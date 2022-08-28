@@ -1,0 +1,32 @@
+[package]
+name = "redis"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = [
+    "tokio/macros",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/io-util",
+]
+async-std-runtime = [
+    "async-std",
+    "async-std/attributes",
+    "tokio-util/compat",
+]
+
+[dependencies]
+async-std = { version = "1", features = ["attributes"], optional = true }
+futures = "0"
+bytes = "1"
+async-trait = "0"
+tokio = { version = "1" }
+tokio-util = { version = "0", features = ["codec"] }
+numtoa = "0"
+
+[dev-dependencies]
+serial_test = "0"
+tokio = { version = "1", features = ["time"] }
+rand = "0.8.4"

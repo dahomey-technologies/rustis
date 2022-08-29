@@ -8,7 +8,6 @@ homepage = "https://github.com/dahomey-technologies/redis-client-rs"
 repository = "https://github.com/dahomey-technologies/redis-client-rs"
 documentation = "https://docs.rs/redis-client"
 readme = "README.md"
-license = "MIT"
 license-file = "LICENSE"
 edition = "2021"
 

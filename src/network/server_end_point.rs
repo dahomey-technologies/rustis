@@ -8,20 +8,26 @@ pub(crate) enum ConnectionType {
 
 #[derive(Clone)]
 pub(crate) struct ServerEndPoint {
+    connection_factory: ConnectionFactory,
     interactive: InteractiveConnection,
     pubsub: PubSubConnection,
 }
 
 impl ServerEndPoint {
-    pub async fn connect() -> Result<Self> {
-        let connection_factory = ConnectionFactory::initialize("127.0.0.1:6379").await?;
+    pub async fn connect(addr: impl Into<String>) -> Result<Self> {
+        let connection_factory = ConnectionFactory::initialize(addr).await?;
         let interactive = InteractiveConnection::connect(&connection_factory).await?;
         let pubsub = PubSubConnection::connect(&connection_factory).await?;
 
         Ok(Self {
+            connection_factory,
             interactive,
             pubsub,
         })
+    }
+
+    pub fn get_addr(&self) -> &str {
+        self.connection_factory.get_addr()
     }
 
     fn get_connection(&self, command: &Command) -> &dyn Connection {

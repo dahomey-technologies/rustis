@@ -28,7 +28,7 @@ impl Database {
     /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [BulkString](crate::resp::BulkString).
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
     /// using redis::{cmd, ConnectionMultiplexer};
     ///
     /// let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;

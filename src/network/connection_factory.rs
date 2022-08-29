@@ -16,6 +16,10 @@ impl ConnectionFactory {
     pub async fn get_connection(&self) -> Result<(TcpStreamReader, TcpStreamWriter)> {
         self.connection_factory_impl.get_connection().await
     }
+
+        pub fn get_addr(&self) -> &str {
+            self.connection_factory_impl.get_addr()
+        }
 }
 
 struct ConnectionFactoryImpl {
@@ -26,12 +30,17 @@ struct ConnectionFactoryImpl {
 impl ConnectionFactoryImpl {
     pub async fn initialize(addr: impl Into<String>) -> Result<ConnectionFactoryImpl> {
         let addr: String = addr.into();
+        println!("Connecting to {}...", addr);
         let first_connection = Mutex::new(Some(tcp_connect(&addr).await?));
 
         Ok(ConnectionFactoryImpl {
             addr,
             first_connection,
         })
+    }
+
+    pub fn get_addr(&self) -> &str {
+        &self.addr
     }
 
     pub async fn get_connection(&self) -> Result<(TcpStreamReader, TcpStreamWriter)> {

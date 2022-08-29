@@ -103,7 +103,7 @@ pub trait StringCommands {
     /// the value of key, or nil when key does not exist.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
     /// let connection = redis::ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
     /// let database = connection.get_default_database();
     /// let value: String = database.getex("key").ex(60).await?;

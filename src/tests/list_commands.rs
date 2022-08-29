@@ -1,11 +1,13 @@
-use crate::{ConnectionMultiplexer, GenericCommands, ListCommands, Result};
+use crate::{
+    tests::get_default_addr, ConnectionMultiplexer, GenericCommands, ListCommands, Result,
+};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lpush_lpop() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup

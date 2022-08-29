@@ -29,8 +29,6 @@ impl Database {
     ///
     /// # Example
     /// ```ignore
-    /// using redis::{cmd, ConnectionMultiplexer};
-    ///
     /// let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
     /// let database = connection.get_default_database();
     ///

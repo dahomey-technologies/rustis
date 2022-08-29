@@ -1,6 +1,6 @@
 use crate::{
-    resp::BulkString, ConnectionMultiplexer, Error, GenericCommands, PubSubCommands, Result,
-    StringCommands,
+    resp::BulkString, tests::get_default_addr, ConnectionMultiplexer, Error, GenericCommands,
+    PubSubCommands, Result, StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -9,7 +9,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pubsub() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
     let pub_sub = connection.get_pub_sub();
 

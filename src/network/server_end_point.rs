@@ -13,8 +13,8 @@ pub(crate) struct ServerEndPoint {
 }
 
 impl ServerEndPoint {
-    pub async fn connect() -> Result<Self> {
-        let connection_factory = ConnectionFactory::initialize("127.0.0.1:6379").await?;
+    pub async fn connect(addr: impl Into<String>) -> Result<Self> {
+        let connection_factory = ConnectionFactory::initialize(addr).await?;
         let interactive = InteractiveConnection::connect(&connection_factory).await?;
         let pubsub = PubSubConnection::connect(&connection_factory).await?;
 

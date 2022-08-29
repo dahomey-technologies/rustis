@@ -1,5 +1,6 @@
 use crate::{
     resp::{BulkString, Value},
+    tests::get_default_addr,
     ConnectionMultiplexer, Error, GenericCommands, Result, StringCommands,
 };
 use serial_test::serial;
@@ -9,7 +10,7 @@ use std::time::{Duration, SystemTime};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn append() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -27,7 +28,7 @@ async fn append() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn decr() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -55,7 +56,7 @@ async fn decr() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn decrby() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -83,7 +84,7 @@ async fn decrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_and_set() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -100,7 +101,7 @@ async fn get_and_set() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_ex() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -119,7 +120,7 @@ async fn get_ex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_pex() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -138,7 +139,7 @@ async fn get_pex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_exat() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -165,7 +166,7 @@ async fn get_exat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_pxat() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -192,7 +193,7 @@ async fn get_pxat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_persist() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -214,7 +215,7 @@ async fn get_persist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getrange() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -232,7 +233,7 @@ async fn getrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getset() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
@@ -252,7 +253,7 @@ async fn getset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incr() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -280,7 +281,7 @@ async fn incr() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incrby() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -308,7 +309,7 @@ async fn incrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incrbyfloat() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -334,7 +335,7 @@ async fn incrbyfloat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lcs() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -363,7 +364,7 @@ async fn lcs() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn mget_mset() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -387,7 +388,7 @@ async fn mget_mset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn msetnx() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -418,12 +419,11 @@ async fn msetnx() -> Result<()> {
     Ok(())
 }
 
-
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn psetex() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.psetex("key", 1000, "value").await?;
@@ -442,7 +442,7 @@ async fn psetex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn set_with_options() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // EX
@@ -473,7 +473,10 @@ async fn set_with_options() -> Result<()> {
         .ok()
         .unwrap()
         .as_secs();
-    database.set_with_options("key", "value").exat(time as u64).await?;
+    database
+        .set_with_options("key", "value")
+        .exat(time as u64)
+        .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -489,7 +492,10 @@ async fn set_with_options() -> Result<()> {
         .ok()
         .unwrap()
         .as_millis();
-    database.set_with_options("key", "value").pxat(time as u64).await?;
+    database
+        .set_with_options("key", "value")
+        .pxat(time as u64)
+        .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -499,25 +505,49 @@ async fn set_with_options() -> Result<()> {
 
     // NX
     database.del("key").await?;
-    let result = database.set_with_options("key", "value").nx().execute().await?;
+    let result = database
+        .set_with_options("key", "value")
+        .nx()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::SimpleString(s) if s == "OK"));
-    let result = database.set_with_options("key", "value").nx().execute().await?;
+    let result = database
+        .set_with_options("key", "value")
+        .nx()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::BulkString(BulkString::Nil)));
 
     // XX
     database.del("key").await?;
-    let result = database.set_with_options("key", "value").xx().execute().await?;
+    let result = database
+        .set_with_options("key", "value")
+        .xx()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::BulkString(BulkString::Nil)));
     database.set("key", "value").await?;
-    let result = database.set_with_options("key", "value").xx().execute().await?;
+    let result = database
+        .set_with_options("key", "value")
+        .xx()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::SimpleString(s) if s == "OK"));
 
     // GET
     database.del("key").await?;
-    let result = database.set_with_options("key", "value").get().execute().await?;
+    let result = database
+        .set_with_options("key", "value")
+        .get()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::BulkString(BulkString::Nil)));
     database.set("key", "value").await?;
-    let result = database.set_with_options("key", "value1").get().execute().await?;
+    let result = database
+        .set_with_options("key", "value1")
+        .get()
+        .execute()
+        .await?;
     assert!(matches!(result, Value::BulkString(BulkString::Binary(s)) if s.as_slice() == b"value"));
     let value: String = database.get("key").await?;
     assert_eq!("value1", value);
@@ -529,7 +559,7 @@ async fn set_with_options() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setex() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.setex("key", 1, "value").await?;
@@ -548,7 +578,7 @@ async fn setex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setnx() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -571,7 +601,7 @@ async fn setnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setrange() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     // cleanup
@@ -592,7 +622,7 @@ async fn setrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn strlen() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key", "Hello World").await?;

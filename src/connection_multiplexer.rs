@@ -12,8 +12,8 @@ pub struct ConnectionMultiplexer {
 }
 
 impl ConnectionMultiplexer {
-    pub async fn connect() -> Result<ConnectionMultiplexer> {
-        let server_end_point = ServerEndPoint::connect().await?;
+    pub async fn connect(addr: impl Into<String>) -> Result<ConnectionMultiplexer> {
+        let server_end_point = ServerEndPoint::connect(addr).await?;
 
         Ok(ConnectionMultiplexer { server_end_point })
     }

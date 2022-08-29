@@ -1,11 +1,11 @@
-use crate::{cmd, ConnectionMultiplexer, Result, StringCommands};
+use crate::{cmd, ConnectionMultiplexer, Result, StringCommands, tests::get_default_addr};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn database() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database0 = connection.get_database(0);
     database0.set("key", "value0").await?;
 
@@ -30,7 +30,7 @@ async fn database() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn send() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect().await?;
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
     database.set("key1", "value1").await?;

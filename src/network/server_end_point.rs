@@ -8,6 +8,7 @@ pub(crate) enum ConnectionType {
 
 #[derive(Clone)]
 pub(crate) struct ServerEndPoint {
+    connection_factory: ConnectionFactory,
     interactive: InteractiveConnection,
     pubsub: PubSubConnection,
 }
@@ -19,9 +20,14 @@ impl ServerEndPoint {
         let pubsub = PubSubConnection::connect(&connection_factory).await?;
 
         Ok(Self {
+            connection_factory,
             interactive,
             pubsub,
         })
+    }
+
+    pub fn get_addr(&self) -> &str {
+        self.connection_factory.get_addr()
     }
 
     fn get_connection(&self, command: &Command) -> &dyn Connection {

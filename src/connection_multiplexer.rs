@@ -15,6 +15,7 @@ impl ConnectionMultiplexer {
     pub async fn connect(addr: impl Into<String>) -> Result<ConnectionMultiplexer> {
         let server_end_point = ServerEndPoint::connect(addr).await?;
 
+        println!("Connected to {}", server_end_point.get_addr());
         Ok(ConnectionMultiplexer { server_end_point })
     }
 

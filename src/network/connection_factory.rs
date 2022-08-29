@@ -30,6 +30,7 @@ struct ConnectionFactoryImpl {
 impl ConnectionFactoryImpl {
     pub async fn initialize(addr: impl Into<String>) -> Result<ConnectionFactoryImpl> {
         let addr: String = addr.into();
+        println!("Connecting to {}...", addr);
         let first_connection = Mutex::new(Some(tcp_connect(&addr).await?));
 
         Ok(ConnectionFactoryImpl {

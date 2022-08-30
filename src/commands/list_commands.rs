@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    Database, Result, IntoArgs,
+    Database, IntoArgs, Result,
 };
 use async_trait::async_trait;
 
@@ -12,10 +12,10 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait ListCommands {
     /// Insert all the specified values at the head of the list stored at key
-    /// 
+    ///
     /// # Return
     /// the length of the list after the push operations.
-    /// 
+    ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
     async fn lpush<K, E>(&self, key: K, elements: E) -> Result<i64>
@@ -24,13 +24,37 @@ pub trait ListCommands {
         E: IntoArgs + Send;
 
     /// Removes and returns the first elements of the list stored at key.
-    /// 
+    ///
     /// # Return
     /// collection of popped elements, or empty collection when key does not exist.
-    /// 
+    ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
     async fn lpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
+    where
+        K: Into<BulkString> + Send,
+        E: FromValue;
+
+    /// Insert all the specified values at the tail of the list stored at key
+    ///
+    /// # Return
+    /// the length of the list after the push operations.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/lpush/](https://redis.io/commands/rpush/)
+    async fn rpush<K, E>(&self, key: K, elements: E) -> Result<i64>
+    where
+        K: Into<BulkString> + Send,
+        E: IntoArgs + Send;
+
+    /// Removes and returns the first elements of the list stored at key.
+    ///
+    /// # Return
+    /// collection of popped elements, or empty collection when key does not exist.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/lpop/](https://redis.io/commands/rpop/)
+    async fn rpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
     where
         K: Into<BulkString> + Send,
         E: FromValue;
@@ -43,7 +67,9 @@ impl ListCommands for Database {
         K: Into<BulkString> + Send,
         E: IntoArgs + Send,
     {
-        self.send(cmd("LPUSH").arg(key).args(elements)).await?.into()
+        self.send(cmd("LPUSH").arg(key).args(elements))
+            .await?
+            .into()
     }
 
     async fn lpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
@@ -52,5 +78,23 @@ impl ListCommands for Database {
         E: FromValue,
     {
         self.send(cmd("LPOP").arg(key).arg(count)).await?.into()
+    }
+
+    async fn rpush<K, E>(&self, key: K, elements: E) -> Result<i64>
+    where
+        K: Into<BulkString> + Send,
+        E: IntoArgs + Send,
+    {
+        self.send(cmd("RPUSH").arg(key).args(elements))
+            .await?
+            .into()
+    }
+
+    async fn rpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
+    where
+        K: Into<BulkString> + Send,
+        E: FromValue,
+    {
+        self.send(cmd("RPOP").arg(key).arg(count)).await?.into()
     }
 }

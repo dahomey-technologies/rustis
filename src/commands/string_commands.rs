@@ -625,7 +625,7 @@ impl<'a> GetEx<'a> {
     }
 }
 
-/// Builder for the [getex](crate::StringCommands::lcs) command
+/// Builder for the [lcs](crate::StringCommands::lcs) command
 pub struct Lcs<'a> {
     database: &'a Database,
     cmd: Command,
@@ -654,7 +654,7 @@ impl<'a> Lcs<'a> {
     }
 }
 
-/// Builder for the [getex](crate::StringCommands::lcs) command
+/// Builder for the [lcs](crate::StringCommands::lcs) command
 pub struct LcsIdx<'a> {
     database: &'a Database,
     cmd: Command,
@@ -683,6 +683,7 @@ impl<'a> LcsIdx<'a> {
     }
 }
 
+/// Result for the [lcs](crate::StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
     pub matches: Vec<((usize, usize), (usize, usize))>,
@@ -729,7 +730,7 @@ impl FromValue for LcsResult {
     }
 }
 
-/// Builder for the [getex](crate::StringCommands::set_with_options) command
+/// Builder for the [set_with_options](crate::StringCommands::set_with_options) command
 pub struct SetWithOptions<'a> {
     database: &'a Database,
     cmd: Command,
@@ -795,9 +796,6 @@ impl<'a> SetWithOptions<'a> {
 
     /// Set the specified Unix time at which the key will expire, in milliseconds.
     pub async fn keepttl(self) -> Result<Value> {
-        self.database
-            .send(self.cmd.arg("KEEPTTL"))
-            .await
+        self.database.send(self.cmd.arg("KEEPTTL")).await
     }
 }
-

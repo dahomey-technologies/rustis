@@ -1,8 +1,9 @@
 use crate::{
-    resp::Value, Command, ConnectionMultiplexer, GenericCommands, ListCommands, Result,
-    ServerCommands, StringCommands,
+    resp::Value, Command, CommandSend, ConnectionMultiplexer, GenericCommands, ListCommands,
+    Result, ServerCommands, StringCommands,
 };
 use futures::Future;
+use std::pin::Pin;
 
 #[derive(Clone)]
 pub struct Database {
@@ -42,6 +43,12 @@ impl Database {
     /// ```
     pub fn send<'a>(&'a self, command: Command) -> impl Future<Output = Result<Value>> + 'a {
         self.multiplexer.send(self.db, command)
+    }
+}
+
+impl CommandSend for Database {
+    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
+        Box::pin(self.send(command))
     }
 }
 

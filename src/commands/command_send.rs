@@ -1,6 +1,6 @@
 use crate::{
     resp::{FromValue, Value},
-    Command, Database, Result,
+    Command, Result
 };
 use futures::Future;
 use std::pin::Pin;
@@ -33,17 +33,5 @@ pub trait CommandSend {
     ) -> Pin<Box<dyn Future<Output = Result<T>> + Send + '_>> {
         let fut = self.send(command);
         Box::pin(async move { fut.await?.into() })
-    }
-}
-
-impl CommandSend for Database {
-    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
-        Box::pin(self.send(command))
-    }
-}
-
-impl CommandSend for Transaction {
-    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
-        Box::pin(self.send(command))
     }
 }

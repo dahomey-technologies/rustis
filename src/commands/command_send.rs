@@ -1,26 +1,11 @@
 use crate::{
-    resp::Value, Command, ConnectionMultiplexer, GenericCommands, ListCommands, Result,
-    ServerCommands, StringCommands,
+    resp::{FromValue, Value},
+    Command, Database, Result, Transaction,
 };
 use futures::Future;
+use std::pin::Pin;
 
-#[derive(Clone)]
-pub struct Database {
-    multiplexer: ConnectionMultiplexer,
-    db: usize,
-}
-
-/// Set of Redis commands related to a specific database
-impl Database {
-    pub(crate) fn new(multiplexer: ConnectionMultiplexer, db: usize) -> Self {
-        Self { multiplexer, db }
-    }
-
-    /// The numeric identifier of this database
-    pub fn get_database(&self) -> usize {
-        self.db
-    }
-
+pub trait CommandSend {
     /// Send an arbitrary command to the server.
     ///
     /// This is used primarily intended for implementing high level commands API
@@ -40,12 +25,25 @@ impl Database {
     ///     .await?
     ///     .into()?;
     /// ```
-    pub fn send<'a>(&'a self, command: Command) -> impl Future<Output = Result<Value>> + 'a {
-        self.multiplexer.send(self.db, command)
+    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>>;
+
+    fn send_into<T: FromValue>(
+        &self,
+        command: Command,
+    ) -> Pin<Box<dyn Future<Output = Result<T>> + Send + '_>> {
+        let fut = self.send(command);
+        Box::pin(async move { fut.await?.into() })
     }
 }
 
-impl GenericCommands for Database {}
-impl ListCommands for Database {}
-impl ServerCommands for Database {}
-impl StringCommands for Database {}
+impl CommandSend for Database {
+    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
+        Box::pin(self.send(command))
+    }
+}
+
+impl CommandSend for Transaction {
+    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
+        Box::pin(self.send(command))
+    }
+}

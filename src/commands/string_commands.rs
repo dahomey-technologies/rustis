@@ -1,16 +1,15 @@
 use crate::{
     cmd,
-    resp::{Array, BulkString, FromValue, ResultValueExt, Value},
-    Command, Database, Error, IntoArgs, Result,
+    resp::{Array, BulkString, FromValue, Value},
+    Command, CommandSend, Error, IntoArgs, Result,
 };
-use async_trait::async_trait;
-use std::iter::once;
+use futures::Future;
+use std::{iter::once, pin::Pin};
 
 /// A group of Redis commands related to Strings
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
-#[async_trait]
-pub trait StringCommands {
+pub trait StringCommands: CommandSend {
     /// If key already exists and is a string,
     /// this command appends the value at the end of the string.
     /// If key does not exist it is created and set as an empty string,
@@ -21,10 +20,13 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/append/](https://redis.io/commands/append/)
-    async fn append<K, V>(&self, key: K, value: V) -> Result<usize>
+    fn append<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("APPEND").arg(key).arg(value))
+    }
 
     /// Decrements the number stored at key by one.
     ///
@@ -38,9 +40,12 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/decr/](https://redis.io/commands/decr/)
-    async fn decr<K>(&self, key: K) -> Result<i64>
+    fn decr<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("DECR").arg(key))
+    }
 
     /// Decrements the number stored at key by one.
     ///
@@ -54,9 +59,12 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/decrby/](https://redis.io/commands/decrby/)
-    async fn decrby<K>(&self, key: K, decrement: i64) -> Result<i64>
+    fn decrby<K>(&self, key: K, decrement: i64) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("DECRBY").arg(key).arg(decrement))
+    }
 
     /// Get the value of key.
     ///
@@ -71,10 +79,14 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/get/](https://redis.io/commands/get/)
-    async fn get<K, V>(&self, key: K) -> Result<V>
+    fn get<'a, K, V>(&'a self, key: K) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         K: Into<BulkString> + Send,
-        V: FromValue;
+        V: FromValue + Send + 'a,
+        Self: Sized,
+    {
+        self.send_into(cmd("GET").arg(key))
+    }
 
     /// Get the value of key and delete the key.
     ///
@@ -86,10 +98,13 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/getdel/](https://redis.io/commands/getdel/)
-    async fn getdel<K, V>(&self, key: K) -> Result<V>
+    fn getdel<K, V>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: FromValue;
+        V: FromValue,
+    {
+        self.send_into(cmd("GETDEL").arg(key))
+    }
 
     ///   Get the value of key and optionally set its expiration. GETEX is similar to GET, but is a write command with additional options.
     ///
@@ -111,9 +126,15 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/getex/](https://redis.io/commands/getex/)
-    fn getex<K>(&self, key: K) -> GetEx
+    fn getex<K>(&self, key: K) -> GetEx<Self>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        GetEx {
+            string_commands: &self,
+            cmd: cmd("GETEX").arg(key),
+        }
+    }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
     ///
@@ -124,10 +145,18 @@ pub trait StringCommands {
 
     /// # See Also
     /// [https://redis.io/commands/getrange/](https://redis.io/commands/getrange/)
-    async fn getrange<K, V>(&self, key: K, start: usize, end: isize) -> Result<V>
+    fn getrange<K, V>(
+        &self,
+        key: K,
+        start: usize,
+        end: isize,
+    ) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: FromValue;
+        V: FromValue,
+    {
+        self.send_into(cmd("GETRANGE").arg(key).arg(start).arg(end))
+    }
 
     /// Atomically sets key to value and returns the old value stored at key.
     /// Returns an error when key exists but does not hold a string value.
@@ -138,11 +167,14 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/getset/](https://redis.io/commands/getset/)
-    async fn getset<K, V, R>(&self, key: K, value: V) -> Result<R>
+    fn getset<K, V, R>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<R>> + '_>>
     where
         K: Into<BulkString> + Send,
         V: Into<BulkString> + Send,
-        R: FromValue;
+        R: FromValue,
+    {
+        self.send_into(cmd("GETSET").arg(key).arg(value))
+    }
 
     /// Increments the number stored at key by one.
     ///
@@ -162,9 +194,12 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/incr/](https://redis.io/commands/incr/)
-    async fn incr<K>(&self, key: K) -> Result<i64>
+    fn incr<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("INCR").arg(key))
+    }
 
     /// Increments the number stored at key by increment.
     ///
@@ -180,9 +215,12 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/incrby/](https://redis.io/commands/incrby/)
-    async fn incrby<K>(&self, key: K, increment: i64) -> Result<i64>
+    fn incrby<K>(&self, key: K, increment: i64) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("INCRBY").arg(key).arg(increment))
+    }
 
     ///Increment the string representing a floating point number stored at key by the specified increment.
     /// By using a negative increment value, the result is that the value stored at the key is decremented (by the obvious properties of addition).
@@ -209,17 +247,30 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/incrbyfloat/](https://redis.io/commands/incrbyfloat/)
-    async fn incrbyfloat<K>(&self, key: K, increment: f64) -> Result<f64>
+    fn incrbyfloat<K>(
+        &self,
+        key: K,
+        increment: f64,
+    ) -> Pin<Box<dyn Future<Output = Result<f64>> + '_>>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("INCRBYFLOAT").arg(key).arg(increment))
+    }
 
     /// The LCS command implements the longest common subsequence algorithm
     ///
     /// # See Also
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
-    fn lcs<K>(&self, key1: K, key2: K) -> Lcs
+    fn lcs<K>(&self, key1: K, key2: K) -> Lcs<Self>
     where
-        K: Into<BulkString> + Send;
+        K: Into<BulkString> + Send,
+    {
+        Lcs {
+            string_commands: &self,
+            cmd: cmd("LCS").arg(key1).arg(key2),
+        }
+    }
 
     /// Returns the values of all specified keys.
     ///
@@ -231,10 +282,16 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/mget/](https://redis.io/commands/mget/)
-    async fn mget<'a, K, V>(&'a self, keys: K) -> Result<Vec<Option<V>>>
+    fn mget<'a, K, V>(
+        &'a self,
+        keys: K,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<V>>>> + '_>>
     where
         K: IntoArgs + Send + Sync,
-        V: FromValue;
+        V: FromValue,
+    {
+        self.send_into(cmd("MGET").args(keys))
+    }
 
     /// Sets the given keys to their respective values.
     ///
@@ -243,10 +300,20 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
-    async fn mset<'a, K, V>(&'a self, items: &'a [(K, V)]) -> Result<()>
+    fn mset<'a, K, V>(
+        &'a self,
+        items: &'a [(K, V)],
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
         K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy;
+        V: Into<BulkString> + Send + Sync + Copy,
+    {
+        let flatten_items: Vec<BulkString> = items
+            .iter()
+            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
+            .collect();
+        self.send_into(cmd("MSET").args(flatten_items))
+    }
 
     /// Sets the given keys to their respective values.
     /// MSETNX will not perform any operation at all even if just a single key already exists.
@@ -265,10 +332,20 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
-    async fn msetnx<'a, K, V>(&'a self, items: &'a [(K, V)]) -> Result<bool>
+    fn msetnx<'a, K, V>(
+        &'a self,
+        items: &'a [(K, V)],
+    ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
         K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy;
+        V: Into<BulkString> + Send + Sync + Copy,
+    {
+        let flatten_items: Vec<BulkString> = items
+            .iter()
+            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
+            .collect();
+        self.send_into(cmd("MSETNX").args(flatten_items))
+    }
 
     /// Works exactly like [setex](crate::StringCommands::setex) with the sole
     /// difference that the expire time is specified in milliseconds instead of seconds.
@@ -278,10 +355,18 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/psetex/](https://redis.io/commands/psetex/)
-    async fn psetex<K, V>(&self, key: K, milliseconds: u64, value: V) -> Result<()>
+    fn psetex<K, V>(
+        &self,
+        key: K,
+        milliseconds: u64,
+        value: V,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
+    }
 
     ///Set key to hold the string value.
     ///
@@ -290,10 +375,14 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
-    async fn set<K, V>(&self, key: K, value: V) -> Result<()>
+    fn set<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+        Self: Sized,
+    {
+        self.send_into(cmd("SET").arg(key).arg(value))
+    }
 
     ///Set key to hold the string value.
     ///
@@ -302,19 +391,33 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
-    fn set_with_options<K, V>(&self, key: K, value: V) -> SetWithOptions
+    fn set_with_options<K, V>(&self, key: K, value: V) -> SetWithOptions<Self>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        SetWithOptions {
+            string_commands: &self,
+            cmd: cmd("SET").arg(key).arg(value),
+        }
+    }
 
     /// Set key to hold the string value and set key to timeout after a given number of seconds.
     ///
     /// # See Also
     /// [https://redis.io/commands/setex/](https://redis.io/commands/setex/)
-    async fn setex<K, V>(&self, key: K, seconds: u64, value: V) -> Result<()>
+    fn setex<K, V>(
+        &self,
+        key: K,
+        seconds: u64,
+        value: V,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("SETEX").arg(key).arg(seconds).arg(value))
+    }
 
     /// Set key to hold string value if key does not exist.
     ///
@@ -329,10 +432,13 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/setnx/](https://redis.io/commands/setnx/)
-    async fn setnx<K, V>(&self, key: K, value: V) -> Result<bool>
+    fn setnx<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("SETNX").arg(key).arg(value))
+    }
 
     /// Overwrites part of the string stored at key,
     /// starting at the specified offset,
@@ -343,10 +449,18 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/setrange/](https://redis.io/commands/setrange/)
-    async fn setrange<K, V>(&self, key: K, offset: usize, value: V) -> Result<usize>
+    fn setrange<K, V>(
+        &self,
+        key: K,
+        offset: usize,
+        value: V,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send;
+        V: Into<BulkString> + Send,
+    {
+        self.send_into(cmd("SETRANGE").arg(key).arg(offset).arg(value))
+    }
 
     /// Returns the length of the string value stored at key.
     ///
@@ -357,329 +471,124 @@ pub trait StringCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/strlen/](https://redis.io/commands/strlen/)
-    async fn strlen<K>(&self, key: K) -> Result<usize>
-    where
-        K: Into<BulkString> + Send;
-}
-
-#[async_trait]
-impl StringCommands for Database {
-    async fn append<K, V>(&self, key: K, value: V) -> Result<usize>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("APPEND").arg(key).arg(value)).await?.into()
-    }
-
-    async fn decr<K>(&self, key: K) -> Result<i64>
+    fn strlen<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString> + Send,
     {
-        self.send(cmd("DECR").arg(key)).await?.into()
-    }
-
-    async fn decrby<K>(&self, key: K, decrement: i64) -> Result<i64>
-    where
-        K: Into<BulkString> + Send,
-    {
-        self.send(cmd("DECRBY").arg(key).arg(decrement))
-            .await?
-            .into()
-    }
-
-    async fn get<K, V>(&self, key: K) -> Result<V>
-    where
-        K: Into<BulkString> + Send,
-        V: FromValue,
-    {
-        self.send(cmd("GET").arg(key)).await?.into()
-    }
-
-    async fn getdel<K, V>(&self, key: K) -> Result<V>
-    where
-        K: Into<BulkString> + Send,
-        V: FromValue,
-    {
-        self.send(cmd("GETDEL").arg(key)).await?.into()
-    }
-
-    fn getex<K>(&self, key: K) -> GetEx
-    where
-        K: Into<BulkString> + Send,
-    {
-        GetEx {
-            database: &self,
-            cmd: cmd("GETEX").arg(key),
-        }
-    }
-
-    async fn getrange<K, V>(&self, key: K, start: usize, end: isize) -> Result<V>
-    where
-        K: Into<BulkString> + Send,
-        V: FromValue,
-    {
-        self.send(cmd("GETRANGE").arg(key).arg(start).arg(end))
-            .await?
-            .into()
-    }
-
-    async fn getset<K, V, R>(&self, key: K, value: V) -> Result<R>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-        R: FromValue,
-    {
-        self.send(cmd("GETSET").arg(key).arg(value)).await?.into()
-    }
-
-    async fn incr<K>(&self, key: K) -> Result<i64>
-    where
-        K: Into<BulkString> + Send,
-    {
-        self.send(cmd("INCR").arg(key)).await?.into()
-    }
-
-    async fn incrby<K>(&self, key: K, increment: i64) -> Result<i64>
-    where
-        K: Into<BulkString> + Send,
-    {
-        self.send(cmd("INCRBY").arg(key).arg(increment))
-            .await?
-            .into()
-    }
-
-    async fn incrbyfloat<K>(&self, key: K, increment: f64) -> Result<f64>
-    where
-        K: Into<BulkString> + Send,
-    {
-        self.send(cmd("INCRBYFLOAT").arg(key).arg(increment))
-            .await?
-            .into()
-    }
-
-    fn lcs<K>(&self, key1: K, key2: K) -> Lcs
-    where
-        K: Into<BulkString> + Send,
-    {
-        Lcs {
-            database: &self,
-            cmd: cmd("LCS").arg(key1).arg(key2),
-        }
-    }
-
-    async fn mget<'a, K, V>(&'a self, keys: K) -> Result<Vec<Option<V>>>
-    where
-        K: IntoArgs + Send + Sync,
-        V: FromValue,
-    {
-        self.send(cmd("MGET").args(keys)).await?.into()
-    }
-
-    async fn mset<'a, K, V>(&'a self, items: &'a [(K, V)]) -> Result<()>
-    where
-        K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy,
-    {
-        let flatten_items: Vec<BulkString> = items
-            .iter()
-            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
-            .collect();
-        self.send(cmd("MSET").args(flatten_items)).await.into_unit()
-    }
-
-    async fn msetnx<'a, K, V>(&'a self, items: &'a [(K, V)]) -> Result<bool>
-    where
-        K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy,
-    {
-        let flatten_items: Vec<BulkString> = items
-            .iter()
-            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
-            .collect();
-        self.send(cmd("MSETNX").args(flatten_items)).await?.into()
-    }
-
-    async fn psetex<K, V>(&self, key: K, milliseconds: u64, value: V) -> Result<()>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
-            .await
-            .into_unit()
-    }
-
-    async fn set<K, V>(&self, key: K, value: V) -> Result<()>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("SET").arg(key).arg(value)).await.into_unit()
-    }
-
-    fn set_with_options<K, V>(&self, key: K, value: V) -> SetWithOptions
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        SetWithOptions {
-            database: &self,
-            cmd: cmd("SET").arg(key).arg(value),
-        }
-    }
-
-    async fn setex<K, V>(&self, key: K, seconds: u64, value: V) -> Result<()>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("PSETEX").arg(key).arg(seconds).arg(value))
-            .await
-            .into_unit()
-    }
-
-    async fn setnx<K, V>(&self, key: K, value: V) -> Result<bool>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("SETNX").arg(key).arg(value)).await?.into()
-    }
-
-    async fn setrange<K, V>(&self, key: K, offset: usize, value: V) -> Result<usize>
-    where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
-    {
-        self.send(cmd("SETRANGE").arg(key).arg(offset).arg(value))
-            .await?
-            .into()
-    }
-
-    async fn strlen<K>(&self, key: K) -> Result<usize>
-    where
-        K: Into<BulkString> + Send,
-    {
-        self.send(cmd("STRLEN").arg(key)).await?.into()
+        self.send_into(cmd("STRLEN").arg(key))
     }
 }
 
 /// Builder for the [getex](crate::StringCommands::getex) command
-pub struct GetEx<'a> {
-    database: &'a Database,
+pub struct GetEx<'a, T: StringCommands + ?Sized> {
+    string_commands: &'a T,
     cmd: Command,
 }
 
-impl<'a> GetEx<'a> {
+impl<'a, T: StringCommands> GetEx<'a, T> {
     /// Set the specified expire time, in seconds.
-    pub async fn ex<V>(self, seconds: u64) -> Result<V>
+    pub fn ex<V>(self, seconds: u64) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database
-            .send(self.cmd.arg("EX").arg(seconds))
-            .await?
-            .into()
+        self.string_commands
+            .send_into(self.cmd.arg("EX").arg(seconds))
     }
 
     /// Set the specified expire time, in milliseconds.
-    pub async fn px<V>(self, milliseconds: u64) -> Result<V>
+    pub fn px<V>(self, milliseconds: u64) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database
-            .send(self.cmd.arg("PX").arg(milliseconds))
-            .await?
-            .into()
+        self.string_commands
+            .send_into(self.cmd.arg("PX").arg(milliseconds))
     }
 
     /// Set the specified Unix time at which the key will expire, in seconds.
-    pub async fn exat<V>(self, timestamp_seconds: u64) -> Result<V>
+    pub fn exat<V>(self, timestamp_seconds: u64) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database
-            .send(self.cmd.arg("EXAT").arg(timestamp_seconds))
-            .await?
-            .into()
+        self.string_commands
+            .send_into(self.cmd.arg("EXAT").arg(timestamp_seconds))
     }
 
     /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub async fn pxat<V>(self, timestamp_milliseconds: u64) -> Result<V>
+    pub fn pxat<V>(
+        self,
+        timestamp_milliseconds: u64,
+    ) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database
-            .send(self.cmd.arg("PXAT").arg(timestamp_milliseconds))
-            .await?
-            .into()
+        self.string_commands
+            .send_into(self.cmd.arg("PXAT").arg(timestamp_milliseconds))
     }
 
     /// Remove the time to live associated with the key.
-    pub async fn persist<V>(self) -> Result<V>
+    pub fn persist<V>(self) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database.send(self.cmd.arg("PERSIST")).await?.into()
+        self.string_commands.send_into(self.cmd.arg("PERSIST"))
     }
 }
 
 /// Builder for the [lcs](crate::StringCommands::lcs) command
-pub struct Lcs<'a> {
-    database: &'a Database,
+pub struct Lcs<'a, T: StringCommands + ?Sized> {
+    string_commands: &'a T,
     cmd: Command,
 }
 
-impl<'a> Lcs<'a> {
+impl<'a, T: StringCommands + ?Sized> Lcs<'a, T> {
     /// return the length of the match
-    pub async fn len(self) -> Result<usize> {
-        self.database.send(self.cmd.arg("LEN")).await?.into()
+    pub fn len(self) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>> {
+        self.string_commands.send_into(self.cmd.arg("LEN"))
     }
 
     /// execute the command
-    pub async fn execute<V>(self) -> Result<V>
+    pub fn execute<V>(self) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
     where
         V: FromValue,
     {
-        self.database.send(self.cmd).await?.into()
+        self.string_commands.send_into(self.cmd)
     }
 
     /// return the match position in each strings
-    pub fn idx(self) -> LcsIdx<'a> {
+    pub fn idx(self) -> LcsIdx<'a, T> {
         LcsIdx {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("IDX"),
         }
     }
 }
 
 /// Builder for the [lcs](crate::StringCommands::lcs) command
-pub struct LcsIdx<'a> {
-    database: &'a Database,
+pub struct LcsIdx<'a, T: StringCommands + ?Sized> {
+    string_commands: &'a T,
     cmd: Command,
 }
 
-impl<'a> LcsIdx<'a> {
+impl<'a, T: StringCommands + ?Sized> LcsIdx<'a, T> {
     /// restrict the list of matches to the ones of a given minimal length
-    pub fn minmatchlen(self, len: usize) -> LcsIdx<'a> {
+    pub fn minmatchlen(self, len: usize) -> Self {
         LcsIdx {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("MINMATCHLEN ").arg(len),
         }
     }
 
     /// also return the length of the match
-    pub fn withmatchlen(self) -> LcsIdx<'a> {
+    pub fn withmatchlen(self) -> Self {
         LcsIdx {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("WITHMATCHLEN "),
         }
     }
 
     /// execute the command
-    pub async fn execute(self) -> Result<LcsResult> {
-        self.database.send(self.cmd).await?.into()
+    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<LcsResult>> + 'a>> {
+        self.string_commands.send_into(self.cmd)
     }
 }
 
@@ -731,71 +640,71 @@ impl FromValue for LcsResult {
 }
 
 /// Builder for the [set_with_options](crate::StringCommands::set_with_options) command
-pub struct SetWithOptions<'a> {
-    database: &'a Database,
+pub struct SetWithOptions<'a, T: StringCommands + ?Sized> {
+    string_commands: &'a T,
     cmd: Command,
 }
 
-impl<'a> SetWithOptions<'a> {
+impl<'a, T: StringCommands + ?Sized> SetWithOptions<'a, T> {
     /// Return the old string stored at key, or nil if key did not exist.
     ///
     /// An error is returned and SET aborted if the value stored at key is not a string.
-    pub fn get(self) -> SetWithOptions<'a> {
+    pub fn get(self) -> Self {
         Self {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("GET"),
         }
     }
 
     /// Only set the key if it does not already exist.
-    pub fn nx(self) -> SetWithOptions<'a> {
+    pub fn nx(self) -> Self {
         Self {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("NX"),
         }
     }
 
     /// Only set the key if it already exist.
-    pub fn xx(self) -> SetWithOptions<'a> {
+    pub fn xx(self) -> Self {
         Self {
-            database: self.database,
+            string_commands: self.string_commands,
             cmd: self.cmd.arg("XX"),
         }
     }
 
     /// execute the command
-    pub async fn execute(self) -> Result<Value> {
-        self.database.send(self.cmd).await
+    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands.send(self.cmd)
     }
 
     /// Set the specified expire time, in seconds.
-    pub async fn ex(self, seconds: u64) -> Result<Value> {
-        self.database.send(self.cmd.arg("EX").arg(seconds)).await
+    pub fn ex(self, seconds: u64) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands.send(self.cmd.arg("EX").arg(seconds))
     }
 
     /// Set the specified expire time, in milliseconds.
-    pub async fn px(self, milliseconds: u64) -> Result<Value> {
-        self.database
+    pub fn px(self, milliseconds: u64) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands
             .send(self.cmd.arg("PX").arg(milliseconds))
-            .await
     }
 
     /// Set the specified Unix time at which the key will expire, in seconds.
-    pub async fn exat(self, timestamp_seconds: u64) -> Result<Value> {
-        self.database
+    pub fn exat(self, timestamp_seconds: u64) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands
             .send(self.cmd.arg("EXAT").arg(timestamp_seconds))
-            .await
     }
 
     /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub async fn pxat(self, timestamp_milliseconds: u64) -> Result<Value> {
-        self.database
+    pub fn pxat(
+        self,
+        timestamp_milliseconds: u64,
+    ) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands
             .send(self.cmd.arg("PXAT").arg(timestamp_milliseconds))
-            .await
     }
 
     /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub async fn keepttl(self) -> Result<Value> {
-        self.database.send(self.cmd.arg("KEEPTTL")).await
+    pub fn keepttl(self) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+        self.string_commands.send(self.cmd.arg("KEEPTTL"))
     }
 }

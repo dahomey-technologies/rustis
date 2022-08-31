@@ -34,6 +34,18 @@ impl FromValue for Value {
     }
 }
 
+impl FromValue for () {
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::SimpleString(_) => Ok(()),
+            _ => Err(Error::Parse(format!(
+                "Cannot parse result {:?} to ())",
+                value
+            ))),
+        }
+    }
+}
+
 impl<T> FromValue for Vec<T>
 where
     T: FromValue,
@@ -262,7 +274,6 @@ impl ToString for Value {
 
 pub(crate) trait ResultValueExt {
     fn into_result(self) -> Result<Value>;
-    fn into_unit(self) -> Result<()>;
     fn map_into_result<T, F>(self, op: F) -> Result<T>
     where
         F: FnOnce(Value) -> T;
@@ -274,19 +285,6 @@ impl ResultValueExt for Result<Value> {
             Ok(value) => match value {
                 Value::Error(e) => Err(Error::Redis(e)),
                 _ => Ok(value),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    fn into_unit(self) -> Result<()> {
-        match self {
-            Ok(value) => match value {
-                Value::SimpleString(s) if &s == "OK" => Ok(()),
-                _ => Err(Error::Parse(format!(
-                    "Cannot parse result {:?} to ())",
-                    value
-                ))),
             },
             Err(e) => Err(e),
         }

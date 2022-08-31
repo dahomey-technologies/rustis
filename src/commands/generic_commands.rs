@@ -1,12 +1,12 @@
-use crate::{cmd, Database, Result, IntoArgs};
-use async_trait::async_trait;
+use crate::{cmd, CommandSend, IntoArgs, Result};
+use futures::Future;
+use std::pin::Pin;
 
 /// A group of generic Redis commands
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=generic)
-#[async_trait]
-pub trait GenericCommands {
+pub trait GenericCommands: CommandSend {
     /// Removes the specified keys. A key is ignored if it does not exist.
     ///
     /// # Return
@@ -14,17 +14,10 @@ pub trait GenericCommands {
     ///
     /// # See Also
     /// [Redis Generic Commands](https://redis.io/commands/?group=generic)
-    async fn del<K>(&self, keys: K) -> Result<usize>
-    where
-        K: IntoArgs + Send;
-}
-
-#[async_trait]
-impl GenericCommands for Database {
-    async fn del<K>(&self, keys: K) -> Result<usize>
+    fn del<K>(&self, keys: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: IntoArgs + Send,
     {
-        self.send(cmd("DEL").args(keys)).await?.into()
+        self.send_into(cmd("DEL").args(keys))
     }
 }

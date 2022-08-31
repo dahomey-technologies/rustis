@@ -1,16 +1,16 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    Database, IntoArgs, Result,
+    CommandSend, IntoArgs, Result,
 };
-use async_trait::async_trait;
+use futures::Future;
+use std::pin::Pin;
 
 /// A group of Redis commands related to Lists
 ///
 /// # See Also
 /// [Redis List Commands](https://redis.io/commands/?group=list)
-#[async_trait]
-pub trait ListCommands {
+pub trait ListCommands: CommandSend {
     /// Insert all the specified values at the head of the list stored at key
     ///
     /// # Return
@@ -18,10 +18,13 @@ pub trait ListCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
-    async fn lpush<K, E>(&self, key: K, elements: E) -> Result<i64>
+    fn lpush<K, E>(&self, key: K, elements: E) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
         K: Into<BulkString> + Send,
-        E: IntoArgs + Send;
+        E: IntoArgs + Send,
+    {
+        self.send_into(cmd("LPUSH").arg(key).args(elements))
+    }
 
     /// Removes and returns the first elements of the list stored at key.
     ///
@@ -30,10 +33,13 @@ pub trait ListCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
-    async fn lpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
+    fn lpop<K, E>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + '_>>
     where
         K: Into<BulkString> + Send,
-        E: FromValue;
+        E: FromValue,
+    {
+        self.send_into(cmd("LPOP").arg(key).arg(count))
+    }
 
     /// Insert all the specified values at the tail of the list stored at key
     ///
@@ -42,10 +48,13 @@ pub trait ListCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/rpush/)
-    async fn rpush<K, E>(&self, key: K, elements: E) -> Result<i64>
+    fn rpush<K, E>(&self, key: K, elements: E) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
         K: Into<BulkString> + Send,
-        E: IntoArgs + Send;
+        E: IntoArgs + Send,
+    {
+        self.send_into(cmd("RPUSH").arg(key).args(elements))
+    }
 
     /// Removes and returns the first elements of the list stored at key.
     ///
@@ -54,47 +63,11 @@ pub trait ListCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/rpop/)
-    async fn rpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
-    where
-        K: Into<BulkString> + Send,
-        E: FromValue;
-}
-
-#[async_trait]
-impl ListCommands for Database {
-    async fn lpush<K, E>(&self, key: K, elements: E) -> Result<i64>
-    where
-        K: Into<BulkString> + Send,
-        E: IntoArgs + Send,
-    {
-        self.send(cmd("LPUSH").arg(key).args(elements))
-            .await?
-            .into()
-    }
-
-    async fn lpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
+    fn rpop<K, E>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + '_>>
     where
         K: Into<BulkString> + Send,
         E: FromValue,
     {
-        self.send(cmd("LPOP").arg(key).arg(count)).await?.into()
-    }
-
-    async fn rpush<K, E>(&self, key: K, elements: E) -> Result<i64>
-    where
-        K: Into<BulkString> + Send,
-        E: IntoArgs + Send,
-    {
-        self.send(cmd("RPUSH").arg(key).args(elements))
-            .await?
-            .into()
-    }
-
-    async fn rpop<K, E>(&self, key: K, count: usize) -> Result<Vec<E>>
-    where
-        K: Into<BulkString> + Send,
-        E: FromValue,
-    {
-        self.send(cmd("RPOP").arg(key).arg(count)).await?.into()
+        self.send_into(cmd("RPOP").arg(key).arg(count))
     }
 }

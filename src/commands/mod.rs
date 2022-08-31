@@ -1,4 +1,5 @@
 mod command;
+mod command_send;
 mod command_args;
 mod command_encoder;
 mod generic_commands;
@@ -8,6 +9,7 @@ mod server_commands;
 mod string_commands;
 
 pub use command::*;
+pub use command_send::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
 pub use generic_commands::*;

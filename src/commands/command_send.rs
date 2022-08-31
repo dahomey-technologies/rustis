@@ -1,6 +1,6 @@
 use crate::{
     resp::{FromValue, Value},
-    Command, Database, Result, Transaction,
+    Command, Database, Result,
 };
 use futures::Future;
 use std::pin::Pin;

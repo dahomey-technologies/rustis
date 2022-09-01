@@ -2,6 +2,7 @@ use crate::{
     resp::{Array, BulkString},
     Error, Result,
 };
+use std::{collections::HashSet, hash::Hash};
 
 #[derive(Debug)]
 pub enum Value {
@@ -58,6 +59,26 @@ where
                 for value in v {
                     let e = T::from_value(value)?;
                     result.push(e);
+                }
+                Ok(result)
+            }
+            _ => Err(Error::Parse("Unexpected result value type".to_owned())),
+        }
+    }
+}
+
+impl<T> FromValue for HashSet<T>
+where
+    T: FromValue + Eq + Hash,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Nil) => Ok(HashSet::new()),
+            Value::Array(Array::Vec(v)) => {
+                let mut result = HashSet::<T>::with_capacity(v.len());
+                for value in v {
+                    let v = T::from_value(value)?;
+                    result.insert(v);
                 }
                 Ok(result)
             }
@@ -242,7 +263,7 @@ impl FromValue for String {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(s) => Result::<String>::from(s),
-            Value::SimpleString(_) => Ok("".to_string()),
+            Value::SimpleString(s) => Ok(s),
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to String",
                 value

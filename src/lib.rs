@@ -9,6 +9,7 @@ mod message;
 mod network;
 mod pub_sub;
 pub mod resp;
+mod transaction;
 
 #[cfg(test)]
 mod tests;
@@ -20,6 +21,7 @@ pub use error::*;
 pub(crate) use message::*;
 pub use network::*;
 pub use pub_sub::*;
+pub use transaction::*;
 
 use futures::channel::{mpsc, oneshot};
 

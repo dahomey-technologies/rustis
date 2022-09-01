@@ -1,6 +1,6 @@
 use crate::{
     resp::Value, Command, CommandSend, ConnectionMultiplexer, GenericCommands, ListCommands,
-    Result, ServerCommands, StringCommands,
+    Result, ServerCommands, StringCommands, Transaction,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -43,6 +43,10 @@ impl Database {
     /// ```
     pub fn send<'a>(&'a self, command: Command) -> impl Future<Output = Result<Value>> + 'a {
         self.multiplexer.send(self.db, command)
+    }
+
+    pub fn create_transaction(&self) -> Transaction {
+        Transaction::new(self.clone())
     }
 }
 

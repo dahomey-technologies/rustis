@@ -5,6 +5,7 @@ mod list_commands;
 mod pub_sub_commands;
 mod server_commands;
 mod string_commands;
+mod transaction;
 mod util;
 
 pub(crate) use util::*;

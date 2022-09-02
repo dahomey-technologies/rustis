@@ -1,8 +1,8 @@
 use crate::{
     cmd,
-    resp::{ResultValueExt, Value, Array},
-    Command, CommandSend, Database, Error, GenericCommands, ListCommands, Result, ServerCommands,
-    StringCommands, ValueReceiver, ValueSender,
+    resp::{Array, ResultValueExt, Value},
+    Command, CommandSend, Database, Error, GenericCommands, HashCommands, ListCommands, Result,
+    ServerCommands, SetCommands, StringCommands, ValueReceiver, ValueSender,
 };
 use futures::{channel::oneshot, Future};
 use std::{collections::VecDeque, pin::Pin, sync::Mutex};
@@ -68,12 +68,14 @@ impl Transaction {
                         Some(value_sender) => {
                             let _ = value_sender.send(value.into());
                         }
-                        None => return Err(Error::Internal("Unexpected transaction reply".to_owned())),
+                        None => {
+                            return Err(Error::Internal("Unexpected transaction reply".to_owned()))
+                        }
                     }
                 }
-            },
+            }
             Value::Error(e) => return Err(Error::Redis(e)),
-            _ => return Err(Error::Internal("Unexpected transaction reply".to_owned()))
+            _ => return Err(Error::Internal("Unexpected transaction reply".to_owned())),
         }
 
         Ok(())
@@ -87,6 +89,8 @@ impl CommandSend for Transaction {
 }
 
 impl GenericCommands for Transaction {}
+impl HashCommands for Transaction {}
 impl ListCommands for Transaction {}
+impl SetCommands for Transaction {}
 impl ServerCommands for Transaction {}
 impl StringCommands for Transaction {}

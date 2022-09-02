@@ -57,6 +57,7 @@ impl Command {
 /// Types compatible with command args
 pub trait IntoArgs {
     fn into_args(self, command: Command) -> Command;
+    fn num_args(&self) -> usize;
 }
 
 impl<'a, T> IntoArgs for &'a [T]
@@ -65,6 +66,23 @@ where
 {
     fn into_args(self, command: Command) -> Command {
         command.args(self.to_vec())
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<'a, T> IntoArgs for [T; 0]
+where
+    T: Into<BulkString> + Clone,
+{
+    fn into_args(self, command: Command) -> Command {
+        command
+    }
+
+    fn num_args(&self) -> usize {
+        0
     }
 }
 
@@ -111,6 +129,10 @@ where
             args: args,
         }
     }
+
+    fn num_args(&self) -> usize {
+        2
+    }
 }
 
 impl<T> IntoArgs for [T; 3]
@@ -155,6 +177,10 @@ where
             args: args,
         }
     }
+
+    fn num_args(&self) -> usize {
+        3
+    }
 }
 
 impl<T> IntoArgs for [T; 4]
@@ -197,6 +223,10 @@ where
             args: args,
         }
     }
+
+    fn num_args(&self) -> usize {
+        4
+    }
 }
 
 impl<T> IntoArgs for Vec<T>
@@ -238,11 +268,19 @@ where
             args,
         }
     }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
 }
 
 impl IntoArgs for BulkString {
     fn into_args(self, command: Command) -> Command {
         command.arg(self)
+    }
+
+    fn num_args(&self) -> usize {
+        1
     }
 }
 
@@ -250,16 +288,28 @@ impl IntoArgs for &'static str {
     fn into_args(self, command: Command) -> Command {
         command.arg(BulkString::from(self))
     }
+
+    fn num_args(&self) -> usize {
+        1
+    }
 }
 
 impl IntoArgs for String {
     fn into_args(self, command: Command) -> Command {
         command.arg(BulkString::from(self))
     }
+
+    fn num_args(&self) -> usize {
+        1
+    }
 }
 
 impl IntoArgs for Vec<u8> {
     fn into_args(self, command: Command) -> Command {
         command.arg(BulkString::from(self))
+    }
+
+    fn num_args(&self) -> usize {
+        1
     }
 }

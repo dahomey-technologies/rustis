@@ -243,8 +243,8 @@ pub trait HashCommands: CommandSend {
     /// Sets field in the hash stored at key to value, only if field does not yet exist.
     ///
     /// # Return
-    /// - *true* if field is a new field in the hash and value was set.
-    /// - *false* if field already exists in the hash and no operation was performed.
+    /// - **true** if field is a new field in the hash and value was set.
+    /// - **false** if field already exists in the hash and no operation was performed.
     ///
     /// # See Also
     /// [https://redis.io/commands/hsetnx/](https://redis.io/commands/hsetnx/)
@@ -367,10 +367,6 @@ pub struct HScan<'a, T: HashCommands + ?Sized> {
 }
 
 impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
-    /// return a random field from the hash value stored at key.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
     pub fn execute<F, V>(self) -> Pin<Box<dyn Future<Output = Result<HScanResult<F, V>>> + 'a>>
     where
         F: FromValue + Send + 'a,

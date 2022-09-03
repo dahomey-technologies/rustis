@@ -165,7 +165,8 @@ async fn expireat() -> Result<()> {
     database.set("key", "value").await?;
     let result = database.expireat("key", now + 10).execute().await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").await?);
+    let ttl = database.ttl("key").await?;
+    assert!(9 <= ttl && ttl <= 10);
 
     // xx
     database.set("key", "value").await?;

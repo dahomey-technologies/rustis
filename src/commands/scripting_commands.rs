@@ -39,6 +39,9 @@ pub trait ScriptingCommands: CommandSend {
     }
 
     /// Load a script into the scripts cache, without executing it. 
+    /// 
+    /// # Return
+    /// The SHA1 digest of the script added into the script cache.
     ///
     /// # See Also
     /// [https://redis.io/commands/script-load/](https://redis.io/commands/script-load/)

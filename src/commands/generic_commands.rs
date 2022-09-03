@@ -53,8 +53,8 @@ pub trait GenericCommands: CommandSend {
     /// Set a timeout on key in seconds
     ///
     /// # Return
-    /// - true if the timeout was set.
-    /// - false if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
+    /// * `true` - if the timeout was set.
+    /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
     /// [https://redis.io/commands/expire/](https://redis.io/commands/expire/)
@@ -64,19 +64,19 @@ pub trait GenericCommands: CommandSend {
     {
         Expire {
             generic_commands: &self,
-            cmd: cmd("EXPIRE").arg(key).arg(seconds)
+            cmd: cmd("EXPIRE").arg(key).arg(seconds),
         }
     }
 
-    /// EXPIREAT has the same effect and semantic as EXPIRE, 
-    /// but instead of specifying the number of seconds representing the TTL (time to live), 
+    /// EXPIREAT has the same effect and semantic as EXPIRE,
+    /// but instead of specifying the number of seconds representing the TTL (time to live),
     /// it takes an absolute Unix timestamp (seconds since January 1, 1970)
-    /// 
+    ///
     /// A timestamp in the past will delete the key
     ///
     /// # Return
-    /// - true if the timeout was set.
-    /// - false if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
+    /// * `true` - if the timeout was set.
+    /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
     /// [https://redis.io/commands/expireat/](https://redis.io/commands/expireat/)
@@ -86,7 +86,7 @@ pub trait GenericCommands: CommandSend {
     {
         Expire {
             generic_commands: &self,
-            cmd: cmd("EXPIREAT").arg(key).arg(unix_time_seconds)
+            cmd: cmd("EXPIREAT").arg(key).arg(unix_time_seconds),
         }
     }
 
@@ -109,8 +109,8 @@ pub trait GenericCommands: CommandSend {
     /// Move key from the currently selected database to the specified destination database.
     ///
     /// # Return
-    /// - true if key was moved.
-    /// - false f key was not moved.
+    /// * `true` - if key was moved.
+    /// * `false` - f key was not moved.
     ///
     /// # See Also
     /// [https://redis.io/commands/move/](https://redis.io/commands/move/)
@@ -121,13 +121,13 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("MOVE").arg(key).arg(db))
     }
 
-    /// Remove the existing timeout on key, 
-    /// turning the key from volatile (a key with an expire set) 
+    /// Remove the existing timeout on key,
+    /// turning the key from volatile (a key with an expire set)
     /// to persistent (a key that will never expire as no timeout is associated).
     ///
     /// # Return
-    /// - true if the timeout was removed.
-    /// - false if key does not exist or does not have an associated timeout.
+    /// * `true` - if the timeout was removed.
+    /// * `false` - if key does not exist or does not have an associated timeout.
     ///
     /// # See Also
     /// [https://redis.io/commands/persist/](https://redis.io/commands/persist/)
@@ -141,8 +141,8 @@ pub trait GenericCommands: CommandSend {
     /// This command works exactly like EXPIRE but the time to live of the key is specified in milliseconds instead of seconds.
     ///
     /// # Return
-    /// - true if the timeout was set.
-    /// - false if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
+    /// * `true` - if the timeout was set.
+    /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
@@ -152,16 +152,16 @@ pub trait GenericCommands: CommandSend {
     {
         Expire {
             generic_commands: &self,
-            cmd: cmd("PEXPIRE").arg(key).arg(milliseconds)
+            cmd: cmd("PEXPIRE").arg(key).arg(milliseconds),
         }
     }
 
-    /// PEXPIREAT has the same effect and semantic as EXPIREAT, 
+    /// PEXPIREAT has the same effect and semantic as EXPIREAT,
     /// but the Unix time at which the key will expire is specified in milliseconds instead of seconds.
     ///
     /// # Return
-    /// - true if the timeout was set.
-    /// - false if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
+    /// * `true` - if the timeout was set.
+    /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpireat/](https://redis.io/commands/pexpireat/)
@@ -171,11 +171,11 @@ pub trait GenericCommands: CommandSend {
     {
         Expire {
             generic_commands: &self,
-            cmd: cmd("PEXPIREAT").arg(key).arg(unix_time_milliseconds)
+            cmd: cmd("PEXPIREAT").arg(key).arg(unix_time_milliseconds),
         }
     }
 
-    /// PEXPIRETIME has the same semantic as EXPIRETIME, 
+    /// PEXPIRETIME has the same semantic as EXPIRETIME,
     /// but returns the absolute Unix expiration timestamp in milliseconds instead of seconds.
     ///
     /// # Return
@@ -225,7 +225,7 @@ pub trait GenericCommands: CommandSend {
     }
 
     /// Returns the string representation of the type of the value stored at key.
-    /// 
+    ///
     /// The different types that can be returned are: string, list, set, zset, hash and stream.
     ///
     /// # Return
@@ -265,11 +265,10 @@ impl<'a, T: GenericCommands> Copy<'a, T> {
     }
 
     /// Execute the command
-    /// 
+    ///
     /// # Return
     ///  Success of the operation
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>>
-    {
+    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
         self.generic_commands.send_into(self.cmd)
     }
 }

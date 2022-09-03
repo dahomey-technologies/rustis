@@ -29,8 +29,8 @@ pub trait HashCommands: CommandSend {
     /// Returns if field is an existing field in the hash stored at key.
     ///
     /// # Return
-    /// - true if the hash contains field.
-    /// - false if the hash does not contain field, or key does not exist.
+    /// * `true` - if the hash contains field.
+    /// * `false` - if the hash does not contain field, or key does not exist.
     ///
     /// # See Also
     /// [https://redis.io/commands/hexists/](https://redis.io/commands/hexists/)
@@ -243,8 +243,8 @@ pub trait HashCommands: CommandSend {
     /// Sets field in the hash stored at key to value, only if field does not yet exist.
     ///
     /// # Return
-    /// - **true** if field is a new field in the hash and value was set.
-    /// - **false** if field already exists in the hash and no operation was performed.
+    /// * `true` - if field is a new field in the hash and value was set.
+    /// * `false` - if field already exists in the hash and no operation was performed.
     ///
     /// # See Also
     /// [https://redis.io/commands/hsetnx/](https://redis.io/commands/hsetnx/)
@@ -270,11 +270,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hstrlen/](https://redis.io/commands/hstrlen/)
-    fn hstrlen<K, F>(
-        &self,
-        key: K,
-        field: F,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hstrlen<K, F>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString> + Send + Sync + Copy,
         F: Into<BulkString> + Send + Sync + Copy,
@@ -385,8 +381,7 @@ impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
         }
     }
 
-    pub fn count(self, count: usize) -> Self
-    {
+    pub fn count(self, count: usize) -> Self {
         Self {
             hash_commands: self.hash_commands,
             cmd: self.cmd.arg("COUNT").arg(count),
@@ -423,7 +418,7 @@ where
         let values: Vec<Value> = if let Some(value) = it.next() {
             value.into()?
         } else {
-            return Err(Error::Internal("unexpected hscan result".to_owned()))
+            return Err(Error::Internal("unexpected hscan result".to_owned()));
         };
 
         let mut it = values.into_iter();

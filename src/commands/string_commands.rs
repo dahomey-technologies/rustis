@@ -427,8 +427,8 @@ pub trait StringCommands: CommandSend {
     ///
     /// # Return
     /// specifically:
-    /// - true if the key was set
-    /// - false if the key was not set
+    /// * `true` - if the key was set
+    /// * `false` - if the key was not set
     ///
     /// # See Also
     /// [https://redis.io/commands/setnx/](https://redis.io/commands/setnx/)

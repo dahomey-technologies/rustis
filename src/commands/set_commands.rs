@@ -138,8 +138,8 @@ pub trait SetCommands: CommandSend {
     /// Returns if member is a member of the set stored at key.
     ///
     /// # Return
-    /// *true" if the element is a member of the set.
-    /// *false* if the element is not a member of the set, or if key does not exist.
+    /// * `true` - if the element is a member of the set.
+    /// * `false` - if the element is not a member of the set, or if key does not exist.
     ///
     /// # See Also
     /// [https://redis.io/commands/sismember/](https://redis.io/commands/sismember/)
@@ -185,8 +185,8 @@ pub trait SetCommands: CommandSend {
     /// Move member from the set at source to the set at destination.
     ///
     /// # Return
-    /// - **true** if the element is moved.
-    /// - **false** if the element is not a member of source and no operation was performed.
+    /// * `true` - if the element is moved.
+    /// * `false` - if the element is not a member of source and no operation was performed.
     ///
     /// # See Also
     /// [https://redis.io/commands/smove/](https://redis.io/commands/smove/)

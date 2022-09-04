@@ -4,7 +4,7 @@ use crate::{
     Command, CommandSend, Error, IntoArgs, Result,
 };
 use futures::Future;
-use std::{iter::once, pin::Pin};
+use std::{pin::Pin};
 
 /// A group of Redis commands related to Strings
 /// # See Also
@@ -300,19 +300,14 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
-    fn mset<'a, K, V>(
+    fn mset<'a, I>(
         &'a self,
-        items: &'a [(K, V)],
+        items: I,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy,
+        I: IntoArgs
     {
-        let flatten_items: Vec<BulkString> = items
-            .iter()
-            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
-            .collect();
-        self.send_into(cmd("MSET").arg(flatten_items))
+        self.send_into(cmd("MSET").arg(items))
     }
 
     /// Sets the given keys to their respective values.
@@ -332,19 +327,14 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
-    fn msetnx<'a, K, V>(
+    fn msetnx<'a, I>(
         &'a self,
-        items: &'a [(K, V)],
+        items: I,
     ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy,
+        I: IntoArgs,
     {
-        let flatten_items: Vec<BulkString> = items
-            .iter()
-            .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
-            .collect();
-        self.send_into(cmd("MSETNX").arg(flatten_items))
+        self.send_into(cmd("MSETNX").arg(items))
     }
 
     /// Works exactly like [setex](crate::StringCommands::setex) with the sole

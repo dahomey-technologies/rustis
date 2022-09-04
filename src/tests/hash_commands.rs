@@ -13,7 +13,7 @@ async fn hdel() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "value")]).await?;
+    database.hset("key", ("field", "value")).await?;
     let value: String = database.hget("key", "field").await?;
     assert_eq!("value", value);
 
@@ -36,7 +36,7 @@ async fn hexists() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "value")]).await?;
+    database.hset("key", ("field", "value")).await?;
     let value: String = database.hget("key", "field").await?;
     assert_eq!("value", value);
 
@@ -59,7 +59,7 @@ async fn hget() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "value")]).await?;
+    database.hset("key", ("field", "value")).await?;
     let value: String = database.hget("key", "field").await?;
     assert_eq!("value", value);
 
@@ -77,7 +77,7 @@ async fn hget_all() -> Result<()> {
     database.del("key").await?;
 
     database
-        .hset("key", &[("field1", "Hello"), ("field2", "World")])
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
     let result: Vec<(String, String)> = database.hgetall("key").await?;
     assert_eq!(2, result.len());
@@ -97,7 +97,7 @@ async fn hincrby() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "5")]).await?;
+    database.hset("key", ("field", "5")).await?;
     let value = database.hincrby("key", "field", 1).await?;
     assert_eq!(6, value);
     let value = database.hincrby("key", "field", -1).await?;
@@ -118,12 +118,12 @@ async fn hincrbyfloat() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "10.50")]).await?;
+    database.hset("key", ("field", "10.50")).await?;
     let value = database.hincrbyfloat("key", "field", 0.1).await?;
     assert_eq!(10.6, value);
     let value = database.hincrbyfloat("key", "field", -5.0).await?;
     assert_eq!(5.6, value);
-    database.hset("key", &[("field", "5.0e3")]).await?;
+    database.hset("key", ("field", "5.0e3")).await?;
     let value = database.hincrbyfloat("key", "field", 2.0e2).await?;
     assert_eq!(5200.0, value);
 
@@ -141,7 +141,7 @@ async fn hkeys() -> Result<()> {
     database.del("key").await?;
 
     database
-        .hset("key", &[("field1", "Hello"), ("field2", "World")])
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
     let fields: Vec<String> = database.hkeys("key").await?;
     assert_eq!(2, fields.len());
@@ -162,7 +162,7 @@ async fn hlen() -> Result<()> {
     database.del("key").await?;
 
     database
-        .hset("key", &[("field1", "Hello"), ("field2", "World")])
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
     let len = database.hlen("key").await?;
     assert_eq!(2, len);
@@ -181,7 +181,7 @@ async fn hmget() -> Result<()> {
     database.del("key").await?;
 
     database
-        .hset("key", &[("field1", "Hello"), ("field2", "World")])
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
     let values: Vec<String> = database
         .hmget("key", ["field1", "field2", "nofield"])
@@ -205,7 +205,7 @@ async fn hrandfield() -> Result<()> {
     database.del("coin").await?;
 
     let fields_and_values = [("heads", "obverse"), ("tails", "reverse"), ("edge", "")];
-    database.hset("coin", &fields_and_values).await?;
+    database.hset("coin", fields_and_values).await?;
 
     let value: String = database.hrandfield("coin").execute().await?;
     assert!(fields_and_values.iter().any(|v| v.0 == value));
@@ -246,7 +246,6 @@ async fn hscan() -> Result<()> {
     let fields_and_values: Vec<_> = (1..21)
         .map(|i| (format!("field{}", i), format!("value{}", i)))
         .collect();
-    let fields_and_values: &[(String, String)] = &fields_and_values;
 
     database.hset("key", fields_and_values).await?;
 
@@ -311,7 +310,7 @@ async fn hstrlen() -> Result<()> {
     // cleanup
     database.del("key").await?;
 
-    database.hset("key", &[("field", "value")]).await?;
+    database.hset("key", ("field", "value")).await?;
 
     let len = database.hstrlen("key", "field").await?;
     assert_eq!(5, len);
@@ -330,7 +329,7 @@ async fn hvals() -> Result<()> {
     database.del("key").await?;
 
     database
-        .hset("key", &[("field1", "Hello"), ("field2", "World")])
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
 
     let values: Vec<String> = database.hvals("key").await?;

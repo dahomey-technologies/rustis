@@ -4,7 +4,7 @@ use crate::{
     Command, CommandSend, Error, IntoArgs, Result,
 };
 use futures::Future;
-use std::{iter::once, pin::Pin};
+use std::{pin::Pin};
 
 /// A group of Redis commands related to Hashes
 ///
@@ -223,21 +223,16 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hset/](https://redis.io/commands/hset/)
-    fn hset<K, F, V>(
+    fn hset<K, I>(
         &self,
         key: K,
-        items: &[(F, V)],
+        items: I,
     ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync,
-        F: Into<BulkString> + Send + Sync + Clone,
-        V: Into<BulkString> + Send + Sync + Clone,
+        K: Into<BulkString>,
+        I: IntoArgs
     {
-        let flatten_items: Vec<BulkString> = items
-            .iter()
-            .flat_map(|i| once(i.0.clone().into()).chain(once(i.1.clone().into())))
-            .collect();
-        self.send_into(cmd("HSET").arg(key).arg(flatten_items))
+        self.send_into(cmd("HSET").arg(key).arg(items))
     }
 
     /// Sets field in the hash stored at key to value, only if field does not yet exist.

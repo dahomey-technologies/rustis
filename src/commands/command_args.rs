@@ -1,5 +1,3 @@
-use std::iter::once;
-
 use crate::resp::BulkString;
 
 #[derive(Debug)]
@@ -91,7 +89,7 @@ where
         0
     }
 }
-
+/*
 impl<T> IntoArgs for [T; 2]
 where
     T: Into<BulkString>,
@@ -257,5 +255,85 @@ where
 
     fn num_args(&self) -> usize {
         self.len()
+    }
+}*/
+
+impl<T> IntoArgs for [T; 2]
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut it = self.into_iter();
+        let args = it.next().unwrap().into_args(args);
+        it.next().unwrap().into_args(args)
+    }
+
+    fn num_args(&self) -> usize {
+        2
+    }
+}
+
+impl<T> IntoArgs for [T; 3]
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut it = self.into_iter();
+        let args = it.next().unwrap().into_args(args);
+        let args = it.next().unwrap().into_args(args);
+        it.next().unwrap().into_args(args)
+    }
+
+    fn num_args(&self) -> usize {
+        3
+    }
+}
+
+impl<T> IntoArgs for [T; 4]
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut it = self.into_iter();
+        let args = it.next().unwrap().into_args(args);
+        let args = it.next().unwrap().into_args(args);
+        let args = it.next().unwrap().into_args(args);
+        it.next().unwrap().into_args(args)
+    }
+
+    fn num_args(&self) -> usize {
+        4
+    }
+}
+
+impl<T> IntoArgs for Vec<T>
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for a in self.into_iter() {
+            args = a.into_args(args)
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T, U> IntoArgs for (T, U)
+where
+    T: IntoArgs,
+    U: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let args = self.0.into_args(args);
+        self.1.into_args(args)
+    }
+
+    fn num_args(&self) -> usize {
+        2
     }
 }

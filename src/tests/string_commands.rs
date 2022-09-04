@@ -342,7 +342,7 @@ async fn lcs() -> Result<()> {
     database.del(["key1", "key2"]).await?;
 
     database
-        .mset(&[("key1", "ohmytext"), ("key2", "mynewtext")])
+        .mset([("key1", "ohmytext"), ("key2", "mynewtext")])
         .await?;
 
     let result: String = database.lcs("key1", "key2").execute().await?;
@@ -371,7 +371,7 @@ async fn mget_mset() -> Result<()> {
     database.del(["key1", "key2", "key3", "key4"]).await?;
 
     database
-        .mset(&[("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
+        .mset([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
         .await?;
 
     let values: Vec<Option<String>> = database.mget(["key1", "key2", "key3", "key4"]).await?;
@@ -395,7 +395,7 @@ async fn msetnx() -> Result<()> {
     database.del(["key1", "key2", "key3", "key4"]).await?;
 
     let success = database
-        .msetnx(&[("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
+        .msetnx([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
         .await?;
     assert!(success);
 
@@ -407,7 +407,7 @@ async fn msetnx() -> Result<()> {
     assert_eq!(values[3], None);
 
     let success = database
-        .msetnx(&[("key1", "value1"), ("key4", "value4")])
+        .msetnx([("key1", "value1"), ("key4", "value4")])
         .await?;
     assert!(!success);
 

@@ -41,39 +41,6 @@ impl CommandArgs {
     }
 }
 
-impl<T> From<T> for CommandArgs
-where
-    T: Into<BulkString>,
-{
-    fn from(arg: T) -> Self {
-        CommandArgs::Single(arg.into())
-    }
-}
-
-impl From<[BulkString; 2]> for CommandArgs {
-    fn from(args: [BulkString; 2]) -> Self {
-        CommandArgs::Array2(args)
-    }
-}
-
-impl From<[BulkString; 3]> for CommandArgs {
-    fn from(args: [BulkString; 3]) -> Self {
-        CommandArgs::Array3(args)
-    }
-}
-
-impl From<[BulkString; 4]> for CommandArgs {
-    fn from(args: [BulkString; 4]) -> Self {
-        CommandArgs::Array4(args)
-    }
-}
-
-impl From<Vec<BulkString>> for CommandArgs {
-    fn from(args: Vec<BulkString>) -> Self {
-        CommandArgs::Vec(args)
-    }
-}
-
 /// Types compatible with command args
 pub trait IntoArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs;

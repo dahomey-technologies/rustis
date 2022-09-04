@@ -1,6 +1,6 @@
 use crate::{
-    Command, Connection, ConnectionFactory, ConnectionType, Error, Message, MsgReceiver, MsgSender,
-    NetworkHandler, Result,
+    Connection, ConnectionFactory, ConnectionType, Error, Message, MsgReceiver, MsgSender,
+    NetworkHandler, Result, cmd,
 };
 use futures::{select, FutureExt, StreamExt};
 use std::sync::Arc;
@@ -92,9 +92,6 @@ impl InteractiveConnection {
     }
 
     fn create_select_database_message(database: usize) -> Message {
-        Message::new(Command {
-            name: "SELECT",
-            args: database.to_string().into(),
-        })
+        Message::new(cmd("SELECT").arg(database))
     }
 }

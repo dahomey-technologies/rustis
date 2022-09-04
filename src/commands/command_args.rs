@@ -45,6 +45,13 @@ pub trait IntoArgs {
     fn num_args(&self) -> usize;
 }
 
+/// Marker for collections of IntoArgs
+pub trait IntoArgsCollection<T>: IntoArgs
+where
+    T: IntoArgs,
+{
+}
+
 impl<'a, T> IntoArgs for T
 where
     T: Into<BulkString>,
@@ -77,9 +84,9 @@ where
     }
 }
 
-impl<'a, T> IntoArgs for [T; 0]
+impl<T> IntoArgs for [T; 0]
 where
-    T: Into<BulkString> + Clone,
+    T: IntoArgs,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args
@@ -89,174 +96,20 @@ where
         0
     }
 }
-/*
-impl<T> IntoArgs for [T; 2]
+
+impl<T> IntoArgs for [T; 1]
 where
-    T: Into<BulkString>,
+    T: IntoArgs,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut it = self.into_iter();
-
-        match args {
-            CommandArgs::Empty => {
-                CommandArgs::Array2([it.next().unwrap().into(), it.next().unwrap().into()])
-            }
-            CommandArgs::Single(a) => {
-                CommandArgs::Array3([a, it.next().unwrap().into(), it.next().unwrap().into()])
-            }
-            CommandArgs::Array2(a) => {
-                let mut it_old = a.into_iter();
-                CommandArgs::Array4([
-                    it_old.next().unwrap().into(),
-                    it_old.next().unwrap().into(),
-                    it.next().unwrap().into(),
-                    it.next().unwrap().into(),
-                ])
-            }
-            CommandArgs::Array3(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array4(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Vec(mut vec) => {
-                vec.reserve(2);
-                for arg in it {
-                    vec.push(arg.into());
-                }
-                CommandArgs::Vec(vec)
-            }
-        }
+        it.next().unwrap().into_args(args)
     }
 
     fn num_args(&self) -> usize {
-        2
+        1
     }
 }
-
-impl<T> IntoArgs for [T; 3]
-where
-    T: Into<BulkString>,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-
-        match args {
-            CommandArgs::Empty => CommandArgs::Array3([
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-            ]),
-            CommandArgs::Single(a) => CommandArgs::Array4([
-                a,
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-            ]),
-            CommandArgs::Array2(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array3(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array4(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Vec(mut vec) => {
-                vec.reserve(3);
-                for arg in it {
-                    vec.push(arg.into());
-                }
-                CommandArgs::Vec(vec)
-            }
-        }
-    }
-
-    fn num_args(&self) -> usize {
-        3
-    }
-}
-
-impl<T> IntoArgs for [T; 4]
-where
-    T: Into<BulkString>,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-
-        match args {
-            CommandArgs::Empty => CommandArgs::Array4([
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-                it.next().unwrap().into(),
-            ]),
-            CommandArgs::Single(a) => {
-                CommandArgs::Vec(once(a).chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array2(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array3(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Array4(a) => {
-                CommandArgs::Vec(a.into_iter().chain(it.map(|e| e.into())).collect())
-            }
-            CommandArgs::Vec(mut vec) => {
-                vec.reserve(3);
-                for arg in it {
-                    vec.push(arg.into());
-                }
-                CommandArgs::Vec(vec)
-            }
-        }
-    }
-
-    fn num_args(&self) -> usize {
-        4
-    }
-}
-
-impl<T> IntoArgs for Vec<T>
-where
-    T: Into<BulkString>,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        match args {
-            CommandArgs::Empty => CommandArgs::Vec(self.into_iter().map(|e| e.into()).collect()),
-            CommandArgs::Single(a) => {
-                CommandArgs::Vec(once(a).chain(self.into_iter().map(|e| e.into())).collect())
-            }
-            CommandArgs::Array2(a) => CommandArgs::Vec(
-                a.into_iter()
-                    .chain(self.into_iter().map(|e| e.into()))
-                    .collect(),
-            ),
-            CommandArgs::Array3(a) => CommandArgs::Vec(
-                a.into_iter()
-                    .chain(self.into_iter().map(|e| e.into()))
-                    .collect(),
-            ),
-            CommandArgs::Array4(a) => CommandArgs::Vec(
-                a.into_iter()
-                    .chain(self.into_iter().map(|e| e.into()))
-                    .collect(),
-            ),
-            CommandArgs::Vec(mut vec) => {
-                vec.reserve(self.len());
-                for arg in self.into_iter() {
-                    vec.push(arg.into());
-                }
-                CommandArgs::Vec(vec)
-            }
-        }
-    }
-
-    fn num_args(&self) -> usize {
-        self.len()
-    }
-}*/
 
 impl<T> IntoArgs for [T; 2]
 where
@@ -337,3 +190,11 @@ where
         2
     }
 }
+
+impl<T> IntoArgsCollection<T> for [T; 0] where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for [T; 1] where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for [T; 2] where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for [T; 3] where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for [T; 4] where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for Vec<T> where T: IntoArgs {}
+impl<T> IntoArgsCollection<T> for T where T: IntoArgs {}

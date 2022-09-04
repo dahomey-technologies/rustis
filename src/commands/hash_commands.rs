@@ -1,10 +1,10 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue, Value},
-    Command, CommandSend, Error, IntoArgs, Result,
+    Command, CommandSend, Error, IntoArgs, IntoArgsCollection, Result,
 };
 use futures::Future;
-use std::{pin::Pin};
+use std::pin::Pin;
 
 /// A group of Redis commands related to Hashes
 ///
@@ -223,14 +223,16 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hset/](https://redis.io/commands/hset/)
-    fn hset<K, I>(
+    fn hset<K, F, V, I>(
         &self,
         key: K,
         items: I,
     ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString>,
-        I: IntoArgs
+        F: Into<BulkString>,
+        V: Into<BulkString>,
+        I: IntoArgsCollection<(F, V)>,
     {
         self.send_into(cmd("HSET").arg(key).arg(items))
     }

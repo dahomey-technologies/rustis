@@ -1,10 +1,10 @@
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    Command, CommandSend, Error, IntoArgs, Result,
+    Command, CommandSend, Error, IntoArgs, IntoArgsCollection, Result,
 };
 use futures::Future;
-use std::{pin::Pin};
+use std::pin::Pin;
 
 /// A group of Redis commands related to Strings
 /// # See Also
@@ -300,12 +300,11 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
-    fn mset<'a, I>(
-        &'a self,
-        items: I,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
+    fn mset<'a, K, V, I>(&'a self, items: I) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        I: IntoArgs
+        I: IntoArgsCollection<(K, V)>,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("MSET").arg(items))
     }
@@ -327,12 +326,11 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
-    fn msetnx<'a, I>(
-        &'a self,
-        items: I,
-    ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn msetnx<'a, K, V, I>(&'a self, items: I) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        I: IntoArgs,
+        I: IntoArgsCollection<(K, V)>,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("MSETNX").arg(items))
     }

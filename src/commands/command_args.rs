@@ -84,65 +84,20 @@ where
     }
 }
 
-impl<T> IntoArgs for [T; 1]
+impl<T, const N: usize> IntoArgs for [T; N]
 where
     T: IntoArgs,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-        it.next().unwrap().into_args(args)
+        let mut args = args;
+        for a in self.into_iter() {
+            args = a.into_args(args)
+        }
+        args
     }
 
     fn num_args(&self) -> usize {
-        1
-    }
-}
-
-impl<T> IntoArgs for [T; 2]
-where
-    T: IntoArgs,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-        let args = it.next().unwrap().into_args(args);
-        it.next().unwrap().into_args(args)
-    }
-
-    fn num_args(&self) -> usize {
-        2
-    }
-}
-
-impl<T> IntoArgs for [T; 3]
-where
-    T: IntoArgs,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-        let args = it.next().unwrap().into_args(args);
-        let args = it.next().unwrap().into_args(args);
-        it.next().unwrap().into_args(args)
-    }
-
-    fn num_args(&self) -> usize {
-        3
-    }
-}
-
-impl<T> IntoArgs for [T; 4]
-where
-    T: IntoArgs,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        let mut it = self.into_iter();
-        let args = it.next().unwrap().into_args(args);
-        let args = it.next().unwrap().into_args(args);
-        let args = it.next().unwrap().into_args(args);
-        it.next().unwrap().into_args(args)
-    }
-
-    fn num_args(&self) -> usize {
-        4
+        N
     }
 }
 
@@ -178,9 +133,6 @@ where
     }
 }
 
-impl<T> IntoArgsCollection<T> for [T; 1] where T: IntoArgs {}
-impl<T> IntoArgsCollection<T> for [T; 2] where T: IntoArgs {}
-impl<T> IntoArgsCollection<T> for [T; 3] where T: IntoArgs {}
-impl<T> IntoArgsCollection<T> for [T; 4] where T: IntoArgs {}
+impl<T, const N: usize> IntoArgsCollection<T> for [T; N] where T: IntoArgs {}
 impl<T> IntoArgsCollection<T> for Vec<T> where T: IntoArgs {}
 impl<T> IntoArgsCollection<T> for T where T: IntoArgs {}

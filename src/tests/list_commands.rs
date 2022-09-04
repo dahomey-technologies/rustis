@@ -125,7 +125,7 @@ async fn lmpop() -> Result<()> {
     database
         .lpush(
             "mylist",
-            vec!["element1", "element2", "element3", "element4", "element5"],
+            ["element1", "element2", "element3", "element4", "element5"],
         )
         .await?;
 
@@ -180,16 +180,38 @@ async fn lpos() -> Result<()> {
         .rpush("mylist", ["element1", "element2", "element3"])
         .await?;
 
-    let pos = database.lpos("mylist", "element2").rank(1).max_len(1).execute().await?;
+    let pos = database
+        .lpos("mylist", "element2")
+        .rank(1)
+        .max_len(1)
+        .execute()
+        .await?;
     assert_eq!(None, pos);
 
-    let pos = database.lpos("mylist", "element2").rank(1).max_len(3).execute().await?;
+    let pos = database
+        .lpos("mylist", "element2")
+        .rank(1)
+        .max_len(3)
+        .execute()
+        .await?;
     assert_eq!(Some(1), pos);
 
-    let pos = database.lpos("mylist", "element2").rank(1).max_len(1).count(1).execute().await?;
+    let pos = database
+        .lpos("mylist", "element2")
+        .rank(1)
+        .max_len(1)
+        .count(1)
+        .execute()
+        .await?;
     assert_eq!(0, pos.len());
- 
-    let pos = database.lpos("mylist", "element2").rank(1).max_len(3).count(1).execute().await?;
+
+    let pos = database
+        .lpos("mylist", "element2")
+        .rank(1)
+        .max_len(3)
+        .count(1)
+        .execute()
+        .await?;
     assert_eq!(1, pos.len());
     assert_eq!(1, pos[0]);
 
@@ -245,7 +267,9 @@ async fn lrange() -> Result<()> {
     // cleanup
     database.del("mylist").await?;
 
-    database.rpush("mylist", ["element1", "element2", "element3"]).await?;
+    database
+        .rpush("mylist", ["element1", "element2", "element3"])
+        .await?;
 
     let elements: Vec<String> = database.lrange("mylist", 0, -1).await?;
     assert_eq!(3, elements.len());
@@ -270,7 +294,9 @@ async fn lrem() -> Result<()> {
     // cleanup
     database.del("mylist").await?;
 
-    database.rpush("mylist", ["element1", "element1", "element3"]).await?;
+    database
+        .rpush("mylist", ["element1", "element1", "element3"])
+        .await?;
 
     let len = database.lrem("mylist", 3, "element1").await?;
     assert_eq!(2, len);
@@ -294,7 +320,9 @@ async fn lset() -> Result<()> {
     // cleanup
     database.del("mylist").await?;
 
-    database.rpush("mylist", ["element1", "element1", "element3"]).await?;
+    database
+        .rpush("mylist", ["element1", "element1", "element3"])
+        .await?;
 
     database.lset("mylist", 0, "element4").await?;
     database.lset("mylist", -2, "element5").await?;
@@ -318,7 +346,9 @@ async fn ltrim() -> Result<()> {
     // cleanup
     database.del("mylist").await?;
 
-    database.rpush("mylist", ["element1", "element2", "element3"]).await?;
+    database
+        .rpush("mylist", ["element1", "element2", "element3"])
+        .await?;
 
     database.ltrim("mylist", 1, -1).await?;
 

@@ -56,7 +56,7 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
                     )))
                 } else {
                     Ok(Some((
-                        buf[pos..(pos + len as usize)].to_vec().into(),
+                        BulkString::Binary(buf[pos..(pos + len as usize)].to_vec()),
                         pos + len as usize + 2,
                     )))
                 }

@@ -19,34 +19,7 @@ impl Command {
         }
     }
 
-    pub fn arg<T>(mut self, arg: T) -> Self
-    where
-        T: Into<BulkString>,
-    {
-        self.args = match self.args {
-            CommandArgs::Empty => CommandArgs::Single(arg.into()),
-            CommandArgs::Single(a) => CommandArgs::Array2([a, arg.into()]),
-            CommandArgs::Array2(a) => {
-                let [item1, item2] = a;
-                CommandArgs::Array3([item1, item2, arg.into()])
-            }
-            CommandArgs::Array3(a) => {
-                let [item1, item2, item3] = a;
-                CommandArgs::Array4([item1, item2, item3, arg.into()])
-            }
-            CommandArgs::Array4(a) => {
-                let [item1, item2, item3, item4] = a;
-                CommandArgs::Vec(vec![item1, item2, item3, item4, arg.into()])
-            }
-            CommandArgs::Vec(mut vec) => {
-                vec.push(arg.into());
-                CommandArgs::Vec(vec)
-            }
-        };
-        self
-    }
-
-    pub fn args<A>(self, args: A) -> Self
+    pub fn arg<A>(self, args: A) -> Self
     where
         A: IntoArgs,
     {
@@ -60,16 +33,40 @@ pub trait IntoArgs {
     fn num_args(&self) -> usize;
 }
 
-impl<'a, T> IntoArgs for &'a [T]
+impl<'a, T> IntoArgs for T
 where
-    T: Into<BulkString> + Clone,
+    T: Into<BulkString>,
 {
     fn into_args(self, command: Command) -> Command {
-        command.args(self.to_vec())
+        let args = match command.args {
+            CommandArgs::Empty => CommandArgs::Single(self.into()),
+            CommandArgs::Single(a) => CommandArgs::Array2([a, self.into()]),
+            CommandArgs::Array2(a) => {
+                let [item1, item2] = a;
+                CommandArgs::Array3([item1, item2, self.into()])
+            }
+            CommandArgs::Array3(a) => {
+                let [item1, item2, item3] = a;
+                CommandArgs::Array4([item1, item2, item3, self.into()])
+            }
+            CommandArgs::Array4(a) => {
+                let [item1, item2, item3, item4] = a;
+                CommandArgs::Vec(vec![item1, item2, item3, item4, self.into()])
+            }
+            CommandArgs::Vec(mut vec) => {
+                vec.push(self.into());
+                CommandArgs::Vec(vec)
+            }
+        };
+
+        Command {
+            name: command.name,
+            args: args,
+        }
     }
 
     fn num_args(&self) -> usize {
-        self.len()
+        1
     }
 }
 
@@ -271,45 +268,5 @@ where
 
     fn num_args(&self) -> usize {
         self.len()
-    }
-}
-
-impl IntoArgs for BulkString {
-    fn into_args(self, command: Command) -> Command {
-        command.arg(self)
-    }
-
-    fn num_args(&self) -> usize {
-        1
-    }
-}
-
-impl IntoArgs for &'static str {
-    fn into_args(self, command: Command) -> Command {
-        command.arg(BulkString::from(self))
-    }
-
-    fn num_args(&self) -> usize {
-        1
-    }
-}
-
-impl IntoArgs for String {
-    fn into_args(self, command: Command) -> Command {
-        command.arg(BulkString::from(self))
-    }
-
-    fn num_args(&self) -> usize {
-        1
-    }
-}
-
-impl IntoArgs for Vec<u8> {
-    fn into_args(self, command: Command) -> Command {
-        command.arg(BulkString::from(self))
-    }
-
-    fn num_args(&self) -> usize {
-        1
     }
 }

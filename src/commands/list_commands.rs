@@ -111,7 +111,7 @@ pub trait ListCommands: CommandSend {
         self.send_into(
             cmd("LMPOP")
                 .arg(keys.num_args())
-                .args(keys)
+                .arg(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -160,7 +160,7 @@ pub trait ListCommands: CommandSend {
         K: Into<BulkString>,
         E: IntoArgs,
     {
-        self.send_into(cmd("LPUSH").arg(key).args(elements))
+        self.send_into(cmd("LPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the head of the list stored at key,
@@ -176,7 +176,7 @@ pub trait ListCommands: CommandSend {
         K: Into<BulkString>,
         E: IntoArgs,
     {
-        self.send_into(cmd("LPUSHX").arg(key).args(elements))
+        self.send_into(cmd("LPUSHX").arg(key).arg(elements))
     }
 
     /// Returns the specified elements of the list stored at key.
@@ -279,7 +279,7 @@ pub trait ListCommands: CommandSend {
         K: Into<BulkString>,
         E: IntoArgs,
     {
-        self.send_into(cmd("RPUSH").arg(key).args(elements))
+        self.send_into(cmd("RPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the tail of the list stored at key,
@@ -295,7 +295,7 @@ pub trait ListCommands: CommandSend {
         K: Into<BulkString>,
         E: IntoArgs,
     {
-        self.send_into(cmd("RPUSHX").arg(key).args(elements))
+        self.send_into(cmd("RPUSHX").arg(key).arg(elements))
     }
 }
 

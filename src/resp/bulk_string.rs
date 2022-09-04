@@ -1,7 +1,6 @@
 use crate::{Error, Result};
 use std::fmt;
 
-//#[derive(Clone)]
 pub enum BulkString {
     Str(&'static str),
     String(String),
@@ -41,12 +40,6 @@ impl From<&'static str> for BulkString {
 impl From<String> for BulkString {
     fn from(string: String) -> Self {
         Self::String(string)
-    }
-}
-
-impl From<Vec<u8>> for BulkString {
-    fn from(binary: Vec<u8>) -> Self {
-        Self::Binary(binary)
     }
 }
 

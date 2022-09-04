@@ -23,7 +23,7 @@ pub trait HashCommands: CommandSend {
         K: Into<BulkString> + Send,
         F: IntoArgs + Send,
     {
-        self.send_into(cmd("HDEL").arg(key).args(fields))
+        self.send_into(cmd("HDEL").arg(key).arg(fields))
     }
 
     /// Returns if field is an existing field in the hash stored at key.
@@ -181,7 +181,7 @@ pub trait HashCommands: CommandSend {
         F: IntoArgs + Send,
         V: FromValue + Send + 'a,
     {
-        self.send_into(cmd("HMGET").arg(key).args(fields))
+        self.send_into(cmd("HMGET").arg(key).arg(fields))
     }
 
     /// When called with just the key argument, return a random field from the hash value stored at key.
@@ -237,7 +237,7 @@ pub trait HashCommands: CommandSend {
             .iter()
             .flat_map(|i| once(i.0.clone().into()).chain(once(i.1.clone().into())))
             .collect();
-        self.send_into(cmd("HSET").arg(key).args(flatten_items))
+        self.send_into(cmd("HSET").arg(key).arg(flatten_items))
     }
 
     /// Sets field in the hash stored at key to value, only if field does not yet exist.

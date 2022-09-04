@@ -19,7 +19,7 @@ pub trait SetCommands: CommandSend {
         K: Into<BulkString>,
         M: IntoArgs,
     {
-        self.send_into(cmd("SADD").arg(key).args(members))
+        self.send_into(cmd("SADD").arg(key).arg(members))
     }
 
     /// Returns the set cardinality (number of elements) of the set stored at key.
@@ -49,7 +49,7 @@ pub trait SetCommands: CommandSend {
         K: IntoArgs,
         M: FromValue + Eq + Hash,
     {
-        self.send_into(cmd("SDIFF").args(keys))
+        self.send_into(cmd("SDIFF").arg(keys))
     }
 
     /// This command is equal to [sdiff](crate::SetCommands::sdiff), but instead of returning the resulting set,
@@ -69,7 +69,7 @@ pub trait SetCommands: CommandSend {
         D: Into<BulkString>,
         K: IntoArgs,
     {
-        self.send_into(cmd("SDIFFSTORE").arg(destination).args(keys))
+        self.send_into(cmd("SDIFFSTORE").arg(destination).arg(keys))
     }
 
     /// Returns the members of the set resulting from the intersection of all the given sets.
@@ -84,7 +84,7 @@ pub trait SetCommands: CommandSend {
         K: IntoArgs,
         M: FromValue + Eq + Hash,
     {
-        self.send_into(cmd("SINTER").args(keys))
+        self.send_into(cmd("SINTER").arg(keys))
     }
 
     /// This command is similar to [sinter](crate::SetCommands::sinter), but instead of returning the result set,
@@ -109,7 +109,7 @@ pub trait SetCommands: CommandSend {
         self.send_into(
             cmd("SINTERCARD")
                 .arg(keys.num_args())
-                .args(keys)
+                .arg(keys)
                 .arg("LIMIT")
                 .arg(limit),
         )
@@ -132,7 +132,7 @@ pub trait SetCommands: CommandSend {
         D: Into<BulkString>,
         K: IntoArgs,
     {
-        self.send_into(cmd("SINTERSTORE").arg(destination).args(keys))
+        self.send_into(cmd("SINTERSTORE").arg(destination).arg(keys))
     }
 
     /// Returns if member is a member of the set stored at key.
@@ -179,7 +179,7 @@ pub trait SetCommands: CommandSend {
         K: Into<BulkString>,
         M: IntoArgs,
     {
-        self.send_into(cmd("SMISMEMBER").arg(key).args(members))
+        self.send_into(cmd("SMISMEMBER").arg(key).arg(members))
     }
 
     /// Move member from the set at source to the set at destination.
@@ -254,7 +254,7 @@ pub trait SetCommands: CommandSend {
         K: Into<BulkString>,
         M: IntoArgs,
     {
-        self.send_into(cmd("SREM").arg(key).args(members))
+        self.send_into(cmd("SREM").arg(key).arg(members))
     }
 
     /// Iterates elements of Sets types.
@@ -286,7 +286,7 @@ pub trait SetCommands: CommandSend {
         K: IntoArgs,
         M: FromValue + Eq + Hash,
     {
-        self.send_into(cmd("SUNION").args(keys))
+        self.send_into(cmd("SUNION").arg(keys))
     }
 
     /// This command is equal to [sunion](crate::SetCommands::sunion), but instead of returning the resulting set,
@@ -306,7 +306,7 @@ pub trait SetCommands: CommandSend {
         D: Into<BulkString>,
         K: IntoArgs,
     {
-        self.send_into(cmd("SUNIONSTORE").arg(destination).args(keys))
+        self.send_into(cmd("SUNIONSTORE").arg(destination).arg(keys))
     }
 }
 

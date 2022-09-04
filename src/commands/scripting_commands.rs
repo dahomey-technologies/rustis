@@ -77,7 +77,7 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     {
         Self {
             scripting_commands: self.scripting_commands,
-            cmd: self.cmd.arg(keys.num_args()).args(keys),
+            cmd: self.cmd.arg(keys.num_args()).arg(keys),
             keys_added: true,
         }
     }
@@ -90,9 +90,9 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
         let cmd = 
         if !self.keys_added {
             // numkeys = 0
-            self.cmd.arg(0).args(args)
+            self.cmd.arg(0).arg(args)
         } else {
-            self.cmd.args(args)
+            self.cmd.arg(args)
         };
 
         Self {

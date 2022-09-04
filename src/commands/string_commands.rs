@@ -290,7 +290,7 @@ pub trait StringCommands: CommandSend {
         K: IntoArgs + Send + Sync,
         V: FromValue,
     {
-        self.send_into(cmd("MGET").args(keys))
+        self.send_into(cmd("MGET").arg(keys))
     }
 
     /// Sets the given keys to their respective values.
@@ -312,7 +312,7 @@ pub trait StringCommands: CommandSend {
             .iter()
             .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
             .collect();
-        self.send_into(cmd("MSET").args(flatten_items))
+        self.send_into(cmd("MSET").arg(flatten_items))
     }
 
     /// Sets the given keys to their respective values.
@@ -344,7 +344,7 @@ pub trait StringCommands: CommandSend {
             .iter()
             .flat_map(|i| once(i.0.into()).chain(once(i.1.into())))
             .collect();
-        self.send_into(cmd("MSETNX").args(flatten_items))
+        self.send_into(cmd("MSETNX").arg(flatten_items))
     }
 
     /// Works exactly like [setex](crate::StringCommands::setex) with the sole

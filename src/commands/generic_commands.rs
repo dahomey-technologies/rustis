@@ -33,7 +33,7 @@ pub trait GenericCommands: CommandSend {
     where
         K: IntoArgs + Send,
     {
-        self.send_into(cmd("DEL").args(keys))
+        self.send_into(cmd("DEL").arg(keys))
     }
 
     /// Returns if keys exist.
@@ -47,7 +47,7 @@ pub trait GenericCommands: CommandSend {
     where
         K: IntoArgs + Send,
     {
-        self.send_into(cmd("EXISTS").args(keys))
+        self.send_into(cmd("EXISTS").arg(keys))
     }
 
     /// Set a timeout on key in seconds

@@ -84,19 +84,6 @@ where
     }
 }
 
-impl<T> IntoArgs for [T; 0]
-where
-    T: IntoArgs,
-{
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args
-    }
-
-    fn num_args(&self) -> usize {
-        0
-    }
-}
-
 impl<T> IntoArgs for [T; 1]
 where
     T: IntoArgs,
@@ -191,7 +178,6 @@ where
     }
 }
 
-impl<T> IntoArgsCollection<T> for [T; 0] where T: IntoArgs {}
 impl<T> IntoArgsCollection<T> for [T; 1] where T: IntoArgs {}
 impl<T> IntoArgsCollection<T> for [T; 2] where T: IntoArgs {}
 impl<T> IntoArgsCollection<T> for [T; 3] where T: IntoArgs {}

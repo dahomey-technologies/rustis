@@ -312,7 +312,7 @@ async fn pexpireat() -> Result<()> {
     database.set("key", "value").await?;
     let result = database.pexpireat("key", now + 10000).execute().await?;
     assert!(result);
-    assert!(10000 > database.pttl("key").await?);
+    assert!(9999 > database.pttl("key").await?);
 
     // xx
     database.set("key", "value").await?;
@@ -323,23 +323,23 @@ async fn pexpireat() -> Result<()> {
     // nx
     let result = database.pexpireat("key", now + 10000).nx().await?;
     assert!(result);
-    assert!(10000 > database.pttl("key").await?);
+    assert!(9999 > database.pttl("key").await?);
 
     // gt
     let result = database.pexpireat("key", now + 5000).gt().await?;
     assert!(!result);
-    assert!(10000 > database.pttl("key").await?);
+    assert!(9999 > database.pttl("key").await?);
     let result = database.pexpireat("key", now + 15000).gt().await?;
     assert!(result);
-    assert!(15000 > database.pttl("key").await?);
+    assert!(14999 > database.pttl("key").await?);
 
     // lt
     let result = database.pexpireat("key", now + 20000).lt().await?;
     assert!(!result);
-    assert!(20000 > database.pttl("key").await?);
+    assert!(19999 > database.pttl("key").await?);
     let result = database.pexpireat("key", now + 5000).lt().await?;
     assert!(result);
-    assert!(5000 > database.pttl("key").await?);
+    assert!(4999 > database.pttl("key").await?);
 
     Ok(())
 }

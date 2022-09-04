@@ -74,24 +74,11 @@ pub trait HashCommands: CommandSend {
         key: K,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<(F, V)>>> + 'a>>
     where
-        K: Into<BulkString> + Send,
-        F: FromValue + Send + 'a,
-        V: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        F: FromValue + 'a,
+        V: FromValue + 'a,
     {
-        let fut = self.send(cmd("HGETALL").arg(key));
-        Box::pin(async move {
-            let values: Vec<Value> = fut.await?.into()?;
-
-            let mut result: Vec<(F, V)> = Vec::with_capacity(values.len() / 2);
-            let mut it = values.into_iter();
-            while let Some(value1) = it.next() {
-                if let Some(value2) = it.next() {
-                    result.push((value1.into()?, value2.into()?));
-                }
-            }
-
-            Ok(result)
-        })
+        self.send_into_tuple_vec(cmd("HGETALL").arg(key))
     }
 
     /// Increments the number stored at field in the hash stored at key by increment.
@@ -331,25 +318,11 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
         count: i64,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<(F, V)>>> + 'a>>
     where
-        F: FromValue + Send + 'a,
-        V: FromValue + Send + 'a,
+        F: FromValue + 'a,
+        V: FromValue + 'a,
     {
-        let fut = self
-            .hash_commands
-            .send(self.cmd.arg(count).arg("WITHVALUES"));
-        Box::pin(async move {
-            let values: Vec<Value> = fut.await?.into()?;
-
-            let mut result: Vec<(F, V)> = Vec::with_capacity(values.len() / 2);
-            let mut it = values.into_iter();
-            while let Some(value1) = it.next() {
-                if let Some(value2) = it.next() {
-                    result.push((value1.into()?, value2.into()?));
-                }
-            }
-
-            Ok(result)
-        })
+        self.hash_commands
+            .send_into_tuple_vec(self.cmd.arg(count).arg("WITHVALUES"))
     }
 }
 
@@ -402,33 +375,14 @@ where
     V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
+        let mut values: Vec<Value> = value.into()?;
 
-        let mut fields_and_values: Vec<(F, V)> = Vec::with_capacity(values.len() / 2);
-        let mut it = values.into_iter();
-        let cursor: usize = if let Some(value) = it.next() {
-            value.into()?
-        } else {
-            0
-        };
-
-        let values: Vec<Value> = if let Some(value) = it.next() {
-            value.into()?
-        } else {
-            return Err(Error::Internal("unexpected hscan result".to_owned()));
-        };
-
-        let mut it = values.into_iter();
-
-        while let Some(value1) = it.next() {
-            if let Some(value2) = it.next() {
-                fields_and_values.push((value1.into()?, value2.into()?));
-            }
+        match (values.pop(), values.pop(), values.pop()) {
+            (Some(fields_and_values), Some(cursor), None) => Ok(HScanResult {
+                cursor: cursor.into()?,
+                fields_and_values: fields_and_values.into_tuple_vec::<F, V>()?,
+            }),
+            _ => Err(Error::Internal("unexpected hscan result".to_owned())),
         }
-
-        Ok(HScanResult {
-            cursor,
-            fields_and_values,
-        })
     }
 }

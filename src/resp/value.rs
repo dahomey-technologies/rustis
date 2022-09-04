@@ -20,6 +20,23 @@ impl Value {
     {
         T::from_value(self)
     }
+
+    pub fn into_tuple_vec<T, U>(self) -> Result<Vec<(T, U)>>
+    where 
+        T: FromValue,
+        U: FromValue
+    {
+        let values: Vec<Value> = self.into()?;
+        let mut result: Vec<(T, U)> = Vec::with_capacity(values.len() / 2);
+        let mut it = values.into_iter();
+        while let Some(value1) = it.next() {
+            if let Some(value2) = it.next() {
+                result.push((value1.into()?, value2.into()?));
+            }
+        }
+
+        Ok(result)
+    }
 }
 
 pub trait FromValue: Sized {

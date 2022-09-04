@@ -356,31 +356,14 @@ where
     M: FromValue + Eq + Hash,
 {
     fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
+        let mut values: Vec<Value> = value.into()?;
 
-        let mut members: HashSet<M> = HashSet::with_capacity(values.len() - 1);
-        let mut it = values.into_iter();
-        let cursor: usize = if let Some(value) = it.next() {
-            value.into()?
-        } else {
-            0
-        };
-
-        let values: Vec<Value> = if let Some(value) = it.next() {
-            value.into()?
-        } else {
-            return Err(Error::Internal("unexpected sscan result".to_owned()));
-        };
-
-        let mut it = values.into_iter();
-
-        while let Some(value) = it.next() {
-            members.insert(value.into()?);
+        match (values.pop(), values.pop(), values.pop()) {
+            (Some(members), Some(cursor), None) => Ok(SScanResult {
+                cursor: cursor.into()?,
+                members: members.into()?,
+            }),
+            _ => Err(Error::Internal("unexpected sscan result".to_owned())),
         }
-
-        Ok(SScanResult {
-            cursor,
-            members,
-        })
     }
 }

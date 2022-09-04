@@ -1,6 +1,6 @@
 use crate::{
     resp::{FromValue, Value},
-    Command, Result
+    Command, Result,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -33,5 +33,13 @@ pub trait CommandSend {
     ) -> Pin<Box<dyn Future<Output = Result<T>> + Send + '_>> {
         let fut = self.send(command);
         Box::pin(async move { fut.await?.into() })
+    }
+
+    fn send_into_tuple_vec<T: FromValue, U: FromValue>(
+        &self,
+        command: Command,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<(T, U)>>> + Send + '_>> {
+        let fut = self.send(command);
+        Box::pin(async move { fut.await?.into_tuple_vec() })
     }
 }

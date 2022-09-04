@@ -177,23 +177,26 @@ async fn expireat() -> Result<()> {
     // nx
     let result = database.expireat("key", now + 10).nx().await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").await?);
+    assert!(9 <= ttl && ttl <= 10);
 
     // gt
     let result = database.expireat("key", now + 5).gt().await?;
     assert!(!result);
-    assert_eq!(10, database.ttl("key").await?);
+    assert!(9 <= ttl && ttl <= 10);
     let result = database.expireat("key", now + 15).gt().await?;
     assert!(result);
-    assert_eq!(15, database.ttl("key").await?);
+    let ttl = database.ttl("key").await?;
+    assert!(14 <= ttl && ttl <= 15);
 
     // lt
     let result = database.expireat("key", now + 20).lt().await?;
     assert!(!result);
-    assert_eq!(15, database.ttl("key").await?);
+    let ttl = database.ttl("key").await?;
+    assert!(14 <= ttl && ttl <= 15);
     let result = database.expireat("key", now + 5).lt().await?;
     assert!(result);
-    assert_eq!(5, database.ttl("key").await?);
+    let ttl = database.ttl("key").await?;
+    assert!(4 <= ttl && ttl <= 5);
 
     Ok(())
 }

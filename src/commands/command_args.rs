@@ -1,4 +1,5 @@
 use crate::resp::BulkString;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[derive(Debug)]
 pub enum CommandArgs {
@@ -45,13 +46,6 @@ pub trait IntoArgs {
     fn num_args(&self) -> usize;
 }
 
-/// Marker for collections of IntoArgs
-pub trait IntoArgsCollection<T>: IntoArgs
-where
-    T: IntoArgs,
-{
-}
-
 impl<'a, T> IntoArgs for T
 where
     T: Into<BulkString>,
@@ -91,7 +85,7 @@ where
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self.into_iter() {
-            args = a.into_args(args)
+            args = a.into_args(args);
         }
         args
     }
@@ -108,7 +102,79 @@ where
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self.into_iter() {
-            args = a.into_args(args)
+            args = a.into_args(args);
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> IntoArgs for HashSet<T>
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for a in self.into_iter() {
+            args = a.into_args(args);
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> IntoArgs for BTreeSet<T>
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for a in self.into_iter() {
+            args = a.into_args(args);
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<K, V> IntoArgs for HashMap<K, V>
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for (key, value) in self.into_iter() {
+            args = key.into_args(args);
+            args = value.into_args(args);
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<K, V> IntoArgs for BTreeMap<K, V>
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for (key, value) in self.into_iter() {
+            args = key.into_args(args);
+            args = value.into_args(args);
         }
         args
     }
@@ -133,6 +199,69 @@ where
     }
 }
 
-impl<T, const N: usize> IntoArgsCollection<T> for [T; N] where T: IntoArgs {}
-impl<T> IntoArgsCollection<T> for Vec<T> where T: IntoArgs {}
-impl<T> IntoArgsCollection<T> for T where T: IntoArgs {}
+/// Generic Marker for Collections of IntoArgs
+pub trait ArgsOrCollection<T>: IntoArgs
+where
+    T: IntoArgs,
+{
+}
+
+impl<T, const N: usize> ArgsOrCollection<T> for [T; N] where T: IntoArgs {}
+impl<T> ArgsOrCollection<T> for Vec<T> where T: IntoArgs {}
+impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
+
+/// Marker for collections of single items (directly convertible to BulkStrings) of IntoArgs
+pub trait SingleArgOrCollection<T>: IntoArgs
+where
+    T: Into<BulkString>,
+{
+}
+
+impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkString> {}
+impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {}
+impl<T> SingleArgOrCollection<T> for HashSet<T> where T: Into<BulkString> {}
+impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {}
+impl<T> SingleArgOrCollection<T> for T where T: Into<BulkString> {}
+
+/// Marker for key/value collections of Args
+pub trait KeyValueArgOrCollection<K, V>: IntoArgs
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}
+
+impl<K, V> KeyValueArgOrCollection<K, V> for Vec<(K, V)>
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}
+
+impl<K, V, const N: usize> KeyValueArgOrCollection<K, V> for [(K, V); N]
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}
+
+impl<K, V> KeyValueArgOrCollection<K, V> for (K, V)
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}
+
+impl<K, V> KeyValueArgOrCollection<K, V> for HashMap<K, V>
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}
+
+impl<K, V> KeyValueArgOrCollection<K, V> for BTreeMap<K, V>
+where
+    K: Into<BulkString>,
+    V: Into<BulkString>,
+{
+}

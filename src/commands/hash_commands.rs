@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue, Value},
-    Command, CommandSend, Error, IntoArgs, IntoArgsCollection, Result,
+    Command, CommandSend, Error, KeyValueArgOrCollection, Result, SingleArgOrCollection,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -18,10 +18,11 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hdel/](https://redis.io/commands/hdel/)
-    fn hdel<K, F>(&self, key: K, fields: F) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hdel<K, F, C>(&self, key: K, fields: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: IntoArgs + Send,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
+        C: SingleArgOrCollection<F>,
     {
         self.send_into(cmd("HDEL").arg(key).arg(fields))
     }
@@ -36,8 +37,8 @@ pub trait HashCommands: CommandSend {
     /// [https://redis.io/commands/hexists/](https://redis.io/commands/hexists/)
     fn hexists<K, F>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
     {
         self.send_into(cmd("HEXISTS").arg(key).arg(field))
     }
@@ -49,15 +50,11 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hget/](https://redis.io/commands/hget/)
-    fn hget<'a, K, F, V>(
-        &'a self,
-        key: K,
-        field: F,
-    ) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
+    fn hget<K, F, V>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: Into<BulkString> + Send,
-        V: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
+        V: FromValue,
     {
         self.send_into(cmd("HGET").arg(key).arg(field))
     }
@@ -95,8 +92,8 @@ pub trait HashCommands: CommandSend {
         increment: i64,
     ) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
     {
         self.send_into(cmd("HINCRBY").arg(key).arg(field).arg(increment))
     }
@@ -116,8 +113,8 @@ pub trait HashCommands: CommandSend {
         increment: f64,
     ) -> Pin<Box<dyn Future<Output = Result<f64>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
     {
         self.send_into(cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
     }
@@ -129,10 +126,10 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hkeys/](https://redis.io/commands/hkeys/)
-    fn hkeys<'a, K, F>(&'a self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<F>>> + 'a>>
+    fn hkeys<K, F>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<F>>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        F: FromValue,
     {
         self.send_into(cmd("HKEYS").arg(key))
     }
@@ -146,7 +143,7 @@ pub trait HashCommands: CommandSend {
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hlen/)
     fn hlen<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("HLEN").arg(key))
     }
@@ -158,15 +155,16 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hmget/](https://redis.io/commands/hmget/)
-    fn hmget<'a, K, F, V>(
-        &'a self,
+    fn hmget<K, F, V, C>(
+        &self,
         key: K,
-        fields: F,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + 'a>>
+        fields: C,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        F: IntoArgs + Send,
-        V: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
+        C: SingleArgOrCollection<F>,
+        V: FromValue,
     {
         self.send_into(cmd("HMGET").arg(key).arg(fields))
     }
@@ -177,7 +175,7 @@ pub trait HashCommands: CommandSend {
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
     fn hrandfield<K>(&self, key: K) -> HRandField<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         HRandField {
             hash_commands: &self,
@@ -195,7 +193,7 @@ pub trait HashCommands: CommandSend {
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hscan/)
     fn hscan<K>(&self, key: K, cursor: usize) -> HScan<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         HScan {
             hash_commands: self,
@@ -219,7 +217,7 @@ pub trait HashCommands: CommandSend {
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: Into<BulkString>,
-        I: IntoArgsCollection<(F, V)>,
+        I: KeyValueArgOrCollection<F, V>,
     {
         self.send_into(cmd("HSET").arg(key).arg(items))
     }
@@ -239,9 +237,9 @@ pub trait HashCommands: CommandSend {
         value: V,
     ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync + Copy,
-        F: Into<BulkString> + Send + Sync + Copy,
-        V: Into<BulkString> + Send + Sync + Copy,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("HSETNX").arg(key).arg(field).arg(value))
     }
@@ -256,8 +254,8 @@ pub trait HashCommands: CommandSend {
     /// [https://redis.io/commands/hstrlen/](https://redis.io/commands/hstrlen/)
     fn hstrlen<K, F>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync + Copy,
-        F: Into<BulkString> + Send + Sync + Copy,
+        K: Into<BulkString>,
+        F: Into<BulkString>,
     {
         self.send_into(cmd("HSTRLEN").arg(key).arg(field))
     }
@@ -269,10 +267,10 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hvals/](https://redis.io/commands/hvals/)
-    fn hvals<'a, K, V>(&'a self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + 'a>>
+    fn hvals<K, V>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + '_>>
     where
-        K: Into<BulkString> + Send + Sync + Copy,
-        V: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        V: FromValue,
     {
         self.send_into(cmd("HVALS").arg(key))
     }
@@ -291,7 +289,7 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
     pub fn execute<F>(self) -> Pin<Box<dyn Future<Output = Result<F>> + 'a>>
     where
-        F: FromValue + Send + 'a,
+        F: FromValue,
     {
         self.hash_commands.send_into(self.cmd)
     }
@@ -303,7 +301,7 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
     pub fn count<F>(self, count: i64) -> Pin<Box<dyn Future<Output = Result<Vec<F>>> + 'a>>
     where
-        F: FromValue + Send + 'a,
+        F: FromValue,
     {
         self.hash_commands.send_into(self.cmd.arg(count))
     }
@@ -335,15 +333,15 @@ pub struct HScan<'a, T: HashCommands + ?Sized> {
 impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
     pub fn execute<F, V>(self) -> Pin<Box<dyn Future<Output = Result<HScanResult<F, V>>> + 'a>>
     where
-        F: FromValue + Send + 'a,
-        V: FromValue + Send + 'a,
+        F: FromValue,
+        V: FromValue,
     {
         self.hash_commands.send_into(self.cmd)
     }
 
     pub fn match_<P>(self, pattern: P) -> Self
     where
-        P: Into<BulkString> + Send,
+        P: Into<BulkString>,
     {
         Self {
             hash_commands: self.hash_commands,

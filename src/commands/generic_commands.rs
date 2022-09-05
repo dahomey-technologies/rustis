@@ -1,4 +1,4 @@
-use crate::{cmd, resp::BulkString, Command, CommandSend, IntoArgs, Result};
+use crate::{cmd, resp::BulkString, Command, CommandSend, Result, SingleArgOrCollection};
 use futures::Future;
 use std::pin::Pin;
 
@@ -13,8 +13,8 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/copy/](https://redis.io/commands/copy/)
     fn copy<S, D>(&self, source: S, destination: D) -> Copy<Self>
     where
-        S: Into<BulkString> + Send,
-        D: Into<BulkString> + Send,
+        S: Into<BulkString>,
+        D: Into<BulkString>,
     {
         Copy {
             generic_commands: &self,
@@ -29,9 +29,10 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/del/](https://redis.io/commands/del/)
-    fn del<K>(&self, keys: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn del<K, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: IntoArgs + Send,
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
     {
         self.send_into(cmd("DEL").arg(keys))
     }
@@ -43,9 +44,10 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/exists/](https://redis.io/commands/exists/)
-    fn exists<K>(&self, keys: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn exists<K, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: IntoArgs + Send,
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
     {
         self.send_into(cmd("EXISTS").arg(keys))
     }
@@ -60,7 +62,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/expire/](https://redis.io/commands/expire/)
     fn expire<K>(&self, key: K, seconds: u64) -> Expire<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         Expire {
             generic_commands: &self,
@@ -82,7 +84,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/expireat/](https://redis.io/commands/expireat/)
     fn expireat<K>(&self, key: K, unix_time_seconds: u64) -> Expire<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         Expire {
             generic_commands: &self,
@@ -101,7 +103,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/expiretime/](https://redis.io/commands/expiretime/)
     fn expiretime<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("EXPIRETIME").arg(key))
     }
@@ -116,7 +118,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/move/](https://redis.io/commands/move/)
     fn move_<K>(&self, key: K, db: usize) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("MOVE").arg(key).arg(db))
     }
@@ -133,7 +135,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/persist/](https://redis.io/commands/persist/)
     fn persist<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("PERSIST").arg(key))
     }
@@ -148,7 +150,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
     fn pexpire<K>(&self, key: K, milliseconds: u64) -> Expire<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         Expire {
             generic_commands: &self,
@@ -167,7 +169,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/pexpireat/](https://redis.io/commands/pexpireat/)
     fn pexpireat<K>(&self, key: K, unix_time_milliseconds: u64) -> Expire<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         Expire {
             generic_commands: &self,
@@ -187,7 +189,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/pexpiretime/](https://redis.io/commands/pexpiretime/)
     fn pexpiretime<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("PEXPIRETIME").arg(key))
     }
@@ -203,7 +205,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/pttl/](https://redis.io/commands/pttl/)
     fn pttl<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("PTTL").arg(key))
     }
@@ -219,7 +221,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/ttl/](https://redis.io/commands/ttl/)
     fn ttl<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("TTL").arg(key))
     }
@@ -235,7 +237,7 @@ pub trait GenericCommands: CommandSend {
     /// [https://redis.io/commands/type/](https://redis.io/commands/type/)
     fn type_<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<String>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("TYPE").arg(key))
     }

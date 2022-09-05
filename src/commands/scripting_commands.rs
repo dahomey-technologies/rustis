@@ -1,4 +1,4 @@
-use crate::{cmd, resp::{BulkString, Value, FromValue}, Command, CommandSend, Result, IntoArgs};
+use crate::{cmd, resp::{BulkString, Value, FromValue}, Command, CommandSend, Result, SingleArgOrCollection};
 use futures::Future;
 use std::pin::Pin;
 
@@ -14,7 +14,7 @@ pub trait ScriptingCommands: CommandSend {
     /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
     fn eval<S>(&self, script: S) -> Eval<Self>
     where
-        S: Into<BulkString> + Send,
+        S: Into<BulkString>,
     {
         Eval {
             scripting_commands: &self,
@@ -29,7 +29,7 @@ pub trait ScriptingCommands: CommandSend {
     /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
     fn evalsha<S>(&self, sha1: S) -> Eval<Self>
     where
-        S: Into<BulkString> + Send,
+        S: Into<BulkString>,
     {
         Eval {
             scripting_commands: &self,
@@ -45,10 +45,10 @@ pub trait ScriptingCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/script-load/](https://redis.io/commands/script-load/)
-    fn script_load<'a, S, V>(&'a self, script: S) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
+    fn script_load<S, V>(&self, script: S) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
-        S: Into<BulkString> + Send,
-        V: FromValue + Send + 'a,
+        S: Into<BulkString>,
+        V: FromValue,
     {
         self.send_into(cmd("SCRIPT").arg("LOAD").arg(script))
     }
@@ -71,9 +71,10 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     }
 
     /// All the keys accessed by the script.
-    pub fn keys<K>(self, keys: K) -> Self
+    pub fn keys<K, C>(self, keys: C) -> Self
     where
-        K: IntoArgs + Send,
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>
     {
         Self {
             scripting_commands: self.scripting_commands,
@@ -83,9 +84,10 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     }
 
     /// Additional input arguments that should not represent names of keys.
-    pub fn args<A>(self, args: A) -> Self
+    pub fn args<A, C>(self, args: C) -> Self
     where
-        A: IntoArgs + Send,
+        A: Into<BulkString>,
+        C: SingleArgOrCollection<A>
     {
         let cmd = 
         if !self.keys_added {

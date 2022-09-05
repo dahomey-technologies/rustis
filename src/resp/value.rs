@@ -22,9 +22,9 @@ impl Value {
     }
 
     pub fn into_tuple_vec<T, U>(self) -> Result<Vec<(T, U)>>
-    where 
+    where
         T: FromValue,
-        U: FromValue
+        U: FromValue,
     {
         let values: Vec<Value> = self.into()?;
         let mut result: Vec<(T, U)> = Vec::with_capacity(values.len() / 2);
@@ -240,14 +240,15 @@ impl FromValue for usize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i as usize),
-            Value::BulkString(BulkString::Binary(s)) => match String::from_utf8(s)
-                .map_err(|e| Error::Parse(e.to_string())) {
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<usize>() {
                         Ok(u) => Ok(u),
                         Err(e) => Err(Error::Parse(e.to_string())),
                     },
                     Err(e) => Err(e),
                 }
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to usize",
                 value

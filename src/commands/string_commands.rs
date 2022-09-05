@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    Command, CommandSend, Error, IntoArgs, IntoArgsCollection, Result,
+    Command, CommandSend, Error, Result, SingleArgOrCollection, KeyValueArgOrCollection,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -22,8 +22,8 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/append/](https://redis.io/commands/append/)
     fn append<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("APPEND").arg(key).arg(value))
     }
@@ -42,7 +42,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/decr/](https://redis.io/commands/decr/)
     fn decr<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("DECR").arg(key))
     }
@@ -61,7 +61,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/decrby/](https://redis.io/commands/decrby/)
     fn decrby<K>(&self, key: K, decrement: i64) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("DECRBY").arg(key).arg(decrement))
     }
@@ -79,10 +79,10 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/get/](https://redis.io/commands/get/)
-    fn get<'a, K, V>(&'a self, key: K) -> Pin<Box<dyn Future<Output = Result<V>> + 'a>>
+    fn get<K, V>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: FromValue + Send + 'a,
+        K: Into<BulkString>,
+        V: FromValue,
         Self: Sized,
     {
         self.send_into(cmd("GET").arg(key))
@@ -100,7 +100,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/getdel/](https://redis.io/commands/getdel/)
     fn getdel<K, V>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
         V: FromValue,
     {
         self.send_into(cmd("GETDEL").arg(key))
@@ -128,7 +128,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/getex/](https://redis.io/commands/getex/)
     fn getex<K>(&self, key: K) -> GetEx<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         GetEx {
             string_commands: &self,
@@ -152,7 +152,7 @@ pub trait StringCommands: CommandSend {
         end: isize,
     ) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
         V: FromValue,
     {
         self.send_into(cmd("GETRANGE").arg(key).arg(start).arg(end))
@@ -169,8 +169,8 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/getset/](https://redis.io/commands/getset/)
     fn getset<K, V, R>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<R>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
         R: FromValue,
     {
         self.send_into(cmd("GETSET").arg(key).arg(value))
@@ -196,7 +196,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/incr/](https://redis.io/commands/incr/)
     fn incr<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("INCR").arg(key))
     }
@@ -217,7 +217,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/incrby/](https://redis.io/commands/incrby/)
     fn incrby<K>(&self, key: K, increment: i64) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("INCRBY").arg(key).arg(increment))
     }
@@ -253,7 +253,7 @@ pub trait StringCommands: CommandSend {
         increment: f64,
     ) -> Pin<Box<dyn Future<Output = Result<f64>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
@@ -264,7 +264,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
     fn lcs<K>(&self, key1: K, key2: K) -> Lcs<Self>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         Lcs {
             string_commands: &self,
@@ -282,13 +282,14 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/mget/](https://redis.io/commands/mget/)
-    fn mget<'a, K, V>(
+    fn mget<'a, K, V, C>(
         &'a self,
-        keys: K,
+        keys: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<V>>>> + '_>>
     where
-        K: IntoArgs + Send + Sync,
+        K: Into<BulkString>,
         V: FromValue,
+        C: SingleArgOrCollection<K>
     {
         self.send_into(cmd("MGET").arg(keys))
     }
@@ -300,9 +301,9 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
-    fn mset<'a, K, V, I>(&'a self, items: I) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
+    fn mset<'a, K, V, C>(&'a self, items: C) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        I: IntoArgsCollection<(K, V)>,
+        C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
@@ -326,9 +327,9 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
-    fn msetnx<'a, K, V, I>(&'a self, items: I) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn msetnx<'a, K, V, C>(&'a self, items: C) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        I: IntoArgsCollection<(K, V)>,
+        C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
@@ -350,8 +351,8 @@ pub trait StringCommands: CommandSend {
         value: V,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
@@ -365,8 +366,8 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
     fn set<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
         Self: Sized,
     {
         self.send_into(cmd("SET").arg(key).arg(value))
@@ -381,8 +382,8 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
     fn set_with_options<K, V>(&self, key: K, value: V) -> SetWithOptions<Self>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         SetWithOptions {
             string_commands: &self,
@@ -401,8 +402,8 @@ pub trait StringCommands: CommandSend {
         value: V,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
@@ -422,8 +423,8 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/setnx/](https://redis.io/commands/setnx/)
     fn setnx<K, V>(&self, key: K, value: V) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("SETNX").arg(key).arg(value))
     }
@@ -444,8 +445,8 @@ pub trait StringCommands: CommandSend {
         value: V,
     ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send,
-        V: Into<BulkString> + Send,
+        K: Into<BulkString>,
+        V: Into<BulkString>,
     {
         self.send_into(cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
@@ -461,7 +462,7 @@ pub trait StringCommands: CommandSend {
     /// [https://redis.io/commands/strlen/](https://redis.io/commands/strlen/)
     fn strlen<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
-        K: Into<BulkString> + Send,
+        K: Into<BulkString>,
     {
         self.send_into(cmd("STRLEN").arg(key))
     }

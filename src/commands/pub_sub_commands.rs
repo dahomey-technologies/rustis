@@ -19,8 +19,8 @@ pub trait PubSubCommands {
         message: M,
     ) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>>
     where
-        C: Into<BulkString> + Send + 'a,
-        M: Into<BulkString> + Send + 'a;
+        C: Into<BulkString> + 'a,
+        M: Into<BulkString> + 'a;
 
     /// Subscribes the client to the specified channels.
     ///
@@ -31,7 +31,7 @@ pub trait PubSubCommands {
         channel: C,
     ) -> Pin<Box<dyn Future<Output = Result<PubSubStream>> + 'a>>
     where
-        C: Into<BulkString> + Send + 'a;
+        C: Into<BulkString> + 'a;
 }
 
 impl PubSubCommands for PubSub {
@@ -41,8 +41,8 @@ impl PubSubCommands for PubSub {
         message: M,
     ) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>>
     where
-        C: Into<BulkString> + Send + 'a,
-        M: Into<BulkString> + Send + 'a,
+        C: Into<BulkString> + 'a,
+        M: Into<BulkString> + 'a,
     {
         Box::pin(async move {
             self.multiplexer
@@ -57,7 +57,7 @@ impl PubSubCommands for PubSub {
         channel: C,
     ) -> Pin<Box<dyn Future<Output = Result<PubSubStream>> + 'a>>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<BulkString> + 'a,
     {
         Box::pin(async move { self.multiplexer.subscribe(channel.into()).await })
     }

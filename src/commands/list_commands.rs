@@ -1,7 +1,7 @@
 use crate::{
     cmd,
-    resp::{Array, BulkString, FromValue, Value},
-    Command, CommandSend, Error, Result, SingleArgOrCollection,
+    resp::{BulkString, FromValue},
+    Command, CommandSend, Result, SingleArgOrCollection,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -406,24 +406,6 @@ impl<'a, T: ListCommands + ?Sized> LPosCount<'a, T> {
         LPosCount {
             list_commands: self.list_commands,
             cmd: self.cmd.arg("MAXLEN").arg(len),
-        }
-    }
-}
-
-impl<E> FromValue for (String, Vec<E>)
-where
-    E: FromValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::Array(Array::Vec(mut elements)) => {
-                match (elements.pop(), elements.pop(), elements.pop()) {
-                    (Some(elements), Some(key), None) => Ok((key.into()?, elements.into()?)),
-                    _ => Err(Error::Internal("Cannot parse LMPOP result".to_owned())),
-                }
-            }
-            Value::Array(Array::Nil) => Ok(("".to_owned(), Vec::new())),
-            _ => Err(Error::Internal("Cannot parse LMPOP result".to_owned())),
         }
     }
 }

@@ -298,6 +298,27 @@ impl FromValue for String {
     }
 }
 
+impl<T, U> FromValue for (T, U)
+where
+    T: FromValue,
+    U: FromValue,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Vec(mut values)) => {
+                match (values.pop(), values.pop(), values.pop()) {
+                    (Some(right), Some(left), None) => Ok((left.into()?, right.into()?)),
+                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                }
+            }
+            _ => Err(Error::Parse(format!(
+                "Cannot parse result {:?} to Tuple",
+                value
+            ))),
+        }
+    }
+}
+
 impl ToString for Value {
     fn to_string(&self) -> String {
         match &self {

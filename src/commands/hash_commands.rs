@@ -191,7 +191,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hscan/)
-    fn hscan<K>(&self, key: K, cursor: usize) -> HScan<Self>
+    fn hscan<K>(&self, key: K, cursor: u64) -> HScan<Self>
     where
         K: Into<BulkString>,
     {

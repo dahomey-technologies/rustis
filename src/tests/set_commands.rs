@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{tests::get_default_addr, ConnectionMultiplexer, GenericCommands, Result, SetCommands, SScanResult};
+use crate::{tests::get_default_addr, ConnectionMultiplexer, GenericCommands, Result, SetCommands};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -303,9 +303,9 @@ async fn sscan() -> Result<()> {
     
     database.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result: SScanResult<String> = database.sscan("key", 0).execute().await?;
-    assert_eq!(0, result.cursor);
-    assert_eq!(3, result.members.len());
+    let result: (u64, Vec<String>) = database.sscan("key", 0).execute().await?;
+    assert_eq!(0, result.0);
+    assert_eq!(3, result.1.len());
 
     Ok(())
 }

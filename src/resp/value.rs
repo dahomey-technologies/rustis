@@ -144,6 +144,15 @@ impl FromValue for u64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i as u64),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<u64>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u64",
                 value

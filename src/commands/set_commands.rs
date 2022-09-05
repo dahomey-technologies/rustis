@@ -1,7 +1,7 @@
 use crate::{
     cmd,
-    resp::{BulkString, FromValue, Value},
-    Command, CommandSend, Error, SingleArgOrCollection, Result,
+    resp::{BulkString, FromValue},
+    Command, CommandSend, SingleArgOrCollection, Result,
 };
 use futures::Future;
 use std::{collections::HashSet, hash::Hash, pin::Pin};
@@ -272,7 +272,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sscan/](https://redis.io/commands/sscan/)
-    fn sscan<K>(&self, key: K, cursor: usize) -> SScan<Self>
+    fn sscan<K>(&self, key: K, cursor: u64) -> SScan<Self>
     where
         K: Into<BulkString>,
     {
@@ -327,7 +327,7 @@ pub struct SScan<'a, T: SetCommands + ?Sized> {
 }
 
 impl<'a, T: SetCommands + ?Sized> SScan<'a, T> {
-    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<SScanResult<M>>> + 'a>>
+    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<M>)>> + 'a>>
     where
         M: FromValue + Eq + Hash,
     {
@@ -348,32 +348,6 @@ impl<'a, T: SetCommands + ?Sized> SScan<'a, T> {
         Self {
             set_commands: self.set_commands,
             cmd: self.cmd.arg("COUNT").arg(count),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct SScanResult<M>
-where
-    M: FromValue + Eq + Hash,
-{
-    pub cursor: usize,
-    pub members: HashSet<M>,
-}
-
-impl<M> FromValue for SScanResult<M>
-where
-    M: FromValue + Eq + Hash,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: Vec<Value> = value.into()?;
-
-        match (values.pop(), values.pop(), values.pop()) {
-            (Some(members), Some(cursor), None) => Ok(SScanResult {
-                cursor: cursor.into()?,
-                members: members.into()?,
-            }),
-            _ => Err(Error::Internal("unexpected sscan result".to_owned())),
         }
     }
 }

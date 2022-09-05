@@ -2,7 +2,7 @@ use crate::{
     cmd,
     resp::{Array, ResultValueExt, Value},
     Command, CommandSend, Database, Error, GenericCommands, HashCommands, ListCommands, Result,
-    ServerCommands, SetCommands, StringCommands, ValueReceiver, ValueSender,
+    ServerCommands, SetCommands, SortedSetCommands, StringCommands, ValueReceiver, ValueSender,
 };
 use futures::{channel::oneshot, Future};
 use std::{collections::VecDeque, pin::Pin, sync::Mutex};
@@ -92,5 +92,6 @@ impl GenericCommands for Transaction {}
 impl HashCommands for Transaction {}
 impl ListCommands for Transaction {}
 impl SetCommands for Transaction {}
+impl SortedSetCommands for Transaction {}
 impl ServerCommands for Transaction {}
 impl StringCommands for Transaction {}

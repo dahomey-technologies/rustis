@@ -309,14 +309,15 @@ impl FromValue for String {
 
 impl<T, U> FromValue for (T, U)
 where
-    T: FromValue,
-    U: FromValue,
+    T: FromValue + Default,
+    U: FromValue + Default,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Array(Array::Vec(mut values)) => {
                 match (values.pop(), values.pop(), values.pop()) {
                     (Some(right), Some(left), None) => Ok((left.into()?, right.into()?)),
+                    (None, None, None) => Ok((Default::default(), Default::default())),
                     _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
                 }
             }

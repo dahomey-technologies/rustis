@@ -1,7 +1,7 @@
 use crate::{
     resp::Value, Command, CommandSend, ConnectionMultiplexer, GenericCommands, HashCommands,
-    ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands, StringCommands,
-    Transaction,
+    ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
+    StringCommands, Transaction,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -63,4 +63,5 @@ impl ListCommands for Database {}
 impl ScriptingCommands for Database {}
 impl ServerCommands for Database {}
 impl SetCommands for Database {}
+impl SortedSetCommands for Database {}
 impl StringCommands for Database {}

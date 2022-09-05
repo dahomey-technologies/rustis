@@ -363,7 +363,7 @@ where
     F: FromValue,
     V: FromValue,
 {
-    pub cursor: usize,
+    pub cursor: u64,
     pub fields_and_values: Vec<(F, V)>,
 }
 

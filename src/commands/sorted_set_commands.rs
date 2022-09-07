@@ -1,7 +1,7 @@
 use crate::{
     cmd,
-    resp::{BulkString, FromValue, Value},
-    ArgsOrCollection, Command, CommandSend, Error, Result, SingleArgOrCollection,
+    resp::{BulkString, FromValue},
+    ArgsOrCollection, Command, CommandSend, Result, SingleArgOrCollection,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -280,9 +280,9 @@ pub trait SortedSetCommands: CommandSend {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<(M, f64)>>> + '_>>
     where
         K: Into<BulkString>,
-        M: FromValue,
+        M: FromValue + Default,
     {
-        self.send_into_tuple_vec(cmd("ZPOPMAX").arg(key).arg(count))
+        self.send_into(cmd("ZPOPMAX").arg(key).arg(count))
     }
 
     /// Removes and returns up to count members with the lowest scores in the sorted set stored at key.
@@ -299,9 +299,9 @@ pub trait SortedSetCommands: CommandSend {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<(M, f64)>>> + '_>>
     where
         K: Into<BulkString>,
-        M: FromValue,
+        M: FromValue + Default,
     {
-        self.send_into_tuple_vec(cmd("ZPOPMIN").arg(key).arg(count))
+        self.send_into(cmd("ZPOPMIN").arg(key).arg(count))
     }
 
     /// Removes and returns up to count members with the lowest scores in the sorted set stored at key.
@@ -698,10 +698,10 @@ where
     /// list of elements and their scores in the specified range
     pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
     where
-        E: FromValue,
+        E: FromValue + Default,
     {
         self.sorted_set_commands
-            .send_into_tuple_vec(self.cmd.arg("WITHSCORES"))
+            .send_into(self.cmd.arg("WITHSCORES"))
     }
 }
 
@@ -747,10 +747,10 @@ where
     /// The result of the difference with scores
     pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
     where
-        E: FromValue,
+        E: FromValue + Default,
     {
         self.sorted_set_commands
-            .send_into_tuple_vec(self.cmd.arg("WITHSCORES"))
+            .send_into(self.cmd.arg("WITHSCORES"))
     }
 }
 
@@ -821,10 +821,10 @@ where
     /// The result of the intersection with scores
     pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
     where
-        E: FromValue,
+        E: FromValue + Default,
     {
         self.sorted_set_commands
-            .send_into_tuple_vec(self.cmd.arg("WITHSCORES"))
+            .send_into(self.cmd.arg("WITHSCORES"))
     }
 }
 
@@ -947,10 +947,10 @@ where
     /// The result of the intersection with scores
     pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
     where
-        E: FromValue,
+        E: FromValue + Default,
     {
         self.sorted_set_commands
-            .send_into_tuple_vec(self.cmd.arg("WITHSCORES"))
+            .send_into(self.cmd.arg("WITHSCORES"))
     }
 }
 
@@ -1019,9 +1019,9 @@ impl<'a, T: SortedSetCommands + ?Sized> ZScan<'a, T> {
     /// A tuple where
     /// * The first value is the cursor as an unsigned 64 bit number
     /// * The second value is a list of members and their scores in a Vec of Tuples
-    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<ZScanResult<M>>> + 'a>>
+    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<(M, f64)>)>> + 'a>>
     where
-        M: FromValue,
+        M: FromValue + Default,
     {
         self.sorted_set_commands.send_into(self.cmd)
     }
@@ -1040,32 +1040,6 @@ impl<'a, T: SortedSetCommands + ?Sized> ZScan<'a, T> {
         Self {
             sorted_set_commands: self.sorted_set_commands,
             cmd: self.cmd.arg("COUNT").arg(count),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ZScanResult<M>
-where
-    M: FromValue,
-{
-    pub cursor: u64,
-    pub elements: Vec<(M, f64)>,
-}
-
-impl<M> FromValue for ZScanResult<M>
-where
-    M: FromValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: Vec<Value> = value.into()?;
-
-        match (values.pop(), values.pop(), values.pop()) {
-            (Some(elements), Some(cursor), None) => Ok(ZScanResult {
-                cursor: cursor.into()?,
-                elements: elements.into_tuple_vec::<M, f64>()?,
-            }),
-            _ => Err(Error::Internal("unexpected hscan result".to_owned())),
         }
     }
 }

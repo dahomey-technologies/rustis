@@ -1,7 +1,7 @@
 use crate::{
     cmd,
-    resp::{BulkString, FromValue, Value},
-    Command, CommandSend, Error, KeyValueArgOrCollection, Result, SingleArgOrCollection,
+    resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
+    Command, CommandSend, KeyValueArgOrCollection, Result, SingleArgOrCollection,
 };
 use futures::Future;
 use std::pin::Pin;
@@ -66,16 +66,14 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hgetall/](https://redis.io/commands/hgetall/)
-    fn hgetall<'a, K, F, V>(
-        &'a self,
-        key: K,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<(F, V)>>> + 'a>>
+    fn hgetall<K, F, V, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
-        F: FromValue + 'a,
-        V: FromValue + 'a,
+        F: FromValue,
+        V: FromValue,
+        A: FromKeyValueValueArray<F, V>,
     {
-        self.send_into_tuple_vec(cmd("HGETALL").arg(key))
+        self.send_into(cmd("HGETALL").arg(key))
     }
 
     /// Increments the number stored at field in the hash stored at key by increment.
@@ -126,10 +124,11 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hkeys/](https://redis.io/commands/hkeys/)
-    fn hkeys<K, F>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<F>>> + '_>>
+    fn hkeys<K, F, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         F: FromValue,
+        A: FromSingleValueArray<F>,
     {
         self.send_into(cmd("HKEYS").arg(key))
     }
@@ -155,16 +154,17 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hmget/](https://redis.io/commands/hmget/)
-    fn hmget<K, F, V, C>(
+    fn hmget<K, F, V, C, A>(
         &self,
         key: K,
         fields: C,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + '_>>
+    ) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
         C: SingleArgOrCollection<F>,
         V: FromValue,
+        A: FromSingleValueArray<V>,
     {
         self.send_into(cmd("HMGET").arg(key).arg(fields))
     }
@@ -267,10 +267,11 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hvals/](https://redis.io/commands/hvals/)
-    fn hvals<K, V>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<Vec<V>>> + '_>>
+    fn hvals<K, V, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         V: FromValue,
+        A: FromSingleValueArray<V>,
     {
         self.send_into(cmd("HVALS").arg(key))
     }
@@ -299,9 +300,10 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count<F>(self, count: i64) -> Pin<Box<dyn Future<Output = Result<Vec<F>>> + 'a>>
+    pub fn count<F, A>(self, count: i64) -> Pin<Box<dyn Future<Output = Result<A>> + 'a>>
     where
         F: FromValue,
+        A: FromSingleValueArray<F>,
     {
         self.hash_commands.send_into(self.cmd.arg(count))
     }
@@ -311,16 +313,17 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count_with_values<F, V>(
+    pub fn count_with_values<F, V, A>(
         self,
         count: i64,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<(F, V)>>> + 'a>>
+    ) -> Pin<Box<dyn Future<Output = Result<A>> + 'a>>
     where
-        F: FromValue + 'a,
-        V: FromValue + 'a,
+        F: FromValue,
+        V: FromValue,
+        A: FromKeyValueValueArray<F, V>
     {
         self.hash_commands
-            .send_into_tuple_vec(self.cmd.arg(count).arg("WITHVALUES"))
+            .send_into(self.cmd.arg(count).arg("WITHVALUES"))
     }
 }
 
@@ -331,10 +334,10 @@ pub struct HScan<'a, T: HashCommands + ?Sized> {
 }
 
 impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
-    pub fn execute<F, V>(self) -> Pin<Box<dyn Future<Output = Result<HScanResult<F, V>>> + 'a>>
+    pub fn execute<F, V>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<(F, V)>)>> + 'a>>
     where
-        F: FromValue,
-        V: FromValue,
+        F: FromValue + Default,
+        V: FromValue + Default,
     {
         self.hash_commands.send_into(self.cmd)
     }
@@ -353,34 +356,6 @@ impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
         Self {
             hash_commands: self.hash_commands,
             cmd: self.cmd.arg("COUNT").arg(count),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct HScanResult<F, V>
-where
-    F: FromValue,
-    V: FromValue,
-{
-    pub cursor: u64,
-    pub fields_and_values: Vec<(F, V)>,
-}
-
-impl<F, V> FromValue for HScanResult<F, V>
-where
-    F: FromValue,
-    V: FromValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: Vec<Value> = value.into()?;
-
-        match (values.pop(), values.pop(), values.pop()) {
-            (Some(fields_and_values), Some(cursor), None) => Ok(HScanResult {
-                cursor: cursor.into()?,
-                fields_and_values: fields_and_values.into_tuple_vec::<F, V>()?,
-            }),
-            _ => Err(Error::Internal("unexpected hscan result".to_owned())),
         }
     }
 }

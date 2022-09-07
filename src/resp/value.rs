@@ -2,7 +2,10 @@ use crate::{
     resp::{Array, BulkString},
     Error, Result,
 };
-use std::{collections::HashSet, hash::Hash};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    hash::Hash,
+};
 
 #[derive(Debug)]
 pub enum Value {
@@ -20,27 +23,16 @@ impl Value {
     {
         T::from_value(self)
     }
-
-    pub fn into_tuple_vec<T, U>(self) -> Result<Vec<(T, U)>>
-    where
-        T: FromValue,
-        U: FromValue,
-    {
-        let values: Vec<Value> = self.into()?;
-        let mut result: Vec<(T, U)> = Vec::with_capacity(values.len() / 2);
-        let mut it = values.into_iter();
-        while let Some(value1) = it.next() {
-            if let Some(value2) = it.next() {
-                result.push((value1.into()?, value2.into()?));
-            }
-        }
-
-        Ok(result)
-    }
 }
 
 pub trait FromValue: Sized {
     fn from_value(value: Value) -> Result<Self>;
+    fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
+        Box::new(|iter| {
+            let value = iter.next()?;
+            Some(value.into())
+        })
+    }
 }
 
 impl FromValue for Value {
@@ -71,14 +63,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Array(Array::Nil) => Ok(Vec::new()),
-            Value::Array(Array::Vec(v)) => {
-                let mut result = Vec::<T>::with_capacity(v.len());
-                for value in v {
-                    let e = T::from_value(value)?;
-                    result.push(e);
-                }
-                Ok(result)
-            }
+            Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
         }
     }
@@ -91,14 +76,48 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Array(Array::Nil) => Ok(HashSet::new()),
-            Value::Array(Array::Vec(v)) => {
-                let mut result = HashSet::<T>::with_capacity(v.len());
-                for value in v {
-                    let v = T::from_value(value)?;
-                    result.insert(v);
-                }
-                Ok(result)
-            }
+            Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
+            _ => Err(Error::Parse("Unexpected result value type".to_owned())),
+        }
+    }
+}
+
+impl<T> FromValue for BTreeSet<T>
+where
+    T: FromValue + Ord,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Nil) => Ok(BTreeSet::new()),
+            Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
+            _ => Err(Error::Parse("Unexpected result value type".to_owned())),
+        }
+    }
+}
+
+impl<K, V> FromValue for HashMap<K, V>
+where
+    K: FromValue + Eq + Hash + Default,
+    V: FromValue + Default,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Nil) => Ok(HashMap::new()),
+            Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
+            _ => Err(Error::Parse("Unexpected result value type".to_owned())),
+        }
+    }
+}
+
+impl<K, V> FromValue for BTreeMap<K, V>
+where
+    K: FromValue + Ord + Default,
+    V: FromValue + Default,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Nil) => Ok(BTreeMap::new()),
+            Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
         }
     }
@@ -327,6 +346,24 @@ where
             ))),
         }
     }
+
+    fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
+        Box::new(|iter| {
+            let first = iter.next()?;
+
+            match first {
+                Value::Array(_) => Some(Self::from_value(first)),
+                _ => {
+                    let second = iter.next()?;
+                    Some(
+                        first
+                            .into()
+                            .and_then(|f| second.into().and_then(|s| Ok((f, s)))),
+                    )
+                }
+            }
+        })
+    }
 }
 
 impl ToString for Value {
@@ -380,4 +417,92 @@ impl ResultValueExt for Result<Value> {
             Err(e) => Err(e),
         }
     }
+}
+
+pub(crate) trait ValueVecExt : Sized {
+    fn from_value_array<T>(self) -> FromArrayIterator<T>
+    where
+        T: FromValue;
+}
+
+impl ValueVecExt for Vec<Value> {
+    fn from_value_array<T>(self) -> FromArrayIterator<T>
+    where
+        T: FromValue,
+    {
+        FromArrayIterator::new(self.into_iter())
+    }
+}
+
+pub(crate) struct FromArrayIterator<T>
+where
+    T: FromValue,
+{
+    iter: std::vec::IntoIter<Value>,
+    phantom: std::marker::PhantomData<T>,
+    next_functor: Box<dyn FnMut(&mut std::vec::IntoIter<Value>) -> Option<Result<T>>>,
+}
+
+impl<T> FromArrayIterator<T>
+where
+    T: FromValue,
+{
+    pub fn new(iter: std::vec::IntoIter<Value>) -> Self {
+        Self {
+            iter,
+            phantom: std::marker::PhantomData,
+            next_functor: T::next_functor(),
+        }
+    }
+}
+
+impl<T> Iterator for FromArrayIterator<T>
+where
+    T: FromValue,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.next_functor)(&mut self.iter)
+    }
+}
+
+/// Marker for single value array
+pub trait FromSingleValueArray<T>: FromValue
+where
+    T: FromValue,
+{
+}
+
+impl<T> FromSingleValueArray<T> for Vec<T> where T: FromValue {}
+impl<T> FromSingleValueArray<T> for HashSet<T> where T: FromValue + Eq + Hash {}
+impl<T> FromSingleValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
+
+/// Marker for key/value array
+pub trait FromKeyValueValueArray<K, V>: FromValue
+where
+    K: FromValue,
+    V: FromValue,
+{
+}
+
+impl<K, V> FromKeyValueValueArray<K, V> for Vec<(K, V)>
+where
+    K: FromValue + Default,
+    V: FromValue + Default,
+{
+}
+
+impl<K, V> FromKeyValueValueArray<K, V> for HashMap<K, V>
+where
+    K: FromValue + Eq + Hash + Default,
+    V: FromValue + Default,
+{
+}
+
+impl<K, V> FromKeyValueValueArray<K, V> for BTreeMap<K, V>
+where
+    K: FromValue + Ord + Default,
+    V: FromValue + Default,
+{
 }

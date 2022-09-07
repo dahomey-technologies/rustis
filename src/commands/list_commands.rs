@@ -1,6 +1,6 @@
 use crate::{
     cmd,
-    resp::{BulkString, FromValue},
+    resp::{BulkString, FromSingleValueArray, FromValue},
     Command, CommandSend, Result, SingleArgOrCollection,
 };
 use futures::Future;
@@ -107,7 +107,7 @@ pub trait ListCommands: CommandSend {
     where
         K: Into<BulkString>,
         E: FromValue,
-        C: SingleArgOrCollection<K>
+        C: SingleArgOrCollection<K>,
     {
         self.send_into(
             cmd("LMPOP")
@@ -126,10 +126,11 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
-    fn lpop<K, E>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + '_>>
+    fn lpop<K, E, A>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         E: FromValue,
+        A: FromSingleValueArray<E>,
     {
         self.send_into(cmd("LPOP").arg(key).arg(count))
     }
@@ -156,11 +157,15 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
-    fn lpush<K, E, C>(&self, key: K, elements: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn lpush<K, E, C>(
+        &self,
+        key: K,
+        elements: C,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
-        C: SingleArgOrCollection<E>
+        C: SingleArgOrCollection<E>,
     {
         self.send_into(cmd("LPUSH").arg(key).arg(elements))
     }
@@ -173,11 +178,15 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpushx/](https://redis.io/commands/lpushx/)
-    fn lpushx<K, E, C>(&self, key: K, elements: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn lpushx<K, E, C>(
+        &self,
+        key: K,
+        elements: C,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
-        C: SingleArgOrCollection<E>
+        C: SingleArgOrCollection<E>,
     {
         self.send_into(cmd("LPUSHX").arg(key).arg(elements))
     }
@@ -189,15 +198,16 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lrange/](https://redis.io/commands/lrange/)
-    fn lrange<K, E>(
+    fn lrange<K, E, A>(
         &self,
         key: K,
         start: isize,
         stop: isize,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + '_>>
+    ) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         E: FromValue,
+        A: FromSingleValueArray<E>,
     {
         self.send_into(cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
@@ -262,10 +272,11 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpop/](https://redis.io/commands/rpop/)
-    fn rpop<K, E>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + '_>>
+    fn rpop<K, E, C>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<C>> + '_>>
     where
         K: Into<BulkString>,
         E: FromValue,
+        C: FromSingleValueArray<E>,
     {
         self.send_into(cmd("RPOP").arg(key).arg(count))
     }
@@ -277,11 +288,15 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpush/](https://redis.io/commands/rpush/)
-    fn rpush<K, E, C>(&self, key: K, elements: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn rpush<K, E, C>(
+        &self,
+        key: K,
+        elements: C,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
-        C: SingleArgOrCollection<E>
+        C: SingleArgOrCollection<E>,
     {
         self.send_into(cmd("RPUSH").arg(key).arg(elements))
     }
@@ -294,11 +309,15 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpushx/](https://redis.io/commands/rpushx/)
-    fn rpushx<K, E, C>(&self, key: K, elements: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn rpushx<K, E, C>(
+        &self,
+        key: K,
+        elements: C,
+    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
-        C: SingleArgOrCollection<E>
+        C: SingleArgOrCollection<E>,
     {
         self.send_into(cmd("RPUSHX").arg(key).arg(elements))
     }
@@ -339,12 +358,11 @@ pub struct LPos<'a, T: ListCommands + ?Sized> {
 }
 
 impl<'a, T: ListCommands + ?Sized> LPos<'a, T> {
-    /// Returns the integer representing the matching element, or nil if there is no match. 
-    /// 
-    /// However, if the COUNT option is given the command returns an array 
+    /// Returns the integer representing the matching element, or nil if there is no match.
+    ///
+    /// However, if the COUNT option is given the command returns an array
     /// (empty if there are no matches).
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Option<usize>>> + 'a>>
-    {
+    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Option<usize>>> + 'a>> {
         self.list_commands.send_into(self.cmd)
     }
 
@@ -386,8 +404,7 @@ pub struct LPosCount<'a, T: ListCommands + ?Sized> {
 impl<'a, T: ListCommands + ?Sized> LPosCount<'a, T> {
     /// Returns an array of integers representing the matching elements
     ///  (empty if there are no matches).
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Vec<usize>>> + 'a>>
-    {
+    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Vec<usize>>> + 'a>> {
         self.list_commands.send_into(self.cmd)
     }
 

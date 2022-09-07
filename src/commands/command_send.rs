@@ -34,12 +34,4 @@ pub trait CommandSend {
         let fut = self.send(command);
         Box::pin(async move { fut.await?.into() })
     }
-
-    fn send_into_tuple_vec<T: FromValue, U: FromValue>(
-        &self,
-        command: Command,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<(T, U)>>> + Send + '_>> {
-        let fut = self.send(command);
-        Box::pin(async move { fut.await?.into_tuple_vec() })
-    }
 }

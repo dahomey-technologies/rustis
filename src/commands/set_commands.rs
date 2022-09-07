@@ -1,10 +1,10 @@
 use crate::{
     cmd,
-    resp::{BulkString, FromValue},
-    Command, CommandSend, SingleArgOrCollection, Result,
+    resp::{BulkString, FromSingleValueArray, FromValue},
+    Command, CommandSend, Result, SingleArgOrCollection,
 };
 use futures::Future;
-use std::{collections::HashSet, hash::Hash, pin::Pin};
+use std::{hash::Hash, pin::Pin};
 
 /// A group of Redis commands related to Sets
 /// # See Also
@@ -45,11 +45,12 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sdiff/](https://redis.io/commands/sdiff/)
-    fn sdiff<K, M, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    fn sdiff<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
         C: SingleArgOrCollection<K>,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SDIFF").arg(keys))
     }
@@ -82,11 +83,12 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sinter/](https://redis.io/commands/sinter/)
-    fn sinter<K, M, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    fn sinter<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
         C: SingleArgOrCollection<K>,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SINTER").arg(keys))
     }
@@ -161,10 +163,11 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/smembers/](https://redis.io/commands/smembers/)
-    fn smembers<K, M>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    fn smembers<K, M, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SMEMBERS").arg(key))
     }
@@ -218,14 +221,11 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/spop/](https://redis.io/commands/spop/)
-    fn spop<K, M>(
-        &self,
-        key: K,
-        count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    fn spop<K, M, A>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SPOP").arg(key).arg(count))
     }
@@ -237,14 +237,15 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/srandmember/](https://redis.io/commands/srandmember/)
-    fn srandmember<K, M>(
+    fn srandmember<K, M, A>(
         &self,
         key: K,
         count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    ) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SRANDMEMBER").arg(key).arg(count))
     }
@@ -260,7 +261,7 @@ pub trait SetCommands: CommandSend {
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
-        C: SingleArgOrCollection<M>
+        C: SingleArgOrCollection<M>,
     {
         self.send_into(cmd("SREM").arg(key).arg(members))
     }
@@ -289,11 +290,12 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sunion/](https://redis.io/commands/sunion/)
-    fn sunion<K, M, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<HashSet<M>>> + '_>>
+    fn sunion<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>
+        C: SingleArgOrCollection<K>,
+        A: FromSingleValueArray<M>,
     {
         self.send_into(cmd("SUNION").arg(keys))
     }
@@ -314,7 +316,7 @@ pub trait SetCommands: CommandSend {
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
-        C: SingleArgOrCollection<K>
+        C: SingleArgOrCollection<K>,
     {
         self.send_into(cmd("SUNIONSTORE").arg(destination).arg(keys))
     }

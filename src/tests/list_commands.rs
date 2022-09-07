@@ -196,7 +196,7 @@ async fn lpos() -> Result<()> {
         .await?;
     assert_eq!(Some(1), pos);
 
-    let pos = database
+    let pos: Vec<usize> = database
         .lpos("mylist", "element2")
         .rank(1)
         .max_len(1)
@@ -205,7 +205,7 @@ async fn lpos() -> Result<()> {
         .await?;
     assert_eq!(0, pos.len());
 
-    let pos = database
+    let pos: Vec<usize> = database
         .lpos("mylist", "element2")
         .rank(1)
         .max_len(3)

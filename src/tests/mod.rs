@@ -12,5 +12,6 @@ mod sorted_set_commands;
 mod string_commands;
 mod transaction;
 mod util;
+mod value;
 
 pub(crate) use util::*;

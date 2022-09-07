@@ -36,7 +36,7 @@ async fn transaction_error() -> Result<()> {
     let transaction = database.create_transaction();
 
     let fut1 = transaction.set("key1", "abc");
-    let fut2 = transaction.lpop::<_, String>("key1", 1);
+    let fut2 = transaction.lpop::<_, String, Vec<_>>("key1", 1);
 
     transaction.execute().await?;
 

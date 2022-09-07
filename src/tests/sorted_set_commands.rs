@@ -1,6 +1,6 @@
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, GenericCommands, Result, SortedSetCommands,
-    ZRangeSortBy, ZScanResult, ZWhere,
+    ZRangeSortBy, ZWhere,
 };
 use serial_test::serial;
 
@@ -284,6 +284,7 @@ async fn zmpop() -> Result<()> {
         .await?;
 
     let result: (String, Vec<(String, f64)>) = database.zmpop("key", ZWhere::Min, 1).await?;
+    println!("result: {:?}", result);
     assert_eq!("key".to_owned(), result.0);
     assert_eq!(1, result.1.len());
     assert_eq!(("one".to_owned(), 1.0), result.1[0]);
@@ -656,12 +657,12 @@ async fn zscan() -> Result<()> {
         .execute([(1.0, "one"), (2.0, "two"), (3.0, "three")])
         .await?;
 
-    let result: ZScanResult<String> = database.zscan("key", 0).execute().await?;
-    assert_eq!(0, result.cursor);
-    assert_eq!(3, result.elements.len());
-    assert_eq!(("one".to_owned(), 1.0), result.elements[0]);
-    assert_eq!(("two".to_owned(), 2.0), result.elements[1]);
-    assert_eq!(("three".to_owned(), 3.0), result.elements[2]);
+    let result = database.zscan("key", 0).execute().await?;
+    assert_eq!(0, result.0);
+    assert_eq!(3, result.1.len());
+    assert_eq!(("one".to_owned(), 1.0), result.1[0]);
+    assert_eq!(("two".to_owned(), 2.0), result.1[1]);
+    assert_eq!(("three".to_owned(), 3.0), result.1[2]);
 
     Ok(())
 }

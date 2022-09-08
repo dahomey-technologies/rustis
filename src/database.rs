@@ -1,5 +1,5 @@
 use crate::{
-    resp::Value, Command, CommandSend, ConnectionMultiplexer, Future, GenericCommands,
+    resp::Value, Command, CommandSend, ConnectionMultiplexer, Future, GenericCommands, GeoCommands,
     HashCommands, ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands,
     SortedSetCommands, StringCommands, Transaction,
 };
@@ -40,7 +40,10 @@ impl Database {
     ///     .await?
     ///     .into()?;
     /// ```
-    pub fn send<'a>(&'a self, command: Command) -> impl futures::Future<Output = Result<Value>> + 'a {
+    pub fn send<'a>(
+        &'a self,
+        command: Command,
+    ) -> impl futures::Future<Output = Result<Value>> + 'a {
         self.multiplexer.send(self.db, command)
     }
 
@@ -56,6 +59,7 @@ impl CommandSend for Database {
 }
 
 impl GenericCommands for Database {}
+impl GeoCommands for Database {}
 impl HashCommands for Database {}
 impl ListCommands for Database {}
 impl ScriptingCommands for Database {}

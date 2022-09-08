@@ -1,10 +1,11 @@
 use crate::{
     cmd,
     resp::{Array, ResultValueExt, Value},
-    Command, CommandSend, Database, Error, Future, GenericCommands, HashCommands, ListCommands, Result,
-    ServerCommands, SetCommands, SortedSetCommands, StringCommands, ValueReceiver, ValueSender,
+    Command, CommandSend, Database, Error, Future, GenericCommands, GeoCommands, HashCommands,
+    ListCommands, Result, ServerCommands, SetCommands, SortedSetCommands, StringCommands,
+    ValueReceiver, ValueSender,
 };
-use futures::{channel::oneshot};
+use futures::channel::oneshot;
 use std::{collections::VecDeque, sync::Mutex};
 
 pub struct Transaction {
@@ -22,7 +23,10 @@ impl Transaction {
         }
     }
 
-    pub fn send<'a>(&'a self, command: Command) -> impl futures::Future<Output = Result<Value>> + 'a {
+    pub fn send<'a>(
+        &'a self,
+        command: Command,
+    ) -> impl futures::Future<Output = Result<Value>> + 'a {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
 
         self.command_queue.lock().unwrap().push_back(command);
@@ -89,6 +93,7 @@ impl CommandSend for Transaction {
 }
 
 impl GenericCommands for Transaction {}
+impl GeoCommands for Transaction {}
 impl HashCommands for Transaction {}
 impl ListCommands for Transaction {}
 impl SetCommands for Transaction {}

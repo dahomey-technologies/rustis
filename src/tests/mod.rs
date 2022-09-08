@@ -2,6 +2,7 @@ mod command_args;
 mod database;
 mod error;
 mod generic_commands;
+mod geo_commands;
 mod hash_commands;
 mod list_commands;
 mod pub_sub_commands;

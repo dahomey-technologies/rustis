@@ -1,9 +1,11 @@
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, GenericCommands, ListCommands, Result,
+    resp::{BulkString, Value},
+    tests::get_default_addr,
+    ConnectionMultiplexer, FlushingMode, GenericCommands, ListCommands, Result, ServerCommands,
     SetCommands, StringCommands,
 };
 use serial_test::serial;
-use std::time::SystemTime;
+use std::{collections::HashSet, time::SystemTime};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -50,24 +52,6 @@ async fn del() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.set("key", "value").await?;
-
-    let deleted = database.del("key").await?;
-    assert_eq!(1, deleted);
-
-    let deleted = database.del("key").await?;
-    assert_eq!(0, deleted);
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn del_multiple() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
-
     database.set("key1", "value1").await?;
     database.set("key2", "value2").await?;
     database.set("key3", "value3").await?;
@@ -77,6 +61,24 @@ async fn del_multiple() -> Result<()> {
 
     let deleted = database.del(["key1", "key2", "key3"]).await?;
     assert_eq!(2, deleted);
+
+    let deleted = database.del("key1").await?;
+    assert_eq!(0, deleted);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn dump() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.set("key", "value").await?;
+
+    let dump = database.dump("key").await?;
+    assert!(dump.len() > 0);
 
     Ok(())
 }
@@ -219,6 +221,40 @@ async fn expiretime() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn keys() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+    database
+        .mset([
+            ("firstname", "Jack"),
+            ("lastname", "Stuntman"),
+            ("age", "35"),
+        ])
+        .await?;
+
+    let keys: HashSet<String> = database.keys("*name*").await?;
+    assert_eq!(2, keys.len());
+    assert!(keys.contains("firstname"));
+    assert!(keys.contains("lastname"));
+
+    let keys: HashSet<String> = database.keys("a??").await?;
+    assert_eq!(1, keys.len());
+    assert!(keys.contains("age"));
+
+    let keys: HashSet<String> = database.keys("*").await?;
+    assert_eq!(3, keys.len());
+    assert!(keys.contains("firstname"));
+    assert!(keys.contains("lastname"));
+    assert!(keys.contains("age"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn move_() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database0 = connection.get_database(0);
@@ -232,6 +268,78 @@ async fn move_() -> Result<()> {
     database0.move_("key", 1).await?;
     assert_eq!(0, database0.exists("key").await?);
     assert_eq!(1, database1.exists("key").await?);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn object_encoding() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.del(["key1", "key2", "unknown"]).await?;
+    database.set("key1", "value").await?;
+    database.set("key2", "12").await?;
+
+    let encoding: String = database.object_encoding("key1").await?;
+    assert_eq!("embstr", encoding);
+
+    let encoding: String = database.object_encoding("key2").await?;
+    assert_eq!("int", encoding);
+
+    let encoding: String = database.object_encoding("unknown").await?;
+    assert_eq!("", encoding);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn object_freq() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.del("key").await?;
+    database.set("key", "value").await?;
+
+    let frequency = database.object_freq("key").await;
+    // ERR An LFU maxmemory policy is not selected, access frequency not tracked.
+    assert!(frequency.is_err());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn object_idle_time() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.del("key").await?;
+    database.set("key", "value").await?;
+
+    let idle_time = database.object_idle_time("key").await?;
+    assert!(idle_time < 1);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn object_refcount() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.del("key").await?;
+    database.set("key", "value").await?;
+
+    let refcount = database.object_refcount("key").await?;
+    assert_eq!(1, refcount);
 
     Ok(())
 }
@@ -362,6 +470,106 @@ async fn pexpiretime() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn randomkey() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+    database.set("key1", "value1").await?;
+    database.set("key2", "value2").await?;
+    database.set("key3", "value3").await?;
+
+    let key: String = database.randomkey().await?;
+    assert!(["key1", "key2", "key3"].contains(&key.as_str()));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn rename() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+    database.set("key1", "value1").await?;
+
+    database.rename("key1", "key2").await?;
+    let value: Value = database.get("key1").await?;
+    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let value: String = database.get("key2").await?;
+    assert_eq!("value1", value);
+
+    let result = database.rename("unknown", "key2").await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn renamenx() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+    database.set("key1", "value1").await?;
+
+    let success = database.renamenx("key1", "key2").await?;
+    assert!(success);
+
+    database.set("key1", "value1").await?;
+    let success = database.renamenx("key1", "key2").await?;
+    assert!(!success);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn restore() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.set("key", "value").await?;
+
+    let dump = database.dump("key").await?;
+    database.del("key").await?;
+    database.restore("key", 0, dump).execute().await?;
+    let value: String = database.get("key").await?;
+    assert_eq!("value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn scan() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+
+    database.set("key1", "value").await?;
+    database.set("key2", "value").await?;    
+    database.set("key3", "value").await?;
+
+    let keys: (u64, HashSet<String>) = database.scan(0).execute().await?;
+    assert_eq!(3, keys.1.len());
+    assert!(keys.1.contains("key1"));
+    assert!(keys.1.contains("key2"));
+    assert!(keys.1.contains("key3"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn type_() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
@@ -381,6 +589,26 @@ async fn type_() -> Result<()> {
 
     let result = database.type_("key3").await?;
     assert_eq!(&result, "set");
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn unlink() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.set("key1", "value1").await?;
+    database.set("key2", "value2").await?;
+    database.set("key3", "value3").await?;
+
+    let unlinked = database.unlink("key1").await?;
+    assert_eq!(1, unlinked);
+
+    let unlinked = database.unlink(["key1", "key2", "key3"]).await?;
+    assert_eq!(2, unlinked);
 
     Ok(())
 }

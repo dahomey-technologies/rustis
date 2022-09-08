@@ -1,4 +1,8 @@
-use crate::{cmd, resp::BulkString, Command, CommandSend, Future, SingleArgOrCollection};
+use crate::{
+    cmd,
+    resp::{BulkString, FromSingleValueArray, FromValue, Value},
+    Command, CommandSend, Error, Future, SingleArgOrCollection,
+};
 
 /// A group of generic Redis commands
 ///
@@ -33,6 +37,27 @@ pub trait GenericCommands: CommandSend {
         C: SingleArgOrCollection<K>,
     {
         self.send_into(cmd("DEL").arg(keys))
+    }
+
+    /// Serialize the value stored at key in a Redis-specific format and return it to the user.
+    ///
+    /// # Return
+    /// The serialized value.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/dump/](https://redis.io/commands/dump/)
+    fn dump<K>(&self, key: K) -> Future<'_, Vec<u8>>
+    where
+        K: Into<BulkString>,
+    {
+        let fut = self.send_into::<Value>(cmd("DUMP").arg(key));
+        Box::pin(async move {
+            let value = fut.await?;
+            match value {
+                Value::BulkString(BulkString::Binary(b)) => Ok(b),
+                _ => Err(Error::Internal("Unexpected dump format".to_owned())),
+            }
+        })
     }
 
     /// Returns if keys exist.
@@ -106,6 +131,22 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("EXPIRETIME").arg(key))
     }
 
+    /// Returns all keys matching pattern.
+    ///
+    /// # Return
+    /// list of keys matching pattern.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/keys/](https://redis.io/commands/keys/)
+    fn keys<P, K, A>(&self, pattern: P) -> Future<'_, A>
+    where
+        P: Into<BulkString>,
+        K: FromValue,
+        A: FromSingleValueArray<K>,
+    {
+        self.send_into(cmd("KEYS").arg(pattern))
+    }
+
     /// Move key from the currently selected database to the specified destination database.
     ///
     /// # Return
@@ -119,6 +160,63 @@ pub trait GenericCommands: CommandSend {
         K: Into<BulkString>,
     {
         self.send_into(cmd("MOVE").arg(key).arg(db))
+    }
+
+    /// Returns the internal encoding for the Redis object stored at `key`
+    ///
+    /// # Return
+    /// The encoding of the object, or nil if the key doesn't exist
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/object-encoding/](https://redis.io/commands/object-encoding/)
+    fn object_encoding<K, E>(&self, key: K) -> Future<'_, E>
+    where
+        K: Into<BulkString>,
+        E: FromValue,
+    {
+        self.send_into(cmd("OBJECT").arg("ENCODING").arg(key))
+    }
+
+    /// This command returns the logarithmic access frequency counter of a Redis object stored at `key`.
+    ///
+    /// # Return
+    /// The counter's value.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/object-freq/](https://redis.io/commands/object-freq/)
+    fn object_freq<K>(&self, key: K) -> Future<'_, i64>
+    where
+        K: Into<BulkString>,
+    {
+        self.send_into(cmd("OBJECT").arg("FREQ").arg(key))
+    }
+
+    /// This command returns the time in seconds since the last access to the value stored at `key`.
+    ///
+    /// # Return
+    /// The idle time in seconds.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/object-idletime/](https://redis.io/commands/object-idletime/)
+    fn object_idle_time<K>(&self, key: K) -> Future<'_, i64>
+    where
+        K: Into<BulkString>,
+    {
+        self.send_into(cmd("OBJECT").arg("IDLETIME").arg(key))
+    }
+
+    /// This command returns the reference count of the stored at `key`.
+    ///
+    /// # Return
+    /// The number of references.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/object-refcount/](https://redis.io/commands/object-refcount/)
+    fn object_refcount<K>(&self, key: K) -> Future<'_, i64>
+    where
+        K: Into<BulkString>,
+    {
+        self.send_into(cmd("OBJECT").arg("REFCOUNT").arg(key))
     }
 
     /// Remove the existing timeout on key,
@@ -208,6 +306,63 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("PTTL").arg(key))
     }
 
+    /// Return a random key from the currently selected database.
+    ///
+    /// # Return
+    /// The number of references.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/randomkey/](https://redis.io/commands/randomkey/)
+    fn randomkey<R>(&self) -> Future<'_, R>
+    where
+        R: FromValue,
+    {
+        self.send_into(cmd("RANDOMKEY"))
+    }
+
+    /// Renames key to newkey.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/rename/](https://redis.io/commands/rename/)
+    fn rename<K1, K2>(&self, key: K1, new_key: K2) -> Future<'_, ()>
+    where
+        K1: Into<BulkString>,
+        K2: Into<BulkString>,
+    {
+        self.send_into(cmd("RENAME").arg(key).arg(new_key))
+    }
+
+    /// Renames key to newkey if newkey does not yet exist. 
+    /// It returns an error when key does not exist.
+    /// 
+    /// # Return
+    /// * `true` if key was renamed to newkey.
+    /// * `false` if newkey already exists.
+    /// # See Also
+    /// [https://redis.io/commands/renamenx/](https://redis.io/commands/renamenx/)
+    fn renamenx<K1, K2>(&self, key: K1, new_key: K2) -> Future<'_, bool>
+    where
+        K1: Into<BulkString>,
+        K2: Into<BulkString>,
+    {
+        self.send_into(cmd("RENAMENX").arg(key).arg(new_key))
+    }
+
+    /// Iterates the set of keys in the currently selected Redis database.
+    /// 
+    /// # Return
+    /// A list of keys
+    /// 
+    /// # See Also
+    /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
+    fn scan(&self, cursor: u64) -> Scan<Self>
+    {
+        Scan {
+            generic_commands: &self,
+            cmd: cmd("SCAN").arg(cursor)
+        }
+    }
+
     /// Returns the remaining time to live of a key that has a timeout.
     ///
     /// # Return
@@ -224,6 +379,27 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("TTL").arg(key))
     }
 
+    /// Create a key associated with a value that is obtained by deserializing
+    /// the provided serialized value (obtained via DUMP).
+    ///
+    /// # Return
+    /// Restore command builder
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/restore/](https://redis.io/commands/restore/)
+    fn restore<K>(&self, key: K, ttl: u64, serialized_value: Vec<u8>) -> Restore<Self>
+    where
+        K: Into<BulkString>,
+    {
+        Restore {
+            generic_commands: &self,
+            cmd: cmd("RESTORE")
+                .arg(key)
+                .arg(ttl)
+                .arg(BulkString::Binary(serialized_value)),
+        }
+    }
+
     /// Returns the string representation of the type of the value stored at key.
     ///
     /// The different types that can be returned are: string, list, set, zset, hash and stream.
@@ -238,6 +414,21 @@ pub trait GenericCommands: CommandSend {
         K: Into<BulkString>,
     {
         self.send_into(cmd("TYPE").arg(key))
+    }
+
+    /// This command is very similar to DEL: it removes the specified keys. 
+    ///
+    /// # Return
+    /// The number of keys that were unlinked.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/unlink/](https://redis.io/commands/unlink/)
+    fn unlink<K, C>(&self, keys: C) -> Future<'_, usize>
+    where
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
+    {
+        self.send_into(cmd("UNLINK").arg(keys))
     }
 }
 
@@ -302,6 +493,97 @@ impl<'a, T: GenericCommands> Expire<'a, T> {
 
     /// execute with no option
     pub fn execute(self) -> Future<'a, bool> {
+        self.generic_commands.send_into(self.cmd)
+    }
+}
+
+/// Builder for the [restore](crate::GenericCommands::restore) command
+pub struct Restore<'a, T: GenericCommands + ?Sized> {
+    generic_commands: &'a T,
+    cmd: Command,
+}
+
+impl<'a, T: GenericCommands> Restore<'a, T> {
+    /// Force replacing the key if it already exists
+    pub fn replace(self) -> Self {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("REPLACE"),
+        }
+    }
+
+    /// If the ABSTTL modifier was used, ttl should represent
+    /// an absolute Unix timestamp (in milliseconds) in which the key will expire.
+    pub fn abs_ttl(self) -> Self {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("ABSTTL"),
+        }
+    }
+
+    /// For eviction purposes, you may use the IDLETIME or FREQ modifiers.
+    pub fn idle_time(self, seconds: i64) -> Self {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("IDLETIME").arg(seconds),
+        }
+    }
+
+    /// For eviction purposes, you may use the IDLETIME or FREQ modifiers.
+    pub fn freq(self, frequency: f64) -> Self {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("FREQ").arg(frequency),
+        }
+    }
+
+    /// Execute the command
+    pub fn execute(self) -> Future<'a, ()> {
+        self.generic_commands.send_into(self.cmd)
+    }
+}
+
+/// Builder for the [scan](crate::GenericCommands::scan) command
+pub struct Scan<'a, T: GenericCommands + ?Sized> {
+    generic_commands: &'a T,
+    cmd: Command,
+}
+
+impl<'a, T: GenericCommands> Scan<'a, T> {
+    pub fn match_<P>(self, pattern: P) -> Self
+    where
+        P: Into<BulkString>,
+    {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("MATCH").arg(pattern),
+        }
+    }
+
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("COUNT").arg(count),
+        }
+    }
+
+    /// You can use the TYPE option to ask SCAN to only return objects that match a given type
+    pub fn type_<A>(self, type_: A) -> Self 
+    where 
+        A : Into<BulkString>
+    {
+        Self {
+            generic_commands: self.generic_commands,
+            cmd: self.cmd.arg("TYPE").arg(type_),
+        }  
+    }
+
+    /// Execute the command
+    pub fn execute<K, A>(self) -> Future<'a, (u64, A)>
+    where
+        K: FromValue,
+        A: FromSingleValueArray<K> + Default
+    {
         self.generic_commands.send_into(self.cmd)
     }
 }

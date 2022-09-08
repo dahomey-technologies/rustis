@@ -1,10 +1,8 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    ArgsOrCollection, Command, CommandSend, Result, SingleArgOrCollection,
+    ArgsOrCollection, Command, CommandSend, Future, SingleArgOrCollection,
 };
-use futures::Future;
-use std::pin::Pin;
 
 /// A group of Redis commands related to Sorted Sets
 ///
@@ -34,7 +32,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zcard/](https://redis.io/commands/zcard/)
-    fn zcard<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zcard<K>(&self, key: K) -> Future<'_, usize>
     where
         K: Into<BulkString>,
     {
@@ -48,12 +46,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zcount/](https://redis.io/commands/zcount/)
-    fn zcount<K, T, U>(
-        &self,
-        key: K,
-        min: T,
-        max: U,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zcount<K, T, U>(&self, key: K, min: T, max: U) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         T: Into<BulkString>,
@@ -89,11 +82,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zdiffstore/](https://redis.io/commands/zdiffstore/)
-    fn zdiffstore<D, K, C>(
-        &self,
-        destination: D,
-        keys: C,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zdiffstore<D, K, C>(&self, destination: D, keys: C) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
@@ -114,12 +103,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zincrby/](https://redis.io/commands/zincrby/)
-    fn zincrby<K, M>(
-        &self,
-        key: K,
-        increment: f64,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<f64>> + '_>>
+    fn zincrby<K, M>(&self, key: K, increment: f64, member: M) -> Future<'_, f64>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -151,11 +135,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zintercard/](https://redis.io/commands/zintercard/)
-    fn zintercard<K, C>(
-        &self,
-        keys: C,
-        limit: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zintercard<K, C>(&self, keys: C, limit: usize) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
@@ -201,12 +181,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zlexcount/](https://redis.io/commands/zlexcount/)
-    fn zlexcount<K, M1, M2>(
-        &self,
-        key: K,
-        min: M1,
-        max: M2,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zlexcount<K, M1, M2>(&self, key: K, min: M1, max: M2) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         M1: Into<BulkString>,
@@ -228,7 +203,7 @@ pub trait SortedSetCommands: CommandSend {
         keys: C,
         where_: ZWhere,
         count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<(String, Vec<(E, f64)>)>> + '_>>
+    ) -> Future<'_, (String, Vec<(E, f64)>)>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
@@ -253,11 +228,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zmscore/](https://redis.io/commands/zmscore/)
-    fn zmscore<K, M, C>(
-        &self,
-        key: K,
-        members: C,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<f64>>>> + '_>>
+    fn zmscore<K, M, C>(&self, key: K, members: C) -> Future<'_, Vec<Option<f64>>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -273,11 +244,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zpopmax/](https://redis.io/commands/zpopmax/)
-    fn zpopmax<K, M>(
-        &self,
-        key: K,
-        count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<(M, f64)>>> + '_>>
+    fn zpopmax<K, M>(&self, key: K, count: usize) -> Future<'_, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
         M: FromValue + Default,
@@ -292,11 +259,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zpopmin/](https://redis.io/commands/zpopmin/)
-    fn zpopmin<K, M>(
-        &self,
-        key: K,
-        count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<(M, f64)>>> + '_>>
+    fn zpopmin<K, M>(&self, key: K, count: usize) -> Future<'_, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
         M: FromValue + Default,
@@ -362,11 +325,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrank/](https://redis.io/commands/zrank/)
-    fn zrank<K, M>(
-        &self,
-        key: K,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<usize>>> + '_>>
+    fn zrank<K, M>(&self, key: K, member: M) -> Future<'_, Option<usize>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -381,7 +340,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrem/](https://redis.io/commands/zrem/)
-    fn zrem<K, M, C>(&self, key: K, members: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zrem<K, M, C>(&self, key: K, members: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -400,12 +359,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebylex/](https://redis.io/commands/zremrangebylex/)
-    fn zremrangebylex<K, S>(
-        &self,
-        key: K,
-        start: S,
-        stop: S,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zremrangebylex<K, S>(&self, key: K, start: S, stop: S) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
@@ -420,12 +374,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebyrank/](https://redis.io/commands/zremrangebyrank/)
-    fn zremrangebyrank<K>(
-        &self,
-        key: K,
-        start: isize,
-        stop: isize,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zremrangebyrank<K>(&self, key: K, start: isize, stop: isize) -> Future<'_, usize>
     where
         K: Into<BulkString>,
     {
@@ -439,12 +388,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebyscore/](https://redis.io/commands/zremrangebyscore/)
-    fn zremrangebyscore<K, S>(
-        &self,
-        key: K,
-        start: S,
-        stop: S,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn zremrangebyscore<K, S>(&self, key: K, start: S, stop: S) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
@@ -460,11 +404,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrevrank/](https://redis.io/commands/zrevrank/)
-    fn zrevrank<K, M>(
-        &self,
-        key: K,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<usize>>> + '_>>
+    fn zrevrank<K, M>(&self, key: K, member: M) -> Future<'_, Option<usize>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -496,11 +436,7 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zscore/](https://redis.io/commands/zscore/)
-    fn zscore<K, M>(
-        &self,
-        key: K,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<f64>>> + '_>>
+    fn zscore<K, M>(&self, key: K, member: M) -> Future<'_, Option<f64>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -563,7 +499,7 @@ where
     /// # Return
     /// * When used without optional arguments, the number of elements added to the sorted set (excluding score updates).
     /// * If the CH option is specified, the number of elements that were changed (added or updated).
-    pub fn execute<M, I>(self, items: I) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>>
+    pub fn execute<M, I>(self, items: I) -> Future<'a, usize>
     where
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, M)>,
@@ -622,11 +558,7 @@ where
     /// # Return
     /// The new score of member (a double precision floating point number),
     /// or nil if the operation was aborted (when called with either the XX or the NX option).
-    pub fn incr<M>(
-        self,
-        score: f64,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<f64>>> + 'a>>
+    pub fn incr<M>(self, score: f64, member: M) -> Future<'a, Option<f64>>
     where
         M: Into<BulkString>,
     {
@@ -684,7 +616,7 @@ where
 
     /// # Return
     /// list of elements in the specified range
-    pub fn execute<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + 'a>>
+    pub fn execute<E>(self) -> Future<'a, Vec<E>>
     where
         E: FromValue,
     {
@@ -696,7 +628,7 @@ where
     ///
     /// # Return
     /// list of elements and their scores in the specified range
-    pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
+    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
     where
         E: FromValue + Default,
     {
@@ -737,7 +669,7 @@ where
     T: SortedSetCommands + ?Sized,
 {
     /// The result of the difference
-    pub fn execute<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + 'a>>
+    pub fn execute<E>(self) -> Future<'a, Vec<E>>
     where
         E: FromValue,
     {
@@ -745,7 +677,7 @@ where
     }
 
     /// The result of the difference with scores
-    pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
+    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
     where
         E: FromValue + Default,
     {
@@ -811,7 +743,7 @@ where
     }
 
     /// The result of the intersection
-    pub fn execute<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + 'a>>
+    pub fn execute<E>(self) -> Future<'a, Vec<E>>
     where
         E: FromValue,
     {
@@ -819,7 +751,7 @@ where
     }
 
     /// The result of the intersection with scores
-    pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
+    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
     where
         E: FromValue + Default,
     {
@@ -869,7 +801,7 @@ where
     }
 
     /// The number of elements in the resulting sorted set at destination.
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>> {
+    pub fn execute(self) -> Future<'a, usize> {
         self.sorted_set_commands.send_into(self.cmd)
     }
 }
@@ -902,7 +834,7 @@ where
     T: SortedSetCommands + ?Sized,
 {
     /// The randomly selected element, or nil when key does not exist.
-    pub fn execute<E>(self) -> Pin<Box<dyn Future<Output = Result<E>> + 'a>>
+    pub fn execute<E>(self) -> Future<'a, E>
     where
         E: FromValue,
     {
@@ -937,7 +869,7 @@ where
     T: SortedSetCommands + ?Sized,
 {
     /// The result of the intersection
-    pub fn execute<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<E>>> + 'a>>
+    pub fn execute<E>(self) -> Future<'a, Vec<E>>
     where
         E: FromValue,
     {
@@ -945,7 +877,7 @@ where
     }
 
     /// The result of the intersection with scores
-    pub fn with_scores<E>(self) -> Pin<Box<dyn Future<Output = Result<Vec<(E, f64)>>> + 'a>>
+    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
     where
         E: FromValue + Default,
     {
@@ -1003,7 +935,7 @@ where
 
     /// # Return
     /// the number of elements in the resulting sorted set.
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>> {
+    pub fn execute(self) -> Future<'a, usize> {
         self.sorted_set_commands.send_into(self.cmd)
     }
 }
@@ -1019,7 +951,7 @@ impl<'a, T: SortedSetCommands + ?Sized> ZScan<'a, T> {
     /// A tuple where
     /// * The first value is the cursor as an unsigned 64 bit number
     /// * The second value is a list of members and their scores in a Vec of Tuples
-    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<(M, f64)>)>> + 'a>>
+    pub fn execute<M>(self) -> Future<'a, (u64, Vec<(M, f64)>)>
     where
         M: FromValue + Default,
     {

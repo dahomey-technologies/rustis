@@ -1,6 +1,4 @@
-use crate::{cmd, resp::BulkString, PubSub, PubSubStream, Result};
-use futures::Future;
-use std::pin::Pin;
+use crate::{cmd, resp::BulkString, Future, PubSub, PubSubStream};
 
 /// A redis connection used in a pub/sub scenario.
 pub trait PubSubCommands {
@@ -13,36 +11,25 @@ pub trait PubSubCommands {
     ///
     /// # See Also
     /// [https://redis.io/commands/publish/](https://redis.io/commands/publish/)
-    fn publish<'a, C, M>(
-        &'a self,
-        channel: C,
-        message: M,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>>
+    fn publish<'a, C, M>(&'a self, channel: C, message: M) -> Future<'a, usize>
     where
-        C: Into<BulkString> + 'a,
-        M: Into<BulkString> + 'a;
+        C: Into<BulkString> + 'a + Send,
+        M: Into<BulkString> + 'a + Send;
 
     /// Subscribes the client to the specified channels.
     ///
     /// # See Also
     /// [https://redis.io/commands/subscribe/](https://redis.io/commands/subscribe/)
-    fn subscribe<'a, C>(
-        &'a self,
-        channel: C,
-    ) -> Pin<Box<dyn Future<Output = Result<PubSubStream>> + 'a>>
+    fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + 'a;
+        C: Into<BulkString> + 'a + Send;
 }
 
 impl PubSubCommands for PubSub {
-    fn publish<'a, C, M>(
-        &'a self,
-        channel: C,
-        message: M,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + 'a>>
+    fn publish<'a, C, M>(&'a self, channel: C, message: M) -> Future<'a, usize>
     where
-        C: Into<BulkString> + 'a,
-        M: Into<BulkString> + 'a,
+        C: Into<BulkString> + 'a + Send,
+        M: Into<BulkString> + 'a + Send,
     {
         Box::pin(async move {
             self.multiplexer
@@ -52,12 +39,9 @@ impl PubSubCommands for PubSub {
         })
     }
 
-    fn subscribe<'a, C>(
-        &'a self,
-        channel: C,
-    ) -> Pin<Box<dyn Future<Output = Result<PubSubStream>> + 'a>>
+    fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + 'a,
+        C: Into<BulkString> + 'a + Send,
     {
         Box::pin(async move { self.multiplexer.subscribe(channel.into()).await })
     }

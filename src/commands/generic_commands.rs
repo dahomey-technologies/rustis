@@ -1,6 +1,4 @@
-use crate::{cmd, resp::BulkString, Command, CommandSend, Result, SingleArgOrCollection};
-use futures::Future;
-use std::pin::Pin;
+use crate::{cmd, resp::BulkString, Command, CommandSend, Future, SingleArgOrCollection};
 
 /// A group of generic Redis commands
 ///
@@ -29,7 +27,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/del/](https://redis.io/commands/del/)
-    fn del<K, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn del<K, C>(&self, keys: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
@@ -44,7 +42,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/exists/](https://redis.io/commands/exists/)
-    fn exists<K, C>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn exists<K, C>(&self, keys: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
@@ -101,7 +99,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/expiretime/](https://redis.io/commands/expiretime/)
-    fn expiretime<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
+    fn expiretime<K>(&self, key: K) -> Future<'_, i64>
     where
         K: Into<BulkString>,
     {
@@ -116,7 +114,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/move/](https://redis.io/commands/move/)
-    fn move_<K>(&self, key: K, db: usize) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn move_<K>(&self, key: K, db: usize) -> Future<'_, i64>
     where
         K: Into<BulkString>,
     {
@@ -133,7 +131,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/persist/](https://redis.io/commands/persist/)
-    fn persist<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn persist<K>(&self, key: K) -> Future<'_, bool>
     where
         K: Into<BulkString>,
     {
@@ -187,7 +185,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpiretime/](https://redis.io/commands/pexpiretime/)
-    fn pexpiretime<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
+    fn pexpiretime<K>(&self, key: K) -> Future<'_, i64>
     where
         K: Into<BulkString>,
     {
@@ -203,7 +201,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/pttl/](https://redis.io/commands/pttl/)
-    fn pttl<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
+    fn pttl<K>(&self, key: K) -> Future<'_, i64>
     where
         K: Into<BulkString>,
     {
@@ -219,7 +217,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/ttl/](https://redis.io/commands/ttl/)
-    fn ttl<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
+    fn ttl<K>(&self, key: K) -> Future<'_, i64>
     where
         K: Into<BulkString>,
     {
@@ -235,7 +233,7 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/type/](https://redis.io/commands/type/)
-    fn type_<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<String>> + '_>>
+    fn type_<K>(&self, key: K) -> Future<'_, String>
     where
         K: Into<BulkString>,
     {
@@ -270,7 +268,7 @@ impl<'a, T: GenericCommands> Copy<'a, T> {
     ///
     /// # Return
     ///  Success of the operation
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn execute(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd)
     }
 }
@@ -283,27 +281,27 @@ pub struct Expire<'a, T: GenericCommands + ?Sized> {
 
 impl<'a, T: GenericCommands> Expire<'a, T> {
     /// Set expiry only when the key has no expiry
-    pub fn nx(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn nx(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd.arg("NX"))
     }
 
     /// Set expiry only when the key has an existing expiry
-    pub fn xx(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn xx(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd.arg("XX"))
     }
 
     /// Set expiry only when the new expiry is greater than current one
-    pub fn gt(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn gt(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd.arg("GT"))
     }
 
     /// Set expiry only when the new expiry is less than current one
-    pub fn lt(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn lt(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd.arg("LT"))
     }
 
     /// execute with no option
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<bool>> + 'a>> {
+    pub fn execute(self) -> Future<'a, bool> {
         self.generic_commands.send_into(self.cmd)
     }
 }

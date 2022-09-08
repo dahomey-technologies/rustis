@@ -1,6 +1,4 @@
-use crate::{cmd, CommandSend, Result};
-use futures::Future;
-use std::pin::Pin;
+use crate::{cmd, CommandSend, Future};
 
 /// Database flushing mode
 pub enum FlushingMode {
@@ -25,10 +23,7 @@ pub trait ServerCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
-    fn flushdb(
-        &self,
-        flushing_mode: FlushingMode,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>> {
+    fn flushdb(&self, flushing_mode: FlushingMode) -> Future<'_, ()> {
         let mut command = cmd("FLUSHDB");
         match flushing_mode {
             FlushingMode::Default => (),
@@ -42,10 +37,7 @@ pub trait ServerCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/flushall/](https://redis.io/commands/flushall/)
-    fn flushall(
-        &self,
-        flushing_mode: FlushingMode,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + '_>> {
+    fn flushall(&self, flushing_mode: FlushingMode) -> Future<'_, ()> {
         let mut command = cmd("FLUSHALL");
         match flushing_mode {
             FlushingMode::Default => (),

@@ -1,10 +1,8 @@
 use crate::{
     cmd,
     resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
-    Command, CommandSend, KeyValueArgOrCollection, Result, SingleArgOrCollection,
+    Command, CommandSend, Future, KeyValueArgOrCollection, SingleArgOrCollection,
 };
-use futures::Future;
-use std::pin::Pin;
 
 /// A group of Redis commands related to Hashes
 ///
@@ -18,7 +16,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hdel/](https://redis.io/commands/hdel/)
-    fn hdel<K, F, C>(&self, key: K, fields: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hdel<K, F, C>(&self, key: K, fields: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -35,7 +33,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hexists/](https://redis.io/commands/hexists/)
-    fn hexists<K, F>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn hexists<K, F>(&self, key: K, field: F) -> Future<'_, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -50,7 +48,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hget/](https://redis.io/commands/hget/)
-    fn hget<K, F, V>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
+    fn hget<K, F, V>(&self, key: K, field: F) -> Future<'_, V>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -66,7 +64,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hgetall/](https://redis.io/commands/hgetall/)
-    fn hgetall<K, F, V, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn hgetall<K, F, V, A>(&self, key: K) -> Future<'_, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -83,12 +81,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hincrby/](https://redis.io/commands/hincrby/)
-    fn hincrby<K, F>(
-        &self,
-        key: K,
-        field: F,
-        increment: i64,
-    ) -> Pin<Box<dyn Future<Output = Result<i64>> + '_>>
+    fn hincrby<K, F>(&self, key: K, field: F, increment: i64) -> Future<'_, i64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -104,12 +97,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hincrbyfloat/](https://redis.io/commands/hincrbyfloat/)
-    fn hincrbyfloat<K, F>(
-        &self,
-        key: K,
-        field: F,
-        increment: f64,
-    ) -> Pin<Box<dyn Future<Output = Result<f64>> + '_>>
+    fn hincrbyfloat<K, F>(&self, key: K, field: F, increment: f64) -> Future<'_, f64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -124,7 +112,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hkeys/](https://redis.io/commands/hkeys/)
-    fn hkeys<K, F, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn hkeys<K, F, A>(&self, key: K) -> Future<'_, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -140,7 +128,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hlen/)
-    fn hlen<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hlen<K>(&self, key: K) -> Future<'_, usize>
     where
         K: Into<BulkString>,
     {
@@ -154,11 +142,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hmget/](https://redis.io/commands/hmget/)
-    fn hmget<K, F, V, C, A>(
-        &self,
-        key: K,
-        fields: C,
-    ) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn hmget<K, F, V, C, A>(&self, key: K, fields: C) -> Future<'_, A>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -208,11 +192,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hset/](https://redis.io/commands/hset/)
-    fn hset<K, F, V, I>(
-        &self,
-        key: K,
-        items: I,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hset<K, F, V, I>(&self, key: K, items: I) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -230,12 +210,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hsetnx/](https://redis.io/commands/hsetnx/)
-    fn hsetnx<K, F, V>(
-        &self,
-        key: K,
-        field: F,
-        value: V,
-    ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn hsetnx<K, F, V>(&self, key: K, field: F, value: V) -> Future<'_, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -252,7 +227,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hstrlen/](https://redis.io/commands/hstrlen/)
-    fn hstrlen<K, F>(&self, key: K, field: F) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn hstrlen<K, F>(&self, key: K, field: F) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -267,7 +242,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hvals/](https://redis.io/commands/hvals/)
-    fn hvals<K, V, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn hvals<K, V, A>(&self, key: K) -> Future<'_, A>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -288,7 +263,7 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn execute<F>(self) -> Pin<Box<dyn Future<Output = Result<F>> + 'a>>
+    pub fn execute<F>(self) -> Future<'a, F>
     where
         F: FromValue,
     {
@@ -300,7 +275,7 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count<F, A>(self, count: i64) -> Pin<Box<dyn Future<Output = Result<A>> + 'a>>
+    pub fn count<F, A>(self, count: i64) -> Future<'a, A>
     where
         F: FromValue,
         A: FromSingleValueArray<F>,
@@ -313,14 +288,11 @@ impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count_with_values<F, V, A>(
-        self,
-        count: i64,
-    ) -> Pin<Box<dyn Future<Output = Result<A>> + 'a>>
+    pub fn count_with_values<F, V, A>(self, count: i64) -> Future<'a, A>
     where
         F: FromValue,
         V: FromValue,
-        A: FromKeyValueValueArray<F, V>
+        A: FromKeyValueValueArray<F, V>,
     {
         self.hash_commands
             .send_into(self.cmd.arg(count).arg("WITHVALUES"))
@@ -334,7 +306,7 @@ pub struct HScan<'a, T: HashCommands + ?Sized> {
 }
 
 impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
-    pub fn execute<F, V>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<(F, V)>)>> + 'a>>
+    pub fn execute<F, V>(self) -> Future<'a, (u64, Vec<(F, V)>)>
     where
         F: FromValue + Default,
         V: FromValue + Default,

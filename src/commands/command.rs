@@ -24,7 +24,7 @@ impl Command {
     {
         Self {
             name: self.name,
-            args: args.into_args(self.args),
+            args: self.args.arg(args),
         }
     }
 }

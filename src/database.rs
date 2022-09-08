@@ -1,10 +1,8 @@
 use crate::{
-    resp::Value, Command, CommandSend, ConnectionMultiplexer, GenericCommands, HashCommands,
-    ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StringCommands, Transaction,
+    resp::Value, Command, CommandSend, ConnectionMultiplexer, Future, GenericCommands,
+    HashCommands, ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands,
+    SortedSetCommands, StringCommands, Transaction,
 };
-use futures::Future;
-use std::pin::Pin;
 
 #[derive(Clone)]
 pub struct Database {
@@ -42,7 +40,7 @@ impl Database {
     ///     .await?
     ///     .into()?;
     /// ```
-    pub fn send<'a>(&'a self, command: Command) -> impl Future<Output = Result<Value>> + 'a {
+    pub fn send<'a>(&'a self, command: Command) -> impl futures::Future<Output = Result<Value>> + 'a {
         self.multiplexer.send(self.db, command)
     }
 
@@ -52,7 +50,7 @@ impl Database {
 }
 
 impl CommandSend for Database {
-    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>> {
+    fn send(&self, command: Command) -> Future<'_, Value> {
         Box::pin(self.send(command))
     }
 }

@@ -1,6 +1,8 @@
-use crate::{cmd, resp::{BulkString, Value, FromValue}, Command, CommandSend, Result, SingleArgOrCollection};
-use futures::Future;
-use std::pin::Pin;
+use crate::{
+    cmd,
+    resp::{BulkString, FromValue, Value},
+    Command, CommandSend, Future, SingleArgOrCollection,
+};
 
 /// A group of Redis commands related to Scripting and Functions
 /// # See Also
@@ -19,12 +21,12 @@ pub trait ScriptingCommands: CommandSend {
         Eval {
             scripting_commands: &self,
             cmd: cmd("EVAL").arg(script),
-            keys_added: false
+            keys_added: false,
         }
     }
 
     /// Evaluate a script from the server's cache by its SHA1 digest.
-    /// 
+    ///
     /// # See Also
     /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
     fn evalsha<S>(&self, sha1: S) -> Eval<Self>
@@ -34,18 +36,18 @@ pub trait ScriptingCommands: CommandSend {
         Eval {
             scripting_commands: &self,
             cmd: cmd("EVALSHA").arg(sha1),
-            keys_added: false
+            keys_added: false,
         }
     }
 
-    /// Load a script into the scripts cache, without executing it. 
-    /// 
+    /// Load a script into the scripts cache, without executing it.
+    ///
     /// # Return
     /// The SHA1 digest of the script added into the script cache.
     ///
     /// # See Also
     /// [https://redis.io/commands/script-load/](https://redis.io/commands/script-load/)
-    fn script_load<S, V>(&self, script: S) -> Pin<Box<dyn Future<Output = Result<V>> + '_>>
+    fn script_load<S, V>(&self, script: S) -> Future<'_, V>
     where
         S: Into<BulkString>,
         V: FromValue,
@@ -58,11 +60,11 @@ pub trait ScriptingCommands: CommandSend {
 pub struct Eval<'a, T: ScriptingCommands + ?Sized> {
     scripting_commands: &'a T,
     cmd: Command,
-    keys_added: bool
+    keys_added: bool,
 }
 
 impl<'a, T: ScriptingCommands> Eval<'a, T> {
-    pub fn new( scripting_commands: &'a T, cmd: Command) -> Self {
+    pub fn new(scripting_commands: &'a T, cmd: Command) -> Self {
         Self {
             scripting_commands,
             cmd,
@@ -74,7 +76,7 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     pub fn keys<K, C>(self, keys: C) -> Self
     where
         K: Into<BulkString>,
-        C: SingleArgOrCollection<K>
+        C: SingleArgOrCollection<K>,
     {
         Self {
             scripting_commands: self.scripting_commands,
@@ -87,10 +89,9 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     pub fn args<A, C>(self, args: C) -> Self
     where
         A: Into<BulkString>,
-        C: SingleArgOrCollection<A>
+        C: SingleArgOrCollection<A>,
     {
-        let cmd = 
-        if !self.keys_added {
+        let cmd = if !self.keys_added {
             // numkeys = 0
             self.cmd.arg(0).arg(args)
         } else {
@@ -105,7 +106,7 @@ impl<'a, T: ScriptingCommands> Eval<'a, T> {
     }
 
     /// execute with no option
-    pub fn execute(self) -> Pin<Box<dyn Future<Output = Result<Value>> + 'a>> {
+    pub fn execute(self) -> Future<'a, Value> {
         self.scripting_commands.send_into(self.cmd)
     }
 }

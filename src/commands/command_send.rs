@@ -1,9 +1,7 @@
 use crate::{
     resp::{FromValue, Value},
-    Command, Result,
+    Command, Future,
 };
-use futures::Future;
-use std::pin::Pin;
 
 pub trait CommandSend {
     /// Send an arbitrary command to the server.
@@ -25,12 +23,9 @@ pub trait CommandSend {
     ///     .await?
     ///     .into()?;
     /// ```
-    fn send(&self, command: Command) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + '_>>;
+    fn send(&self, command: Command) -> Future<'_, Value>;
 
-    fn send_into<T: FromValue>(
-        &self,
-        command: Command,
-    ) -> Pin<Box<dyn Future<Output = Result<T>> + Send + '_>> {
+    fn send_into<T: FromValue>(&self, command: Command) -> Future<'_, T> {
         let fut = self.send(command);
         Box::pin(async move { fut.await?.into() })
     }

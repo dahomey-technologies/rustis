@@ -1,10 +1,9 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    Command, CommandSend, Result, SingleArgOrCollection,
+    Command, CommandSend, Future, SingleArgOrCollection,
 };
-use futures::Future;
-use std::{hash::Hash, pin::Pin};
+use std::hash::Hash;
 
 /// A group of Redis commands related to Sets
 /// # See Also
@@ -14,7 +13,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sadd/](https://redis.io/commands/sadd/)
-    fn sadd<K, M, C>(&self, key: K, members: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn sadd<K, M, C>(&self, key: K, members: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -30,7 +29,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/scard/](https://redis.io/commands/scard/)
-    fn scard<K>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn scard<K>(&self, key: K) -> Future<'_, usize>
     where
         K: Into<BulkString>,
     {
@@ -45,7 +44,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sdiff/](https://redis.io/commands/sdiff/)
-    fn sdiff<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn sdiff<K, M, C, A>(&self, keys: C) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -63,11 +62,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sdiffstore/](https://redis.io/commands/sdiffstore/)
-    fn sdiffstore<D, K, C>(
-        &self,
-        destination: D,
-        keys: C,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn sdiffstore<D, K, C>(&self, destination: D, keys: C) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
@@ -83,7 +78,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sinter/](https://redis.io/commands/sinter/)
-    fn sinter<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn sinter<K, M, C, A>(&self, keys: C) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -104,11 +99,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sintercard/](https://redis.io/commands/sintercard/)
-    fn sintercard<K, C>(
-        &self,
-        keys: C,
-        limit: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn sintercard<K, C>(&self, keys: C, limit: usize) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
@@ -130,11 +121,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sinterstore/](https://redis.io/commands/sinterstore/)
-    fn sinterstore<D, K, C>(
-        &self,
-        destination: D,
-        keys: C,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn sinterstore<D, K, C>(&self, destination: D, keys: C) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
@@ -151,7 +138,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sismember/](https://redis.io/commands/sismember/)
-    fn sismember<K, M>(&self, key: K, member: M) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn sismember<K, M>(&self, key: K, member: M) -> Future<'_, bool>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -163,7 +150,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/smembers/](https://redis.io/commands/smembers/)
-    fn smembers<K, M, A>(&self, key: K) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn smembers<K, M, A>(&self, key: K) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -179,11 +166,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/smismember/](https://redis.io/commands/smismember/)
-    fn smismember<K, M, C>(
-        &self,
-        key: K,
-        members: C,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<bool>>> + '_>>
+    fn smismember<K, M, C>(&self, key: K, members: C) -> Future<'_, Vec<bool>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -200,12 +183,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/smove/](https://redis.io/commands/smove/)
-    fn smove<S, D, M>(
-        &self,
-        source: S,
-        destination: D,
-        member: M,
-    ) -> Pin<Box<dyn Future<Output = Result<bool>> + '_>>
+    fn smove<S, D, M>(&self, source: S, destination: D, member: M) -> Future<'_, bool>
     where
         S: Into<BulkString>,
         D: Into<BulkString>,
@@ -221,7 +199,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/spop/](https://redis.io/commands/spop/)
-    fn spop<K, M, A>(&self, key: K, count: usize) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn spop<K, M, A>(&self, key: K, count: usize) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -237,11 +215,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/srandmember/](https://redis.io/commands/srandmember/)
-    fn srandmember<K, M, A>(
-        &self,
-        key: K,
-        count: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn srandmember<K, M, A>(&self, key: K, count: usize) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -257,7 +231,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/srem/](https://redis.io/commands/srem/)
-    fn srem<K, M, C>(&self, key: K, members: C) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn srem<K, M, C>(&self, key: K, members: C) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -290,7 +264,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sunion/](https://redis.io/commands/sunion/)
-    fn sunion<K, M, C, A>(&self, keys: C) -> Pin<Box<dyn Future<Output = Result<A>> + '_>>
+    fn sunion<K, M, C, A>(&self, keys: C) -> Future<'_, A>
     where
         K: Into<BulkString>,
         M: FromValue + Eq + Hash,
@@ -308,11 +282,7 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sunionstore/](https://redis.io/commands/sunionstore/)
-    fn sunionstore<D, K, C>(
-        &self,
-        destination: D,
-        keys: C,
-    ) -> Pin<Box<dyn Future<Output = Result<usize>> + '_>>
+    fn sunionstore<D, K, C>(&self, destination: D, keys: C) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
@@ -329,7 +299,7 @@ pub struct SScan<'a, T: SetCommands + ?Sized> {
 }
 
 impl<'a, T: SetCommands + ?Sized> SScan<'a, T> {
-    pub fn execute<M>(self) -> Pin<Box<dyn Future<Output = Result<(u64, Vec<M>)>> + 'a>>
+    pub fn execute<M>(self) -> Future<'a, (u64, Vec<M>)>
     where
         M: FromValue + Eq + Hash,
     {

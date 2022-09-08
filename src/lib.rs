@@ -25,6 +25,7 @@ pub use transaction::*;
 
 use futures::channel::{mpsc, oneshot};
 
+pub type Future<'a, T> = futures::future::BoxFuture<'a, Result<T>>;
 type MsgSender = mpsc::UnboundedSender<Message>;
 type MsgReceiver = mpsc::UnboundedReceiver<Message>;
 type ValueSender = oneshot::Sender<Result<resp::Value>>;

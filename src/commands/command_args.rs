@@ -25,6 +25,13 @@ impl CommandArgs {
             CommandArgs::Vec(v) => &v[0],
         }
     }
+
+    pub fn arg<A>(self, args: A) -> Self
+    where
+        A: IntoArgs,
+    {
+        args.into_args(self)
+    }
 }
 
 impl CommandArgs {
@@ -43,7 +50,9 @@ impl CommandArgs {
 /// Types compatible with command args
 pub trait IntoArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs;
-    fn num_args(&self) -> usize;
+    fn num_args(&self) -> usize {
+        unimplemented!()
+    }
 }
 
 impl<'a, T> IntoArgs for T
@@ -196,6 +205,23 @@ where
 
     fn num_args(&self) -> usize {
         2
+    }
+}
+
+impl<T, U, V> IntoArgs for (T, U, V)
+where
+    T: IntoArgs,
+    U: IntoArgs,
+    V: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let args = self.0.into_args(args);
+        let args = self.1.into_args(args);
+        self.2.into_args(args)
+    }
+
+    fn num_args(&self) -> usize {
+        3
     }
 }
 

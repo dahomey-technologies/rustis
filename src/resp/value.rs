@@ -419,7 +419,7 @@ impl ResultValueExt for Result<Value> {
     }
 }
 
-pub(crate) trait ValueVecExt : Sized {
+pub(crate) trait ValueVecExt: Sized {
     fn from_value_array<T>(self) -> FromArrayIterator<T>
     where
         T: FromValue;

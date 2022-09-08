@@ -194,7 +194,10 @@ pub trait SortedSetCommands: CommandSend {
     /// from the first non-empty sorted set in the provided list of key names.
     ///
     /// # Return
-    /// the number of elements in the specified score range.
+    /// * None if no element could be popped
+    /// * A tuple made up of
+    ///     * The name of the key from which elements were popped
+    ///     * An array of tuples with all the popped members and their scores
     ///
     /// # See Also
     /// [https://redis.io/commands/zmpop/](https://redis.io/commands/zmpop/)
@@ -203,7 +206,7 @@ pub trait SortedSetCommands: CommandSend {
         keys: C,
         where_: ZWhere,
         count: usize,
-    ) -> Future<'_, (String, Vec<(E, f64)>)>
+    ) -> Future<'_, Option<(String, Vec<(E, f64)>)>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,

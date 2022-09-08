@@ -29,7 +29,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
 
     match first_byte {
         b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(Array::Vec(v)), pos))),
+        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
         b':' => Ok(decode_integer(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'+' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s), pos))),
         b'-' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::Error(s), pos))),
@@ -65,10 +65,10 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
     }
 }
 
-fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Vec<Value>, usize)>> {
+fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> {
     match decode_integer(buf, idx)? {
         None => Ok(None),
-        Some((-1, pos)) => Ok(Some((Vec::new(), pos))),
+        Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
             let mut values = Vec::with_capacity(len as usize);
             let mut pos = pos;
@@ -81,7 +81,7 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Vec<Value>, us
                     }
                 }
             }
-            Ok(Some((values, pos)))
+            Ok(Some((Array::Vec(values), pos)))
         }
     }
 }

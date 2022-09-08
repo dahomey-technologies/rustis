@@ -274,52 +274,67 @@ async fn zmpop() -> Result<()> {
     // cleanup
     database.del(["key", "key2", "unknown"]).await?;
 
-    let result: (String, Vec<(String, f64)>) = database.zmpop("unknown", ZWhere::Min, 1).await?;
-    assert_eq!("".to_owned(), result.0);
-    assert_eq!(0, result.1.len());
+    let result: Option<(String, Vec<(String, f64)>)> =
+        database.zmpop("unknown", ZWhere::Min, 1).await?;
+    assert!(result.is_none());
 
     database
         .zadd("key")
         .execute([(1.0, "one"), (2.0, "two"), (3.0, "three")])
         .await?;
 
-    let result: (String, Vec<(String, f64)>) = database.zmpop("key", ZWhere::Min, 1).await?;
-    println!("result: {:?}", result);
-    assert_eq!("key".to_owned(), result.0);
-    assert_eq!(1, result.1.len());
-    assert_eq!(("one".to_owned(), 1.0), result.1[0]);
+    let result: Option<(String, Vec<(String, f64)>)> =
+        database.zmpop("key", ZWhere::Min, 1).await?;
+    match result {
+        Some(result) => {
+            assert_eq!("key".to_owned(), result.0);
+            assert_eq!(1, result.1.len());
+            assert_eq!(("one".to_owned(), 1.0), result.1[0]);
+        }
+        None => assert!(false),
+    }
 
     let values: Vec<(String, f64)> = database.zrange("key", 0, -1).with_scores().await?;
     assert_eq!(2, values.len());
     assert_eq!(("two".to_owned(), 2.0), values[0]);
     assert_eq!(("three".to_owned(), 3.0), values[1]);
 
-    let result: (String, Vec<(String, f64)>) = database.zmpop("key", ZWhere::Max, 10).await?;
-    assert_eq!("key".to_owned(), result.0);
-    assert_eq!(2, result.1.len());
-    assert_eq!(("three".to_owned(), 3.0), result.1[0]);
-    assert_eq!(("two".to_owned(), 2.0), result.1[1]);
+    let result: Option<(String, Vec<(String, f64)>)> =
+        database.zmpop("key", ZWhere::Max, 10).await?;
+    match result {
+        Some(result) => {
+            assert_eq!("key".to_owned(), result.0);
+            assert_eq!(2, result.1.len());
+            assert_eq!(("three".to_owned(), 3.0), result.1[0]);
+            assert_eq!(("two".to_owned(), 2.0), result.1[1]);
+        }
+        None => assert!(false),
+    }
 
     database
         .zadd("key2")
         .execute([(4.0, "four"), (5.0, "five"), (6.0, "six")])
         .await?;
 
-    let result: (String, Vec<(String, f64)>) =
+    let result: Option<(String, Vec<(String, f64)>)> =
         database.zmpop(["key", "key2"], ZWhere::Min, 10).await?;
-    assert_eq!("key2".to_owned(), result.0);
-    assert_eq!(3, result.1.len());
-    assert_eq!(("four".to_owned(), 4.0), result.1[0]);
-    assert_eq!(("five".to_owned(), 5.0), result.1[1]);
-    assert_eq!(("six".to_owned(), 6.0), result.1[2]);
+    match result {
+        Some(result) => {
+            assert_eq!("key2".to_owned(), result.0);
+            assert_eq!(3, result.1.len());
+            assert_eq!(("four".to_owned(), 4.0), result.1[0]);
+            assert_eq!(("five".to_owned(), 5.0), result.1[1]);
+            assert_eq!(("six".to_owned(), 6.0), result.1[2]);
+        }
+        None => assert!(false),
+    }
 
     let values: Vec<(String, f64)> = database.zrange("key", 0, -1).with_scores().await?;
     assert_eq!(0, values.len());
 
-    let result: (String, Vec<(String, f64)>) =
+    let result: Option<(String, Vec<(String, f64)>)> =
         database.zmpop(["key", "key2"], ZWhere::Min, 10).await?;
-    assert_eq!("".to_owned(), result.0);
-    assert_eq!(0, result.1.len());
+    assert!(result.is_none());
 
     let values: Vec<(String, f64)> = database.zrange("key2", 0, -1).with_scores().await?;
     assert_eq!(0, values.len());

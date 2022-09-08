@@ -130,6 +130,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(BulkString::Nil) => Ok(None),
+            Value::Array(Array::Nil) => Ok(None),
             _ => T::from_value(value).map(|v| Some(v)),
         }
     }

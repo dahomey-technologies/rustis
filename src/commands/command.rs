@@ -18,15 +18,27 @@ impl Command {
         }
     }
 
-    pub fn arg<A>(self, args: A) -> Self
+    pub fn arg<A>(self, arg: A) -> Self
     where
         A: IntoArgs,
     {
         Self {
             name: self.name,
-            args: self.args.arg(args),
+            args: self.args.arg(arg),
+        }
+    }
+
+    pub fn arg_if<A>(self, condition: bool, arg: A) -> Self
+    where
+        A: IntoArgs,
+    {
+        if condition {
+            Self {
+                name: self.name,
+                args: self.args.arg(arg),
+            }
+        } else {
+            self
         }
     }
 }
-
-

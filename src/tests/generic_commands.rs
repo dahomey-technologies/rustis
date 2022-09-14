@@ -1,8 +1,8 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_default_addr,
-    ConnectionMultiplexer, FlushingMode, GenericCommands, ListCommands, Result, ServerCommands,
-    SetCommands, StringCommands,
+    ConnectionMultiplexer, ExpireOption, FlushingMode, GenericCommands, ListCommands, Result,
+    ServerCommands, SetCommands, StringCommands,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -21,23 +21,23 @@ async fn copy() -> Result<()> {
 
     database0.set("key", "value").await?;
 
-    let result = database0.copy("key", "key1").execute().await?;
+    let result = database0.copy("key", "key1", None, false).await?;
     assert!(result);
     let value: String = database0.get("key1").await?;
     assert_eq!("value", value);
 
     database0.set("key", "new_value").await?;
-    let result = database0.copy("key", "key1").execute().await?;
+    let result = database0.copy("key", "key1", None, false).await?;
     assert!(!result);
     let value: String = database0.get("key1").await?;
     assert_eq!("value", value);
 
-    let result = database0.copy("key", "key1").replace().execute().await?;
+    let result = database0.copy("key", "key1", None, true).await?;
     assert!(result);
     let value: String = database0.get("key1").await?;
     assert_eq!("new_value", value);
 
-    let result = database0.copy("key", "key").db(1).execute().await?;
+    let result = database0.copy("key", "key", Some(1), false).await?;
     assert!(result);
     let value: String = database1.get("key").await?;
     assert_eq!("new_value", value);
@@ -116,34 +116,34 @@ async fn expire() -> Result<()> {
 
     // no option
     database.set("key", "value").await?;
-    let result = database.expire("key", 10).execute().await?;
+    let result = database.expire("key", 10, None).await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").await?);
 
     // xx
     database.set("key", "value").await?;
-    let result = database.expire("key", 10).xx().await?;
+    let result = database.expire("key", 10, Some(ExpireOption::Xx)).await?;
     assert!(!result);
     assert_eq!(-1, database.ttl("key").await?);
 
     // nx
-    let result = database.expire("key", 10).nx().await?;
+    let result = database.expire("key", 10, Some(ExpireOption::Nx)).await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").await?);
 
     // gt
-    let result = database.expire("key", 5).gt().await?;
+    let result = database.expire("key", 5, Some(ExpireOption::Gt)).await?;
     assert!(!result);
     assert_eq!(10, database.ttl("key").await?);
-    let result = database.expire("key", 15).gt().await?;
+    let result = database.expire("key", 15, Some(ExpireOption::Gt)).await?;
     assert!(result);
     assert_eq!(15, database.ttl("key").await?);
 
     // lt
-    let result = database.expire("key", 20).lt().await?;
+    let result = database.expire("key", 20, Some(ExpireOption::Lt)).await?;
     assert!(!result);
     assert_eq!(15, database.ttl("key").await?);
-    let result = database.expire("key", 5).lt().await?;
+    let result = database.expire("key", 5, Some(ExpireOption::Lt)).await?;
     assert!(result);
     assert_eq!(5, database.ttl("key").await?);
 
@@ -165,37 +165,49 @@ async fn expireat() -> Result<()> {
 
     // no option
     database.set("key", "value").await?;
-    let result = database.expireat("key", now + 10).execute().await?;
+    let result = database.expireat("key", now + 10, None).await?;
     assert!(result);
     let ttl = database.ttl("key").await?;
     assert!(9 <= ttl && ttl <= 10);
 
     // xx
     database.set("key", "value").await?;
-    let result = database.expireat("key", now + 10).xx().await?;
+    let result = database
+        .expireat("key", now + 10, Some(ExpireOption::Xx))
+        .await?;
     assert!(!result);
     assert_eq!(-1, database.ttl("key").await?);
 
     // nx
-    let result = database.expireat("key", now + 10).nx().await?;
+    let result = database
+        .expireat("key", now + 10, Some(ExpireOption::Nx))
+        .await?;
     assert!(result);
     assert!(9 <= ttl && ttl <= 10);
 
     // gt
-    let result = database.expireat("key", now + 5).gt().await?;
+    let result = database
+        .expireat("key", now + 5, Some(ExpireOption::Gt))
+        .await?;
     assert!(!result);
     assert!(9 <= ttl && ttl <= 10);
-    let result = database.expireat("key", now + 15).gt().await?;
+    let result = database
+        .expireat("key", now + 15, Some(ExpireOption::Gt))
+        .await?;
     assert!(result);
     let ttl = database.ttl("key").await?;
     assert!(14 <= ttl && ttl <= 15);
 
     // lt
-    let result = database.expireat("key", now + 20).lt().await?;
+    let result = database
+        .expireat("key", now + 20, Some(ExpireOption::Lt))
+        .await?;
     assert!(!result);
     let ttl = database.ttl("key").await?;
     assert!(14 <= ttl && ttl <= 15);
-    let result = database.expireat("key", now + 5).lt().await?;
+    let result = database
+        .expireat("key", now + 5, Some(ExpireOption::Lt))
+        .await?;
     assert!(result);
     let ttl = database.ttl("key").await?;
     assert!(4 <= ttl && ttl <= 5);
@@ -211,7 +223,7 @@ async fn expiretime() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    assert!(database.expireat("key", 33177117420).execute().await?);
+    assert!(database.expireat("key", 33177117420, None).await?);
     let time = database.expiretime("key").await?;
     assert_eq!(time, 33177117420);
 
@@ -352,7 +364,7 @@ async fn persist() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    assert!(database.expire("key", 10).execute().await?);
+    assert!(database.expire("key", 10, None).await?);
     assert_eq!(10, database.ttl("key").await?);
     assert!(database.persist("key").await?);
     assert_eq!(-1, database.ttl("key").await?);
@@ -369,34 +381,46 @@ async fn pexpire() -> Result<()> {
 
     // no option
     database.set("key", "value").await?;
-    let result = database.pexpire("key", 10000).execute().await?;
+    let result = database.pexpire("key", 10000, None).await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").await?);
 
     // xx
     database.set("key", "value").await?;
-    let result = database.pexpire("key", 10000).xx().await?;
+    let result = database
+        .pexpire("key", 10000, Some(ExpireOption::Xx))
+        .await?;
     assert!(!result);
     assert_eq!(-1, database.ttl("key").await?);
 
     // nx
-    let result = database.pexpire("key", 10000).nx().await?;
+    let result = database
+        .pexpire("key", 10000, Some(ExpireOption::Nx))
+        .await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").await?);
 
     // gt
-    let result = database.pexpire("key", 5000).gt().await?;
+    let result = database
+        .pexpire("key", 5000, Some(ExpireOption::Gt))
+        .await?;
     assert!(!result);
     assert_eq!(10, database.ttl("key").await?);
-    let result = database.pexpire("key", 15000).gt().await?;
+    let result = database
+        .pexpire("key", 15000, Some(ExpireOption::Gt))
+        .await?;
     assert!(result);
     assert_eq!(15, database.ttl("key").await?);
 
     // lt
-    let result = database.pexpire("key", 20000).lt().await?;
+    let result = database
+        .pexpire("key", 20000, Some(ExpireOption::Lt))
+        .await?;
     assert!(!result);
     assert_eq!(15, database.ttl("key").await?);
-    let result = database.pexpire("key", 5000).lt().await?;
+    let result = database
+        .pexpire("key", 5000, Some(ExpireOption::Lt))
+        .await?;
     assert!(result);
     assert_eq!(5, database.ttl("key").await?);
 
@@ -418,34 +442,46 @@ async fn pexpireat() -> Result<()> {
 
     // no option
     database.set("key", "value").await?;
-    let result = database.pexpireat("key", now + 10000).execute().await?;
+    let result = database.pexpireat("key", now + 10000, None).await?;
     assert!(result);
     assert!(10000 >= database.pttl("key").await?);
 
     // xx
     database.set("key", "value").await?;
-    let result = database.pexpireat("key", now + 10000).xx().await?;
+    let result = database
+        .pexpireat("key", now + 10000, Some(ExpireOption::Xx))
+        .await?;
     assert!(!result);
     assert_eq!(-1, database.pttl("key").await?);
 
     // nx
-    let result = database.pexpireat("key", now + 10000).nx().await?;
+    let result = database
+        .pexpireat("key", now + 10000, Some(ExpireOption::Nx))
+        .await?;
     assert!(result);
     assert!(10000 >= database.pttl("key").await?);
 
     // gt
-    let result = database.pexpireat("key", now + 5000).gt().await?;
+    let result = database
+        .pexpireat("key", now + 5000, Some(ExpireOption::Gt))
+        .await?;
     assert!(!result);
     assert!(10000 >= database.pttl("key").await?);
-    let result = database.pexpireat("key", now + 15000).gt().await?;
+    let result = database
+        .pexpireat("key", now + 15000, Some(ExpireOption::Gt))
+        .await?;
     assert!(result);
     assert!(15000 >= database.pttl("key").await?);
 
     // lt
-    let result = database.pexpireat("key", now + 20000).lt().await?;
+    let result = database
+        .pexpireat("key", now + 20000, Some(ExpireOption::Lt))
+        .await?;
     assert!(!result);
     assert!(20000 >= database.pttl("key").await?);
-    let result = database.pexpireat("key", now + 5000).lt().await?;
+    let result = database
+        .pexpireat("key", now + 5000, Some(ExpireOption::Lt))
+        .await?;
     assert!(result);
     assert!(5000 >= database.pttl("key").await?);
 
@@ -460,7 +496,7 @@ async fn pexpiretime() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    assert!(database.pexpireat("key", 33177117420000).execute().await?);
+    assert!(database.pexpireat("key", 33177117420000, None).await?);
     let time = database.pexpiretime("key").await?;
     assert_eq!(time, 33177117420000);
 
@@ -538,7 +574,9 @@ async fn restore() -> Result<()> {
 
     let dump = database.dump("key").await?;
     database.del("key").await?;
-    database.restore("key", 0, dump).execute().await?;
+    database
+        .restore("key", 0, dump, false, false, None, None)
+        .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
 
@@ -555,10 +593,10 @@ async fn scan() -> Result<()> {
     database.flushdb(FlushingMode::Sync).await?;
 
     database.set("key1", "value").await?;
-    database.set("key2", "value").await?;    
+    database.set("key2", "value").await?;
     database.set("key3", "value").await?;
 
-    let keys: (u64, HashSet<String>) = database.scan(0).execute().await?;
+    let keys: (u64, HashSet<String>) = database.scan(0, None, None, None).await?;
     assert_eq!(3, keys.1.len());
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));

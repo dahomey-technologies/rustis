@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    Command, CommandSend, Error, Future, SingleArgOrCollection,
+    CommandSend, Error, Future, SingleArgOrCollection,
 };
 
 /// A group of generic Redis commands
@@ -11,17 +11,29 @@ use crate::{
 pub trait GenericCommands: CommandSend {
     /// This command copies the value stored at the source key to the destination key.
     ///
+    /// # Return
+    /// Success of the operation
+    ///
     /// # See Also
     /// [https://redis.io/commands/copy/](https://redis.io/commands/copy/)
-    fn copy<S, D>(&self, source: S, destination: D) -> Copy<Self>
+    fn copy<S, D>(
+        &self,
+        source: S,
+        destination: D,
+        destination_db: Option<usize>,
+        replace: bool,
+    ) -> Future<'_, bool>
     where
         S: Into<BulkString>,
         D: Into<BulkString>,
     {
-        Copy {
-            generic_commands: &self,
-            cmd: cmd("COPY").arg(source).arg(destination),
-        }
+        self.send_into(
+            cmd("COPY")
+                .arg(source)
+                .arg(destination)
+                .arg(destination_db.map(|db| ("DB", db)))
+                .arg_if(replace, "REPLACE"),
+        )
     }
 
     /// Removes the specified keys. A key is ignored if it does not exist.
@@ -83,14 +95,11 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/expire/](https://redis.io/commands/expire/)
-    fn expire<K>(&self, key: K, seconds: u64) -> Expire<Self>
+    fn expire<K>(&self, key: K, seconds: u64, option: Option<ExpireOption>) -> Future<'_, bool>
     where
         K: Into<BulkString>,
     {
-        Expire {
-            generic_commands: &self,
-            cmd: cmd("EXPIRE").arg(key).arg(seconds),
-        }
+        self.send_into(cmd("EXPIRE").arg(key).arg(seconds).arg(option))
     }
 
     /// EXPIREAT has the same effect and semantic as EXPIRE,
@@ -105,14 +114,16 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/expireat/](https://redis.io/commands/expireat/)
-    fn expireat<K>(&self, key: K, unix_time_seconds: u64) -> Expire<Self>
+    fn expireat<K>(
+        &self,
+        key: K,
+        unix_time_seconds: u64,
+        option: Option<ExpireOption>,
+    ) -> Future<'_, bool>
     where
         K: Into<BulkString>,
     {
-        Expire {
-            generic_commands: &self,
-            cmd: cmd("EXPIREAT").arg(key).arg(unix_time_seconds),
-        }
+        self.send_into(cmd("EXPIREAT").arg(key).arg(unix_time_seconds).arg(option))
     }
 
     /// Returns the absolute Unix timestamp (since January 1, 1970) in seconds at which the given key will expire.
@@ -244,14 +255,16 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
-    fn pexpire<K>(&self, key: K, milliseconds: u64) -> Expire<Self>
+    fn pexpire<K>(
+        &self,
+        key: K,
+        milliseconds: u64,
+        option: Option<ExpireOption>,
+    ) -> Future<'_, bool>
     where
         K: Into<BulkString>,
     {
-        Expire {
-            generic_commands: &self,
-            cmd: cmd("PEXPIRE").arg(key).arg(milliseconds),
-        }
+        self.send_into(cmd("PEXPIRE").arg(key).arg(milliseconds).arg(option))
     }
 
     /// PEXPIREAT has the same effect and semantic as EXPIREAT,
@@ -263,14 +276,21 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpireat/](https://redis.io/commands/pexpireat/)
-    fn pexpireat<K>(&self, key: K, unix_time_milliseconds: u64) -> Expire<Self>
+    fn pexpireat<K>(
+        &self,
+        key: K,
+        unix_time_milliseconds: u64,
+        option: Option<ExpireOption>,
+    ) -> Future<'_, bool>
     where
         K: Into<BulkString>,
     {
-        Expire {
-            generic_commands: &self,
-            cmd: cmd("PEXPIREAT").arg(key).arg(unix_time_milliseconds),
-        }
+        self.send_into(
+            cmd("PEXPIREAT")
+                .arg(key)
+                .arg(unix_time_milliseconds)
+                .arg(option),
+        )
     }
 
     /// PEXPIRETIME has the same semantic as EXPIRETIME,
@@ -332,9 +352,9 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("RENAME").arg(key).arg(new_key))
     }
 
-    /// Renames key to newkey if newkey does not yet exist. 
+    /// Renames key to newkey if newkey does not yet exist.
     /// It returns an error when key does not exist.
-    /// 
+    ///
     /// # Return
     /// * `true` if key was renamed to newkey.
     /// * `false` if newkey already exists.
@@ -348,19 +368,64 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("RENAMENX").arg(key).arg(new_key))
     }
 
+    /// Create a key associated with a value that is obtained by deserializing
+    /// the provided serialized value (obtained via DUMP).
+    ///
+    /// # Return
+    /// Restore command builder
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/restore/](https://redis.io/commands/restore/)
+    fn restore<K>(
+        &self,
+        key: K,
+        ttl: u64,
+        serialized_value: Vec<u8>,
+        replace: bool,
+        abs_ttl: bool,
+        idle_time: Option<i64>,
+        frequency: Option<f64>,
+    ) -> Future<'_, ()>
+    where
+        K: Into<BulkString>,
+    {
+        self.send_into(
+            cmd("RESTORE")
+                .arg(key)
+                .arg(ttl)
+                .arg(BulkString::Binary(serialized_value))
+                .arg_if(replace, "REPLACE")
+                .arg_if(abs_ttl, "ABSTTL")
+                .arg(idle_time.map(|idle_time| ("IDLETIME", idle_time)))
+                .arg(frequency.map(|frequency| ("FREQ", frequency))),
+        )
+    }
+
     /// Iterates the set of keys in the currently selected Redis database.
-    /// 
+    ///
     /// # Return
     /// A list of keys
-    /// 
+    ///
     /// # See Also
     /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
-    fn scan(&self, cursor: u64) -> Scan<Self>
+    fn scan<K, A>(
+        &self,
+        cursor: u64,
+        match_pattern: Option<String>,
+        count: Option<usize>,
+        type_: Option<String>,
+    ) -> Future<'_, (u64, A)>
+    where
+        K: FromValue,
+        A: FromSingleValueArray<K> + Default,
     {
-        Scan {
-            generic_commands: &self,
-            cmd: cmd("SCAN").arg(cursor)
-        }
+        self.send_into(
+            cmd("SCAN")
+                .arg(cursor)
+                .arg(match_pattern.map(|p| ("MATCH", p)))
+                .arg(count.map(|c| ("COUNT", c)))
+                .arg(type_.map(|t| ("TYPE", t))),
+        )
     }
 
     /// Returns the remaining time to live of a key that has a timeout.
@@ -379,27 +444,6 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("TTL").arg(key))
     }
 
-    /// Create a key associated with a value that is obtained by deserializing
-    /// the provided serialized value (obtained via DUMP).
-    ///
-    /// # Return
-    /// Restore command builder
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/restore/](https://redis.io/commands/restore/)
-    fn restore<K>(&self, key: K, ttl: u64, serialized_value: Vec<u8>) -> Restore<Self>
-    where
-        K: Into<BulkString>,
-    {
-        Restore {
-            generic_commands: &self,
-            cmd: cmd("RESTORE")
-                .arg(key)
-                .arg(ttl)
-                .arg(BulkString::Binary(serialized_value)),
-        }
-    }
-
     /// Returns the string representation of the type of the value stored at key.
     ///
     /// The different types that can be returned are: string, list, set, zset, hash and stream.
@@ -416,7 +460,7 @@ pub trait GenericCommands: CommandSend {
         self.send_into(cmd("TYPE").arg(key))
     }
 
-    /// This command is very similar to DEL: it removes the specified keys. 
+    /// This command is very similar to DEL: it removes the specified keys.
     ///
     /// # Return
     /// The number of keys that were unlinked.
@@ -432,158 +476,25 @@ pub trait GenericCommands: CommandSend {
     }
 }
 
-/// Builder for the [copy](crate::GenericCommands::copy) command
-pub struct Copy<'a, T: GenericCommands + ?Sized> {
-    generic_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GenericCommands> Copy<'a, T> {
-    /// Allows specifying an alternative logical database index for the destination key.
-    pub fn db(self, destination_db: usize) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("DB").arg(destination_db),
-        }
-    }
-
-    /// Removes the destination key before copying the value to it
-    pub fn replace(self) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("REPLACE"),
-        }
-    }
-
-    /// Execute the command
-    ///
-    /// # Return
-    ///  Success of the operation
-    pub fn execute(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd)
-    }
-}
-
-/// Builder for the [expire](crate::GenericCommands::expire) command
-pub struct Expire<'a, T: GenericCommands + ?Sized> {
-    generic_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GenericCommands> Expire<'a, T> {
+/// Options for the [expire](crate::GenericCommands::expire) command
+pub enum ExpireOption {
     /// Set expiry only when the key has no expiry
-    pub fn nx(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd.arg("NX"))
-    }
-
-    /// Set expiry only when the key has an existing expiry
-    pub fn xx(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd.arg("XX"))
-    }
-
+    Nx,
+    /// Set expiry only when the key has no expiry    
+    Xx,
     /// Set expiry only when the new expiry is greater than current one
-    pub fn gt(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd.arg("GT"))
-    }
-
+    Gt,
     /// Set expiry only when the new expiry is less than current one
-    pub fn lt(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd.arg("LT"))
-    }
-
-    /// execute with no option
-    pub fn execute(self) -> Future<'a, bool> {
-        self.generic_commands.send_into(self.cmd)
-    }
+    Lt,
 }
 
-/// Builder for the [restore](crate::GenericCommands::restore) command
-pub struct Restore<'a, T: GenericCommands + ?Sized> {
-    generic_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GenericCommands> Restore<'a, T> {
-    /// Force replacing the key if it already exists
-    pub fn replace(self) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("REPLACE"),
+impl From<ExpireOption> for BulkString {
+    fn from(option: ExpireOption) -> Self {
+        match option {
+            ExpireOption::Nx => BulkString::Str("NX"),
+            ExpireOption::Xx => BulkString::Str("XX"),
+            ExpireOption::Gt => BulkString::Str("GT"),
+            ExpireOption::Lt => BulkString::Str("LT"),
         }
-    }
-
-    /// If the ABSTTL modifier was used, ttl should represent
-    /// an absolute Unix timestamp (in milliseconds) in which the key will expire.
-    pub fn abs_ttl(self) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("ABSTTL"),
-        }
-    }
-
-    /// For eviction purposes, you may use the IDLETIME or FREQ modifiers.
-    pub fn idle_time(self, seconds: i64) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("IDLETIME").arg(seconds),
-        }
-    }
-
-    /// For eviction purposes, you may use the IDLETIME or FREQ modifiers.
-    pub fn freq(self, frequency: f64) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("FREQ").arg(frequency),
-        }
-    }
-
-    /// Execute the command
-    pub fn execute(self) -> Future<'a, ()> {
-        self.generic_commands.send_into(self.cmd)
-    }
-}
-
-/// Builder for the [scan](crate::GenericCommands::scan) command
-pub struct Scan<'a, T: GenericCommands + ?Sized> {
-    generic_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GenericCommands> Scan<'a, T> {
-    pub fn match_<P>(self, pattern: P) -> Self
-    where
-        P: Into<BulkString>,
-    {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("MATCH").arg(pattern),
-        }
-    }
-
-    pub fn count(self, count: usize) -> Self {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("COUNT").arg(count),
-        }
-    }
-
-    /// You can use the TYPE option to ask SCAN to only return objects that match a given type
-    pub fn type_<A>(self, type_: A) -> Self 
-    where 
-        A : Into<BulkString>
-    {
-        Self {
-            generic_commands: self.generic_commands,
-            cmd: self.cmd.arg("TYPE").arg(type_),
-        }  
-    }
-
-    /// Execute the command
-    pub fn execute<K, A>(self) -> Future<'a, (u64, A)>
-    where
-        K: FromValue,
-        A: FromSingleValueArray<K> + Default
-    {
-        self.generic_commands.send_into(self.cmd)
     }
 }

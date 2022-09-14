@@ -87,6 +87,18 @@ where
     }
 }
 
+impl<'a, T> IntoArgs for Option<T>
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            Some(s) => s.into_args(args),
+            None => args,
+        }
+    }
+}
+
 impl<T, const N: usize> IntoArgs for [T; N]
 where
     T: IntoArgs,

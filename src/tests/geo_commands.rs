@@ -17,45 +17,60 @@ async fn geoadd() -> Result<()> {
     database.del("key").await?;
 
     let len = database
-        .geoadd("key")
-        .execute([(1.0, 1.0, "location1"), (2.0, 2.0, "location2")])
+        .geoadd(
+            "key",
+            None,
+            false,
+            [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
+        )
         .await?;
     assert_eq!(2, len);
 
     let len = database
-        .geoadd("key")
-        .execute([(1.0, 1.0, "location1"), (2.0, 2.0, "location2")])
+        .geoadd(
+            "key",
+            None,
+            false,
+            [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
+        )
         .await?;
     assert_eq!(0, len);
 
     let len = database
-        .geoadd("key")
-        .ch()
-        .execute([(2.0, 2.0, "location1"), (2.0, 2.0, "location2")])
+        .geoadd(
+            "key",
+            None,
+            true,
+            [(2.0, 2.0, "location1"), (2.0, 2.0, "location2")],
+        )
         .await?;
     assert_eq!(1, len);
 
     let len = database
-        .geoadd("key")
-        .ch()
-        .xx()
-        .execute([
-            (1.0, 1.0, "location1"),
-            (2.0, 2.0, "location2"),
-            (3.0, 3.0, "location3"),
-        ])
+        .geoadd(
+            "key",
+            Some(crate::GeoAddCondition::XX),
+            true,
+            [
+                (1.0, 1.0, "location1"),
+                (2.0, 2.0, "location2"),
+                (3.0, 3.0, "location3"),
+            ],
+        )
         .await?;
     assert_eq!(1, len);
 
     let len = database
-        .geoadd("key")
-        .ch()
-        .nx()
-        .execute([
-            (2.0, 2.0, "location1"),
-            (2.0, 2.0, "location2"),
-            (3.0, 3.0, "location3"),
-        ])
+        .geoadd(
+            "key",
+            Some(crate::GeoAddCondition::NX),
+            true,
+            [
+                (2.0, 2.0, "location1"),
+                (2.0, 2.0, "location2"),
+                (3.0, 3.0, "location3"),
+            ],
+        )
         .await?;
     assert_eq!(1, len);
 
@@ -73,11 +88,15 @@ async fn geodist() -> Result<()> {
     database.del("Sicily").await?;
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (13.361389, 38.115556, "Palermo"),
-            (15.087269, 37.502669, "Catania"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
@@ -115,11 +134,15 @@ async fn geohash() -> Result<()> {
     database.del("Sicily").await?;
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (13.361389, 38.115556, "Palermo"),
-            (15.087269, 37.502669, "Catania"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
@@ -142,11 +165,15 @@ async fn geopos() -> Result<()> {
     database.del("Sicily").await?;
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (13.361389, 38.115556, "Palermo"),
-            (15.087269, 37.502669, "Catania"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
@@ -178,20 +205,28 @@ async fn geosearch() -> Result<()> {
     database.del("Sicily").await?;
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (13.361389, 38.115556, "Palermo"),
-            (15.087269, 37.502669, "Catania"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (12.758489, 38.788135, "edge1"),
-            (17.241510, 38.788135, "edge2"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (12.758489, 38.788135, "edge1"),
+                (17.241510, 38.788135, "edge2"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
@@ -206,15 +241,16 @@ async fn geosearch() -> Result<()> {
                 radius: 200.0,
                 unit: GeoUnit::Kilometers,
             },
+            None,
+            None,
         )
-        .execute()
         .await?;
     assert_eq!(2, results.len());
     assert!(results.contains("Palermo"));
     assert!(results.contains("Catania"));
 
     let results: Vec<GeoSearchResult<String>> = database
-        .geosearch(
+        .geosearch_with_options(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
                 longitude: 15.0,
@@ -225,11 +261,12 @@ async fn geosearch() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
+            Some(GeoSearchOrder::Asc),
+            None,
+            true,
+            true,
+            false,
         )
-        .order(GeoSearchOrder::Asc)
-        .with_coord()
-        .with_dist()
-        .execute()
         .await?;
 
     assert_eq!(4, results.len());
@@ -276,20 +313,28 @@ async fn geosearchstore() -> Result<()> {
     database.del(["Sicily", "out"]).await?;
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (13.361389, 38.115556, "Palermo"),
-            (15.087269, 37.502669, "Catania"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
     let len = database
-        .geoadd("Sicily")
-        .execute([
-            (12.758489, 38.788135, "edge1"),
-            (17.241510, 38.788135, "edge2"),
-        ])
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (12.758489, 38.788135, "edge1"),
+                (17.241510, 38.788135, "edge2"),
+            ],
+        )
         .await?;
     assert_eq!(2, len);
 
@@ -306,15 +351,15 @@ async fn geosearchstore() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
+            Some(GeoSearchOrder::Asc),
+            Some((3, false)),
+            false,
         )
-        .order(GeoSearchOrder::Asc)
-        .count(3, false)
-        .execute()
         .await?;
     assert_eq!(3, len);
 
     let results: Vec<GeoSearchResult<String>> = database
-        .geosearch(
+        .geosearch_with_options(
             "out",
             GeoSearchFrom::FromLonLat::<String> {
                 longitude: 15.0,
@@ -325,12 +370,12 @@ async fn geosearchstore() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
+            Some(GeoSearchOrder::Asc),
+            None,
+            true,
+            true,
+            true,
         )
-        .order(GeoSearchOrder::Asc)
-        .with_coord()
-        .with_dist()
-        .with_hash()
-        .execute()
         .await?;
 
     assert_eq!(3, results.len());

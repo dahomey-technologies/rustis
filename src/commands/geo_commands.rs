@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    ArgsOrCollection, Command, CommandSend, Error, Future, IntoArgs, Result, SingleArgOrCollection,
+    ArgsOrCollection, CommandSend, Error, Future, IntoArgs, Result, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Geospatial indices
@@ -12,18 +12,24 @@ pub trait GeoCommands: CommandSend {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
-    /// GeoAdd builder
+    /// * When used without optional arguments, the number of elements added to the sorted set (excluding score updates).
+    /// * If the CH option is specified, the number of elements that were changed (added or updated).
     ///
     /// # See Also
     /// [https://redis.io/commands/geoadd/](https://redis.io/commands/geoadd/)
-    fn geoadd<K>(&self, key: K) -> GeoAdd<Self>
+    fn geoadd<K, M, I>(
+        &self,
+        key: K,
+        condition: Option<GeoAddCondition>,
+        change: bool,
+        items: I
+    ) -> Future<'_, usize>
     where
         K: Into<BulkString>,
+        M: Into<BulkString>,
+        I: ArgsOrCollection<(f64, f64, M)>,
     {
-        GeoAdd {
-            geo_commands: &self,
-            cmd: cmd("GEOADD").arg(key),
-        }
+        self.send_into(cmd("GEOADD").arg(key).arg(condition).arg_if(change, "CH").arg(items))
     }
 
     /// Return the distance between two members in the geospatial index
@@ -88,25 +94,89 @@ pub trait GeoCommands: CommandSend {
     /// which are within the borders of the area specified by a given shape.
     ///
     /// # Return
-    /// [GeoSearch builder](crate::GeoSearch)
+    /// An array of members
     ///
     /// # See Also
     /// [https://redis.io/commands/geosearch/](https://redis.io/commands/geosearch/)
-    fn geosearch<K, M>(&self, key: K, from: GeoSearchFrom<M>, by: GeoSearchBy) -> GeoSearch<Self>
+    fn geosearch<K, M1, M2, A>(
+        &self,
+        key: K,
+        from: GeoSearchFrom<M1>,
+        by: GeoSearchBy,
+        order: Option<GeoSearchOrder>,
+        count: Option<(usize, bool)>,
+    ) -> Future<'_, A>
     where
         K: Into<BulkString>,
-        M: Into<BulkString>,
+        M1: Into<BulkString>,
+        M2: FromValue,
+        A: FromSingleValueArray<M2>,
     {
-        GeoSearch {
-            geo_commands: &self,
-            cmd: cmd("GEOSEARCH").arg(key).arg(from).arg(by),
-        }
+        self.send_into(
+            cmd("GEOSEARCH")
+                .arg(key)
+                .arg(from)
+                .arg(by)
+                .arg(order)
+                .arg(count.map(|(count, any)| {
+                    if any {
+                        (count, Some("ANY"))
+                    } else {
+                        (count, None)
+                    }
+                })),
+        )
+    }
+
+    /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
+    /// which are within the borders of the area specified by a given shape.
+    ///
+    /// # Return
+    /// An array of members + additional information depending
+    /// on which with_xyz options have been selected
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/geosearch/](https://redis.io/commands/geosearch/)
+    fn geosearch_with_options<K, M1, M2, A>(
+        &self,
+        key: K,
+        from: GeoSearchFrom<M1>,
+        by: GeoSearchBy,
+        order: Option<GeoSearchOrder>,
+        count: Option<(usize, bool)>,
+        with_coord: bool,
+        with_dist: bool,
+        with_hash: bool,
+    ) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        M1: Into<BulkString>,
+        M2: FromValue,
+        A: FromSingleValueArray<GeoSearchResult<M2>>,
+    {
+        self.send_into(
+            cmd("GEOSEARCH")
+                .arg(key)
+                .arg(from)
+                .arg(by)
+                .arg(order)
+                .arg(count.map(|(count, any)| {
+                    if any {
+                        ("COUNT", count, Some("ANY"))
+                    } else {
+                        ("COUNT", count, None)
+                    }
+                }))
+                .arg_if(with_coord, "WITHCOORD")
+                .arg_if(with_dist, "WITHDIST")
+                .arg_if(with_hash, "WITHHASH"),
+        )
     }
 
     /// This command is like [geosearch](crate::GeoCommands::geosearch), but stores the result in destination key.
     ///
     /// # Return
-    /// [GeoSearchStore builder](crate::GeoSearchStore)
+    /// the number of elements in the resulting set.
     ///
     /// # See Also
     /// [https://redis.io/commands/geosearchstore/](https://redis.io/commands/geosearchstore/)
@@ -116,60 +186,48 @@ pub trait GeoCommands: CommandSend {
         source: S,
         from: GeoSearchFrom<M>,
         by: GeoSearchBy,
-    ) -> GeoSearchStore<Self>
+        order: Option<GeoSearchOrder>,
+        count: Option<(usize, bool)>,
+        store_dist: bool,
+    ) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,
         M: Into<BulkString>,
     {
-        GeoSearchStore {
-            geo_commands: &self,
-            cmd: cmd("GEOSEARCHSTORE").arg(destination).arg(source).arg(from).arg(by),
-        }
+        self.send_into(
+            cmd("GEOSEARCHSTORE")
+                .arg(destination)
+                .arg(source)
+                .arg(from)
+                .arg(by)
+                .arg(order)
+                .arg(count.map(|(count, any)| {
+                    if any {
+                        ("COUNT", count, Some("ANY"))
+                    } else {
+                        ("COUNT", count, None)
+                    }
+                }))
+                .arg_if(store_dist, "STOREDIST"),
+        )
     }
 }
 
-/// Builder for the [geoadd](crate::GeoCommands::geoadd) command
-pub struct GeoAdd<'a, T: GeoCommands + ?Sized> {
-    geo_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GeoCommands + ?Sized> GeoAdd<'a, T> {
+/// Condition for the [geoadd](crate::GeoCommands::geoadd) command
+pub enum GeoAddCondition {
     /// Don't update already existing elements. Always add new elements.
-    pub fn nx(self) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("NX"),
-        }
-    }
-
+    NX,
     /// Only update elements that already exist. Never add elements.
-    pub fn xx(self) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("XX"),
-        }
-    }
+    XX,
+}
 
-    /// Modify the return value from the number of new elements added,
-    /// to the total number of elements changed (CH is an abbreviation of changed)
-    pub fn ch(self) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("CH"),
+impl From<GeoAddCondition> for BulkString {
+    fn from(cond: GeoAddCondition) -> Self {
+        match cond {
+            GeoAddCondition::NX => BulkString::Str("NX"),
+            GeoAddCondition::XX => BulkString::Str("XX"),
         }
-    }
-
-    /// # Return
-    /// * When used without optional arguments, the number of elements added to the sorted set (excluding score updates).
-    /// * If the CH option is specified, the number of elements that were changed (added or updated).
-    pub fn execute<M, I>(self, items: I) -> Future<'a, usize>
-    where
-        M: Into<BulkString>,
-        I: ArgsOrCollection<(f64, f64, M)>,
-    {
-        self.geo_commands.send_into(self.cmd.arg(items))
     }
 }
 
@@ -188,121 +246,6 @@ impl From<GeoUnit> for BulkString {
             GeoUnit::Kilometers => BulkString::Str("km"),
             GeoUnit::Miles => BulkString::Str("mi"),
             GeoUnit::Feet => BulkString::Str("ft"),
-        }
-    }
-}
-
-/// Builder for the [geosearch](crate::GeoCommands::geosearch) command
-pub struct GeoSearch<'a, T: GeoCommands + ?Sized> {
-    geo_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GeoCommands + ?Sized> GeoSearch<'a, T> {
-    /// Matching items are returned unsorted by default. To sort them, use one of the following two options
-    /// * [Asc](crate::GeoSearchOrder::Asc): Sort returned items from the nearest to the farthest, relative to the center point.
-    /// * [Desc](crate::GeoSearchOrder::Desc): Sort returned items from the farthest to the nearest, relative to the center point.
-    pub fn order(self, order: GeoSearchOrder) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg(order),
-        }
-    }
-
-    /// Limit the results to the first `count` matching items,
-    /// When the `any` option is used, the command returns as soon as enough matches are found.
-    pub fn count(self, count: usize, any: bool) -> Self {
-        let mut cmd = self.cmd.arg("COUNT").arg(count);
-
-        if any {
-            cmd = cmd.arg("ANY");
-        }
-
-        Self {
-            geo_commands: self.geo_commands,
-            cmd,
-        }
-    }
-
-    /// Result without `with` option specified
-    /// # Return
-    /// A linear array of members
-    pub fn execute<M, A>(self) -> Future<'a, A>
-    where
-        M: FromValue,
-        A: FromSingleValueArray<M>,
-    {
-        self.geo_commands.send_into(self.cmd)
-    }
-
-    /// Also return the longitude and latitude of the matching items.
-    pub fn with_coord(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHCOORD"),
-        }
-    }
-
-    /// Also return the distance of the returned items from the specified center point.
-    /// The distance is returned in the same unit as specified for the radius or height and width arguments.
-    pub fn with_dist(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHDIST"),
-        }
-    }
-
-    /// Also return the raw geohash-encoded sorted set score of the item, in the form of a 52 bit unsigned integer.
-    /// This is only useful for low level hacks or debugging and is otherwise of little interest for the general user.
-    pub fn with_hash(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHHASH"),
-        }
-    }
-}
-
-/// Builder for the [geosearch](crate::GeoCommands::geosearch) command
-pub struct GeoSearchWithOptions<'a, T: GeoCommands + ?Sized> {
-    geo_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GeoCommands + ?Sized> GeoSearchWithOptions<'a, T> {
-    /// # Return
-    /// A linear array of members + additional information depending
-    /// on which with_xyz options have been selected
-    pub fn execute<M, A>(self) -> Future<'a, A>
-    where
-        M: FromValue,
-        A: FromSingleValueArray<GeoSearchResult<M>>,
-    {
-        self.geo_commands.send_into(self.cmd)
-    }
-
-    /// Also return the longitude and latitude of the matching items.
-    pub fn with_coord(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHCOORD"),
-        }
-    }
-
-    /// Also return the distance of the returned items from the specified center point.
-    /// The distance is returned in the same unit as specified for the radius or height and width arguments.
-    pub fn with_dist(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHDIST"),
-        }
-    }
-
-    /// Also return the raw geohash-encoded sorted set score of the item, in the form of a 52 bit unsigned integer.
-    /// This is only useful for low level hacks or debugging and is otherwise of little interest for the general user.
-    pub fn with_hash(self) -> GeoSearchWithOptions<'a, T> {
-        GeoSearchWithOptions {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("WITHHASH"),
         }
     }
 }
@@ -409,7 +352,9 @@ where
 
         match it.next() {
             Some(value) => member = value.into()?,
-            None => { return Err(Error::Internal("Unexpected geo search result".to_owned())); }
+            None => {
+                return Err(Error::Internal("Unexpected geo search result".to_owned()));
+            }
         }
 
         while let Some(value) = it.next() {
@@ -417,7 +362,7 @@ where
                 Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
                 Value::Integer(h) => geo_hash = Some(h),
                 Value::Array(_) => coordinates = Some(value.into()?),
-                _ => return Err(Error::Internal("Unexpected geo search result".to_owned()))
+                _ => return Err(Error::Internal("Unexpected geo search result".to_owned())),
             }
         }
 
@@ -427,57 +372,5 @@ where
             geo_hash,
             coordinates,
         })
-    }
-}
-
-/// Builder for the [geosearchstore](crate::GeoCommands::geosearchstore) command
-pub struct GeoSearchStore<'a, T: GeoCommands + ?Sized> {
-    geo_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: GeoCommands + ?Sized> GeoSearchStore<'a, T> {
-    /// Matching items are returned unsorted by default. To sort them, use one of the following two options
-    /// * [Asc](crate::GeoSearchOrder::Asc): Sort returned items from the nearest to the farthest, relative to the center point.
-    /// * [Desc](crate::GeoSearchOrder::Desc): Sort returned items from the farthest to the nearest, relative to the center point.
-    pub fn order(self, order: GeoSearchOrder) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg(order),
-        }
-    }
-
-    /// Limit the results to the first `count` matching items,
-    /// When the `any` option is used, the command returns as soon as enough matches are found.
-    pub fn count(self, count: usize, any: bool) -> Self {
-        let mut cmd = self.cmd.arg("COUNT").arg(count);
-
-        if any {
-            cmd = cmd.arg("ANY");
-        }
-
-        Self {
-            geo_commands: self.geo_commands,
-            cmd,
-        }
-    }
-
-    /// When using the STOREDIST option, the command stores the items in a sorted set populated
-    /// with their distance from the center of the circle or box, as a floating-point number,
-    /// in the same unit specified for that shape.
-    pub fn store_dist(self) -> Self {
-        Self {
-            geo_commands: self.geo_commands,
-            cmd: self.cmd.arg("STOREDIST"),
-        }
-    }
-
-    /// Executes the command
-    /// 
-    /// # Return
-    /// the number of elements in the resulting set.
-    pub fn execute(self) -> Future<'a, usize>
-    {
-        self.geo_commands.send_into(self.cmd)
     }
 }

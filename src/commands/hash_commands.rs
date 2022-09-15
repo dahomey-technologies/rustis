@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
-    Command, CommandSend, Future, KeyValueArgOrCollection, SingleArgOrCollection,
+    CommandSend, Future, KeyValueArgOrCollection, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Hashes
@@ -153,18 +153,59 @@ pub trait HashCommands: CommandSend {
         self.send_into(cmd("HMGET").arg(key).arg(fields))
     }
 
-    /// When called with just the key argument, return a random field from the hash value stored at key.
+    /// return random fields from the hash value stored at key.
+    ///
+    /// # Return
+    /// * When called with just the key argument, return a random field from the hash value stored at key.
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    fn hrandfield<K>(&self, key: K) -> HRandField<Self>
+    fn hrandfield<K, F>(&self, key: K) -> Future<'_, F>
     where
         K: Into<BulkString>,
+        F: FromValue,
     {
-        HRandField {
-            hash_commands: &self,
-            cmd: cmd("HRANDFIELD").arg(key),
-        }
+        self.send_into(cmd("HRANDFIELD").arg(key))
+    }
+
+    /// return random fields from the hash value stored at key.
+    ///
+    /// # Return
+    /// * If the provided count argument is positive, return an array of distinct fields.
+    /// The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
+    /// * If called with a negative count, the behavior changes and the command is allowed to return the same field multiple times.
+    /// In this case, the number of returned fields is the absolute value of the specified count.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
+    fn hrandfields<K, F, A>(&self, key: K, count: isize) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        F: FromValue,
+        A: FromSingleValueArray<F>,
+    {
+        self.send_into(cmd("HRANDFIELD").arg(key).arg(count))
+    }
+
+    /// return random fields from the hash value stored at key.
+    ///
+    /// # Return
+    /// * If the provided count argument is positive, return an array of distinct fields.
+    /// The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
+    /// * If called with a negative count, the behavior changes and the command is allowed to return the same field multiple times.
+    /// In this case, the number of returned fields is the absolute value of the specified count.
+    /// The optional WITHVALUES modifier changes the reply so it includes the respective values of the randomly selected hash fields.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
+    fn hrandfields_with_values<K, F, V, A>(&self, key: K, count: isize) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        F: FromValue,
+        V: FromValue,
+        A: FromKeyValueValueArray<F, V>,
+    {
+        self.send_into(cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"))
     }
 
     /// Iterates fields of Hash types and their associated values.
@@ -175,14 +216,25 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hscan/)
-    fn hscan<K>(&self, key: K, cursor: u64) -> HScan<Self>
+    fn hscan<K, F, V>(
+        &self,
+        key: K,
+        cursor: u64,
+        match_pattern: Option<String>,
+        count: Option<usize>,
+    ) -> Future<'_, (u64, Vec<(F, V)>)>
     where
         K: Into<BulkString>,
+        F: FromValue + Default,
+        V: FromValue + Default,
     {
-        HScan {
-            hash_commands: self,
-            cmd: cmd("HSCAN").arg(key).arg(cursor),
-        }
+        self.send_into(
+            cmd("HSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg(match_pattern.map(|p| ("MATCH", p)))
+                .arg(count.map(|c| ("COUNT", c))),
+        )
     }
 
     /// Sets field in the hash stored at key to value.
@@ -249,85 +301,5 @@ pub trait HashCommands: CommandSend {
         A: FromSingleValueArray<V>,
     {
         self.send_into(cmd("HVALS").arg(key))
-    }
-}
-
-/// Builder for the [hrandfield](crate::HashCommands::hrandfield) command
-pub struct HRandField<'a, T: HashCommands + ?Sized> {
-    hash_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: HashCommands + ?Sized> HRandField<'a, T> {
-    /// return a random field from the hash value stored at key.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn execute<F>(self) -> Future<'a, F>
-    where
-        F: FromValue,
-    {
-        self.hash_commands.send_into(self.cmd)
-    }
-
-    /// If the provided count argument is positive, return an array of distinct fields.
-    /// The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count<F, A>(self, count: i64) -> Future<'a, A>
-    where
-        F: FromValue,
-        A: FromSingleValueArray<F>,
-    {
-        self.hash_commands.send_into(self.cmd.arg(count))
-    }
-
-    /// The optional WITHVALUES modifier changes the reply so it includes
-    /// the respective values of the randomly selected hash fields.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    pub fn count_with_values<F, V, A>(self, count: i64) -> Future<'a, A>
-    where
-        F: FromValue,
-        V: FromValue,
-        A: FromKeyValueValueArray<F, V>,
-    {
-        self.hash_commands
-            .send_into(self.cmd.arg(count).arg("WITHVALUES"))
-    }
-}
-
-/// Builder for the [hscan](crate::HashCommands::hscan) command
-pub struct HScan<'a, T: HashCommands + ?Sized> {
-    hash_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: HashCommands + ?Sized> HScan<'a, T> {
-    pub fn execute<F, V>(self) -> Future<'a, (u64, Vec<(F, V)>)>
-    where
-        F: FromValue + Default,
-        V: FromValue + Default,
-    {
-        self.hash_commands.send_into(self.cmd)
-    }
-
-    pub fn match_<P>(self, pattern: P) -> Self
-    where
-        P: Into<BulkString>,
-    {
-        Self {
-            hash_commands: self.hash_commands,
-            cmd: self.cmd.arg("MATCH").arg(pattern),
-        }
-    }
-
-    pub fn count(self, count: usize) -> Self {
-        Self {
-            hash_commands: self.hash_commands,
-            cmd: self.cmd.arg("COUNT").arg(count),
-        }
     }
 }

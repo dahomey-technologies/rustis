@@ -207,22 +207,22 @@ async fn hrandfield() -> Result<()> {
     let fields_and_values = [("heads", "obverse"), ("tails", "reverse"), ("edge", "")];
     database.hset("coin", fields_and_values).await?;
 
-    let value: String = database.hrandfield("coin").execute().await?;
+    let value: String = database.hrandfield("coin").await?;
     assert!(fields_and_values.iter().any(|v| v.0 == value));
 
-    let values: Vec<String> = database.hrandfield("coin").count(-5).await?;
+    let values: Vec<String> = database.hrandfields("coin", -5).await?;
     assert_eq!(5, values.len());
     for value in values {
         assert!(fields_and_values.iter().any(|v| v.0 == value));
     }
 
-    let values: Vec<String> = database.hrandfield("coin").count(5).await?;
+    let values: Vec<String> = database.hrandfields("coin", 5).await?;
     assert_eq!(3, values.len());
     for value in values {
         assert!(fields_and_values.iter().any(|v| v.0 == value));
     }
 
-    let values: Vec<(String, String)> = database.hrandfield("coin").count_with_values(5).await?;
+    let values: Vec<(String, String)> = database.hrandfields_with_values("coin", 5).await?;
     assert_eq!(3, values.len());
     for value in values {
         assert!(fields_and_values
@@ -250,9 +250,7 @@ async fn hscan() -> Result<()> {
     database.hset("key", fields_and_values).await?;
 
     let result = database
-        .hscan("key", 0)
-        .count(20)
-        .execute::<String, String>()
+        .hscan::<_, String, String>("key", 0, None, Some(20))
         .await?;
 
     //println!("{:?}", result);

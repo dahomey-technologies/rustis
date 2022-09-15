@@ -32,13 +32,9 @@ impl Command {
     where
         A: IntoArgs,
     {
-        if condition {
-            Self {
-                name: self.name,
-                args: self.args.arg(arg),
-            }
-        } else {
-            self
+        Self {
+            name: self.name,
+            args: self.args.arg_if(condition, arg),
         }
     }
 }

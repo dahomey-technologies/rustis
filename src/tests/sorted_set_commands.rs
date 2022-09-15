@@ -1,6 +1,6 @@
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, GenericCommands, Result, SortedSetCommands,
-    ZRangeSortBy, ZWhere, NONE_ARG,
+    ZAddOptions, ZRangeOptions, ZRangeSortBy, ZWhere, NONE_ARG,
 };
 use serial_test::serial;
 
@@ -15,22 +15,26 @@ async fn zadd() -> Result<()> {
     database.del("key").await?;
 
     let len = database
-        .zadd("key", None, None, false, (1.0, "one"))
+        .zadd("key", (1.0, "one"), ZAddOptions::default())
         .await?;
     assert_eq!(1, len);
 
     let len = database
-        .zadd("key", None, None, false, [(2.0, "two"), (3.0, "three")])
+        .zadd(
+            "key",
+            [(2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
+        )
         .await?;
     assert_eq!(2, len);
 
     let len = database
-        .zadd("key", None, None, false, (1.0, "uno"))
+        .zadd("key", (1.0, "uno"), ZAddOptions::default())
         .await?;
     assert_eq!(1, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(4, values.len());
     assert_eq!(("one".to_owned(), 1.0), values[0]);
@@ -52,7 +56,7 @@ async fn zcard() -> Result<()> {
     database.del("key").await?;
 
     database
-        .zadd("key", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let len = database.zcard("key").await?;
@@ -74,10 +78,8 @@ async fn zcount() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -103,14 +105,12 @@ async fn zdiff() -> Result<()> {
     database
         .zadd(
             "key1",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
     database
-        .zadd("key2", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let result: Vec<String> = database.zdiff(["key1", "key2"]).await?;
@@ -137,21 +137,19 @@ async fn zdiffstore() -> Result<()> {
     database
         .zadd(
             "key1",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
     database
-        .zadd("key2", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let len = database.zdiffstore("out", ["key1", "key2"]).await?;
     assert_eq!(1, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("out", 0, -1, None, false, None)
+        .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(1, values.len());
     assert_eq!(("three".to_owned(), 3.0), values[0]);
@@ -170,14 +168,14 @@ async fn zincrby() -> Result<()> {
     database.del("key").await?;
 
     database
-        .zadd("key", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let new_score = database.zincrby("key", 2.0, "one").await?;
     assert_eq!(3.0, new_score);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(2, values.len());
     assert_eq!(("two".to_owned(), 2.0), values[0]);
@@ -199,14 +197,12 @@ async fn zinter() -> Result<()> {
     database
         .zadd(
             "key1",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
     database
-        .zadd("key2", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let result: Vec<String> = database
@@ -239,14 +235,12 @@ async fn zinterstore() -> Result<()> {
     database
         .zadd(
             "key1",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
     database
-        .zadd("key2", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let len = database
@@ -255,7 +249,7 @@ async fn zinterstore() -> Result<()> {
     assert_eq!(2, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("out", 0, -1, None, false, None)
+        .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(2, values.len());
     assert_eq!(("one".to_owned(), 5.0), values[0]);
@@ -277,9 +271,6 @@ async fn zlexcount() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [
                 (0.0, "a"),
                 (0.0, "b"),
@@ -289,6 +280,7 @@ async fn zlexcount() -> Result<()> {
                 (0.0, "f"),
                 (0.0, "g"),
             ],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -318,10 +310,8 @@ async fn zmpop() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -337,7 +327,7 @@ async fn zmpop() -> Result<()> {
     }
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(2, values.len());
     assert_eq!(("two".to_owned(), 2.0), values[0]);
@@ -358,10 +348,8 @@ async fn zmpop() -> Result<()> {
     database
         .zadd(
             "key2",
-            None,
-            None,
-            false,
             [(4.0, "four"), (5.0, "five"), (6.0, "six")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -379,7 +367,7 @@ async fn zmpop() -> Result<()> {
     }
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(0, values.len());
 
@@ -388,7 +376,7 @@ async fn zmpop() -> Result<()> {
     assert!(result.is_none());
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key2", 0, -1, None, false, None)
+        .zrange_with_scores("key2", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(0, values.len());
 
@@ -409,7 +397,7 @@ async fn zmscore() -> Result<()> {
     database.del("key").await?;
 
     database
-        .zadd("key", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
     let scores = database.zmscore("key", ["one", "two", "nofield"]).await?;
@@ -434,10 +422,8 @@ async fn zpopmax() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -461,10 +447,8 @@ async fn zpopmin() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -494,7 +478,7 @@ async fn zrandmember() -> Result<()> {
         (6.0, "six"),
     ];
 
-    database.zadd("key", None, None, false, values).await?;
+    database.zadd("key", values, ZAddOptions::default()).await?;
 
     let result: String = database.zrandmember("key").await?;
     assert!(values.iter().any(|v| v.1 == result));
@@ -520,30 +504,34 @@ async fn zrange() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
-    let values: Vec<String> = database.zrange("key", 0, -1, None, false, None).await?;
+    let values: Vec<String> = database
+        .zrange("key", 0, -1, ZRangeOptions::default())
+        .await?;
     assert_eq!(3, values.len());
     assert_eq!("one".to_owned(), values[0]);
     assert_eq!("two".to_owned(), values[1]);
     assert_eq!("three".to_owned(), values[2]);
 
-    let values: Vec<String> = database.zrange("key", 2, 3, None, false, None).await?;
+    let values: Vec<String> = database
+        .zrange("key", 2, 3, ZRangeOptions::default())
+        .await?;
     assert_eq!(1, values.len());
     assert_eq!("three".to_owned(), values[0]);
 
-    let values: Vec<String> = database.zrange("key", -2, -1, None, false, None).await?;
+    let values: Vec<String> = database
+        .zrange("key", -2, -1, ZRangeOptions::default())
+        .await?;
     assert_eq!(2, values.len());
     assert_eq!("two".to_owned(), values[0]);
     assert_eq!("three".to_owned(), values[1]);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(3, values.len());
     assert_eq!(("one".to_owned(), 1.0), values[0]);
@@ -555,9 +543,9 @@ async fn zrange() -> Result<()> {
             "key",
             "(1",
             "+inf",
-            Some(ZRangeSortBy::ByScore),
-            false,
-            Some((1, 1)),
+            ZRangeOptions::default()
+                .sort_by(ZRangeSortBy::ByScore)
+                .limit(1, 1),
         )
         .await?;
     assert_eq!(1, values.len());
@@ -579,10 +567,8 @@ async fn zrangestore() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three"), (4.0, "four")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -591,7 +577,9 @@ async fn zrangestore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let values: Vec<String> = database.zrange("key", -2, -1, None, false, None).await?;
+    let values: Vec<String> = database
+        .zrange("key", -2, -1, ZRangeOptions::default())
+        .await?;
     assert_eq!(2, values.len());
     assert_eq!("three".to_owned(), values[0]);
     assert_eq!("four".to_owned(), values[1]);
@@ -612,10 +600,8 @@ async fn zrank() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -641,10 +627,8 @@ async fn zrem() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -652,7 +636,7 @@ async fn zrem() -> Result<()> {
     assert_eq!(1, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(2, values.len());
     assert_eq!(("one".to_owned(), 1.0), values[0]);
@@ -674,9 +658,6 @@ async fn zremrangebylex() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [
                 (0.0, "aaaa"),
                 (0.0, "b"),
@@ -689,13 +670,16 @@ async fn zremrangebylex() -> Result<()> {
                 (0.0, "ALPHA"),
                 (0.0, "alpha"),
             ],
+            ZAddOptions::default(),
         )
         .await?;
 
     let len = database.zremrangebylex("key", "[alpha", "[omega").await?;
     assert_eq!(6, len);
 
-    let values: Vec<String> = database.zrange("key", 0, -1, None, false, None).await?;
+    let values: Vec<String> = database
+        .zrange("key", 0, -1, ZRangeOptions::default())
+        .await?;
     assert_eq!(4, values.len());
     assert_eq!("ALPHA".to_owned(), values[0]);
     assert_eq!("aaaa".to_owned(), values[1]);
@@ -718,10 +702,8 @@ async fn zremrangebyrank() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -729,7 +711,7 @@ async fn zremrangebyrank() -> Result<()> {
     assert_eq!(2, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("key", 0, -1, None, false, None)
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(1, values.len());
     assert_eq!(("three".to_owned(), 3.0), values[0]);
@@ -750,10 +732,8 @@ async fn zrevrank() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -779,10 +759,8 @@ async fn zscan() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -809,10 +787,8 @@ async fn zscore() -> Result<()> {
     database
         .zadd(
             "key",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -836,15 +812,13 @@ async fn zunion() -> Result<()> {
     database.del(["key1", "key2"]).await?;
 
     database
-        .zadd("key1", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key1", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
     database
         .zadd(
             "key2",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -878,15 +852,13 @@ async fn zunionstore() -> Result<()> {
     database.del(["key1", "key2", "out"]).await?;
 
     database
-        .zadd("key1", None, None, false, [(1.0, "one"), (2.0, "two")])
+        .zadd("key1", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
     database
         .zadd(
             "key2",
-            None,
-            None,
-            false,
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
         )
         .await?;
 
@@ -896,7 +868,7 @@ async fn zunionstore() -> Result<()> {
     assert_eq!(3, len);
 
     let values: Vec<(String, f64)> = database
-        .zrange_with_scores("out", 0, -1, None, false, None)
+        .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .await?;
     assert_eq!(3, values.len());
     assert_eq!(("one".to_owned(), 5.0), values[0]);

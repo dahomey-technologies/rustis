@@ -34,6 +34,17 @@ impl CommandArgs {
     {
         args.into_args(self)
     }
+
+    pub fn arg_if<A>(self, condition: bool, arg: A) -> Self
+    where
+        A: IntoArgs,
+    {
+        if condition {
+            arg.into_args(self)
+        } else {
+            self
+        }
+    }
 }
 
 impl CommandArgs {

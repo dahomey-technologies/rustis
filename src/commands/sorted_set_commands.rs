@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    ArgsOrCollection, CommandSend, Future, SingleArgOrCollection,
+    ArgsOrCollection, CommandSend, Future, IntoArgs, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Sorted Sets
@@ -18,27 +18,13 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
-    fn zadd<K, M, I>(
-        &self,
-        key: K,
-        condition: Option<ZAddCondition>,
-        comparison: Option<ZAddComparison>,
-        change: bool,
-        items: I,
-    ) -> Future<'_, usize>
+    fn zadd<K, M, I>(&self, key: K, items: I, options: ZAddOptions) -> Future<'_, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, M)>,
     {
-        self.send_into(
-            cmd("ZADD")
-                .arg(key)
-                .arg(condition)
-                .arg(comparison)
-                .arg_if(change, "CH")
-                .arg(items),
-        )
+        self.send_into(cmd("ZADD").arg(key).arg(options).arg(items))
     }
 
     /// In this mode ZADD acts like ZINCRBY.
@@ -136,7 +122,12 @@ pub trait SortedSetCommands: CommandSend {
         C: SingleArgOrCollection<K>,
         E: FromValue + Default,
     {
-        self.send_into(cmd("ZDIFF").arg(keys.num_args()).arg(keys).arg("WITHSCORES"))
+        self.send_into(
+            cmd("ZDIFF")
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg("WITHSCORES"),
+        )
     }
 
     /// Computes the difference between the first and all successive
@@ -451,24 +442,14 @@ pub trait SortedSetCommands: CommandSend {
         key: K,
         start: S,
         stop: S,
-        sort_by: Option<ZRangeSortBy>,
-        reverse: bool,
-        limit: Option<(usize, isize)>,
+        options: ZRangeOptions,
     ) -> Future<'_, Vec<E>>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
         E: FromValue,
     {
-        self.send_into(
-            cmd("ZRANGE")
-                .arg(key)
-                .arg(start)
-                .arg(stop)
-                .arg(sort_by)
-                .arg_if(reverse, "REV")
-                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count))),
-        )
+        self.send_into(cmd("ZRANGE").arg(key).arg(start).arg(stop).arg(options))
     }
 
     /// Returns the specified range of elements in the sorted set stored at `key`.
@@ -483,9 +464,7 @@ pub trait SortedSetCommands: CommandSend {
         key: K,
         start: S,
         stop: S,
-        sort_by: Option<ZRangeSortBy>,
-        reverse: bool,
-        limit: Option<(usize, isize)>,
+        options: ZRangeOptions,
     ) -> Future<'_, Vec<(E, f64)>>
     where
         K: Into<BulkString>,
@@ -497,9 +476,7 @@ pub trait SortedSetCommands: CommandSend {
                 .arg(key)
                 .arg(start)
                 .arg(stop)
-                .arg(sort_by)
-                .arg_if(reverse, "REV")
-                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count)))
+                .arg(options)
                 .arg("WITHSCORES"),
         )
     }
@@ -869,5 +846,89 @@ impl From<ZWhere> for BulkString {
             ZWhere::Min => BulkString::Str("MIN"),
             ZWhere::Max => BulkString::Str("MAX"),
         }
+    }
+}
+
+/// Options for the command [zadd](crate::SortedSetCommands::zadd)
+#[derive(Default)]
+pub struct ZAddOptions {
+    condition: Option<ZAddCondition>,
+    comparison: Option<ZAddComparison>,
+    change: bool,
+}
+
+impl ZAddOptions {
+    pub fn condition(self, condition: ZAddCondition) -> Self {
+        Self {
+            condition: Some(condition),
+            comparison: self.comparison,
+            change: self.change,
+        }
+    }
+
+    pub fn comparison(self, comparison: ZAddComparison) -> Self {
+        Self {
+            condition: self.condition,
+            comparison: Some(comparison),
+            change: self.change,
+        }
+    }
+
+    pub fn change(self) -> Self {
+        Self {
+            condition: self.condition,
+            comparison: self.comparison,
+            change: true,
+        }
+    }
+}
+
+impl IntoArgs for ZAddOptions {
+    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+        args.arg(self.condition)
+            .arg(self.comparison)
+            .arg_if(self.change, "CH")
+    }
+}
+
+/// Options for the [zrange](crate::SortedSetCommands::zrange) command
+#[derive(Default)]
+pub struct ZRangeOptions {
+    sort_by: Option<ZRangeSortBy>,
+    reverse: bool,
+    limit: Option<(usize, isize)>,
+}
+
+impl ZRangeOptions {
+    pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
+        Self {
+            sort_by: Some(sort_by),
+            reverse: self.reverse,
+            limit: self.limit,
+        }
+    }
+
+    pub fn reverse(self) -> Self {
+        Self {
+            sort_by: self.sort_by,
+            reverse: true,
+            limit: self.limit,
+        }
+    }
+
+    pub fn limit(self, offset: usize, count: isize) -> Self {
+        Self {
+            sort_by: self.sort_by,
+            reverse: self.reverse,
+            limit: Some((offset, count)),
+        }
+    }
+}
+
+impl IntoArgs for ZRangeOptions {
+    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+        args.arg(self.sort_by)
+            .arg_if(self.reverse, "REV")
+            .arg(self.limit.map(|(offset, count)| ("LIMIT", offset, count)))
     }
 }

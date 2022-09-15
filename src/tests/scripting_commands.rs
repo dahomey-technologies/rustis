@@ -11,28 +11,29 @@ async fn eval() -> Result<()> {
     let database = connection.get_default_database();
 
     let result = database
-        .eval("return ARGV[1]")
-        .args("hello")
-        .execute()
+        .eval("return ARGV[1]", None as Option<String>, Some("hello"))
         .await?;
     let value: String = result.into()?;
     assert_eq!("hello", value);
 
     database.set("key", "hello").await?;
     let result = database
-        .eval("return redis.call('GET', KEYS[1])")
-        .keys("key")
-        .execute()
+        .eval(
+            "return redis.call('GET', KEYS[1])",
+            Some("key"),
+            None as Option<String>,
+        )
         .await?;
     let value: String = result.into()?;
     assert_eq!("hello", value);
 
     database.set("key", "hello").await?;
     let result = database
-        .eval("return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"")
-        .keys("key")
-        .args("world")
-        .execute()
+        .eval(
+            "return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"",
+            Some("key"),
+            Some("world"),
+        )
         .await?;
     let value: String = result.into()?;
     assert_eq!("hello world!", value);
@@ -49,7 +50,9 @@ async fn evalsha() -> Result<()> {
 
     let sha1: String = database.script_load("return ARGV[1]").await?;
 
-    let result = database.evalsha(sha1).args("hello").execute().await?;
+    let result = database
+        .evalsha(sha1, None as Option<String>, Some("hello"))
+        .await?;
     let value: String = result.into()?;
     assert_eq!("hello", value);
 

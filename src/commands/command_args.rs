@@ -97,6 +97,13 @@ where
             None => args,
         }
     }
+
+    fn num_args(&self) -> usize {
+        match self {
+            Some(_) => 1,
+            None => 0,
+        }
+    }
 }
 
 impl<T, const N: usize> IntoArgs for [T; N]

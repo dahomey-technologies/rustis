@@ -140,6 +140,8 @@ impl FromValue for bool {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i != 0),
+            Value::SimpleString(s) if s == "OK" => Ok(true),
+            Value::BulkString(BulkString::Nil) => Ok(false),
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to bool",
                 value

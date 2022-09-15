@@ -87,7 +87,7 @@ where
     }
 }
 
-impl<'a, T> IntoArgs for Option<T>
+impl<T> IntoArgs for Option<T>
 where
     T: IntoArgs,
 {

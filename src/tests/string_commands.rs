@@ -1,7 +1,8 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_default_addr,
-    ConnectionMultiplexer, Error, GenericCommands, Result, StringCommands,
+    ConnectionMultiplexer, Error, GenericCommands, GetExOptions, Result, SetCondition,
+    SetExpiration, StringCommands,
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};
@@ -105,7 +106,7 @@ async fn get_ex() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    let value: String = database.getex("key").ex(1).await?;
+    let value: String = database.getex("key", GetExOptions::Ex(1)).await?;
     assert_eq!("value", value);
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -124,7 +125,7 @@ async fn get_pex() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    let value: String = database.getex("key").px(1000).await?;
+    let value: String = database.getex("key", GetExOptions::Px(1000)).await?;
     assert_eq!("value", value);
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -151,7 +152,7 @@ async fn get_exat() -> Result<()> {
         .ok()
         .unwrap()
         .as_secs();
-    let value: String = database.getex("key").exat(time).await?;
+    let value: String = database.getex("key", GetExOptions::Exat(time)).await?;
     assert_eq!("value", value);
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -178,7 +179,9 @@ async fn get_pxat() -> Result<()> {
         .ok()
         .unwrap()
         .as_millis();
-    let value: String = database.getex("key").pxat(time as u64).await?;
+    let value: String = database
+        .getex("key", GetExOptions::Pxat(time as u64))
+        .await?;
     assert_eq!("value", value);
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -197,10 +200,10 @@ async fn get_persist() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").await?;
-    let value: String = database.getex("key").ex(1).await?;
+    let value: String = database.getex("key", GetExOptions::Ex(1)).await?;
     assert_eq!("value", value);
 
-    let value: String = database.getex("key").persist().await?;
+    let value: String = database.getex("key", GetExOptions::Persist).await?;
     assert_eq!("value", value);
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -345,17 +348,28 @@ async fn lcs() -> Result<()> {
         .mset([("key1", "ohmytext"), ("key2", "mynewtext")])
         .await?;
 
-    let result: String = database.lcs("key1", "key2").execute().await?;
+    let result: String = database.lcs("key1", "key2").await?;
     assert_eq!("mytext", result);
 
-    let result = database.lcs("key1", "key2").len().await?;
+    let result = database.lcs_len("key1", "key2").await?;
     assert_eq!(6, result);
 
-    let result = database.lcs("key1", "key2").idx().execute().await?;
+    let result = database.lcs_idx("key1", "key2", None, false).await?;
     assert_eq!(6, result.len);
     assert_eq!(2, result.matches.len());
-    assert_eq!(((4, 7), (5, 8)), result.matches[0]);
-    assert_eq!(((2, 3), (0, 1)), result.matches[1]);
+    assert_eq!(((4, 7), (5, 8), None), result.matches[0]);
+    assert_eq!(((2, 3), (0, 1), None), result.matches[1]);
+
+    let result = database.lcs_idx("key1", "key2", Some(4), false).await?;
+    assert_eq!(6, result.len);
+    assert_eq!(1, result.matches.len());
+    assert_eq!(((4, 7), (5, 8), None), result.matches[0]);
+
+    let result = database.lcs_idx("key1", "key2", None, true).await?;
+    assert_eq!(6, result.len);
+    assert_eq!(2, result.matches.len());
+    assert_eq!(((4, 7), (5, 8), Some(4)), result.matches[0]);
+    assert_eq!(((2, 3), (0, 1), Some(2)), result.matches[1]);
 
     Ok(())
 }
@@ -446,7 +460,9 @@ async fn set_with_options() -> Result<()> {
     let database = connection.get_default_database();
 
     // EX
-    database.set_with_options("key", "value").ex(1).await?;
+    database
+        .set_with_options("key", "value", None, Some(SetExpiration::Ex(1)), false)
+        .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
 
@@ -456,7 +472,9 @@ async fn set_with_options() -> Result<()> {
     assert!(matches!(value, Value::BulkString(BulkString::Nil)));
 
     // PX
-    database.set_with_options("key", "value").px(1000).await?;
+    database
+        .set_with_options("key", "value", None, Some(SetExpiration::Px(1000)), false)
+        .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
 
@@ -474,8 +492,7 @@ async fn set_with_options() -> Result<()> {
         .unwrap()
         .as_secs();
     database
-        .set_with_options("key", "value")
-        .exat(time as u64)
+        .set_with_options("key", "value", None, Some(SetExpiration::Exat(time)), false)
         .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
@@ -493,8 +510,13 @@ async fn set_with_options() -> Result<()> {
         .unwrap()
         .as_millis();
     database
-        .set_with_options("key", "value")
-        .pxat(time as u64)
+        .set_with_options(
+            "key",
+            "value",
+            None,
+            Some(SetExpiration::Pxat(time as u64)),
+            false,
+        )
         .await?;
     let value: String = database.get("key").await?;
     assert_eq!("value", value);
@@ -506,49 +528,37 @@ async fn set_with_options() -> Result<()> {
     // NX
     database.del("key").await?;
     let result = database
-        .set_with_options("key", "value")
-        .nx()
-        .execute()
+        .set_with_options("key", "value", Some(SetCondition::NX), None, false)
         .await?;
-    assert!(matches!(result, Value::SimpleString(s) if s == "OK"));
+    assert!(result);
     let result = database
-        .set_with_options("key", "value")
-        .nx()
-        .execute()
+        .set_with_options("key", "value", Some(SetCondition::NX), None, false)
         .await?;
-    assert!(matches!(result, Value::BulkString(BulkString::Nil)));
+    assert!(!result);
 
     // XX
     database.del("key").await?;
     let result = database
-        .set_with_options("key", "value")
-        .xx()
-        .execute()
+        .set_with_options("key", "value", Some(SetCondition::XX), None, false)
         .await?;
-    assert!(matches!(result, Value::BulkString(BulkString::Nil)));
+    assert!(!result);
     database.set("key", "value").await?;
     let result = database
-        .set_with_options("key", "value")
-        .xx()
-        .execute()
+        .set_with_options("key", "value", Some(SetCondition::XX), None, false)
         .await?;
-    assert!(matches!(result, Value::SimpleString(s) if s == "OK"));
+    assert!(result);
 
     // GET
     database.del("key").await?;
-    let result = database
-        .set_with_options("key", "value")
-        .get()
-        .execute()
+    let result: Option<String> = database
+        .set_get_with_options("key", "value", None, None, false)
         .await?;
-    assert!(matches!(result, Value::BulkString(BulkString::Nil)));
+    assert!(result.is_none());
     database.set("key", "value").await?;
-    let result = database
-        .set_with_options("key", "value1")
-        .get()
-        .execute()
+    let result: String = database
+        .set_get_with_options("key", "value1", None, None, false)
         .await?;
-    assert!(matches!(result, Value::BulkString(BulkString::Binary(s)) if s.as_slice() == b"value"));
+    assert_eq!("value", result);
     let value: String = database.get("key").await?;
     assert_eq!("value1", value);
 

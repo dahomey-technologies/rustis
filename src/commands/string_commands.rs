@@ -1,7 +1,8 @@
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    Command, CommandSend, Error, Future, KeyValueArgOrCollection, Result, SingleArgOrCollection,
+    CommandArgs, CommandSend, Error, Future, IntoArgs, KeyValueArgOrCollection, Result,
+    SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Strings
@@ -124,14 +125,12 @@ pub trait StringCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/getex/](https://redis.io/commands/getex/)
-    fn getex<K>(&self, key: K) -> GetEx<Self>
+    fn getex<K, V>(&self, key: K, options: GetExOptions) -> Future<'_, V>
     where
         K: Into<BulkString>,
+        V: FromValue,
     {
-        GetEx {
-            string_commands: &self,
-            cmd: cmd("GETEX").arg(key),
-        }
+        self.send_into(cmd("GETEX").arg(key).arg(options))
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -249,16 +248,60 @@ pub trait StringCommands: CommandSend {
 
     /// The LCS command implements the longest common subsequence algorithm
     ///
+    /// # Return
+    /// The string representing the longest common substring.
+    ///
     /// # See Also
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
-    fn lcs<K>(&self, key1: K, key2: K) -> Lcs<Self>
+    fn lcs<K, V>(&self, key1: K, key2: K) -> Future<'_, V>
+    where
+        K: Into<BulkString>,
+        V: FromValue,
+    {
+        self.send_into(cmd("LCS").arg(key1).arg(key2))
+    }
+
+    /// The LCS command implements the longest common subsequence algorithm
+    ///
+    /// # Return
+    /// The length of the longest common substring.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    fn lcs_len<K>(&self, key1: K, key2: K) -> Future<'_, usize>
     where
         K: Into<BulkString>,
     {
-        Lcs {
-            string_commands: &self,
-            cmd: cmd("LCS").arg(key1).arg(key2),
-        }
+        self.send_into(cmd("LCS").arg(key1).arg(key2).arg("LEN"))
+    }
+
+    /// The LCS command implements the longest common subsequence algorithm
+    ///
+    /// # Return
+    /// An array with the LCS length and all the ranges in both the strings,
+    /// start and end offset for each string, where there are matches.
+    /// When `with_match_len` is given each match will also have the length of the match
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    fn lcs_idx<K>(
+        &self,
+        key1: K,
+        key2: K,
+        min_match_len: Option<usize>,
+        with_match_len: bool,
+    ) -> Future<'_, LcsResult>
+    where
+        K: Into<BulkString>,
+    {
+        self.send_into(
+            cmd("LCS")
+                .arg(key1)
+                .arg(key2)
+                .arg("IDX")
+                .arg(min_match_len.map(|len| ("MINMATCHLEN", len)))
+                .arg_if(with_match_len, "WITHMATCHLEN"),
+        )
     }
 
     /// Returns the values of all specified keys.
@@ -356,20 +399,61 @@ pub trait StringCommands: CommandSend {
 
     ///Set key to hold the string value.
     ///
-    /// If key already holds a value, it is overwritten, regardless of its type.
-    /// Any previous time to live associated with the key is discarded on successful SET operation.
+    /// # Return
+    /// * `true` if SET was executed correctly.
+    /// * `false` if the SET operation was not performed because the user
+    ///  specified the NX or XX option but the condition was not met.
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
-    fn set_with_options<K, V>(&self, key: K, value: V) -> SetWithOptions<Self>
+    fn set_with_options<K, V>(
+        &self,
+        key: K,
+        value: V,
+        condition: Option<SetCondition>,
+        expiration: Option<SetExpiration>,
+        keep_ttl: bool,
+    ) -> Future<'_, bool>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        SetWithOptions {
-            string_commands: &self,
-            cmd: cmd("SET").arg(key).arg(value),
-        }
+        self.send_into(
+            cmd("SET")
+                .arg(key)
+                .arg(value)
+                .arg(condition)
+                .arg(expiration)
+                .arg_if(keep_ttl, "KEEPTTL"),
+        )
+    }
+
+    /// Set key to hold the string value wit GET option enforced
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    fn set_get_with_options<K, V1, V2>(
+        &self,
+        key: K,
+        value: V1,
+        condition: Option<SetCondition>,
+        expiration: Option<SetExpiration>,
+        keep_ttl: bool,
+    ) -> Future<'_, V2>
+    where
+        K: Into<BulkString>,
+        V1: Into<BulkString>,
+        V2: FromValue,
+    {
+        self.send_into(
+            cmd("SET")
+                .arg(key)
+                .arg(value)
+                .arg(condition)
+                .arg("GET")
+                .arg(expiration)
+                .arg_if(keep_ttl, "KEEPTTL"),
+        )
     }
 
     /// Set key to hold the string value and set key to timeout after a given number of seconds.
@@ -439,120 +523,36 @@ pub trait StringCommands: CommandSend {
     }
 }
 
-/// Builder for the [getex](crate::StringCommands::getex) command
-pub struct GetEx<'a, T: StringCommands + ?Sized> {
-    string_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: StringCommands> GetEx<'a, T> {
+/// Options for the [getex](crate::StringCommands::getex) command
+pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
-    pub fn ex<V>(self, seconds: u64) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands
-            .send_into(self.cmd.arg("EX").arg(seconds))
-    }
-
+    Ex(u64),
     /// Set the specified expire time, in milliseconds.
-    pub fn px<V>(self, milliseconds: u64) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands
-            .send_into(self.cmd.arg("PX").arg(milliseconds))
-    }
-
+    Px(u64),
     /// Set the specified Unix time at which the key will expire, in seconds.
-    pub fn exat<V>(self, timestamp_seconds: u64) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands
-            .send_into(self.cmd.arg("EXAT").arg(timestamp_seconds))
-    }
-
+    Exat(u64),
     /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub fn pxat<V>(self, timestamp_milliseconds: u64) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands
-            .send_into(self.cmd.arg("PXAT").arg(timestamp_milliseconds))
-    }
-
+    Pxat(u64),
     /// Remove the time to live associated with the key.
-    pub fn persist<V>(self) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands.send_into(self.cmd.arg("PERSIST"))
-    }
+    Persist,
 }
 
-/// Builder for the [lcs](crate::StringCommands::lcs) command
-pub struct Lcs<'a, T: StringCommands + ?Sized> {
-    string_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: StringCommands + ?Sized> Lcs<'a, T> {
-    /// return the length of the match
-    pub fn len(self) -> Future<'a, usize> {
-        self.string_commands.send_into(self.cmd.arg("LEN"))
-    }
-
-    /// execute the command
-    pub fn execute<V>(self) -> Future<'a, V>
-    where
-        V: FromValue,
-    {
-        self.string_commands.send_into(self.cmd)
-    }
-
-    /// return the match position in each strings
-    pub fn idx(self) -> LcsIdx<'a, T> {
-        LcsIdx {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("IDX"),
+impl IntoArgs for GetExOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            GetExOptions::Ex(duration) => ("EX", duration).into_args(args),
+            GetExOptions::Px(duration) => ("PX", duration).into_args(args),
+            GetExOptions::Exat(timestamp) => ("EXAT", timestamp).into_args(args),
+            GetExOptions::Pxat(timestamp) => ("PXAT", timestamp).into_args(args),
+            GetExOptions::Persist => "PERSIST".into_args(args),
         }
-    }
-}
-
-/// Builder for the [lcs](crate::StringCommands::lcs) command
-pub struct LcsIdx<'a, T: StringCommands + ?Sized> {
-    string_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: StringCommands + ?Sized> LcsIdx<'a, T> {
-    /// restrict the list of matches to the ones of a given minimal length
-    pub fn minmatchlen(self, len: usize) -> Self {
-        LcsIdx {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("MINMATCHLEN ").arg(len),
-        }
-    }
-
-    /// also return the length of the match
-    pub fn withmatchlen(self) -> Self {
-        LcsIdx {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("WITHMATCHLEN "),
-        }
-    }
-
-    /// execute the command
-    pub fn execute(self) -> Future<'a, LcsResult> {
-        self.string_commands.send_into(self.cmd)
     }
 }
 
 /// Result for the [lcs](crate::StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
-    pub matches: Vec<((usize, usize), (usize, usize))>,
+    pub matches: Vec<((usize, usize), (usize, usize), Option<usize>)>,
     pub len: usize,
 }
 
@@ -569,19 +569,76 @@ impl FromValue for LcsResult {
                     ) => {
                         if matches_label.as_slice() == b"matches" && len_label.as_slice() == b"len"
                         {
-                            let matches: Vec<((usize, usize), (usize, usize))> = matches
+                            let matches: Result<
+                                Vec<((usize, usize), (usize, usize), Option<usize>)>,
+                            > = matches
                                 .into_iter()
                                 .map(|m| {
-                                    let mut _match: Vec<Value> = m.into().unwrap();
-                                    let pos2: Vec<usize> = _match.pop().unwrap().into().unwrap();
-                                    let pos1: Vec<usize> = _match.pop().unwrap().into().unwrap();
+                                    let mut _match: Vec<Value> = m.into()?;
 
-                                    ((pos1[0], pos1[1]), (pos2[0], pos2[1]))
+                                    match (_match.pop(), _match.pop(), _match.pop(), _match.pop()) {
+                                        (Some(len), Some(pos2), Some(pos1), None) => {
+                                            let mut pos1: Vec<usize> = pos1.into()?;
+                                            let mut pos2: Vec<usize> = pos2.into()?;
+                                            let len: usize = len.into()?;
+
+                                            match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                                (Some(pos1_right), Some(pos1_left), None) => {
+                                                    match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                        (
+                                                            Some(pos2_right),
+                                                            Some(pos2_left),
+                                                            None,
+                                                        ) => Ok((
+                                                            (pos1_left, pos1_right),
+                                                            (pos2_left, pos2_right),
+                                                            Some(len),
+                                                        )),
+                                                        _ => Err(Error::Internal(
+                                                            "Cannot parse LCS result".to_owned(),
+                                                        )),
+                                                    }
+                                                }
+                                                _ => Err(Error::Internal(
+                                                    "Cannot parse LCS result".to_owned(),
+                                                )),
+                                            }
+                                        }
+                                        (Some(pos2), Some(pos1), None, None) => {
+                                            let mut pos1: Vec<usize> = pos1.into()?;
+                                            let mut pos2: Vec<usize> = pos2.into()?;
+
+                                            match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                                (Some(pos1_right), Some(pos1_left), None) => {
+                                                    match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                        (
+                                                            Some(pos2_right),
+                                                            Some(pos2_left),
+                                                            None,
+                                                        ) => Ok((
+                                                            (pos1_left, pos1_right),
+                                                            (pos2_left, pos2_right),
+                                                            None,
+                                                        )),
+                                                        _ => Err(Error::Internal(
+                                                            "Cannot parse LCS result".to_owned(),
+                                                        )),
+                                                    }
+                                                }
+                                                _ => Err(Error::Internal(
+                                                    "Cannot parse LCS result".to_owned(),
+                                                )),
+                                            }
+                                        }
+                                        _ => Err(Error::Internal(
+                                            "Cannot parse LCS result".to_owned(),
+                                        )),
+                                    }
                                 })
                                 .collect();
 
                             return Ok(LcsResult {
-                                matches,
+                                matches: matches?,
                                 len: len as usize,
                             });
                         }
@@ -596,69 +653,42 @@ impl FromValue for LcsResult {
     }
 }
 
-/// Builder for the [set_with_options](crate::StringCommands::set_with_options) command
-pub struct SetWithOptions<'a, T: StringCommands + ?Sized> {
-    string_commands: &'a T,
-    cmd: Command,
+/// Expiration option for the [set_with_options](crate::StringCommands::set_with_options) command
+pub enum SetExpiration {
+    /// Set the specified expire time, in seconds.
+    Ex(u64),
+    /// Set the specified expire time, in milliseconds.
+    Px(u64),
+    /// Set the specified Unix time at which the key will expire, in seconds.
+    Exat(u64),
+    /// Set the specified Unix time at which the key will expire, in milliseconds.
+    Pxat(u64),
 }
 
-impl<'a, T: StringCommands + ?Sized> SetWithOptions<'a, T> {
-    /// Return the old string stored at key, or nil if key did not exist.
-    ///
-    /// An error is returned and SET aborted if the value stored at key is not a string.
-    pub fn get(self) -> Self {
-        Self {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("GET"),
+impl IntoArgs for SetExpiration {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            SetExpiration::Ex(duration) => ("EX", duration).into_args(args),
+            SetExpiration::Px(duration) => ("PX", duration).into_args(args),
+            SetExpiration::Exat(timestamp) => ("EXAT", timestamp).into_args(args),
+            SetExpiration::Pxat(timestamp) => ("PXAT", timestamp).into_args(args),
         }
     }
+}
 
+/// Condition option for the [set_with_options](crate::StringCommands::set_with_options) command
+pub enum SetCondition {
     /// Only set the key if it does not already exist.
-    pub fn nx(self) -> Self {
-        Self {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("NX"),
-        }
-    }
-
+    NX,
     /// Only set the key if it already exist.
-    pub fn xx(self) -> Self {
-        Self {
-            string_commands: self.string_commands,
-            cmd: self.cmd.arg("XX"),
+    XX,
+}
+
+impl From<SetCondition> for BulkString {
+    fn from(cond: SetCondition) -> Self {
+        match cond {
+            SetCondition::NX => BulkString::Str("NX"),
+            SetCondition::XX => BulkString::Str("XX"),
         }
-    }
-
-    /// execute the command
-    pub fn execute(self) -> Future<'a, Value> {
-        self.string_commands.send(self.cmd)
-    }
-
-    /// Set the specified expire time, in seconds.
-    pub fn ex(self, seconds: u64) -> Future<'a, Value> {
-        self.string_commands.send(self.cmd.arg("EX").arg(seconds))
-    }
-
-    /// Set the specified expire time, in milliseconds.
-    pub fn px(self, milliseconds: u64) -> Future<'a, Value> {
-        self.string_commands
-            .send(self.cmd.arg("PX").arg(milliseconds))
-    }
-
-    /// Set the specified Unix time at which the key will expire, in seconds.
-    pub fn exat(self, timestamp_seconds: u64) -> Future<'a, Value> {
-        self.string_commands
-            .send(self.cmd.arg("EXAT").arg(timestamp_seconds))
-    }
-
-    /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub fn pxat(self, timestamp_milliseconds: u64) -> Future<'a, Value> {
-        self.string_commands
-            .send(self.cmd.arg("PXAT").arg(timestamp_milliseconds))
-    }
-
-    /// Set the specified Unix time at which the key will expire, in milliseconds.
-    pub fn keepttl(self) -> Future<'a, Value> {
-        self.string_commands.send(self.cmd.arg("KEEPTTL"))
     }
 }

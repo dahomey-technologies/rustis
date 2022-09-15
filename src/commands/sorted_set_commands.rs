@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    ArgsOrCollection, Command, CommandSend, Future, SingleArgOrCollection,
+    ArgsOrCollection, CommandSend, Future, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Sorted Sets
@@ -12,16 +12,66 @@ pub trait SortedSetCommands: CommandSend {
     /// Adds all the specified members with the specified scores
     /// to the sorted set stored at key.
     ///
+    /// # Return
+    /// * When used without optional arguments, the number of elements added to the sorted set (excluding score updates).
+    /// * If the `change` option is specified, the number of elements that were changed (added or updated).
+    ///
     /// # See Also
     /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
-    fn zadd<K>(&self, key: K) -> ZAdd<Self>
+    fn zadd<K, M, I>(
+        &self,
+        key: K,
+        condition: Option<ZAddCondition>,
+        comparison: Option<ZAddComparison>,
+        change: bool,
+        items: I,
+    ) -> Future<'_, usize>
     where
         K: Into<BulkString>,
+        M: Into<BulkString>,
+        I: ArgsOrCollection<(f64, M)>,
     {
-        ZAdd {
-            sorted_set_commands: &self,
-            cmd: cmd("ZADD").arg(key),
-        }
+        self.send_into(
+            cmd("ZADD")
+                .arg(key)
+                .arg(condition)
+                .arg(comparison)
+                .arg_if(change, "CH")
+                .arg(items),
+        )
+    }
+
+    /// In this mode ZADD acts like ZINCRBY.
+    /// Only one score-element pair can be specified in this mode.
+    ///
+    /// # Return
+    /// The new score of member (a double precision floating point number),
+    /// or nil if the operation was aborted (when called with either the XX or the NX option).
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
+    fn zadd_incr<K, M>(
+        &self,
+        key: K,
+        condition: Option<ZAddCondition>,
+        comparison: Option<ZAddComparison>,
+        change: bool,
+        score: f64,
+        member: M,
+    ) -> Future<'_, Option<f64>>
+    where
+        K: Into<BulkString>,
+        M: Into<BulkString>,
+    {
+        self.send_into(
+            cmd("ZADD")
+                .arg(key)
+                .arg(condition)
+                .arg(comparison)
+                .arg_if(change, "CH")
+                .arg(score)
+                .arg(member),
+        )
     }
 
     /// Returns the sorted set cardinality (number of elements)
@@ -59,19 +109,34 @@ pub trait SortedSetCommands: CommandSend {
     /// it is returned to the client.
     ///
     /// # Return
-    /// The number of elements in the specified score range.
+    /// The result of the difference
     ///
     /// # See Also
     /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
-    fn zdiff<K, C>(&self, keys: C) -> ZDiff<Self>
+    fn zdiff<K, C, E>(&self, keys: C) -> Future<'_, Vec<E>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
+        E: FromValue,
     {
-        ZDiff {
-            sorted_set_commands: &self,
-            cmd: cmd("ZDIFF").arg(keys.num_args()).arg(keys),
-        }
+        self.send_into(cmd("ZDIFF").arg(keys.num_args()).arg(keys))
+    }
+
+    /// This command is similar to [zdiffstore](crate::SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
+    /// it is returned to the client.
+    ///
+    /// # Return
+    /// The result of the difference with their scores
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
+    fn zdiff_with_scores<K, C, E>(&self, keys: C) -> Future<'_, Vec<(E, f64)>>
+    where
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
+        E: FromValue + Default,
+    {
+        self.send_into(cmd("ZDIFF").arg(keys.num_args()).arg(keys).arg("WITHSCORES"))
     }
 
     /// Computes the difference between the first and all successive
@@ -114,17 +179,60 @@ pub trait SortedSetCommands: CommandSend {
     /// This command is similar to [zinterstore](crate::SortedSetCommands::zinterstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
+    /// # Return
+    /// The result of the intersection as an array of members
+    ///
     /// # See Also
     /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
-    fn zinter<K, C>(&self, keys: C) -> ZInterUnion<Self>
+    fn zinter<K, C, W, E>(
+        &self,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, Vec<E>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
+        E: FromValue,
     {
-        ZInterUnion {
-            sorted_set_commands: &self,
-            cmd: cmd("ZINTER").arg(keys.num_args()).arg(keys),
-        }
+        self.send_into(
+            cmd("ZINTER")
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+        )
+    }
+
+    /// This command is similar to [zinterstore](crate::SortedSetCommands::zinterstore),
+    /// but instead of storing the resulting sorted set, it is returned to the client.
+    ///
+    /// # Return
+    /// The result of the intersection as an array of members with their scores
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
+    fn zinter_with_scores<K, C, W, E>(
+        &self,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, Vec<(E, f64)>>
+    where
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
+        E: FromValue + Default,
+    {
+        self.send_into(
+            cmd("ZINTER")
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a)))
+                .arg("WITHSCORES"),
+        )
     }
 
     /// This command is similar to [zinter](crate::SortedSetCommands::zinter),
@@ -157,19 +265,27 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zinterstore/](https://redis.io/commands/zinterstore/)
-    fn zinterstore<D, K, C>(&self, destination: D, keys: C) -> ZInterUnionStore<Self>
+    fn zinterstore<D, K, C, W>(
+        &self,
+        destination: D,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
     {
-        ZInterUnionStore {
-            sorted_set_commands: &self,
-            cmd: cmd("ZINTERSTORE")
+        self.send_into(
+            cmd("ZINTERSTORE")
                 .arg(destination)
                 .arg(keys.num_args())
-                .arg(keys),
-        }
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+        )
     }
 
     /// When all the elements in a sorted set are inserted with the same score,
@@ -270,53 +386,157 @@ pub trait SortedSetCommands: CommandSend {
         self.send_into(cmd("ZPOPMIN").arg(key).arg(count))
     }
 
-    /// Removes and returns up to count members with the lowest scores in the sorted set stored at key.
+    /// Return a random element from the sorted set value stored at key.
     ///
     /// # Return
-    /// The list of popped elements and scores.
+    /// The randomly selected element, or nil when key does not exist.
     ///
     /// # See Also
     /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
-    fn zrandmember<K>(&self, key: K) -> ZRandMember<Self>
+    fn zrandmember<K, E>(&self, key: K) -> Future<'_, E>
     where
         K: Into<BulkString>,
+        E: FromValue,
     {
-        ZRandMember {
-            sorted_set_commands: &self,
-            cmd: cmd("ZRANDMEMBER").arg(key),
-        }
+        self.send_into(cmd("ZRANDMEMBER").arg(key))
+    }
+
+    /// Return random elements from the sorted set value stored at key.
+    ///
+    /// # Return
+    /// * If the provided count argument is positive, return an array of distinct elements.
+    /// The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
+    /// * If called with a negative count, the behavior changes and the command is allowed
+    /// to return the same element multiple times. In this case, the number of returned elements
+    /// is the absolute value of the specified count.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    fn zrandmembers<K, E>(&self, key: K, count: isize) -> Future<'_, Vec<E>>
+    where
+        K: Into<BulkString>,
+        E: FromValue,
+    {
+        self.send_into(cmd("ZRANDMEMBER").arg(key).arg(count))
+    }
+
+    /// Return random elements with their scores from the sorted set value stored at key.
+    ///
+    /// # Return
+    /// * If the provided count argument is positive, return an array of distinct elements with their scores.
+    /// The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
+    /// * If called with a negative count, the behavior changes and the command is allowed
+    /// to return the same element multiple times. In this case, the number of returned elements
+    /// is the absolute value of the specified count.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    fn zrandmembers_with_scores<K, E>(&self, key: K, count: isize) -> Future<'_, Vec<E>>
+    where
+        K: Into<BulkString>,
+        E: FromValue,
+    {
+        self.send_into(cmd("ZRANDMEMBER").arg(key).arg(count).arg("WITHSCORES"))
     }
 
     /// Returns the specified range of elements in the sorted set stored at `key`.
     ///
+    /// # Return
+    /// A collection of elements in the specified range
+    ///
     /// # See Also
     /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
-    fn zrange<K, S>(&self, key: K, start: S, stop: S) -> ZRange<Self>
+    fn zrange<K, S, E>(
+        &self,
+        key: K,
+        start: S,
+        stop: S,
+        sort_by: Option<ZRangeSortBy>,
+        reverse: bool,
+        limit: Option<(usize, isize)>,
+    ) -> Future<'_, Vec<E>>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
+        E: FromValue,
     {
-        ZRange {
-            sorted_set_commands: &self,
-            cmd: cmd("ZRANGE").arg(key).arg(start).arg(stop),
-        }
+        self.send_into(
+            cmd("ZRANGE")
+                .arg(key)
+                .arg(start)
+                .arg(stop)
+                .arg(sort_by)
+                .arg_if(reverse, "REV")
+                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count))),
+        )
+    }
+
+    /// Returns the specified range of elements in the sorted set stored at `key`.
+    ///
+    /// # Return
+    /// A collection of elements and their scores in the specified range
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
+    fn zrange_with_scores<K, S, E>(
+        &self,
+        key: K,
+        start: S,
+        stop: S,
+        sort_by: Option<ZRangeSortBy>,
+        reverse: bool,
+        limit: Option<(usize, isize)>,
+    ) -> Future<'_, Vec<(E, f64)>>
+    where
+        K: Into<BulkString>,
+        S: Into<BulkString>,
+        E: FromValue + Default,
+    {
+        self.send_into(
+            cmd("ZRANGE")
+                .arg(key)
+                .arg(start)
+                .arg(stop)
+                .arg(sort_by)
+                .arg_if(reverse, "REV")
+                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count)))
+                .arg("WITHSCORES"),
+        )
     }
 
     /// This command is like [zrange](crate::SortedSetCommands::zrange),
     /// but stores the result in the `dst` destination key.
     ///
+    /// # Return
+    /// The number of elements in the resulting sorted set.
+    ///
     /// # See Also
     /// [https://redis.io/commands/zrangestore/](https://redis.io/commands/zrangestore/)
-    fn zrangestore<D, S, T>(&self, dst: D, src: S, start: T, stop: T) -> ZRangeStore<Self>
+    fn zrangestore<D, S, T>(
+        &self,
+        dst: D,
+        src: S,
+        start: T,
+        stop: T,
+        sort_by: Option<ZRangeSortBy>,
+        reverse: bool,
+        limit: Option<(usize, isize)>,
+    ) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,
         T: Into<BulkString>,
     {
-        ZRangeStore {
-            sorted_set_commands: &self,
-            cmd: cmd("ZRANGESTORE").arg(dst).arg(src).arg(start).arg(stop),
-        }
+        self.send_into(
+            cmd("ZRANGESTORE")
+                .arg(dst)
+                .arg(src)
+                .arg(start)
+                .arg(stop)
+                .arg(sort_by)
+                .arg_if(reverse, "REV")
+                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count))),
+        )
     }
 
     /// Returns the rank of member in the sorted set stored at key,
@@ -417,19 +637,32 @@ pub trait SortedSetCommands: CommandSend {
 
     /// Iterates elements of Sorted Set types and their associated scores.
     ///
-    /// # Return
-    /// The list of members and their associated scores.
+    /// # Returns
+    /// A tuple where
+    /// * The first value is the cursor as an unsigned 64 bit number
+    /// * The second value is a list of members and their scores in a Vec of Tuples
     ///
     /// # See Also
     /// [https://redis.io/commands/zscan/](https://redis.io/commands/zscan/)
-    fn zscan<K>(&self, key: K, cursor: usize) -> ZScan<Self>
+    fn zscan<K, P, M>(
+        &self,
+        key: K,
+        cursor: usize,
+        match_pattern: Option<P>,
+        count: Option<usize>,
+    ) -> Future<'_, (u64, Vec<(M, f64)>)>
     where
         K: Into<BulkString>,
+        P: Into<BulkString>,
+        M: FromValue + Default,
     {
-        ZScan {
-            sorted_set_commands: self,
-            cmd: cmd("ZSCAN").arg(key).arg(cursor),
-        }
+        self.send_into(
+            cmd("ZSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg(match_pattern.map(|p| ("MATCH", p)))
+                .arg(count.map(|c| ("COUNT", c))),
+        )
     }
 
     /// Returns the score of member in the sorted set at key.
@@ -450,20 +683,63 @@ pub trait SortedSetCommands: CommandSend {
     /// This command is similar to [zunionstore](crate::SortedSetCommands::zunionstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
+    /// # Return
+    /// The result of the unionsection as an array of members
+    ///
     /// # See Also
     /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
-    fn zunion<K, C>(&self, keys: C) -> ZInterUnion<Self>
+    fn zunion<K, C, W, E>(
+        &self,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, Vec<E>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
+        E: FromValue,
     {
-        ZInterUnion {
-            sorted_set_commands: &self,
-            cmd: cmd("ZUNION").arg(keys.num_args()).arg(keys),
-        }
+        self.send_into(
+            cmd("ZUNION")
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+        )
     }
 
-    /// Computes the union  of numkeys sorted sets given by the specified keys,
+    /// This command is similar to [zunionstore](crate::SortedSetCommands::zunionstore),
+    /// but instead of storing the resulting sorted set, it is returned to the client.
+    ///
+    /// # Return
+    /// The result of the unionsection as an array of members with their scores
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
+    fn zunion_with_scores<K, C, W, E>(
+        &self,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, Vec<(E, f64)>>
+    where
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
+        E: FromValue + Default,
+    {
+        self.send_into(
+            cmd("ZUNION")
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a)))
+                .arg("WITHSCORES"),
+        )
+    }
+
+    /// Computes the unionsection of numkeys sorted sets given by the specified keys,
     /// and stores the result in destination.
     ///
     /// # Return
@@ -471,175 +747,69 @@ pub trait SortedSetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/zunionstore/](https://redis.io/commands/zunionstore/)
-    fn zunionstore<D, K, C>(&self, destination: D, keys: C) -> ZInterUnionStore<Self>
+    fn zunionstore<D, K, C, W>(
+        &self,
+        destination: D,
+        keys: C,
+        weights: Option<W>,
+        aggregate: Option<ZAggregate>,
+    ) -> Future<'_, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
+        W: SingleArgOrCollection<f64>,
     {
-        ZInterUnionStore {
-            sorted_set_commands: &self,
-            cmd: cmd("ZUNIONSTORE")
+        self.send_into(
+            cmd("ZUNIONSTORE")
                 .arg(destination)
                 .arg(keys.num_args())
-                .arg(keys),
-        }
+                .arg(keys)
+                .arg(weights.map(|w| ("WEIGHTS", w)))
+                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+        )
     }
 }
 
-pub struct ZAdd<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZAdd<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// # Return
-    /// * When used without optional arguments, the number of elements added to the sorted set (excluding score updates).
-    /// * If the CH option is specified, the number of elements that were changed (added or updated).
-    pub fn execute<M, I>(self, items: I) -> Future<'a, usize>
-    where
-        M: Into<BulkString>,
-        I: ArgsOrCollection<(f64, M)>,
-    {
-        self.sorted_set_commands.send_into(self.cmd.arg(items))
-    }
-
+/// Condition option for the [zadd](crate::SortedSetCommands::zadd) command
+pub enum ZAddCondition {
     /// Only update elements that already exist. Don't add new elements.
-    pub fn nx(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("NX"),
-        }
-    }
-
+    NX,
     /// Only add new elements. Don't update already existing elements.
-    pub fn xx(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("XX"),
+    XX,
+}
+
+impl From<ZAddCondition> for BulkString {
+    fn from(cond: ZAddCondition) -> Self {
+        match cond {
+            ZAddCondition::NX => BulkString::Str("NX"),
+            ZAddCondition::XX => BulkString::Str("XX"),
         }
     }
+}
 
-    /// Only update existing elements if the new score is less than the current score.
-    ///
-    /// This flag doesn't prevent adding new elements.
-    pub fn lt(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("LT"),
-        }
-    }
-
+/// Comparison option for the [zadd](crate::SortedSetCommands::zadd) command
+pub enum ZAddComparison {
     /// Only update existing elements if the new score is greater than the current score.
     ///
     /// This flag doesn't prevent adding new elements.
-    pub fn gt(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("GT"),
-        }
-    }
-
-    /// Modify the return value from the number of new elements added,
-    /// to the total number of elements changed (CH is an abbreviation of changed).
-    pub fn ch(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("CH"),
-        }
-    }
-
-    /// When this option is specified ZADD acts like ZINCRBY.
-    /// Only one score-element pair can be specified in this mode.
+    GT,
+    /// Only update existing elements if the new score is less than the current score.
     ///
-    /// # Return
-    /// The new score of member (a double precision floating point number),
-    /// or nil if the operation was aborted (when called with either the XX or the NX option).
-    pub fn incr<M>(self, score: f64, member: M) -> Future<'a, Option<f64>>
-    where
-        M: Into<BulkString>,
-    {
-        self.sorted_set_commands
-            .send_into(self.cmd.arg("INCR").arg(score).arg(member))
+    /// This flag doesn't prevent adding new elements.
+    LT,
+}
+
+impl From<ZAddComparison> for BulkString {
+    fn from(cond: ZAddComparison) -> Self {
+        match cond {
+            ZAddComparison::GT => BulkString::Str("GT"),
+            ZAddComparison::LT => BulkString::Str("LT"),
+        }
     }
 }
 
-/// Builder for the [zrange](crate::SortedSetCommands::zrange) command
-pub struct ZRange<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZRange<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
-    /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
-    ///
-    /// When the `ByLex` option is used, the command behaves like `ZRANGEBYLEX` and returns the range
-    /// of elements from the sorted set between the `start` and `stop` lexicographical closed range intervals.
-    pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg(sort_by),
-        }
-    }
-
-    /// Using the REV option reverses the sorted set, with index 0 as the element with the highest score.
-    pub fn rev(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("REV"),
-        }
-    }
-
-    /// The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-    /// (similar to SELECT LIMIT offset, count in SQL).
-    ///
-    /// A negative `count` returns all elements from the `offset`.
-    ///
-    /// Keep in mind that if `offset` is large, the sorted set needs to be traversed for `offset`
-    /// elements before getting to the elements to return, which can add up to O(N) time complexity.
-    pub fn limit(self, offset: usize, count: isize) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("LIMIT").arg(offset).arg(count),
-        }
-    }
-
-    /// # Return
-    /// list of elements in the specified range
-    pub fn execute<E>(self) -> Future<'a, Vec<E>>
-    where
-        E: FromValue,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    /// The optional `WITHSCORES` argument supplements the command's reply with the scores of elements returned.
-    /// The returned list contains value1,score1,...,valueN,scoreN instead of value1,...,valueN.
-    ///
-    /// # Return
-    /// list of elements and their scores in the specified range
-    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
-    where
-        E: FromValue + Default,
-    {
-        self.sorted_set_commands
-            .send_into(self.cmd.arg("WITHSCORES"))
-    }
-}
-
+/// SortBy option of the [zrange](crate::SortedSetCommands::zrange) command
 pub enum ZRangeSortBy {
     /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
     /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
@@ -658,40 +828,19 @@ impl From<ZRangeSortBy> for BulkString {
     }
 }
 
-/// Builder for the [zdiff](crate::SortedSetCommands::zdiff) command
-pub struct ZDiff<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZDiff<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// The result of the difference
-    pub fn execute<E>(self) -> Future<'a, Vec<E>>
-    where
-        E: FromValue,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    /// The result of the difference with scores
-    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
-    where
-        E: FromValue + Default,
-    {
-        self.sorted_set_commands
-            .send_into(self.cmd.arg("WITHSCORES"))
-    }
-}
-
+/// Option that specify how results of an union or intersection are aggregated
+///
+/// # See Also
+/// [zinter](crate::SortedSetCommands::zinter)
+/// [zinterstore](crate::SortedSetCommands::zinterstore)
+/// [zunion](crate::SortedSetCommands::zunion)
+/// [zunionstore](crate::SortedSetCommands::zunionstore)
 pub enum ZAggregate {
+    /// The score of an element is summed across the inputs where it exists.
     Sum,
+    /// The minimum score of an element across the inputs where it exists.
     Min,
+    /// The maximum score of an element across the inputs where it exists.
     Max,
 }
 
@@ -705,112 +854,12 @@ impl From<ZAggregate> for BulkString {
     }
 }
 
-/// Builder for the [zinter](crate::SortedSetCommands::zinter) and [zunion](crate::SortedSetCommands::zunion) commands
-pub struct ZInterUnion<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZInterUnion<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// Using the WEIGHTS option, it is possible to specify a multiplication factor for each input sorted set.
-    ///
-    /// This means that the score of every element in every input sorted set is multiplied by this factor
-    /// before being passed to the aggregation function.
-    /// When WEIGHTS is not given, the multiplication factors default to 1.
-    pub fn weights<W>(self, weights: W) -> Self
-    where
-        W: SingleArgOrCollection<f64>,
-    {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("WEIGHT").arg(weights),
-        }
-    }
-
-    /// With the AGGREGATE option, it is possible to specify how the results of the union are aggregated.
-    ///
-    /// This option defaults to SUM, where the score of an element is summed across the inputs where it exists.
-    /// When this option is set to either MIN or MAX, the resulting set will contain the minimum or maximum score
-    /// of an element across the inputs where it exists.
-    pub fn aggregate(self, aggregate: ZAggregate) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("AGGREGATE").arg(aggregate),
-        }
-    }
-
-    /// The result of the intersection
-    pub fn execute<E>(self) -> Future<'a, Vec<E>>
-    where
-        E: FromValue,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    /// The result of the intersection with scores
-    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
-    where
-        E: FromValue + Default,
-    {
-        self.sorted_set_commands
-            .send_into(self.cmd.arg("WITHSCORES"))
-    }
-}
-
-/// Builder for the [zinterstore](crate::SortedSetCommands::zinterstore) and [zunionstore](crate::SortedSetCommands::zunionstore) commands
-pub struct ZInterUnionStore<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZInterUnionStore<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// Using the WEIGHTS option, it is possible to specify a multiplication factor for each input sorted set.
-    ///
-    /// This means that the score of every element in every input sorted set is multiplied by this factor
-    /// before being passed to the aggregation function.
-    /// When WEIGHTS is not given, the multiplication factors default to 1.
-    pub fn weights<W>(self, weights: W) -> Self
-    where
-        W: SingleArgOrCollection<f64>,
-    {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("WEIGHTS").arg(weights),
-        }
-    }
-
-    /// With the AGGREGATE option, it is possible to specify how the results of the union are aggregated.
-    ///
-    /// This option defaults to SUM, where the score of an element is summed across the inputs where it exists.
-    /// When this option is set to either MIN or MAX, the resulting set will contain the minimum or maximum score
-    /// of an element across the inputs where it exists.
-    pub fn aggregate(self, aggregate: ZAggregate) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("AGGREGATE").arg(aggregate),
-        }
-    }
-
-    /// The number of elements in the resulting sorted set at destination.
-    pub fn execute(self) -> Future<'a, usize> {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-}
-
+/// Where option of the [zmpop](crate::SortedSetCommands::zmpop) command
 pub enum ZWhere {
+    /// When the MIN modifier is used, the elements popped are those
+    /// with the lowest scores from the first non-empty sorted set.
     Min,
+    /// The MAX modifier causes elements with the highest scores to be popped.
     Max,
 }
 
@@ -819,162 +868,6 @@ impl From<ZWhere> for BulkString {
         match w {
             ZWhere::Min => BulkString::Str("MIN"),
             ZWhere::Max => BulkString::Str("MAX"),
-        }
-    }
-}
-
-/// Builder for the [zrandmember](crate::SortedSetCommands::zrandmember) command
-pub struct ZRandMember<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZRandMember<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// The randomly selected element, or nil when key does not exist.
-    pub fn execute<E>(self) -> Future<'a, E>
-    where
-        E: FromValue,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    /// If the provided count argument is positive, return an array of distinct elements.
-    /// The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
-    ///
-    /// If called with a negative count, the behavior changes and the command is allowed
-    /// to return the same element multiple times. In this case, the number of returned elements
-    /// is the absolute value of the specified count.
-    pub fn count(self, count: isize) -> ZRandMemberCount<'a, T> {
-        ZRandMemberCount {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg(count),
-        }
-    }
-}
-
-/// Builder for the [zrandmember](crate::SortedSetCommands::zrandmember) command
-pub struct ZRandMemberCount<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZRandMemberCount<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// The result of the intersection
-    pub fn execute<E>(self) -> Future<'a, Vec<E>>
-    where
-        E: FromValue,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    /// The result of the intersection with scores
-    pub fn with_scores<E>(self) -> Future<'a, Vec<(E, f64)>>
-    where
-        E: FromValue + Default,
-    {
-        self.sorted_set_commands
-            .send_into(self.cmd.arg("WITHSCORES"))
-    }
-}
-
-/// Builder for the [zrangestore](crate::SortedSetCommands::zrangestore) command
-pub struct ZRangeStore<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T> ZRangeStore<'a, T>
-where
-    T: SortedSetCommands + ?Sized,
-{
-    /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
-    /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
-    ///
-    /// When the `ByLex` option is used, the command behaves like `ZRANGEBYLEX` and returns the range
-    /// of elements from the sorted set between the `start` and `stop` lexicographical closed range intervals.
-    pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg(sort_by),
-        }
-    }
-
-    /// Using the REV option reverses the sorted set, with index 0 as the element with the highest score.
-    pub fn rev(self) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("REV"),
-        }
-    }
-
-    /// The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-    /// (similar to SELECT LIMIT offset, count in SQL).
-    ///
-    /// A negative `count` returns all elements from the `offset`.
-    ///
-    /// Keep in mind that if `offset` is large, the sorted set needs to be traversed for `offset`
-    /// elements before getting to the elements to return, which can add up to O(N) time complexity.
-    pub fn limit(self, offset: usize, count: isize) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("LIMIT").arg(offset).arg(count),
-        }
-    }
-
-    /// # Return
-    /// the number of elements in the resulting sorted set.
-    pub fn execute(self) -> Future<'a, usize> {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-}
-
-/// Builder for the [zscan](crate::SortedSetCommands::zscan) command
-pub struct ZScan<'a, T: SortedSetCommands + ?Sized> {
-    sorted_set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: SortedSetCommands + ?Sized> ZScan<'a, T> {
-    /// # Returns
-    /// A tuple where
-    /// * The first value is the cursor as an unsigned 64 bit number
-    /// * The second value is a list of members and their scores in a Vec of Tuples
-    pub fn execute<M>(self) -> Future<'a, (u64, Vec<(M, f64)>)>
-    where
-        M: FromValue + Default,
-    {
-        self.sorted_set_commands.send_into(self.cmd)
-    }
-
-    pub fn match_<P>(self, pattern: P) -> Self
-    where
-        P: Into<BulkString>,
-    {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("MATCH").arg(pattern),
-        }
-    }
-
-    pub fn count(self, count: usize) -> Self {
-        Self {
-            sorted_set_commands: self.sorted_set_commands,
-            cmd: self.cmd.arg("COUNT").arg(count),
         }
     }
 }

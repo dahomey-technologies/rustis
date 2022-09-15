@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    Command, CommandSend, Future, SingleArgOrCollection,
+    CommandSend, Future, SingleArgOrCollection,
 };
 use std::hash::Hash;
 
@@ -247,14 +247,25 @@ pub trait SetCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/sscan/](https://redis.io/commands/sscan/)
-    fn sscan<K>(&self, key: K, cursor: u64) -> SScan<Self>
+    fn sscan<K, P, M>(
+        &self,
+        key: K,
+        cursor: u64,
+        match_pattern: Option<P>,
+        count: Option<usize>,
+    ) -> Future<'_, (u64, Vec<M>)>
     where
         K: Into<BulkString>,
+        P: Into<BulkString>,
+        M: FromValue,
     {
-        SScan {
-            set_commands: self,
-            cmd: cmd("SSCAN").arg(key).arg(cursor),
-        }
+        self.send_into(
+            cmd("SSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg(match_pattern.map(|p| ("MATCH", p)))
+                .arg(count.map(|c| ("COUNT", c))),
+        )
     }
 
     /// Returns the members of the set resulting from the union of all the given sets.
@@ -289,37 +300,5 @@ pub trait SetCommands: CommandSend {
         C: SingleArgOrCollection<K>,
     {
         self.send_into(cmd("SUNIONSTORE").arg(destination).arg(keys))
-    }
-}
-
-/// Builder for the [sscan](crate::SetCommands::sscan) command
-pub struct SScan<'a, T: SetCommands + ?Sized> {
-    set_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: SetCommands + ?Sized> SScan<'a, T> {
-    pub fn execute<M>(self) -> Future<'a, (u64, Vec<M>)>
-    where
-        M: FromValue + Eq + Hash,
-    {
-        self.set_commands.send_into(self.cmd)
-    }
-
-    pub fn match_<P>(self, pattern: P) -> Self
-    where
-        P: Into<BulkString>,
-    {
-        Self {
-            set_commands: self.set_commands,
-            cmd: self.cmd.arg("MATCH").arg(pattern),
-        }
-    }
-
-    pub fn count(self, count: usize) -> Self {
-        Self {
-            set_commands: self.set_commands,
-            cmd: self.cmd.arg("COUNT").arg(count),
-        }
     }
 }

@@ -1,6 +1,8 @@
 use crate::resp::BulkString;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+pub const NONE_ARG: Option<BulkString> = None;
+
 #[derive(Debug)]
 pub enum CommandArgs {
     Empty,

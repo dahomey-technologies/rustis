@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, Result, ScriptingCommands, StringCommands,
+    tests::get_default_addr, ConnectionMultiplexer, Result, ScriptingCommands, StringCommands, NONE_ARG,
 };
 use serial_test::serial;
 
@@ -11,7 +11,7 @@ async fn eval() -> Result<()> {
     let database = connection.get_default_database();
 
     let result = database
-        .eval("return ARGV[1]", None as Option<String>, Some("hello"))
+        .eval("return ARGV[1]", NONE_ARG, Some("hello"))
         .await?;
     let value: String = result.into()?;
     assert_eq!("hello", value);
@@ -21,7 +21,7 @@ async fn eval() -> Result<()> {
         .eval(
             "return redis.call('GET', KEYS[1])",
             Some("key"),
-            None as Option<String>,
+            NONE_ARG,
         )
         .await?;
     let value: String = result.into()?;
@@ -51,7 +51,7 @@ async fn evalsha() -> Result<()> {
     let sha1: String = database.script_load("return ARGV[1]").await?;
 
     let result = database
-        .evalsha(sha1, None as Option<String>, Some("hello"))
+        .evalsha(sha1, NONE_ARG, Some("hello"))
         .await?;
     let value: String = result.into()?;
     assert_eq!("hello", value);

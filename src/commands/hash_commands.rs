@@ -216,15 +216,16 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hscan/)
-    fn hscan<K, F, V>(
+    fn hscan<K, P, F, V>(
         &self,
         key: K,
         cursor: u64,
-        match_pattern: Option<String>,
+        match_pattern: Option<P>,
         count: Option<usize>,
     ) -> Future<'_, (u64, Vec<(F, V)>)>
     where
         K: Into<BulkString>,
+        P: Into<BulkString>,
         F: FromValue + Default,
         V: FromValue + Default,
     {

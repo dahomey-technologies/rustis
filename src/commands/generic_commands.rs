@@ -408,14 +408,16 @@ pub trait GenericCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
-    fn scan<K, A>(
+    fn scan<P, T, K, A>(
         &self,
         cursor: u64,
-        match_pattern: Option<String>,
+        match_pattern: Option<P>,
         count: Option<usize>,
-        type_: Option<String>,
+        type_: Option<T>,
     ) -> Future<'_, (u64, A)>
     where
+        P: Into<BulkString>,
+        T: Into<BulkString>,
         K: FromValue,
         A: FromSingleValueArray<K> + Default,
     {

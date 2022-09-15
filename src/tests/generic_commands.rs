@@ -2,7 +2,7 @@ use crate::{
     resp::{BulkString, Value},
     tests::get_default_addr,
     ConnectionMultiplexer, ExpireOption, FlushingMode, GenericCommands, ListCommands, Result,
-    ServerCommands, SetCommands, StringCommands,
+    ServerCommands, SetCommands, StringCommands, NONE_ARG,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -596,7 +596,7 @@ async fn scan() -> Result<()> {
     database.set("key2", "value").await?;
     database.set("key3", "value").await?;
 
-    let keys: (u64, HashSet<String>) = database.scan(0, None, None, None).await?;
+    let keys: (u64, HashSet<String>) = database.scan(0, NONE_ARG, None, NONE_ARG).await?;
     assert_eq!(3, keys.1.len());
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));

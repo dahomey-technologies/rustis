@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, GenericCommands, HashCommands, Result,
+    tests::get_default_addr, ConnectionMultiplexer, GenericCommands, HashCommands, Result, NONE_ARG,
 };
 use serial_test::serial;
 
@@ -249,8 +249,8 @@ async fn hscan() -> Result<()> {
 
     database.hset("key", fields_and_values).await?;
 
-    let result = database
-        .hscan::<_, String, String>("key", 0, None, Some(20))
+    let result: (u64, Vec<(String, String)>) = database
+        .hscan("key", 0, NONE_ARG, Some(20))
         .await?;
 
     //println!("{:?}", result);

@@ -1,7 +1,9 @@
+use std::marker::PhantomData;
+
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    CommandSend, Error, Future, SingleArgOrCollection,
+    CommandArgs, CommandSend, Error, Future, IntoArgs, SingleArgOrCollection,
 };
 
 /// A group of generic Redis commands
@@ -156,6 +158,42 @@ pub trait GenericCommands: CommandSend {
         A: FromSingleValueArray<K>,
     {
         self.send_into(cmd("KEYS").arg(pattern))
+    }
+
+    /// Atomically transfer a key or a collection of keys from a source Redis instance to a destination Redis instance.
+    ///
+    /// # Return
+    /// * `true` - on success
+    /// * `false` - if no keys were found in the source instance.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/migrate/](https://redis.io/commands/migrate/)
+    fn migrate<H, K, P1, U, P2, KK>(
+        &self,
+        host: H,
+        port: u16,
+        key: K,
+        destination_db: usize,
+        timeout: u64,
+        options: MigrateOptions<P1, U, P2, K, KK>,
+    ) -> Future<'_, bool>
+    where
+        H: Into<BulkString>,
+        K: Into<BulkString>,
+        P1: Into<BulkString>,
+        U: Into<BulkString>,
+        P2: Into<BulkString>,
+        KK: SingleArgOrCollection<K>,
+    {
+        self.send_into(
+            cmd("MIGRATE")
+                .arg(host)
+                .arg(port)
+                .arg(key)
+                .arg(destination_db)
+                .arg(timeout)
+                .arg(options),
+        )
     }
 
     /// Move key from the currently selected database to the specified destination database.
@@ -430,6 +468,82 @@ pub trait GenericCommands: CommandSend {
         )
     }
 
+    /// Returns the elements contained in the list, set or sorted set at key.
+    ///
+    /// # Return
+    /// A collection of sorted elements.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    fn sort<K, BP, GP, M, A>(&self, key: K, options: SortOptions<BP, GP>) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        BP: Into<BulkString>,
+        GP: Into<BulkString>,
+        M: FromValue,
+        A: FromSingleValueArray<M>,
+    {
+        self.send_into(cmd("SORT").arg(key).arg(options))
+    }
+
+    /// Stores the elements contained in the list, set or sorted set at key.
+    ///
+    /// # Return
+    /// The number of sorted elements in the destination list.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    fn sort_and_store<K, BP, GP, D>(
+        &self,
+        key: K,
+        destination: D,
+        options: SortOptions<BP, GP>,
+    ) -> Future<'_, usize>
+    where
+        K: Into<BulkString>,
+        BP: Into<BulkString>,
+        GP: Into<BulkString>,
+        D: Into<BulkString>,
+    {
+        self.send_into(cmd("SORT").arg(key).arg(options).arg("STORE").arg(destination))
+    }
+
+    /// Read-only variant of the SORT command.
+    ///
+    /// It is exactly like the original SORT but refuses the STORE option
+    /// and can safely be used in read-only replicas.
+    ///
+    /// # Return
+    /// A collection of sorted elements.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/sort_ro/](https://redis.io/commands/sort_ro/)
+    fn sort_readonly<K, BP, GP, M, A>(&self, key: K, options: SortOptions<BP, GP>) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        BP: Into<BulkString>,
+        GP: Into<BulkString>,
+        M: FromValue,
+        A: FromSingleValueArray<M>,
+    {
+        self.send_into(cmd("SORT_RO").arg(key).arg(options))
+    }
+
+    /// Alters the last access time of a key(s). A key is ignored if it does not exist.
+    ///
+    /// # Return
+    /// The number of keys that were touched.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/touch/](https://redis.io/commands/touch/)
+    fn touch<K, KK>(&self, keys: KK) -> Future<'_, usize>
+    where
+        K: Into<BulkString>,
+        KK: SingleArgOrCollection<K>,
+    {
+        self.send_into(cmd("TOUCH").arg(keys))
+    }
+
     /// Returns the remaining time to live of a key that has a timeout.
     ///
     /// # Return
@@ -476,6 +590,18 @@ pub trait GenericCommands: CommandSend {
     {
         self.send_into(cmd("UNLINK").arg(keys))
     }
+
+    /// This command blocks the current client until all the previous write commands are
+    /// successfully transferred and acknowledged by at least the specified number of replicas.
+    ///
+    /// # Return
+    /// The number of replicas reached by all the writes performed in the context of the current connection.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/wait/](https://redis.io/commands/wait/)
+    fn wait(&self, num_replicas: usize, timeout: u64) -> Future<'_, usize> {
+        self.send_into(cmd("WAIT").arg(num_replicas).arg(timeout))
+    }
 }
 
 /// Options for the [expire](crate::GenericCommands::expire) command
@@ -498,5 +624,199 @@ impl From<ExpireOption> for BulkString {
             ExpireOption::Gt => BulkString::Str("GT"),
             ExpireOption::Lt => BulkString::Str("LT"),
         }
+    }
+}
+
+#[derive(Default)]
+pub struct MigrateOptions<
+    P1 = &'static str,
+    U = &'static str,
+    P2 = &'static str,
+    K = &'static str,
+    KK = Vec<&'static str>,
+> where
+    P1: Into<BulkString>,
+    U: Into<BulkString>,
+    P2: Into<BulkString>,
+    K: Into<BulkString>,
+    KK: SingleArgOrCollection<K>,
+{
+    phantom: PhantomData<K>,
+    copy: bool,
+    replace: bool,
+    auth: Option<P1>,
+    auth2: Option<(U, P2)>,
+    keys: Option<KK>,
+}
+
+impl<P1, U, P2, K, KK> MigrateOptions<P1, U, P2, K, KK>
+where
+    P1: Into<BulkString>,
+    U: Into<BulkString>,
+    P2: Into<BulkString>,
+    K: Into<BulkString>,
+    KK: SingleArgOrCollection<K>,
+{
+    pub fn copy(self) -> Self {
+        Self {
+            phantom: PhantomData,
+            copy: true,
+            replace: self.replace,
+            auth: self.auth,
+            auth2: self.auth2,
+            keys: self.keys,
+        }
+    }
+
+    pub fn auth(self, password: P1) -> Self {
+        Self {
+            phantom: PhantomData,
+            copy: self.copy,
+            replace: self.replace,
+            auth: Some(password),
+            auth2: self.auth2,
+            keys: self.keys,
+        }
+    }
+
+    pub fn auth2(self, username: U, password: P2) -> Self {
+        Self {
+            phantom: PhantomData,
+            copy: self.copy,
+            replace: self.replace,
+            auth: self.auth,
+            auth2: Some((username, password)),
+            keys: self.keys,
+        }
+    }
+
+    pub fn keys(self, keys: KK) -> Self {
+        Self {
+            phantom: PhantomData,
+            copy: self.copy,
+            replace: self.replace,
+            auth: self.auth,
+            auth2: self.auth2,
+            keys: Some(keys),
+        }
+    }
+}
+
+impl<P1, U, P2, K, KK> IntoArgs for MigrateOptions<P1, U, P2, K, KK>
+where
+    P1: Into<BulkString>,
+    U: Into<BulkString>,
+    P2: Into<BulkString>,
+    K: Into<BulkString>,
+    KK: SingleArgOrCollection<K>,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg_if(self.copy, "COPY")
+            .arg_if(self.replace, "REPLACE")
+            .arg(self.auth.map(|pwd| ("AUTH", pwd)))
+            .arg(self.auth2.map(|(user, pwd)| ("AUTH2", user, pwd)))
+            .arg(self.keys)
+    }
+}
+
+/// Order option of the [sort](crate::GenericCommands::sort) command
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+impl IntoArgs for SortOrder {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            SortOrder::Asc => args.arg("ASC"),
+            SortOrder::Desc => args.arg("DESC"),
+        }
+    }
+}
+
+/// Options of the [sort](crate::GenericCommands::sort) command
+#[derive(Default)]
+pub struct SortOptions<BP = &'static str, GP = &'static str>
+where
+    BP: Into<BulkString>,
+    GP: Into<BulkString>,
+{
+    by_pattern: Option<BP>,
+    limit: Option<(usize, isize)>,
+    get_patterns: Option<Vec<GP>>,
+    order: Option<SortOrder>,
+    alpha: bool,
+}
+
+impl<BP, GP> SortOptions<BP, GP>
+where
+    BP: Into<BulkString>,
+    GP: Into<BulkString>,
+{
+    pub fn by(self, pattern: BP) -> Self {
+        Self {
+            by_pattern: Some(pattern),
+            limit: self.limit,
+            get_patterns: self.get_patterns,
+            order: self.order,
+            alpha: self.alpha,
+        }
+    }
+
+    pub fn limit(self, offset: usize, count: isize) -> Self {
+        Self {
+            by_pattern: self.by_pattern,
+            limit: Some((offset, count)),
+            get_patterns: self.get_patterns,
+            order: self.order,
+            alpha: self.alpha,
+        }
+    }
+
+    pub fn get(self, patterns: Vec<GP>) -> Self {
+        Self {
+            by_pattern: self.by_pattern,
+            limit: self.limit,
+            get_patterns: Some(patterns),
+            order: self.order,
+            alpha: self.alpha,
+        }
+    }
+
+    pub fn order(self, order: SortOrder) -> Self {
+        Self {
+            by_pattern: self.by_pattern,
+            limit: self.limit,
+            get_patterns: self.get_patterns,
+            order: Some(order),
+            alpha: self.alpha,
+        }
+    }
+
+    pub fn alpha(self) -> Self {
+        Self {
+            by_pattern: self.by_pattern,
+            limit: self.limit,
+            get_patterns: self.get_patterns,
+            order: self.order,
+            alpha: true,
+        }
+    }
+}
+
+impl<BP, GP> IntoArgs for SortOptions<BP, GP>
+where
+    BP: Into<BulkString>,
+    GP: Into<BulkString>,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.by_pattern.map(|bp| ("BY", bp)))
+            .arg(self.limit.map(|(offset, count)| ("LIMIT", offset, count)))
+            .arg(
+                self.get_patterns
+                    .map(|patterns| patterns.into_iter().map(|p| ("GET", p)).collect::<Vec<_>>()),
+            )
+            .arg(self.order)
+            .arg_if(self.alpha, "ALPHA")
     }
 }

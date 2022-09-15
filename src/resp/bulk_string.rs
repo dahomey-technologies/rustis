@@ -67,6 +67,18 @@ impl From<u32> for BulkString {
     }
 }
 
+impl From<i16> for BulkString {
+    fn from(i: i16) -> Self {
+        Self::Integer(i as i64)
+    }
+}
+
+impl From<u16> for BulkString {
+    fn from(u: u16) -> Self {
+        Self::Integer(u as i64)
+    }
+}
+
 impl From<isize> for BulkString {
     fn from(i: isize) -> Self {
         Self::Integer(i as i64)

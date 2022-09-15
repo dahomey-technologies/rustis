@@ -2,7 +2,7 @@ use crate::{
     resp::{BulkString, Value},
     tests::get_default_addr,
     ConnectionMultiplexer, ExpireOption, FlushingMode, GenericCommands, ListCommands, Result,
-    ServerCommands, SetCommands, StringCommands, NONE_ARG,
+    ServerCommands, SetCommands, SortOptions, StringCommands, NONE_ARG,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -601,6 +601,57 @@ async fn scan() -> Result<()> {
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));
     assert!(keys.1.contains("key3"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn sort() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.flushdb(FlushingMode::Sync).await?;
+
+    database
+        .rpush("key", ["member3", "member1", "member2"])
+        .await?;
+
+    let values: Vec<String> = database
+        .sort("key", <SortOptions>::default().alpha())
+        .await?;
+    assert_eq!(3, values.len());
+    assert_eq!("member1".to_owned(), values[0]);
+    assert_eq!("member2".to_owned(), values[1]);
+    assert_eq!("member3".to_owned(), values[2]);
+
+    let len = database
+        .sort_and_store("key", "out", <SortOptions>::default().alpha())
+        .await?;
+    assert_eq!(3, len);
+
+    let values: Vec<String> = database.lrange("out", 0, -1).await?;
+    assert_eq!(3, values.len());
+    assert_eq!("member1".to_owned(), values[0]);
+    assert_eq!("member2".to_owned(), values[1]);
+    assert_eq!("member3".to_owned(), values[2]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn touch() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.set("key1", "Hello").await?;
+    database.set("key2", "World").await?;
+
+    let num_keys = database.touch(["key1", "key2"]).await?;
+    assert_eq!(2, num_keys);
 
     Ok(())
 }

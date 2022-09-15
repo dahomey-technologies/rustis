@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    Command, CommandSend, Future, SingleArgOrCollection,
+    CommandSend, Future, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Lists
@@ -129,17 +129,61 @@ pub trait ListCommands: CommandSend {
 
     /// Returns the index of matching elements inside a Redis list.
     ///
+    /// # Return
+    /// The integer representing the matching element, or nil if there is no match.
+    ///
     /// # See Also
     /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
-    fn lpos<K, E>(&self, key: K, element: E) -> LPos<Self>
+    fn lpos<K, E>(
+        &self,
+        key: K,
+        element: E,
+        rank: Option<usize>,
+        max_len: Option<usize>,
+    ) -> Future<'_, Option<usize>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        LPos {
-            list_commands: self,
-            cmd: cmd("LPOS").arg(key).arg(element),
-        }
+        self.send_into(
+            cmd("LPOS")
+                .arg(key)
+                .arg(element)
+                .arg(rank.map(|r| ("RANK", r)))
+                .arg(max_len.map(|l| ("MAXLEN", l))),
+        )
+    }
+
+    /// Returns the index of matching elements inside a Redis list.
+    ///
+    /// # Return
+    /// An array of integers representing the matching elements.
+    /// (empty if there are no matches).
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
+    fn lpos_with_count<K, E, A>(
+        &self,
+        key: K,
+        element: E,
+        num_matches: usize,
+        rank: Option<usize>,
+        max_len: Option<usize>,
+    ) -> Future<'_, A>
+    where
+        K: Into<BulkString>,
+        E: Into<BulkString>,
+        A: FromSingleValueArray<usize>
+    {
+        self.send_into(
+            cmd("LPOS")
+                .arg(key)
+                .arg(element)
+                .arg(rank.map(|r| ("RANK", r)))
+                .arg("COUNT")
+                .arg(num_matches)
+                .arg(max_len.map(|l| ("MAXLEN", l))),
+        )
     }
 
     /// Insert all the specified values at the head of the list stored at key
@@ -303,82 +347,6 @@ impl From<LMoveWhere> for BulkString {
         match w {
             LMoveWhere::Left => BulkString::Str("LEFT"),
             LMoveWhere::Right => BulkString::Str("RIGHT"),
-        }
-    }
-}
-
-/// Builder for the [lpos](crate::ListCommands::lpos) command
-pub struct LPos<'a, T: ListCommands + ?Sized> {
-    list_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: ListCommands + ?Sized> LPos<'a, T> {
-    /// Returns the integer representing the matching element, or nil if there is no match.
-    ///
-    /// However, if the COUNT option is given the command returns an array
-    /// (empty if there are no matches).
-    pub fn execute(self) -> Future<'a, Option<usize>> {
-        self.list_commands.send_into(self.cmd)
-    }
-
-    /// The RANK option specifies the "rank" of the first element to return,
-    /// in case there are multiple matches.
-    pub fn rank(self, rank: usize) -> Self {
-        LPos {
-            list_commands: self.list_commands,
-            cmd: self.cmd.arg("RANK").arg(rank),
-        }
-    }
-
-    /// Sometimes we want to return not just the Nth matching element,
-    /// but the position of all the first N matching elements.
-    /// This can be achieved using the COUNT option.
-    pub fn count(self, num_matches: usize) -> LPosCount<'a, T> {
-        LPosCount {
-            list_commands: self.list_commands,
-            cmd: self.cmd.arg("COUNT").arg(num_matches),
-        }
-    }
-
-    /// the MAXLEN option tells the command to compare the provided
-    /// element only with a given maximum number of list items.
-    pub fn max_len(self, len: usize) -> Self {
-        LPos {
-            list_commands: self.list_commands,
-            cmd: self.cmd.arg("MAXLEN").arg(len),
-        }
-    }
-}
-
-/// Builder for the [lpos](crate::ListCommands::lpos) command
-pub struct LPosCount<'a, T: ListCommands + ?Sized> {
-    list_commands: &'a T,
-    cmd: Command,
-}
-
-impl<'a, T: ListCommands + ?Sized> LPosCount<'a, T> {
-    /// Returns an array of integers representing the matching elements
-    ///  (empty if there are no matches).
-    pub fn execute(self) -> Future<'a, Vec<usize>> {
-        self.list_commands.send_into(self.cmd)
-    }
-
-    /// The RANK option specifies the "rank" of the first element to return,
-    /// in case there are multiple matches.
-    pub fn rank(self, rank: usize) -> Self {
-        LPosCount {
-            list_commands: self.list_commands,
-            cmd: self.cmd.arg("RANK").arg(rank),
-        }
-    }
-
-    /// the MAXLEN option tells the command to compare the provided
-    /// element only with a given maximum number of list items.
-    pub fn max_len(self, len: usize) -> Self {
-        LPosCount {
-            list_commands: self.list_commands,
-            cmd: self.cmd.arg("MAXLEN").arg(len),
         }
     }
 }

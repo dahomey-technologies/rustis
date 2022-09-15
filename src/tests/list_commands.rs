@@ -181,36 +181,22 @@ async fn lpos() -> Result<()> {
         .await?;
 
     let pos = database
-        .lpos("mylist", "element2")
-        .rank(1)
-        .max_len(1)
-        .execute()
+        .lpos("mylist", "element2", Some(1), Some(1))
         .await?;
     assert_eq!(None, pos);
 
     let pos = database
-        .lpos("mylist", "element2")
-        .rank(1)
-        .max_len(3)
-        .execute()
+        .lpos("mylist", "element2", Some(1), Some(3))
         .await?;
     assert_eq!(Some(1), pos);
 
     let pos: Vec<usize> = database
-        .lpos("mylist", "element2")
-        .rank(1)
-        .max_len(1)
-        .count(1)
-        .execute()
+        .lpos_with_count("mylist", "element2", 1, Some(1), Some(1))
         .await?;
     assert_eq!(0, pos.len());
 
     let pos: Vec<usize> = database
-        .lpos("mylist", "element2")
-        .rank(1)
-        .max_len(3)
-        .count(1)
-        .execute()
+        .lpos_with_count("mylist", "element2", 1, Some(1), Some(3))
         .await?;
     assert_eq!(1, pos.len());
     assert_eq!(1, pos[0]);

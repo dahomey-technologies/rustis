@@ -1,3 +1,4 @@
+mod bitmap_commands;
 mod command;
 mod command_args;
 mod command_encoder;
@@ -13,6 +14,7 @@ mod set_commands;
 mod sorted_set_commands;
 mod string_commands;
 
+pub use bitmap_commands::*;
 pub use command::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;

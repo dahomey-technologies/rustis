@@ -1,7 +1,7 @@
 use crate::{
-    resp::Value, Command, CommandSend, ConnectionMultiplexer, Future, GenericCommands, GeoCommands,
-    HashCommands, ListCommands, Result, ScriptingCommands, ServerCommands, SetCommands,
-    SortedSetCommands, StringCommands, Transaction,
+    resp::Value, BitmapCommands, Command, CommandSend, ConnectionMultiplexer, Future,
+    GenericCommands, GeoCommands, HashCommands, ListCommands, Result, ScriptingCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StringCommands, Transaction,
 };
 
 #[derive(Clone)]
@@ -58,6 +58,7 @@ impl CommandSend for Database {
     }
 }
 
+impl BitmapCommands for Database {}
 impl GenericCommands for Database {}
 impl GeoCommands for Database {}
 impl HashCommands for Database {}

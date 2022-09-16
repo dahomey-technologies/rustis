@@ -1,3 +1,4 @@
+mod bitmap_commands;
 mod command_args;
 mod database;
 mod error;

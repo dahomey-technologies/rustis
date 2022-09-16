@@ -1,9 +1,9 @@
 use crate::{
     cmd,
     resp::{Array, ResultValueExt, Value},
-    Command, CommandSend, Database, Error, Future, GenericCommands, GeoCommands, HashCommands,
-    ListCommands, Result, ServerCommands, SetCommands, SortedSetCommands, StringCommands,
-    ValueReceiver, ValueSender,
+    BitmapCommands, Command, CommandSend, Database, Error, Future, GenericCommands, GeoCommands,
+    HashCommands, ListCommands, Result, ServerCommands, SetCommands, SortedSetCommands,
+    StringCommands, ValueReceiver, ValueSender,
 };
 use futures::channel::oneshot;
 use std::{collections::VecDeque, sync::Mutex};
@@ -92,6 +92,7 @@ impl CommandSend for Transaction {
     }
 }
 
+impl BitmapCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
 impl HashCommands for Transaction {}

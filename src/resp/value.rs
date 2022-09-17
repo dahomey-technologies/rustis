@@ -25,6 +25,12 @@ impl Value {
     }
 }
 
+impl Default for Value {
+    fn default() -> Self {
+        Value::BulkString(BulkString::Nil)
+    }
+}
+
 pub trait FromValue: Sized {
     fn from_value(value: Value) -> Result<Self>;
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
@@ -329,43 +335,15 @@ impl FromValue for String {
     }
 }
 
-impl<T, U> FromValue for (T, U)
-where
-    T: FromValue + Default,
-    U: FromValue + Default,
-{
+impl FromValue for BulkString {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Array::Vec(mut values)) => {
-                match (values.pop(), values.pop(), values.pop()) {
-                    (Some(right), Some(left), None) => Ok((left.into()?, right.into()?)),
-                    (None, None, None) => Ok((Default::default(), Default::default())),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
-                }
-            }
+            Value::BulkString(s) => Ok(s),
             _ => Err(Error::Parse(format!(
-                "Cannot parse result {:?} to Tuple",
+                "Cannot parse result {:?} to BulkString",
                 value
             ))),
         }
-    }
-
-    fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
-        Box::new(|iter| {
-            let first = iter.next()?;
-
-            match first {
-                Value::Array(_) => Some(Self::from_value(first)),
-                _ => {
-                    let second = iter.next()?;
-                    Some(
-                        first
-                            .into()
-                            .and_then(|f| second.into().and_then(|s| Ok((f, s)))),
-                    )
-                }
-            }
-        })
     }
 }
 

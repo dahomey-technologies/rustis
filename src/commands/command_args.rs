@@ -257,6 +257,20 @@ where
     }
 }
 
+/// Allow to merge CommandArgs in another CommandArgs
+impl IntoArgs for CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            CommandArgs::Empty => args,
+            CommandArgs::Single(s) => args.arg(s),
+            CommandArgs::Array2(a) => args.arg(a),
+            CommandArgs::Array3(a) => args.arg(a),
+            CommandArgs::Array4(a) => args.arg(a),
+            CommandArgs::Vec(v) => args.arg(v),
+        }
+    }
+}
+
 /// Generic Marker for Collections of IntoArgs
 pub trait ArgsOrCollection<T>: IntoArgs
 where

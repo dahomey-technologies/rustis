@@ -217,7 +217,7 @@ async fn function_stats() -> Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let function_stat = database.function_stat().await?;
+    let function_stat = database.function_stats().await?;
     assert!(function_stat.running_script.is_some());
     if let Some(running_script) = function_stat.running_script {
         assert_eq!("myfunc", running_script.name);

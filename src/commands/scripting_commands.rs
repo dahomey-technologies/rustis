@@ -62,7 +62,7 @@ pub trait ScriptingCommands: CommandSend {
     /// The return value of the script
     ///
     /// # See Also
-    /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
+    /// [https://redis.io/commands/evalsha_ro/](https://redis.io/commands/evalsha_ro/)
     fn evalsha_readonly<R>(&self, builder: CallBuilder) -> Future<'_, R>
     where
         R: FromValue,
@@ -76,7 +76,7 @@ pub trait ScriptingCommands: CommandSend {
     /// The return value of the function
     ///
     /// # See Also
-    /// [https://redis.io/commands/fcall/](https://redis.io/commands/ffcall/)
+    /// [https://redis.io/commands/fcall/](https://redis.io/commands/fcall/)
     fn fcall<R>(&self, builder: CallBuilder) -> Future<'_, R>
     where
         R: FromValue,
@@ -90,7 +90,7 @@ pub trait ScriptingCommands: CommandSend {
     /// The return value of the function
     ///
     /// # See Also
-    /// [https://redis.io/commands/fcall/](https://redis.io/commands/ffcall/)
+    /// [https://redis.io/commands/fcall-ro/](https://redis.io/commands/fcall_ro/)
     fn fcall_readonly<R>(&self, builder: CallBuilder) -> Future<'_, R>
     where
         R: FromValue,
@@ -205,7 +205,7 @@ pub trait ScriptingCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/function-stats/](https://redis.io/commands/function-stats/)
-    fn function_stat(&self) -> Future<'_, FunctionStat> {
+    fn function_stats(&self) -> Future<'_, FunctionStats> {
         self.send_into(cmd("FUNCTION").arg("STATS"))
     }
 
@@ -478,15 +478,15 @@ impl FromValue for FunctionInfo {
 }
 
 #[derive(Debug)]
-pub struct FunctionStat {
+pub struct FunctionStats {
     pub running_script: Option<RunningScript>,
-    pub engines: HashMap<String, EngineStat>,
+    pub engines: HashMap<String, EngineStats>,
 }
 
-impl FromValue for FunctionStat {
+impl FromValue for FunctionStats {
     fn from_value(value: Value) -> Result<Self> {
         let (running_script_title, running_script, engines_title, engines) =
-            value.into::<(String, Option<RunningScript>, String, HashMap<String, EngineStat>)>()?;
+            value.into::<(String, Option<RunningScript>, String, HashMap<String, EngineStats>)>()?;
 
         if running_script_title != "running_script" || engines_title != "engines" {
             return Err(crate::Error::Internal(
@@ -529,12 +529,12 @@ impl FromValue for RunningScript {
 }
 
 #[derive(Debug, Default)]
-pub struct EngineStat {
+pub struct EngineStats {
     pub libraries_count: usize,
     pub functions_count: usize,
 }
 
-impl FromValue for EngineStat {
+impl FromValue for EngineStats {
     fn from_value(value: Value) -> Result<Self> {
         let (libraries_count_title, libraries_count, functions_count_title, functions_count) =
         value.into::<(String, usize, String, usize)>()?;

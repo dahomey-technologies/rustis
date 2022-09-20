@@ -80,7 +80,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     /// ```
     /// use redis_driver::{
     ///     cmd, ConnectionMultiplexer, DatabaseCommandResult, FlushingMode,
-    ///     GetExOptions, ServerCommands, StringCommands, Result
+    ///     ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
@@ -150,7 +150,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     /// ```
     /// use redis_driver::{
     ///     cmd, ConnectionMultiplexer, DatabaseCommandResult, FlushingMode,
-    ///     GetExOptions, ServerCommands, StringCommands, Result
+    ///     GenericCommands, GetExOptions, ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
@@ -160,13 +160,11 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///     database.flushdb(FlushingMode::Sync).send().await?;
     /// 
     ///     database.set("key", "value").send().await?;
-    ///     let value: String = database.getex("key", GetExOptions::Ex(1)).send().await?;
+    ///     let value: String = database.getex("key", GetExOptions::Ex(60)).send().await?;
     ///     assert_eq!("value", value);
     /// 
-    ///     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    /// 
-    ///     let value: Option<String> = database.get("key").send().await?;
-    ///     assert_eq!(None, value);
+    ///     let ttl = database.ttl("key").send().await?;
+    ///     assert!(59 <= ttl && ttl <= 60);
     /// 
     ///     Ok(())
     /// }

@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    ArgsOrCollection, CommandResult, Error, IntoArgs, IntoCommandResult, Result,
+    ArgsOrCollection, CommandArgs, CommandResult, Error, IntoArgs, IntoCommandResult, Result,
     SingleArgOrCollection,
 };
 
@@ -21,7 +21,7 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     fn geoadd<K, M, I>(
         &self,
         key: K,
-        condition: Option<GeoAddCondition>,
+        condition: GeoAddCondition,
         change: bool,
         items: I,
     ) -> CommandResult<T, usize>
@@ -218,17 +218,26 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
 
 /// Condition for the [geoadd](crate::GeoCommands::geoadd) command
 pub enum GeoAddCondition {
+    /// No option
+    None,
     /// Don't update already existing elements. Always add new elements.
     NX,
     /// Only update elements that already exist. Never add elements.
     XX,
 }
 
-impl From<GeoAddCondition> for BulkString {
-    fn from(cond: GeoAddCondition) -> Self {
-        match cond {
-            GeoAddCondition::NX => BulkString::Str("NX"),
-            GeoAddCondition::XX => BulkString::Str("XX"),
+impl Default for GeoAddCondition {
+    fn default() -> Self {
+        GeoAddCondition::None
+    }
+}
+
+impl IntoArgs for GeoAddCondition {
+    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+        match self {
+            GeoAddCondition::None => args,
+            GeoAddCondition::NX => args.arg("NX"),
+            GeoAddCondition::XX => args.arg("XX"),
         }
     }
 }
@@ -241,14 +250,14 @@ pub enum GeoUnit {
     Feet,
 }
 
-impl From<GeoUnit> for BulkString {
-    fn from(unit: GeoUnit) -> Self {
-        match unit {
+impl IntoArgs for GeoUnit {
+    fn into_args(self, args: CommandArgs) -> crate::CommandArgs {
+        args.arg(match self {
             GeoUnit::Meters => BulkString::Str("m"),
             GeoUnit::Kilometers => BulkString::Str("km"),
             GeoUnit::Miles => BulkString::Str("mi"),
             GeoUnit::Feet => BulkString::Str("ft"),
-        }
+        })
     }
 }
 

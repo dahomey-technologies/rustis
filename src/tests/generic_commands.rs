@@ -116,34 +116,34 @@ async fn expire() -> Result<()> {
 
     // no option
     database.set("key", "value").send().await?;
-    let result = database.expire("key", 10, None).send().await?;
+    let result = database.expire("key", 10, ExpireOption::None).send().await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").send().await?);
 
     // xx
     database.set("key", "value").send().await?;
-    let result = database.expire("key", 10, Some(ExpireOption::Xx)).send().await?;
+    let result = database.expire("key", 10, ExpireOption::Xx).send().await?;
     assert!(!result);
     assert_eq!(-1, database.ttl("key").send().await?);
 
     // nx
-    let result = database.expire("key", 10, Some(ExpireOption::Nx)).send().await?;
+    let result = database.expire("key", 10, ExpireOption::Nx).send().await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").send().await?);
 
     // gt
-    let result = database.expire("key", 5, Some(ExpireOption::Gt)).send().await?;
+    let result = database.expire("key", 5, ExpireOption::Gt).send().await?;
     assert!(!result);
     assert_eq!(10, database.ttl("key").send().await?);
-    let result = database.expire("key", 15, Some(ExpireOption::Gt)).send().await?;
+    let result = database.expire("key", 15, ExpireOption::Gt).send().await?;
     assert!(result);
     assert_eq!(15, database.ttl("key").send().await?);
 
     // lt
-    let result = database.expire("key", 20, Some(ExpireOption::Lt)).send().await?;
+    let result = database.expire("key", 20, ExpireOption::Lt).send().await?;
     assert!(!result);
     assert_eq!(15, database.ttl("key").send().await?);
-    let result = database.expire("key", 5, Some(ExpireOption::Lt)).send().await?;
+    let result = database.expire("key", 5, ExpireOption::Lt).send().await?;
     assert!(result);
     assert_eq!(5, database.ttl("key").send().await?);
 
@@ -364,7 +364,7 @@ async fn persist() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").send().await?;
-    assert!(database.expire("key", 10, None).send().await?);
+    assert!(database.expire("key", 10, ExpireOption::None).send().await?);
     assert_eq!(10, database.ttl("key").send().await?);
     assert!(database.persist("key").send().await?);
     assert_eq!(-1, database.ttl("key").send().await?);

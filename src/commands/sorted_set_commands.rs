@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    ArgsOrCollection, CommandResult, IntoArgs, IntoCommandResult, SingleArgOrCollection,
+    ArgsOrCollection, CommandResult, IntoArgs, IntoCommandResult, SingleArgOrCollection, CommandArgs,
 };
 
 /// A group of Redis commands related to Sorted Sets
@@ -39,8 +39,8 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     fn zadd_incr<K, M>(
         &self,
         key: K,
-        condition: Option<ZAddCondition>,
-        comparison: Option<ZAddComparison>,
+        condition: ZAddCondition,
+        comparison: ZAddComparison,
         change: bool,
         score: f64,
         member: M,
@@ -179,7 +179,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         &self,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, Vec<E>>
     where
         K: Into<BulkString>,
@@ -192,7 +192,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+                .arg(aggregate),
         )
     }
 
@@ -208,7 +208,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         &self,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, Vec<(E, f64)>>
     where
         K: Into<BulkString>,
@@ -221,7 +221,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a)))
+                .arg(aggregate)
                 .arg("WITHSCORES"),
         )
     }
@@ -261,7 +261,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         destination: D,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
@@ -275,7 +275,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+                .arg(aggregate),
         )
     }
 
@@ -669,7 +669,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         &self,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, Vec<E>>
     where
         K: Into<BulkString>,
@@ -682,7 +682,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+                .arg(aggregate),
         )
     }
 
@@ -698,7 +698,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         &self,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, Vec<(E, f64)>>
     where
         K: Into<BulkString>,
@@ -711,7 +711,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a)))
+                .arg(aggregate)
                 .arg("WITHSCORES"),
         )
     }
@@ -729,7 +729,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         destination: D,
         keys: C,
         weights: Option<W>,
-        aggregate: Option<ZAggregate>,
+        aggregate: ZAggregate,
     ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
@@ -743,30 +743,41 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
                 .arg(keys.num_args())
                 .arg(keys)
                 .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate.map(|a| ("AGGREGATE", a))),
+                .arg(aggregate),
         )
     }
 }
 
 /// Condition option for the [zadd](crate::SortedSetCommands::zadd) command
 pub enum ZAddCondition {
+    /// No condition
+    None,
     /// Only update elements that already exist. Don't add new elements.
     NX,
     /// Only add new elements. Don't update already existing elements.
     XX,
 }
 
-impl From<ZAddCondition> for BulkString {
-    fn from(cond: ZAddCondition) -> Self {
-        match cond {
-            ZAddCondition::NX => BulkString::Str("NX"),
-            ZAddCondition::XX => BulkString::Str("XX"),
+impl Default for ZAddCondition {
+    fn default() -> Self {
+        ZAddCondition::None
+    }
+}
+
+impl IntoArgs for ZAddCondition {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ZAddCondition::None => args,
+            ZAddCondition::NX => args.arg("NX"),
+            ZAddCondition::XX => args.arg("XX"),
         }
     }
 }
 
 /// Comparison option for the [zadd](crate::SortedSetCommands::zadd) command
 pub enum ZAddComparison {
+    /// No comparison
+    None,
     /// Only update existing elements if the new score is greater than the current score.
     ///
     /// This flag doesn't prevent adding new elements.
@@ -777,17 +788,26 @@ pub enum ZAddComparison {
     LT,
 }
 
-impl From<ZAddComparison> for BulkString {
-    fn from(cond: ZAddComparison) -> Self {
-        match cond {
-            ZAddComparison::GT => BulkString::Str("GT"),
-            ZAddComparison::LT => BulkString::Str("LT"),
+impl Default for ZAddComparison {
+    fn default() -> Self {
+        ZAddComparison::None
+    }
+}
+
+impl IntoArgs for ZAddComparison {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ZAddComparison::None => args,
+            ZAddComparison::GT => args.arg("GT"),
+            ZAddComparison::LT => args.arg("LT"),
         }
     }
 }
 
 /// SortBy option of the [zrange](crate::SortedSetCommands::zrange) command
 pub enum ZRangeSortBy {
+    /// No sort by
+    None,
     /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
     /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
     ByScore,
@@ -796,11 +816,18 @@ pub enum ZRangeSortBy {
     ByLex,
 }
 
-impl From<ZRangeSortBy> for BulkString {
-    fn from(s: ZRangeSortBy) -> Self {
-        match s {
-            ZRangeSortBy::ByScore => BulkString::Str("BYSCORE"),
-            ZRangeSortBy::ByLex => BulkString::Str("BYLEX"),
+impl Default for ZRangeSortBy {
+    fn default() -> Self {
+        ZRangeSortBy::None
+    }
+}
+
+impl IntoArgs for ZRangeSortBy {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ZRangeSortBy::None => args,
+            ZRangeSortBy::ByScore => args.arg("BYSCORE"),
+            ZRangeSortBy::ByLex => args.arg("BYLEX"),
         }
     }
 }
@@ -813,6 +840,8 @@ impl From<ZRangeSortBy> for BulkString {
 /// [zunion](crate::SortedSetCommands::zunion)
 /// [zunionstore](crate::SortedSetCommands::zunionstore)
 pub enum ZAggregate {
+    /// No aggregation
+    None,
     /// The score of an element is summed across the inputs where it exists.
     Sum,
     /// The minimum score of an element across the inputs where it exists.
@@ -821,12 +850,19 @@ pub enum ZAggregate {
     Max,
 }
 
-impl From<ZAggregate> for BulkString {
-    fn from(a: ZAggregate) -> Self {
-        match a {
-            ZAggregate::Sum => BulkString::Str("SUM"),
-            ZAggregate::Min => BulkString::Str("MIN"),
-            ZAggregate::Max => BulkString::Str("MAX"),
+impl Default for ZAggregate {
+    fn default() -> Self {
+        ZAggregate::None
+    }
+}
+
+impl IntoArgs for ZAggregate {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ZAggregate::None => args,
+            ZAggregate::Sum => args.arg("SUM"),
+            ZAggregate::Min => args.arg("MIN"),
+            ZAggregate::Max => args.arg("MAX"),
         }
     }
 }
@@ -840,11 +876,11 @@ pub enum ZWhere {
     Max,
 }
 
-impl From<ZWhere> for BulkString {
-    fn from(w: ZWhere) -> Self {
-        match w {
-            ZWhere::Min => BulkString::Str("MIN"),
-            ZWhere::Max => BulkString::Str("MAX"),
+impl IntoArgs for ZWhere {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ZWhere::Min => args.arg("MIN"),
+            ZWhere::Max => args.arg("MAX"),
         }
     }
 }
@@ -852,15 +888,15 @@ impl From<ZWhere> for BulkString {
 /// Options for the command [zadd](crate::SortedSetCommands::zadd)
 #[derive(Default)]
 pub struct ZAddOptions {
-    condition: Option<ZAddCondition>,
-    comparison: Option<ZAddComparison>,
+    condition: ZAddCondition,
+    comparison: ZAddComparison,
     change: bool,
 }
 
 impl ZAddOptions {
     pub fn condition(self, condition: ZAddCondition) -> Self {
         Self {
-            condition: Some(condition),
+            condition: condition,
             comparison: self.comparison,
             change: self.change,
         }
@@ -869,7 +905,7 @@ impl ZAddOptions {
     pub fn comparison(self, comparison: ZAddComparison) -> Self {
         Self {
             condition: self.condition,
-            comparison: Some(comparison),
+            comparison: comparison,
             change: self.change,
         }
     }
@@ -894,7 +930,7 @@ impl IntoArgs for ZAddOptions {
 /// Options for the [zrange](crate::SortedSetCommands::zrange) command
 #[derive(Default)]
 pub struct ZRangeOptions {
-    sort_by: Option<ZRangeSortBy>,
+    sort_by: ZRangeSortBy,
     reverse: bool,
     limit: Option<(usize, isize)>,
 }
@@ -902,7 +938,7 @@ pub struct ZRangeOptions {
 impl ZRangeOptions {
     pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
         Self {
-            sort_by: Some(sort_by),
+            sort_by: sort_by,
             reverse: self.reverse,
             limit: self.limit,
         }

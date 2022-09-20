@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands,
-    GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOrder, GeoSearchResult, GeoUnit, Result,
+    GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOrder, GeoSearchResult,
+    GeoUnit, Result,
 };
 use serial_test::serial;
 
@@ -19,7 +20,7 @@ async fn geoadd() -> Result<()> {
     let len = database
         .geoadd(
             "key",
-            None,
+            Default::default(),
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -30,7 +31,7 @@ async fn geoadd() -> Result<()> {
     let len = database
         .geoadd(
             "key",
-            None,
+            Default::default(),
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -41,7 +42,7 @@ async fn geoadd() -> Result<()> {
     let len = database
         .geoadd(
             "key",
-            None,
+            Default::default(),
             true,
             [(2.0, 2.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -52,7 +53,7 @@ async fn geoadd() -> Result<()> {
     let len = database
         .geoadd(
             "key",
-            Some(crate::GeoAddCondition::XX),
+            GeoAddCondition::XX,
             true,
             [
                 (1.0, 1.0, "location1"),
@@ -67,7 +68,7 @@ async fn geoadd() -> Result<()> {
     let len = database
         .geoadd(
             "key",
-            Some(crate::GeoAddCondition::NX),
+            GeoAddCondition::NX,
             true,
             [
                 (2.0, 2.0, "location1"),
@@ -95,7 +96,7 @@ async fn geodist() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -146,7 +147,7 @@ async fn geohash() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -181,7 +182,7 @@ async fn geopos() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -223,7 +224,7 @@ async fn geosearch() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -237,7 +238,7 @@ async fn geosearch() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (12.758489, 38.788135, "edge1"),
@@ -335,7 +336,7 @@ async fn geosearchstore() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -349,7 +350,7 @@ async fn geosearchstore() -> Result<()> {
     let len = database
         .geoadd(
             "Sicily",
-            None,
+            Default::default(),
             false,
             [
                 (12.758489, 38.788135, "edge1"),

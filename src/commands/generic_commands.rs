@@ -94,7 +94,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         &self,
         key: K,
         seconds: u64,
-        option: Option<ExpireOption>,
+        option: ExpireOption,
     ) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
@@ -614,6 +614,8 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
 
 /// Options for the [expire](crate::GenericCommands::expire) command
 pub enum ExpireOption {
+    /// No option
+    None,
     /// Set expiry only when the key has no expiry
     Nx,
     /// Set expiry only when the key has no expiry    
@@ -624,13 +626,20 @@ pub enum ExpireOption {
     Lt,
 }
 
-impl From<ExpireOption> for BulkString {
-    fn from(option: ExpireOption) -> Self {
-        match option {
-            ExpireOption::Nx => BulkString::Str("NX"),
-            ExpireOption::Xx => BulkString::Str("XX"),
-            ExpireOption::Gt => BulkString::Str("GT"),
-            ExpireOption::Lt => BulkString::Str("LT"),
+impl Default for ExpireOption {
+    fn default() -> Self {
+        ExpireOption::None
+    }
+}
+
+impl IntoArgs for ExpireOption {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            ExpireOption::None => args,
+            ExpireOption::Nx => args.arg("NX"),
+            ExpireOption::Xx => args.arg("XX"),
+            ExpireOption::Gt => args.arg("GT"),
+            ExpireOption::Lt => args.arg("LT"),            
         }
     }
 }

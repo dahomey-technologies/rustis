@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    CommandResult, IntoCommandResult, SingleArgOrCollection,
+    CommandArgs, CommandResult, IntoArgs, IntoCommandResult, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Lists
@@ -334,12 +334,12 @@ pub enum LInsertWhere {
     After,
 }
 
-impl From<LInsertWhere> for BulkString {
-    fn from(w: LInsertWhere) -> Self {
-        match w {
+impl IntoArgs for LInsertWhere {
+    fn into_args(self, args: CommandArgs) -> crate::CommandArgs {
+        args.arg(match self {
             LInsertWhere::Before => BulkString::Str("BEFORE"),
             LInsertWhere::After => BulkString::Str("AFTER"),
-        }
+        })
     }
 }
 
@@ -348,11 +348,11 @@ pub enum LMoveWhere {
     Right,
 }
 
-impl From<LMoveWhere> for BulkString {
-    fn from(w: LMoveWhere) -> Self {
-        match w {
+impl IntoArgs for LMoveWhere {
+    fn into_args(self, args: CommandArgs) -> crate::CommandArgs {
+        args.arg(match self {
             LMoveWhere::Left => BulkString::Str("LEFT"),
             LMoveWhere::Right => BulkString::Str("RIGHT"),
-        }
+        })
     }
 }

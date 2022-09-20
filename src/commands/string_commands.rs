@@ -457,8 +457,8 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
         &self,
         key: K,
         value: V,
-        condition: Option<SetCondition>,
-        expiration: Option<SetExpiration>,
+        condition: SetCondition,
+        expiration: SetExpiration,
         keep_ttl: bool,
     ) -> CommandResult<T, bool>
     where
@@ -483,8 +483,8 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
         &self,
         key: K,
         value: V1,
-        condition: Option<SetCondition>,
-        expiration: Option<SetExpiration>,
+        condition: SetCondition,
+        expiration: SetExpiration,
         keep_ttl: bool,
     ) -> CommandResult<T, V2>
     where
@@ -702,6 +702,8 @@ impl FromValue for LcsResult {
 
 /// Expiration option for the [set_with_options](crate::StringCommands::set_with_options) command
 pub enum SetExpiration {
+    /// No expiration
+    None,
     /// Set the specified expire time, in seconds.
     Ex(u64),
     /// Set the specified expire time, in milliseconds.
@@ -712,9 +714,16 @@ pub enum SetExpiration {
     Pxat(u64),
 }
 
+impl Default for SetExpiration {
+    fn default() -> Self {
+        SetExpiration::None
+    }
+}
+
 impl IntoArgs for SetExpiration {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
+            SetExpiration::None => args,
             SetExpiration::Ex(duration) => ("EX", duration).into_args(args),
             SetExpiration::Px(duration) => ("PX", duration).into_args(args),
             SetExpiration::Exat(timestamp) => ("EXAT", timestamp).into_args(args),
@@ -725,17 +734,26 @@ impl IntoArgs for SetExpiration {
 
 /// Condition option for the [set_with_options](crate::StringCommands::set_with_options) command
 pub enum SetCondition {
+    /// No condition
+    None,
     /// Only set the key if it does not already exist.
     NX,
     /// Only set the key if it already exist.
     XX,
 }
 
-impl From<SetCondition> for BulkString {
-    fn from(cond: SetCondition) -> Self {
-        match cond {
-            SetCondition::NX => BulkString::Str("NX"),
-            SetCondition::XX => BulkString::Str("XX"),
+impl Default for SetCondition {
+    fn default() -> Self {
+        SetCondition::None
+    }
+}
+
+impl IntoArgs for SetCondition {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        match self {
+            SetCondition::None => args,
+            SetCondition::NX => args.arg("NX"),
+            SetCondition::XX => args.arg("XX"),
         }
     }
 }

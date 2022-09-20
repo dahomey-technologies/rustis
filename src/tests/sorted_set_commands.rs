@@ -206,14 +206,14 @@ async fn zinter() -> Result<()> {
         .send().await?;
 
     let result: Vec<String> = database
-        .zinter(["key1", "key2"], None as Option<f64>, None)
+        .zinter(["key1", "key2"], None as Option<f64>, Default::default())
         .send().await?;
     assert_eq!(2, result.len());
     assert_eq!("one".to_owned(), result[0]);
     assert_eq!("two".to_owned(), result[1]);
 
     let result: Vec<(String, f64)> = database
-        .zinter_with_scores(["key1", "key2"], None as Option<f64>, None)
+        .zinter_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
         .send().await?;
     assert_eq!(2, result.len());
     assert_eq!(("one".to_owned(), 2.0), result[0]);
@@ -244,7 +244,7 @@ async fn zinterstore() -> Result<()> {
         .send().await?;
 
     let len = database
-        .zinterstore("out", ["key1", "key2"], Some([2.0, 3.0]), None)
+        .zinterstore("out", ["key1", "key2"], Some([2.0, 3.0]), Default::default())
         .send().await?;
     assert_eq!(2, len);
 
@@ -823,7 +823,7 @@ async fn zunion() -> Result<()> {
         .send().await?;
 
     let result: Vec<String> = database
-        .zunion(["key1", "key2"], None as Option<f64>, None)
+        .zunion(["key1", "key2"], None as Option<f64>, Default::default())
         .send().await?;
     assert_eq!(3, result.len());
     assert_eq!("one".to_owned(), result[0]);
@@ -831,7 +831,7 @@ async fn zunion() -> Result<()> {
     assert_eq!("two".to_owned(), result[2]);
 
     let result: Vec<(String, f64)> = database
-        .zunion_with_scores(["key1", "key2"], None as Option<f64>, None)
+        .zunion_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
         .send().await?;
     assert_eq!(3, result.len());
     assert_eq!(("one".to_owned(), 2.0), result[0]);
@@ -863,7 +863,7 @@ async fn zunionstore() -> Result<()> {
         .send().await?;
 
     let len = database
-        .zunionstore("out", ["key1", "key2"], Some([2.0, 3.0]), None)
+        .zunionstore("out", ["key1", "key2"], Some([2.0, 3.0]), Default::default())
         .send().await?;
     assert_eq!(3, len);
 

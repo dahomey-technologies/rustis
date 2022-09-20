@@ -44,7 +44,7 @@ impl ConnectionMultiplexer {
         value.into_result()
     }
 
-    pub(crate) async fn send_and_forget(&self, database: usize, command: Command) -> Result<()> {
+    pub(crate) fn send_and_forget(&self, database: usize, command: Command) -> Result<()> {
         let message = Message::new(command)
             .database(database);
 

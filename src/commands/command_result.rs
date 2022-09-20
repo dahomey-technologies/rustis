@@ -59,7 +59,7 @@ where
     R: FromValue,
 {
     fn send(self) -> Future<'a, R>;
-    fn send_and_forget(self) -> Future<'a, ()>;
+    fn send_and_forget(self) -> Result<()>;
 }
 
 impl<'a, R> DatabaseCommandResult<'a, R> for CommandResult<'a, DatabaseResult, R>
@@ -78,14 +78,14 @@ where
         }
     }
 
-    fn send_and_forget(self) -> Future<'a, ()> {
+    fn send_and_forget(self) -> Result<()> {
         match self {
             CommandResult::Database(_, command, database) => {
-                Box::pin(database.send_and_forget(command))
+                database.send_and_forget(command)
             }
-            _ => Box::pin(ready(Err(Error::Internal(
+            _ => Err(Error::Internal(
                 "send_and_forget method must be called with a valid database".to_owned(),
-            )))),
+            )),
         }
     }
 }

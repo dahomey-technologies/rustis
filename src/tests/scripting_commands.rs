@@ -193,7 +193,7 @@ async fn function_stats() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.function_kill().send_and_forget().await?;
+    database.function_kill().send_and_forget()?;
 
     database.function_flush(FlushingMode::Sync).send().await?;
 

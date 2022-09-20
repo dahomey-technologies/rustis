@@ -60,7 +60,7 @@ impl Database {
     pub fn send_and_forget<'a>(
         &'a self,
         command: Command,
-    ) -> impl futures::Future<Output = Result<()>> + 'a {
+    ) -> Result<()> {
         self.multiplexer.send_and_forget(self.db, command)
     }
 

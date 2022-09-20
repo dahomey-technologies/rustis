@@ -109,10 +109,8 @@ async fn get_ex() -> Result<()> {
     let value: String = database.getex("key", GetExOptions::Ex(1)).send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Option<String> = database.get("key").send().await?;
-    assert_eq!(None, value);
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }
@@ -128,10 +126,8 @@ async fn get_pex() -> Result<()> {
     let value: String = database.getex("key", GetExOptions::Px(1000)).send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Option<String> = database.get("key").send().await?;
-    assert_eq!(None, value);
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }
@@ -158,10 +154,8 @@ async fn get_exat() -> Result<()> {
         .await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Option<String> = database.get("key").send().await?;
-    assert_eq!(None, value);
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }
@@ -188,10 +182,8 @@ async fn get_pxat() -> Result<()> {
         .await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Option<String> = database.get("key").send().await?;
-    assert_eq!(None, value);
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }
@@ -210,10 +202,8 @@ async fn get_persist() -> Result<()> {
     let value: String = database.getex("key", GetExOptions::Persist).send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: String = database.get("key").send().await?;
-    assert_eq!("value", value);
+    let ttl = database.pttl("key").send().await?;
+    assert_eq!(-1, ttl);
 
     Ok(())
 }
@@ -467,10 +457,8 @@ async fn psetex() -> Result<()> {
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }
@@ -496,10 +484,8 @@ async fn set_with_options() -> Result<()> {
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     // PX
     database
@@ -515,10 +501,8 @@ async fn set_with_options() -> Result<()> {
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     // EXAT
     let time = SystemTime::now()
@@ -540,10 +524,9 @@ async fn set_with_options() -> Result<()> {
         .await?;
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     // PXAT
     let time = SystemTime::now()
@@ -565,10 +548,9 @@ async fn set_with_options() -> Result<()> {
         .await?;
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     // NX
     database.del("key").send().await?;
@@ -639,10 +621,8 @@ async fn setex() -> Result<()> {
     let value: String = database.get("key").send().await?;
     assert_eq!("value", value);
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    let value: Value = database.get("key").send().await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    let ttl = database.pttl("key").send().await?;
+    assert!(ttl <= 1000);
 
     Ok(())
 }

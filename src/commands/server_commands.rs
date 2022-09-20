@@ -1,4 +1,25 @@
-use crate::{cmd, CommandSend, Future, IntoArgs};
+use crate::{cmd, CommandResult, IntoArgs, IntoCommandResult};
+
+/// A group of Redis commands related to Server Management
+/// # See Also
+/// [Redis Server Management Commands](https://redis.io/commands/?group=server)
+pub trait ServerCommands<T>: IntoCommandResult<T> {
+    /// Delete all the keys of the currently selected DB.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
+    fn flushdb(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+        self.into_command_result(cmd("FLUSHDB").arg(flushing_mode))
+    }
+
+    /// Delete all the keys of all the existing databases, not just the currently selected one.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/flushall/](https://redis.io/commands/flushall/)
+    fn flushall(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+        self.into_command_result(cmd("FLUSHALL").arg(flushing_mode))
+    }
+}
 
 /// Database flushing mode
 pub enum FlushingMode {
@@ -22,26 +43,5 @@ impl IntoArgs for FlushingMode {
             FlushingMode::Async => args.arg("ASYNC"),
             FlushingMode::Sync => args.arg("SYNC"),
         }
-    }
-}
-
-/// A group of Redis commands related to Server Management
-/// # See Also
-/// [Redis Server Management Commands](https://redis.io/commands/?group=server)
-pub trait ServerCommands: CommandSend {
-    /// Delete all the keys of the currently selected DB.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
-    fn flushdb(&self, flushing_mode: FlushingMode) -> Future<'_, ()> {
-        self.send_into(cmd("FLUSHDB").arg(flushing_mode))
-    }
-
-    /// Delete all the keys of all the existing databases, not just the currently selected one.
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/flushall/](https://redis.io/commands/flushall/)
-    fn flushall(&self, flushing_mode: FlushingMode) -> Future<'_, ()> {
-        self.send_into(cmd("FLUSHALL").arg(flushing_mode))
     }
 }

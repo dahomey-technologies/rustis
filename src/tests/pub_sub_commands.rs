@@ -1,6 +1,6 @@
 use crate::{
-    resp::BulkString, tests::get_default_addr, ConnectionMultiplexer, Error, GenericCommands,
-    PubSubCommands, Result, StringCommands,
+    resp::BulkString, tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, Error,
+    GenericCommands, PubSubCommands, Result, StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -14,7 +14,7 @@ async fn pubsub() -> Result<()> {
     let pub_sub = connection.get_pub_sub();
 
     // cleanup
-    database.del("key").await?;
+    database.del("key").send().await?;
 
     let mut pub_sub_stream = pub_sub.subscribe("mychannel").await?;
     pub_sub.publish("mychannel", "mymessage").await?;
@@ -25,8 +25,8 @@ async fn pubsub() -> Result<()> {
         .ok_or(Error::Internal("fail".to_owned()))?;
     assert!(matches!(value, Ok(BulkString::Binary(b)) if b.as_slice() == b"mymessage"));
 
-    database.set("key", "value").await?;
-    let value: String = database.get("key").await?;
+    database.set("key", "value").send().await?;
+    let value: String = database.get("key").send().await?;
     assert_eq!("value".to_string(), value);
 
     std::mem::drop(pub_sub_stream);

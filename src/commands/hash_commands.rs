@@ -1,14 +1,14 @@
 use crate::{
     cmd,
     resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
-    CommandSend, Future, KeyValueArgOrCollection, SingleArgOrCollection,
+    CommandResult, IntoCommandResult, KeyValueArgOrCollection, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Hashes
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hash)
-pub trait HashCommands: CommandSend {
+pub trait HashCommands<T>: IntoCommandResult<T> {
     /// Removes the specified fields from the hash stored at key.
     ///
     /// # Return
@@ -16,13 +16,13 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hdel/](https://redis.io/commands/hdel/)
-    fn hdel<K, F, C>(&self, key: K, fields: C) -> Future<'_, usize>
+    fn hdel<K, F, C>(&self, key: K, fields: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
         C: SingleArgOrCollection<F>,
     {
-        self.send_into(cmd("HDEL").arg(key).arg(fields))
+        self.into_command_result(cmd("HDEL").arg(key).arg(fields))
     }
 
     /// Returns if field is an existing field in the hash stored at key.
@@ -33,12 +33,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hexists/](https://redis.io/commands/hexists/)
-    fn hexists<K, F>(&self, key: K, field: F) -> Future<'_, bool>
+    fn hexists<K, F>(&self, key: K, field: F) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.send_into(cmd("HEXISTS").arg(key).arg(field))
+        self.into_command_result(cmd("HEXISTS").arg(key).arg(field))
     }
 
     /// Returns the value associated with field in the hash stored at key.
@@ -48,13 +48,13 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hget/](https://redis.io/commands/hget/)
-    fn hget<K, F, V>(&self, key: K, field: F) -> Future<'_, V>
+    fn hget<K, F, V>(&self, key: K, field: F) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: FromValue,
     {
-        self.send_into(cmd("HGET").arg(key).arg(field))
+        self.into_command_result(cmd("HGET").arg(key).arg(field))
     }
 
     /// Returns all fields and values of the hash stored at key.
@@ -64,14 +64,14 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hgetall/](https://redis.io/commands/hgetall/)
-    fn hgetall<K, F, V, A>(&self, key: K) -> Future<'_, A>
+    fn hgetall<K, F, V, A>(&self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
         V: FromValue,
         A: FromKeyValueValueArray<F, V>,
     {
-        self.send_into(cmd("HGETALL").arg(key))
+        self.into_command_result(cmd("HGETALL").arg(key))
     }
 
     /// Increments the number stored at field in the hash stored at key by increment.
@@ -81,12 +81,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hincrby/](https://redis.io/commands/hincrby/)
-    fn hincrby<K, F>(&self, key: K, field: F, increment: i64) -> Future<'_, i64>
+    fn hincrby<K, F>(&self, key: K, field: F, increment: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.send_into(cmd("HINCRBY").arg(key).arg(field).arg(increment))
+        self.into_command_result(cmd("HINCRBY").arg(key).arg(field).arg(increment))
     }
 
     /// Increment the specified field of a hash stored at key,
@@ -97,12 +97,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hincrbyfloat/](https://redis.io/commands/hincrbyfloat/)
-    fn hincrbyfloat<K, F>(&self, key: K, field: F, increment: f64) -> Future<'_, f64>
+    fn hincrbyfloat<K, F>(&self, key: K, field: F, increment: f64) -> CommandResult<T, f64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.send_into(cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
+        self.into_command_result(cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
     }
 
     /// Returns all field names in the hash stored at key.
@@ -112,13 +112,13 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hkeys/](https://redis.io/commands/hkeys/)
-    fn hkeys<K, F, A>(&self, key: K) -> Future<'_, A>
+    fn hkeys<K, F, A>(&self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
-        self.send_into(cmd("HKEYS").arg(key))
+        self.into_command_result(cmd("HKEYS").arg(key))
     }
 
     /// Returns the number of fields contained in the hash stored at key.
@@ -128,11 +128,11 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hlen/](https://redis.io/commands/hlen/)
-    fn hlen<K>(&self, key: K) -> Future<'_, usize>
+    fn hlen<K>(&self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.send_into(cmd("HLEN").arg(key))
+        self.into_command_result(cmd("HLEN").arg(key))
     }
 
     /// Returns the values associated with the specified fields in the hash stored at key.
@@ -142,7 +142,7 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hmget/](https://redis.io/commands/hmget/)
-    fn hmget<K, F, V, C, A>(&self, key: K, fields: C) -> Future<'_, A>
+    fn hmget<K, F, V, C, A>(&self, key: K, fields: C) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -150,7 +150,7 @@ pub trait HashCommands: CommandSend {
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
-        self.send_into(cmd("HMGET").arg(key).arg(fields))
+        self.into_command_result(cmd("HMGET").arg(key).arg(fields))
     }
 
     /// return random fields from the hash value stored at key.
@@ -160,12 +160,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    fn hrandfield<K, F>(&self, key: K) -> Future<'_, F>
+    fn hrandfield<K, F>(&self, key: K) -> CommandResult<T, F>
     where
         K: Into<BulkString>,
         F: FromValue,
     {
-        self.send_into(cmd("HRANDFIELD").arg(key))
+        self.into_command_result(cmd("HRANDFIELD").arg(key))
     }
 
     /// return random fields from the hash value stored at key.
@@ -178,13 +178,13 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    fn hrandfields<K, F, A>(&self, key: K, count: isize) -> Future<'_, A>
+    fn hrandfields<K, F, A>(&self, key: K, count: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
-        self.send_into(cmd("HRANDFIELD").arg(key).arg(count))
+        self.into_command_result(cmd("HRANDFIELD").arg(key).arg(count))
     }
 
     /// return random fields from the hash value stored at key.
@@ -198,14 +198,14 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hrandfield/](https://redis.io/commands/hrandfield/)
-    fn hrandfields_with_values<K, F, V, A>(&self, key: K, count: isize) -> Future<'_, A>
+    fn hrandfields_with_values<K, F, V, A>(&self, key: K, count: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
         V: FromValue,
         A: FromKeyValueValueArray<F, V>,
     {
-        self.send_into(cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"))
+        self.into_command_result(cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"))
     }
 
     /// Iterates fields of Hash types and their associated values.
@@ -222,14 +222,14 @@ pub trait HashCommands: CommandSend {
         cursor: u64,
         match_pattern: Option<P>,
         count: Option<usize>,
-    ) -> Future<'_, (u64, Vec<(F, V)>)>
+    ) -> CommandResult<T, (u64, Vec<(F, V)>)>
     where
         K: Into<BulkString>,
         P: Into<BulkString>,
         F: FromValue + Default,
         V: FromValue + Default,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("HSCAN")
                 .arg(key)
                 .arg(cursor)
@@ -245,14 +245,14 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hset/](https://redis.io/commands/hset/)
-    fn hset<K, F, V, I>(&self, key: K, items: I) -> Future<'_, usize>
+    fn hset<K, F, V, I>(&self, key: K, items: I) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: Into<BulkString>,
         I: KeyValueArgOrCollection<F, V>,
     {
-        self.send_into(cmd("HSET").arg(key).arg(items))
+        self.into_command_result(cmd("HSET").arg(key).arg(items))
     }
 
     /// Sets field in the hash stored at key to value, only if field does not yet exist.
@@ -263,13 +263,13 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hsetnx/](https://redis.io/commands/hsetnx/)
-    fn hsetnx<K, F, V>(&self, key: K, field: F, value: V) -> Future<'_, bool>
+    fn hsetnx<K, F, V>(&self, key: K, field: F, value: V) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.send_into(cmd("HSETNX").arg(key).arg(field).arg(value))
+        self.into_command_result(cmd("HSETNX").arg(key).arg(field).arg(value))
     }
 
     /// Returns the string length of the value associated with field in the hash stored at key.
@@ -280,12 +280,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hstrlen/](https://redis.io/commands/hstrlen/)
-    fn hstrlen<K, F>(&self, key: K, field: F) -> Future<'_, usize>
+    fn hstrlen<K, F>(&self, key: K, field: F) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.send_into(cmd("HSTRLEN").arg(key).arg(field))
+        self.into_command_result(cmd("HSTRLEN").arg(key).arg(field))
     }
 
     /// list of values in the hash, or an empty list when key does not exist.
@@ -295,12 +295,12 @@ pub trait HashCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/hvals/](https://redis.io/commands/hvals/)
-    fn hvals<K, V, A>(&self, key: K) -> Future<'_, A>
+    fn hvals<K, V, A>(&self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
-        self.send_into(cmd("HVALS").arg(key))
+        self.into_command_result(cmd("HVALS").arg(key))
     }
 }

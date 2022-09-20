@@ -1,14 +1,15 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    ArgsOrCollection, CommandSend, Error, Future, IntoArgs, Result, SingleArgOrCollection,
+    ArgsOrCollection, CommandResult, Error, IntoArgs, IntoCommandResult, Result,
+    SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Geospatial indices
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)
-pub trait GeoCommands: CommandSend {
+pub trait GeoCommands<T>: IntoCommandResult<T> {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
@@ -22,14 +23,20 @@ pub trait GeoCommands: CommandSend {
         key: K,
         condition: Option<GeoAddCondition>,
         change: bool,
-        items: I
-    ) -> Future<'_, usize>
+        items: I,
+    ) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, f64, M)>,
     {
-        self.send_into(cmd("GEOADD").arg(key).arg(condition).arg_if(change, "CH").arg(items))
+        self.into_command_result(
+            cmd("GEOADD")
+                .arg(key)
+                .arg(condition)
+                .arg_if(change, "CH")
+                .arg(items),
+        )
     }
 
     /// Return the distance between two members in the geospatial index
@@ -46,12 +53,12 @@ pub trait GeoCommands: CommandSend {
         member1: M,
         member2: M,
         unit: GeoUnit,
-    ) -> Future<'_, Option<f64>>
+    ) -> CommandResult<T, Option<f64>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.send_into(cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit))
+        self.into_command_result(cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit))
     }
 
     /// Return valid [Geohash](https://en.wikipedia.org/wiki/Geohash) strings representing the position of one or more elements
@@ -62,13 +69,13 @@ pub trait GeoCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/geohash/](https://redis.io/commands/geohash/)
-    fn geohash<K, M, C>(&self, key: K, members: C) -> Future<'_, Vec<String>>
+    fn geohash<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<String>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.send_into(cmd("GEOHASH").arg(key).arg(members))
+        self.into_command_result(cmd("GEOHASH").arg(key).arg(members))
     }
 
     /// Return the positions (longitude,latitude) of all the specified members
@@ -81,13 +88,13 @@ pub trait GeoCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/geopos/](https://redis.io/commands/geopos/)
-    fn geopos<K, M, C>(&self, key: K, members: C) -> Future<'_, Vec<Option<(f64, f64)>>>
+    fn geopos<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.send_into(cmd("GEOPOS").arg(key).arg(members))
+        self.into_command_result(cmd("GEOPOS").arg(key).arg(members))
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
@@ -105,27 +112,22 @@ pub trait GeoCommands: CommandSend {
         by: GeoSearchBy,
         order: Option<GeoSearchOrder>,
         count: Option<(usize, bool)>,
-    ) -> Future<'_, A>
+    ) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         M1: Into<BulkString>,
         M2: FromValue,
         A: FromSingleValueArray<M2>,
     {
-        self.send_into(
-            cmd("GEOSEARCH")
-                .arg(key)
-                .arg(from)
-                .arg(by)
-                .arg(order)
-                .arg(count.map(|(count, any)| {
-                    if any {
-                        (count, Some("ANY"))
-                    } else {
-                        (count, None)
-                    }
-                })),
-        )
+        self.into_command_result(cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(order).arg(
+            count.map(|(count, any)| {
+                if any {
+                    (count, Some("ANY"))
+                } else {
+                    (count, None)
+                }
+            }),
+        ))
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
@@ -147,14 +149,14 @@ pub trait GeoCommands: CommandSend {
         with_coord: bool,
         with_dist: bool,
         with_hash: bool,
-    ) -> Future<'_, A>
+    ) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         M1: Into<BulkString>,
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("GEOSEARCH")
                 .arg(key)
                 .arg(from)
@@ -189,13 +191,13 @@ pub trait GeoCommands: CommandSend {
         order: Option<GeoSearchOrder>,
         count: Option<(usize, bool)>,
         store_dist: bool,
-    ) -> Future<'_, usize>
+    ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("GEOSEARCHSTORE")
                 .arg(destination)
                 .arg(source)

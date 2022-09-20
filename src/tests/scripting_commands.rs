@@ -1,6 +1,7 @@
 use crate::{
     resp::BulkString, spawn, tests::get_default_addr, CallBuilder, ConnectionMultiplexer,
-    FlushingMode, LibraryInfo, Result, ScriptingCommands, ServerCommands, StringCommands, NONE_ARG,
+    DatabaseCommandResult, FlushingMode, LibraryInfo, Result, ScriptingCommands, ServerCommands,
+    StringCommands, NONE_ARG,
 };
 use serial_test::serial;
 
@@ -13,23 +14,23 @@ async fn eval() -> Result<()> {
 
     let result: String = database
         .eval(CallBuilder::script("return ARGV[1]").args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
-    database.set("key", "hello").await?;
+    database.set("key", "hello").send().await?;
     let result: String = database
         .eval(CallBuilder::script("return redis.call('GET', KEYS[1])").keys("key"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
-    database.set("key", "hello").await?;
+    database.set("key", "hello").send().await?;
     let result: String = database
         .eval(
             CallBuilder::script("return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"")
                 .keys("key")
                 .args("world"),
         )
-        .await?;
+        .send().await?;
     assert_eq!("hello world!", result);
 
     Ok(())
@@ -42,11 +43,11 @@ async fn evalsha() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let sha1: String = database.script_load("return ARGV[1]").await?;
+    let sha1: String = database.script_load("return ARGV[1]").send().await?;
 
     let result: String = database
         .evalsha(CallBuilder::sha1(sha1).args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -59,12 +60,12 @@ async fn fcall() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
+    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
     let result: String = database
         .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -77,19 +78,19 @@ async fn function_delete() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
+    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
     let result: String = database
         .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
-    database.function_delete("mylib").await?;
+    database.function_delete("mylib").send().await?;
 
     let result: Result<String> = database
         .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await;
+        .send().await;
     assert!(result.is_err());
 
     Ok(())
@@ -102,28 +103,28 @@ async fn function_dump() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.flushdb(FlushingMode::Sync).await?;
+    database.flushdb(FlushingMode::Sync).send().await?;
 
-    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
+    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
     let result: String = database
         .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
-    let serialized_payload: BulkString = database.function_dump().await?;
+    let serialized_payload: BulkString = database.function_dump().send().await?;
     assert!(serialized_payload.len() > 0);
 
-    database.function_delete("mylib").await?;
+    database.function_delete("mylib").send().await?;
 
     database
         .function_restore(serialized_payload, Default::default())
-        .await?;
+        .send().await?;
 
     let result: String = database
         .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+        .send().await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -136,12 +137,12 @@ async fn function_flush() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
+    let library: String = database.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
-    database.function_flush(FlushingMode::Sync).await?;
+    database.function_flush(FlushingMode::Sync).send().await?;
 
-    let list: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).await?;
+    let list: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).send().await?;
     assert_eq!(0, list.len());
 
     Ok(())
@@ -154,13 +155,13 @@ async fn function_list() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.function_flush(FlushingMode::Sync).await?;
+    database.function_flush(FlushingMode::Sync).send().await?;
 
     let code = "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) return args[1] end, flags={ 'no-writes' }, description='My description'}";
-    let library: String = database.function_load(true, code).await?;
+    let library: String = database.function_load(true, code).send().await?;
     assert_eq!("mylib", library);
 
-    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).await?;
+    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).send().await?;
     assert_eq!(1, libs.len());
     assert_eq!("mylib", libs[0].library_name);
     assert_eq!("LUA", libs[0].engine);
@@ -171,7 +172,7 @@ async fn function_list() -> Result<()> {
     assert_eq!("no-writes", libs[0].functions[0].flags[0]);
     assert_eq!(None, libs[0].library_code);
 
-    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, true).await?;
+    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, true).send().await?;
     assert_eq!(1, libs.len());
     assert_eq!("mylib", libs[0].library_name);
     assert_eq!("LUA", libs[0].engine);
@@ -192,12 +193,12 @@ async fn function_stats() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let _ = database.function_kill().await;
+    database.function_kill().send_and_forget().await?;
 
-    database.function_flush(FlushingMode::Sync).await?;
+    database.function_flush(FlushingMode::Sync).send().await?;
 
     let code = "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) while (true) do end return args[1] end, flags={ 'no-writes' }, description='My description'}";
-    let library: String = database.function_load(true, code).await?;
+    let library: String = database.function_load(true, code).send().await?;
     assert_eq!("mylib", library);
 
     spawn(async move {
@@ -207,7 +208,7 @@ async fn function_stats() -> Result<()> {
 
             let _ = database
                 .fcall::<String>(CallBuilder::function("myfunc").args("hello"))
-                .await?;
+                .send().await?;
 
             Ok(())
         }
@@ -217,7 +218,7 @@ async fn function_stats() -> Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let function_stat = database.function_stats().await?;
+    let function_stat = database.function_stats().send().await?;
     assert!(function_stat.running_script.is_some());
     if let Some(running_script) = function_stat.running_script {
         assert_eq!("myfunc", running_script.name);
@@ -232,7 +233,7 @@ async fn function_stats() -> Result<()> {
     assert_eq!(1, function_stat.engines["LUA"].libraries_count);
     assert_eq!(1, function_stat.engines["LUA"].functions_count);
 
-    database.function_kill().await?;
+    database.function_kill().send().await?;
 
     Ok(())
 }
@@ -244,14 +245,14 @@ async fn script_exists() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let sha11: String = database.script_load("return ARGV[1]").await?;
+    let sha11: String = database.script_load("return ARGV[1]").send().await?;
     let sha12: String = database
         .script_load("return redis.call('GET', KEYS[1])")
-        .await?;
+        .send().await?;
 
     let result = database
         .script_exists([sha11, sha12, "unknwon".to_owned()])
-        .await?;
+        .send().await?;
     assert_eq!([true, true, false], &result[..]);
 
     Ok(())
@@ -264,14 +265,14 @@ async fn script_flush() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let sha11: String = database.script_load("return ARGV[1]").await?;
+    let sha11: String = database.script_load("return ARGV[1]").send().await?;
     let sha12: String = database
         .script_load("return redis.call('GET', KEYS[1])")
-        .await?;
+        .send().await?;
 
-    database.script_flush(FlushingMode::Sync).await?;
+    database.script_flush(FlushingMode::Sync).send().await?;
 
-    let result = database.script_exists([sha11, sha12]).await?;
+    let result = database.script_exists([sha11, sha12]).send().await?;
     assert_eq!([false, false], &result[..]);
 
     Ok(())
@@ -284,11 +285,11 @@ async fn script_kill() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let _ = database.script_kill().await;
+    let _ = database.script_kill().send().await;
 
     let sha1: String = database
         .script_load("while (true) do end return ARGV[1]")
-        .await?;
+        .send().await?;
 
     spawn(async move {
         async fn blocking_script(sha1: String) -> Result<()> {
@@ -297,7 +298,7 @@ async fn script_kill() -> Result<()> {
 
             let _ = database
                 .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
-                .await?;
+                .send().await?;
 
             Ok(())
         }
@@ -307,7 +308,7 @@ async fn script_kill() -> Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    database.script_kill().await?;
+    database.script_kill().send().await?;
 
     Ok(())
 }

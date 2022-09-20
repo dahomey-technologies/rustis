@@ -1,14 +1,14 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    CommandSend, Future, SingleArgOrCollection,
+    CommandResult, IntoCommandResult, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Lists
 ///
 /// # See Also
 /// [Redis List Commands](https://redis.io/commands/?group=list)
-pub trait ListCommands: CommandSend {
+pub trait ListCommands<T>: IntoCommandResult<T> {
     /// Returns the element at index index in the list stored at key.
     ///
     /// # Return
@@ -16,12 +16,12 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lindex/](https://redis.io/commands/lindex/)
-    fn lindex<K, E>(&self, key: K, index: isize) -> Future<'_, E>
+    fn lindex<K, E>(&self, key: K, index: isize) -> CommandResult<T, E>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.send_into(cmd("LINDEX").arg(key).arg(index))
+        self.into_command_result(cmd("LINDEX").arg(key).arg(index))
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -31,12 +31,18 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/linsert/](https://redis.io/commands/linsert/)
-    fn linsert<K, E>(&self, key: K, where_: LInsertWhere, pivot: E, element: E) -> Future<'_, usize>
+    fn linsert<K, E>(
+        &self,
+        key: K,
+        where_: LInsertWhere,
+        pivot: E,
+        element: E,
+    ) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.send_into(cmd("LINSERT").arg(key).arg(where_).arg(pivot).arg(element))
+        self.into_command_result(cmd("LINSERT").arg(key).arg(where_).arg(pivot).arg(element))
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -46,11 +52,11 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/llen/](https://redis.io/commands/llen/)
-    fn llen<K>(&self, key: K) -> Future<'_, usize>
+    fn llen<K>(&self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.send_into(cmd("LLEN").arg(key))
+        self.into_command_result(cmd("LLEN").arg(key))
     }
 
     /// Atomically returns and removes the first/last element (head/tail depending on the wherefrom argument)
@@ -68,13 +74,13 @@ pub trait ListCommands: CommandSend {
         destination: D,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
-    ) -> Future<'_, E>
+    ) -> CommandResult<T, E>
     where
         S: Into<BulkString>,
         D: Into<BulkString>,
         E: FromValue,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("LMOVE")
                 .arg(source)
                 .arg(destination)
@@ -95,13 +101,13 @@ pub trait ListCommands: CommandSend {
         keys: C,
         where_: LMoveWhere,
         count: usize,
-    ) -> Future<'_, (String, Vec<E>)>
+    ) -> CommandResult<T, (String, Vec<E>)>
     where
         K: Into<BulkString>,
         E: FromValue,
         C: SingleArgOrCollection<K>,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("LMPOP")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -118,13 +124,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
-    fn lpop<K, E, A>(&self, key: K, count: usize) -> Future<'_, A>
+    fn lpop<K, E, A>(&self, key: K, count: usize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
         A: FromSingleValueArray<E>,
     {
-        self.send_into(cmd("LPOP").arg(key).arg(count))
+        self.into_command_result(cmd("LPOP").arg(key).arg(count))
     }
 
     /// Returns the index of matching elements inside a Redis list.
@@ -140,12 +146,12 @@ pub trait ListCommands: CommandSend {
         element: E,
         rank: Option<usize>,
         max_len: Option<usize>,
-    ) -> Future<'_, Option<usize>>
+    ) -> CommandResult<T, Option<usize>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("LPOS")
                 .arg(key)
                 .arg(element)
@@ -169,13 +175,13 @@ pub trait ListCommands: CommandSend {
         num_matches: usize,
         rank: Option<usize>,
         max_len: Option<usize>,
-    ) -> Future<'_, A>
+    ) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
-        A: FromSingleValueArray<usize>
+        A: FromSingleValueArray<usize>,
     {
-        self.send_into(
+        self.into_command_result(
             cmd("LPOS")
                 .arg(key)
                 .arg(element)
@@ -193,13 +199,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
-    fn lpush<K, E, C>(&self, key: K, elements: C) -> Future<'_, usize>
+    fn lpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.send_into(cmd("LPUSH").arg(key).arg(elements))
+        self.into_command_result(cmd("LPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the head of the list stored at key,
@@ -210,13 +216,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpushx/](https://redis.io/commands/lpushx/)
-    fn lpushx<K, E, C>(&self, key: K, elements: C) -> Future<'_, usize>
+    fn lpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.send_into(cmd("LPUSHX").arg(key).arg(elements))
+        self.into_command_result(cmd("LPUSHX").arg(key).arg(elements))
     }
 
     /// Returns the specified elements of the list stored at key.
@@ -226,13 +232,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lrange/](https://redis.io/commands/lrange/)
-    fn lrange<K, E, A>(&self, key: K, start: isize, stop: isize) -> Future<'_, A>
+    fn lrange<K, E, A>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
         A: FromSingleValueArray<E>,
     {
-        self.send_into(cmd("LRANGE").arg(key).arg(start).arg(stop))
+        self.into_command_result(cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
 
     /// Removes the first count occurrences of elements equal to element from the list stored at key.
@@ -242,35 +248,35 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/lrem/](https://redis.io/commands/lrem/)
-    fn lrem<K, E>(&self, key: K, count: isize, element: E) -> Future<'_, usize>
+    fn lrem<K, E>(&self, key: K, count: isize, element: E) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.send_into(cmd("LREM").arg(key).arg(count).arg(element))
+        self.into_command_result(cmd("LREM").arg(key).arg(count).arg(element))
     }
 
     /// Sets the list element at index to element.
     ///
     /// # See Also
     /// [https://redis.io/commands/lset/](https://redis.io/commands/lset/)
-    fn lset<K, E>(&self, key: K, index: isize, element: E) -> Future<'_, ()>
+    fn lset<K, E>(&self, key: K, index: isize, element: E) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.send_into(cmd("LSET").arg(key).arg(index).arg(element))
+        self.into_command_result(cmd("LSET").arg(key).arg(index).arg(element))
     }
 
     /// Trim an existing list so that it will contain only the specified range of elements specified.
     ///
     /// # See Also
     /// [https://redis.io/commands/ltrim/](https://redis.io/commands/ltrim/)
-    fn ltrim<K>(&self, key: K, start: isize, stop: isize) -> Future<'_, ()>
+    fn ltrim<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
     {
-        self.send_into(cmd("LTRIM").arg(key).arg(start).arg(stop))
+        self.into_command_result(cmd("LTRIM").arg(key).arg(start).arg(stop))
     }
 
     /// Removes and returns the first elements of the list stored at key.
@@ -280,13 +286,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpop/](https://redis.io/commands/rpop/)
-    fn rpop<K, E, C>(&self, key: K, count: usize) -> Future<'_, C>
+    fn rpop<K, E, C>(&self, key: K, count: usize) -> CommandResult<T, C>
     where
         K: Into<BulkString>,
         E: FromValue,
         C: FromSingleValueArray<E>,
     {
-        self.send_into(cmd("RPOP").arg(key).arg(count))
+        self.into_command_result(cmd("RPOP").arg(key).arg(count))
     }
 
     /// Insert all the specified values at the tail of the list stored at key
@@ -296,13 +302,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpush/](https://redis.io/commands/rpush/)
-    fn rpush<K, E, C>(&self, key: K, elements: C) -> Future<'_, usize>
+    fn rpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.send_into(cmd("RPUSH").arg(key).arg(elements))
+        self.into_command_result(cmd("RPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the tail of the list stored at key,
@@ -313,13 +319,13 @@ pub trait ListCommands: CommandSend {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpushx/](https://redis.io/commands/rpushx/)
-    fn rpushx<K, E, C>(&self, key: K, elements: C) -> Future<'_, usize>
+    fn rpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.send_into(cmd("RPUSHX").arg(key).arg(elements))
+        self.into_command_result(cmd("RPUSHX").arg(key).arg(elements))
     }
 }
 

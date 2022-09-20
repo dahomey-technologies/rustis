@@ -1,4 +1,7 @@
-use crate::{cmd, ConnectionMultiplexer, Result, StringCommands, tests::get_default_addr};
+use crate::{
+    cmd, tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, Result,
+    StringCommands,
+};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -7,21 +10,21 @@ use serial_test::serial;
 async fn database() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database0 = connection.get_database(0);
-    database0.set("key", "value0").await?;
+    database0.set("key", "value0").send().await?;
 
-    assert_eq!("value0", &database0.get::<_, String>("key").await?);
+    assert_eq!("value0", &database0.get::<_, String>("key").send().await?);
 
     let database1 = connection.get_database(1);
-    database1.set("key", "value1").await?;
+    database1.set("key", "value1").send().await?;
 
-    assert_eq!("value0", &database0.get::<_, String>("key").await?);
-    assert_eq!("value1", &database1.get::<_, String>("key").await?);
+    assert_eq!("value0", &database0.get::<_, String>("key").send().await?);
+    assert_eq!("value1", &database1.get::<_, String>("key").send().await?);
 
     let database0 = connection.get_database(0);
-    database0.set("key", "value00").await?;
+    database0.set("key", "value00").send().await?;
 
-    assert_eq!("value00", &database0.get::<_, String>("key").await?);
-    assert_eq!("value1", &database1.get::<_, String>("key").await?);
+    assert_eq!("value00", &database0.get::<_, String>("key").send().await?);
+    assert_eq!("value1", &database1.get::<_, String>("key").send().await?);
 
     Ok(())
 }
@@ -33,11 +36,11 @@ async fn send() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.set("key1", "value1").await?;
-    database.set("key2", "value2").await?;
-    database.set("key3", "value3").await?;
-    database.set("key4", "value4").await?;
-    database.set("key5", "value5").await?;
+    database.set("key1", "value1").send().await?;
+    database.set("key2", "value2").send().await?;
+    database.set("key3", "value3").send().await?;
+    database.set("key4", "value4").send().await?;
+    database.set("key5", "value5").send().await?;
 
     let values: Vec<String> = database
         .send(

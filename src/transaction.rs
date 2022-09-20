@@ -1,103 +1,95 @@
 use crate::{
     cmd,
-    resp::{Array, ResultValueExt, Value},
-    BitmapCommands, Command, CommandSend, Database, Error, Future, GenericCommands, GeoCommands,
-    HashCommands, ListCommands, Result, ServerCommands, SetCommands, SortedSetCommands,
-    StringCommands, ValueReceiver, ValueSender,
+    resp::{Array, FromValue, Value, ResultValueExt},
+    BitmapCommands, Command, CommandResult, Database, Error, Future, GenericCommands, GeoCommands,
+    HashCommands, IntoCommandResult, ListCommands, Result, ScriptingCommands, ServerCommands,
+    SetCommands, SortedSetCommands, StringCommands,
 };
-use futures::channel::oneshot;
-use std::{collections::VecDeque, sync::Mutex};
+use std::{
+    iter::zip,
+    marker::PhantomData,
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
-pub struct Transaction {
+pub struct Transaction<T> {
+    phantom: PhantomData<T>,
     database: Database,
-    command_queue: Mutex<VecDeque<Command>>,
-    value_sender_queue: Mutex<VecDeque<ValueSender>>,
+    forget_flags: Arc<Mutex<Vec<bool>>>,
 }
 
-impl Transaction {
-    pub fn new(database: Database) -> Self {
-        Self {
+impl<T: Send + Sync> Transaction<T> {
+    pub(crate) async fn initialize(database: Database) -> Result<Self> {
+        database.send(cmd("MULTI")).await?.into::<()>()?;
+        Ok(Self {
+            phantom: PhantomData,
             database,
-            command_queue: Mutex::new(VecDeque::new()),
-            value_sender_queue: Mutex::new(VecDeque::new()),
+            forget_flags: Arc::new(Mutex::new(Vec::new())),
+        })
+    }
+
+    pub(crate) fn from_transaction<U: Send + Sync>(transaction: &Transaction<U>) -> Self {
+        Self {
+            phantom: PhantomData,
+            database: transaction.database.clone(),
+            forget_flags: transaction.forget_flags.clone(),
         }
     }
 
-    pub fn send<'a>(
-        &'a self,
-        command: Command,
-    ) -> impl futures::Future<Output = Result<Value>> + 'a {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-
-        self.command_queue.lock().unwrap().push_back(command);
-        self.value_sender_queue
-            .lock()
-            .unwrap()
-            .push_back(value_sender);
-
-        async fn await_for_result(value_receiver: ValueReceiver) -> Result<Value> {
-            let value = value_receiver.await?;
-            value.into_result()
-        }
-
-        await_for_result(value_receiver)
+    pub(crate) async fn internal_queue(&self, command: Command) -> Result<()> {
+        self.forget_flags.lock().unwrap().push(false);
+        self.database.send(command).await?.into()
     }
 
-    pub async fn execute(&self) -> Result<()> {
-        let mut commands = self
-            .command_queue
-            .lock()
-            .unwrap()
-            .drain(..)
-            .collect::<VecDeque<_>>();
-        let mut value_senders = self
-            .value_sender_queue
-            .lock()
-            .unwrap()
-            .drain(..)
-            .collect::<VecDeque<_>>();
+    pub(crate) async fn internal_queue_and_forget(&self, command: Command) -> Result<()> {
+        self.forget_flags.lock().unwrap().push(true);
+        self.database.send(command).await?.into()
+    }
 
-        self.database.send(cmd("MULTI")).await?;
+    pub(crate) fn internal_exec<R: FromValue>(&self) -> Future<'_, R> {
+        Box::pin(async move {
+            let result = self.database.send(cmd("EXEC")).await?;
 
-        while let Some(command) = commands.pop_front() {
-            self.database.send(command).await.into_result()?;
-        }
-
-        let result = self.database.send(cmd("EXEC")).await?;
-
-        match result {
-            Value::Array(Array::Vec(results)) => {
-                for value in results.into_iter() {
-                    match value_senders.pop_front() {
-                        Some(value_sender) => {
-                            let _ = value_sender.send(value.into());
-                        }
-                        None => {
-                            return Err(Error::Internal("Unexpected transaction reply".to_owned()))
-                        }
+            match result {
+                Value::Array(Array::Vec(results)) => {
+                    let forget_flags = self.forget_flags.lock().unwrap();
+                    let forget_flags = forget_flags.deref();
+                    let mut filtered_results = zip(results, forget_flags.iter())
+                        .filter_map(
+                            |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
+                        )
+                        .collect::<Vec<_>>();
+                    
+                    if filtered_results.len() == 1 {
+                        let value = filtered_results.pop().unwrap();
+                        Ok(value).into_result()?.into()
+                    } else {
+                        Value::Array(Array::Vec(filtered_results)).into()
                     }
                 }
+                _ => Err(Error::Internal("Unexpected transaction reply".to_owned())),
             }
-            Value::Error(e) => return Err(Error::Redis(e)),
-            _ => return Err(Error::Internal("Unexpected transaction reply".to_owned())),
-        }
+        })
+    }
 
-        Ok(())
+    pub async fn discard(self) -> Result<()> {
+        self.database.send(cmd("DISCARD")).await?.into()
     }
 }
 
-impl CommandSend for Transaction {
-    fn send(&self, command: Command) -> Future<'_, Value> {
-        Box::pin(self.send(command))
+impl<T: Send + Sync> IntoCommandResult<T> for Transaction<T> {
+    fn into_command_result<R: FromValue>(&self, command: Command) -> CommandResult<T, R> {
+        CommandResult::from_transaction(command, &self)
     }
 }
 
-impl BitmapCommands for Transaction {}
-impl GenericCommands for Transaction {}
-impl GeoCommands for Transaction {}
-impl HashCommands for Transaction {}
-impl ListCommands for Transaction {}
-impl SetCommands for Transaction {}
-impl SortedSetCommands for Transaction {}
-impl ServerCommands for Transaction {}
-impl StringCommands for Transaction {}
+impl<T: Send + Sync> BitmapCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> GenericCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> GeoCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> HashCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> ListCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> SetCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> ScriptingCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> SortedSetCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> ServerCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> StringCommands<T> for Transaction<T> {}

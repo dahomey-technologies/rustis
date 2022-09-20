@@ -1,4 +1,7 @@
-use crate::{tests::get_default_addr, ConnectionMultiplexer, Result, StringCommands, ListCommands};
+use crate::{
+    tests::get_default_addr, ConnectionMultiplexer, ListCommands, Result, StringCommands,
+    TransactionCommandResult, TransactionExt, IntoCommandResult, cmd, resp::Value, Error,
+};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -8,19 +11,21 @@ async fn transaction() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let transaction = database.create_transaction();
+    let transaction = database.create_transaction().await?;
 
-    let fut1 = transaction.set("key1", "value1");
-    let fut2 = transaction.set("key2", "value2");
-    let fut3 = transaction.get("key1");
+    let value: String = transaction
+        .set("key1", "value1")
+        .queue_and_forget()
+        .await?
+        .set("key2", "value2")
+        .queue_and_forget()
+        .await?
+        .get("key1")
+        .queue()
+        .await?
+        .exec()
+        .await?;
 
-    transaction.execute().await?;
-
-    let (result1, result2, result3) = tokio::join!(fut1, fut2, fut3);
-
-    result1?;
-    result2?;
-    let value: String = result3?;
     assert_eq!("value1", value);
 
     Ok(())
@@ -33,17 +38,29 @@ async fn transaction_error() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    let transaction = database.create_transaction();
+    let transaction = database.create_transaction().await?;
 
-    let fut1 = transaction.set("key1", "abc");
-    let fut2 = transaction.lpop::<_, String, Vec<_>>("key1", 1);
+    let result = transaction
+        .into_command_result::<Value>(cmd("UNKNOWN")).queue().await;
+    assert!(
+        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR unknown command 'UNKNOWN'"))
+    );
 
-    transaction.execute().await?;
+    transaction.discard().await?;
 
-    let (result1, result2) = tokio::join!(fut1, fut2);
+    let transaction = database.create_transaction().await?;
 
-    assert!(result1.is_ok());
-    assert!(result2.is_err());
+    let result = transaction
+        .set("key1", "abc")
+        .queue_and_forget()
+        .await?
+        .lpop::<_, String, Vec<_>>("key1", 1)
+        .queue()
+        .await?
+        .exec()
+        .await;
+
+    assert!(result.is_err());
 
     Ok(())
 }

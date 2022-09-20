@@ -1,7 +1,9 @@
 use crate::{
-    resp::Value, BitmapCommands, Command, CommandSend, ConnectionMultiplexer, Future,
-    GenericCommands, GeoCommands, HashCommands, ListCommands, Result, ScriptingCommands,
+    resp::{FromValue, Value},
+    BitmapCommands, Command, CommandResult, ConnectionMultiplexer, DatabaseResult, GenericCommands,
+    GeoCommands, HashCommands, IntoCommandResult, ListCommands, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StringCommands, Transaction,
+    TransactionResult0,
 };
 
 #[derive(Clone)]
@@ -31,14 +33,22 @@ impl Database {
     /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [BulkString](crate::resp::BulkString).
     ///
     /// # Example
-    /// ```ignore
-    /// let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
-    /// let database = connection.get_default_database();
+    /// ```
+    /// use redis_driver::{cmd, ConnectionMultiplexer, Result};
     ///
-    /// let values: Vec<String> = database
-    ///     .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
-    ///     .await?
-    ///     .into()?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
+    ///     let database = connection.get_default_database();
+    ///
+    ///    let values: Vec<String> = database
+    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
+    ///         .await?
+    ///         .into()?;
+    ///     println!("{:?}", values);
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     pub fn send<'a>(
         &'a self,
@@ -47,24 +57,34 @@ impl Database {
         self.multiplexer.send(self.db, command)
     }
 
-    pub fn create_transaction(&self) -> Transaction {
-        Transaction::new(self.clone())
+    pub fn send_and_forget<'a>(
+        &'a self,
+        command: Command,
+    ) -> impl futures::Future<Output = Result<()>> + 'a {
+        self.multiplexer.send_and_forget(self.db, command)
+    }
+
+    pub async fn create_transaction(&self) -> Result<Transaction<TransactionResult0>> {
+        Transaction::initialize(self.clone()).await
     }
 }
 
-impl CommandSend for Database {
-    fn send(&self, command: Command) -> Future<'_, Value> {
-        Box::pin(self.send(command))
+impl IntoCommandResult<DatabaseResult> for Database {
+    fn into_command_result<R: FromValue>(
+        &self,
+        command: Command,
+    ) -> CommandResult<DatabaseResult, R> {
+        CommandResult::from_database(command, &self)
     }
 }
 
-impl BitmapCommands for Database {}
-impl GenericCommands for Database {}
-impl GeoCommands for Database {}
-impl HashCommands for Database {}
-impl ListCommands for Database {}
-impl ScriptingCommands for Database {}
-impl ServerCommands for Database {}
-impl SetCommands for Database {}
-impl SortedSetCommands for Database {}
-impl StringCommands for Database {}
+impl BitmapCommands<DatabaseResult> for Database {}
+impl GenericCommands<DatabaseResult> for Database {}
+impl GeoCommands<DatabaseResult> for Database {}
+impl HashCommands<DatabaseResult> for Database {}
+impl ListCommands<DatabaseResult> for Database {}
+impl ScriptingCommands<DatabaseResult> for Database {}
+impl ServerCommands<DatabaseResult> for Database {}
+impl SetCommands<DatabaseResult> for Database {}
+impl SortedSetCommands<DatabaseResult> for Database {}
+impl StringCommands<DatabaseResult> for Database {}

@@ -44,6 +44,15 @@ impl ConnectionMultiplexer {
         value.into_result()
     }
 
+    pub(crate) async fn send_and_forget(&self, database: usize, command: Command) -> Result<()> {
+        let message = Message::new(command)
+            .database(database);
+
+        self.server_end_point.send(message)?;
+
+        Ok(())
+    }   
+
     pub(crate) async fn subscribe(&self, channel: BulkString) -> Result<PubSubStream> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();

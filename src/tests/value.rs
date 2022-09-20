@@ -1,7 +1,7 @@
 use crate::{
     resp::{Array, Value},
     tests::get_default_addr,
-    ConnectionMultiplexer, GenericCommands, Result, SetCommands,
+    ConnectionMultiplexer, DatabaseCommandResult, GenericCommands, Result, SetCommands,
 };
 use serial_test::serial;
 use std::collections::{BTreeSet, HashSet};
@@ -13,25 +13,25 @@ async fn from_single_value_array() -> Result<()> {
     let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
     let database = connection.get_default_database();
 
-    database.del("key").await?;
+    database.del("key").send().await?;
 
     database
         .sadd("key", ["member1", "member2", "member3"])
-        .await?;
+        .send().await?;
 
-    let members: Vec<String> = database.smembers("key").await?;
+    let members: Vec<String> = database.smembers("key").send().await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));
     assert!(members.contains(&"member3".to_owned()));
 
-    let members: HashSet<String> = database.smembers("key").await?;
+    let members: HashSet<String> = database.smembers("key").send().await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));
     assert!(members.contains(&"member3".to_owned()));
 
-    let members: BTreeSet<String> = database.smembers("key").await?;
+    let members: BTreeSet<String> = database.smembers("key").send().await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));

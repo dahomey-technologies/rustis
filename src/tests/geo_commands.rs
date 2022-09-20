@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, GenericCommands, GeoCommands, GeoSearchBy,
-    GeoSearchFrom, GeoSearchOrder, GeoSearchResult, GeoUnit, Result,
+    tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands,
+    GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOrder, GeoSearchResult, GeoUnit, Result,
 };
 use serial_test::serial;
 
@@ -14,7 +14,7 @@ async fn geoadd() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del("key").await?;
+    database.del("key").send().await?;
 
     let len = database
         .geoadd(
@@ -23,6 +23,7 @@ async fn geoadd() -> Result<()> {
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -33,6 +34,7 @@ async fn geoadd() -> Result<()> {
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
+        .send()
         .await?;
     assert_eq!(0, len);
 
@@ -43,6 +45,7 @@ async fn geoadd() -> Result<()> {
             true,
             [(2.0, 2.0, "location1"), (2.0, 2.0, "location2")],
         )
+        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -57,6 +60,7 @@ async fn geoadd() -> Result<()> {
                 (3.0, 3.0, "location3"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -71,6 +75,7 @@ async fn geoadd() -> Result<()> {
                 (3.0, 3.0, "location3"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -85,7 +90,7 @@ async fn geodist() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del("Sicily").await?;
+    database.del("Sicily").send().await?;
 
     let len = database
         .geoadd(
@@ -97,26 +102,31 @@ async fn geodist() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
     let dist = database
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Meters)
+        .send()
         .await?;
     assert_eq!(Some(166274.1516), dist);
 
     let dist = database
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Kilometers)
+        .send()
         .await?;
     assert_eq!(Some(166.2742), dist);
 
     let dist = database
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Miles)
+        .send()
         .await?;
     assert_eq!(Some(103.3182), dist);
 
     let dist = database
         .geodist("Sicily", "Foo", "Bar", GeoUnit::Meters)
+        .send()
         .await?;
     assert_eq!(None, dist);
 
@@ -131,7 +141,7 @@ async fn geohash() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del("Sicily").await?;
+    database.del("Sicily").send().await?;
 
     let len = database
         .geoadd(
@@ -143,10 +153,14 @@ async fn geohash() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
-    let hashes = database.geohash("Sicily", ["Palermo", "Catania"]).await?;
+    let hashes = database
+        .geohash("Sicily", ["Palermo", "Catania"])
+        .send()
+        .await?;
     assert_eq!(2, hashes.len());
     assert_eq!("sqc8b49rny0", hashes[0]);
     assert_eq!("sqdtr74hyu0", hashes[1]);
@@ -162,7 +176,7 @@ async fn geopos() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del("Sicily").await?;
+    database.del("Sicily").send().await?;
 
     let len = database
         .geoadd(
@@ -174,11 +188,13 @@ async fn geopos() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
     let hashes = database
         .geopos("Sicily", ["Palermo", "Catania", "NonExisting"])
+        .send()
         .await?;
     assert_eq!(3, hashes.len());
     assert_eq!(
@@ -202,7 +218,7 @@ async fn geosearch() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del("Sicily").await?;
+    database.del("Sicily").send().await?;
 
     let len = database
         .geoadd(
@@ -214,6 +230,7 @@ async fn geosearch() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -227,6 +244,7 @@ async fn geosearch() -> Result<()> {
                 (17.241510, 38.788135, "edge2"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -244,6 +262,7 @@ async fn geosearch() -> Result<()> {
             None,
             None,
         )
+        .send()
         .await?;
     assert_eq!(2, results.len());
     assert!(results.contains("Palermo"));
@@ -267,6 +286,7 @@ async fn geosearch() -> Result<()> {
             true,
             false,
         )
+        .send()
         .await?;
 
     assert_eq!(4, results.len());
@@ -310,7 +330,7 @@ async fn geosearchstore() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del(["Sicily", "out"]).await?;
+    database.del(["Sicily", "out"]).send().await?;
 
     let len = database
         .geoadd(
@@ -322,6 +342,7 @@ async fn geosearchstore() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -335,6 +356,7 @@ async fn geosearchstore() -> Result<()> {
                 (17.241510, 38.788135, "edge2"),
             ],
         )
+        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -355,6 +377,7 @@ async fn geosearchstore() -> Result<()> {
             Some((3, false)),
             false,
         )
+        .send()
         .await?;
     assert_eq!(3, len);
 
@@ -376,6 +399,7 @@ async fn geosearchstore() -> Result<()> {
             true,
             true,
         )
+        .send()
         .await?;
 
     assert_eq!(3, results.len());

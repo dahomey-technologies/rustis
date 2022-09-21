@@ -11,6 +11,7 @@ use std::{
 pub enum Value {
     SimpleString(String),
     Integer(i64),
+    Double(f64),
     BulkString(BulkString),
     Array(Array),
     Error(String),
@@ -68,6 +69,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::BulkString(BulkString::Nil) => Ok(Vec::new()),
             Value::Array(Array::Nil) => Ok(Vec::new()),
             Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
@@ -81,6 +83,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::BulkString(BulkString::Nil) => Ok(HashSet::new()),
             Value::Array(Array::Nil) => Ok(HashSet::new()),
             Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
@@ -94,6 +97,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::BulkString(BulkString::Nil) => Ok(BTreeSet::new()),
             Value::Array(Array::Nil) => Ok(BTreeSet::new()),
             Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
@@ -108,6 +112,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::BulkString(BulkString::Nil) => Ok(HashMap::new()),
             Value::Array(Array::Nil) => Ok(HashMap::new()),
             Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
@@ -122,6 +127,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::BulkString(BulkString::Nil) => Ok(BTreeMap::new()),
             Value::Array(Array::Nil) => Ok(BTreeMap::new()),
             Value::Array(Array::Vec(v)) => v.from_value_array().collect(),
             _ => Err(Error::Parse("Unexpected result value type".to_owned())),
@@ -312,8 +318,9 @@ impl FromValue for f64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(BulkString::Binary(b)) => {
-                Ok(String::from_utf8_lossy(&b).parse::<f64>().unwrap())
+                Ok(String::from_utf8_lossy(&b).parse::<f64>()?)
             }
+            Value::Double(d) => Ok(d),
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to f64",
                 value
@@ -352,17 +359,16 @@ impl ToString for Value {
         match &self {
             Value::SimpleString(s) => s.clone(),
             Value::Integer(i) => i.to_string(),
+            Value::Double(f) => f.to_string(),
             Value::BulkString(s) => s.to_string(),
-            Value::Array(a) => match a {
-                Array::Vec(v) => format!(
-                    "[{}]",
-                    v.iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                Array::Nil => "[]".to_string(),
-            },
+            Value::Array(Array::Vec(v)) => format!(
+                "[{}]",
+                v.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Array(Array::Nil) => "[]".to_string(),
             Value::Error(e) => e.clone(),
         }
     }

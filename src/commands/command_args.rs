@@ -45,9 +45,7 @@ impl CommandArgs {
             self
         }
     }
-}
 
-impl CommandArgs {
     pub fn len(&self) -> usize {
         match self {
             CommandArgs::Empty => 0,
@@ -57,6 +55,12 @@ impl CommandArgs {
             CommandArgs::Array4(_) => 4,
             CommandArgs::Vec(v) => v.len(),
         }
+    }
+}
+
+impl Default for CommandArgs {
+    fn default() -> Self {
+        CommandArgs::Empty
     }
 }
 

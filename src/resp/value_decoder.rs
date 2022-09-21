@@ -27,12 +27,19 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
     let first_byte = buf[idx];
     let idx = idx + 1;
 
+    // cf. https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
     match first_byte {
         b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
         b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
+        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
+        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
         b':' => Ok(decode_integer(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
+        b',' => Ok(decode_double(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
         b'+' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s), pos))),
         b'-' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::Error(s), pos))),
+        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
+        b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
+        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
         _ => Err(Error::Parse(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte
@@ -70,6 +77,28 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
+            let mut values = Vec::with_capacity(len as usize);
+            let mut pos = pos;
+            for _ in 0..len {
+                match decode(buf, pos)? {
+                    None => return Ok(None),
+                    Some((value, new_pos)) => {
+                        values.push(value);
+                        pos = new_pos;
+                    }
+                }
+            }
+            Ok(Some((Array::Vec(values), pos)))
+        }
+    }
+}
+
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> {
+    match decode_integer(buf, idx)? {
+        None => Ok(None),
+        Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
+        Some((len, pos)) => {
+            let len = len * 2;
             let mut values = Vec::with_capacity(len as usize);
             let mut pos = pos;
             for _ in 0..len {
@@ -135,4 +164,47 @@ fn decode_integer(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>
     }
 
     Ok(None)
+}
+
+fn decode_double(buf: &mut BytesMut, idx: usize) -> Result<Option<(f64, usize)>> {
+    match buf[idx..].iter().position(|b| *b == b'\r') {
+        Some(pos) if buf[idx + pos + 1] == b'\n' => {
+            let slice = &buf[idx..idx + pos];
+            let str = std::str::from_utf8(slice)?;
+            let d = str.parse::<f64>()?;
+            Ok(Some((d, idx + pos + 2)))
+        }
+        _ => return Err(Error::Parse("malformed double".to_owned())),
+    }
+}
+
+fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
+    if buf[idx] != b'\r' || buf[idx + 1] != b'\n' {
+        Err(Error::Parse(format!(
+            "Expected \\r\\n after null. Got '{}''{}'",
+            buf[idx] as char,
+            buf[idx + 1] as char
+        )))
+    } else {
+        Ok(Some(idx + 2))
+    }
+}
+
+fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>> {
+    if buf[idx + 1] != b'\r' || buf[idx + 2] != b'\n' {
+        Err(Error::Parse(format!(
+            "Expected \\r\\n after bulk string. Got '{}''{}'",
+            buf[idx + 1] as char,
+            buf[idx + 2] as char
+        )))
+    } else {
+        match buf[idx] {
+            b't' => Ok(Some((1, idx + 2))),
+            b'f' => Ok(Some((0, idx + 2))),
+            _ => Err(Error::Parse(format!(
+                "Unexpected boolean character '{}'",
+                buf[idx] as char,
+            ))),
+        }
+    }
 }

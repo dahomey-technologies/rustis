@@ -3,7 +3,7 @@ use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
 };
-use std::result;
+use std::{num::ParseFloatError, result, str::Utf8Error};
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -55,5 +55,17 @@ impl From<oneshot::Canceled> for Error {
 impl From<mpsc::SendError> for Error {
     fn from(e: mpsc::SendError) -> Self {
         Error::SendError(e.to_string())
+    }
+}
+
+impl From<Utf8Error> for Error {
+    fn from(e: Utf8Error) -> Self {
+        Error::Parse(e.to_string())
+    }
+}
+
+impl From<ParseFloatError> for Error {
+    fn from(e: ParseFloatError) -> Self {
+        Error::Parse(e.to_string())
     }
 }

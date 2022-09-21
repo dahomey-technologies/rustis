@@ -1,5 +1,6 @@
 mod bitmap_commands;
 mod command_args;
+mod connection_commands;
 mod database;
 mod error;
 mod generic_commands;
@@ -7,6 +8,7 @@ mod geo_commands;
 mod hash_commands;
 mod list_commands;
 mod pub_sub_commands;
+mod resp3;
 mod scripting_commands;
 mod server_commands;
 mod set_commands;

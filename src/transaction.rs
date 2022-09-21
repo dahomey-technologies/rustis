@@ -2,8 +2,8 @@ use crate::{
     cmd,
     resp::{Array, FromValue, ResultValueExt, Value},
     BitmapCommands, Command, CommandResult, Database, Error, Future, GenericCommands, GeoCommands,
-    HashCommands, PrepareCommand, ListCommands, Result, ScriptingCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StringCommands,
+    HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result, ScriptingCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StringCommands,
 };
 use std::{
     iter::zip,
@@ -72,7 +72,7 @@ impl<T: Send + Sync> Transaction<T> {
     }
 
     /// Flushes all previously queued commands in a transaction and restores the connection state to normal.
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
     pub async fn discard(self) -> Result<()> {
@@ -90,6 +90,7 @@ impl<T: Send + Sync> BitmapCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> GenericCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> GeoCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> HashCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> HyperLogLogCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ListCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> SetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ScriptingCommands<T> for Transaction<T> {}

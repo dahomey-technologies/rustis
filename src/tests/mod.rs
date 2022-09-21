@@ -6,6 +6,7 @@ mod error;
 mod generic_commands;
 mod geo_commands;
 mod hash_commands;
+mod hyper_log_log_commands;
 mod list_commands;
 mod pub_sub_commands;
 mod resp3;

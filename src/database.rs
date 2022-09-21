@@ -1,9 +1,9 @@
 use crate::{
     resp::{FromValue, Value},
-    BitmapCommands, Command, CommandResult, ConnectionMultiplexer, DatabaseResult, GenericCommands,
-    GeoCommands, HashCommands, PrepareCommand, ListCommands, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StringCommands, Transaction,
-    TransactionResult0, ConnectionCommands,
+    BitmapCommands, Command, CommandResult, ConnectionCommands, ConnectionMultiplexer,
+    DatabaseResult, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, ListCommands,
+    PrepareCommand, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
+    StringCommands, Transaction, TransactionResult0,
 };
 
 #[derive(Clone)]
@@ -51,26 +51,20 @@ impl Database {
     ///     Ok(())
     /// }
     /// ```
-    pub fn send(
-        &self,
-        command: Command,
-    ) -> impl futures::Future<Output = Result<Value>> + '_ {
+    pub fn send(&self, command: Command) -> impl futures::Future<Output = Result<Value>> + '_ {
         self.multiplexer.send(self.db, command)
     }
 
     /// Send command and forget its response
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
-    pub fn send_and_forget(
-        &self,
-        command: Command,
-    ) -> Result<()> {
+    pub fn send_and_forget(&self, command: Command) -> Result<()> {
         self.multiplexer.send_and_forget(self.db, command)
     }
 
     /// Create a new transaction
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
     pub async fn create_transaction(&self) -> Result<Transaction<TransactionResult0>> {
@@ -79,10 +73,7 @@ impl Database {
 }
 
 impl PrepareCommand<DatabaseResult> for Database {
-    fn prepare_command<R: FromValue>(
-        &self,
-        command: Command,
-    ) -> CommandResult<DatabaseResult, R> {
+    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<DatabaseResult, R> {
         CommandResult::from_database(command, self)
     }
 }
@@ -92,6 +83,7 @@ impl ConnectionCommands<DatabaseResult> for Database {}
 impl GenericCommands<DatabaseResult> for Database {}
 impl GeoCommands<DatabaseResult> for Database {}
 impl HashCommands<DatabaseResult> for Database {}
+impl HyperLogLogCommands<DatabaseResult> for Database {}
 impl ListCommands<DatabaseResult> for Database {}
 impl ScriptingCommands<DatabaseResult> for Database {}
 impl ServerCommands<DatabaseResult> for Database {}

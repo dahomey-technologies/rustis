@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands, Result,
-    SetCommands, NONE_ARG,
+    SScanOptions, SetCommands,
 };
 use serial_test::serial;
 
@@ -16,7 +16,10 @@ async fn sadd() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    let len = database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    let len = database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
     assert_eq!(3, len);
 
     Ok(())
@@ -32,7 +35,10 @@ async fn scard() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
     let len = database.scard("key").send().await?;
     assert_eq!(3, len);
 
@@ -69,7 +75,10 @@ async fn sdiffstore() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del(["key1", "key2", "key3", "key4"]).send().await?;
+    database
+        .del(["key1", "key2", "key3", "key4"])
+        .send()
+        .await?;
 
     database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
     database.sadd("key2", "c").send().await?;
@@ -77,7 +86,8 @@ async fn sdiffstore() -> Result<()> {
 
     let len = database
         .sdiffstore("key4", ["key1", "key2", "key3"])
-        .send().await?;
+        .send()
+        .await?;
     assert_eq!(2, len);
 
     let members: HashSet<String> = database.smembers("key4").send().await?;
@@ -123,7 +133,10 @@ async fn sintercard() -> Result<()> {
     database.sadd("key2", "c").send().await?;
     database.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = database.sintercard(["key1", "key2", "key3"], 0).send().await?;
+    let len = database
+        .sintercard(["key1", "key2", "key3"], 0)
+        .send()
+        .await?;
     assert_eq!(1, len);
 
     Ok(())
@@ -137,7 +150,10 @@ async fn sinterstore() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del(["key1", "key2", "key3", "key4"]).send().await?;
+    database
+        .del(["key1", "key2", "key3", "key4"])
+        .send()
+        .await?;
 
     database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
     database.sadd("key2", "c").send().await?;
@@ -145,7 +161,8 @@ async fn sinterstore() -> Result<()> {
 
     let len = database
         .sinterstore("key4", ["key1", "key2", "key3"])
-        .send().await?;
+        .send()
+        .await?;
     assert_eq!(1, len);
 
     let members: HashSet<String> = database.smembers("key4").send().await?;
@@ -165,7 +182,10 @@ async fn sismember() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
     let result = database.sismember("key", "value1").send().await?;
     assert!(result);
@@ -186,7 +206,10 @@ async fn smembers() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
     let members: HashSet<String> = database.smembers("key").send().await?;
     assert_eq!(3, members.len());
@@ -207,9 +230,15 @@ async fn smismember() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
-    let result = database.smismember("key", ["value1", "value4"]).send().await?;
+    let result = database
+        .smismember("key", ["value1", "value4"])
+        .send()
+        .await?;
     assert_eq!(2, result.len());
     assert!(result[0]);
     assert!(!result[1]);
@@ -229,10 +258,12 @@ async fn smove() -> Result<()> {
 
     database
         .sadd("key1", ["value1", "value2", "value3"])
-        .send().await?;
+        .send()
+        .await?;
     database
         .sadd("key2", ["value4", "value5", "value6"])
-        .send().await?;
+        .send()
+        .await?;
 
     let result = database.smove("key1", "key2", "value3").send().await?;
     assert!(result);
@@ -250,7 +281,10 @@ async fn spop() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
     let result: HashSet<String> = database.spop("key", 2).send().await?;
     assert_eq!(2, result.len());
@@ -268,7 +302,10 @@ async fn srandmember() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
     let result: HashSet<String> = database.srandmember("key", 2).send().await?;
     assert_eq!(2, result.len());
@@ -286,9 +323,15 @@ async fn srem() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
-    let result = database.srem("key", ["value1", "value2", "value4"]).send().await?;
+    let result = database
+        .srem("key", ["value1", "value2", "value4"])
+        .send()
+        .await?;
     assert_eq!(2, result);
 
     Ok(())
@@ -304,9 +347,15 @@ async fn sscan() -> Result<()> {
     // cleanup
     database.del("key").send().await?;
 
-    database.sadd("key", ["value1", "value2", "value3"]).send().await?;
+    database
+        .sadd("key", ["value1", "value2", "value3"])
+        .send()
+        .await?;
 
-    let result: (u64, Vec<String>) = database.sscan("key", 0, NONE_ARG, None).send().await?;
+    let result: (u64, Vec<String>) = database
+        .sscan("key", 0, SScanOptions::default())
+        .send()
+        .await?;
     assert_eq!(0, result.0);
     assert_eq!(3, result.1.len());
 
@@ -346,7 +395,10 @@ async fn sunionstore() -> Result<()> {
     let database = connection.get_default_database();
 
     // cleanup
-    database.del(["key1", "key2", "key3", "key4"]).send().await?;
+    database
+        .del(["key1", "key2", "key3", "key4"])
+        .send()
+        .await?;
 
     database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
     database.sadd("key2", "c").send().await?;
@@ -354,7 +406,8 @@ async fn sunionstore() -> Result<()> {
 
     let len = database
         .sunionstore("key4", ["key1", "key2", "key3"])
-        .send().await?;
+        .send()
+        .await?;
     assert_eq!(5, len);
 
     let members: HashSet<String> = database.smembers("key4").send().await?;

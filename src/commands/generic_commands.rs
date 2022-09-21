@@ -118,7 +118,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
         &self,
         key: K,
         unix_time_seconds: u64,
-        option: Option<ExpireOption>,
+        option: ExpireOption,
     ) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
@@ -301,12 +301,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
     #[must_use]
-    fn pexpire<K>(
-        &self,
-        key: K,
-        milliseconds: u64,
-        option: Option<ExpireOption>,
-    ) -> CommandResult<T, bool>
+    fn pexpire<K>(&self, key: K, milliseconds: u64, option: ExpireOption) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
     {
@@ -327,7 +322,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
         &self,
         key: K,
         unix_time_milliseconds: u64,
-        option: Option<ExpireOption>,
+        option: ExpireOption,
     ) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
@@ -456,26 +451,12 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
     #[must_use]
-    fn scan<P, TY, K, A>(
-        &self,
-        cursor: u64,
-        match_pattern: Option<P>,
-        count: Option<usize>,
-        type_: Option<TY>,
-    ) -> CommandResult<T, (u64, A)>
+    fn scan<K, A>(&self, cursor: u64, options: ScanOptions) -> CommandResult<T, (u64, A)>
     where
-        P: Into<BulkString>,
-        TY: Into<BulkString>,
         K: FromValue,
         A: FromSingleValueArray<K> + Default,
     {
-        self.prepare_command(
-            cmd("SCAN")
-                .arg(cursor)
-                .arg(match_pattern.map(|p| ("MATCH", p)))
-                .arg(count.map(|c| ("COUNT", c)))
-                .arg(type_.map(|t| ("TYPE", t))),
-        )
+        self.prepare_command(cmd("SCAN").arg(cursor).arg(options))
     }
 
     /// Returns the elements contained in the list, set or sorted set at key.
@@ -486,11 +467,9 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
     #[must_use]
-    fn sort<K, BP, GP, M, A>(&self, key: K, options: SortOptions<BP, GP>) -> CommandResult<T, A>
+    fn sort<K, M, A>(&self, key: K, options: SortOptions) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
-        BP: Into<BulkString>,
-        GP: Into<BulkString>,
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
@@ -505,16 +484,14 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
     #[must_use]
-    fn sort_and_store<K, BP, GP, D>(
+    fn sort_and_store<K, D>(
         &self,
         key: K,
         destination: D,
-        options: SortOptions<BP, GP>,
+        options: SortOptions,
     ) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
-        BP: Into<BulkString>,
-        GP: Into<BulkString>,
         D: Into<BulkString>,
     {
         self.prepare_command(
@@ -537,15 +514,9 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/sort_ro/](https://redis.io/commands/sort_ro/)
     #[must_use]
-    fn sort_readonly<K, BP, GP, M, A>(
-        &self,
-        key: K,
-        options: SortOptions<BP, GP>,
-    ) -> CommandResult<T, A>
+    fn sort_readonly<K, M, A>(&self, key: K, options: SortOptions) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
-        BP: Into<BulkString>,
-        GP: Into<BulkString>,
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
@@ -817,95 +788,52 @@ impl IntoArgs for SortOrder {
     }
 }
 
-/// Options of the [sort](crate::GenericCommands::sort) command
+/// Options for the [`sort`](crate::GenericCommands::sort) command
 #[derive(Default)]
-pub struct SortOptions<BP = &'static str, GP = &'static str>
-where
-    BP: Into<BulkString>,
-    GP: Into<BulkString>,
-{
-    by_pattern: Option<BP>,
-    limit: Option<(usize, isize)>,
-    get_patterns: Option<Vec<GP>>,
-    order: Option<SortOrder>,
-    alpha: bool,
+pub struct SortOptions {
+    command_args: CommandArgs,
 }
 
-impl<BP, GP> SortOptions<BP, GP>
-where
-    BP: Into<BulkString>,
-    GP: Into<BulkString>,
-{
+impl SortOptions {
     #[must_use]
-    pub fn by(self, pattern: BP) -> Self {
+    pub fn by<P: Into<BulkString>>(self, pattern: P) -> Self {
         Self {
-            by_pattern: Some(pattern),
-            limit: self.limit,
-            get_patterns: self.get_patterns,
-            order: self.order,
-            alpha: self.alpha,
+            command_args: self.command_args.arg("BY").arg(pattern),
         }
     }
 
     #[must_use]
     pub fn limit(self, offset: usize, count: isize) -> Self {
         Self {
-            by_pattern: self.by_pattern,
-            limit: Some((offset, count)),
-            get_patterns: self.get_patterns,
-            order: self.order,
-            alpha: self.alpha,
+            command_args: self.command_args.arg("LIMIT").arg(offset).arg(count),
         }
     }
 
     #[must_use]
-    pub fn get(self, patterns: Vec<GP>) -> Self {
+    pub fn get<P: Into<BulkString>>(self, pattern: P) -> Self {
         Self {
-            by_pattern: self.by_pattern,
-            limit: self.limit,
-            get_patterns: Some(patterns),
-            order: self.order,
-            alpha: self.alpha,
+            command_args: self.command_args.arg("GET").arg(pattern),
         }
     }
 
     #[must_use]
     pub fn order(self, order: SortOrder) -> Self {
         Self {
-            by_pattern: self.by_pattern,
-            limit: self.limit,
-            get_patterns: self.get_patterns,
-            order: Some(order),
-            alpha: self.alpha,
+            command_args: self.command_args.arg(order),
         }
     }
 
     #[must_use]
     pub fn alpha(self) -> Self {
         Self {
-            by_pattern: self.by_pattern,
-            limit: self.limit,
-            get_patterns: self.get_patterns,
-            order: self.order,
-            alpha: true,
+            command_args: self.command_args.arg("ALPHA"),
         }
     }
 }
 
-impl<BP, GP> IntoArgs for SortOptions<BP, GP>
-where
-    BP: Into<BulkString>,
-    GP: Into<BulkString>,
-{
+impl IntoArgs for SortOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.by_pattern.map(|bp| ("BY", bp)))
-            .arg(self.limit.map(|(offset, count)| ("LIMIT", offset, count)))
-            .arg(
-                self.get_patterns
-                    .map(|patterns| patterns.into_iter().map(|p| ("GET", p)).collect::<Vec<_>>()),
-            )
-            .arg(self.order)
-            .arg_if(self.alpha, "ALPHA")
+        args.arg(self.command_args)
     }
 }
 
@@ -922,5 +850,40 @@ impl FromValue for DumpResult {
             }),
             _ => Err(Error::Internal("Unexpected dump format".to_owned())),
         }
+    }
+}
+
+/// Options for the [`scan`](crate::GenericCommands::scan) command
+#[derive(Default)]
+pub struct ScanOptions {
+    command_args: CommandArgs,
+}
+
+impl ScanOptions {
+    #[must_use]
+    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+        Self {
+            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count),
+        }
+    }
+
+    #[must_use]
+    pub fn type_<TY: Into<BulkString>>(self, type_: TY) -> Self {
+        Self {
+            command_args: self.command_args.arg("TYPE").arg(type_),
+        }
+    }
+}
+
+impl IntoArgs for ScanOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

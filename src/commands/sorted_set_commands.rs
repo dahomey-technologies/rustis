@@ -647,24 +647,21 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/zscan/](https://redis.io/commands/zscan/)
     #[must_use]
-    fn zscan<K, P, M>(
+    fn zscan<K, M>(
         &self,
         key: K,
         cursor: usize,
-        match_pattern: Option<P>,
-        count: Option<usize>,
+        options: ZScanOptions,
     ) -> CommandResult<T, (u64, Vec<(M, f64)>)>
     where
         K: Into<BulkString>,
-        P: Into<BulkString>,
         M: FromValue + Default,
     {
         self.prepare_command(
             cmd("ZSCAN")
                 .arg(key)
                 .arg(cursor)
-                .arg(match_pattern.map(|p| ("MATCH", p)))
-                .arg(count.map(|c| ("COUNT", c))),
+                .arg(options),
         )
     }
 
@@ -993,6 +990,34 @@ impl ZRangeOptions {
 }
 
 impl IntoArgs for ZRangeOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Options for the [`zscan`](crate::SortedSetCommands::zscan) command
+#[derive(Default)]
+pub struct ZScanOptions {
+    command_args: CommandArgs,
+}
+
+impl ZScanOptions {
+    #[must_use]
+    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+        Self {
+            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count),
+        }
+    }
+}
+
+impl IntoArgs for ZScanOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }

@@ -1,7 +1,5 @@
 use crate::resp::BulkString;
-use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, hash::BuildHasher};
-
-pub const NONE_ARG: Option<BulkString> = None;
+use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, hash::BuildHasher, iter::{once, Once}};
 
 #[derive(Debug)]
 pub enum CommandArgs {
@@ -299,13 +297,50 @@ pub trait SingleArgOrCollection<T>: IntoArgs
 where
     T: Into<BulkString>,
 {
+    type IntoIter: Iterator<Item = T>;
+
+    fn into_iter(self) -> Self::IntoIter;
 }
 
-impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkString> {}
-impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {}
-impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S> where T: Into<BulkString> {}
-impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {}
-impl<T> SingleArgOrCollection<T> for T where T: Into<BulkString> {}
+impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkString> {
+    type IntoIter = std::array::IntoIter<T, N>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
+}
+
+impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {
+    type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
+}
+
+impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S> where T: Into<BulkString> {
+    type IntoIter = std::collections::hash_set::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
+}
+
+impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {
+    type IntoIter = std::collections::btree_set::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
+}
+
+impl<T> SingleArgOrCollection<T> for T where T: Into<BulkString> {
+    type IntoIter = Once<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        once(self)
+    }
+}
 
 /// Marker for key/value collections of Args
 pub trait KeyValueArgOrCollection<K, V>: IntoArgs

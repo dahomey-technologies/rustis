@@ -157,20 +157,9 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/function-list/](https://redis.io/commands/function-list/)
     #[must_use]
-    fn function_list<P>(
-        &self,
-        library_name_pattern: Option<P>,
-        with_code: bool,
-    ) -> CommandResult<T, Vec<LibraryInfo>>
-    where
-        P: Into<BulkString>,
+    fn function_list(&self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>>
     {
-        self.prepare_command(
-            cmd("FUNCTION")
-                .arg("LIST")
-                .arg(library_name_pattern)
-                .arg_if(with_code, "WITHCODE"),
-        )
+        self.prepare_command(cmd("FUNCTION").arg("LIST").arg(options))
     }
 
     /// Load a library to Redis.
@@ -456,7 +445,7 @@ impl FromValue for FunctionInfo {
 
                 into_result(&mut value.into()?)
                     .ok_or_else(|| Error::Internal("Cannot parse FunctionInfo".to_owned()))
-            },
+            }
             _ => Err(Error::Internal("Cannot parse FunctionInfo".to_owned())),
         }
     }
@@ -481,7 +470,7 @@ impl FromValue for FunctionStats {
 
                 into_result(&mut value.into()?)
                     .ok_or_else(|| Error::Internal("Cannot parse FunctionStats".to_owned()))
-            },
+            }
             _ => Err(Error::Internal("Cannot parse FunctionStats".to_owned())),
         }
     }
@@ -508,7 +497,7 @@ impl FromValue for RunningScript {
 
                 into_result(&mut value.into()?)
                     .ok_or_else(|| Error::Internal("Cannot parse RunningScript".to_owned()))
-            },
+            }
             _ => Err(Error::Internal("Cannot parse RunningScript".to_owned())),
         }
     }
@@ -532,8 +521,8 @@ impl FromValue for EngineStats {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(||Error::Internal("Cannot parse EngineStats".to_owned()))
-            },
+                    .ok_or_else(|| Error::Internal("Cannot parse EngineStats".to_owned()))
+            }
             _ => Err(Error::Internal("Cannot parse EngineStats".to_owned())),
         }
     }
@@ -554,5 +543,36 @@ impl IntoArgs for ScriptDebugMode {
             ScriptDebugMode::Sync => args.arg("SYNC"),
             ScriptDebugMode::No => args.arg("NO"),
         }
+    }
+}
+
+/// Options for the [`function_list`](crate::ScriptingCommands::function_list) command
+#[derive(Default)]
+pub struct FunctionListOptions {
+    command_args: CommandArgs,
+}
+
+impl FunctionListOptions {
+    #[must_use]
+    pub fn library_name_pattern<P: Into<BulkString>>(self, library_name_pattern: P) -> Self {
+        Self {
+            command_args: self
+                .command_args
+                .arg("LIBRARYNAME")
+                .arg(library_name_pattern),
+        }
+    }
+
+    #[must_use]
+    pub fn with_code(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHCODE"),
+        }
+    }
+}
+
+impl IntoArgs for FunctionListOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

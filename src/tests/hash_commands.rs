@@ -1,6 +1,6 @@
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands,
-    HashCommands, Result, NONE_ARG,
+    HScanOptions, HashCommands, Result,
 };
 use serial_test::serial;
 
@@ -79,7 +79,8 @@ async fn hget_all() -> Result<()> {
 
     database
         .hset("key", [("field1", "Hello"), ("field2", "World")])
-        .send().await?;
+        .send()
+        .await?;
     let result: Vec<(String, String)> = database.hgetall("key").send().await?;
     assert_eq!(2, result.len());
     assert_eq!(("field1".to_owned(), "Hello".to_owned()), result[0]);
@@ -143,7 +144,8 @@ async fn hkeys() -> Result<()> {
 
     database
         .hset("key", [("field1", "Hello"), ("field2", "World")])
-        .send().await?;
+        .send()
+        .await?;
     let fields: Vec<String> = database.hkeys("key").send().await?;
     assert_eq!(2, fields.len());
     assert_eq!("field1".to_owned(), fields[0]);
@@ -164,7 +166,8 @@ async fn hlen() -> Result<()> {
 
     database
         .hset("key", [("field1", "Hello"), ("field2", "World")])
-        .send().await?;
+        .send()
+        .await?;
     let len = database.hlen("key").send().await?;
     assert_eq!(2, len);
 
@@ -183,10 +186,12 @@ async fn hmget() -> Result<()> {
 
     database
         .hset("key", [("field1", "Hello"), ("field2", "World")])
-        .send().await?;
+        .send()
+        .await?;
     let values: Vec<String> = database
         .hmget("key", ["field1", "field2", "nofield"])
-        .send().await?;
+        .send()
+        .await?;
     assert_eq!(3, values.len());
     assert_eq!("Hello".to_owned(), values[0]);
     assert_eq!("World".to_owned(), values[1]);
@@ -250,7 +255,10 @@ async fn hscan() -> Result<()> {
 
     database.hset("key", fields_and_values).send().await?;
 
-    let result: (u64, Vec<(String, String)>) = database.hscan("key", 0, NONE_ARG, Some(20)).send().await?;
+    let result: (u64, Vec<(String, String)>) = database
+        .hscan("key", 0, HScanOptions::default().count(20))
+        .send()
+        .await?;
 
     //println!("{:?}", result);
     assert_eq!(0, result.0);
@@ -315,7 +323,8 @@ async fn hvals() -> Result<()> {
 
     database
         .hset("key", [("field1", "Hello"), ("field2", "World")])
-        .send().await?;
+        .send()
+        .await?;
 
     let values: Vec<String> = database.hvals("key").send().await?;
     assert_eq!(2, values.len());

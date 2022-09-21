@@ -1,7 +1,7 @@
 use crate::{
     resp::BulkString, spawn, tests::get_default_addr, CallBuilder, ConnectionMultiplexer,
     DatabaseCommandResult, FlushingMode, LibraryInfo, Result, ScriptingCommands, ServerCommands,
-    StringCommands, NONE_ARG,
+    StringCommands, FunctionListOptions,
 };
 use serial_test::serial;
 
@@ -142,7 +142,7 @@ async fn function_flush() -> Result<()> {
 
     database.function_flush(FlushingMode::Sync).send().await?;
 
-    let list: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).send().await?;
+    let list: Vec<LibraryInfo> = database.function_list(FunctionListOptions::default()).send().await?;
     assert_eq!(0, list.len());
 
     Ok(())
@@ -161,7 +161,7 @@ async fn function_list() -> Result<()> {
     let library: String = database.function_load(true, code).send().await?;
     assert_eq!("mylib", library);
 
-    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, false).send().await?;
+    let libs: Vec<LibraryInfo> = database.function_list(FunctionListOptions::default()).send().await?;
     assert_eq!(1, libs.len());
     assert_eq!("mylib", libs[0].library_name);
     assert_eq!("LUA", libs[0].engine);
@@ -172,7 +172,7 @@ async fn function_list() -> Result<()> {
     assert_eq!("no-writes", libs[0].functions[0].flags[0]);
     assert_eq!(None, libs[0].library_code);
 
-    let libs: Vec<LibraryInfo> = database.function_list(NONE_ARG, true).send().await?;
+    let libs: Vec<LibraryInfo> = database.function_list(FunctionListOptions::default().with_code()).send().await?;
     assert_eq!(1, libs.len());
     assert_eq!("mylib", libs[0].library_name);
     assert_eq!("LUA", libs[0].engine);

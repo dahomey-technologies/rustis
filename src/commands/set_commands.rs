@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    CommandResult, PrepareCommand, SingleArgOrCollection,
+    CommandArgs, CommandResult, IntoArgs, PrepareCommand, SingleArgOrCollection,
 };
 use std::hash::Hash;
 
@@ -262,25 +262,17 @@ pub trait SetCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/sscan/](https://redis.io/commands/sscan/)
     #[must_use]
-    fn sscan<K, P, M>(
+    fn sscan<K, M>(
         &self,
         key: K,
         cursor: u64,
-        match_pattern: Option<P>,
-        count: Option<usize>,
+        options: SScanOptions,
     ) -> CommandResult<T, (u64, Vec<M>)>
     where
         K: Into<BulkString>,
-        P: Into<BulkString>,
         M: FromValue,
     {
-        self.prepare_command(
-            cmd("SSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg(match_pattern.map(|p| ("MATCH", p)))
-                .arg(count.map(|c| ("COUNT", c))),
-        )
+        self.prepare_command(cmd("SSCAN").arg(key).arg(cursor).arg(options))
     }
 
     /// Returns the members of the set resulting from the union of all the given sets.
@@ -317,5 +309,33 @@ pub trait SetCommands<T>: PrepareCommand<T> {
         C: SingleArgOrCollection<K>,
     {
         self.prepare_command(cmd("SUNIONSTORE").arg(destination).arg(keys))
+    }
+}
+
+/// Options for the [`sscan`](crate::SetCommands::sscan) command
+#[derive(Default)]
+pub struct SScanOptions {
+    command_args: CommandArgs,
+}
+
+impl SScanOptions {
+    #[must_use]
+    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+        Self {
+            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count),
+        }
+    }
+}
+
+impl IntoArgs for SScanOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

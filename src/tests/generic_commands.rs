@@ -3,7 +3,7 @@ use crate::{
     tests::get_default_addr,
     ConnectionMultiplexer, DatabaseCommandResult, ExpireOption, FlushingMode, GenericCommands,
     ListCommands, RestoreOptions, Result, ServerCommands, SetCommands, SortOptions, StringCommands,
-    NONE_ARG,
+    ScanOptions,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -169,7 +169,7 @@ async fn expireat() -> Result<()> {
 
     // no option
     database.set("key", "value").send().await?;
-    let result = database.expireat("key", now + 10, None).send().await?;
+    let result = database.expireat("key", now + 10, ExpireOption::default()).send().await?;
     assert!(result);
     let ttl = database.ttl("key").send().await?;
     assert!(9 <= ttl && ttl <= 10);
@@ -177,7 +177,7 @@ async fn expireat() -> Result<()> {
     // xx
     database.set("key", "value").send().await?;
     let result = database
-        .expireat("key", now + 10, Some(ExpireOption::Xx))
+        .expireat("key", now + 10, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
@@ -185,7 +185,7 @@ async fn expireat() -> Result<()> {
 
     // nx
     let result = database
-        .expireat("key", now + 10, Some(ExpireOption::Nx))
+        .expireat("key", now + 10, ExpireOption::Nx)
         .send()
         .await?;
     assert!(result);
@@ -193,13 +193,13 @@ async fn expireat() -> Result<()> {
 
     // gt
     let result = database
-        .expireat("key", now + 5, Some(ExpireOption::Gt))
+        .expireat("key", now + 5, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
     assert!(9 <= ttl && ttl <= 10);
     let result = database
-        .expireat("key", now + 15, Some(ExpireOption::Gt))
+        .expireat("key", now + 15, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
@@ -208,14 +208,14 @@ async fn expireat() -> Result<()> {
 
     // lt
     let result = database
-        .expireat("key", now + 20, Some(ExpireOption::Lt))
+        .expireat("key", now + 20, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
     let ttl = database.ttl("key").send().await?;
     assert!(14 <= ttl && ttl <= 15);
     let result = database
-        .expireat("key", now + 5, Some(ExpireOption::Lt))
+        .expireat("key", now + 5, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
@@ -233,7 +233,7 @@ async fn expiretime() -> Result<()> {
     let database = connection.get_default_database();
 
     database.set("key", "value").send().await?;
-    assert!(database.expireat("key", 33177117420, None).send().await?);
+    assert!(database.expireat("key", 33177117420, ExpireOption::default()).send().await?);
     let time = database.expiretime("key").send().await?;
     assert_eq!(time, 33177117420);
 
@@ -397,14 +397,14 @@ async fn pexpire() -> Result<()> {
 
     // no option
     database.set("key", "value").send().await?;
-    let result = database.pexpire("key", 10000, None).send().await?;
+    let result = database.pexpire("key", 10000, ExpireOption::default()).send().await?;
     assert!(result);
     assert_eq!(10, database.ttl("key").send().await?);
 
     // xx
     database.set("key", "value").send().await?;
     let result = database
-        .pexpire("key", 10000, Some(ExpireOption::Xx))
+        .pexpire("key", 10000, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
@@ -412,7 +412,7 @@ async fn pexpire() -> Result<()> {
 
     // nx
     let result = database
-        .pexpire("key", 10000, Some(ExpireOption::Nx))
+        .pexpire("key", 10000, ExpireOption::Nx)
         .send()
         .await?;
     assert!(result);
@@ -420,13 +420,13 @@ async fn pexpire() -> Result<()> {
 
     // gt
     let result = database
-        .pexpire("key", 5000, Some(ExpireOption::Gt))
+        .pexpire("key", 5000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
     assert_eq!(10, database.ttl("key").send().await?);
     let result = database
-        .pexpire("key", 15000, Some(ExpireOption::Gt))
+        .pexpire("key", 15000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
@@ -434,13 +434,13 @@ async fn pexpire() -> Result<()> {
 
     // lt
     let result = database
-        .pexpire("key", 20000, Some(ExpireOption::Lt))
+        .pexpire("key", 20000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
     assert_eq!(15, database.ttl("key").send().await?);
     let result = database
-        .pexpire("key", 5000, Some(ExpireOption::Lt))
+        .pexpire("key", 5000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
@@ -464,14 +464,14 @@ async fn pexpireat() -> Result<()> {
 
     // no option
     database.set("key", "value").send().await?;
-    let result = database.pexpireat("key", now + 10000, None).send().await?;
+    let result = database.pexpireat("key", now + 10000, ExpireOption::default()).send().await?;
     assert!(result);
     assert!(10000 >= database.pttl("key").send().await?);
 
     // xx
     database.set("key", "value").send().await?;
     let result = database
-        .pexpireat("key", now + 10000, Some(ExpireOption::Xx))
+        .pexpireat("key", now + 10000, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
@@ -479,7 +479,7 @@ async fn pexpireat() -> Result<()> {
 
     // nx
     let result = database
-        .pexpireat("key", now + 10000, Some(ExpireOption::Nx))
+        .pexpireat("key", now + 10000, ExpireOption::Nx)
         .send()
         .await?;
     assert!(result);
@@ -487,13 +487,13 @@ async fn pexpireat() -> Result<()> {
 
     // gt
     let result = database
-        .pexpireat("key", now + 5000, Some(ExpireOption::Gt))
+        .pexpireat("key", now + 5000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
     assert!(10000 >= database.pttl("key").send().await?);
     let result = database
-        .pexpireat("key", now + 15000, Some(ExpireOption::Gt))
+        .pexpireat("key", now + 15000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
@@ -501,13 +501,13 @@ async fn pexpireat() -> Result<()> {
 
     // lt
     let result = database
-        .pexpireat("key", now + 20000, Some(ExpireOption::Lt))
+        .pexpireat("key", now + 20000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
     assert!(20000 >= database.pttl("key").send().await?);
     let result = database
-        .pexpireat("key", now + 5000, Some(ExpireOption::Lt))
+        .pexpireat("key", now + 5000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
@@ -526,7 +526,7 @@ async fn pexpiretime() -> Result<()> {
     database.set("key", "value").send().await?;
     assert!(
         database
-            .pexpireat("key", 33177117420000, None)
+            .pexpireat("key", 33177117420000, ExpireOption::default())
             .send()
             .await?
     );
@@ -630,7 +630,7 @@ async fn scan() -> Result<()> {
     database.set("key2", "value").send().await?;
     database.set("key3", "value").send().await?;
 
-    let keys: (u64, HashSet<String>) = database.scan(0, NONE_ARG, None, NONE_ARG).send().await?;
+    let keys: (u64, HashSet<String>) = database.scan(0, ScanOptions::default()).send().await?;
     assert_eq!(3, keys.1.len());
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));
@@ -654,7 +654,7 @@ async fn sort() -> Result<()> {
         .await?;
 
     let values: Vec<String> = database
-        .sort("key", <SortOptions>::default().alpha())
+        .sort("key", SortOptions::default().alpha())
         .send()
         .await?;
     assert_eq!(3, values.len());
@@ -663,7 +663,7 @@ async fn sort() -> Result<()> {
     assert_eq!("member3".to_owned(), values[2]);
 
     let len = database
-        .sort_and_store("key", "out", <SortOptions>::default().alpha())
+        .sort_and_store("key", "out", SortOptions::default().alpha())
         .send()
         .await?;
     assert_eq!(3, len);

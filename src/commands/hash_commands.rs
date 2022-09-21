@@ -1,7 +1,8 @@
 use crate::{
     cmd,
     resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
-    CommandResult, PrepareCommand, KeyValueArgOrCollection, SingleArgOrCollection,
+    CommandArgs, CommandResult, IntoArgs, KeyValueArgOrCollection, PrepareCommand,
+    SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Hashes
@@ -229,26 +230,18 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hscan/)
     #[must_use]
-    fn hscan<K, P, F, V>(
+    fn hscan<K, F, V>(
         &self,
         key: K,
         cursor: u64,
-        match_pattern: Option<P>,
-        count: Option<usize>,
+        options: HScanOptions,
     ) -> CommandResult<T, (u64, Vec<(F, V)>)>
     where
         K: Into<BulkString>,
-        P: Into<BulkString>,
         F: FromValue + Default,
         V: FromValue + Default,
     {
-        self.prepare_command(
-            cmd("HSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg(match_pattern.map(|p| ("MATCH", p)))
-                .arg(count.map(|c| ("COUNT", c))),
-        )
+        self.prepare_command(cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
 
     /// Sets field in the hash stored at key to value.
@@ -319,5 +312,33 @@ pub trait HashCommands<T>: PrepareCommand<T> {
         A: FromSingleValueArray<V>,
     {
         self.prepare_command(cmd("HVALS").arg(key))
+    }
+}
+
+/// Options for the [`hscan`](crate::HashCommands::hscan) command
+#[derive(Default)]
+pub struct HScanOptions {
+    command_args: CommandArgs,
+}
+
+impl HScanOptions {
+    #[must_use]
+    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+        Self {
+            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count),
+        }
+    }
+}
+
+impl IntoArgs for HScanOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

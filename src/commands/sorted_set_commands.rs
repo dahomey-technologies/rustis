@@ -915,45 +915,35 @@ impl IntoArgs for ZWhere {
 /// Options for the command [zadd](crate::SortedSetCommands::zadd)
 #[derive(Default)]
 pub struct ZAddOptions {
-    condition: ZAddCondition,
-    comparison: ZAddComparison,
-    change: bool,
+    command_args: CommandArgs
 }
 
 impl ZAddOptions {
     #[must_use]
     pub fn condition(self, condition: ZAddCondition) -> Self {
         Self {
-            condition,
-            comparison: self.comparison,
-            change: self.change,
+            command_args: self.command_args.arg(condition)
         }
     }
 
     #[must_use]
     pub fn comparison(self, comparison: ZAddComparison) -> Self {
         Self {
-            condition: self.condition,
-            comparison,
-            change: self.change,
+            command_args: self.command_args.arg(comparison)
         }
     }
 
     #[must_use]
     pub fn change(self) -> Self {
         Self {
-            condition: self.condition,
-            comparison: self.comparison,
-            change: true,
+            command_args: self.command_args.arg("CH")
         }
     }
 }
 
 impl IntoArgs for ZAddOptions {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
-        args.arg(self.condition)
-            .arg(self.comparison)
-            .arg_if(self.change, "CH")
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }
 

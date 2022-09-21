@@ -3,7 +3,6 @@ use crate::{
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
     CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, SingleArgOrCollection,
 };
-use std::marker::PhantomData;
 
 /// A group of generic Redis commands
 ///
@@ -169,22 +168,18 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/migrate/](https://redis.io/commands/migrate/)
     #[must_use]
-    fn migrate<H, K, P1, U, P2, KK>(
+    fn migrate<H, K>(
         &self,
         host: H,
         port: u16,
         key: K,
         destination_db: usize,
         timeout: u64,
-        options: MigrateOptions<P1, U, P2, K, KK>,
+        options: MigrateOptions,
     ) -> CommandResult<T, bool>
     where
         H: Into<BulkString>,
         K: Into<BulkString>,
-        P1: Into<BulkString>,
-        U: Into<BulkString>,
-        P2: Into<BulkString>,
-        KK: SingleArgOrCollection<K>,
     {
         self.prepare_command(
             cmd("MIGRATE")
@@ -636,98 +631,50 @@ impl IntoArgs for ExpireOption {
 }
 
 #[derive(Default)]
-pub struct MigrateOptions<
-    P1 = &'static str,
-    U = &'static str,
-    P2 = &'static str,
-    K = &'static str,
-    KK = Vec<&'static str>,
-> where
-    P1: Into<BulkString>,
-    U: Into<BulkString>,
-    P2: Into<BulkString>,
-    K: Into<BulkString>,
-    KK: SingleArgOrCollection<K>,
-{
-    phantom: PhantomData<K>,
-    copy: bool,
-    replace: bool,
-    auth: Option<P1>,
-    auth2: Option<(U, P2)>,
-    keys: Option<KK>,
+pub struct MigrateOptions {
+    command_args: CommandArgs,
 }
 
-impl<P1, U, P2, K, KK> MigrateOptions<P1, U, P2, K, KK>
-where
-    P1: Into<BulkString>,
-    U: Into<BulkString>,
-    P2: Into<BulkString>,
-    K: Into<BulkString>,
-    KK: SingleArgOrCollection<K>,
-{
+impl MigrateOptions {
     #[must_use]
     pub fn copy(self) -> Self {
         Self {
-            phantom: PhantomData,
-            copy: true,
-            replace: self.replace,
-            auth: self.auth,
-            auth2: self.auth2,
-            keys: self.keys,
+            command_args: self.command_args.arg("COPY"),
         }
     }
 
     #[must_use]
-    pub fn auth(self, password: P1) -> Self {
+    pub fn replace(self) -> Self {
         Self {
-            phantom: PhantomData,
-            copy: self.copy,
-            replace: self.replace,
-            auth: Some(password),
-            auth2: self.auth2,
-            keys: self.keys,
+            command_args: self.command_args.arg("REPLACE"),
         }
     }
 
     #[must_use]
-    pub fn auth2(self, username: U, password: P2) -> Self {
+    pub fn auth<P: Into<BulkString>>(self, password: P) -> Self {
         Self {
-            phantom: PhantomData,
-            copy: self.copy,
-            replace: self.replace,
-            auth: self.auth,
-            auth2: Some((username, password)),
-            keys: self.keys,
+            command_args: self.command_args.arg("AUTH").arg(password),
         }
     }
 
     #[must_use]
-    pub fn keys(self, keys: KK) -> Self {
+    pub fn auth2<U: Into<BulkString>, P: Into<BulkString>>(self, username: U, password: P) -> Self {
         Self {
-            phantom: PhantomData,
-            copy: self.copy,
-            replace: self.replace,
-            auth: self.auth,
-            auth2: self.auth2,
-            keys: Some(keys),
+            command_args: self.command_args.arg("AUTH2").arg(username).arg(password),
+        }
+    }
+
+    #[must_use]
+    pub fn keys<K: Into<BulkString>, KK: SingleArgOrCollection<K>>(self, keys: KK) -> Self {
+        Self {
+            command_args: self.command_args.arg("KEYS").arg(keys),
         }
     }
 }
 
-impl<P1, U, P2, K, KK> IntoArgs for MigrateOptions<P1, U, P2, K, KK>
-where
-    P1: Into<BulkString>,
-    U: Into<BulkString>,
-    P2: Into<BulkString>,
-    K: Into<BulkString>,
-    KK: SingleArgOrCollection<K>,
-{
+impl IntoArgs for MigrateOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg_if(self.copy, "COPY")
-            .arg_if(self.replace, "REPLACE")
-            .arg(self.auth.map(|pwd| ("AUTH", pwd)))
-            .arg(self.auth2.map(|(user, pwd)| ("AUTH2", user, pwd)))
-            .arg(self.keys)
+        args.arg(self.command_args)
     }
 }
 

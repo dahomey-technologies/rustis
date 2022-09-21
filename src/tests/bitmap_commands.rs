@@ -14,29 +14,29 @@ async fn bitcount() -> Result<()> {
 
     database.set("mykey", "foobar").send().await?;
 
-    let count = database.bitcount("mykey", None).send().await?;
+    let count = database.bitcount("mykey", BitRange::default()).send().await?;
     assert_eq!(26, count);
 
     let count = database
-        .bitcount("mykey", Some(BitRange::range(0, 0)))
+        .bitcount("mykey", BitRange::range(0, 0))
         .send()
         .await?;
     assert_eq!(4, count);
 
     let count = database
-        .bitcount("mykey", Some(BitRange::range(1, 1)))
+        .bitcount("mykey", BitRange::range(1, 1))
         .send()
         .await?;
     assert_eq!(6, count);
 
     let count = database
-        .bitcount("mykey", Some(BitRange::range(1, 1).unit(BitUnit::Byte)))
+        .bitcount("mykey", BitRange::range(1, 1).unit(BitUnit::Byte))
         .send()
         .await?;
     assert_eq!(6, count);
 
     let count = database
-        .bitcount("mykey", Some(BitRange::range(5, 30).unit(BitUnit::Bit)))
+        .bitcount("mykey", BitRange::range(5, 30).unit(BitUnit::Bit))
         .send()
         .await?;
     assert_eq!(17, count);
@@ -161,7 +161,7 @@ async fn bitpos() -> Result<()> {
         .send()
         .await?;
 
-    let pos = database.bitpos("mykey", 1, None).send().await?;
+    let pos = database.bitpos("mykey", 1, BitRange::default()).send().await?;
     assert_eq!(0, pos);
 
     database
@@ -169,31 +169,31 @@ async fn bitpos() -> Result<()> {
         .send()
         .await?;
     let pos = database
-        .bitpos("mykey", 0, Some(BitRange::range(0, -1)))
+        .bitpos("mykey", 0, BitRange::range(0, -1))
         .send()
         .await?;
     assert_eq!(0, pos);
 
     let pos = database
-        .bitpos("mykey", 1, Some(BitRange::range(2, -1)))
+        .bitpos("mykey", 1, BitRange::range(2, -1))
         .send()
         .await?;
     assert_eq!(16, pos);
 
     let pos = database
-        .bitpos("mykey", 1, Some(BitRange::range(2, -1).unit(BitUnit::Byte)))
+        .bitpos("mykey", 1, BitRange::range(2, -1).unit(BitUnit::Byte))
         .send()
         .await?;
     assert_eq!(16, pos);
 
     let pos = database
-        .bitpos("mykey", 1, Some(BitRange::range(7, 15).unit(BitUnit::Bit)))
+        .bitpos("mykey", 1, BitRange::range(7, 15).unit(BitUnit::Bit))
         .send()
         .await?;
     assert_eq!(8, pos);
 
     let pos = database
-        .bitpos("mykey", 1, Some(BitRange::range(7, -3).unit(BitUnit::Bit)))
+        .bitpos("mykey", 1, BitRange::range(7, -3).unit(BitUnit::Bit))
         .send()
         .await?;
     assert_eq!(8, pos);

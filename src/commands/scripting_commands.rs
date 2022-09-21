@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, FlushingMode, IntoArgs, IntoCommandResult, Result,
+    CommandArgs, CommandResult, Error, FlushingMode, IntoArgs, IntoCommandResult, Result,
     SingleArgOrCollection,
 };
 
@@ -382,68 +382,30 @@ impl FromValue for LibraryInfo {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
             Value::Array(Array::Vec(v)) if v.len() == 8 => {
-                let (
-                    library_name_title,
-                    library_name,
-                    engine_title,
-                    engine,
-                    functions_title,
-                    functions,
-                    library_code_title,
-                    library_code,
-                ) = value.into::<(
-                    String,
-                    String,
-                    String,
-                    String,
-                    String,
-                    Vec<FunctionInfo>,
-                    String,
-                    String,
-                )>()?;
-
-                if library_name_title != "library_name"
-                    || engine_title != "engine"
-                    || functions_title != "functions"
-                    || library_code_title != "library_code"
-                {
-                    return Err(crate::Error::Internal(
-                        "Cannot parse LibraryInfo".to_owned(),
-                    ));
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
+                    Some(LibraryInfo {
+                        library_name: values.remove("library_name")?.into().ok()?,
+                        engine: values.remove("engine")?.into().ok()?,
+                        functions: values.remove("functions")?.into().ok()?,
+                        library_code: values.remove("library_code")?.into().ok()?,
+                    })
                 }
 
-                Ok(Self {
-                    library_name,
-                    engine,
-                    functions,
-                    library_code: Some(library_code),
-                })
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse LibraryInfo".to_owned()))
             }
             _ => {
-                let (
-                    library_name_title,
-                    library_name,
-                    engine_title,
-                    engine,
-                    functions_title,
-                    functions,
-                ) = value.into::<(String, String, String, String, String, Vec<FunctionInfo>)>()?;
-
-                if library_name_title != "library_name"
-                    || engine_title != "engine"
-                    || functions_title != "functions"
-                {
-                    return Err(crate::Error::Internal(
-                        "Cannot parse LibraryInfo".to_owned(),
-                    ));
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
+                    Some(LibraryInfo {
+                        library_name: values.remove("library_name")?.into().ok()?,
+                        engine: values.remove("engine")?.into().ok()?,
+                        functions: values.remove("functions")?.into().ok()?,
+                        library_code: None,
+                    })
                 }
 
-                Ok(Self {
-                    library_name,
-                    engine,
-                    functions,
-                    library_code: None,
-                })
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse LibraryInfo".to_owned()))
             }
         }
     }
@@ -458,20 +420,21 @@ pub struct FunctionInfo {
 
 impl FromValue for FunctionInfo {
     fn from_value(value: Value) -> Result<Self> {
-        let (name_title, name, desc_title, description, flags_title, flags) =
-            value.into::<(String, String, String, String, String, Vec<String>)>()?;
+        match &value {
+            Value::Array(Array::Vec(v)) if v.len() == 6 => {
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionInfo> {
+                    Some(FunctionInfo {
+                        name: values.remove("name")?.into().ok()?,
+                        description: values.remove("description")?.into().ok()?,
+                        flags: values.remove("flags")?.into().ok()?,
+                    })
+                }
 
-        if name_title != "name" || desc_title != "description" || flags_title != "flags" {
-            return Err(crate::Error::Internal(
-                "Cannot parse FunctionInfo".to_owned(),
-            ));
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse FunctionInfo".to_owned()))
+            },
+            _ => Err(Error::Internal("Cannot parse FunctionInfo".to_owned())),
         }
-
-        Ok(Self {
-            name,
-            description,
-            flags,
-        })
     }
 }
 
@@ -483,23 +446,20 @@ pub struct FunctionStats {
 
 impl FromValue for FunctionStats {
     fn from_value(value: Value) -> Result<Self> {
-        let (running_script_title, running_script, engines_title, engines) = value.into::<(
-            String,
-            Option<RunningScript>,
-            String,
-            HashMap<String, EngineStats>,
-        )>()?;
+        match &value {
+            Value::Array(Array::Vec(v)) if v.len() == 4 => {
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionStats> {
+                    Some(FunctionStats {
+                        running_script: values.remove("running_script")?.into().ok()?,
+                        engines: values.remove("engines")?.into().ok()?,
+                    })
+                }
 
-        if running_script_title != "running_script" || engines_title != "engines" {
-            return Err(crate::Error::Internal(
-                "Cannot parse FunctionStat".to_owned(),
-            ));
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse FunctionStats".to_owned()))
+            },
+            _ => Err(Error::Internal("Cannot parse FunctionStats".to_owned())),
         }
-
-        Ok(Self {
-            running_script,
-            engines,
-        })
     }
 }
 
@@ -512,21 +472,21 @@ pub struct RunningScript {
 
 impl FromValue for RunningScript {
     fn from_value(value: Value) -> Result<Self> {
-        let (name_title, name, command_title, command, duration_ms_title, duration_ms) =
-            value.into::<(String, String, String, Vec<String>, String, u64)>()?;
+        match &value {
+            Value::Array(Array::Vec(v)) if v.len() == 6 => {
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<RunningScript> {
+                    Some(RunningScript {
+                        name: values.remove("name")?.into().ok()?,
+                        command: values.remove("command")?.into().ok()?,
+                        duration_ms: values.remove("duration_ms")?.into().ok()?,
+                    })
+                }
 
-        if name_title != "name" || command_title != "command" || duration_ms_title != "duration_ms"
-        {
-            return Err(crate::Error::Internal(
-                "Cannot parse RunningScript".to_owned(),
-            ));
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse RunningScript".to_owned()))
+            },
+            _ => Err(Error::Internal("Cannot parse RunningScript".to_owned())),
         }
-
-        Ok(Self {
-            name,
-            command,
-            duration_ms,
-        })
     }
 }
 
@@ -538,18 +498,20 @@ pub struct EngineStats {
 
 impl FromValue for EngineStats {
     fn from_value(value: Value) -> Result<Self> {
-        let (libraries_count_title, libraries_count, functions_count_title, functions_count) =
-            value.into::<(String, usize, String, usize)>()?;
+        match &value {
+            Value::Array(Array::Vec(v)) if v.len() == 4 => {
+                fn into_result(values: &mut HashMap<String, Value>) -> Option<EngineStats> {
+                    Some(EngineStats {
+                        libraries_count: values.remove("libraries_count")?.into().ok()?,
+                        functions_count: values.remove("functions_count")?.into().ok()?,
+                    })
+                }
 
-        if libraries_count_title != "libraries_count" || functions_count_title != "functions_count"
-        {
-            return Err(crate::Error::Internal("Cannot parse EngineStat".to_owned()));
+                into_result(&mut value.into()?)
+                    .ok_or(Error::Internal("Cannot parse EngineStats".to_owned()))
+            },
+            _ => Err(Error::Internal("Cannot parse EngineStats".to_owned())),
         }
-
-        Ok(Self {
-            libraries_count,
-            functions_count,
-        })
     }
 }
 

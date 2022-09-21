@@ -181,7 +181,9 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
+        #[allow(clippy::complexity)]
         fn transpose<T1, T2, T3, T4, T5>(
             tuple: (Result<T1>, Result<T2>, Result<T3>, Result<T4>, Result<T5>),
         ) -> Result<(T1, T2, T3, T4, T5)> {
@@ -252,6 +254,7 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
         fn transpose<T1, T2, T3, T4, T5, T6>(
             tuple: (
@@ -344,6 +347,7 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
         fn transpose<T1, T2, T3, T4, T5, T6, T7>(
             tuple: (
@@ -443,6 +447,7 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
         fn transpose<T1, T2, T3, T4, T5, T6, T7, T8>(
             tuple: (
@@ -549,6 +554,7 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
         fn transpose<T1, T2, T3, T4, T5, T6, T7, T8, T9>(
             tuple: (
@@ -662,6 +668,7 @@ where
         }
     }
 
+    #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
         fn transpose<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
             tuple: (

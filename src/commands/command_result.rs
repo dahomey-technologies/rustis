@@ -15,50 +15,56 @@ where
     R: FromValue,
     T: Send + Sync,
 {
+    #[must_use]
     pub fn from_database(command: Command, database: &'a Database) -> Self {
         CommandResult::Database(PhantomData, command, database)
     }
 
+    #[must_use]
     pub fn from_transaction(command: Command, transaction: &'a Transaction<T>) -> Self {
         CommandResult::Transaction(PhantomData, command, transaction)
     }
 
     pub(crate) async fn internal_queue<U: Send + Sync>(self) -> Result<Transaction<U>> {
-        match self {
-            CommandResult::Transaction(_, command, transaction) => {
-                transaction.internal_queue(command).await?;
-                Ok(Transaction::from_transaction(transaction))
-            }
-            _ => Err(Error::Internal(
+        if let CommandResult::Transaction(_, command, transaction) = self {
+            transaction.internal_queue(command).await?;
+            Ok(Transaction::from_transaction(transaction))
+        } else {
+            Err(Error::Internal(
                 "queue method must be called with a valid transaction".to_owned(),
-            )),
+            ))
         }
     }
 
     pub(crate) async fn internal_queue_and_forget(self) -> Result<Transaction<T>> {
-        match self {
-            CommandResult::Transaction(_, command, transaction) => {
-                transaction.internal_queue_and_forget(command).await?;
-                Ok(Transaction::from_transaction(transaction))
-            }
-            _ => Err(Error::Internal(
+        if let CommandResult::Transaction(_, command, transaction) = self {
+            transaction.internal_queue_and_forget(command).await?;
+            Ok(Transaction::from_transaction(transaction))
+        } else {
+            Err(Error::Internal(
                 "queue method must be called with a valid transaction".to_owned(),
-            )),
+            ))
         }
     }
 }
 
-pub trait IntoCommandResult<T> {
-    fn into_command_result<R: FromValue>(&self, command: Command) -> CommandResult<T, R>;
+pub trait PrepareCommand<T> {
+    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<T, R>;
 }
 
 pub struct DatabaseResult;
 
+#[allow(clippy::module_name_repetitions)]
 pub trait DatabaseCommandResult<'a, R>
 where
     R: FromValue,
 {
     fn send(self) -> Future<'a, R>;
+
+    /// Send command and forget its response
+    /// 
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn send_and_forget(self) -> Result<()>;
 }
 
@@ -67,25 +73,27 @@ where
     R: FromValue + Send + 'a,
 {
     fn send(self) -> Future<'a, R> {
-        match self {
-            CommandResult::Database(_, command, database) => {
-                let fut = database.send(command);
-                Box::pin(async move { fut.await?.into() })
-            }
-            _ => Box::pin(ready(Err(Error::Internal(
+        if let CommandResult::Database(_, command, database) = self {
+            let fut = database.send(command);
+            Box::pin(async move { fut.await?.into() })
+        } else {
+            Box::pin(ready(Err(Error::Internal(
                 "send method must be called with a valid database".to_owned(),
-            )))),
+            ))))
         }
     }
 
+    /// Send command and forget its response
+    ///
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn send_and_forget(self) -> Result<()> {
-        match self {
-            CommandResult::Database(_, command, database) => {
-                database.send_and_forget(command)
-            }
-            _ => Err(Error::Internal(
+        if let CommandResult::Database(_, command, database) = self {
+            database.send_and_forget(command)
+        } else {
+            Err(Error::Internal(
                 "send_and_forget method must be called with a valid database".to_owned(),
-            )),
+            ))
         }
     }
 }
@@ -171,6 +179,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(clippy::complexity)]
 pub struct TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>
 where
     T1: FromValue,
@@ -186,6 +195,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(clippy::complexity)]
 pub struct TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>
 where
     T1: FromValue,
@@ -202,6 +212,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(clippy::complexity)]
 pub struct TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
 where
     T1: FromValue,
@@ -218,17 +229,18 @@ where
     phantom: PhantomData<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub trait TransactionCommandResult<'a, T, U> {
     fn queue(self) -> Future<'a, Transaction<T>>;
     fn queue_and_forget(self) -> Future<'a, Transaction<U>>;
 }
 
-impl<'a, T> TransactionCommandResult<'a, TransactionResult1<T>, TransactionResult0>
-    for CommandResult<'a, TransactionResult0, T>
+impl<'a, T1> TransactionCommandResult<'a, TransactionResult1<T1>, TransactionResult0>
+    for CommandResult<'a, TransactionResult0, T1>
 where
-    T: FromValue + Send + Sync + 'a,
+    T1: FromValue + Send + Sync + 'a,
 {
-    fn queue(self) -> Future<'a, Transaction<TransactionResult1<T>>> {
+    fn queue(self) -> Future<'a, Transaction<TransactionResult1<T1>>> {
         Box::pin(self.internal_queue())
     }
 
@@ -570,7 +582,8 @@ where
     }
 }
 
-impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> TransactionExt<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>
+impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+    TransactionExt<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>
     for Transaction<TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>
 where
     T1: FromValue + Default + Send + Sync,
@@ -588,4 +601,3 @@ where
         self.internal_exec()
     }
 }
-

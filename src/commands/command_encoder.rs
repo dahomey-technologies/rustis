@@ -49,7 +49,7 @@ fn encode_command_args(command_args: &CommandArgs, buf: &mut BytesMut) {
     match command_args {
         CommandArgs::Empty => (),
         CommandArgs::Single(arg) => {
-            encode_bulkstring(&arg, buf);
+            encode_bulkstring(arg, buf);
         }
         CommandArgs::Array2(args) => {
             for arg in args.iter() {

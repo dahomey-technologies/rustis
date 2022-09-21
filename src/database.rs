@@ -1,7 +1,7 @@
 use crate::{
     resp::{FromValue, Value},
     BitmapCommands, Command, CommandResult, ConnectionMultiplexer, DatabaseResult, GenericCommands,
-    GeoCommands, HashCommands, IntoCommandResult, ListCommands, Result, ScriptingCommands,
+    GeoCommands, HashCommands, PrepareCommand, ListCommands, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StringCommands, Transaction,
     TransactionResult0, ConnectionCommands,
 };
@@ -19,6 +19,7 @@ impl Database {
     }
 
     /// The numeric identifier of this database
+    #[must_use]
     pub fn get_database(&self) -> usize {
         self.db
     }
@@ -30,7 +31,7 @@ impl Database {
     ///
     /// # Arguments
     /// * `name` - Command name in uppercase.
-    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [BulkString](crate::resp::BulkString).
+    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`BulkString`](crate::resp::BulkString).
     ///
     /// # Example
     /// ```
@@ -50,31 +51,39 @@ impl Database {
     ///     Ok(())
     /// }
     /// ```
-    pub fn send<'a>(
-        &'a self,
+    pub fn send(
+        &self,
         command: Command,
-    ) -> impl futures::Future<Output = Result<Value>> + 'a {
+    ) -> impl futures::Future<Output = Result<Value>> + '_ {
         self.multiplexer.send(self.db, command)
     }
 
-    pub fn send_and_forget<'a>(
-        &'a self,
+    /// Send command and forget its response
+    /// 
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    pub fn send_and_forget(
+        &self,
         command: Command,
     ) -> Result<()> {
         self.multiplexer.send_and_forget(self.db, command)
     }
 
+    /// Create a new transaction
+    /// 
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error)
     pub async fn create_transaction(&self) -> Result<Transaction<TransactionResult0>> {
         Transaction::initialize(self.clone()).await
     }
 }
 
-impl IntoCommandResult<DatabaseResult> for Database {
-    fn into_command_result<R: FromValue>(
+impl PrepareCommand<DatabaseResult> for Database {
+    fn prepare_command<R: FromValue>(
         &self,
         command: Command,
     ) -> CommandResult<DatabaseResult, R> {
-        CommandResult::from_database(command, &self)
+        CommandResult::from_database(command, self)
     }
 }
 

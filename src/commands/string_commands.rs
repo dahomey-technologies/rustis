@@ -1,14 +1,14 @@
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, IntoCommandResult, KeyValueArgOrCollection,
+    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, KeyValueArgOrCollection,
     Result, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Strings
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
-pub trait StringCommands<T>: IntoCommandResult<T> {
+pub trait StringCommands<T>: PrepareCommand<T> {
     /// If key already exists and is a string,
     /// this command appends the value at the end of the string.
     /// If key does not exist it is created and set as an empty string,
@@ -19,12 +19,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/append/](https://redis.io/commands/append/)
+    #[must_use]
     fn append<K, V>(&self, key: K, value: V) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("APPEND").arg(key).arg(value))
+        self.prepare_command(cmd("APPEND").arg(key).arg(value))
     }
 
     /// Decrements the number stored at key by one.
@@ -39,11 +40,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/decr/](https://redis.io/commands/decr/)
+    #[must_use]
     fn decr<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("DECR").arg(key))
+        self.prepare_command(cmd("DECR").arg(key))
     }
 
     /// Decrements the number stored at key by one.
@@ -58,11 +60,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/decrby/](https://redis.io/commands/decrby/)
+    #[must_use]
     fn decrby<K>(&self, key: K, decrement: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("DECRBY").arg(key).arg(decrement))
+        self.prepare_command(cmd("DECRBY").arg(key).arg(decrement))
     }
 
     /// Get the value of key.
@@ -75,7 +78,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # Return
     /// the value of key, or `nil` when key does not exist.
-    /// 
+    ///
     /// # Example
     /// ```
     /// use redis_driver::{
@@ -88,33 +91,34 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
     ///     let database = connection.get_default_database();
     ///     database.flushdb(FlushingMode::Sync).send().await?;
-    /// 
+    ///
     ///     // return value can be an Option<String>...
     ///     let value: Option<String> = database.get("key").send().await?;
     ///     assert_eq!(None, value);
-    /// 
-    ///     // ... or it can be directly a String. 
+    ///
+    ///     // ... or it can be directly a String.
     ///     // In this cas a `nil` value will result in an empty String
     ///     let value: String = database.get("key").send().await?;
     ///     assert_eq!("", &value);
-    /// 
+    ///
     ///     database.set("key", "value").send().await?;
     ///     let value: String = database.get("key").send().await?;
     ///     assert_eq!("value", value);
-    /// 
+    ///
     ///     Ok(())
     /// }
     /// ```
     ///
     /// # See Also
     /// [https://redis.io/commands/get/](https://redis.io/commands/get/)
+    #[must_use]
     fn get<K, V>(&self, key: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
         Self: Sized,
     {
-        self.into_command_result(cmd("GET").arg(key))
+        self.prepare_command(cmd("GET").arg(key))
     }
 
     /// Get the value of key and delete the key.
@@ -127,12 +131,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/getdel/](https://redis.io/commands/getdel/)
+    #[must_use]
     fn getdel<K, V>(&self, key: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.into_command_result(cmd("GETDEL").arg(key))
+        self.prepare_command(cmd("GETDEL").arg(key))
     }
 
     /// Get the value of key and optionally set its expiration. GETEX is similar to GET, but is a write command with additional options.
@@ -158,26 +163,27 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
     ///     let database = connection.get_default_database();
     ///     database.flushdb(FlushingMode::Sync).send().await?;
-    /// 
+    ///
     ///     database.set("key", "value").send().await?;
     ///     let value: String = database.getex("key", GetExOptions::Ex(60)).send().await?;
     ///     assert_eq!("value", value);
-    /// 
+    ///
     ///     let ttl = database.ttl("key").send().await?;
     ///     assert!(59 <= ttl && ttl <= 60);
-    /// 
+    ///
     ///     Ok(())
     /// }
     /// ```
     ///
     /// # See Also
     /// [https://redis.io/commands/getex/](https://redis.io/commands/getex/)
+    #[must_use]
     fn getex<K, V>(&self, key: K, options: GetExOptions) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.into_command_result(cmd("GETEX").arg(key).arg(options))
+        self.prepare_command(cmd("GETEX").arg(key).arg(options))
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -189,12 +195,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
 
     /// # See Also
     /// [https://redis.io/commands/getrange/](https://redis.io/commands/getrange/)
+    #[must_use]
     fn getrange<K, V>(&self, key: K, start: usize, end: isize) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.into_command_result(cmd("GETRANGE").arg(key).arg(start).arg(end))
+        self.prepare_command(cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
 
     /// Atomically sets key to value and returns the old value stored at key.
@@ -206,13 +213,14 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/getset/](https://redis.io/commands/getset/)
+    #[must_use]
     fn getset<K, V, R>(&self, key: K, value: V) -> CommandResult<T, R>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
         R: FromValue,
     {
-        self.into_command_result(cmd("GETSET").arg(key).arg(value))
+        self.prepare_command(cmd("GETSET").arg(key).arg(value))
     }
 
     /// Increments the number stored at key by one.
@@ -233,11 +241,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/incr/](https://redis.io/commands/incr/)
+    #[must_use]
     fn incr<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("INCR").arg(key))
+        self.prepare_command(cmd("INCR").arg(key))
     }
 
     /// Increments the number stored at key by increment.
@@ -254,11 +263,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/incrby/](https://redis.io/commands/incrby/)
+    #[must_use]
     fn incrby<K>(&self, key: K, increment: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("INCRBY").arg(key).arg(increment))
+        self.prepare_command(cmd("INCRBY").arg(key).arg(increment))
     }
 
     ///Increment the string representing a floating point number stored at key by the specified increment.
@@ -286,11 +296,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/incrbyfloat/](https://redis.io/commands/incrbyfloat/)
+    #[must_use]
     fn incrbyfloat<K>(&self, key: K, increment: f64) -> CommandResult<T, f64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("INCRBYFLOAT").arg(key).arg(increment))
+        self.prepare_command(cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -300,12 +311,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    #[must_use]
     fn lcs<K, V>(&self, key1: K, key2: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.into_command_result(cmd("LCS").arg(key1).arg(key2))
+        self.prepare_command(cmd("LCS").arg(key1).arg(key2))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -315,11 +327,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    #[must_use]
     fn lcs_len<K>(&self, key1: K, key2: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("LCS").arg(key1).arg(key2).arg("LEN"))
+        self.prepare_command(cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -331,6 +344,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    #[must_use]
     fn lcs_idx<K>(
         &self,
         key1: K,
@@ -341,7 +355,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("LCS")
                 .arg(key1)
                 .arg(key2)
@@ -361,13 +375,14 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/mget/](https://redis.io/commands/mget/)
-    fn mget<'a, K, V, C>(&'a self, keys: C) -> CommandResult<T, Vec<Option<V>>>
+    #[must_use]
+    fn mget<K, V, C>(&self, keys: C) -> CommandResult<T, Vec<Option<V>>>
     where
         K: Into<BulkString>,
         V: FromValue,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("MGET").arg(keys))
+        self.prepare_command(cmd("MGET").arg(keys))
     }
 
     /// Sets the given keys to their respective values.
@@ -377,13 +392,14 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
-    fn mset<'a, K, V, C>(&'a self, items: C) -> CommandResult<T, ()>
+    #[must_use]
+    fn mset<K, V, C>(&self, items: C) -> CommandResult<T, ()>
     where
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("MSET").arg(items))
+        self.prepare_command(cmd("MSET").arg(items))
     }
 
     /// Sets the given keys to their respective values.
@@ -403,13 +419,14 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
-    fn msetnx<'a, K, V, C>(&'a self, items: C) -> CommandResult<T, bool>
+    #[must_use]
+    fn msetnx<K, V, C>(&self, items: C) -> CommandResult<T, bool>
     where
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("MSETNX").arg(items))
+        self.prepare_command(cmd("MSETNX").arg(items))
     }
 
     /// Works exactly like [setex](crate::StringCommands::setex) with the sole
@@ -420,12 +437,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/psetex/](https://redis.io/commands/psetex/)
+    #[must_use]
     fn psetex<K, V>(&self, key: K, milliseconds: u64, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
+        self.prepare_command(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
 
     ///Set key to hold the string value.
@@ -435,13 +453,14 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    #[must_use]
     fn set<K, V>(&self, key: K, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
         Self: Sized,
     {
-        self.into_command_result(cmd("SET").arg(key).arg(value))
+        self.prepare_command(cmd("SET").arg(key).arg(value))
     }
 
     ///Set key to hold the string value.
@@ -453,6 +472,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    #[must_use]
     fn set_with_options<K, V>(
         &self,
         key: K,
@@ -465,7 +485,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("SET")
                 .arg(key)
                 .arg(value)
@@ -479,6 +499,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    #[must_use]
     fn set_get_with_options<K, V1, V2>(
         &self,
         key: K,
@@ -492,7 +513,7 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
         V1: Into<BulkString>,
         V2: FromValue,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("SET")
                 .arg(key)
                 .arg(value)
@@ -507,12 +528,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/setex/](https://redis.io/commands/setex/)
+    #[must_use]
     fn setex<K, V>(&self, key: K, seconds: u64, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("SETEX").arg(key).arg(seconds).arg(value))
+        self.prepare_command(cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
 
     /// Set key to hold string value if key does not exist.
@@ -528,12 +550,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/setnx/](https://redis.io/commands/setnx/)
+    #[must_use]
     fn setnx<K, V>(&self, key: K, value: V) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("SETNX").arg(key).arg(value))
+        self.prepare_command(cmd("SETNX").arg(key).arg(value))
     }
 
     /// Overwrites part of the string stored at key,
@@ -545,12 +568,13 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/setrange/](https://redis.io/commands/setrange/)
+    #[must_use]
     fn setrange<K, V>(&self, key: K, offset: usize, value: V) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.into_command_result(cmd("SETRANGE").arg(key).arg(offset).arg(value))
+        self.prepare_command(cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
 
     /// Returns the length of the string value stored at key.
@@ -562,11 +586,12 @@ pub trait StringCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/strlen/](https://redis.io/commands/strlen/)
+    #[must_use]
     fn strlen<K>(&self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("STRLEN").arg(key))
+        self.prepare_command(cmd("STRLEN").arg(key))
     }
 }
 
@@ -596,111 +621,100 @@ impl IntoArgs for GetExOptions {
     }
 }
 
+pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
+
 /// Result for the [lcs](crate::StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
-    pub matches: Vec<((usize, usize), (usize, usize), Option<usize>)>,
+    pub matches: Vec<LcsMatch>,
     pub len: usize,
 }
 
 impl FromValue for LcsResult {
     fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::Array(Array::Vec(mut result)) => {
-                match (result.pop(), result.pop(), result.pop(), result.pop()) {
-                    (
-                        Some(Value::Integer(len)),
-                        Some(Value::BulkString(BulkString::Binary(len_label))),
-                        Some(Value::Array(Array::Vec(matches))),
-                        Some(Value::BulkString(BulkString::Binary(matches_label))),
-                    ) => {
-                        if matches_label.as_slice() == b"matches" && len_label.as_slice() == b"len"
-                        {
-                            let matches: Result<
-                                Vec<((usize, usize), (usize, usize), Option<usize>)>,
-                            > = matches
-                                .into_iter()
-                                .map(|m| {
-                                    let mut _match: Vec<Value> = m.into()?;
+        if let Value::Array(Array::Vec(mut result)) = value {
+            if let (
+                Some(Value::Integer(len)),
+                Some(Value::BulkString(BulkString::Binary(len_label))),
+                Some(Value::Array(Array::Vec(matches))),
+                Some(Value::BulkString(BulkString::Binary(matches_label))),
+            ) = (result.pop(), result.pop(), result.pop(), result.pop())
+            {
+                if matches_label.as_slice() == b"matches" && len_label.as_slice() == b"len" {
+                    let matches: Result<Vec<LcsMatch>> =
+                        matches
+                            .into_iter()
+                            .map(|m| {
+                                let mut match_: Vec<Value> = m.into()?;
 
-                                    match (_match.pop(), _match.pop(), _match.pop(), _match.pop()) {
-                                        (Some(len), Some(pos2), Some(pos1), None) => {
-                                            let mut pos1: Vec<usize> = pos1.into()?;
-                                            let mut pos2: Vec<usize> = pos2.into()?;
-                                            let len: usize = len.into()?;
+                                match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
+                                    (Some(len), Some(pos2), Some(pos1), None) => {
+                                        let mut pos1: Vec<usize> = pos1.into()?;
+                                        let mut pos2: Vec<usize> = pos2.into()?;
+                                        let len: usize = len.into()?;
 
-                                            match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                                (Some(pos1_right), Some(pos1_left), None) => {
-                                                    match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                        (
-                                                            Some(pos2_right),
-                                                            Some(pos2_left),
-                                                            None,
-                                                        ) => Ok((
+                                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                            (Some(pos1_right), Some(pos1_left), None) => {
+                                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                    (Some(pos2_right), Some(pos2_left), None) => {
+                                                        Ok((
                                                             (pos1_left, pos1_right),
                                                             (pos2_left, pos2_right),
                                                             Some(len),
-                                                        )),
-                                                        _ => Err(Error::Internal(
-                                                            "Cannot parse LCS result".to_owned(),
-                                                        )),
+                                                        ))
                                                     }
+                                                    _ => Err(Error::Internal(
+                                                        "Cannot parse LCS result".to_owned(),
+                                                    )),
                                                 }
-                                                _ => Err(Error::Internal(
-                                                    "Cannot parse LCS result".to_owned(),
-                                                )),
                                             }
+                                            _ => Err(Error::Internal(
+                                                "Cannot parse LCS result".to_owned(),
+                                            )),
                                         }
-                                        (Some(pos2), Some(pos1), None, None) => {
-                                            let mut pos1: Vec<usize> = pos1.into()?;
-                                            let mut pos2: Vec<usize> = pos2.into()?;
+                                    }
+                                    (Some(pos2), Some(pos1), None, None) => {
+                                        let mut pos1: Vec<usize> = pos1.into()?;
+                                        let mut pos2: Vec<usize> = pos2.into()?;
 
-                                            match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                                (Some(pos1_right), Some(pos1_left), None) => {
-                                                    match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                        (
-                                                            Some(pos2_right),
-                                                            Some(pos2_left),
-                                                            None,
-                                                        ) => Ok((
+                                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                            (Some(pos1_right), Some(pos1_left), None) => {
+                                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                    (Some(pos2_right), Some(pos2_left), None) => {
+                                                        Ok((
                                                             (pos1_left, pos1_right),
                                                             (pos2_left, pos2_right),
                                                             None,
-                                                        )),
-                                                        _ => Err(Error::Internal(
-                                                            "Cannot parse LCS result".to_owned(),
-                                                        )),
+                                                        ))
                                                     }
+                                                    _ => Err(Error::Internal(
+                                                        "Cannot parse LCS result".to_owned(),
+                                                    )),
                                                 }
-                                                _ => Err(Error::Internal(
-                                                    "Cannot parse LCS result".to_owned(),
-                                                )),
                                             }
+                                            _ => Err(Error::Internal(
+                                                "Cannot parse LCS result".to_owned(),
+                                            )),
                                         }
-                                        _ => Err(Error::Internal(
-                                            "Cannot parse LCS result".to_owned(),
-                                        )),
                                     }
-                                })
-                                .collect();
+                                    _ => Err(Error::Internal("Cannot parse LCS result".to_owned())),
+                                }
+                            })
+                            .collect();
 
-                            return Ok(LcsResult {
-                                matches: matches?,
-                                len: len as usize,
-                            });
-                        }
-                    }
-                    _ => (),
+                    return Ok(LcsResult {
+                        matches: matches?,
+                        len: usize::try_from(len).unwrap(),
+                    });
                 }
             }
-            _ => (),
         }
 
         Err(Error::Parse("Cannot parse result to LcsResult".to_string()))
     }
 }
 
-/// Expiration option for the [set_with_options](crate::StringCommands::set_with_options) command
+/// Expiration option for the [`set_with_options`](crate::StringCommands::set_with_options) command
 pub enum SetExpiration {
     /// No expiration
     None,
@@ -732,7 +746,7 @@ impl IntoArgs for SetExpiration {
     }
 }
 
-/// Condition option for the [set_with_options](crate::StringCommands::set_with_options) command
+/// Condition option for the [`set_with_options`](crate::StringCommands::set_with_options) command
 pub enum SetCondition {
     /// No condition
     None,

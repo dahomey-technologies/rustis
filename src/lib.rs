@@ -18,7 +18,7 @@ pub use commands::*;
 pub use connection_multiplexer::*;
 pub use database::*;
 pub use error::*;
-pub(crate) use message::*;
+pub(crate) use message::Message;
 pub use network::*;
 pub use pub_sub::*;
 pub use transaction::*;

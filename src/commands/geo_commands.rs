@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    ArgsOrCollection, CommandArgs, CommandResult, Error, IntoArgs, IntoCommandResult, Result,
+    ArgsOrCollection, CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, Result,
     SingleArgOrCollection,
 };
 
@@ -9,7 +9,7 @@ use crate::{
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)
-pub trait GeoCommands<T>: IntoCommandResult<T> {
+pub trait GeoCommands<T>: PrepareCommand<T> {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
@@ -18,6 +18,7 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/geoadd/](https://redis.io/commands/geoadd/)
+    #[must_use]
     fn geoadd<K, M, I>(
         &self,
         key: K,
@@ -30,7 +31,7 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, f64, M)>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("GEOADD")
                 .arg(key)
                 .arg(condition)
@@ -47,6 +48,7 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/geodist/](https://redis.io/commands/geodist/)
+    #[must_use]
     fn geodist<K, M>(
         &self,
         key: K,
@@ -58,7 +60,7 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit))
+        self.prepare_command(cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit))
     }
 
     /// Return valid [Geohash](https://en.wikipedia.org/wiki/Geohash) strings representing the position of one or more elements
@@ -69,13 +71,14 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/geohash/](https://redis.io/commands/geohash/)
+    #[must_use]
     fn geohash<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<String>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.into_command_result(cmd("GEOHASH").arg(key).arg(members))
+        self.prepare_command(cmd("GEOHASH").arg(key).arg(members))
     }
 
     /// Return the positions (longitude,latitude) of all the specified members
@@ -88,46 +91,14 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/geopos/](https://redis.io/commands/geopos/)
+    #[must_use]
     fn geopos<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.into_command_result(cmd("GEOPOS").arg(key).arg(members))
-    }
-
-    /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
-    /// which are within the borders of the area specified by a given shape.
-    ///
-    /// # Return
-    /// An array of members
-    ///
-    /// # See Also
-    /// [https://redis.io/commands/geosearch/](https://redis.io/commands/geosearch/)
-    fn geosearch<K, M1, M2, A>(
-        &self,
-        key: K,
-        from: GeoSearchFrom<M1>,
-        by: GeoSearchBy,
-        order: Option<GeoSearchOrder>,
-        count: Option<(usize, bool)>,
-    ) -> CommandResult<T, A>
-    where
-        K: Into<BulkString>,
-        M1: Into<BulkString>,
-        M2: FromValue,
-        A: FromSingleValueArray<M2>,
-    {
-        self.into_command_result(cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(order).arg(
-            count.map(|(count, any)| {
-                if any {
-                    (count, Some("ANY"))
-                } else {
-                    (count, None)
-                }
-            }),
-        ))
+        self.prepare_command(cmd("GEOPOS").arg(key).arg(members))
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
@@ -135,20 +106,17 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     ///
     /// # Return
     /// An array of members + additional information depending
-    /// on which with_xyz options have been selected
+    /// on which `with_xyz` options have been selected
     ///
     /// # See Also
     /// [https://redis.io/commands/geosearch/](https://redis.io/commands/geosearch/)
-    fn geosearch_with_options<K, M1, M2, A>(
+    #[must_use]
+    fn geosearch<K, M1, M2, A>(
         &self,
         key: K,
         from: GeoSearchFrom<M1>,
         by: GeoSearchBy,
-        order: Option<GeoSearchOrder>,
-        count: Option<(usize, bool)>,
-        with_coord: bool,
-        with_dist: bool,
-        with_hash: bool,
+        options: GeoSearchOptions,
     ) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
@@ -156,22 +124,12 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("GEOSEARCH")
                 .arg(key)
                 .arg(from)
                 .arg(by)
-                .arg(order)
-                .arg(count.map(|(count, any)| {
-                    if any {
-                        ("COUNT", count, Some("ANY"))
-                    } else {
-                        ("COUNT", count, None)
-                    }
-                }))
-                .arg_if(with_coord, "WITHCOORD")
-                .arg_if(with_dist, "WITHDIST")
-                .arg_if(with_hash, "WITHHASH"),
+                .arg(options),
         )
     }
 
@@ -181,37 +139,28 @@ pub trait GeoCommands<T>: IntoCommandResult<T> {
     /// the number of elements in the resulting set.
     ///
     /// # See Also
-    /// [https://redis.io/commands/geosearchstore/](https://redis.io/commands/geosearchstore/)
+    /// [<https://redis.io/commands/geosearchstore/>](https://redis.io/commands/geosearchstore/)
+    #[must_use]
     fn geosearchstore<D, S, M>(
         &self,
         destination: D,
         source: S,
         from: GeoSearchFrom<M>,
         by: GeoSearchBy,
-        order: Option<GeoSearchOrder>,
-        count: Option<(usize, bool)>,
-        store_dist: bool,
+        options: GeoSearchStoreOptions,
     ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("GEOSEARCHSTORE")
                 .arg(destination)
                 .arg(source)
                 .arg(from)
                 .arg(by)
-                .arg(order)
-                .arg(count.map(|(count, any)| {
-                    if any {
-                        ("COUNT", count, Some("ANY"))
-                    } else {
-                        ("COUNT", count, None)
-                    }
-                }))
-                .arg_if(store_dist, "STOREDIST"),
+                .arg(options),
         )
     }
 }
@@ -330,7 +279,56 @@ impl IntoArgs for GeoSearchOrder {
     }
 }
 
-/// Result of a GeoSearch with options
+/// Options for the [`geosearch`](crate::GeoCommands::geosearch) command
+#[derive(Default)]
+pub struct GeoSearchOptions {
+    command_args: CommandArgs,
+}
+
+impl GeoSearchOptions {
+    #[must_use]
+    pub fn order(self, order: GeoSearchOrder) -> Self {
+        Self {
+            command_args: self.command_args.arg(order),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize, any: bool) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count).arg_if(any, "ANY"),
+        }
+    }
+
+    #[must_use]
+    pub fn with_coord(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHCOORD"),
+        }
+    }
+   
+    #[must_use]
+    pub fn with_dist(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHDIST"),
+        }
+    }
+
+    #[must_use]
+    pub fn with_hash(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHHASH"),
+        }
+    }
+}
+
+impl IntoArgs for GeoSearchOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Result of the [`geosearch_with_options`](crate::GeoCommands::geosearch_with_options) command.
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
@@ -354,34 +352,79 @@ where
     M: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut it = values.into_iter();
-        let member: M;
-        let mut distance: Option<f64> = None;
-        let mut geo_hash: Option<i64> = None;
-        let mut coordinates: Option<(f64, f64)> = None;
-
-        match it.next() {
-            Some(value) => member = value.into()?,
-            None => {
-                return Err(Error::Internal("Unexpected geo search result".to_owned()));
-            }
+        match value {
+            Value::BulkString(_) => Ok(GeoSearchResult {
+                member: value.into()?,
+                distance: None,
+                geo_hash: None,
+                coordinates: None,
+            }),
+            Value::Array(_) => {
+                let values: Vec<Value> = value.into()?;
+                let mut it = values.into_iter();
+                let mut distance: Option<f64> = None;
+                let mut geo_hash: Option<i64> = None;
+                let mut coordinates: Option<(f64, f64)> = None;
+        
+                let member = match it.next() {
+                    Some(value) => value.into()?,
+                    None => {
+                        return Err(Error::Internal("Unexpected geo search result".to_owned()));
+                    }
+                };
+        
+                for value in it {
+                    match value {
+                        Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
+                        Value::Integer(h) => geo_hash = Some(h),
+                        Value::Array(_) => coordinates = Some(value.into()?),
+                        _ => return Err(Error::Internal("Unexpected geo search result".to_owned())),
+                    }
+                }
+        
+                Ok(GeoSearchResult {
+                    member,
+                    distance,
+                    geo_hash,
+                    coordinates,
+                })
+            },
+            _ => Err(Error::Internal("Unexpected geo search result".to_owned()))
         }
+    }
+}
 
-        while let Some(value) = it.next() {
-            match value {
-                Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
-                Value::Integer(h) => geo_hash = Some(h),
-                Value::Array(_) => coordinates = Some(value.into()?),
-                _ => return Err(Error::Internal("Unexpected geo search result".to_owned())),
-            }
+/// Options for the [`geosearchstore`](crate::GeoCommands::geosearchstore) command
+#[derive(Default)]
+pub struct GeoSearchStoreOptions {
+    command_args: CommandArgs,
+}
+
+impl GeoSearchStoreOptions {
+    #[must_use]
+    pub fn order(self, order: GeoSearchOrder) -> Self {
+        Self {
+            command_args: self.command_args.arg(order),
         }
+    }
 
-        Ok(GeoSearchResult {
-            member,
-            distance,
-            geo_hash,
-            coordinates,
-        })
+    #[must_use]
+    pub fn count(self, count: usize, any: bool) -> Self {
+        Self {
+            command_args: self.command_args.arg("COUNT").arg(count).arg_if(any, "ANY"),
+        }
+    }
+
+    #[must_use]
+    pub fn store_dist(self, store_dist: bool) -> Self {
+        Self {
+            command_args: self.command_args.arg_if(store_dist, "STOREDIST"),
+        }
+    }
+}
+
+impl IntoArgs for GeoSearchStoreOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

@@ -53,17 +53,17 @@ impl NetworkHandler {
 
         match self.value_senders.pop_front() {
             Some(Some(value_sender)) => {
-                let _ = value_sender.send(value);
+                let _result = value_sender.send(value);
             }
             Some(None) => (), // fire & forget
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance
-                if value.is_ok() {
-                    panic!(
-                        "[{:?}] Received unexpected message: {:?}",
-                        self.connection_type, value
-                    );
-                }
+                assert!(
+                    value.is_err(),
+                    "[{:?}] Received unexpected message: {:?}",
+                    self.connection_type,
+                    value
+                );
             }
         }
     }
@@ -71,7 +71,7 @@ impl NetworkHandler {
     pub(crate) async fn reconnect(&mut self) -> bool {
         while let Some(value_sender) = self.value_senders.pop_front() {
             if let Some(value_sender) = value_sender {
-                let _ =
+                let _result =
                     value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
             }
         }

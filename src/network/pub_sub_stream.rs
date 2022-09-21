@@ -37,6 +37,6 @@ impl Drop for PubSubStream {
     fn drop(&mut self) {
         let mut channel = String::new();
         std::mem::swap(&mut channel, &mut self.channel);
-        let _ = self.connection.unsubscribe(channel.into());
+        let _result = self.connection.unsubscribe(channel.into());
     }
 }

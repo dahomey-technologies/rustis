@@ -1,14 +1,14 @@
 use crate::{
     cmd,
     resp::{BulkString, FromValue},
-    ArgsOrCollection, CommandResult, IntoArgs, IntoCommandResult, SingleArgOrCollection, CommandArgs,
+    ArgsOrCollection, CommandArgs, CommandResult, IntoArgs, PrepareCommand, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Sorted Sets
 ///
 /// # See Also
 /// [Redis Sorted Set Commands](https://redis.io/commands/?group=sorted-set)
-pub trait SortedSetCommands<T>: IntoCommandResult<T> {
+pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// Adds all the specified members with the specified scores
     /// to the sorted set stored at key.
     ///
@@ -18,13 +18,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
+    #[must_use]
     fn zadd<K, M, I>(&self, key: K, items: I, options: ZAddOptions) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, M)>,
     {
-        self.into_command_result(cmd("ZADD").arg(key).arg(options).arg(items))
+        self.prepare_command(cmd("ZADD").arg(key).arg(options).arg(items))
     }
 
     /// In this mode ZADD acts like ZINCRBY.
@@ -36,6 +37,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
+    #[must_use]
     fn zadd_incr<K, M>(
         &self,
         key: K,
@@ -49,7 +51,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZADD")
                 .arg(key)
                 .arg(condition)
@@ -68,11 +70,12 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zcard/](https://redis.io/commands/zcard/)
+    #[must_use]
     fn zcard<K>(&self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZCARD").arg(key))
+        self.prepare_command(cmd("ZCARD").arg(key))
     }
 
     /// Returns the number of elements in the sorted set at key with a score between min and max.
@@ -82,13 +85,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zcount/](https://redis.io/commands/zcount/)
+    #[must_use]
     fn zcount<K, M1, M2>(&self, key: K, min: M1, max: M2) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         M1: Into<BulkString>,
         M2: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZCOUNT").arg(key).arg(min).arg(max))
+        self.prepare_command(cmd("ZCOUNT").arg(key).arg(min).arg(max))
     }
 
     /// This command is similar to [zdiffstore](crate::SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
@@ -99,13 +103,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
+    #[must_use]
     fn zdiff<K, C, E>(&self, keys: C) -> CommandResult<T, Vec<E>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         E: FromValue,
     {
-        self.into_command_result(cmd("ZDIFF").arg(keys.num_args()).arg(keys))
+        self.prepare_command(cmd("ZDIFF").arg(keys.num_args()).arg(keys))
     }
 
     /// This command is similar to [zdiffstore](crate::SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
@@ -116,13 +121,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
+    #[must_use]
     fn zdiff_with_scores<K, C, E>(&self, keys: C) -> CommandResult<T, Vec<(E, f64)>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         E: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZDIFF")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -138,13 +144,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zdiffstore/](https://redis.io/commands/zdiffstore/)
+    #[must_use]
     fn zdiffstore<D, K, C>(&self, destination: D, keys: C) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZDIFFSTORE")
                 .arg(destination)
                 .arg(keys.num_args())
@@ -159,12 +166,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zincrby/](https://redis.io/commands/zincrby/)
+    #[must_use]
     fn zincrby<K, M>(&self, key: K, increment: f64, member: M) -> CommandResult<T, f64>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZINCRBY").arg(key).arg(increment).arg(member))
+        self.prepare_command(cmd("ZINCRBY").arg(key).arg(increment).arg(member))
     }
 
     /// This command is similar to [zinterstore](crate::SortedSetCommands::zinterstore),
@@ -175,6 +183,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
+    #[must_use]
     fn zinter<K, C, W, E>(
         &self,
         keys: C,
@@ -187,7 +196,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         W: SingleArgOrCollection<f64>,
         E: FromValue,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZINTER")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -204,6 +213,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
+    #[must_use]
     fn zinter_with_scores<K, C, W, E>(
         &self,
         keys: C,
@@ -216,7 +226,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         W: SingleArgOrCollection<f64>,
         E: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZINTER")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -234,12 +244,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zintercard/](https://redis.io/commands/zintercard/)
+    #[must_use]
     fn zintercard<K, C>(&self, keys: C, limit: usize) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZINTERCARD")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -256,6 +267,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zinterstore/](https://redis.io/commands/zinterstore/)
+    #[must_use]
     fn zinterstore<D, K, C, W>(
         &self,
         destination: D,
@@ -269,7 +281,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         C: SingleArgOrCollection<K>,
         W: SingleArgOrCollection<f64>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZINTERSTORE")
                 .arg(destination)
                 .arg(keys.num_args())
@@ -288,13 +300,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zlexcount/](https://redis.io/commands/zlexcount/)
+    #[must_use]
     fn zlexcount<K, M1, M2>(&self, key: K, min: M1, max: M2) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         M1: Into<BulkString>,
         M2: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZLEXCOUNT").arg(key).arg(min).arg(max))
+        self.prepare_command(cmd("ZLEXCOUNT").arg(key).arg(min).arg(max))
     }
 
     /// Pops one or more elements, that are member-score pairs,
@@ -308,18 +321,19 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zmpop/](https://redis.io/commands/zmpop/)
+    #[must_use]
     fn zmpop<K, C, E>(
         &self,
         keys: C,
         where_: ZWhere,
         count: usize,
-    ) -> CommandResult<T, Option<(String, Vec<(E, f64)>)>>
+    ) -> CommandResult<T, Option<ZMPopResult<E>>>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         E: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZMPOP")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -338,13 +352,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zmscore/](https://redis.io/commands/zmscore/)
+    #[must_use]
     fn zmscore<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<f64>>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.into_command_result(cmd("ZMSCORE").arg(key).arg(members))
+        self.prepare_command(cmd("ZMSCORE").arg(key).arg(members))
     }
 
     /// Removes and returns up to count members with the highest scores in the sorted set stored at key.
@@ -354,12 +369,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zpopmax/](https://redis.io/commands/zpopmax/)
+    #[must_use]
     fn zpopmax<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
         M: FromValue + Default,
     {
-        self.into_command_result(cmd("ZPOPMAX").arg(key).arg(count))
+        self.prepare_command(cmd("ZPOPMAX").arg(key).arg(count))
     }
 
     /// Removes and returns up to count members with the lowest scores in the sorted set stored at key.
@@ -369,12 +385,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zpopmin/](https://redis.io/commands/zpopmin/)
+    #[must_use]
     fn zpopmin<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
         M: FromValue + Default,
     {
-        self.into_command_result(cmd("ZPOPMIN").arg(key).arg(count))
+        self.prepare_command(cmd("ZPOPMIN").arg(key).arg(count))
     }
 
     /// Return a random element from the sorted set value stored at key.
@@ -384,12 +401,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    #[must_use]
     fn zrandmember<K, E>(&self, key: K) -> CommandResult<T, E>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("ZRANDMEMBER").arg(key))
+        self.prepare_command(cmd("ZRANDMEMBER").arg(key))
     }
 
     /// Return random elements from the sorted set value stored at key.
@@ -403,12 +421,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    #[must_use]
     fn zrandmembers<K, E>(&self, key: K, count: isize) -> CommandResult<T, Vec<E>>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("ZRANDMEMBER").arg(key).arg(count))
+        self.prepare_command(cmd("ZRANDMEMBER").arg(key).arg(count))
     }
 
     /// Return random elements with their scores from the sorted set value stored at key.
@@ -422,12 +441,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    #[must_use]
     fn zrandmembers_with_scores<K, E>(&self, key: K, count: isize) -> CommandResult<T, Vec<E>>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("ZRANDMEMBER").arg(key).arg(count).arg("WITHSCORES"))
+        self.prepare_command(cmd("ZRANDMEMBER").arg(key).arg(count).arg("WITHSCORES"))
     }
 
     /// Returns the specified range of elements in the sorted set stored at `key`.
@@ -437,6 +457,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
+    #[must_use]
     fn zrange<K, S, E>(
         &self,
         key: K,
@@ -449,7 +470,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         S: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("ZRANGE").arg(key).arg(start).arg(stop).arg(options))
+        self.prepare_command(cmd("ZRANGE").arg(key).arg(start).arg(stop).arg(options))
     }
 
     /// Returns the specified range of elements in the sorted set stored at `key`.
@@ -459,6 +480,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
+    #[must_use]
     fn zrange_with_scores<K, S, E>(
         &self,
         key: K,
@@ -471,7 +493,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         S: Into<BulkString>,
         E: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZRANGE")
                 .arg(key)
                 .arg(start)
@@ -489,30 +511,27 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrangestore/](https://redis.io/commands/zrangestore/)
+    #[must_use]
     fn zrangestore<D, S, SS>(
         &self,
         dst: D,
         src: S,
         start: SS,
         stop: SS,
-        sort_by: Option<ZRangeSortBy>,
-        reverse: bool,
-        limit: Option<(usize, isize)>,
+        options: ZRangeOptions,
     ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,
         SS: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZRANGESTORE")
                 .arg(dst)
                 .arg(src)
                 .arg(start)
                 .arg(stop)
-                .arg(sort_by)
-                .arg_if(reverse, "REV")
-                .arg(limit.map(|(offset, count)| ("LIMIT", offset, count))),
+                .arg(options),
         )
     }
 
@@ -525,12 +544,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrank/](https://redis.io/commands/zrank/)
+    #[must_use]
     fn zrank<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<usize>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZRANK").arg(key).arg(member))
+        self.prepare_command(cmd("ZRANK").arg(key).arg(member))
     }
 
     /// Removes the specified members from the sorted set stored at key.
@@ -540,13 +560,14 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrem/](https://redis.io/commands/zrem/)
+    #[must_use]
     fn zrem<K, M, C>(&self, key: K, members: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.into_command_result(cmd("ZREM").arg(key).arg(members))
+        self.prepare_command(cmd("ZREM").arg(key).arg(members))
     }
 
     /// When all the elements in a sorted set are inserted with the same score,
@@ -559,12 +580,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebylex/](https://redis.io/commands/zremrangebylex/)
+    #[must_use]
     fn zremrangebylex<K, S>(&self, key: K, start: S, stop: S) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZREMRANGEBYLEX").arg(key).arg(start).arg(stop))
+        self.prepare_command(cmd("ZREMRANGEBYLEX").arg(key).arg(start).arg(stop))
     }
 
     /// Removes all elements in the sorted set stored at key with rank between start and stop.
@@ -574,11 +596,12 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebyrank/](https://redis.io/commands/zremrangebyrank/)
+    #[must_use]
     fn zremrangebyrank<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZREMRANGEBYRANK").arg(key).arg(start).arg(stop))
+        self.prepare_command(cmd("ZREMRANGEBYRANK").arg(key).arg(start).arg(stop))
     }
 
     /// Removes all elements in the sorted set stored at key with a score between min and max (inclusive).
@@ -588,12 +611,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zremrangebyscore/](https://redis.io/commands/zremrangebyscore/)
+    #[must_use]
     fn zremrangebyscore<K, S>(&self, key: K, start: S, stop: S) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZREMRANGEBYSCORE").arg(key).arg(start).arg(stop))
+        self.prepare_command(cmd("ZREMRANGEBYSCORE").arg(key).arg(start).arg(stop))
     }
 
     /// Returns the rank of member in the sorted set stored at key, with the scores ordered from high to low.
@@ -604,12 +628,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zrevrank/](https://redis.io/commands/zrevrank/)
+    #[must_use]
     fn zrevrank<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<usize>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZREVRANK").arg(key).arg(member))
+        self.prepare_command(cmd("ZREVRANK").arg(key).arg(member))
     }
 
     /// Iterates elements of Sorted Set types and their associated scores.
@@ -621,6 +646,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zscan/](https://redis.io/commands/zscan/)
+    #[must_use]
     fn zscan<K, P, M>(
         &self,
         key: K,
@@ -633,7 +659,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         P: Into<BulkString>,
         M: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZSCAN")
                 .arg(key)
                 .arg(cursor)
@@ -649,12 +675,13 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zscore/](https://redis.io/commands/zscore/)
+    #[must_use]
     fn zscore<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<f64>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.into_command_result(cmd("ZSCORE").arg(key).arg(member))
+        self.prepare_command(cmd("ZSCORE").arg(key).arg(member))
     }
 
     /// This command is similar to [zunionstore](crate::SortedSetCommands::zunionstore),
@@ -665,6 +692,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
+    #[must_use]
     fn zunion<K, C, W, E>(
         &self,
         keys: C,
@@ -677,7 +705,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         W: SingleArgOrCollection<f64>,
         E: FromValue,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZUNION")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -694,6 +722,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
+    #[must_use]
     fn zunion_with_scores<K, C, W, E>(
         &self,
         keys: C,
@@ -706,7 +735,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         W: SingleArgOrCollection<f64>,
         E: FromValue + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZUNION")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -724,6 +753,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/zunionstore/](https://redis.io/commands/zunionstore/)
+    #[must_use]
     fn zunionstore<D, K, C, W>(
         &self,
         destination: D,
@@ -737,7 +767,7 @@ pub trait SortedSetCommands<T>: IntoCommandResult<T> {
         C: SingleArgOrCollection<K>,
         W: SingleArgOrCollection<f64>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("ZUNIONSTORE")
                 .arg(destination)
                 .arg(keys.num_args())
@@ -804,7 +834,7 @@ impl IntoArgs for ZAddComparison {
     }
 }
 
-/// SortBy option of the [zrange](crate::SortedSetCommands::zrange) command
+/// sort by option of the [zrange](crate::SortedSetCommands::zrange) command
 pub enum ZRangeSortBy {
     /// No sort by
     None,
@@ -894,22 +924,25 @@ pub struct ZAddOptions {
 }
 
 impl ZAddOptions {
+    #[must_use]
     pub fn condition(self, condition: ZAddCondition) -> Self {
         Self {
-            condition: condition,
+            condition,
             comparison: self.comparison,
             change: self.change,
         }
     }
 
+    #[must_use]
     pub fn comparison(self, comparison: ZAddComparison) -> Self {
         Self {
             condition: self.condition,
-            comparison: comparison,
+            comparison,
             change: self.change,
         }
     }
 
+    #[must_use]
     pub fn change(self) -> Self {
         Self {
             condition: self.condition,
@@ -927,44 +960,40 @@ impl IntoArgs for ZAddOptions {
     }
 }
 
-/// Options for the [zrange](crate::SortedSetCommands::zrange) command
+pub type ZMPopResult<E> = (String, Vec<(E, f64)>);
+
+/// Options for the [`zrange`](crate::SortedSetCommands::zrange)
+/// and [`zrangestore`](crate::SortedSetCommands::zrangestore) commands
 #[derive(Default)]
 pub struct ZRangeOptions {
-    sort_by: ZRangeSortBy,
-    reverse: bool,
-    limit: Option<(usize, isize)>,
+    command_args: CommandArgs,
 }
 
 impl ZRangeOptions {
+    #[must_use]
     pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
         Self {
-            sort_by: sort_by,
-            reverse: self.reverse,
-            limit: self.limit,
+            command_args: self.command_args.arg(sort_by),
         }
     }
 
+    #[must_use]
     pub fn reverse(self) -> Self {
         Self {
-            sort_by: self.sort_by,
-            reverse: true,
-            limit: self.limit,
+            command_args: self.command_args.arg("REV"),
         }
     }
 
+    #[must_use]
     pub fn limit(self, offset: usize, count: isize) -> Self {
         Self {
-            sort_by: self.sort_by,
-            reverse: self.reverse,
-            limit: Some((offset, count)),
+            command_args: self.command_args.arg("LIMIT").arg(offset).arg(count),
         }
     }
 }
 
 impl IntoArgs for ZRangeOptions {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
-        args.arg(self.sort_by)
-            .arg_if(self.reverse, "REV")
-            .arg(self.limit.map(|(offset, count)| ("LIMIT", offset, count)))
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

@@ -52,21 +52,20 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((BulkString::Nil, pos))),
         Some((len, pos)) => {
-            if buf.len() - pos < len as usize + 2 {
+            let len = usize::try_from(len).unwrap();
+            if buf.len() - pos < len + 2 {
                 Ok(None) // EOF
+            } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
+                Err(Error::Parse(format!(
+                    "Expected \\r\\n after bulk string. Got '{}''{}'",
+                    buf[pos + len] as char,
+                    buf[pos + len + 1] as char
+                )))
             } else {
-                if buf[pos + len as usize] != b'\r' || buf[pos + len as usize + 1] != b'\n' {
-                    Err(Error::Parse(format!(
-                        "Expected \\r\\n after bulk string. Got '{}''{}'",
-                        buf[pos + len as usize] as char,
-                        buf[pos + len as usize + 1] as char
-                    )))
-                } else {
-                    Ok(Some((
-                        BulkString::Binary(buf[pos..(pos + len as usize)].to_vec()),
-                        pos + len as usize + 2,
-                    )))
-                }
+                Ok(Some((
+                    BulkString::Binary(buf[pos..(pos + len)].to_vec()),
+                    pos + len + 2,
+                )))
             }
         }
     }
@@ -77,7 +76,7 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
-            let mut values = Vec::with_capacity(len as usize);
+            let mut values = Vec::with_capacity(usize::try_from(len).unwrap());
             let mut pos = pos;
             for _ in 0..len {
                 match decode(buf, pos)? {
@@ -99,7 +98,7 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> 
         Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
             let len = len * 2;
-            let mut values = Vec::with_capacity(len as usize);
+            let mut values = Vec::with_capacity(usize::try_from(len).unwrap());
             let mut pos = pos;
             for _ in 0..len {
                 match decode(buf, pos)? {
@@ -135,7 +134,7 @@ fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(String, usize
             _ => return Err(Error::Parse(format!("Unexpected byte {}", byte))),
         }
 
-        pos = pos + 1;
+        pos += 1;
     }
 
     Ok(None)
@@ -153,14 +152,14 @@ fn decode_integer(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>
 
         match (cr, is_negative, byte) {
             (false, false, b'-') => is_negative = true,
-            (false, false, b'0'..=b'9') => i = i * 10 + (byte - b'0') as i64,
-            (false, true, b'0'..=b'9') => i = i * 10 - (byte - b'0') as i64,
+            (false, false, b'0'..=b'9') => i = i * 10 + i64::from(byte - b'0'),
+            (false, true, b'0'..=b'9') => i = i * 10 - i64::from(byte - b'0'),
             (false, _, b'\r') => cr = true,
             (true, _, b'\n') => return Ok(Some((i, pos + 1))),
             _ => return Err(Error::Parse(format!("Unexpected byte {}", byte))),
         }
 
-        pos = pos + 1;
+        pos += 1;
     }
 
     Ok(None)
@@ -174,7 +173,7 @@ fn decode_double(buf: &mut BytesMut, idx: usize) -> Result<Option<(f64, usize)>>
             let d = str.parse::<f64>()?;
             Ok(Some((d, idx + pos + 2)))
         }
-        _ => return Err(Error::Parse("malformed double".to_owned())),
+        _ => Err(Error::Parse("malformed double".to_owned())),
     }
 }
 

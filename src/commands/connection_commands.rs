@@ -1,7 +1,7 @@
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, IntoCommandResult, Result,
+    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, Result,
 };
 use std::collections::HashMap;
 
@@ -9,13 +9,14 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [Redis Connection Management Commands](https://redis.io/commands/?group=connection)
-pub trait ConnectionCommands<T>: IntoCommandResult<T> {
+pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// Delete all the keys of the currently selected DB.
     ///
     /// # See Also
     /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
+    #[must_use]
     fn hello(&self, options: HelloOptions) -> CommandResult<T, HelloResult> {
-        self.into_command_result(cmd("HELLO").arg(options))
+        self.prepare_command(cmd("HELLO").arg(options))
     }
 }
 
@@ -26,12 +27,14 @@ pub struct HelloOptions {
 }
 
 impl HelloOptions {
+    #[must_use]
     pub fn new(protover: usize) -> Self {
         Self {
             command_args: CommandArgs::Single(protover.into()),
         }
     }
 
+    #[must_use]
     pub fn auth<U, P>(self, username: U, password: P) -> Self
     where
         U: Into<BulkString>,
@@ -42,6 +45,7 @@ impl HelloOptions {
         }
     }
 
+    #[must_use]
     pub fn set_name<C>(self, client_name: C) -> Self
     where
         C: Into<BulkString>,
@@ -85,7 +89,7 @@ impl FromValue for HelloResult {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse HelloResult".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse HelloResult".to_owned()))
             },
             _ => Err(Error::Internal("Cannot parse HelloResult".to_owned())),
         }

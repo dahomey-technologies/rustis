@@ -1,6 +1,6 @@
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, ListCommands, Result, StringCommands,
-    TransactionCommandResult, TransactionExt, IntoCommandResult, cmd, resp::Value, Error,
+    TransactionCommandResult, TransactionExt, PrepareCommand, cmd, resp::Value, Error,
 };
 use serial_test::serial;
 
@@ -41,7 +41,7 @@ async fn transaction_error() -> Result<()> {
     let transaction = database.create_transaction().await?;
 
     let result = transaction
-        .into_command_result::<Value>(cmd("UNKNOWN")).queue().await;
+        .prepare_command::<Value>(cmd("UNKNOWN")).queue().await;
     assert!(
         matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR unknown command 'UNKNOWN'"))
     );

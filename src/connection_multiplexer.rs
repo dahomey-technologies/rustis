@@ -12,6 +12,10 @@ pub struct ConnectionMultiplexer {
 }
 
 impl ConnectionMultiplexer {
+    /// Establish connection to the Redis server
+    /// 
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occur during the connection operation
     pub async fn connect(addr: impl Into<String>) -> Result<ConnectionMultiplexer> {
         let server_end_point = ServerEndPoint::connect(addr).await?;
 
@@ -19,14 +23,17 @@ impl ConnectionMultiplexer {
         Ok(ConnectionMultiplexer { server_end_point })
     }
 
+    #[must_use]
     pub fn get_database(&self, db: usize) -> Database {
         Database::new(self.clone(), db)
     }
 
+    #[must_use]
     pub fn get_default_database(&self) -> Database {
         Database::new(self.clone(), 0)
     }
 
+    #[must_use]
     pub fn get_pub_sub(&self) -> PubSub {
         PubSub::new(self.clone())
     }

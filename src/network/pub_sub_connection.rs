@@ -43,11 +43,11 @@ impl PubSubConnection {
                 msg = network_handler.msg_receiver.next().fuse() => match msg {
                     Some(msg) => {
                         if connected {
-                            Self::send_message(msg, &mut network_handler, &mut subscriptions).await
+                            Self::send_message(msg, &mut network_handler, &mut subscriptions).await;
                         } else {
                             let value_sender = msg.value_sender;
                             if let Some(value_sender) = value_sender {
-                                let _ = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
+                                let _result = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
                             }
                         }
                     },
@@ -60,7 +60,7 @@ impl PubSubConnection {
                         connected = false;
                         while let Some(value_sender) = network_handler.value_senders.pop_front() {
                             if let Some(value_sender) = value_sender {
-                                let _ = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
+                                let _result = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
                             }
                         }
 
@@ -103,7 +103,7 @@ impl PubSubConnection {
         subscriptions: &mut HashMap<Vec<u8>, PubSubSender>,
     ) -> Result<()> {
         if let Some(v) = Self::try_match_pubsub_message(value, subscriptions).await? {
-            network_handler.receive_result(v)
+            network_handler.receive_result(v);
         }
 
         Ok(())
@@ -115,17 +115,10 @@ impl PubSubConnection {
     ) -> Result<Option<Result<Value>>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(ref value) => match value {
-                Value::Array(Array::Vec(ref items)) => match &items[..] {
-                    [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_)), Value::BulkString(BulkString::Binary(_))] => {
-                        if command.as_slice() == b"message" {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                },
+            Ok(Value::Array(Array::Vec(ref items))) => match &items[..] {
+                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_)), Value::BulkString(BulkString::Binary(_))] => {
+                    command.as_slice() == b"message"
+                }
                 _ => false,
             },
             _ => false,
@@ -140,32 +133,26 @@ impl PubSubConnection {
         println!("[{:?}] Received result {:?}", ConnectionType::PubSub, value);
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        match value {
-            Ok(value) => match value {
-                Value::Array(Array::Vec(mut items)) => {
-                    match (items.pop(), items.pop(), items.pop()) {
-                        (
-                            Some(Value::BulkString(payload)),
-                            Some(Value::BulkString(BulkString::Binary(channel))),
-                            Some(Value::BulkString(BulkString::Binary(_command))),
-                        ) => match subscriptions.get_mut(&channel) {
-                            Some(pub_sub_sender) => {
-                                pub_sub_sender.send(Ok(payload)).await?;
-                                return Ok(None);
-                            }
-                            None => {
-                                return Err(Error::Internal(format!(
-                                    "Unexpected message on channel: {:?}",
-                                    channel
-                                )));
-                            }
-                        },
-                        _ => (),
+        if let Ok(Value::Array(Array::Vec(mut items))) = value {
+            if let (
+                Some(Value::BulkString(payload)),
+                Some(Value::BulkString(BulkString::Binary(channel))),
+                Some(Value::BulkString(BulkString::Binary(_command))),
+            ) = (items.pop(), items.pop(), items.pop())
+            {
+                match subscriptions.get_mut(&channel) {
+                    Some(pub_sub_sender) => {
+                        pub_sub_sender.send(Ok(payload)).await?;
+                        return Ok(None);
+                    }
+                    None => {
+                        return Err(Error::Internal(format!(
+                            "Unexpected message on channel: {:?}",
+                            channel
+                        )));
                     }
                 }
-                _ => (),
-            },
-            _ => (),
+            }
         }
 
         Err(Error::Internal("Should not reach this point".to_string()))

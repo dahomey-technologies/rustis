@@ -52,7 +52,6 @@ impl ConnectionFactoryImpl {
 
     fn get_first_connection(&self) -> Option<(TcpStreamReader, TcpStreamWriter)> {
         let mut first_connection = self.first_connection.lock().unwrap();
-        let first_connection = std::mem::replace(&mut *first_connection, None);
-        first_connection
+        std::mem::replace(&mut *first_connection, None)
     }
 }

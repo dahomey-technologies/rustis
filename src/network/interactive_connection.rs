@@ -42,11 +42,11 @@ impl InteractiveConnection {
                 msg = network_handler.msg_receiver.next().fuse() => match msg {
                     Some(msg) => {
                         if connected {
-                            Self::send_message(msg, &mut network_handler, &mut current_database).await
+                            Self::send_message(msg, &mut network_handler, &mut current_database).await;
                         } else {
                             let value_sender = msg.value_sender;
                             if let Some(value_sender) = value_sender {
-                                let _ = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
+                                let _result = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
                             }
                         }
                     },
@@ -59,7 +59,7 @@ impl InteractiveConnection {
                         connected = false;
                         while let Some(value_sender) = network_handler.value_senders.pop_front() {
                             if let Some(value_sender) = value_sender {
-                                let _ = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
+                                let _result = value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
                             }
                         }
 

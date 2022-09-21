@@ -1,16 +1,15 @@
-use std::marker::PhantomData;
-
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, IntoCommandResult, SingleArgOrCollection,
+    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, SingleArgOrCollection,
 };
+use std::marker::PhantomData;
 
 /// A group of generic Redis commands
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=generic)
-pub trait GenericCommands<T>: IntoCommandResult<T> {
+pub trait GenericCommands<T>: PrepareCommand<T> {
     /// This command copies the value stored at the source key to the destination key.
     ///
     /// # Return
@@ -18,6 +17,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/copy/](https://redis.io/commands/copy/)
+    #[must_use]
     fn copy<S, D>(
         &self,
         source: S,
@@ -29,7 +29,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         S: Into<BulkString>,
         D: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("COPY")
                 .arg(source)
                 .arg(destination)
@@ -45,12 +45,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/del/](https://redis.io/commands/del/)
+    #[must_use]
     fn del<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("DEL").arg(keys))
+        self.prepare_command(cmd("DEL").arg(keys))
     }
 
     /// Serialize the value stored at key in a Redis-specific format and return it to the user.
@@ -60,11 +61,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/dump/](https://redis.io/commands/dump/)
+    #[must_use]
     fn dump<K>(&self, key: K) -> CommandResult<T, DumpResult>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("DUMP").arg(key))
+        self.prepare_command(cmd("DUMP").arg(key))
     }
 
     /// Returns if keys exist.
@@ -74,12 +76,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/exists/](https://redis.io/commands/exists/)
+    #[must_use]
     fn exists<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("EXISTS").arg(keys))
+        self.prepare_command(cmd("EXISTS").arg(keys))
     }
 
     /// Set a timeout on key in seconds
@@ -90,16 +93,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/expire/](https://redis.io/commands/expire/)
-    fn expire<K>(
-        &self,
-        key: K,
-        seconds: u64,
-        option: ExpireOption,
-    ) -> CommandResult<T, bool>
+    #[must_use]
+    fn expire<K>(&self, key: K, seconds: u64, option: ExpireOption) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("EXPIRE").arg(key).arg(seconds).arg(option))
+        self.prepare_command(cmd("EXPIRE").arg(key).arg(seconds).arg(option))
     }
 
     /// EXPIREAT has the same effect and semantic as EXPIRE,
@@ -114,6 +113,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/expireat/](https://redis.io/commands/expireat/)
+    #[must_use]
     fn expireat<K>(
         &self,
         key: K,
@@ -123,7 +123,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("EXPIREAT").arg(key).arg(unix_time_seconds).arg(option))
+        self.prepare_command(cmd("EXPIREAT").arg(key).arg(unix_time_seconds).arg(option))
     }
 
     /// Returns the absolute Unix timestamp (since January 1, 1970) in seconds at which the given key will expire.
@@ -135,11 +135,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/expiretime/](https://redis.io/commands/expiretime/)
+    #[must_use]
     fn expiretime<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("EXPIRETIME").arg(key))
+        self.prepare_command(cmd("EXPIRETIME").arg(key))
     }
 
     /// Returns all keys matching pattern.
@@ -149,13 +150,14 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/keys/](https://redis.io/commands/keys/)
+    #[must_use]
     fn keys<P, K, A>(&self, pattern: P) -> CommandResult<T, A>
     where
         P: Into<BulkString>,
         K: FromValue,
         A: FromSingleValueArray<K>,
     {
-        self.into_command_result(cmd("KEYS").arg(pattern))
+        self.prepare_command(cmd("KEYS").arg(pattern))
     }
 
     /// Atomically transfer a key or a collection of keys from a source Redis instance to a destination Redis instance.
@@ -166,6 +168,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/migrate/](https://redis.io/commands/migrate/)
+    #[must_use]
     fn migrate<H, K, P1, U, P2, KK>(
         &self,
         host: H,
@@ -183,7 +186,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         P2: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("MIGRATE")
                 .arg(host)
                 .arg(port)
@@ -202,11 +205,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/move/](https://redis.io/commands/move/)
+    #[must_use]
     fn move_<K>(&self, key: K, db: usize) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("MOVE").arg(key).arg(db))
+        self.prepare_command(cmd("MOVE").arg(key).arg(db))
     }
 
     /// Returns the internal encoding for the Redis object stored at `key`
@@ -216,12 +220,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/object-encoding/](https://redis.io/commands/object-encoding/)
+    #[must_use]
     fn object_encoding<K, E>(&self, key: K) -> CommandResult<T, E>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("OBJECT").arg("ENCODING").arg(key))
+        self.prepare_command(cmd("OBJECT").arg("ENCODING").arg(key))
     }
 
     /// This command returns the logarithmic access frequency counter of a Redis object stored at `key`.
@@ -231,11 +236,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/object-freq/](https://redis.io/commands/object-freq/)
+    #[must_use]
     fn object_freq<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("OBJECT").arg("FREQ").arg(key))
+        self.prepare_command(cmd("OBJECT").arg("FREQ").arg(key))
     }
 
     /// This command returns the time in seconds since the last access to the value stored at `key`.
@@ -245,11 +251,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/object-idletime/](https://redis.io/commands/object-idletime/)
+    #[must_use]
     fn object_idle_time<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("OBJECT").arg("IDLETIME").arg(key))
+        self.prepare_command(cmd("OBJECT").arg("IDLETIME").arg(key))
     }
 
     /// This command returns the reference count of the stored at `key`.
@@ -259,11 +266,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/object-refcount/](https://redis.io/commands/object-refcount/)
+    #[must_use]
     fn object_refcount<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("OBJECT").arg("REFCOUNT").arg(key))
+        self.prepare_command(cmd("OBJECT").arg("REFCOUNT").arg(key))
     }
 
     /// Remove the existing timeout on key,
@@ -276,11 +284,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/persist/](https://redis.io/commands/persist/)
+    #[must_use]
     fn persist<K>(&self, key: K) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("PERSIST").arg(key))
+        self.prepare_command(cmd("PERSIST").arg(key))
     }
 
     /// This command works exactly like EXPIRE but the time to live of the key is specified in milliseconds instead of seconds.
@@ -291,6 +300,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
+    #[must_use]
     fn pexpire<K>(
         &self,
         key: K,
@@ -300,7 +310,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("PEXPIRE").arg(key).arg(milliseconds).arg(option))
+        self.prepare_command(cmd("PEXPIRE").arg(key).arg(milliseconds).arg(option))
     }
 
     /// PEXPIREAT has the same effect and semantic as EXPIREAT,
@@ -312,6 +322,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpireat/](https://redis.io/commands/pexpireat/)
+    #[must_use]
     fn pexpireat<K>(
         &self,
         key: K,
@@ -321,7 +332,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("PEXPIREAT")
                 .arg(key)
                 .arg(unix_time_milliseconds)
@@ -339,11 +350,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/pexpiretime/](https://redis.io/commands/pexpiretime/)
+    #[must_use]
     fn pexpiretime<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("PEXPIRETIME").arg(key))
+        self.prepare_command(cmd("PEXPIRETIME").arg(key))
     }
 
     /// Returns the remaining time to live of a key that has a timeout.
@@ -355,11 +367,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/pttl/](https://redis.io/commands/pttl/)
+    #[must_use]
     fn pttl<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("PTTL").arg(key))
+        self.prepare_command(cmd("PTTL").arg(key))
     }
 
     /// Return a random key from the currently selected database.
@@ -369,23 +382,25 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/randomkey/](https://redis.io/commands/randomkey/)
+    #[must_use]
     fn randomkey<R>(&self) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("RANDOMKEY"))
+        self.prepare_command(cmd("RANDOMKEY"))
     }
 
     /// Renames key to newkey.
     ///
     /// # See Also
     /// [https://redis.io/commands/rename/](https://redis.io/commands/rename/)
+    #[must_use]
     fn rename<K1, K2>(&self, key: K1, new_key: K2) -> CommandResult<T, ()>
     where
         K1: Into<BulkString>,
         K2: Into<BulkString>,
     {
-        self.into_command_result(cmd("RENAME").arg(key).arg(new_key))
+        self.prepare_command(cmd("RENAME").arg(key).arg(new_key))
     }
 
     /// Renames key to newkey if newkey does not yet exist.
@@ -396,12 +411,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     /// * `false` if newkey already exists.
     /// # See Also
     /// [https://redis.io/commands/renamenx/](https://redis.io/commands/renamenx/)
+    #[must_use]
     fn renamenx<K1, K2>(&self, key: K1, new_key: K2) -> CommandResult<T, bool>
     where
         K1: Into<BulkString>,
         K2: Into<BulkString>,
     {
-        self.into_command_result(cmd("RENAMENX").arg(key).arg(new_key))
+        self.prepare_command(cmd("RENAMENX").arg(key).arg(new_key))
     }
 
     /// Create a key associated with a value that is obtained by deserializing
@@ -412,28 +428,23 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/restore/](https://redis.io/commands/restore/)
+    #[must_use]
     fn restore<K>(
         &self,
         key: K,
         ttl: u64,
         serialized_value: Vec<u8>,
-        replace: bool,
-        abs_ttl: bool,
-        idle_time: Option<i64>,
-        frequency: Option<f64>,
+        options: RestoreOptions,
     ) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("RESTORE")
                 .arg(key)
                 .arg(ttl)
                 .arg(BulkString::Binary(serialized_value))
-                .arg_if(replace, "REPLACE")
-                .arg_if(abs_ttl, "ABSTTL")
-                .arg(idle_time.map(|idle_time| ("IDLETIME", idle_time)))
-                .arg(frequency.map(|frequency| ("FREQ", frequency))),
+                .arg(options),
         )
     }
 
@@ -444,6 +455,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
+    #[must_use]
     fn scan<P, TY, K, A>(
         &self,
         cursor: u64,
@@ -457,7 +469,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         K: FromValue,
         A: FromSingleValueArray<K> + Default,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("SCAN")
                 .arg(cursor)
                 .arg(match_pattern.map(|p| ("MATCH", p)))
@@ -473,6 +485,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    #[must_use]
     fn sort<K, BP, GP, M, A>(&self, key: K, options: SortOptions<BP, GP>) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
@@ -481,7 +494,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
-        self.into_command_result(cmd("SORT").arg(key).arg(options))
+        self.prepare_command(cmd("SORT").arg(key).arg(options))
     }
 
     /// Stores the elements contained in the list, set or sorted set at key.
@@ -491,6 +504,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    #[must_use]
     fn sort_and_store<K, BP, GP, D>(
         &self,
         key: K,
@@ -503,7 +517,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         GP: Into<BulkString>,
         D: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("SORT")
                 .arg(key)
                 .arg(options)
@@ -522,6 +536,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/sort_ro/](https://redis.io/commands/sort_ro/)
+    #[must_use]
     fn sort_readonly<K, BP, GP, M, A>(
         &self,
         key: K,
@@ -534,7 +549,7 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
-        self.into_command_result(cmd("SORT_RO").arg(key).arg(options))
+        self.prepare_command(cmd("SORT_RO").arg(key).arg(options))
     }
 
     /// Alters the last access time of a key(s). A key is ignored if it does not exist.
@@ -544,12 +559,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/touch/](https://redis.io/commands/touch/)
+    #[must_use]
     fn touch<K, KK>(&self, keys: KK) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("TOUCH").arg(keys))
+        self.prepare_command(cmd("TOUCH").arg(keys))
     }
 
     /// Returns the remaining time to live of a key that has a timeout.
@@ -561,11 +577,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/ttl/](https://redis.io/commands/ttl/)
+    #[must_use]
     fn ttl<K>(&self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("TTL").arg(key))
+        self.prepare_command(cmd("TTL").arg(key))
     }
 
     /// Returns the string representation of the type of the value stored at key.
@@ -577,11 +594,12 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/type/](https://redis.io/commands/type/)
+    #[must_use]
     fn type_<K>(&self, key: K) -> CommandResult<T, String>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("TYPE").arg(key))
+        self.prepare_command(cmd("TYPE").arg(key))
     }
 
     /// This command is very similar to DEL: it removes the specified keys.
@@ -591,12 +609,13 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/unlink/](https://redis.io/commands/unlink/)
+    #[must_use]
     fn unlink<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("UNLINK").arg(keys))
+        self.prepare_command(cmd("UNLINK").arg(keys))
     }
 
     /// This command blocks the current client until all the previous write commands are
@@ -607,8 +626,9 @@ pub trait GenericCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/wait/](https://redis.io/commands/wait/)
+    #[must_use]
     fn wait(&self, num_replicas: usize, timeout: u64) -> CommandResult<T, usize> {
-        self.into_command_result(cmd("WAIT").arg(num_replicas).arg(timeout))
+        self.prepare_command(cmd("WAIT").arg(num_replicas).arg(timeout))
     }
 }
 
@@ -639,7 +659,7 @@ impl IntoArgs for ExpireOption {
             ExpireOption::Nx => args.arg("NX"),
             ExpireOption::Xx => args.arg("XX"),
             ExpireOption::Gt => args.arg("GT"),
-            ExpireOption::Lt => args.arg("LT"),            
+            ExpireOption::Lt => args.arg("LT"),
         }
     }
 }
@@ -674,6 +694,7 @@ where
     K: Into<BulkString>,
     KK: SingleArgOrCollection<K>,
 {
+    #[must_use]
     pub fn copy(self) -> Self {
         Self {
             phantom: PhantomData,
@@ -685,6 +706,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn auth(self, password: P1) -> Self {
         Self {
             phantom: PhantomData,
@@ -696,6 +718,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn auth2(self, username: U, password: P2) -> Self {
         Self {
             phantom: PhantomData,
@@ -707,6 +730,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn keys(self, keys: KK) -> Self {
         Self {
             phantom: PhantomData,
@@ -733,6 +757,48 @@ where
             .arg(self.auth.map(|pwd| ("AUTH", pwd)))
             .arg(self.auth2.map(|(user, pwd)| ("AUTH2", user, pwd)))
             .arg(self.keys)
+    }
+}
+
+/// Options for the [`restore`](crate::GenericCommands::restore) command
+#[derive(Default)]
+pub struct RestoreOptions {
+    command_args: CommandArgs,
+}
+
+impl RestoreOptions {
+    #[must_use]
+    pub fn replace(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("REPLACE"),
+        }
+    }
+
+    #[must_use]
+    pub fn abs_ttl(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("ABSTTL"),
+        }
+    }
+
+    #[must_use]
+    pub fn idle_time(self, idle_time: i64) -> Self {
+        Self {
+            command_args: self.command_args.arg("IDLETIME").arg(idle_time),
+        }
+    }
+
+    #[must_use]
+    pub fn frequency(self, frequency: f64) -> Self {
+        Self {
+            command_args: self.command_args.arg("FREQ").arg(frequency),
+        }
+    }
+}
+
+impl IntoArgs for RestoreOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }
 
@@ -770,6 +836,7 @@ where
     BP: Into<BulkString>,
     GP: Into<BulkString>,
 {
+    #[must_use]
     pub fn by(self, pattern: BP) -> Self {
         Self {
             by_pattern: Some(pattern),
@@ -780,6 +847,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn limit(self, offset: usize, count: isize) -> Self {
         Self {
             by_pattern: self.by_pattern,
@@ -790,6 +858,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn get(self, patterns: Vec<GP>) -> Self {
         Self {
             by_pattern: self.by_pattern,
@@ -800,6 +869,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn order(self, order: SortOrder) -> Self {
         Self {
             by_pattern: self.by_pattern,
@@ -810,6 +880,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn alpha(self) -> Self {
         Self {
             by_pattern: self.by_pattern,

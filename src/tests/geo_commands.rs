@@ -1,9 +1,7 @@
-use std::collections::HashSet;
-
 use crate::{
     tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands,
-    GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOrder, GeoSearchResult,
-    GeoUnit, Result,
+    GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder,
+    GeoSearchResult, GeoSearchStoreOptions, GeoUnit, Result,
 };
 use serial_test::serial;
 
@@ -249,7 +247,7 @@ async fn geosearch() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let results: HashSet<String> = database
+    let results: Vec<GeoSearchResult<String>> = database
         .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
@@ -260,17 +258,16 @@ async fn geosearch() -> Result<()> {
                 radius: 200.0,
                 unit: GeoUnit::Kilometers,
             },
-            None,
-            None,
+            GeoSearchOptions::default(),
         )
         .send()
         .await?;
     assert_eq!(2, results.len());
-    assert!(results.contains("Palermo"));
-    assert!(results.contains("Catania"));
+    assert!(results.iter().any(|r| r.member == "Palermo",));
+    assert!(results.iter().any(|r| r.member == "Catania"));
 
     let results: Vec<GeoSearchResult<String>> = database
-        .geosearch_with_options(
+        .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
                 longitude: 15.0,
@@ -281,11 +278,10 @@ async fn geosearch() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
-            Some(GeoSearchOrder::Asc),
-            None,
-            true,
-            true,
-            false,
+            GeoSearchOptions::default()
+                .order(GeoSearchOrder::Asc)
+                .with_coord()
+                .with_dist(),
         )
         .send()
         .await?;
@@ -374,16 +370,16 @@ async fn geosearchstore() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
-            Some(GeoSearchOrder::Asc),
-            Some((3, false)),
-            false,
+            GeoSearchStoreOptions::default()
+                .order(GeoSearchOrder::Asc)
+                .count(3, false),
         )
         .send()
         .await?;
     assert_eq!(3, len);
 
     let results: Vec<GeoSearchResult<String>> = database
-        .geosearch_with_options(
+        .geosearch(
             "out",
             GeoSearchFrom::FromLonLat::<String> {
                 longitude: 15.0,
@@ -394,11 +390,11 @@ async fn geosearchstore() -> Result<()> {
                 height: 400.0,
                 unit: GeoUnit::Kilometers,
             },
-            Some(GeoSearchOrder::Asc),
-            None,
-            true,
-            true,
-            true,
+            GeoSearchOptions::default()
+                .order(GeoSearchOrder::Asc)
+                .with_coord()
+                .with_dist()
+                .with_hash(),
         )
         .send()
         .await?;

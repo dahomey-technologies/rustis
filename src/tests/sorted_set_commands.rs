@@ -573,7 +573,7 @@ async fn zrangestore() -> Result<()> {
         .send().await?;
 
     let len = database
-        .zrangestore("out", "key", 2, -1, None, false, None)
+        .zrangestore("out", "key", 2, -1, ZRangeOptions::default())
         .send().await?;
     assert_eq!(2, len);
 

@@ -1,13 +1,13 @@
 use crate::{
     cmd, resp::BulkString, ArgsOrCollection, CommandArgs, IntoArgs,
-    IntoCommandResult, SingleArgOrCollection, CommandResult,
+    PrepareCommand, SingleArgOrCollection, CommandResult,
 };
 
 /// A group of Redis commands related to bitmaps
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=bitmap)
-pub trait BitmapCommands<T>: IntoCommandResult<T> {
+pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// Count the number of set bits (population counting) in a string.
     ///
     /// # Return
@@ -15,11 +15,12 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/bitcount/](https://redis.io/commands/bitcount/)
+    #[must_use]
     fn bitcount<K>(&self, key: K, range: Option<BitRange>) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("BITCOUNT").arg(key).arg(range))
+        self.prepare_command(cmd("BITCOUNT").arg(key).arg(range))
     }
 
     /// The command treats a Redis string as an array of bits,
@@ -32,6 +33,7 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/bitfield/](https://redis.io/commands/bitfield/)
+    #[must_use]
     fn bitfield<K, C, E, O>(&self, key: K, sub_commands: C) -> CommandResult<T, Vec<u64>>
     where
         K: Into<BulkString>,
@@ -39,7 +41,7 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
         O: Into<BulkString>,
         C: ArgsOrCollection<BitFieldSubCommand<E, O>>,
     {
-        self.into_command_result(cmd("BITFIELD").arg(key).arg(sub_commands))
+        self.prepare_command(cmd("BITFIELD").arg(key).arg(sub_commands))
     }
 
     /// Read-only variant of the BITFIELD command.
@@ -52,6 +54,7 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/bitfield_ro/](https://redis.io/commands/bitfield_ro/)
+    #[must_use]
     fn bitfield_readonly<K, C, E, O>(&self, key: K, get_commands: C) -> CommandResult<T, Vec<u64>>
     where
         K: Into<BulkString>,
@@ -59,7 +62,7 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
         O: Into<BulkString>,
         C: ArgsOrCollection<BitFieldGetSubCommand<E, O>>,
     {
-        self.into_command_result(cmd("BITFIELD_RO").arg(key).arg(get_commands))
+        self.prepare_command(cmd("BITFIELD_RO").arg(key).arg(get_commands))
     }
 
     /// Perform a bitwise operation between multiple keys (containing string values)
@@ -71,13 +74,14 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/bitop/](https://redis.io/commands/bitop/)
+    #[must_use]
     fn bitop<D, K, KK>(&self, operation: BitOperation, dest_key: D, keys: KK) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
     {
-        self.into_command_result(cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
+        self.prepare_command(cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
     }
 
     /// Perform a bitwise operation between multiple keys (containing string values)
@@ -88,11 +92,12 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/bitpos/](https://redis.io/commands/bitpos/)
+    #[must_use]
     fn bitpos<K>(&self, key: K, bit: u64, range: Option<BitRange>) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("BITPOS").arg(key).arg(bit).arg(range))
+        self.prepare_command(cmd("BITPOS").arg(key).arg(bit).arg(range))
     }
 
     /// Returns the bit value at offset in the string value stored at key.
@@ -102,11 +107,12 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/getbit/](https://redis.io/commands/getbit/)
+    #[must_use]
     fn getbit<K>(&self, key: K, offset: u64) -> CommandResult<T, u64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("GETBIT").arg(key).arg(offset))
+        self.prepare_command(cmd("GETBIT").arg(key).arg(offset))
     }
 
     /// Sets or clears the bit at offset in the string value stored at key.
@@ -116,11 +122,12 @@ pub trait BitmapCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/setbit/](https://redis.io/commands/setbit/)
+    #[must_use]
     fn setbit<K>(&self, key: K, offset: u64, value: u64) -> CommandResult<T, u64>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("SETBIT").arg(key).arg(offset).arg(value))
+        self.prepare_command(cmd("SETBIT").arg(key).arg(offset).arg(value))
     }
 }
 
@@ -132,6 +139,7 @@ pub struct BitRange {
 }
 
 impl BitRange {
+    #[must_use]
     pub fn range(start: isize, end: isize) -> Self {
         Self {
             start,
@@ -140,6 +148,7 @@ impl BitRange {
         }
     }
 
+    #[must_use]
     pub fn unit(self, unit: BitUnit) -> Self {
         Self {
             start: self.start,
@@ -186,18 +195,22 @@ where
     E: Into<BulkString>,
     O: Into<BulkString>,
 {
+    #[must_use]
     pub fn get(encoding: E, offset: O) -> Self {
         Self::Get(BitFieldGetSubCommand::new(encoding, offset))
     }
 
+    #[must_use]
     pub fn set(encoding: E, offset: O, value: u64) -> Self {
         Self::Set(encoding, offset, value)
     }
 
+    #[must_use]
     pub fn incr_by(encoding: E, offset: O, increment: i64) -> Self {
         Self::IncrBy(encoding, offset, increment)
     }
 
+    #[must_use]
     pub fn overflow(overflow: BitFieldOverflow) -> Self {
         Self::Overflow(overflow)
     }
@@ -236,6 +249,7 @@ where
     E: Into<BulkString>,
     O: Into<BulkString>,
 {
+    #[must_use]
     pub fn new(encoding: E, offset: O) -> Self {
         Self { encoding, offset }
     }

@@ -1,14 +1,14 @@
 use crate::{
     cmd,
     resp::{BulkString, FromSingleValueArray, FromValue},
-    CommandArgs, CommandResult, IntoArgs, IntoCommandResult, SingleArgOrCollection,
+    CommandArgs, CommandResult, IntoArgs, PrepareCommand, SingleArgOrCollection,
 };
 
 /// A group of Redis commands related to Lists
 ///
 /// # See Also
 /// [Redis List Commands](https://redis.io/commands/?group=list)
-pub trait ListCommands<T>: IntoCommandResult<T> {
+pub trait ListCommands<T>: PrepareCommand<T> {
     /// Returns the element at index index in the list stored at key.
     ///
     /// # Return
@@ -16,12 +16,13 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lindex/](https://redis.io/commands/lindex/)
+    #[must_use]
     fn lindex<K, E>(&self, key: K, index: isize) -> CommandResult<T, E>
     where
         K: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(cmd("LINDEX").arg(key).arg(index))
+        self.prepare_command(cmd("LINDEX").arg(key).arg(index))
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -31,6 +32,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/linsert/](https://redis.io/commands/linsert/)
+    #[must_use]
     fn linsert<K, E>(
         &self,
         key: K,
@@ -42,7 +44,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.into_command_result(cmd("LINSERT").arg(key).arg(where_).arg(pivot).arg(element))
+        self.prepare_command(cmd("LINSERT").arg(key).arg(where_).arg(pivot).arg(element))
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -52,11 +54,12 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/llen/](https://redis.io/commands/llen/)
+    #[must_use]
     fn llen<K>(&self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("LLEN").arg(key))
+        self.prepare_command(cmd("LLEN").arg(key))
     }
 
     /// Atomically returns and removes the first/last element (head/tail depending on the wherefrom argument)
@@ -68,6 +71,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lmove/](https://redis.io/commands/lmove/)
+    #[must_use]
     fn lmove<S, D, E>(
         &self,
         source: S,
@@ -80,7 +84,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
         D: Into<BulkString>,
         E: FromValue,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("LMOVE")
                 .arg(source)
                 .arg(destination)
@@ -96,6 +100,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lmpop/](https://redis.io/commands/lmpop/)
+    #[must_use]
     fn lmpop<K, E, C>(
         &self,
         keys: C,
@@ -107,7 +112,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
         E: FromValue,
         C: SingleArgOrCollection<K>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("LMPOP")
                 .arg(keys.num_args())
                 .arg(keys)
@@ -124,13 +129,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
+    #[must_use]
     fn lpop<K, E, A>(&self, key: K, count: usize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
         A: FromSingleValueArray<E>,
     {
-        self.into_command_result(cmd("LPOP").arg(key).arg(count))
+        self.prepare_command(cmd("LPOP").arg(key).arg(count))
     }
 
     /// Returns the index of matching elements inside a Redis list.
@@ -140,6 +146,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
+    #[must_use]
     fn lpos<K, E>(
         &self,
         key: K,
@@ -151,7 +158,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("LPOS")
                 .arg(key)
                 .arg(element)
@@ -168,6 +175,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
+    #[must_use]
     fn lpos_with_count<K, E, A>(
         &self,
         key: K,
@@ -181,7 +189,7 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
         E: Into<BulkString>,
         A: FromSingleValueArray<usize>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("LPOS")
                 .arg(key)
                 .arg(element)
@@ -199,13 +207,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
+    #[must_use]
     fn lpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.into_command_result(cmd("LPUSH").arg(key).arg(elements))
+        self.prepare_command(cmd("LPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the head of the list stored at key,
@@ -216,13 +225,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lpushx/](https://redis.io/commands/lpushx/)
+    #[must_use]
     fn lpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.into_command_result(cmd("LPUSHX").arg(key).arg(elements))
+        self.prepare_command(cmd("LPUSHX").arg(key).arg(elements))
     }
 
     /// Returns the specified elements of the list stored at key.
@@ -232,13 +242,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lrange/](https://redis.io/commands/lrange/)
+    #[must_use]
     fn lrange<K, E, A>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
         A: FromSingleValueArray<E>,
     {
-        self.into_command_result(cmd("LRANGE").arg(key).arg(start).arg(stop))
+        self.prepare_command(cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
 
     /// Removes the first count occurrences of elements equal to element from the list stored at key.
@@ -248,35 +259,38 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/lrem/](https://redis.io/commands/lrem/)
+    #[must_use]
     fn lrem<K, E>(&self, key: K, count: isize, element: E) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.into_command_result(cmd("LREM").arg(key).arg(count).arg(element))
+        self.prepare_command(cmd("LREM").arg(key).arg(count).arg(element))
     }
 
     /// Sets the list element at index to element.
     ///
     /// # See Also
     /// [https://redis.io/commands/lset/](https://redis.io/commands/lset/)
+    #[must_use]
     fn lset<K, E>(&self, key: K, index: isize, element: E) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
     {
-        self.into_command_result(cmd("LSET").arg(key).arg(index).arg(element))
+        self.prepare_command(cmd("LSET").arg(key).arg(index).arg(element))
     }
 
     /// Trim an existing list so that it will contain only the specified range of elements specified.
     ///
     /// # See Also
     /// [https://redis.io/commands/ltrim/](https://redis.io/commands/ltrim/)
+    #[must_use]
     fn ltrim<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
     {
-        self.into_command_result(cmd("LTRIM").arg(key).arg(start).arg(stop))
+        self.prepare_command(cmd("LTRIM").arg(key).arg(start).arg(stop))
     }
 
     /// Removes and returns the first elements of the list stored at key.
@@ -286,13 +300,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpop/](https://redis.io/commands/rpop/)
+    #[must_use]
     fn rpop<K, E, C>(&self, key: K, count: usize) -> CommandResult<T, C>
     where
         K: Into<BulkString>,
         E: FromValue,
         C: FromSingleValueArray<E>,
     {
-        self.into_command_result(cmd("RPOP").arg(key).arg(count))
+        self.prepare_command(cmd("RPOP").arg(key).arg(count))
     }
 
     /// Insert all the specified values at the tail of the list stored at key
@@ -302,13 +317,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpush/](https://redis.io/commands/rpush/)
+    #[must_use]
     fn rpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.into_command_result(cmd("RPUSH").arg(key).arg(elements))
+        self.prepare_command(cmd("RPUSH").arg(key).arg(elements))
     }
 
     /// Inserts specified values at the tail of the list stored at key,
@@ -319,13 +335,14 @@ pub trait ListCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/rpushx/](https://redis.io/commands/rpushx/)
+    #[must_use]
     fn rpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
         C: SingleArgOrCollection<E>,
     {
-        self.into_command_result(cmd("RPUSHX").arg(key).arg(elements))
+        self.prepare_command(cmd("RPUSHX").arg(key).arg(elements))
     }
 }
 

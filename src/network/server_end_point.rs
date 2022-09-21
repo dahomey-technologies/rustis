@@ -1,4 +1,7 @@
-use crate::{Command, Connection, InteractiveConnection, Message, PubSubConnection, Result, ConnectionFactory};
+use crate::{
+    Command, Connection, ConnectionFactory, InteractiveConnection, Message, PubSubConnection,
+    Result,
+};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum ConnectionType {
@@ -32,10 +35,7 @@ impl ServerEndPoint {
 
     fn get_connection(&self, command: &Command) -> &dyn Connection {
         match command.name {
-            "SUBSCRIBE" => &self.pubsub,
-            "UNSUBSCRIBE" => &self.pubsub,
-            "PSUBSCRIBE" => &self.pubsub,
-            "PUNSUBSCRIBE" => &self.pubsub,
+            "SUBSCRIBE" | "UNSUBSCRIBE" | "PSUBSCRIBE" | "PUNSUBSCRIBE" => &self.pubsub,
             _ => &self.interactive,
         }
     }

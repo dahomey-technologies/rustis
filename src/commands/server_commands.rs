@@ -1,23 +1,25 @@
-use crate::{cmd, CommandResult, IntoArgs, IntoCommandResult};
+use crate::{cmd, CommandResult, IntoArgs, PrepareCommand};
 
 /// A group of Redis commands related to Server Management
 /// # See Also
 /// [Redis Server Management Commands](https://redis.io/commands/?group=server)
-pub trait ServerCommands<T>: IntoCommandResult<T> {
+pub trait ServerCommands<T>: PrepareCommand<T> {
     /// Delete all the keys of the currently selected DB.
     ///
     /// # See Also
     /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
+    #[must_use]
     fn flushdb(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("FLUSHDB").arg(flushing_mode))
+        self.prepare_command(cmd("FLUSHDB").arg(flushing_mode))
     }
 
     /// Delete all the keys of all the existing databases, not just the currently selected one.
     ///
     /// # See Also
     /// [https://redis.io/commands/flushall/](https://redis.io/commands/flushall/)
+    #[must_use]
     fn flushall(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("FLUSHALL").arg(flushing_mode))
+        self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
     }
 }
 

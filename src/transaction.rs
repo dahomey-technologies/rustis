@@ -1,14 +1,13 @@
 use crate::{
     cmd,
-    resp::{Array, FromValue, Value, ResultValueExt},
+    resp::{Array, FromValue, ResultValueExt, Value},
     BitmapCommands, Command, CommandResult, Database, Error, Future, GenericCommands, GeoCommands,
-    HashCommands, IntoCommandResult, ListCommands, Result, ScriptingCommands, ServerCommands,
+    HashCommands, PrepareCommand, ListCommands, Result, ScriptingCommands, ServerCommands,
     SetCommands, SortedSetCommands, StringCommands,
 };
 use std::{
     iter::zip,
     marker::PhantomData,
-    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -53,13 +52,13 @@ impl<T: Send + Sync> Transaction<T> {
             match result {
                 Value::Array(Array::Vec(results)) => {
                     let forget_flags = self.forget_flags.lock().unwrap();
-                    let forget_flags = forget_flags.deref();
+                    let forget_flags = &*forget_flags;
                     let mut filtered_results = zip(results, forget_flags.iter())
                         .filter_map(
                             |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
                         )
                         .collect::<Vec<_>>();
-                    
+
                     if filtered_results.len() == 1 {
                         let value = filtered_results.pop().unwrap();
                         Ok(value).into_result()?.into()
@@ -72,14 +71,18 @@ impl<T: Send + Sync> Transaction<T> {
         })
     }
 
+    /// Flushes all previously queued commands in a transaction and restores the connection state to normal.
+    /// 
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error)
     pub async fn discard(self) -> Result<()> {
         self.database.send(cmd("DISCARD")).await?.into()
     }
 }
 
-impl<T: Send + Sync> IntoCommandResult<T> for Transaction<T> {
-    fn into_command_result<R: FromValue>(&self, command: Command) -> CommandResult<T, R> {
-        CommandResult::from_transaction(command, &self)
+impl<T: Send + Sync> PrepareCommand<T> for Transaction<T> {
+    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<T, R> {
+        CommandResult::from_transaction(command, self)
     }
 }
 

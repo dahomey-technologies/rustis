@@ -10,23 +10,28 @@ pub enum BulkString {
 }
 
 impl BulkString {
+    #[must_use]
     pub fn len(&self) -> usize {
         match self {
             BulkString::Str(s) => s.len(),
             BulkString::String(s) => s.len(),
             BulkString::Binary(s) => s.len(),
-            BulkString::Integer(_) => unimplemented!(),
-            BulkString::Nil => unimplemented!(),
+            BulkString::Integer(_) | BulkString::Nil => unimplemented!(),
         }
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             BulkString::Str(s) => s.as_bytes(),
             BulkString::String(s) => s.as_bytes(),
-            BulkString::Binary(s) => &s,
-            BulkString::Integer(_) => unimplemented!(),
-            BulkString::Nil => unimplemented!(),
+            BulkString::Binary(s) => s,
+            BulkString::Integer(_) | BulkString::Nil => unimplemented!(),
         }
     }
 }
@@ -51,37 +56,37 @@ impl From<i64> for BulkString {
 
 impl From<u64> for BulkString {
     fn from(u: u64) -> Self {
-        Self::Integer(u as i64)
+        Self::Integer(i64::try_from(u).unwrap())
     }
 }
 
 impl From<i32> for BulkString {
     fn from(i: i32) -> Self {
-        Self::Integer(i as i64)
+        Self::Integer(i64::from(i))
     }
 }
 
 impl From<u32> for BulkString {
     fn from(u: u32) -> Self {
-        Self::Integer(u as i64)
+        Self::Integer(i64::from(u))
     }
 }
 
 impl From<i16> for BulkString {
     fn from(i: i16) -> Self {
-        Self::Integer(i as i64)
+        Self::Integer(i64::from(i))
     }
 }
 
 impl From<u16> for BulkString {
     fn from(u: u16) -> Self {
-        Self::Integer(u as i64)
+        Self::Integer(i64::from(u))
     }
 }
 
 impl From<isize> for BulkString {
     fn from(i: isize) -> Self {
-        Self::Integer(i as i64)
+        Self::Integer(i64::try_from(i).unwrap())
     }
 }
 
@@ -142,7 +147,7 @@ impl fmt::Debug for BulkString {
     }
 }
 
-/// Initialize a Bulksring as [BulkString::Nil](crate::resp::BulkString::Nil)
+/// Initialize a Bulksring as [`BulkString::Nil`](crate::resp::BulkString::Nil)
 impl Default for BulkString {
     fn default() -> Self {
         BulkString::Nil

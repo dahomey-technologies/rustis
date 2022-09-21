@@ -1,5 +1,5 @@
 use crate::resp::BulkString;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, hash::BuildHasher};
 
 pub const NONE_ARG: Option<BulkString> = None;
 
@@ -28,6 +28,7 @@ impl CommandArgs {
         }
     }
 
+    #[must_use]
     pub fn arg<A>(self, args: A) -> Self
     where
         A: IntoArgs,
@@ -35,6 +36,7 @@ impl CommandArgs {
         args.into_args(self)
     }
 
+    #[must_use]
     pub fn arg_if<A>(self, condition: bool, arg: A) -> Self
     where
         A: IntoArgs,
@@ -46,6 +48,7 @@ impl CommandArgs {
         }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         match self {
             CommandArgs::Empty => 0,
@@ -55,6 +58,11 @@ impl CommandArgs {
             CommandArgs::Array4(_) => 4,
             CommandArgs::Vec(v) => v.len(),
         }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+       self.len() == 0
     }
 }
 
@@ -72,7 +80,7 @@ pub trait IntoArgs {
     }
 }
 
-impl<'a, T> IntoArgs for T
+impl<T> IntoArgs for T
 where
     T: Into<BulkString>,
 {
@@ -129,7 +137,7 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for a in self.into_iter() {
+        for a in self {
             args = a.into_args(args);
         }
         args
@@ -146,7 +154,7 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for a in self.into_iter() {
+        for a in self {
             args = a.into_args(args);
         }
         args
@@ -157,13 +165,13 @@ where
     }
 }
 
-impl<T> IntoArgs for HashSet<T>
+impl<T, S: BuildHasher> IntoArgs for HashSet<T, S>
 where
     T: IntoArgs,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for a in self.into_iter() {
+        for a in self {
             args = a.into_args(args);
         }
         args
@@ -180,7 +188,7 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for a in self.into_iter() {
+        for a in self {
             args = a.into_args(args);
         }
         args
@@ -191,14 +199,14 @@ where
     }
 }
 
-impl<K, V> IntoArgs for HashMap<K, V>
+impl<K, V, S: BuildHasher> IntoArgs for HashMap<K, V, S>
 where
     K: Into<BulkString>,
     V: Into<BulkString>,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for (key, value) in self.into_iter() {
+        for (key, value) in self {
             args = key.into_args(args);
             args = value.into_args(args);
         }
@@ -217,7 +225,7 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
-        for (key, value) in self.into_iter() {
+        for (key, value) in self {
             args = key.into_args(args);
             args = value.into_args(args);
         }
@@ -261,7 +269,7 @@ where
     }
 }
 
-/// Allow to merge CommandArgs in another CommandArgs
+/// Allow to merge `CommandArgs` in another `CommandArgs`
 impl IntoArgs for CommandArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
@@ -275,7 +283,7 @@ impl IntoArgs for CommandArgs {
     }
 }
 
-/// Generic Marker for Collections of IntoArgs
+/// Generic Marker for Collections of `IntoArgs`
 pub trait ArgsOrCollection<T>: IntoArgs
 where
     T: IntoArgs,
@@ -286,7 +294,7 @@ impl<T, const N: usize> ArgsOrCollection<T> for [T; N] where T: IntoArgs {}
 impl<T> ArgsOrCollection<T> for Vec<T> where T: IntoArgs {}
 impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
 
-/// Marker for collections of single items (directly convertible to BulkStrings) of IntoArgs
+/// Marker for collections of single items (directly convertible to `BulkStrings`) of `IntoArgs`
 pub trait SingleArgOrCollection<T>: IntoArgs
 where
     T: Into<BulkString>,
@@ -295,7 +303,7 @@ where
 
 impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkString> {}
 impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {}
-impl<T> SingleArgOrCollection<T> for HashSet<T> where T: Into<BulkString> {}
+impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S> where T: Into<BulkString> {}
 impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {}
 impl<T> SingleArgOrCollection<T> for T where T: Into<BulkString> {}
 
@@ -328,7 +336,7 @@ where
 {
 }
 
-impl<K, V> KeyValueArgOrCollection<K, V> for HashMap<K, V>
+impl<K, V, S: BuildHasher> KeyValueArgOrCollection<K, V> for HashMap<K, V, S>
 where
     K: Into<BulkString>,
     V: Into<BulkString>,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     cmd,
     resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, FlushingMode, IntoArgs, IntoCommandResult, Result,
+    CommandArgs, CommandResult, Error, FlushingMode, IntoArgs, PrepareCommand, Result,
     SingleArgOrCollection,
 };
 
@@ -12,7 +12,7 @@ use crate::{
 /// [Redis Scripting and Functions Commands](https://redis.io/commands/?group=scripting)
 /// [Scripting with LUA](https://redis.io/docs/manual/programmability/eval-intro/)
 /// [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
-pub trait ScriptingCommands<T>: IntoCommandResult<T> {
+pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// Invoke the execution of a server-side Lua script.
     ///
     /// # Return
@@ -20,11 +20,12 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
+    #[must_use]
     fn eval<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("EVAL").arg(builder))
+        self.prepare_command(cmd("EVAL").arg(builder))
     }
 
     /// This is a read-only variant of the [eval](crate::ScriptingCommands::eval)]
@@ -35,11 +36,12 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/eval_ro/](https://redis.io/commands/eval_ro/)
+    #[must_use]
     fn eval_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("EVAL_RO").arg(builder))
+        self.prepare_command(cmd("EVAL_RO").arg(builder))
     }
 
     /// Evaluate a script from the server's cache by its SHA1 digest.
@@ -49,11 +51,12 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/eval/](https://redis.io/commands/eval/)
+    #[must_use]
     fn evalsha<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("EVALSHA").arg(builder))
+        self.prepare_command(cmd("EVALSHA").arg(builder))
     }
 
     /// This is a read-only variant of the [evalsha](crate::ScriptingCommands::evalsha)
@@ -64,11 +67,12 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/evalsha_ro/](https://redis.io/commands/evalsha_ro/)
+    #[must_use]
     fn evalsha_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("EVALSHA_RO").arg(builder))
+        self.prepare_command(cmd("EVALSHA_RO").arg(builder))
     }
 
     /// Invoke a function.
@@ -78,11 +82,12 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/fcall/](https://redis.io/commands/fcall/)
+    #[must_use]
     fn fcall<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("FCALL").arg(builder))
+        self.prepare_command(cmd("FCALL").arg(builder))
     }
 
     /// Invoke a function.
@@ -91,61 +96,67 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     /// The return value of the function
     ///
     /// # See Also
-    /// [https://redis.io/commands/fcall-ro/](https://redis.io/commands/fcall_ro/)
+    /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
+    #[must_use]
     fn fcall_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
-        self.into_command_result(cmd("FCALL_RO").arg(builder))
+        self.prepare_command(cmd("FCALL_RO").arg(builder))
     }
 
     /// Delete a library and all its functions.
     ///
     /// # See Also
     /// [https://redis.io/commands/function-delete/](https://redis.io/commands/function-delete/)
+    #[must_use]
     fn function_delete<L>(&self, library_name: L) -> CommandResult<T, ()>
     where
         L: Into<BulkString>,
     {
-        self.into_command_result(cmd("FUNCTION").arg("DELETE").arg(library_name))
+        self.prepare_command(cmd("FUNCTION").arg("DELETE").arg(library_name))
     }
 
     /// Return the serialized payload of loaded libraries.
     /// You can restore the serialized payload later with the
-    /// [function_restore](crate::ScriptingCommands::function_restore) command.
+    /// [`function_restore`](crate::ScriptingCommands::function_restore) command.
     ///
     /// # Return
     /// The serialized payload
     ///
     /// # See Also
     /// [https://redis.io/commands/function-dump/](https://redis.io/commands/function-dump/)
+    #[must_use]
     fn function_dump<P>(&self) -> CommandResult<T, P>
     where
         P: FromValue,
     {
-        self.into_command_result(cmd("FUNCTION").arg("DUMP"))
+        self.prepare_command(cmd("FUNCTION").arg("DUMP"))
     }
 
     /// Deletes all the libraries.
     ///
     /// # See Also
     /// [https://redis.io/commands/function-flush/](https://redis.io/commands/function-flush/)
+    #[must_use]
     fn function_flush(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
+        self.prepare_command(cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
 
     /// Kill a function that is currently executing.
     ///
     /// # See Also
     /// [https://redis.io/commands/function-kill/](https://redis.io/commands/function-kill/)
+    #[must_use]
     fn function_kill(&self) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("FUNCTION").arg("KILL"))
+        self.prepare_command(cmd("FUNCTION").arg("KILL"))
     }
 
     /// Return information about the functions and libraries.
     ///
     /// # See Also
     /// [https://redis.io/commands/function-list/](https://redis.io/commands/function-list/)
+    #[must_use]
     fn function_list<P>(
         &self,
         library_name_pattern: Option<P>,
@@ -154,7 +165,7 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     where
         P: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("FUNCTION")
                 .arg("LIST")
                 .arg(library_name_pattern)
@@ -169,12 +180,13 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/function-load/](https://redis.io/commands/function-load/)
+    #[must_use]
     fn function_load<F, L>(&self, replace: bool, function_code: F) -> CommandResult<T, L>
     where
         F: Into<BulkString>,
         L: FromValue,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("FUNCTION")
                 .arg("LOAD")
                 .arg_if(replace, "REPLACE")
@@ -186,6 +198,7 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/function-restore/](https://redis.io/commands/function-restore/)
+    #[must_use]
     fn function_restore<P>(
         &self,
         serialized_payload: P,
@@ -194,7 +207,7 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     where
         P: Into<BulkString>,
     {
-        self.into_command_result(
+        self.prepare_command(
             cmd("FUNCTION")
                 .arg("RESTORE")
                 .arg(serialized_payload)
@@ -206,16 +219,18 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/function-stats/](https://redis.io/commands/function-stats/)
+    #[must_use]
     fn function_stats(&self) -> CommandResult<T, FunctionStats> {
-        self.into_command_result(cmd("FUNCTION").arg("STATS"))
+        self.prepare_command(cmd("FUNCTION").arg("STATS"))
     }
 
     /// Set the debug mode for subsequent scripts executed with EVAL.
     ///
     /// # See Also
     /// [https://redis.io/commands/script-debug/](https://redis.io/commands/script-debug/)
+    #[must_use]
     fn script_debug(&self, debug_mode: ScriptDebugMode) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
+        self.prepare_command(cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
     }
 
     /// Returns information about the existence of the scripts in the script cache.
@@ -225,20 +240,22 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/script-exists/](https://redis.io/commands/script-exists/)
+    #[must_use]
     fn script_exists<S, C>(&self, sha1s: C) -> CommandResult<T, Vec<bool>>
     where
         S: Into<BulkString>,
         C: SingleArgOrCollection<S>,
     {
-        self.into_command_result(cmd("SCRIPT").arg("EXISTS").arg(sha1s))
+        self.prepare_command(cmd("SCRIPT").arg("EXISTS").arg(sha1s))
     }
 
     /// Flush the Lua scripts cache.
     ///
     /// # See Also
     /// [https://redis.io/commands/script-flush/](https://redis.io/commands/script-flush/)
+    #[must_use]
     fn script_flush(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
+        self.prepare_command(cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
     }
 
     /// Kills the currently executing EVAL script,
@@ -246,8 +263,9 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/script-kill/](https://redis.io/commands/script-kill/)
+    #[must_use]
     fn script_kill(&self) -> CommandResult<T, ()> {
-        self.into_command_result(cmd("SCRIPT").arg("KILL"))
+        self.prepare_command(cmd("SCRIPT").arg("KILL"))
     }
 
     /// Load a script into the scripts cache, without executing it.
@@ -257,28 +275,30 @@ pub trait ScriptingCommands<T>: IntoCommandResult<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/script-load/](https://redis.io/commands/script-load/)
+    #[must_use]
     fn script_load<S, V>(&self, script: S) -> CommandResult<T, V>
     where
         S: Into<BulkString>,
         V: FromValue,
     {
-        self.into_command_result(cmd("SCRIPT").arg("LOAD").arg(script))
+        self.prepare_command(cmd("SCRIPT").arg("LOAD").arg(script))
     }
 }
 
 /// Builder for calling a script/function for the following commands:
-/// * [eval](crate::ScriptingCommands::eval)
-/// * [eval_readonly](crate::ScriptingCommands::eval_readonly)
-/// * [eval_sha](crate::ScriptingCommands::evalsha)
-/// * [evalsha_readonly](crate::ScriptingCommands::evalsha_readonly)
-/// * [fcall](crate::ScriptingCommands::fcall)
-/// * [fcall_readonly](crate::ScriptingCommands::fcall_readonly)
+/// * [`eval`](crate::ScriptingCommands::eval)
+/// * [`eval_readonly`](crate::ScriptingCommands::eval_readonly)
+/// * [`eval_sha`](crate::ScriptingCommands::evalsha)
+/// * [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly)
+/// * [`fcall`](crate::ScriptingCommands::fcall)
+/// * [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly)
 pub struct CallBuilder {
     command_args: CommandArgs,
     keys_added: bool,
 }
 
 impl CallBuilder {
+    #[must_use]
     pub fn script<S: Into<BulkString>>(script: S) -> Self {
         Self {
             command_args: CommandArgs::Single(script.into()),
@@ -286,6 +306,7 @@ impl CallBuilder {
         }
     }
 
+    #[must_use]
     pub fn sha1<S: Into<BulkString>>(sha1: S) -> Self {
         Self {
             command_args: CommandArgs::Single(sha1.into()),
@@ -293,6 +314,7 @@ impl CallBuilder {
         }
     }
 
+    #[must_use]
     pub fn function<F: Into<BulkString>>(function: F) -> Self {
         Self {
             command_args: CommandArgs::Single(function.into()),
@@ -301,6 +323,7 @@ impl CallBuilder {
     }
 
     /// All the keys accessed by the script.
+    #[must_use]
     pub fn keys<K, C>(self, keys: C) -> Self
     where
         K: Into<BulkString>,
@@ -313,16 +336,17 @@ impl CallBuilder {
     }
 
     /// Additional input arguments that should not represent names of keys.
+    #[must_use]
     pub fn args<A, C>(self, args: C) -> Self
     where
         A: Into<BulkString>,
         C: SingleArgOrCollection<A>,
     {
-        let command_args = if !self.keys_added {
+        let command_args = if self.keys_added {
+            self.command_args.arg(args)
+        } else {
             // numkeys = 0
             self.command_args.arg(0).arg(args)
-        } else {
-            self.command_args.arg(args)
         };
 
         Self {
@@ -338,7 +362,7 @@ impl IntoArgs for CallBuilder {
     }
 }
 
-/// Policy option for the [function_restore](crate::ScriptingCommands::function_restore) command.
+/// Policy option for the [`function_restore`](crate::ScriptingCommands::function_restore) command.
 pub enum FunctionRestorePolicy {
     /// Append
     Default,
@@ -392,7 +416,7 @@ impl FromValue for LibraryInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse LibraryInfo".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse LibraryInfo".to_owned()))
             }
             _ => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
@@ -405,7 +429,7 @@ impl FromValue for LibraryInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse LibraryInfo".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse LibraryInfo".to_owned()))
             }
         }
     }
@@ -431,7 +455,7 @@ impl FromValue for FunctionInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse FunctionInfo".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse FunctionInfo".to_owned()))
             },
             _ => Err(Error::Internal("Cannot parse FunctionInfo".to_owned())),
         }
@@ -456,7 +480,7 @@ impl FromValue for FunctionStats {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse FunctionStats".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse FunctionStats".to_owned()))
             },
             _ => Err(Error::Internal("Cannot parse FunctionStats".to_owned())),
         }
@@ -483,7 +507,7 @@ impl FromValue for RunningScript {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse RunningScript".to_owned()))
+                    .ok_or_else(|| Error::Internal("Cannot parse RunningScript".to_owned()))
             },
             _ => Err(Error::Internal("Cannot parse RunningScript".to_owned())),
         }
@@ -508,7 +532,7 @@ impl FromValue for EngineStats {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or(Error::Internal("Cannot parse EngineStats".to_owned()))
+                    .ok_or_else(||Error::Internal("Cannot parse EngineStats".to_owned()))
             },
             _ => Err(Error::Internal("Cannot parse EngineStats".to_owned())),
         }

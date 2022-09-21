@@ -16,7 +16,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/bitcount/](https://redis.io/commands/bitcount/)
     #[must_use]
-    fn bitcount<K>(&self, key: K, range: Option<BitRange>) -> CommandResult<T, usize>
+    fn bitcount<K>(&self, key: K, range: BitRange) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -93,7 +93,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/bitpos/](https://redis.io/commands/bitpos/)
     #[must_use]
-    fn bitpos<K>(&self, key: K, bit: u64, range: Option<BitRange>) -> CommandResult<T, usize>
+    fn bitpos<K>(&self, key: K, bit: u64, range: BitRange) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -132,35 +132,30 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
 }
 
 /// Interval options for the [bitcount](crate::BitmapCommands::bitcount) command
+#[derive(Default)]
 pub struct BitRange {
-    start: isize,
-    end: isize,
-    unit: Option<BitUnit>,
+        command_args: CommandArgs,
 }
 
 impl BitRange {
     #[must_use]
     pub fn range(start: isize, end: isize) -> Self {
         Self {
-            start,
-            end,
-            unit: None,
+            command_args: CommandArgs::Empty.arg(start).arg(end),
         }
     }
 
     #[must_use]
     pub fn unit(self, unit: BitUnit) -> Self {
         Self {
-            start: self.start,
-            end: self.end,
-            unit: Some(unit),
+            command_args: self.command_args.arg(unit),
         }
     }
 }
 
 impl IntoArgs for BitRange {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
-        args.arg(self.start).arg(self.end).arg(self.unit)
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }
 

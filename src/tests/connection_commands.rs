@@ -13,7 +13,7 @@ async fn hello_v2() -> Result<()> {
 
     let result = database.hello(HelloOptions::new(2)).send().await?;
     assert_eq!("redis", result.server);
-    assert_eq!("7.0.3", result.version);
+    assert!(result.version.starts_with("7"));
     assert_eq!(2, result.proto);
     assert!(result.id > 0);
     assert_eq!("standalone", result.mode);
@@ -32,7 +32,7 @@ async fn hello_v3() -> Result<()> {
 
     let result = database.hello(HelloOptions::new(3)).send().await?;
     assert_eq!("redis", result.server);
-    assert_eq!("7.0.3", result.version);
+    assert!(result.version.starts_with("7"));
     assert_eq!(3, result.proto);
     assert!(result.id > 0);
     assert_eq!("standalone", result.mode);

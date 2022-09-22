@@ -65,7 +65,8 @@ impl<T: Send + Sync> Transaction<T> {
                     } else {
                         Value::Array(Array::Vec(filtered_results)).into()
                     }
-                }
+                },
+                Value::Array(Array::Nil) => Err(Error::Aborted),
                 _ => Err(Error::Internal("Unexpected transaction reply".to_owned())),
             }
         })

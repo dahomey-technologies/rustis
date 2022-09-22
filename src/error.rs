@@ -17,6 +17,7 @@ pub enum Error {
     Canceled(oneshot::Canceled),
     Internal(String),
     Network(String),
+    Aborted,
 }
 
 impl std::fmt::Display for Error {
@@ -30,6 +31,7 @@ impl std::fmt::Display for Error {
             Error::Canceled(e) => f.write_fmt(format_args!("oneshot::Canceled: {}", e)),
             Error::Internal(e) => f.write_fmt(format_args!("Internal error: {}", e)),
             Error::Network(e) => f.write_fmt(format_args!("Network error: {}", e)),
+            Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
         }
     }
 }

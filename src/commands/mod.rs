@@ -16,6 +16,7 @@ mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
+mod transaction_commands;
 
 pub use bitmap_commands::*;
 pub use command::*;
@@ -35,3 +36,4 @@ pub use set_commands::*;
 pub use sorted_set_commands::*;
 pub use stream_commands::*;
 pub use string_commands::*;
+pub use transaction_commands::*;

@@ -3,7 +3,7 @@ use crate::{
     BitmapCommands, Command, CommandResult, ConnectionCommands, ConnectionMultiplexer,
     DatabaseResult, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, ListCommands,
     PrepareCommand, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StreamCommands, StringCommands, Transaction, TransactionResult0,
+    StreamCommands, StringCommands, Transaction, TransactionCommands, TransactionResult0,
 };
 
 #[derive(Clone)]
@@ -91,3 +91,4 @@ impl SetCommands<DatabaseResult> for Database {}
 impl SortedSetCommands<DatabaseResult> for Database {}
 impl StreamCommands<DatabaseResult> for Database {}
 impl StringCommands<DatabaseResult> for Database {}
+impl TransactionCommands<DatabaseResult> for Database {}

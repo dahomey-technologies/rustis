@@ -45,14 +45,13 @@ impl Connection {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{cmd, ConnectionMultiplexer, Result};
+    /// use redis_driver::{cmd, Connection, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
-    ///     let database = connection.get_default_database();
+    ///     let connection = Connection::connect("127.0.0.1:6379").await?;
     ///
-    ///    let values: Vec<String> = database
+    ///    let values: Vec<String> = connection
     ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
     ///         .await?
     ///         .into()?;

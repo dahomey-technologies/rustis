@@ -82,27 +82,26 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     cmd, ConnectionMultiplexer, DatabaseCommandResult, FlushingMode,
+    ///     cmd, Connection, ConnectionCommandResult, FlushingMode,
     ///     ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
-    ///     let database = connection.get_default_database();
-    ///     database.flushdb(FlushingMode::Sync).send().await?;
+    ///     let connection = Connection::connect("127.0.0.1:6379").await?;
+    ///     connection.flushdb(FlushingMode::Sync).send().await?;
     ///
     ///     // return value can be an Option<String>...
-    ///     let value: Option<String> = database.get("key").send().await?;
+    ///     let value: Option<String> = connection.get("key").send().await?;
     ///     assert_eq!(None, value);
     ///
     ///     // ... or it can be directly a String.
     ///     // In this cas a `nil` value will result in an empty String
-    ///     let value: String = database.get("key").send().await?;
+    ///     let value: String = connection.get("key").send().await?;
     ///     assert_eq!("", &value);
     ///
-    ///     database.set("key", "value").send().await?;
-    ///     let value: String = database.get("key").send().await?;
+    ///     connection.set("key", "value").send().await?;
+    ///     let value: String = connection.get("key").send().await?;
     ///     assert_eq!("value", value);
     ///
     ///     Ok(())
@@ -154,21 +153,20 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     cmd, ConnectionMultiplexer, DatabaseCommandResult, FlushingMode,
-    ///     GenericCommands, GetExOptions, ServerCommands, StringCommands, Result
+    ///     cmd, Connection, ConnectionCommandResult, FlushingMode,
+    ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let connection = ConnectionMultiplexer::connect("127.0.0.1:6379").await?;
-    ///     let database = connection.get_default_database();
-    ///     database.flushdb(FlushingMode::Sync).send().await?;
+    ///     let connection = Connection::connect("127.0.0.1:6379").await?;
+    ///     connection.flushdb(FlushingMode::Sync).send().await?;
     ///
-    ///     database.set("key", "value").send().await?;
-    ///     let value: String = database.getex("key", GetExOptions::Ex(60)).send().await?;
+    ///     connection.set("key", "value").send().await?;
+    ///     let value: String = connection.getex("key", GetExOptions::Ex(60)).send().await?;
     ///     assert_eq!("value", value);
     ///
-    ///     let ttl = database.ttl("key").send().await?;
+    ///     let ttl = connection.ttl("key").send().await?;
     ///     assert!(59 <= ttl && ttl <= 60);
     ///
     ///     Ok(())

@@ -18,6 +18,50 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     fn hello(&self, options: HelloOptions) -> CommandResult<T, HelloResult> {
         self.prepare_command(cmd("HELLO").arg(options))
     }
+
+    /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/ping/](https://redis.io/commands/ping/)
+    #[must_use]
+    fn ping<M, R>(&self, message: Option<M>) -> CommandResult<T, R> 
+    where
+        M: Into<BulkString>,
+        R: FromValue
+    {
+        self.prepare_command(cmd("PING").arg(message))
+    }
+
+    /// Ask the server to close the connection.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/quit/](https://redis.io/commands/quit/)
+    #[must_use]
+    fn quit(&self) -> CommandResult<T, ()> 
+    {
+        self.prepare_command(cmd("QUIT"))
+    }
+
+    /// This command performs a full reset of the connection's server-side context, 
+    /// mimicking the effect of disconnecting and reconnecting again.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
+    #[must_use]
+    fn reset(&self) -> CommandResult<T, ()> 
+    {
+        self.prepare_command(cmd("RESET"))
+    }
+
+    /// Select the Redis logical database having the specified zero-based numeric index.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
+    #[must_use]
+    fn select(&self, index: usize) -> CommandResult<T, ()> 
+    {
+        self.prepare_command(cmd("SELECT").arg(index))
+    }
 }
 
 /// Options for the [hello](crate::ConnectionCommands::hello) command.

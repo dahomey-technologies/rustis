@@ -41,3 +41,44 @@ async fn hello_v3() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ping() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.ping::<String, ()>(None).send().await?;
+    let result: String = database.ping(Some("value")).send().await?;
+    assert_eq!("value", result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn quit() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.quit().send().await?;
+
+    // reconnection here
+    database.ping::<String, ()>(None).send().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn reset() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    database.reset().send().await?;
+
+    Ok(())
+}

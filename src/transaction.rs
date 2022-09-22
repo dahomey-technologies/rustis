@@ -3,7 +3,7 @@ use crate::{
     resp::{Array, FromValue, ResultValueExt, Value},
     BitmapCommands, Command, CommandResult, Database, Error, Future, GenericCommands, GeoCommands,
     HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StringCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
 use std::{
     iter::zip,
@@ -96,4 +96,5 @@ impl<T: Send + Sync> SetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ScriptingCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> SortedSetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ServerCommands<T> for Transaction<T> {}
+impl<T: Send + Sync> StreamCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> StringCommands<T> for Transaction<T> {}

@@ -14,6 +14,7 @@ mod scripting_commands;
 mod server_commands;
 mod set_commands;
 mod sorted_set_commands;
+mod stream_commands;
 mod string_commands;
 mod transaction;
 mod util;

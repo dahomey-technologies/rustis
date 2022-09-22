@@ -14,6 +14,7 @@ mod scripting_commands;
 mod server_commands;
 mod set_commands;
 mod sorted_set_commands;
+mod stream_commands;
 mod string_commands;
 
 pub use bitmap_commands::*;
@@ -32,4 +33,5 @@ pub use scripting_commands::*;
 pub use server_commands::*;
 pub use set_commands::*;
 pub use sorted_set_commands::*;
+pub use stream_commands::*;
 pub use string_commands::*;

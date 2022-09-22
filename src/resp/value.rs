@@ -32,6 +32,26 @@ impl Default for Value {
     }
 }
 
+impl ToString for Value {
+    fn to_string(&self) -> String {
+        match &self {
+            Value::SimpleString(s) => s.clone(),
+            Value::Integer(i) => i.to_string(),
+            Value::Double(f) => f.to_string(),
+            Value::BulkString(s) => s.to_string(),
+            Value::Array(Array::Vec(v)) => format!(
+                "[{}]",
+                v.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Array(Array::Nil) => "[]".to_string(),
+            Value::Error(e) => e.clone(),
+        }
+    }
+}
+
 pub(crate) trait ResultValueExt {
     fn into_result(self) -> Result<Value>;
     fn map_into_result<T, F>(self, op: F) -> Result<T>

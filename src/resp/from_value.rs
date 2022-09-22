@@ -3,8 +3,9 @@ use crate::{
     Error, Result,
 };
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    hash::{BuildHasher, Hash},
+    hash::{BuildHasher, Hash}, fmt::Display,
 };
 
 pub trait FromValue: Sized {
@@ -330,26 +331,6 @@ impl FromValue for BulkString {
     }
 }
 
-impl ToString for Value {
-    fn to_string(&self) -> String {
-        match &self {
-            Value::SimpleString(s) => s.clone(),
-            Value::Integer(i) => i.to_string(),
-            Value::Double(f) => f.to_string(),
-            Value::BulkString(s) => s.to_string(),
-            Value::Array(Array::Vec(v)) => format!(
-                "[{}]",
-                v.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Value::Array(Array::Nil) => "[]".to_string(),
-            Value::Error(e) => e.clone(),
-        }
-    }
-}
-
 /// Marker for single value array
 pub trait FromSingleValueArray<T>: FromValue
 where
@@ -391,4 +372,23 @@ where
     K: FromValue + Ord + Default,
     V: FromValue + Default,
 {
+}
+
+pub trait HashMapExt<K, V, S> {
+    fn remove_with_result<Q: ?Sized>(&mut self, k: &Q) -> Result<V>
+    where
+        K: Borrow<Q> + Hash + Eq,
+        Q: Hash + Eq + Display,
+        S: BuildHasher;
+}
+
+impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
+    fn remove_with_result<Q: ?Sized>(&mut self, k: &Q) -> Result<V>
+    where
+        K: Borrow<Q> + Hash + Eq,
+        Q: Hash + Eq + Display,
+        S: BuildHasher,
+    {
+        self.remove(k).ok_or_else(|| Error::Parse(format!("Cannot parse field {}", k)))
+    }
 }

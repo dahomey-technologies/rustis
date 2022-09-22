@@ -12,20 +12,6 @@ pub enum CommandArgs {
 }
 
 impl CommandArgs {
-    /// Return the first command
-    pub(crate) fn first(&self) -> &BulkString {
-        match self {
-            CommandArgs::Empty => {
-                unimplemented!("Cannot get first argument because arguments are empty")
-            }
-            CommandArgs::Single(s) => s,
-            CommandArgs::Array2(a) => &a[0],
-            CommandArgs::Array3(a) => &a[0],
-            CommandArgs::Array4(a) => &a[0],
-            CommandArgs::Vec(v) => &v[0],
-        }
-    }
-
     #[must_use]
     pub fn arg<A>(self, args: A) -> Self
     where

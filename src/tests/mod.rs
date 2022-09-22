@@ -1,7 +1,6 @@
 mod bitmap_commands;
 mod command_args;
 mod connection_commands;
-mod database;
 mod error;
 mod generic_commands;
 mod geo_commands;

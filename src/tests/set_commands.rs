@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands, Result,
+    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, Result,
     SScanOptions, SetCommands,
 };
 use serial_test::serial;
@@ -10,13 +10,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sadd() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    let len = database
+    let len = connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
@@ -29,17 +28,16 @@ async fn sadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn scard() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
-    let len = database.scard("key").send().await?;
+    let len = connection.scard("key").send().await?;
     assert_eq!(3, len);
 
     Ok(())
@@ -49,17 +47,16 @@ async fn scard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiff() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "key3"]).send().await?;
+    connection.del(["key1", "key2", "key3"]).send().await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = database.sdiff(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = connection.sdiff(["key1", "key2", "key3"]).send().await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -71,26 +68,25 @@ async fn sdiff() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiffstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database
+    connection
         .del(["key1", "key2", "key3", "key4"])
         .send()
         .await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = database
+    let len = connection
         .sdiffstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(2, len);
 
-    let members: HashSet<String> = database.smembers("key4").send().await?;
+    let members: HashSet<String> = connection.smembers("key4").send().await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -102,17 +98,16 @@ async fn sdiffstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinter() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "key3"]).send().await?;
+    connection.del(["key1", "key2", "key3"]).send().await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = database.sinter(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = connection.sinter(["key1", "key2", "key3"]).send().await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -123,17 +118,16 @@ async fn sinter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sintercard() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "key3"]).send().await?;
+    connection.del(["key1", "key2", "key3"]).send().await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = database
+    let len = connection
         .sintercard(["key1", "key2", "key3"], 0)
         .send()
         .await?;
@@ -146,26 +140,25 @@ async fn sintercard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinterstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database
+    connection
         .del(["key1", "key2", "key3", "key4"])
         .send()
         .await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = database
+    let len = connection
         .sinterstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(1, len);
 
-    let members: HashSet<String> = database.smembers("key4").send().await?;
+    let members: HashSet<String> = connection.smembers("key4").send().await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -176,21 +169,20 @@ async fn sinterstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sismember() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = database.sismember("key", "value1").send().await?;
+    let result = connection.sismember("key", "value1").send().await?;
     assert!(result);
 
-    let result = database.sismember("key", "value4").send().await?;
+    let result = connection.sismember("key", "value4").send().await?;
     assert!(!result);
 
     Ok(())
@@ -200,18 +192,17 @@ async fn sismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smembers() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let members: HashSet<String> = database.smembers("key").send().await?;
+    let members: HashSet<String> = connection.smembers("key").send().await?;
     assert_eq!(3, members.len());
     assert!(members.contains("value1"));
     assert!(members.contains("value2"));
@@ -224,18 +215,17 @@ async fn smembers() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smismember() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = database
+    let result = connection
         .smismember("key", ["value1", "value4"])
         .send()
         .await?;
@@ -250,22 +240,21 @@ async fn smismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smove() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2"]).send().await?;
+    connection.del(["key1", "key2"]).send().await?;
 
-    database
+    connection
         .sadd("key1", ["value1", "value2", "value3"])
         .send()
         .await?;
-    database
+    connection
         .sadd("key2", ["value4", "value5", "value6"])
         .send()
         .await?;
 
-    let result = database.smove("key1", "key2", "value3").send().await?;
+    let result = connection.smove("key1", "key2", "value3").send().await?;
     assert!(result);
 
     Ok(())
@@ -275,18 +264,17 @@ async fn smove() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn spop() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: HashSet<String> = database.spop("key", 2).send().await?;
+    let result: HashSet<String> = connection.spop("key", 2).send().await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -296,18 +284,17 @@ async fn spop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srandmember() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: HashSet<String> = database.srandmember("key", 2).send().await?;
+    let result: HashSet<String> = connection.srandmember("key", 2).send().await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -317,18 +304,17 @@ async fn srandmember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srem() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = database
+    let result = connection
         .srem("key", ["value1", "value2", "value4"])
         .send()
         .await?;
@@ -341,18 +327,17 @@ async fn srem() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sscan() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: (u64, Vec<String>) = database
+    let result: (u64, Vec<String>) = connection
         .sscan("key", 0, SScanOptions::default())
         .send()
         .await?;
@@ -366,17 +351,16 @@ async fn sscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunion() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "key3"]).send().await?;
+    connection.del(["key1", "key2", "key3"]).send().await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = database.sunion(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = connection.sunion(["key1", "key2", "key3"]).send().await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));
@@ -391,26 +375,25 @@ async fn sunion() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunionstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database
+    connection
         .del(["key1", "key2", "key3", "key4"])
         .send()
         .await?;
 
-    database.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    database.sadd("key2", "c").send().await?;
-    database.sadd("key3", ["a", "c", "e"]).send().await?;
+    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    connection.sadd("key2", "c").send().await?;
+    connection.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = database
+    let len = connection
         .sunionstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(5, len);
 
-    let members: HashSet<String> = database.smembers("key4").send().await?;
+    let members: HashSet<String> = connection.smembers("key4").send().await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));

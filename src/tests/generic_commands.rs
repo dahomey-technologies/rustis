@@ -1,9 +1,8 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_default_addr,
-    ConnectionMultiplexer, DatabaseCommandResult, ExpireOption, FlushingMode, GenericCommands,
-    ListCommands, RestoreOptions, Result, ServerCommands, SetCommands, SortOptions, StringCommands,
-    ScanOptions,
+    Connection, ConnectionCommandResult, ExpireOption, FlushingMode, GenericCommands, ListCommands,
+    RestoreOptions, Result, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands, ConnectionCommands,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -12,35 +11,35 @@ use std::{collections::HashSet, time::SystemTime};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn copy() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database0 = connection.get_database(0);
-    let database1 = connection.get_database(1);
+    let connection0 = Connection::connect(get_default_addr()).await?;
+    let connection1 = Connection::connect(get_default_addr()).await?;
+    connection1.select(1).send().await?;
 
     // cleanup
-    database0.del(["key", "key1"]).send().await?;
-    database1.del(["key", "key1"]).send().await?;
+    connection0.del(["key", "key1"]).send().await?;
+    connection1.del(["key", "key1"]).send().await?;
 
-    database0.set("key", "value").send().await?;
+    connection0.set("key", "value").send().await?;
 
-    let result = database0.copy("key", "key1", None, false).send().await?;
+    let result = connection0.copy("key", "key1", None, false).send().await?;
     assert!(result);
-    let value: String = database0.get("key1").send().await?;
+    let value: String = connection0.get("key1").send().await?;
     assert_eq!("value", value);
 
-    database0.set("key", "new_value").send().await?;
-    let result = database0.copy("key", "key1", None, false).send().await?;
+    connection0.set("key", "new_value").send().await?;
+    let result = connection0.copy("key", "key1", None, false).send().await?;
     assert!(!result);
-    let value: String = database0.get("key1").send().await?;
+    let value: String = connection0.get("key1").send().await?;
     assert_eq!("value", value);
 
-    let result = database0.copy("key", "key1", None, true).send().await?;
+    let result = connection0.copy("key", "key1", None, true).send().await?;
     assert!(result);
-    let value: String = database0.get("key1").send().await?;
+    let value: String = connection0.get("key1").send().await?;
     assert_eq!("new_value", value);
 
-    let result = database0.copy("key", "key", Some(1), false).send().await?;
+    let result = connection0.copy("key", "key", Some(1), false).send().await?;
     assert!(result);
-    let value: String = database1.get("key").send().await?;
+    let value: String = connection1.get("key").send().await?;
     assert_eq!("new_value", value);
 
     Ok(())
@@ -50,20 +49,19 @@ async fn copy() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn del() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key1", "value1").send().await?;
-    database.set("key2", "value2").send().await?;
-    database.set("key3", "value3").send().await?;
+    connection.set("key1", "value1").send().await?;
+    connection.set("key2", "value2").send().await?;
+    connection.set("key3", "value3").send().await?;
 
-    let deleted = database.del("key1").send().await?;
+    let deleted = connection.del("key1").send().await?;
     assert_eq!(1, deleted);
 
-    let deleted = database.del(["key1", "key2", "key3"]).send().await?;
+    let deleted = connection.del(["key1", "key2", "key3"]).send().await?;
     assert_eq!(2, deleted);
 
-    let deleted = database.del("key1").send().await?;
+    let deleted = connection.del("key1").send().await?;
     assert_eq!(0, deleted);
 
     Ok(())
@@ -73,12 +71,11 @@ async fn del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn dump() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key", "value").send().await?;
+    connection.set("key", "value").send().await?;
 
-    let dump = database.dump("key").send().await?;
+    let dump = connection.dump("key").send().await?;
     assert!(dump.serialized_value.len() > 0);
 
     Ok(())
@@ -88,21 +85,20 @@ async fn dump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn exists() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2"]).send().await?;
+    connection.del(["key1", "key2"]).send().await?;
 
-    database.set("key1", "value1").send().await?;
+    connection.set("key1", "value1").send().await?;
 
-    let result = database.exists("key1").send().await?;
+    let result = connection.exists("key1").send().await?;
     assert_eq!(1, result);
 
-    let result = database.exists(["key1", "key2"]).send().await?;
+    let result = connection.exists(["key1", "key2"]).send().await?;
     assert_eq!(1, result);
 
-    let result = database.exists("key2").send().await?;
+    let result = connection.exists("key2").send().await?;
     assert_eq!(0, result);
 
     Ok(())
@@ -112,44 +108,55 @@ async fn exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expire() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // no option
-    database.set("key", "value").send().await?;
-    let result = database
+    connection.set("key", "value").send().await?;
+    let result = connection
         .expire("key", 10, ExpireOption::None)
         .send()
         .await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").send().await?);
+    assert_eq!(10, connection.ttl("key").send().await?);
 
     // xx
-    database.set("key", "value").send().await?;
-    let result = database.expire("key", 10, ExpireOption::Xx).send().await?;
+    connection.set("key", "value").send().await?;
+    let result = connection
+        .expire("key", 10, ExpireOption::Xx)
+        .send()
+        .await?;
     assert!(!result);
-    assert_eq!(-1, database.ttl("key").send().await?);
+    assert_eq!(-1, connection.ttl("key").send().await?);
 
     // nx
-    let result = database.expire("key", 10, ExpireOption::Nx).send().await?;
+    let result = connection
+        .expire("key", 10, ExpireOption::Nx)
+        .send()
+        .await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").send().await?);
+    assert_eq!(10, connection.ttl("key").send().await?);
 
     // gt
-    let result = database.expire("key", 5, ExpireOption::Gt).send().await?;
+    let result = connection.expire("key", 5, ExpireOption::Gt).send().await?;
     assert!(!result);
-    assert_eq!(10, database.ttl("key").send().await?);
-    let result = database.expire("key", 15, ExpireOption::Gt).send().await?;
+    assert_eq!(10, connection.ttl("key").send().await?);
+    let result = connection
+        .expire("key", 15, ExpireOption::Gt)
+        .send()
+        .await?;
     assert!(result);
-    assert_eq!(15, database.ttl("key").send().await?);
+    assert_eq!(15, connection.ttl("key").send().await?);
 
     // lt
-    let result = database.expire("key", 20, ExpireOption::Lt).send().await?;
+    let result = connection
+        .expire("key", 20, ExpireOption::Lt)
+        .send()
+        .await?;
     assert!(!result);
-    assert_eq!(15, database.ttl("key").send().await?);
-    let result = database.expire("key", 5, ExpireOption::Lt).send().await?;
+    assert_eq!(15, connection.ttl("key").send().await?);
+    let result = connection.expire("key", 5, ExpireOption::Lt).send().await?;
     assert!(result);
-    assert_eq!(5, database.ttl("key").send().await?);
+    assert_eq!(5, connection.ttl("key").send().await?);
 
     Ok(())
 }
@@ -158,8 +165,7 @@ async fn expire() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expireat() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -168,23 +174,26 @@ async fn expireat() -> Result<()> {
         .as_secs();
 
     // no option
-    database.set("key", "value").send().await?;
-    let result = database.expireat("key", now + 10, ExpireOption::default()).send().await?;
+    connection.set("key", "value").send().await?;
+    let result = connection
+        .expireat("key", now + 10, ExpireOption::default())
+        .send()
+        .await?;
     assert!(result);
-    let ttl = database.ttl("key").send().await?;
+    let ttl = connection.ttl("key").send().await?;
     assert!(9 <= ttl && ttl <= 10);
 
     // xx
-    database.set("key", "value").send().await?;
-    let result = database
+    connection.set("key", "value").send().await?;
+    let result = connection
         .expireat("key", now + 10, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
-    assert_eq!(-1, database.ttl("key").send().await?);
+    assert_eq!(-1, connection.ttl("key").send().await?);
 
     // nx
-    let result = database
+    let result = connection
         .expireat("key", now + 10, ExpireOption::Nx)
         .send()
         .await?;
@@ -192,34 +201,34 @@ async fn expireat() -> Result<()> {
     assert!(9 <= ttl && ttl <= 10);
 
     // gt
-    let result = database
+    let result = connection
         .expireat("key", now + 5, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
     assert!(9 <= ttl && ttl <= 10);
-    let result = database
+    let result = connection
         .expireat("key", now + 15, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
-    let ttl = database.ttl("key").send().await?;
+    let ttl = connection.ttl("key").send().await?;
     assert!(14 <= ttl && ttl <= 15);
 
     // lt
-    let result = database
+    let result = connection
         .expireat("key", now + 20, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
-    let ttl = database.ttl("key").send().await?;
+    let ttl = connection.ttl("key").send().await?;
     assert!(14 <= ttl && ttl <= 15);
-    let result = database
+    let result = connection
         .expireat("key", now + 5, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
-    let ttl = database.ttl("key").send().await?;
+    let ttl = connection.ttl("key").send().await?;
     assert!(4 <= ttl && ttl <= 5);
 
     Ok(())
@@ -229,12 +238,16 @@ async fn expireat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expiretime() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key", "value").send().await?;
-    assert!(database.expireat("key", 33177117420, ExpireOption::default()).send().await?);
-    let time = database.expiretime("key").send().await?;
+    connection.set("key", "value").send().await?;
+    assert!(
+        connection
+            .expireat("key", 33177117420, ExpireOption::default())
+            .send()
+            .await?
+    );
+    let time = connection.expiretime("key").send().await?;
     assert_eq!(time, 33177117420);
 
     Ok(())
@@ -244,11 +257,10 @@ async fn expiretime() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn keys() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
-    database
+    connection.flushdb(FlushingMode::Sync).send().await?;
+    connection
         .mset([
             ("firstname", "Jack"),
             ("lastname", "Stuntman"),
@@ -257,16 +269,16 @@ async fn keys() -> Result<()> {
         .send()
         .await?;
 
-    let keys: HashSet<String> = database.keys("*name*").send().await?;
+    let keys: HashSet<String> = connection.keys("*name*").send().await?;
     assert_eq!(2, keys.len());
     assert!(keys.contains("firstname"));
     assert!(keys.contains("lastname"));
 
-    let keys: HashSet<String> = database.keys("a??").send().await?;
+    let keys: HashSet<String> = connection.keys("a??").send().await?;
     assert_eq!(1, keys.len());
     assert!(keys.contains("age"));
 
-    let keys: HashSet<String> = database.keys("*").send().await?;
+    let keys: HashSet<String> = connection.keys("*").send().await?;
     assert_eq!(3, keys.len());
     assert!(keys.contains("firstname"));
     assert!(keys.contains("lastname"));
@@ -279,18 +291,18 @@ async fn keys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn move_() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database0 = connection.get_database(0);
-    let database1 = connection.get_database(1);
+    let connection0 = Connection::connect(get_default_addr()).await?;
+    let connection1 = Connection::connect(get_default_addr()).await?;
+    connection1.select(1).send().await?;
 
     // cleanup
-    database0.del("key").send().await?;
-    database1.del("key").send().await?;
+    connection0.del("key").send().await?;
+    connection1.del("key").send().await?;
 
-    database0.set("key", "value").send().await?;
-    database0.move_("key", 1).send().await?;
-    assert_eq!(0, database0.exists("key").send().await?);
-    assert_eq!(1, database1.exists("key").send().await?);
+    connection0.set("key", "value").send().await?;
+    connection0.move_("key", 1).send().await?;
+    assert_eq!(0, connection0.exists("key").send().await?);
+    assert_eq!(1, connection1.exists("key").send().await?);
 
     Ok(())
 }
@@ -299,20 +311,19 @@ async fn move_() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_encoding() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.del(["key1", "key2", "unknown"]).send().await?;
-    database.set("key1", "value").send().await?;
-    database.set("key2", "12").send().await?;
+    connection.del(["key1", "key2", "unknown"]).send().await?;
+    connection.set("key1", "value").send().await?;
+    connection.set("key2", "12").send().await?;
 
-    let encoding: String = database.object_encoding("key1").send().await?;
+    let encoding: String = connection.object_encoding("key1").send().await?;
     assert_eq!("embstr", encoding);
 
-    let encoding: String = database.object_encoding("key2").send().await?;
+    let encoding: String = connection.object_encoding("key2").send().await?;
     assert_eq!("int", encoding);
 
-    let encoding: String = database.object_encoding("unknown").send().await?;
+    let encoding: String = connection.object_encoding("unknown").send().await?;
     assert_eq!("", encoding);
 
     Ok(())
@@ -322,13 +333,12 @@ async fn object_encoding() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_freq() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.del("key").send().await?;
-    database.set("key", "value").send().await?;
+    connection.del("key").send().await?;
+    connection.set("key", "value").send().await?;
 
-    let frequency = database.object_freq("key").send().await;
+    let frequency = connection.object_freq("key").send().await;
     // ERR An LFU maxmemory policy is not selected, access frequency not tracked.
     assert!(frequency.is_err());
 
@@ -339,13 +349,12 @@ async fn object_freq() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_idle_time() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.del("key").send().await?;
-    database.set("key", "value").send().await?;
+    connection.del("key").send().await?;
+    connection.set("key", "value").send().await?;
 
-    let idle_time = database.object_idle_time("key").send().await?;
+    let idle_time = connection.object_idle_time("key").send().await?;
     assert!(idle_time < 1);
 
     Ok(())
@@ -355,13 +364,12 @@ async fn object_idle_time() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_refcount() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.del("key").send().await?;
-    database.set("key", "value").send().await?;
+    connection.del("key").send().await?;
+    connection.set("key", "value").send().await?;
 
-    let refcount = database.object_refcount("key").send().await?;
+    let refcount = connection.object_refcount("key").send().await?;
     assert_eq!(1, refcount);
 
     Ok(())
@@ -371,19 +379,18 @@ async fn object_refcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn persist() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key", "value").send().await?;
+    connection.set("key", "value").send().await?;
     assert!(
-        database
+        connection
             .expire("key", 10, ExpireOption::None)
             .send()
             .await?
     );
-    assert_eq!(10, database.ttl("key").send().await?);
-    assert!(database.persist("key").send().await?);
-    assert_eq!(-1, database.ttl("key").send().await?);
+    assert_eq!(10, connection.ttl("key").send().await?);
+    assert!(connection.persist("key").send().await?);
+    assert_eq!(-1, connection.ttl("key").send().await?);
 
     Ok(())
 }
@@ -392,59 +399,61 @@ async fn persist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpire() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // no option
-    database.set("key", "value").send().await?;
-    let result = database.pexpire("key", 10000, ExpireOption::default()).send().await?;
+    connection.set("key", "value").send().await?;
+    let result = connection
+        .pexpire("key", 10000, ExpireOption::default())
+        .send()
+        .await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").send().await?);
+    assert_eq!(10, connection.ttl("key").send().await?);
 
     // xx
-    database.set("key", "value").send().await?;
-    let result = database
+    connection.set("key", "value").send().await?;
+    let result = connection
         .pexpire("key", 10000, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
-    assert_eq!(-1, database.ttl("key").send().await?);
+    assert_eq!(-1, connection.ttl("key").send().await?);
 
     // nx
-    let result = database
+    let result = connection
         .pexpire("key", 10000, ExpireOption::Nx)
         .send()
         .await?;
     assert!(result);
-    assert_eq!(10, database.ttl("key").send().await?);
+    assert_eq!(10, connection.ttl("key").send().await?);
 
     // gt
-    let result = database
+    let result = connection
         .pexpire("key", 5000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
-    assert_eq!(10, database.ttl("key").send().await?);
-    let result = database
+    assert_eq!(10, connection.ttl("key").send().await?);
+    let result = connection
         .pexpire("key", 15000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
-    assert_eq!(15, database.ttl("key").send().await?);
+    assert_eq!(15, connection.ttl("key").send().await?);
 
     // lt
-    let result = database
+    let result = connection
         .pexpire("key", 20000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
-    assert_eq!(15, database.ttl("key").send().await?);
-    let result = database
+    assert_eq!(15, connection.ttl("key").send().await?);
+    let result = connection
         .pexpire("key", 5000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
-    assert_eq!(5, database.ttl("key").send().await?);
+    assert_eq!(5, connection.ttl("key").send().await?);
 
     Ok(())
 }
@@ -453,8 +462,7 @@ async fn pexpire() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpireat() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -463,55 +471,58 @@ async fn pexpireat() -> Result<()> {
         .as_millis() as u64;
 
     // no option
-    database.set("key", "value").send().await?;
-    let result = database.pexpireat("key", now + 10000, ExpireOption::default()).send().await?;
+    connection.set("key", "value").send().await?;
+    let result = connection
+        .pexpireat("key", now + 10000, ExpireOption::default())
+        .send()
+        .await?;
     assert!(result);
-    assert!(10000 >= database.pttl("key").send().await?);
+    assert!(10000 >= connection.pttl("key").send().await?);
 
     // xx
-    database.set("key", "value").send().await?;
-    let result = database
+    connection.set("key", "value").send().await?;
+    let result = connection
         .pexpireat("key", now + 10000, ExpireOption::Xx)
         .send()
         .await?;
     assert!(!result);
-    assert_eq!(-1, database.pttl("key").send().await?);
+    assert_eq!(-1, connection.pttl("key").send().await?);
 
     // nx
-    let result = database
+    let result = connection
         .pexpireat("key", now + 10000, ExpireOption::Nx)
         .send()
         .await?;
     assert!(result);
-    assert!(10000 >= database.pttl("key").send().await?);
+    assert!(10000 >= connection.pttl("key").send().await?);
 
     // gt
-    let result = database
+    let result = connection
         .pexpireat("key", now + 5000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(!result);
-    assert!(10000 >= database.pttl("key").send().await?);
-    let result = database
+    assert!(10000 >= connection.pttl("key").send().await?);
+    let result = connection
         .pexpireat("key", now + 15000, ExpireOption::Gt)
         .send()
         .await?;
     assert!(result);
-    assert!(15000 >= database.pttl("key").send().await?);
+    assert!(15000 >= connection.pttl("key").send().await?);
 
     // lt
-    let result = database
+    let result = connection
         .pexpireat("key", now + 20000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(!result);
-    assert!(20000 >= database.pttl("key").send().await?);
-    let result = database
+    assert!(20000 >= connection.pttl("key").send().await?);
+    let result = connection
         .pexpireat("key", now + 5000, ExpireOption::Lt)
         .send()
         .await?;
     assert!(result);
-    assert!(5000 >= database.pttl("key").send().await?);
+    assert!(5000 >= connection.pttl("key").send().await?);
 
     Ok(())
 }
@@ -520,17 +531,16 @@ async fn pexpireat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpiretime() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key", "value").send().await?;
+    connection.set("key", "value").send().await?;
     assert!(
-        database
+        connection
             .pexpireat("key", 33177117420000, ExpireOption::default())
             .send()
             .await?
     );
-    let time = database.pexpiretime("key").send().await?;
+    let time = connection.pexpiretime("key").send().await?;
     assert_eq!(time, 33177117420000);
 
     Ok(())
@@ -540,15 +550,14 @@ async fn pexpiretime() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn randomkey() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
-    database.set("key1", "value1").send().await?;
-    database.set("key2", "value2").send().await?;
-    database.set("key3", "value3").send().await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
+    connection.set("key1", "value1").send().await?;
+    connection.set("key2", "value2").send().await?;
+    connection.set("key3", "value3").send().await?;
 
-    let key: String = database.randomkey().send().await?;
+    let key: String = connection.randomkey().send().await?;
     assert!(["key1", "key2", "key3"].contains(&key.as_str()));
 
     Ok(())
@@ -558,19 +567,18 @@ async fn randomkey() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn rename() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
-    database.set("key1", "value1").send().await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
+    connection.set("key1", "value1").send().await?;
 
-    database.rename("key1", "key2").send().await?;
-    let value: Value = database.get("key1").send().await?;
+    connection.rename("key1", "key2").send().await?;
+    let value: Value = connection.get("key1").send().await?;
     assert!(matches!(value, Value::BulkString(BulkString::Nil)));
-    let value: String = database.get("key2").send().await?;
+    let value: String = connection.get("key2").send().await?;
     assert_eq!("value1", value);
 
-    let result = database.rename("unknown", "key2").send().await;
+    let result = connection.rename("unknown", "key2").send().await;
     assert!(result.is_err());
 
     Ok(())
@@ -580,17 +588,16 @@ async fn rename() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn renamenx() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
-    database.set("key1", "value1").send().await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
+    connection.set("key1", "value1").send().await?;
 
-    let success = database.renamenx("key1", "key2").send().await?;
+    let success = connection.renamenx("key1", "key2").send().await?;
     assert!(success);
 
-    database.set("key1", "value1").send().await?;
-    let success = database.renamenx("key1", "key2").send().await?;
+    connection.set("key1", "value1").send().await?;
+    let success = connection.renamenx("key1", "key2").send().await?;
     assert!(!success);
 
     Ok(())
@@ -600,18 +607,17 @@ async fn renamenx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn restore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key", "value").send().await?;
+    connection.set("key", "value").send().await?;
 
-    let dump = database.dump("key").send().await?;
-    database.del("key").send().await?;
-    database
+    let dump = connection.dump("key").send().await?;
+    connection.del("key").send().await?;
+    connection
         .restore("key", 0, dump.serialized_value, RestoreOptions::default())
         .send()
         .await?;
-    let value: String = database.get("key").send().await?;
+    let value: String = connection.get("key").send().await?;
     assert_eq!("value", value);
 
     Ok(())
@@ -621,16 +627,15 @@ async fn restore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn scan() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
 
-    database.set("key1", "value").send().await?;
-    database.set("key2", "value").send().await?;
-    database.set("key3", "value").send().await?;
+    connection.set("key1", "value").send().await?;
+    connection.set("key2", "value").send().await?;
+    connection.set("key3", "value").send().await?;
 
-    let keys: (u64, HashSet<String>) = database.scan(0, ScanOptions::default()).send().await?;
+    let keys: (u64, HashSet<String>) = connection.scan(0, ScanOptions::default()).send().await?;
     assert_eq!(3, keys.1.len());
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));
@@ -643,17 +648,16 @@ async fn scan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sort() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.flushdb(FlushingMode::Sync).send().await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
 
-    database
+    connection
         .rpush("key", ["member3", "member1", "member2"])
         .send()
         .await?;
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .sort("key", SortOptions::default().alpha())
         .send()
         .await?;
@@ -662,13 +666,13 @@ async fn sort() -> Result<()> {
     assert_eq!("member2".to_owned(), values[1]);
     assert_eq!("member3".to_owned(), values[2]);
 
-    let len = database
+    let len = connection
         .sort_and_store("key", "out", SortOptions::default().alpha())
         .send()
         .await?;
     assert_eq!(3, len);
 
-    let values: Vec<String> = database.lrange("out", 0, -1).send().await?;
+    let values: Vec<String> = connection.lrange("out", 0, -1).send().await?;
     assert_eq!(3, values.len());
     assert_eq!("member1".to_owned(), values[0]);
     assert_eq!("member2".to_owned(), values[1]);
@@ -681,13 +685,12 @@ async fn sort() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn touch() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key1", "Hello").send().await?;
-    database.set("key2", "World").send().await?;
+    connection.set("key1", "Hello").send().await?;
+    connection.set("key2", "World").send().await?;
 
-    let num_keys = database.touch(["key1", "key2"]).send().await?;
+    let num_keys = connection.touch(["key1", "key2"]).send().await?;
     assert_eq!(2, num_keys);
 
     Ok(())
@@ -697,23 +700,22 @@ async fn touch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn type_() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "key3"]).send().await?;
+    connection.del(["key1", "key2", "key3"]).send().await?;
 
-    database.set("key1", "value").send().await?;
-    database.lpush("key2", "value").send().await?;
-    database.sadd("key3", "value").send().await?;
+    connection.set("key1", "value").send().await?;
+    connection.lpush("key2", "value").send().await?;
+    connection.sadd("key3", "value").send().await?;
 
-    let result = database.type_("key1").send().await?;
+    let result = connection.type_("key1").send().await?;
     assert_eq!(&result, "string");
 
-    let result = database.type_("key2").send().await?;
+    let result = connection.type_("key2").send().await?;
     assert_eq!(&result, "list");
 
-    let result = database.type_("key3").send().await?;
+    let result = connection.type_("key3").send().await?;
     assert_eq!(&result, "set");
 
     Ok(())
@@ -723,17 +725,16 @@ async fn type_() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unlink() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
-    database.set("key1", "value1").send().await?;
-    database.set("key2", "value2").send().await?;
-    database.set("key3", "value3").send().await?;
+    connection.set("key1", "value1").send().await?;
+    connection.set("key2", "value2").send().await?;
+    connection.set("key3", "value3").send().await?;
 
-    let unlinked = database.unlink("key1").send().await?;
+    let unlinked = connection.unlink("key1").send().await?;
     assert_eq!(1, unlinked);
 
-    let unlinked = database.unlink(["key1", "key2", "key3"]).send().await?;
+    let unlinked = connection.unlink(["key1", "key2", "key3"]).send().await?;
     assert_eq!(2, unlinked);
 
     Ok(())

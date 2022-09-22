@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands, Result,
+    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, Result,
     SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZWhere,
 };
 use serial_test::serial;
@@ -8,19 +8,18 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zadd() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    let len = database
+    let len = connection
         .zadd("key", (1.0, "one"), ZAddOptions::default())
         .send()
         .await?;
     assert_eq!(1, len);
 
-    let len = database
+    let len = connection
         .zadd(
             "key",
             [(2.0, "two"), (3.0, "three")],
@@ -30,13 +29,13 @@ async fn zadd() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = database
+    let len = connection
         .zadd("key", (1.0, "uno"), ZAddOptions::default())
         .send()
         .await?;
     assert_eq!(1, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -53,18 +52,17 @@ async fn zadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zcard() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let len = database.zcard("key").send().await?;
+    let len = connection.zcard("key").send().await?;
     assert_eq!(2, len);
 
     Ok(())
@@ -74,13 +72,12 @@ async fn zcard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zcount() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -89,10 +86,10 @@ async fn zcount() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zcount("key", "-inf", "+inf").send().await?;
+    let len = connection.zcount("key", "-inf", "+inf").send().await?;
     assert_eq!(3, len);
 
-    let len = database.zcount("key", "(1", 3).send().await?;
+    let len = connection.zcount("key", "(1", 3).send().await?;
     assert_eq!(2, len);
 
     Ok(())
@@ -102,13 +99,12 @@ async fn zcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zdiff() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2"]).send().await?;
+    connection.del(["key1", "key2"]).send().await?;
 
-    database
+    connection
         .zadd(
             "key1",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -116,16 +112,19 @@ async fn zdiff() -> Result<()> {
         )
         .send()
         .await?;
-    database
+    connection
         .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let result: Vec<String> = database.zdiff(["key1", "key2"]).send().await?;
+    let result: Vec<String> = connection.zdiff(["key1", "key2"]).send().await?;
     assert_eq!(1, result.len());
     assert_eq!("three".to_owned(), result[0]);
 
-    let result: Vec<(String, f64)> = database.zdiff_with_scores(["key1", "key2"]).send().await?;
+    let result: Vec<(String, f64)> = connection
+        .zdiff_with_scores(["key1", "key2"])
+        .send()
+        .await?;
     assert_eq!(1, result.len());
     assert_eq!(("three".to_owned(), 3.0), result[0]);
 
@@ -136,13 +135,12 @@ async fn zdiff() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zdiffstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "out"]).send().await?;
+    connection.del(["key1", "key2", "out"]).send().await?;
 
-    database
+    connection
         .zadd(
             "key1",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -150,15 +148,18 @@ async fn zdiffstore() -> Result<()> {
         )
         .send()
         .await?;
-    database
+    connection
         .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let len = database.zdiffstore("out", ["key1", "key2"]).send().await?;
+    let len = connection
+        .zdiffstore("out", ["key1", "key2"])
+        .send()
+        .await?;
     assert_eq!(1, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -172,21 +173,20 @@ async fn zdiffstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zincrby() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let new_score = database.zincrby("key", 2.0, "one").send().await?;
+    let new_score = connection.zincrby("key", 2.0, "one").send().await?;
     assert_eq!(3.0, new_score);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -201,13 +201,12 @@ async fn zincrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zinter() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2"]).send().await?;
+    connection.del(["key1", "key2"]).send().await?;
 
-    database
+    connection
         .zadd(
             "key1",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -215,12 +214,12 @@ async fn zinter() -> Result<()> {
         )
         .send()
         .await?;
-    database
+    connection
         .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let result: Vec<String> = database
+    let result: Vec<String> = connection
         .zinter(["key1", "key2"], None as Option<f64>, Default::default())
         .send()
         .await?;
@@ -228,7 +227,7 @@ async fn zinter() -> Result<()> {
     assert_eq!("one".to_owned(), result[0]);
     assert_eq!("two".to_owned(), result[1]);
 
-    let result: Vec<(String, f64)> = database
+    let result: Vec<(String, f64)> = connection
         .zinter_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
         .send()
         .await?;
@@ -243,13 +242,12 @@ async fn zinter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zinterstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "out"]).send().await?;
+    connection.del(["key1", "key2", "out"]).send().await?;
 
-    database
+    connection
         .zadd(
             "key1",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -257,12 +255,12 @@ async fn zinterstore() -> Result<()> {
         )
         .send()
         .await?;
-    database
+    connection
         .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let len = database
+    let len = connection
         .zinterstore(
             "out",
             ["key1", "key2"],
@@ -273,7 +271,7 @@ async fn zinterstore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -288,13 +286,12 @@ async fn zinterstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zlexcount() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [
@@ -311,10 +308,10 @@ async fn zlexcount() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zlexcount("key", "-", "+").send().await?;
+    let len = connection.zlexcount("key", "-", "+").send().await?;
     assert_eq!(7, len);
 
-    let len = database.zlexcount("key", "[b", "[f").send().await?;
+    let len = connection.zlexcount("key", "[b", "[f").send().await?;
     assert_eq!(5, len);
 
     Ok(())
@@ -324,17 +321,16 @@ async fn zlexcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zmpop() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key", "key2", "unknown"]).send().await?;
+    connection.del(["key", "key2", "unknown"]).send().await?;
 
     let result: Option<(String, Vec<(String, f64)>)> =
-        database.zmpop("unknown", ZWhere::Min, 1).send().await?;
+        connection.zmpop("unknown", ZWhere::Min, 1).send().await?;
     assert!(result.is_none());
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -344,7 +340,7 @@ async fn zmpop() -> Result<()> {
         .await?;
 
     let result: Option<(String, Vec<(String, f64)>)> =
-        database.zmpop("key", ZWhere::Min, 1).send().await?;
+        connection.zmpop("key", ZWhere::Min, 1).send().await?;
     match result {
         Some(result) => {
             assert_eq!("key".to_owned(), result.0);
@@ -354,7 +350,7 @@ async fn zmpop() -> Result<()> {
         None => assert!(false),
     }
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -363,7 +359,7 @@ async fn zmpop() -> Result<()> {
     assert_eq!(("three".to_owned(), 3.0), values[1]);
 
     let result: Option<(String, Vec<(String, f64)>)> =
-        database.zmpop("key", ZWhere::Max, 10).send().await?;
+        connection.zmpop("key", ZWhere::Max, 10).send().await?;
     match result {
         Some(result) => {
             assert_eq!("key".to_owned(), result.0);
@@ -374,7 +370,7 @@ async fn zmpop() -> Result<()> {
         None => assert!(false),
     }
 
-    database
+    connection
         .zadd(
             "key2",
             [(4.0, "four"), (5.0, "five"), (6.0, "six")],
@@ -383,7 +379,7 @@ async fn zmpop() -> Result<()> {
         .send()
         .await?;
 
-    let result: Option<(String, Vec<(String, f64)>)> = database
+    let result: Option<(String, Vec<(String, f64)>)> = connection
         .zmpop(["key", "key2"], ZWhere::Min, 10)
         .send()
         .await?;
@@ -398,25 +394,25 @@ async fn zmpop() -> Result<()> {
         None => assert!(false),
     }
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
     assert_eq!(0, values.len());
 
-    let result: Option<(String, Vec<(String, f64)>)> = database
+    let result: Option<(String, Vec<(String, f64)>)> = connection
         .zmpop(["key", "key2"], ZWhere::Min, 10)
         .send()
         .await?;
     assert!(result.is_none());
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key2", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
     assert_eq!(0, values.len());
 
-    let len = database.exists(["key", "key2"]).send().await?;
+    let len = connection.exists(["key", "key2"]).send().await?;
     assert_eq!(0, len);
 
     Ok(())
@@ -426,18 +422,17 @@ async fn zmpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zmscore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
 
-    let scores = database
+    let scores = connection
         .zmscore("key", ["one", "two", "nofield"])
         .send()
         .await?;
@@ -453,13 +448,12 @@ async fn zmscore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zpopmax() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -468,7 +462,7 @@ async fn zpopmax() -> Result<()> {
         .send()
         .await?;
 
-    let result: Vec<(String, f64)> = database.zpopmax("key", 1).send().await?;
+    let result: Vec<(String, f64)> = connection.zpopmax("key", 1).send().await?;
     assert_eq!(1, result.len());
     assert_eq!(("three".to_owned(), 3.0), result[0]);
 
@@ -479,13 +473,12 @@ async fn zpopmax() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zpopmin() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -494,7 +487,7 @@ async fn zpopmin() -> Result<()> {
         .send()
         .await?;
 
-    let result: Vec<(String, f64)> = database.zpopmin("key", 1).send().await?;
+    let result: Vec<(String, f64)> = connection.zpopmin("key", 1).send().await?;
     assert_eq!(1, result.len());
     assert_eq!(("one".to_owned(), 1.0), result[0]);
 
@@ -505,11 +498,10 @@ async fn zpopmin() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrandmember() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
     let values = [
         (1.0, "one"),
@@ -520,15 +512,18 @@ async fn zrandmember() -> Result<()> {
         (6.0, "six"),
     ];
 
-    database
+    connection
         .zadd("key", values, ZAddOptions::default())
         .send()
         .await?;
 
-    let result: String = database.zrandmember("key").send().await?;
+    let result: String = connection.zrandmember("key").send().await?;
     assert!(values.iter().any(|v| v.1 == result));
 
-    let result: Vec<(String, f64)> = database.zrandmembers_with_scores("key", -5).send().await?;
+    let result: Vec<(String, f64)> = connection
+        .zrandmembers_with_scores("key", -5)
+        .send()
+        .await?;
     assert!(result
         .iter()
         .all(|r| values.iter().any(|v| v.0 == r.1 && v.1 == r.0)));
@@ -540,13 +535,12 @@ async fn zrandmember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrange() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -555,7 +549,7 @@ async fn zrange() -> Result<()> {
         .send()
         .await?;
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -564,14 +558,14 @@ async fn zrange() -> Result<()> {
     assert_eq!("two".to_owned(), values[1]);
     assert_eq!("three".to_owned(), values[2]);
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange("key", 2, 3, ZRangeOptions::default())
         .send()
         .await?;
     assert_eq!(1, values.len());
     assert_eq!("three".to_owned(), values[0]);
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange("key", -2, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -579,7 +573,7 @@ async fn zrange() -> Result<()> {
     assert_eq!("two".to_owned(), values[0]);
     assert_eq!("three".to_owned(), values[1]);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -588,7 +582,7 @@ async fn zrange() -> Result<()> {
     assert_eq!(("two".to_owned(), 2.0), values[1]);
     assert_eq!(("three".to_owned(), 3.0), values[2]);
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange(
             "key",
             "(1",
@@ -609,13 +603,12 @@ async fn zrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrangestore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key", "out"]).send().await?;
+    connection.del(["key", "out"]).send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three"), (4.0, "four")],
@@ -624,13 +617,13 @@ async fn zrangestore() -> Result<()> {
         .send()
         .await?;
 
-    let len = database
+    let len = connection
         .zrangestore("out", "key", 2, -1, ZRangeOptions::default())
         .send()
         .await?;
     assert_eq!(2, len);
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange("key", -2, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -645,13 +638,12 @@ async fn zrangestore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrank() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -660,10 +652,10 @@ async fn zrank() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zrank("key", "three").send().await?;
+    let len = connection.zrank("key", "three").send().await?;
     assert_eq!(Some(2), len);
 
-    let len = database.zrank("key", "four").send().await?;
+    let len = connection.zrank("key", "four").send().await?;
     assert_eq!(None, len);
 
     Ok(())
@@ -673,13 +665,12 @@ async fn zrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrem() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -688,10 +679,10 @@ async fn zrem() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zrem("key", "two").send().await?;
+    let len = connection.zrem("key", "two").send().await?;
     assert_eq!(1, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -706,13 +697,12 @@ async fn zrem() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zremrangebylex() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [
@@ -732,13 +722,13 @@ async fn zremrangebylex() -> Result<()> {
         .send()
         .await?;
 
-    let len = database
+    let len = connection
         .zremrangebylex("key", "[alpha", "[omega")
         .send()
         .await?;
     assert_eq!(6, len);
 
-    let values: Vec<String> = database
+    let values: Vec<String> = connection
         .zrange("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -755,13 +745,12 @@ async fn zremrangebylex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zremrangebyrank() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -770,10 +759,10 @@ async fn zremrangebyrank() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zremrangebyrank("key", 0, 1).send().await?;
+    let len = connection.zremrangebyrank("key", 0, 1).send().await?;
     assert_eq!(2, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
         .send()
         .await?;
@@ -787,13 +776,12 @@ async fn zremrangebyrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zrevrank() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -802,10 +790,10 @@ async fn zrevrank() -> Result<()> {
         .send()
         .await?;
 
-    let len = database.zrevrank("key", "one").send().await?;
+    let len = connection.zrevrank("key", "one").send().await?;
     assert_eq!(Some(2), len);
 
-    let len = database.zrevrank("key", "four").send().await?;
+    let len = connection.zrevrank("key", "four").send().await?;
     assert_eq!(None, len);
 
     Ok(())
@@ -815,13 +803,12 @@ async fn zrevrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zscan() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -830,7 +817,7 @@ async fn zscan() -> Result<()> {
         .send()
         .await?;
 
-    let result = database
+    let result = connection
         .zscan("key", 0, ZScanOptions::default())
         .send()
         .await?;
@@ -847,13 +834,12 @@ async fn zscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zscore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -862,10 +848,10 @@ async fn zscore() -> Result<()> {
         .send()
         .await?;
 
-    let score = database.zscore("key", "one").send().await?;
+    let score = connection.zscore("key", "one").send().await?;
     assert_eq!(Some(1.0), score);
 
-    let score = database.zscore("key", "four").send().await?;
+    let score = connection.zscore("key", "four").send().await?;
     assert_eq!(None, score);
 
     Ok(())
@@ -875,17 +861,16 @@ async fn zscore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zunion() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2"]).send().await?;
+    connection.del(["key1", "key2"]).send().await?;
 
-    database
+    connection
         .zadd("key1", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
-    database
+    connection
         .zadd(
             "key2",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -894,7 +879,7 @@ async fn zunion() -> Result<()> {
         .send()
         .await?;
 
-    let result: Vec<String> = database
+    let result: Vec<String> = connection
         .zunion(["key1", "key2"], None as Option<f64>, Default::default())
         .send()
         .await?;
@@ -903,7 +888,7 @@ async fn zunion() -> Result<()> {
     assert_eq!("three".to_owned(), result[1]);
     assert_eq!("two".to_owned(), result[2]);
 
-    let result: Vec<(String, f64)> = database
+    let result: Vec<(String, f64)> = connection
         .zunion_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
         .send()
         .await?;
@@ -919,17 +904,16 @@ async fn zunion() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn zunionstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["key1", "key2", "out"]).send().await?;
+    connection.del(["key1", "key2", "out"]).send().await?;
 
-    database
+    connection
         .zadd("key1", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .send()
         .await?;
-    database
+    connection
         .zadd(
             "key2",
             [(1.0, "one"), (2.0, "two"), (3.0, "three")],
@@ -938,7 +922,7 @@ async fn zunionstore() -> Result<()> {
         .send()
         .await?;
 
-    let len = database
+    let len = connection
         .zunionstore(
             "out",
             ["key1", "key2"],
@@ -949,7 +933,7 @@ async fn zunionstore() -> Result<()> {
         .await?;
     assert_eq!(3, len);
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
         .send()
         .await?;

@@ -1,55 +1,173 @@
 use crate::{
     message::Message,
-    resp::{Value, ValueDecoder},
-    CommandEncoder, ConnectionFactory, ConnectionType, Error, MsgReceiver, Result, TcpStreamReader,
-    TcpStreamWriter, ValueSender,
+    resp::{Array, BulkString, Value, ValueDecoder},
+    spawn, CommandEncoder, ConnectionFactory, Error, MsgReceiver, MsgSender, PubSubSender, Result,
+    TcpStreamReader, TcpStreamWriter, ValueSender,
 };
-use futures::SinkExt;
-use std::collections::VecDeque;
+use futures::{channel::mpsc, select, FutureExt, SinkExt, StreamExt};
+use std::collections::{HashMap, VecDeque};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
+enum Status {
+    Disconnected,
+    Connected,
+    Subscribing,
+    Subscribed,
+}
+
 pub(crate) struct NetworkHandler {
-    pub connection_factory: ConnectionFactory,
-    pub connection_type: ConnectionType,
-    pub msg_receiver: MsgReceiver,
-    pub value_senders: VecDeque<Option<ValueSender>>,
-    pub framed_read: FramedRead<TcpStreamReader, ValueDecoder>,
-    pub framed_write: FramedWrite<TcpStreamWriter, CommandEncoder>,
+    status: Status,
+    connection_factory: ConnectionFactory,
+    msg_receiver: MsgReceiver,
+    value_senders: VecDeque<Option<ValueSender>>,
+    framed_read: FramedRead<TcpStreamReader, ValueDecoder>,
+    framed_write: FramedWrite<TcpStreamWriter, CommandEncoder>,
+    pending_pub_sub_sender: Option<PubSubSender>,
+    subscriptions: HashMap<Vec<u8>, PubSubSender>,
 }
 
 impl NetworkHandler {
-    pub async fn initialize(
-        connection_factory: ConnectionFactory,
-        connection_type: ConnectionType,
-        msg_receiver: MsgReceiver,
-    ) -> Result<Self> {
+    pub async fn connect(addr: impl Into<String>) -> Result<MsgSender> {
+        let connection_factory = ConnectionFactory::initialize(addr).await?;
+        let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let value_senders = VecDeque::new();
         let (reader, writer) = connection_factory.get_connection().await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);
 
-        Ok(Self {
+        let mut network_handler = NetworkHandler {
+            status: Status::Connected,
             connection_factory,
-            connection_type,
             msg_receiver,
             value_senders,
             framed_read,
             framed_write,
-        })
+            pending_pub_sub_sender: None,
+            subscriptions: HashMap::new(),
+        };
+        
+        spawn(async move {
+            if let Err(e) = network_handler.network_loop().await {
+                eprintln!("{}", e);
+            }
+        });
+
+        Ok(msg_sender)
     }
 
-    pub async fn send_message(&mut self, msg: Message) {
+    pub async fn network_loop(&mut self) -> Result<()> {
+        loop {
+            select! {
+                msg = self.msg_receiver.next().fuse() => if !self.handle_message(msg).await { break; },
+                value = self.framed_read.next().fuse() => self.handle_result(value).await?,
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_message(&mut self, msg: Option<Message>) -> bool {
+        if let Some(mut msg) = msg {
+            let mut pub_sub_sender: Option<PubSubSender> = None;
+            std::mem::swap(&mut pub_sub_sender, &mut msg.pub_sub_sender);
+            self.pending_pub_sub_sender = pub_sub_sender;
+
+            match &self.status {
+                Status::Connected => {
+                    if let "SUBSCRIBE" | "SSUBSCRIBE" | "PSUBSCRIBE" = msg.command.name {
+                        self.status = Status::Subscribing;
+                    }
+                    self.send_message(msg).await;
+                }
+                Status::Subscribing | Status::Subscribed => match msg.command.name {
+                    "SUBSCRIBE" | "SSUBSCRIBE" | "PSUBSCRIBE" | "UNSUBSCRIBE" | "SUNSUBSCRIBE"
+                    | "PUNSUBSCRIBE" | "PING" | "RESET" | "QUIT" => {
+                        self.send_message(msg).await;
+                    }
+                    _ => {
+                        let value_sender = msg.value_sender;
+                        if let Some(value_sender) = value_sender {
+                            let _result = value_sender.send(Err(Error::Internal(format!(
+                                "Command {} not allowed when connection is in subscribed state",
+                                msg.command.name
+                            ))));
+                        }
+                    }
+                },
+                Status::Disconnected => {
+                    let value_sender = msg.value_sender;
+                    if let Some(value_sender) = value_sender {
+                        let _result = value_sender
+                            .send(Err(Error::Network("Disconnected from server".to_string())));
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    async fn send_message(&mut self, msg: Message) {
         let command = msg.command;
         let value_sender = msg.value_sender;
-        println!("[{:?}] Sending {:?}", self.connection_type, command);
+        println!("Sending {command:?}");
         match self.framed_write.send(command).await {
             Ok(()) => self.value_senders.push_back(value_sender),
             Err(_e) => self.value_senders.push_back(value_sender),
         }
     }
 
-    pub fn receive_result(&mut self, value: Result<Value>) {
-        println!("[{:?}] Received result {:?}", self.connection_type, value);
+    async fn handle_result(&mut self, result: Option<Result<Value>>) -> Result<()> {
+        match result {
+            Some(value) => match self.status {
+                Status::Disconnected => {
+                    panic!("Should not happen!");
+                }
+                Status::Connected => {
+                    self.receive_result(value);
+                }
+                Status::Subscribing => {
+                    if value.is_ok() {
+                        self.status = Status::Subscribed;
+                    } else {
+                        self.status = Status::Connected;
+                    }
+                    println!("value: {:?}", value);
+                    if let Some(value) = self.try_match_pubsub_message(value).await? {
+                        self.receive_result(value);
+                    }
+                }
+                Status::Subscribed => {
+                    if let Some(value) = self.try_match_pubsub_message(value).await? {
+                        self.receive_result(value);
+                    }
+                }
+            },
+            // disconnection
+            None => {
+                self.status = Status::Disconnected;
+                while let Some(value_sender) = self.value_senders.pop_front() {
+                    if let Some(value_sender) = value_sender {
+                        let _result = value_sender
+                            .send(Err(Error::Network("Disconnected from server".to_string())));
+                    }
+                }
+
+                // reconnect
+                println!("reconnecting");
+                if self.reconnect().await {
+                    self.status = Status::Connected;
+                    println!("reconnected!");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn receive_result(&mut self, value: Result<Value>) {
+        println!("Received result {value:?}");
 
         match self.value_senders.pop_front() {
             Some(Some(value_sender)) => {
@@ -58,14 +176,74 @@ impl NetworkHandler {
             Some(None) => (), // fire & forget
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance
-                assert!(
-                    value.is_err(),
-                    "[{:?}] Received unexpected message: {:?}",
-                    self.connection_type,
-                    value
-                );
+                assert!(value.is_err(), "Received unexpected message: {value:?}",);
             }
         }
+    }
+
+    async fn try_match_pubsub_message(
+        &mut self,
+        value: Result<Value>,
+    ) -> Result<Option<Result<Value>>> {
+        // first pass check if received value if a PubSub message with matching on references
+        let is_pub_sub_message = match value {
+            Ok(Value::Array(Array::Vec(ref items))) => match &items[..] {
+                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] => {
+                    match command.as_slice() {
+                        b"message" => true,
+                        b"subscribe" => {
+                            let mut pub_sub_sender: Option<PubSubSender> = None;
+                            std::mem::swap(&mut pub_sub_sender, &mut self.pending_pub_sub_sender);
+
+                            if let Some(pub_sub_sender) = pub_sub_sender {
+                                self.subscriptions.insert(channel.clone(), pub_sub_sender);
+                            }
+                            false
+                        }
+                        b"unsubscribe" => {
+                            self.subscriptions.remove(channel);
+                            false
+                        }
+                        _ => false,
+                    }
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+
+        // because value is not consumed we can send it back to the caller
+        // if it is not a PubSub message
+        if !is_pub_sub_message {
+            return Ok(Some(value));
+        }
+
+        println!("Received result {value:?}");
+
+        // second pass, move payload into pub_sub_sender by consuming received value
+        if let Ok(Value::Array(Array::Vec(mut items))) = value {
+            if let (
+                Some(Value::BulkString(payload)),
+                Some(Value::BulkString(BulkString::Binary(channel))),
+                Some(Value::BulkString(BulkString::Binary(_command))),
+            ) = (items.pop(), items.pop(), items.pop())
+            {
+                match self.subscriptions.get_mut(&channel) {
+                    Some(pub_sub_sender) => {
+                        pub_sub_sender.send(Ok(payload)).await?;
+                        return Ok(None);
+                    }
+                    None => {
+                        return Err(Error::Internal(format!(
+                            "Unexpected message on channel: {:?}",
+                            String::from_utf8(channel).unwrap()
+                        )));
+                    }
+                }
+            }
+        }
+
+        panic!("Should not reach this point");
     }
 
     pub(crate) async fn reconnect(&mut self) -> bool {

@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_default_addr, ConnectionCommands, ConnectionMultiplexer, DatabaseCommandResult,
-    FlushingMode, HelloOptions, Result, ServerCommands, SortedSetCommands, StringCommands,
+    tests::get_default_addr, Connection, ConnectionCommandResult, ConnectionCommands, FlushingMode,
+    HelloOptions, Result, ServerCommands, SortedSetCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -8,13 +8,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn double() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
-    database.flushdb(FlushingMode::Sync).send().await?;
+    let connection = Connection::connect(get_default_addr()).await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
 
-    database.hello(HelloOptions::new(3)).send().await?;
+    connection.hello(HelloOptions::new(3)).send().await?;
 
-    database
+    connection
         .zadd(
             "key",
             [(1.1, "one"), (2.2, "two"), (3.3, "three")],
@@ -23,7 +22,7 @@ async fn double() -> Result<()> {
         .send()
         .await?;
 
-    let values: Vec<(String, f64)> = database
+    let values: Vec<(String, f64)> = connection
         .zrange_with_scores("key", 0, -1, Default::default())
         .send()
         .await?;
@@ -39,13 +38,12 @@ async fn double() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn null() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
-    database.flushdb(FlushingMode::Sync).send().await?;
+    let connection = Connection::connect(get_default_addr()).await?;
+    connection.flushdb(FlushingMode::Sync).send().await?;
 
-    database.hello(HelloOptions::new(3)).send().await?;
+    connection.hello(HelloOptions::new(3)).send().await?;
 
-    let value: Option<String> = database.get("key").send().await?;
+    let value: Option<String> = connection.get("key").send().await?;
     assert_eq!(None, value);
 
     Ok(())

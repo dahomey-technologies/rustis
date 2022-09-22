@@ -1,9 +1,10 @@
 use crate::{
     cmd,
     resp::{Array, FromValue, ResultValueExt, Value},
-    BitmapCommands, Command, CommandResult, Database, Error, Future, GenericCommands, GeoCommands,
-    HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+    BitmapCommands, Command, CommandResult, Connection, Error, Future, GenericCommands,
+    GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result,
+    ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
+    StringCommands,
 };
 use std::{
     iter::zip,
@@ -13,16 +14,16 @@ use std::{
 
 pub struct Transaction<T> {
     phantom: PhantomData<T>,
-    database: Database,
+    connection: Connection,
     forget_flags: Arc<Mutex<Vec<bool>>>,
 }
 
 impl<T: Send + Sync> Transaction<T> {
-    pub(crate) async fn initialize(database: Database) -> Result<Self> {
-        database.send(cmd("MULTI")).await?.into::<()>()?;
+    pub(crate) async fn initialize(connection: Connection) -> Result<Self> {
+        connection.send(cmd("MULTI")).await?.into::<()>()?;
         Ok(Self {
             phantom: PhantomData,
-            database,
+            connection,
             forget_flags: Arc::new(Mutex::new(Vec::new())),
         })
     }
@@ -30,24 +31,24 @@ impl<T: Send + Sync> Transaction<T> {
     pub(crate) fn from_transaction<U: Send + Sync>(transaction: &Transaction<U>) -> Self {
         Self {
             phantom: PhantomData,
-            database: transaction.database.clone(),
+            connection: transaction.connection.clone(),
             forget_flags: transaction.forget_flags.clone(),
         }
     }
 
     pub(crate) async fn internal_queue(&self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(false);
-        self.database.send(command).await?.into()
+        self.connection.send(command).await?.into()
     }
 
     pub(crate) async fn internal_queue_and_forget(&self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(true);
-        self.database.send(command).await?.into()
+        self.connection.send(command).await?.into()
     }
 
     pub(crate) fn internal_exec<R: FromValue>(&self) -> Future<'_, R> {
         Box::pin(async move {
-            let result = self.database.send(cmd("EXEC")).await?;
+            let result = self.connection.send(cmd("EXEC")).await?;
 
             match result {
                 Value::Array(Array::Vec(results)) => {
@@ -65,7 +66,7 @@ impl<T: Send + Sync> Transaction<T> {
                     } else {
                         Value::Array(Array::Vec(filtered_results)).into()
                     }
-                },
+                }
                 Value::Array(Array::Nil) => Err(Error::Aborted),
                 _ => Err(Error::Internal("Unexpected transaction reply".to_owned())),
             }
@@ -77,7 +78,7 @@ impl<T: Send + Sync> Transaction<T> {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
     pub async fn discard(self) -> Result<()> {
-        self.database.send(cmd("DISCARD")).await?.into()
+        self.connection.send(cmd("DISCARD")).await?.into()
     }
 }
 

@@ -15,8 +15,10 @@ pub(crate) type TcpStreamWriter =
 
 #[cfg(feature = "tokio-runtime")]
 pub(crate) async fn tcp_connect(addr: &str) -> Result<(TcpStreamReader, TcpStreamWriter)> {
+    println!("Connecting to {addr}...");
     let stream = tokio::net::TcpStream::connect(addr).await?;
     let (reader, writer) = tokio::io::split(stream);
+    println!("Connected to {addr}");
 
     Ok((reader, writer))
 }

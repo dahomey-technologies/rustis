@@ -1,7 +1,7 @@
 use crate::{
-    tests::get_default_addr, ConnectionMultiplexer, DatabaseCommandResult, GenericCommands,
-    GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder,
-    GeoSearchResult, GeoSearchStoreOptions, GeoUnit, Result,
+    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, GeoAddCondition,
+    GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult,
+    GeoSearchStoreOptions, GeoUnit, Result,
 };
 use serial_test::serial;
 
@@ -9,13 +9,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geoadd() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("key").send().await?;
+    connection.del("key").send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "key",
             Default::default(),
@@ -26,7 +25,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "key",
             Default::default(),
@@ -37,7 +36,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(0, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "key",
             Default::default(),
@@ -48,7 +47,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(1, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "key",
             GeoAddCondition::XX,
@@ -63,7 +62,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(1, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "key",
             GeoAddCondition::NX,
@@ -85,13 +84,12 @@ async fn geoadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geodist() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("Sicily").send().await?;
+    connection.del("Sicily").send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -105,25 +103,25 @@ async fn geodist() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let dist = database
+    let dist = connection
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Meters)
         .send()
         .await?;
     assert_eq!(Some(166274.1516), dist);
 
-    let dist = database
+    let dist = connection
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Kilometers)
         .send()
         .await?;
     assert_eq!(Some(166.2742), dist);
 
-    let dist = database
+    let dist = connection
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Miles)
         .send()
         .await?;
     assert_eq!(Some(103.3182), dist);
 
-    let dist = database
+    let dist = connection
         .geodist("Sicily", "Foo", "Bar", GeoUnit::Meters)
         .send()
         .await?;
@@ -136,13 +134,12 @@ async fn geodist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geohash() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("Sicily").send().await?;
+    connection.del("Sicily").send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -156,7 +153,7 @@ async fn geohash() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let hashes = database
+    let hashes = connection
         .geohash("Sicily", ["Palermo", "Catania"])
         .send()
         .await?;
@@ -171,13 +168,12 @@ async fn geohash() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geopos() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("Sicily").send().await?;
+    connection.del("Sicily").send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -191,7 +187,7 @@ async fn geopos() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let hashes = database
+    let hashes = connection
         .geopos("Sicily", ["Palermo", "Catania", "NonExisting"])
         .send()
         .await?;
@@ -213,13 +209,12 @@ async fn geopos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearch() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del("Sicily").send().await?;
+    connection.del("Sicily").send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -233,7 +228,7 @@ async fn geosearch() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -247,7 +242,7 @@ async fn geosearch() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let results: Vec<GeoSearchResult<String>> = database
+    let results: Vec<GeoSearchResult<String>> = connection
         .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
@@ -266,7 +261,7 @@ async fn geosearch() -> Result<()> {
     assert!(results.iter().any(|r| r.member == "Palermo",));
     assert!(results.iter().any(|r| r.member == "Catania"));
 
-    let results: Vec<GeoSearchResult<String>> = database
+    let results: Vec<GeoSearchResult<String>> = connection
         .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
@@ -323,13 +318,12 @@ async fn geosearch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearchstore() -> Result<()> {
-    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
-    let database = connection.get_default_database();
+    let connection = Connection::connect(get_default_addr()).await?;
 
     // cleanup
-    database.del(["Sicily", "out"]).send().await?;
+    connection.del(["Sicily", "out"]).send().await?;
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -343,7 +337,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = database
+    let len = connection
         .geoadd(
             "Sicily",
             Default::default(),
@@ -357,7 +351,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = database
+    let len = connection
         .geosearchstore(
             "out",
             "Sicily",
@@ -378,7 +372,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(3, len);
 
-    let results: Vec<GeoSearchResult<String>> = database
+    let results: Vec<GeoSearchResult<String>> = connection
         .geosearch(
             "out",
             GeoSearchFrom::FromLonLat::<String> {

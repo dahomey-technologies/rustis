@@ -1,4 +1,4 @@
-use crate::{resp::FromValue, Command, Database, Error, Future, Result, Transaction};
+use crate::{resp::FromValue, Command, Connection, Error, Future, Result, Transaction};
 use futures::future::ready;
 use std::marker::PhantomData;
 
@@ -6,7 +6,7 @@ pub enum CommandResult<'a, T, R>
 where
     R: FromValue,
 {
-    Database(PhantomData<(R, T)>, Command, &'a Database),
+    Connection(PhantomData<(R, T)>, Command, &'a Connection),
     Transaction(PhantomData<R>, Command, &'a Transaction<T>),
 }
 
@@ -16,8 +16,8 @@ where
     T: Send + Sync,
 {
     #[must_use]
-    pub fn from_database(command: Command, database: &'a Database) -> Self {
-        CommandResult::Database(PhantomData, command, database)
+    pub fn from_connection(command: Command, connection: &'a Connection) -> Self {
+        CommandResult::Connection(PhantomData, command, connection)
     }
 
     #[must_use]
@@ -52,33 +52,34 @@ pub trait PrepareCommand<T> {
     fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<T, R>;
 }
 
-pub struct DatabaseResult;
+pub struct ConnectionResult;
 
 #[allow(clippy::module_name_repetitions)]
-pub trait DatabaseCommandResult<'a, R>
+pub trait ConnectionCommandResult<'a, R>
 where
     R: FromValue,
 {
     fn send(self) -> Future<'a, R>;
 
     /// Send command and forget its response
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn send_and_forget(self) -> Result<()>;
 }
 
-impl<'a, R> DatabaseCommandResult<'a, R> for CommandResult<'a, DatabaseResult, R>
+impl<'a, R> ConnectionCommandResult<'a, R> for CommandResult<'a, ConnectionResult, R>
 where
     R: FromValue + Send + 'a,
 {
     fn send(self) -> Future<'a, R> {
-        if let CommandResult::Database(_, command, database) = self {
-            let fut = database.send(command);
+        if let CommandResult::Connection(_, command, connection) = self {
+            let fut = connection.send(command);
             Box::pin(async move { fut.await?.into() })
         } else {
             Box::pin(ready(Err(Error::Internal(
-                "send method must be called with a valid database".to_owned(),
+
+                "send method must be called with a valid connection".to_owned(),
             ))))
         }
     }
@@ -88,11 +89,11 @@ where
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn send_and_forget(self) -> Result<()> {
-        if let CommandResult::Database(_, command, database) = self {
-            database.send_and_forget(command)
+        if let CommandResult::Connection(_, command, connection) = self {
+            connection.send_and_forget(command)
         } else {
             Err(Error::Internal(
-                "send_and_forget method must be called with a valid database".to_owned(),
+                "send_and_forget method must be called with a valid connection".to_owned(),
             ))
         }
     }

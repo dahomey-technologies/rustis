@@ -1,20 +1,26 @@
-use crate::{cmd, resp::BulkString, Future, PubSub, PubSubStream};
+use crate::{
+    cmd, resp::BulkString, CommandResult, Future, PrepareCommand, PubSubStream, SingleArgOrCollection,
+};
 
 /// A redis connection used in a pub/sub scenario.
-pub trait PubSubCommands {
+pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// Posts a message to the given channel.
     ///
     /// # Return
-    /// Integer reply: the number of clients that received the message.
+    /// The number of clients that received the message.
+    ///
     /// Note that in a Redis Cluster, only clients that are connected
     /// to the same node as the publishing client are included in the count.
     ///
     /// # See Also
     /// [https://redis.io/commands/publish/](https://redis.io/commands/publish/)
-    fn publish<'a, C, M>(&'a self, channel: C, message: M) -> Future<'a, usize>
+    fn publish<C, M>(&self, channel: C, message: M) -> CommandResult<T, usize>
     where
-        C: Into<BulkString> + 'a + Send,
-        M: Into<BulkString> + 'a + Send;
+        C: Into<BulkString>,
+        M: Into<BulkString>,
+    {
+        self.prepare_command(cmd("PUBLISH").arg(channel).arg(message))
+    }
 
     /// Subscribes the client to the specified channels.
     ///
@@ -22,27 +28,18 @@ pub trait PubSubCommands {
     /// [https://redis.io/commands/subscribe/](https://redis.io/commands/subscribe/)
     fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + 'a + Send;
-}
+        C: Into<BulkString> + Send + 'a;
 
-impl PubSubCommands for PubSub {
-    fn publish<'a, C, M>(&'a self, channel: C, message: M) -> Future<'a, usize>
+    /// Unsubscribes the client from the given channels, or from all of them if none is given.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/unsubscribe/](https://redis.io/commands/unsubscribe/)            
+    fn unsubscribe<C, CC>(&self, channels: CC) -> CommandResult<T, ()> 
     where
-        C: Into<BulkString> + 'a + Send,
-        M: Into<BulkString> + 'a + Send,
+        C: Into<BulkString>,
+        CC: SingleArgOrCollection<C>,
     {
-        Box::pin(async move {
-            self.multiplexer
-                .send(0, cmd("PUBLISH").arg(channel).arg(message))
-                .await?
-                .into()
-        })
-    }
-
-    fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
-    where
-        C: Into<BulkString> + 'a + Send,
-    {
-        Box::pin(async move { self.multiplexer.subscribe(channel.into()).await })
+        self.prepare_command(cmd("UNSUBSCRIBE").arg(channels))
     }
 }
+

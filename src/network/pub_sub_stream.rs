@@ -1,4 +1,4 @@
-use crate::{resp::BulkString, ConnectionMultiplexer, PubSubReceiver, Result};
+use crate::{resp::BulkString, PubSubReceiver, Result, Connection, PubSubCommands, ConnectionCommandResult};
 use futures::{Stream, StreamExt};
 use std::{
     pin::Pin,
@@ -8,14 +8,14 @@ use std::{
 pub struct PubSubStream {
     channel: String,
     receiver: PubSubReceiver,
-    connection: ConnectionMultiplexer,
+    connection: Connection,
 }
 
 impl PubSubStream {
     pub(crate) fn new(
         channel: String,
         receiver: PubSubReceiver,
-        connection: ConnectionMultiplexer,
+        connection: Connection,
     ) -> Self {
         Self {
             channel,
@@ -37,6 +37,6 @@ impl Drop for PubSubStream {
     fn drop(&mut self) {
         let mut channel = String::new();
         std::mem::swap(&mut channel, &mut self.channel);
-        let _result = self.connection.unsubscribe(channel.into());
+        let _result = self.connection.unsubscribe(channel).send_and_forget();
     }
 }

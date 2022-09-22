@@ -143,6 +143,15 @@ impl FromValue for i64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<i64>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i64",
                 value
@@ -197,6 +206,15 @@ impl FromValue for u32 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u32::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<u32>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u32",
                 value
@@ -209,6 +227,15 @@ impl FromValue for i16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i16::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<i16>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i16",
                 value
@@ -221,6 +248,15 @@ impl FromValue for u16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u16::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<u16>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u16",
                 value
@@ -233,6 +269,15 @@ impl FromValue for i8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i8::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<i8>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i8",
                 value
@@ -245,6 +290,15 @@ impl FromValue for u8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u8::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<u8>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u8",
                 value
@@ -257,6 +311,15 @@ impl FromValue for isize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(isize::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Binary(s)) => {
+                match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
+                    Ok(s) => match s.parse::<isize>() {
+                        Ok(u) => Ok(u),
+                        Err(e) => Err(Error::Parse(e.to_string())),
+                    },
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to isize",
                 value

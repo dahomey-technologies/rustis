@@ -67,3 +67,15 @@ async fn flushall() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn time() -> Result<()> {
+    let connection = ConnectionMultiplexer::connect(get_default_addr()).await?;
+    let database = connection.get_default_database();
+
+    let (_unix_timestamp, _microseconds) = database.time().send().await?;
+
+    Ok(())
+}

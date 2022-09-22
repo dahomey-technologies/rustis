@@ -21,6 +21,16 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     fn flushall(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
     }
+
+     /// The TIME command returns the current server time as a two items lists: 
+     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/time/](https://redis.io/commands/time/)
+    #[must_use]
+    fn time(&self) -> CommandResult<T, (u32, u32)> {
+        self.prepare_command(cmd("TIME"))
+    }   
 }
 
 /// Database flushing mode

@@ -53,19 +53,19 @@ async fn ping() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn quit() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[serial]
+// async fn quit() -> Result<()> {
+//     let connection = Connection::connect(get_default_addr()).await?;
 
-    connection.quit().send().await?;
+//     connection.quit().send().await?;
 
-    // reconnection here
-    connection.ping::<String, ()>(None).send().await?;
+//     // reconnection here
+//     connection.ping::<String, ()>(None).send().await?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

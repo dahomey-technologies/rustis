@@ -1,4 +1,4 @@
-use crate::{resp::BulkString, PubSubReceiver, Result, Connection, PubSubCommands, ConnectionCommandResult};
+use crate::{resp::{Value}, PubSubReceiver, Result, Connection, PubSubCommands, ConnectionCommandResult};
 use futures::{Stream, StreamExt};
 use std::{
     pin::Pin,
@@ -26,7 +26,7 @@ impl PubSubStream {
 }
 
 impl Stream for PubSubStream {
-    type Item = Result<BulkString>;
+    type Item = Result<Value>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         self.get_mut().receiver.poll_next_unpin(cx)

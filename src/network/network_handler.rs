@@ -223,7 +223,7 @@ impl NetworkHandler {
         // second pass, move payload into pub_sub_sender by consuming received value
         if let Ok(Value::Array(Array::Vec(mut items))) = value {
             if let (
-                Some(Value::BulkString(payload)),
+                Some(payload),
                 Some(Value::BulkString(BulkString::Binary(channel))),
                 Some(Value::BulkString(BulkString::Binary(_command))),
             ) = (items.pop(), items.pop(), items.pop())

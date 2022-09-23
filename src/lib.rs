@@ -26,5 +26,5 @@ type MsgSender = mpsc::UnboundedSender<Message>;
 type MsgReceiver = mpsc::UnboundedReceiver<Message>;
 type ValueSender = oneshot::Sender<Result<resp::Value>>;
 type ValueReceiver = oneshot::Receiver<Result<resp::Value>>;
-type PubSubSender = mpsc::UnboundedSender<Result<resp::BulkString>>;
-type PubSubReceiver = mpsc::UnboundedReceiver<Result<resp::BulkString>>;
+type PubSubSender = mpsc::UnboundedSender<Result<resp::Value>>;
+type PubSubReceiver = mpsc::UnboundedReceiver<Result<resp::Value>>;

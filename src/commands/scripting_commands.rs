@@ -290,7 +290,7 @@ impl CallBuilder {
     #[must_use]
     pub fn script<S: Into<BulkString>>(script: S) -> Self {
         Self {
-            command_args: CommandArgs::Single(script.into()),
+            command_args: CommandArgs::default().arg(script),
             keys_added: false,
         }
     }
@@ -298,7 +298,7 @@ impl CallBuilder {
     #[must_use]
     pub fn sha1<S: Into<BulkString>>(sha1: S) -> Self {
         Self {
-            command_args: CommandArgs::Single(sha1.into()),
+            command_args: CommandArgs::default().arg(sha1),
             keys_added: false,
         }
     }
@@ -306,7 +306,7 @@ impl CallBuilder {
     #[must_use]
     pub fn function<F: Into<BulkString>>(function: F) -> Self {
         Self {
-            command_args: CommandArgs::Single(function.into()),
+            command_args: CommandArgs::default().arg(function),
             keys_added: false,
         }
     }

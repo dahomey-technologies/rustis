@@ -141,7 +141,7 @@ impl BitRange {
     #[must_use]
     pub fn range(start: isize, end: isize) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg(start).arg(end),
+            command_args: CommandArgs::default().arg(start).arg(end),
         }
     }
 

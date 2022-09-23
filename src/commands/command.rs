@@ -16,7 +16,7 @@ impl Command {
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
-            args: CommandArgs::Empty,
+            args: CommandArgs::default(),
         }
     }
 

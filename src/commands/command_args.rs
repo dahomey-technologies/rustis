@@ -1,14 +1,14 @@
 use crate::resp::BulkString;
-use std::{collections::{BTreeMap, BTreeSet, HashMap, HashSet}, hash::BuildHasher, iter::{once, Once}};
+use smallvec::{SmallVec};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    hash::BuildHasher,
+    iter::{once, Once},
+};
 
 #[derive(Debug)]
 pub enum CommandArgs {
-    Empty,
-    Single(BulkString),
-    Array2([BulkString; 2]),
-    Array3([BulkString; 3]),
-    Array4([BulkString; 4]),
-    Vec(Vec<BulkString>),
+    Vec(SmallVec<[BulkString; 10]>),
 }
 
 impl CommandArgs {
@@ -35,24 +35,19 @@ impl CommandArgs {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
-            CommandArgs::Empty => 0,
-            CommandArgs::Single(_) => 1,
-            CommandArgs::Array2(_) => 2,
-            CommandArgs::Array3(_) => 3,
-            CommandArgs::Array4(_) => 4,
             CommandArgs::Vec(v) => v.len(),
         }
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-       self.len() == 0
+        self.len() == 0
     }
 }
 
 impl Default for CommandArgs {
     fn default() -> Self {
-        CommandArgs::Empty
+        CommandArgs::Vec(SmallVec::new())
     }
 }
 
@@ -70,20 +65,6 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match args {
-            CommandArgs::Empty => CommandArgs::Single(self.into()),
-            CommandArgs::Single(a) => CommandArgs::Array2([a, self.into()]),
-            CommandArgs::Array2(a) => {
-                let [item1, item2] = a;
-                CommandArgs::Array3([item1, item2, self.into()])
-            }
-            CommandArgs::Array3(a) => {
-                let [item1, item2, item3] = a;
-                CommandArgs::Array4([item1, item2, item3, self.into()])
-            }
-            CommandArgs::Array4(a) => {
-                let [item1, item2, item3, item4] = a;
-                CommandArgs::Vec(vec![item1, item2, item3, item4, self.into()])
-            }
             CommandArgs::Vec(mut vec) => {
                 vec.push(self.into());
                 CommandArgs::Vec(vec)
@@ -133,6 +114,23 @@ where
 }
 
 impl<T> IntoArgs for Vec<T>
+where
+    T: IntoArgs,
+{
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        let mut args = args;
+        for a in self {
+            args = a.into_args(args);
+        }
+        args
+    }
+
+    fn num_args(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> IntoArgs for SmallVec<[T; 10]>
 where
     T: IntoArgs,
 {
@@ -257,11 +255,6 @@ where
 impl IntoArgs for CommandArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
-            CommandArgs::Empty => args,
-            CommandArgs::Single(s) => args.arg(s),
-            CommandArgs::Array2(a) => args.arg(a),
-            CommandArgs::Array3(a) => args.arg(a),
-            CommandArgs::Array4(a) => args.arg(a),
             CommandArgs::Vec(v) => args.arg(v),
         }
     }
@@ -288,7 +281,10 @@ where
     fn into_iter(self) -> Self::IntoIter;
 }
 
-impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkString> {
+impl<T, const N: usize> SingleArgOrCollection<T> for [T; N]
+where
+    T: Into<BulkString>,
+{
     type IntoIter = std::array::IntoIter<T, N>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -296,7 +292,10 @@ impl<T, const N: usize> SingleArgOrCollection<T> for [T; N] where T: Into<BulkSt
     }
 }
 
-impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {
+impl<T> SingleArgOrCollection<T> for Vec<T>
+where
+    T: Into<BulkString>,
+{
     type IntoIter = std::vec::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -304,7 +303,10 @@ impl<T> SingleArgOrCollection<T> for Vec<T> where T: Into<BulkString> {
     }
 }
 
-impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S> where T: Into<BulkString> {
+impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S>
+where
+    T: Into<BulkString>,
+{
     type IntoIter = std::collections::hash_set::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -312,7 +314,10 @@ impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S> where T: Into
     }
 }
 
-impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {
+impl<T> SingleArgOrCollection<T> for BTreeSet<T>
+where
+    T: Into<BulkString>,
+{
     type IntoIter = std::collections::btree_set::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -320,7 +325,10 @@ impl<T> SingleArgOrCollection<T> for BTreeSet<T> where T: Into<BulkString> {
     }
 }
 
-impl<T> SingleArgOrCollection<T> for T where T: Into<BulkString> {
+impl<T> SingleArgOrCollection<T> for T
+where
+    T: Into<BulkString>,
+{
     type IntoIter = Once<T>;
 
     fn into_iter(self) -> Self::IntoIter {

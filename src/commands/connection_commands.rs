@@ -74,7 +74,7 @@ impl HelloOptions {
     #[must_use]
     pub fn new(protover: usize) -> Self {
         Self {
-            command_args: CommandArgs::Single(protover.into()),
+            command_args: CommandArgs::default().arg(protover),
         }
     }
 

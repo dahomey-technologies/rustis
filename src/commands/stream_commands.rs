@@ -572,7 +572,7 @@ impl XTrimOptions {
     #[must_use]
     pub fn max_len(operator: XTrimOperator, threshold: i64) -> Self {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("MAXLEN")
                 .arg(operator)
                 .arg(threshold),
@@ -582,7 +582,7 @@ impl XTrimOptions {
     #[must_use]
     pub fn min_id<I: Into<BulkString>>(operator: XTrimOperator, threshold_id: I) -> Self {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("MINID")
                 .arg(operator)
                 .arg(threshold_id),
@@ -800,7 +800,7 @@ pub struct XGroupInfo {
     /// the number of consumers in the group
     pub consumers: usize,
 
-    /// the length of the group's pending entries list (PEL), 
+    /// the length of the group's pending entries list (PEL),
     /// which are messages that were delivered but are yet to be acknowledged
     pub pending: usize,
 

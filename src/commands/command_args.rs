@@ -1,5 +1,5 @@
 use crate::resp::BulkString;
-use smallvec::{SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
@@ -8,6 +8,12 @@ use std::{
 
 #[derive(Debug)]
 pub enum CommandArgs {
+    Empty,
+    Single(BulkString),
+    Array2([BulkString; 2]),
+    Array3([BulkString; 3]),
+    Array4([BulkString; 4]),
+    Array5([BulkString; 5]),
     Vec(SmallVec<[BulkString; 10]>),
 }
 
@@ -35,6 +41,12 @@ impl CommandArgs {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
+            CommandArgs::Empty => 0,
+            CommandArgs::Single(_) => 1,
+            CommandArgs::Array2(_) => 2,
+            CommandArgs::Array3(_) => 3,
+            CommandArgs::Array4(_) => 4,
+            CommandArgs::Array5(_) => 5,
             CommandArgs::Vec(v) => v.len(),
         }
     }
@@ -65,6 +77,24 @@ where
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match args {
+            CommandArgs::Empty => CommandArgs::Single(self.into()),
+            CommandArgs::Single(a) => CommandArgs::Array2([a, self.into()]),
+            CommandArgs::Array2(a) => {
+                let [item1, item2] = a;
+                CommandArgs::Array3([item1, item2, self.into()])
+            }
+            CommandArgs::Array3(a) => {
+                let [item1, item2, item3] = a;
+                CommandArgs::Array4([item1, item2, item3, self.into()])
+            }
+            CommandArgs::Array4(a) => {
+                let [item1, item2, item3, item4] = a;
+                CommandArgs::Array5([item1, item2, item3, item4, self.into()])
+            }
+            CommandArgs::Array5(a) => {
+                let [item1, item2, item3, item4, item5] = a;
+                CommandArgs::Vec(smallvec![item1, item2, item3, item4, item5, self.into()])
+            }
             CommandArgs::Vec(mut vec) => {
                 vec.push(self.into());
                 CommandArgs::Vec(vec)
@@ -255,6 +285,12 @@ where
 impl IntoArgs for CommandArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
+            CommandArgs::Empty => args,
+            CommandArgs::Single(s) => args.arg(s),
+            CommandArgs::Array2(a) => args.arg(a),
+            CommandArgs::Array3(a) => args.arg(a),
+            CommandArgs::Array4(a) => args.arg(a),
+            CommandArgs::Array5(a) => args.arg(a),
             CommandArgs::Vec(v) => args.arg(v),
         }
     }

@@ -47,6 +47,30 @@ fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
 
 fn encode_command_args(command_args: &CommandArgs, buf: &mut BytesMut) {
     match command_args {
+        CommandArgs::Empty => (),
+        CommandArgs::Single(arg) => {
+            encode_bulkstring(arg, buf);
+        }
+        CommandArgs::Array2(args) => {
+            for arg in args.iter() {
+                encode_bulkstring(arg, buf);
+            }
+        }
+        CommandArgs::Array3(args) => {
+            for arg in args.iter() {
+                encode_bulkstring(arg, buf);
+            }
+        }
+        CommandArgs::Array4(args) => {
+            for arg in args.iter() {
+                encode_bulkstring(arg, buf);
+            }
+        }
+        CommandArgs::Array5(args) => {
+            for arg in args.iter() {
+                encode_bulkstring(arg, buf);
+            }
+        }
         CommandArgs::Vec(args) => {
             for arg in args.iter() {
                 encode_bulkstring(arg, buf);

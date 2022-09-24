@@ -11,6 +11,7 @@ pub enum BulkString {
 
 impl BulkString {
     #[must_use]
+    #[inline(always)]
     pub fn len(&self) -> usize {
         match self {
             BulkString::Str(s) => s.len(),
@@ -21,11 +22,13 @@ impl BulkString {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             BulkString::Str(s) => s.as_bytes(),
@@ -37,78 +40,91 @@ impl BulkString {
 }
 
 impl From<&'static str> for BulkString {
+    #[inline(always)]
     fn from(str: &'static str) -> Self {
         Self::Str(str)
     }
 }
 
 impl From<String> for BulkString {
+    #[inline(always)]
     fn from(string: String) -> Self {
         Self::String(string)
     }
 }
 
 impl From<i64> for BulkString {
+    #[inline(always)]
     fn from(i: i64) -> Self {
         Self::Integer(i)
     }
 }
 
 impl From<u64> for BulkString {
+    #[inline(always)]
     fn from(u: u64) -> Self {
         Self::Integer(i64::try_from(u).unwrap())
     }
 }
 
 impl From<i32> for BulkString {
+    #[inline(always)]
     fn from(i: i32) -> Self {
         Self::Integer(i64::from(i))
     }
 }
 
 impl From<u32> for BulkString {
+    #[inline(always)]
     fn from(u: u32) -> Self {
         Self::Integer(i64::from(u))
     }
 }
 
 impl From<i16> for BulkString {
+    #[inline(always)]
     fn from(i: i16) -> Self {
         Self::Integer(i64::from(i))
     }
 }
 
 impl From<u16> for BulkString {
+    #[inline(always)]
     fn from(u: u16) -> Self {
         Self::Integer(i64::from(u))
     }
 }
 
 impl From<isize> for BulkString {
+    #[inline(always)]
     fn from(i: isize) -> Self {
         Self::Integer(i64::try_from(i).unwrap())
     }
 }
 
 impl From<usize> for BulkString {
+    #[inline(always)]
     fn from(u: usize) -> Self {
         Self::Integer(u as i64)
     }
 }
 
 impl From<f32> for BulkString {
+    #[inline(always)]
     fn from(f: f32) -> Self {
         Self::String(f.to_string())
     }
 }
 
 impl From<f64> for BulkString {
+    #[inline(always)]
     fn from(f: f64) -> Self {
         Self::String(f.to_string())
     }
 }
 
 impl From<BulkString> for Result<String> {
+    #[inline(always)]
     fn from(bs: BulkString) -> Self {
         match bs {
             BulkString::Str(s) => Ok(s.to_owned()),

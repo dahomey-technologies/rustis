@@ -19,6 +19,7 @@ pub enum CommandArgs {
 
 impl CommandArgs {
     #[must_use]
+    #[inline(always)]
     pub fn arg<A>(self, args: A) -> Self
     where
         A: IntoArgs,
@@ -27,6 +28,7 @@ impl CommandArgs {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn arg_if<A>(self, condition: bool, arg: A) -> Self
     where
         A: IntoArgs,
@@ -39,6 +41,7 @@ impl CommandArgs {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn len(&self) -> usize {
         match self {
             CommandArgs::Empty => 0,
@@ -52,6 +55,7 @@ impl CommandArgs {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -75,6 +79,7 @@ impl<T> IntoArgs for T
 where
     T: Into<BulkString>,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match args {
             CommandArgs::Empty => CommandArgs::Single(self.into()),
@@ -111,6 +116,7 @@ impl<T> IntoArgs for Option<T>
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             Some(s) => s.into_args(args),
@@ -118,6 +124,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         match self {
             Some(_) => 1,
@@ -130,6 +137,7 @@ impl<T, const N: usize> IntoArgs for [T; N]
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self {
@@ -138,6 +146,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         N
     }
@@ -147,6 +156,7 @@ impl<T> IntoArgs for Vec<T>
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self {
@@ -155,6 +165,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -164,6 +175,7 @@ impl<T> IntoArgs for SmallVec<[T; 10]>
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self {
@@ -172,6 +184,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -181,6 +194,7 @@ impl<T, S: BuildHasher> IntoArgs for HashSet<T, S>
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self {
@@ -189,6 +203,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -198,6 +213,7 @@ impl<T> IntoArgs for BTreeSet<T>
 where
     T: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for a in self {
@@ -206,6 +222,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -216,6 +233,7 @@ where
     K: Into<BulkString>,
     V: Into<BulkString>,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for (key, value) in self {
@@ -225,6 +243,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -235,6 +254,7 @@ where
     K: Into<BulkString>,
     V: Into<BulkString>,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let mut args = args;
         for (key, value) in self {
@@ -244,6 +264,7 @@ where
         args
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         self.len()
     }
@@ -254,11 +275,13 @@ where
     T: IntoArgs,
     U: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let args = self.0.into_args(args);
         self.1.into_args(args)
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         2
     }
@@ -270,12 +293,14 @@ where
     U: IntoArgs,
     V: IntoArgs,
 {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         let args = self.0.into_args(args);
         let args = self.1.into_args(args);
         self.2.into_args(args)
     }
 
+    #[inline(always)]
     fn num_args(&self) -> usize {
         3
     }
@@ -283,6 +308,7 @@ where
 
 /// Allow to merge `CommandArgs` in another `CommandArgs`
 impl IntoArgs for CommandArgs {
+    #[inline(always)]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             CommandArgs::Empty => args,

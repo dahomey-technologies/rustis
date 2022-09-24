@@ -1,6 +1,7 @@
 use crate::{CommandArgs, IntoArgs};
 
 #[must_use]
+#[inline(always)]
 pub fn cmd(name: &'static str) -> Command {
     Command::new(name)
 }
@@ -13,6 +14,7 @@ pub struct Command {
 
 impl Command {
     #[must_use]
+    #[inline(always)]
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -21,6 +23,7 @@ impl Command {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn arg<A>(self, arg: A) -> Self
     where
         A: IntoArgs,
@@ -32,6 +35,7 @@ impl Command {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn arg_if<A>(self, condition: bool, arg: A) -> Self
     where
         A: IntoArgs,

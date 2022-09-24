@@ -60,6 +60,7 @@ pub(crate) trait ResultValueExt {
 }
 
 impl ResultValueExt for Result<Value> {
+    #[inline(always)]
     fn into_result(self) -> Result<Value> {
         match self {
             Ok(value) => match value {
@@ -70,6 +71,7 @@ impl ResultValueExt for Result<Value> {
         }
     }
 
+    #[inline(always)]
     fn map_into_result<T, F>(self, op: F) -> Result<T>
     where
         F: FnOnce(Value) -> T,

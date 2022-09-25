@@ -35,6 +35,26 @@ fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
             buf.put(str.as_bytes());
             encode_crlf(buf);
         },
+        BulkString::F32(f) => {
+            let mut temp = dtoa::Buffer::new();
+            let str = temp.format(*f);        
+
+            buf.put_u8(b'$');
+            encode_integer(str.len() as i64, buf);
+            encode_crlf(buf);
+            buf.put(str.as_bytes());
+            encode_crlf(buf);
+        },
+        BulkString::F64(f) => {
+            let mut temp = dtoa::Buffer::new();
+            let str = temp.format(*f);        
+
+            buf.put_u8(b'$');
+            encode_integer(str.len() as i64, buf);
+            encode_crlf(buf);
+            buf.put(str.as_bytes());
+            encode_crlf(buf);
+        },
         _ => {
             buf.put_u8(b'$');
             encode_integer(bulk_string.len() as i64, buf);

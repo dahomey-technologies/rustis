@@ -23,12 +23,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/ping/](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<M, R>(&self, message: Option<M>) -> CommandResult<T, R>
+    fn ping<R>(&self, options: PingOptions) -> CommandResult<T, R>
     where
-        M: Into<BulkString>,
         R: FromValue,
     {
-        self.prepare_command(cmd("PING").arg(message))
+        self.prepare_command(cmd("PING").arg(options))
     }
 
     /// Ask the server to close the connection.
@@ -133,5 +132,28 @@ impl FromValue for HelloResult {
             }
             _ => Err(Error::Internal("Cannot parse HelloResult".to_owned())),
         }
+    }
+}
+
+
+/// Options for the [`ping`](crate::ConnectionCommands::ping) command.
+#[derive(Default)]
+pub struct PingOptions {
+    command_args: CommandArgs,
+}
+
+
+impl PingOptions {
+    pub fn message<M: Into<BulkString>>(self, message: M) -> Self 
+    {
+        Self {
+            command_args: self.command_args.arg(message),
+        }
+    }
+}
+
+impl IntoArgs for PingOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

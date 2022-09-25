@@ -1,6 +1,6 @@
 use crate::{
     tests::get_test_client, ConnectionCommandResult, ConnectionCommands, GenericCommands,
-    HelloOptions, Result, ServerCommands, StringCommands,
+    HelloOptions, PingOptions, Result, ServerCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -46,8 +46,11 @@ async fn hello_v3() -> Result<()> {
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.ping::<String, ()>(None).send().await?;
-    let result: String = client.ping(Some("value")).send().await?;
+    client.ping(PingOptions::default()).send().await?;
+    let result: String = client
+        .ping(PingOptions::default().message("value"))
+        .send()
+        .await?;
     assert_eq!("value", result);
 
     Ok(())

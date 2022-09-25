@@ -6,7 +6,7 @@ use crate::{
     CommandResult, Error, PrepareCommand, Result,
 };
 
-/// A group of Redis commands related to Strings
+/// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
 pub trait StringCommands<T>: PrepareCommand<T> {
@@ -83,26 +83,26 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     cmd, Connection, ConnectionCommandResult, FlushingMode,
+    ///     resp::{cmd}, Client, ConnectionCommandResult, FlushingMode,
     ///     ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let connection = Connection::connect("127.0.0.1:6379").await?;
-    ///     connection.flushdb(FlushingMode::Sync).send().await?;
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     client.flushdb(FlushingMode::Sync).send().await?;
     ///
     ///     // return value can be an Option<String>...
-    ///     let value: Option<String> = connection.get("key").send().await?;
+    ///     let value: Option<String> = client.get("key").send().await?;
     ///     assert_eq!(None, value);
     ///
     ///     // ... or it can be directly a String.
     ///     // In this cas a `nil` value will result in an empty String
-    ///     let value: String = connection.get("key").send().await?;
+    ///     let value: String = client.get("key").send().await?;
     ///     assert_eq!("", &value);
     ///
-    ///     connection.set("key", "value").send().await?;
-    ///     let value: String = connection.get("key").send().await?;
+    ///     client.set("key", "value").send().await?;
+    ///     let value: String = client.get("key").send().await?;
     ///     assert_eq!("value", value);
     ///
     ///     Ok(())
@@ -154,20 +154,20 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     cmd, Connection, ConnectionCommandResult, FlushingMode,
+    ///     resp::cmd, Client, ConnectionCommandResult, FlushingMode,
     ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
     /// };
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let connection = Connection::connect("127.0.0.1:6379").await?;
-    ///     connection.flushdb(FlushingMode::Sync).send().await?;
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     client.flushdb(FlushingMode::Sync).send().await?;
     ///
-    ///     connection.set("key", "value").send().await?;
-    ///     let value: String = connection.getex("key", GetExOptions::Ex(60)).send().await?;
+    ///     client.set("key", "value").send().await?;
+    ///     let value: String = client.getex("key", GetExOptions::Ex(60)).send().await?;
     ///     assert_eq!("value", value);
     ///
-    ///     let ttl = connection.ttl("key").send().await?;
+    ///     let ttl = client.ttl("key").send().await?;
     ///     assert!(59 <= ttl && ttl <= 60);
     ///
     ///     Ok(())

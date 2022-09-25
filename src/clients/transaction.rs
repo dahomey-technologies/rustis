@@ -10,6 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction<T> {
     phantom: PhantomData<T>,
     connection: Client,

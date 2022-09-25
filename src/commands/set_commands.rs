@@ -7,7 +7,7 @@ use crate::{
 };
 use std::hash::Hash;
 
-/// A group of Redis commands related to Sets
+/// A group of Redis commands related to [`Sets`](https://redis.io/docs/data-types/sets/)
 /// # See Also
 /// [Redis Set Commands](https://redis.io/commands/?group=set)
 pub trait SetCommands<T>: PrepareCommand<T> {

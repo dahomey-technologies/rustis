@@ -6,7 +6,7 @@ use crate::{
     CommandResult, PrepareCommand,
 };
 
-/// A group of Redis commands related to Hashes
+/// A group of Redis commands related to [`Hashes`](https://redis.io/docs/data-types/hashes/)
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hash)

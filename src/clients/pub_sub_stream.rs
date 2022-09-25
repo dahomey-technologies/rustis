@@ -5,6 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
+/// Stream to get messages from the channel [`subscribed`](https://redis.io/docs/manual/pubsub/) to
 pub struct PubSubStream {
     channel: String,
     receiver: PubSubReceiver,

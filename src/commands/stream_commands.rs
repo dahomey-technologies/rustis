@@ -8,9 +8,10 @@ use crate::{
     CommandResult, PrepareCommand, Result,
 };
 
-/// A group of Redis commands related to Streams
+/// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=stream)
+/// [Streams tutorial](https://redis.io/docs/data-types/streams-tutorial/)
 pub trait StreamCommands<T>: PrepareCommand<T> {
     /// The XACK command removes one or multiple messages
     /// from the Pending Entries List (PEL) of a stream consumer group

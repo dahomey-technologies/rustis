@@ -6,7 +6,7 @@ use crate::{
     CommandResult, Error, PrepareCommand, Result,
 };
 
-/// A group of Redis commands related to Geospatial indices
+/// A group of Redis commands related to [`Geospatial`](https://redis.io/docs/data-types/geospatial/) indices
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)

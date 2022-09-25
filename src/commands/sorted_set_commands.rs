@@ -5,7 +5,7 @@ use crate::{
     CommandResult, PrepareCommand,
 };
 
-/// A group of Redis commands related to Sorted Sets
+/// A group of Redis commands related to [`Sorted Sets`](https://redis.io/docs/data-types/sorted-sets/)
 ///
 /// # See Also
 /// [Redis Sorted Set Commands](https://redis.io/commands/?group=sorted-set)

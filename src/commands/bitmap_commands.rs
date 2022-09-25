@@ -3,7 +3,8 @@ use crate::{
     CommandResult, PrepareCommand,
 };
 
-/// A group of Redis commands related to bitmaps
+/// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/) 
+/// & [`Bitfields`](https://redis.io/docs/data-types/bitfields/)
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=bitmap)

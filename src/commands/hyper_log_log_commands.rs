@@ -3,7 +3,7 @@ use crate::{
     CommandResult, PrepareCommand,
 };
 
-/// A group of Redis commands related to HyperLogLog
+/// A group of Redis commands related to [`HyperLogLog`](https://redis.io/docs/data-types/hyperloglogs/)
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hyperloglog)

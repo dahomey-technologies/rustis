@@ -6,7 +6,7 @@ use crate::{
     CommandResult, PrepareCommand,
 };
 
-/// A group of Redis commands related to Lists
+/// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
 ///
 /// # See Also
 /// [Redis List Commands](https://redis.io/commands/?group=list)

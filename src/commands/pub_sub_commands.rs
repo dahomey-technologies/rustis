@@ -3,7 +3,9 @@ use crate::{
     CommandResult, Future, PrepareCommand, PubSubStream,
 };
 
-/// A redis connection used in a pub/sub scenario.
+/// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
+/// # See Also
+/// [Redis Pub/Sub Commands](https://redis.io/commands/?group=pubsub)
 pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// Posts a message to the given channel.
     ///

@@ -1,4 +1,7 @@
-use crate::{resp::BulkString, Command, CommandArgs, Error, Result};
+use crate::{
+    resp::{BulkString, Command, CommandArgs},
+    Error, Result,
+};
 use bytes::{BufMut, BytesMut};
 use tokio_util::codec::Encoder;
 
@@ -27,34 +30,34 @@ fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
         BulkString::Nil => buf.put(&b"$-1\r\n"[..]),
         BulkString::Integer(i) => {
             let mut temp = itoa::Buffer::new();
-            let str = temp.format(*i);        
+            let str = temp.format(*i);
 
             buf.put_u8(b'$');
             encode_integer(str.len() as i64, buf);
             encode_crlf(buf);
             buf.put(str.as_bytes());
             encode_crlf(buf);
-        },
+        }
         BulkString::F32(f) => {
             let mut temp = dtoa::Buffer::new();
-            let str = temp.format(*f);        
+            let str = temp.format(*f);
 
             buf.put_u8(b'$');
             encode_integer(str.len() as i64, buf);
             encode_crlf(buf);
             buf.put(str.as_bytes());
             encode_crlf(buf);
-        },
+        }
         BulkString::F64(f) => {
             let mut temp = dtoa::Buffer::new();
-            let str = temp.format(*f);        
+            let str = temp.format(*f);
 
             buf.put_u8(b'$');
             encode_integer(str.len() as i64, buf);
             encode_crlf(buf);
             buf.put(str.as_bytes());
             encode_crlf(buf);
-        },
+        }
         _ => {
             buf.put_u8(b'$');
             encode_integer(bulk_string.len() as i64, buf);

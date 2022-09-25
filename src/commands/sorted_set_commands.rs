@@ -1,7 +1,8 @@
 use crate::{
-    cmd,
-    resp::{BulkString, FromValue},
-    ArgsOrCollection, CommandArgs, CommandResult, IntoArgs, PrepareCommand, SingleArgOrCollection,
+    resp::{
+        cmd, ArgsOrCollection, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection,
+    },
+    CommandResult, PrepareCommand,
 };
 
 /// A group of Redis commands related to Sorted Sets
@@ -657,12 +658,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
         K: Into<BulkString>,
         M: FromValue + Default,
     {
-        self.prepare_command(
-            cmd("ZSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg(options),
-        )
+        self.prepare_command(cmd("ZSCAN").arg(key).arg(cursor).arg(options))
     }
 
     /// Returns the score of member in the sorted set at key.
@@ -915,28 +911,28 @@ impl IntoArgs for ZWhere {
 /// Options for the command [zadd](crate::SortedSetCommands::zadd)
 #[derive(Default)]
 pub struct ZAddOptions {
-    command_args: CommandArgs
+    command_args: CommandArgs,
 }
 
 impl ZAddOptions {
     #[must_use]
     pub fn condition(self, condition: ZAddCondition) -> Self {
         Self {
-            command_args: self.command_args.arg(condition)
+            command_args: self.command_args.arg(condition),
         }
     }
 
     #[must_use]
     pub fn comparison(self, comparison: ZAddComparison) -> Self {
         Self {
-            command_args: self.command_args.arg(comparison)
+            command_args: self.command_args.arg(comparison),
         }
     }
 
     #[must_use]
     pub fn change(self) -> Self {
         Self {
-            command_args: self.command_args.arg("CH")
+            command_args: self.command_args.arg("CH"),
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_default_addr, Connection, ConnectionCommandResult, FlushingMode, Result,
-    ServerCommands, StreamCommands, StreamEntry, XAddOptions, XGroupCreateOptions,
+    tests::get_test_client, ConnectionCommandResult, FlushingMode, Result, ServerCommands,
+    StreamCommands, StreamEntry, XAddOptions, XGroupCreateOptions,
 };
 use serial_test::serial;
 
@@ -8,10 +8,10 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xadd() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    let id1: String = connection
+    let id1: String = client
         .xadd(
             "mystream",
             "123456-0",
@@ -22,7 +22,7 @@ async fn xadd() -> Result<()> {
         .await?;
     assert_eq!("123456-0", &id1);
 
-    let id2: String = connection
+    let id2: String = client
         .xadd(
             "mystream",
             "*",
@@ -44,10 +44,10 @@ async fn xadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xgroup() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    connection
+    client
         .xgroup_create(
             "mystream",
             "mygroup",
@@ -57,7 +57,7 @@ async fn xgroup() -> Result<()> {
         .send()
         .await?;
 
-    let results = connection.xinfo_groups("mystream").send().await?;
+    let results = client.xinfo_groups("mystream").send().await?;
     assert_eq!(1, results.len());
     assert_eq!("mygroup", results[0].name);
     assert_eq!(0, results[0].consumers);
@@ -66,10 +66,7 @@ async fn xgroup() -> Result<()> {
     assert_eq!(None, results[0].entries_read);
     assert_eq!(Some(0), results[0].lag);
 
-    let result = connection
-        .xgroup_destroy("mystream", "mygroup")
-        .send()
-        .await?;
+    let result = client.xgroup_destroy("mystream", "mygroup").send().await?;
     assert!(result);
 
     Ok(())
@@ -79,10 +76,10 @@ async fn xgroup() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xlen() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    let id1: String = connection
+    let id1: String = client
         .xadd(
             "mystream",
             "*",
@@ -93,7 +90,7 @@ async fn xlen() -> Result<()> {
         .await?;
     assert!(!id1.is_empty());
 
-    let id2: String = connection
+    let id2: String = client
         .xadd(
             "mystream",
             "*",
@@ -108,7 +105,7 @@ async fn xlen() -> Result<()> {
         .await?;
     assert!(!id2.is_empty());
 
-    let len = connection.xlen("mystream").send().await?;
+    let len = client.xlen("mystream").send().await?;
     assert_eq!(2, len);
 
     Ok(())
@@ -118,10 +115,10 @@ async fn xlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xrange() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    let id1: String = connection
+    let id1: String = client
         .xadd(
             "mystream",
             "*",
@@ -132,7 +129,7 @@ async fn xrange() -> Result<()> {
         .await?;
     assert!(!id1.is_empty());
 
-    let id2: String = connection
+    let id2: String = client
         .xadd(
             "mystream",
             "*",
@@ -148,7 +145,7 @@ async fn xrange() -> Result<()> {
     assert!(!id2.is_empty());
 
     let results: Vec<StreamEntry<String>> =
-        connection.xrange("mystream", "-", "+", None).send().await?;
+        client.xrange("mystream", "-", "+", None).send().await?;
     assert_eq!(2, results.len());
     assert_eq!(id1, results[0].stream_id);
     assert_eq!(Some(&"John".to_owned()), results[0].items.get("name"));
@@ -165,10 +162,10 @@ async fn xrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xrevrange() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    let id1: String = connection
+    let id1: String = client
         .xadd(
             "mystream",
             "*",
@@ -179,7 +176,7 @@ async fn xrevrange() -> Result<()> {
         .await?;
     assert!(!id1.is_empty());
 
-    let id2: String = connection
+    let id2: String = client
         .xadd(
             "mystream",
             "*",
@@ -194,10 +191,8 @@ async fn xrevrange() -> Result<()> {
         .await?;
     assert!(!id2.is_empty());
 
-    let results: Vec<StreamEntry<String>> = connection
-        .xrevrange("mystream", "+", "-", None)
-        .send()
-        .await?;
+    let results: Vec<StreamEntry<String>> =
+        client.xrevrange("mystream", "+", "-", None).send().await?;
     assert_eq!(2, results.len());
     assert_eq!(id2, results[0].stream_id);
     assert_eq!(Some(&"value1".to_owned()), results[0].items.get("field1"));

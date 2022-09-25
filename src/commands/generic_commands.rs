@@ -1,7 +1,9 @@
 use crate::{
-    cmd,
-    resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, SingleArgOrCollection,
+    resp::{
+        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        SingleArgOrCollection, Value,
+    },
+    CommandResult, Error, PrepareCommand,
 };
 
 /// A group of generic Redis commands

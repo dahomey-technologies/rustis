@@ -1,4 +1,4 @@
-use crate::{Result};
+use crate::Result;
 use futures::Future;
 
 #[cfg(feature = "tokio-runtime")]
@@ -40,7 +40,7 @@ pub(crate) async fn tcp_connect(addr: &str) -> Result<(TcpStreamReader, TcpStrea
 pub(crate) fn spawn<F, T>(future: F)
 where
     F: Future<Output = T> + Send + 'static,
-    T: Send + 'static, 
+    T: Send + 'static,
 {
     tokio::spawn(future);
 }
@@ -49,7 +49,7 @@ where
 pub(crate) fn spawn<F, T>(future: F)
 where
     F: Future<Output = T> + Send + 'static,
-    T: Send + 'static, 
+    T: Send + 'static,
 {
     async_std::task::spawn(future);
 }

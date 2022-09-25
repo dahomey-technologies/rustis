@@ -1,4 +1,7 @@
-use crate::{cmd, CommandResult, IntoArgs, PrepareCommand};
+use crate::{
+    resp::{cmd, CommandArgs, IntoArgs},
+    CommandResult, PrepareCommand,
+};
 
 /// A group of Redis commands related to Server Management
 /// # See Also
@@ -22,15 +25,15 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
     }
 
-     /// The TIME command returns the current server time as a two items lists: 
-     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
+    /// The TIME command returns the current server time as a two items lists:
+    /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
     ///
     /// # See Also
     /// [https://redis.io/commands/time/](https://redis.io/commands/time/)
     #[must_use]
     fn time(&self) -> CommandResult<T, (u32, u32)> {
         self.prepare_command(cmd("TIME"))
-    }   
+    }
 }
 
 /// Database flushing mode
@@ -49,7 +52,7 @@ impl Default for FlushingMode {
 }
 
 impl IntoArgs for FlushingMode {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             FlushingMode::Default => args,
             FlushingMode::Async => args.arg("ASYNC"),

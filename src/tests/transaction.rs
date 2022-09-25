@@ -1,7 +1,8 @@
 use crate::{
-    cmd, resp::Value, tests::get_default_addr, Connection, ConnectionCommandResult, Error,
-    FlushingMode, ListCommands, PrepareCommand, Result, ServerCommands, StringCommands,
-    TransactionCommandResult, TransactionCommands, TransactionExt,
+    resp::{cmd, Value},
+    tests::get_test_client,
+    ConnectionCommandResult, Error, FlushingMode, ListCommands, PrepareCommand, Result,
+    ServerCommands, StringCommands, TransactionCommandResult, TransactionCommands, TransactionExt,
 };
 use serial_test::serial;
 
@@ -9,9 +10,9 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
     let value: String = transaction
         .set("key1", "value1")
@@ -35,9 +36,9 @@ async fn transaction() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_error() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
     let result = transaction
         .prepare_command::<Value>(cmd("UNKNOWN"))
@@ -49,7 +50,7 @@ async fn transaction_error() -> Result<()> {
 
     transaction.discard().await?;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
     let result = transaction
         .set("key1", "abc")
@@ -70,30 +71,30 @@ async fn transaction_error() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn watch() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    connection.set("key", 1).send().await?;
-    connection.watch("key").send().await?;
+    client.set("key", 1).send().await?;
+    client.watch("key").send().await?;
 
-    let mut value: i32 = connection.get("key").send().await?;
+    let mut value: i32 = client.get("key").send().await?;
     value += 1;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
     transaction.set("key", value).queue().await?.exec().await?;
 
-    let value: i32 = connection.get("key").send().await?;
+    let value: i32 = client.get("key").send().await?;
     assert_eq!(2, value);
 
     let value = 3;
-    connection.watch("key").send().await?;
+    client.watch("key").send().await?;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
-    // set key on another connection during the transaction
-    let connection2 = Connection::connect(get_default_addr()).await?;
-    connection2.set("key", value).send().await?;
+    // set key on another client during the transaction
+    let client2 = get_test_client().await?;
+    client2.set("key", value).send().await?;
 
     let result = transaction.set("key", value).queue().await?.exec().await;
     assert!(matches!(result, Err(Error::Aborted)));
@@ -105,27 +106,27 @@ async fn watch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unwatch() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    connection.set("key", 1).send().await?;
-    connection.watch("key").send().await?;
+    client.set("key", 1).send().await?;
+    client.watch("key").send().await?;
 
-    let mut value: i32 = connection.get("key").send().await?;
+    let mut value: i32 = client.get("key").send().await?;
     value += 1;
 
-    connection.watch("key").send().await?;
-    connection.unwatch().send().await?;
+    client.watch("key").send().await?;
+    client.unwatch().send().await?;
 
-    let transaction = connection.create_transaction().await?;
+    let transaction = client.create_transaction().await?;
 
-    // set key on another connection during the transaction
-    let connection2 = Connection::connect(get_default_addr()).await?;
-    connection2.set("key", 3).send().await?;
+    // set key on another client during the transaction
+    let client2 = get_test_client().await?;
+    client2.set("key", 3).send().await?;
 
     transaction.set("key", value).queue().await?.exec().await?;
 
-    let value: i32 = connection.get("key").send().await?;
+    let value: i32 = client.get("key").send().await?;
     assert_eq!(2, value);
 
     Ok(())

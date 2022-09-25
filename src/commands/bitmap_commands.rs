@@ -1,6 +1,6 @@
 use crate::{
-    cmd, resp::BulkString, ArgsOrCollection, CommandArgs, IntoArgs,
-    PrepareCommand, SingleArgOrCollection, CommandResult,
+    resp::{cmd, ArgsOrCollection, BulkString, CommandArgs, IntoArgs, SingleArgOrCollection},
+    CommandResult, PrepareCommand,
 };
 
 /// A group of Redis commands related to bitmaps
@@ -75,7 +75,12 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/bitop/](https://redis.io/commands/bitop/)
     #[must_use]
-    fn bitop<D, K, KK>(&self, operation: BitOperation, dest_key: D, keys: KK) -> CommandResult<T, usize>
+    fn bitop<D, K, KK>(
+        &self,
+        operation: BitOperation,
+        dest_key: D,
+        keys: KK,
+    ) -> CommandResult<T, usize>
     where
         D: Into<BulkString>,
         K: Into<BulkString>,
@@ -134,7 +139,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
 /// Interval options for the [bitcount](crate::BitmapCommands::bitcount) command
 #[derive(Default)]
 pub struct BitRange {
-        command_args: CommandArgs,
+    command_args: CommandArgs,
 }
 
 impl BitRange {

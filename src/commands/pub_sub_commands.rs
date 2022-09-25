@@ -1,5 +1,6 @@
 use crate::{
-    cmd, resp::BulkString, CommandResult, Future, PrepareCommand, PubSubStream, SingleArgOrCollection,
+    resp::{cmd, BulkString, SingleArgOrCollection},
+    CommandResult, Future, PrepareCommand, PubSubStream,
 };
 
 /// A redis connection used in a pub/sub scenario.
@@ -34,7 +35,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/unsubscribe/](https://redis.io/commands/unsubscribe/)            
-    fn unsubscribe<C, CC>(&self, channels: CC) -> CommandResult<T, ()> 
+    fn unsubscribe<C, CC>(&self, channels: CC) -> CommandResult<T, ()>
     where
         C: Into<BulkString>,
         CC: SingleArgOrCollection<C>,
@@ -42,4 +43,3 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("UNSUBSCRIBE").arg(channels))
     }
 }
-

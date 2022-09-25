@@ -1,7 +1,7 @@
 use crate::{
     resp::{Array, Value},
-    tests::get_default_addr,
-    Connection, ConnectionCommandResult, GenericCommands, Result, SetCommands,
+    tests::get_test_client,
+    ConnectionCommandResult, GenericCommands, Result, SetCommands,
 };
 use serial_test::serial;
 use std::collections::{BTreeSet, HashSet};
@@ -10,7 +10,7 @@ use std::collections::{BTreeSet, HashSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn from_single_value_array() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let connection = get_test_client().await?;
 
     connection.del("key").send().await?;
 

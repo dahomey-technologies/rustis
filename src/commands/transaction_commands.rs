@@ -1,4 +1,7 @@
-use crate::{cmd, resp::BulkString, CommandResult, PrepareCommand, SingleArgOrCollection};
+use crate::{
+    resp::{cmd, BulkString, SingleArgOrCollection},
+    CommandResult, PrepareCommand,
+};
 
 /// A group of Redis commands related to Transactions
 /// # See Also
@@ -18,15 +21,14 @@ pub trait TransactionCommands<T>: PrepareCommand<T> {
     }
 
     /// Flushes all the previously watched keys for a transaction.
-    /// 
-    /// If you call [`exec`](crate::TransactionExt::exec) or [`discard`](crate::Transaction::discard), 
+    ///
+    /// If you call [`exec`](crate::TransactionExt::exec) or [`discard`](crate::Transaction::discard),
     /// there's no need to manually call UNWATCH.
     ///
     /// # See Also
     /// [https://redis.io/commands/unwatch/](https://redis.io/commands/unwatch/)
     #[must_use]
-    fn unwatch(&self) -> CommandResult<T, ()>
-    {
+    fn unwatch(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("UNWATCH"))
     }
 }

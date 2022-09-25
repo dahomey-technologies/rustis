@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, GeoAddCondition,
-    GeoCommands, GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult,
+    tests::get_test_client, ConnectionCommandResult, GenericCommands, GeoAddCondition, GeoCommands,
+    GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult,
     GeoSearchStoreOptions, GeoUnit, Result,
 };
 use serial_test::serial;
@@ -9,12 +9,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geoadd() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "key",
             Default::default(),
@@ -25,7 +25,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "key",
             Default::default(),
@@ -36,7 +36,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(0, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "key",
             Default::default(),
@@ -47,7 +47,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(1, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "key",
             GeoAddCondition::XX,
@@ -62,7 +62,7 @@ async fn geoadd() -> Result<()> {
         .await?;
     assert_eq!(1, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "key",
             GeoAddCondition::NX,
@@ -84,12 +84,12 @@ async fn geoadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geodist() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("Sicily").send().await?;
+    client.del("Sicily").send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -103,25 +103,25 @@ async fn geodist() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let dist = connection
+    let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Meters)
         .send()
         .await?;
     assert_eq!(Some(166274.1516), dist);
 
-    let dist = connection
+    let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Kilometers)
         .send()
         .await?;
     assert_eq!(Some(166.2742), dist);
 
-    let dist = connection
+    let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Miles)
         .send()
         .await?;
     assert_eq!(Some(103.3182), dist);
 
-    let dist = connection
+    let dist = client
         .geodist("Sicily", "Foo", "Bar", GeoUnit::Meters)
         .send()
         .await?;
@@ -134,12 +134,12 @@ async fn geodist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geohash() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("Sicily").send().await?;
+    client.del("Sicily").send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -153,7 +153,7 @@ async fn geohash() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let hashes = connection
+    let hashes = client
         .geohash("Sicily", ["Palermo", "Catania"])
         .send()
         .await?;
@@ -168,12 +168,12 @@ async fn geohash() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geopos() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("Sicily").send().await?;
+    client.del("Sicily").send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -187,7 +187,7 @@ async fn geopos() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let hashes = connection
+    let hashes = client
         .geopos("Sicily", ["Palermo", "Catania", "NonExisting"])
         .send()
         .await?;
@@ -209,12 +209,12 @@ async fn geopos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearch() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("Sicily").send().await?;
+    client.del("Sicily").send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -228,7 +228,7 @@ async fn geosearch() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -242,7 +242,7 @@ async fn geosearch() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let results: Vec<GeoSearchResult<String>> = connection
+    let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
@@ -261,7 +261,7 @@ async fn geosearch() -> Result<()> {
     assert!(results.iter().any(|r| r.member == "Palermo",));
     assert!(results.iter().any(|r| r.member == "Catania"));
 
-    let results: Vec<GeoSearchResult<String>> = connection
+    let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "Sicily",
             GeoSearchFrom::FromLonLat::<String> {
@@ -318,12 +318,12 @@ async fn geosearch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearchstore() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["Sicily", "out"]).send().await?;
+    client.del(["Sicily", "out"]).send().await?;
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -337,7 +337,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = connection
+    let len = client
         .geoadd(
             "Sicily",
             Default::default(),
@@ -351,7 +351,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let len = connection
+    let len = client
         .geosearchstore(
             "out",
             "Sicily",
@@ -372,7 +372,7 @@ async fn geosearchstore() -> Result<()> {
         .await?;
     assert_eq!(3, len);
 
-    let results: Vec<GeoSearchResult<String>> = connection
+    let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "out",
             GeoSearchFrom::FromLonLat::<String> {

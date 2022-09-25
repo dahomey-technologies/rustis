@@ -1,7 +1,6 @@
 use crate::{
-    cmd,
-    resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, Result,
+    resp::{cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, Value},
+    CommandResult, Error, PrepareCommand, Result,
 };
 use std::collections::HashMap;
 
@@ -24,10 +23,10 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/ping/](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<M, R>(&self, message: Option<M>) -> CommandResult<T, R> 
+    fn ping<M, R>(&self, message: Option<M>) -> CommandResult<T, R>
     where
         M: Into<BulkString>,
-        R: FromValue
+        R: FromValue,
     {
         self.prepare_command(cmd("PING").arg(message))
     }
@@ -37,19 +36,17 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/quit/](https://redis.io/commands/quit/)
     #[must_use]
-    fn quit(&self) -> CommandResult<T, ()> 
-    {
+    fn quit(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("QUIT"))
     }
 
-    /// This command performs a full reset of the connection's server-side context, 
+    /// This command performs a full reset of the connection's server-side context,
     /// mimicking the effect of disconnecting and reconnecting again.
     ///
     /// # See Also
     /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
     #[must_use]
-    fn reset(&self) -> CommandResult<T, ()> 
-    {
+    fn reset(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("RESET"))
     }
 
@@ -58,8 +55,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
     #[must_use]
-    fn select(&self, index: usize) -> CommandResult<T, ()> 
-    {
+    fn select(&self, index: usize) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SELECT").arg(index))
     }
 }
@@ -134,7 +130,7 @@ impl FromValue for HelloResult {
 
                 into_result(&mut value.into()?)
                     .ok_or_else(|| Error::Internal("Cannot parse HelloResult".to_owned()))
-            },
+            }
             _ => Err(Error::Internal("Cannot parse HelloResult".to_owned())),
         }
     }

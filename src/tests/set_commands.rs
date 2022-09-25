@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::{
-    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, Result,
-    SScanOptions, SetCommands,
+    tests::get_test_client, ConnectionCommandResult, GenericCommands, Result, SScanOptions,
+    SetCommands,
 };
 use serial_test::serial;
 
@@ -10,12 +10,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sadd() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    let len = connection
+    let len = client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
@@ -28,16 +28,16 @@ async fn sadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn scard() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
-    let len = connection.scard("key").send().await?;
+    let len = client.scard("key").send().await?;
     assert_eq!(3, len);
 
     Ok(())
@@ -47,16 +47,16 @@ async fn scard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiff() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = connection.sdiff(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sdiff(["key1", "key2", "key3"]).send().await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -68,25 +68,22 @@ async fn sdiff() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiffstore() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection
-        .del(["key1", "key2", "key3", "key4"])
-        .send()
-        .await?;
+    client.del(["key1", "key2", "key3", "key4"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = connection
+    let len = client
         .sdiffstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(2, len);
 
-    let members: HashSet<String> = connection.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").send().await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -98,16 +95,16 @@ async fn sdiffstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinter() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = connection.sinter(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sinter(["key1", "key2", "key3"]).send().await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -118,16 +115,16 @@ async fn sinter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sintercard() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = connection
+    let len = client
         .sintercard(["key1", "key2", "key3"], 0)
         .send()
         .await?;
@@ -140,25 +137,22 @@ async fn sintercard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinterstore() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection
-        .del(["key1", "key2", "key3", "key4"])
-        .send()
-        .await?;
+    client.del(["key1", "key2", "key3", "key4"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = connection
+    let len = client
         .sinterstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(1, len);
 
-    let members: HashSet<String> = connection.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").send().await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -169,20 +163,20 @@ async fn sinterstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sismember() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = connection.sismember("key", "value1").send().await?;
+    let result = client.sismember("key", "value1").send().await?;
     assert!(result);
 
-    let result = connection.sismember("key", "value4").send().await?;
+    let result = client.sismember("key", "value4").send().await?;
     assert!(!result);
 
     Ok(())
@@ -192,17 +186,17 @@ async fn sismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smembers() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let members: HashSet<String> = connection.smembers("key").send().await?;
+    let members: HashSet<String> = client.smembers("key").send().await?;
     assert_eq!(3, members.len());
     assert!(members.contains("value1"));
     assert!(members.contains("value2"));
@@ -215,17 +209,17 @@ async fn smembers() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smismember() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = connection
+    let result = client
         .smismember("key", ["value1", "value4"])
         .send()
         .await?;
@@ -240,21 +234,21 @@ async fn smismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smove() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["key1", "key2"]).send().await?;
+    client.del(["key1", "key2"]).send().await?;
 
-    connection
+    client
         .sadd("key1", ["value1", "value2", "value3"])
         .send()
         .await?;
-    connection
+    client
         .sadd("key2", ["value4", "value5", "value6"])
         .send()
         .await?;
 
-    let result = connection.smove("key1", "key2", "value3").send().await?;
+    let result = client.smove("key1", "key2", "value3").send().await?;
     assert!(result);
 
     Ok(())
@@ -264,17 +258,17 @@ async fn smove() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn spop() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: HashSet<String> = connection.spop("key", 2).send().await?;
+    let result: HashSet<String> = client.spop("key", 2).send().await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -284,17 +278,17 @@ async fn spop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srandmember() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: HashSet<String> = connection.srandmember("key", 2).send().await?;
+    let result: HashSet<String> = client.srandmember("key", 2).send().await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -304,17 +298,17 @@ async fn srandmember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srem() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result = connection
+    let result = client
         .srem("key", ["value1", "value2", "value4"])
         .send()
         .await?;
@@ -327,17 +321,17 @@ async fn srem() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sscan() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .sadd("key", ["value1", "value2", "value3"])
         .send()
         .await?;
 
-    let result: (u64, Vec<String>) = connection
+    let result: (u64, Vec<String>) = client
         .sscan("key", 0, SScanOptions::default())
         .send()
         .await?;
@@ -351,16 +345,16 @@ async fn sscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunion() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let members: HashSet<String> = connection.sunion(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sunion(["key1", "key2", "key3"]).send().await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));
@@ -375,25 +369,22 @@ async fn sunion() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunionstore() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection
-        .del(["key1", "key2", "key3", "key4"])
-        .send()
-        .await?;
+    client.del(["key1", "key2", "key3", "key4"]).send().await?;
 
-    connection.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    connection.sadd("key2", "c").send().await?;
-    connection.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
+    client.sadd("key2", "c").send().await?;
+    client.sadd("key3", ["a", "c", "e"]).send().await?;
 
-    let len = connection
+    let len = client
         .sunionstore("key4", ["key1", "key2", "key3"])
         .send()
         .await?;
     assert_eq!(5, len);
 
-    let members: HashSet<String> = connection.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").send().await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));

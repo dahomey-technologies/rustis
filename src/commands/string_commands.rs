@@ -1,8 +1,9 @@
 use crate::{
-    cmd,
-    resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, KeyValueArgOrCollection,
-    Result, SingleArgOrCollection,
+    resp::{
+        cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, KeyValueArgOrCollection,
+        SingleArgOrCollection, Value,
+    },
+    CommandResult, Error, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Strings
@@ -639,66 +640,61 @@ impl FromValue for LcsResult {
             ) = (result.pop(), result.pop(), result.pop(), result.pop())
             {
                 if matches_label.as_slice() == b"matches" && len_label.as_slice() == b"len" {
-                    let matches: Result<Vec<LcsMatch>> =
-                        matches
-                            .into_iter()
-                            .map(|m| {
-                                let mut match_: Vec<Value> = m.into()?;
+                    let matches: Result<Vec<LcsMatch>> = matches
+                        .into_iter()
+                        .map(|m| {
+                            let mut match_: Vec<Value> = m.into()?;
 
-                                match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
-                                    (Some(len), Some(pos2), Some(pos1), None) => {
-                                        let mut pos1: Vec<usize> = pos1.into()?;
-                                        let mut pos2: Vec<usize> = pos2.into()?;
-                                        let len: usize = len.into()?;
+                            match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
+                                (Some(len), Some(pos2), Some(pos1), None) => {
+                                    let mut pos1: Vec<usize> = pos1.into()?;
+                                    let mut pos2: Vec<usize> = pos2.into()?;
+                                    let len: usize = len.into()?;
 
-                                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                            (Some(pos1_right), Some(pos1_left), None) => {
-                                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                    (Some(pos2_right), Some(pos2_left), None) => {
-                                                        Ok((
-                                                            (pos1_left, pos1_right),
-                                                            (pos2_left, pos2_right),
-                                                            Some(len),
-                                                        ))
-                                                    }
-                                                    _ => Err(Error::Internal(
-                                                        "Cannot parse LCS result".to_owned(),
-                                                    )),
-                                                }
+                                    match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                        (Some(pos1_right), Some(pos1_left), None) => {
+                                            match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                (Some(pos2_right), Some(pos2_left), None) => Ok((
+                                                    (pos1_left, pos1_right),
+                                                    (pos2_left, pos2_right),
+                                                    Some(len),
+                                                )),
+                                                _ => Err(Error::Internal(
+                                                    "Cannot parse LCS result".to_owned(),
+                                                )),
                                             }
-                                            _ => Err(Error::Internal(
-                                                "Cannot parse LCS result".to_owned(),
-                                            )),
                                         }
+                                        _ => Err(Error::Internal(
+                                            "Cannot parse LCS result".to_owned(),
+                                        )),
                                     }
-                                    (Some(pos2), Some(pos1), None, None) => {
-                                        let mut pos1: Vec<usize> = pos1.into()?;
-                                        let mut pos2: Vec<usize> = pos2.into()?;
-
-                                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                            (Some(pos1_right), Some(pos1_left), None) => {
-                                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                    (Some(pos2_right), Some(pos2_left), None) => {
-                                                        Ok((
-                                                            (pos1_left, pos1_right),
-                                                            (pos2_left, pos2_right),
-                                                            None,
-                                                        ))
-                                                    }
-                                                    _ => Err(Error::Internal(
-                                                        "Cannot parse LCS result".to_owned(),
-                                                    )),
-                                                }
-                                            }
-                                            _ => Err(Error::Internal(
-                                                "Cannot parse LCS result".to_owned(),
-                                            )),
-                                        }
-                                    }
-                                    _ => Err(Error::Internal("Cannot parse LCS result".to_owned())),
                                 }
-                            })
-                            .collect();
+                                (Some(pos2), Some(pos1), None, None) => {
+                                    let mut pos1: Vec<usize> = pos1.into()?;
+                                    let mut pos2: Vec<usize> = pos2.into()?;
+
+                                    match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                                        (Some(pos1_right), Some(pos1_left), None) => {
+                                            match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                                (Some(pos2_right), Some(pos2_left), None) => Ok((
+                                                    (pos1_left, pos1_right),
+                                                    (pos2_left, pos2_right),
+                                                    None,
+                                                )),
+                                                _ => Err(Error::Internal(
+                                                    "Cannot parse LCS result".to_owned(),
+                                                )),
+                                            }
+                                        }
+                                        _ => Err(Error::Internal(
+                                            "Cannot parse LCS result".to_owned(),
+                                        )),
+                                    }
+                                }
+                                _ => Err(Error::Internal("Cannot parse LCS result".to_owned())),
+                            }
+                        })
+                        .collect();
 
                     return Ok(LcsResult {
                         matches: matches?,

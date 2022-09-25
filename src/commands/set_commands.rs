@@ -1,7 +1,9 @@
 use crate::{
-    cmd,
-    resp::{BulkString, FromSingleValueArray, FromValue},
-    CommandArgs, CommandResult, IntoArgs, PrepareCommand, SingleArgOrCollection,
+    resp::{
+        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        SingleArgOrCollection,
+    },
+    CommandResult, PrepareCommand,
 };
 use std::hash::Hash;
 

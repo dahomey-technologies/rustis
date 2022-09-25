@@ -1,3 +1,5 @@
+use crate::{Client, Result};
+
 pub(crate) fn get_default_host() -> String {
     match std::env::var("REDIS_HOST") {
         Ok(host) => host,
@@ -14,4 +16,8 @@ pub(crate) fn get_default_port() -> u16 {
 
 pub(crate) fn get_default_addr() -> String {
     format!("{}:{}", get_default_host(), get_default_port())
+}
+
+pub(crate) async fn get_test_client() -> Result<Client> {
+    Client::connect(get_default_addr()).await    
 }

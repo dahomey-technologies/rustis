@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_default_addr, Connection, ConnectionCommandResult, GenericCommands, HScanOptions,
-    HashCommands, Result,
+    tests::get_test_client, ConnectionCommandResult, GenericCommands, HScanOptions, HashCommands,
+    Result,
 };
 use serial_test::serial;
 
@@ -8,19 +8,19 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hdel() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "value")).send().await?;
-    let value: String = connection.hget("key", "field").send().await?;
+    client.hset("key", ("field", "value")).send().await?;
+    let value: String = client.hget("key", "field").send().await?;
     assert_eq!("value", value);
 
-    let len = connection.hdel("key", "field").send().await?;
+    let len = client.hdel("key", "field").send().await?;
     assert_eq!(1, len);
 
-    let len = connection.hdel("key", "field").send().await?;
+    let len = client.hdel("key", "field").send().await?;
     assert_eq!(0, len);
 
     Ok(())
@@ -30,19 +30,19 @@ async fn hdel() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hexists() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "value")).send().await?;
-    let value: String = connection.hget("key", "field").send().await?;
+    client.hset("key", ("field", "value")).send().await?;
+    let value: String = client.hget("key", "field").send().await?;
     assert_eq!("value", value);
 
-    let result = connection.hexists("key", "field").send().await?;
+    let result = client.hexists("key", "field").send().await?;
     assert!(result);
 
-    let result = connection.hexists("key", "unknown").send().await?;
+    let result = client.hexists("key", "unknown").send().await?;
     assert!(!result);
 
     Ok(())
@@ -52,13 +52,13 @@ async fn hexists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hget() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "value")).send().await?;
-    let value: String = connection.hget("key", "field").send().await?;
+    client.hset("key", ("field", "value")).send().await?;
+    let value: String = client.hget("key", "field").send().await?;
     assert_eq!("value", value);
 
     Ok(())
@@ -68,16 +68,16 @@ async fn hget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hget_all() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .send()
         .await?;
-    let result: Vec<(String, String)> = connection.hgetall("key").send().await?;
+    let result: Vec<(String, String)> = client.hgetall("key").send().await?;
     assert_eq!(2, result.len());
     assert_eq!(("field1".to_owned(), "Hello".to_owned()), result[0]);
     assert_eq!(("field2".to_owned(), "World".to_owned()), result[1]);
@@ -89,17 +89,17 @@ async fn hget_all() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hincrby() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "5")).send().await?;
-    let value = connection.hincrby("key", "field", 1).send().await?;
+    client.hset("key", ("field", "5")).send().await?;
+    let value = client.hincrby("key", "field", 1).send().await?;
     assert_eq!(6, value);
-    let value = connection.hincrby("key", "field", -1).send().await?;
+    let value = client.hincrby("key", "field", -1).send().await?;
     assert_eq!(5, value);
-    let value = connection.hincrby("key", "field", -10).send().await?;
+    let value = client.hincrby("key", "field", -10).send().await?;
     assert_eq!(-5, value);
 
     Ok(())
@@ -109,21 +109,18 @@ async fn hincrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hincrbyfloat() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "10.50")).send().await?;
-    let value = connection.hincrbyfloat("key", "field", 0.1).send().await?;
+    client.hset("key", ("field", "10.50")).send().await?;
+    let value = client.hincrbyfloat("key", "field", 0.1).send().await?;
     assert_eq!(10.6, value);
-    let value = connection.hincrbyfloat("key", "field", -5.0).send().await?;
+    let value = client.hincrbyfloat("key", "field", -5.0).send().await?;
     assert_eq!(5.6, value);
-    connection.hset("key", ("field", "5.0e3")).send().await?;
-    let value = connection
-        .hincrbyfloat("key", "field", 2.0e2)
-        .send()
-        .await?;
+    client.hset("key", ("field", "5.0e3")).send().await?;
+    let value = client.hincrbyfloat("key", "field", 2.0e2).send().await?;
     assert_eq!(5200.0, value);
 
     Ok(())
@@ -133,16 +130,16 @@ async fn hincrbyfloat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hkeys() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .send()
         .await?;
-    let fields: Vec<String> = connection.hkeys("key").send().await?;
+    let fields: Vec<String> = client.hkeys("key").send().await?;
     assert_eq!(2, fields.len());
     assert_eq!("field1".to_owned(), fields[0]);
     assert_eq!("field2".to_owned(), fields[1]);
@@ -154,16 +151,16 @@ async fn hkeys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hlen() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .send()
         .await?;
-    let len = connection.hlen("key").send().await?;
+    let len = client.hlen("key").send().await?;
     assert_eq!(2, len);
 
     Ok(())
@@ -173,16 +170,16 @@ async fn hlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hmget() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .send()
         .await?;
-    let values: Vec<String> = connection
+    let values: Vec<String> = client
         .hmget("key", ["field1", "field2", "nofield"])
         .send()
         .await?;
@@ -198,31 +195,30 @@ async fn hmget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hrandfield() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("coin").send().await?;
+    client.del("coin").send().await?;
 
     let fields_and_values = [("heads", "obverse"), ("tails", "reverse"), ("edge", "")];
-    connection.hset("coin", fields_and_values).send().await?;
+    client.hset("coin", fields_and_values).send().await?;
 
-    let value: String = connection.hrandfield("coin").send().await?;
+    let value: String = client.hrandfield("coin").send().await?;
     assert!(fields_and_values.iter().any(|v| v.0 == value));
 
-    let values: Vec<String> = connection.hrandfields("coin", -5).send().await?;
+    let values: Vec<String> = client.hrandfields("coin", -5).send().await?;
     assert_eq!(5, values.len());
     for value in values {
         assert!(fields_and_values.iter().any(|v| v.0 == value));
     }
 
-    let values: Vec<String> = connection.hrandfields("coin", 5).send().await?;
+    let values: Vec<String> = client.hrandfields("coin", 5).send().await?;
     assert_eq!(3, values.len());
     for value in values {
         assert!(fields_and_values.iter().any(|v| v.0 == value));
     }
 
-    let values: Vec<(String, String)> =
-        connection.hrandfields_with_values("coin", 5).send().await?;
+    let values: Vec<(String, String)> = client.hrandfields_with_values("coin", 5).send().await?;
     assert_eq!(3, values.len());
     for value in values {
         assert!(fields_and_values
@@ -237,23 +233,22 @@ async fn hrandfield() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hscan() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
     let fields_and_values: Vec<_> = (1..21)
         .map(|i| (format!("field{}", i), format!("value{}", i)))
         .collect();
 
-    connection.hset("key", fields_and_values).send().await?;
+    client.hset("key", fields_and_values).send().await?;
 
-    let result: (u64, Vec<(String, String)>) = connection
+    let result: (u64, Vec<(String, String)>) = client
         .hscan("key", 0, HScanOptions::default().count(20))
         .send()
         .await?;
 
-    //println!("{:?}", result);
     assert_eq!(0, result.0);
     assert_eq!(20, result.1.len());
     assert_eq!(("field1".to_owned(), "value1".to_owned()), result.1[0]);
@@ -268,18 +263,18 @@ async fn hscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hsetnx() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    let result = connection.hsetnx("key", "field", "Hello").send().await?;
+    let result = client.hsetnx("key", "field", "Hello").send().await?;
     assert!(result);
 
-    let result = connection.hsetnx("key", "field", "World").send().await?;
+    let result = client.hsetnx("key", "field", "World").send().await?;
     assert!(!result);
 
-    let value: String = connection.hget("key", "field").send().await?;
+    let value: String = client.hget("key", "field").send().await?;
     assert_eq!("Hello", value);
 
     Ok(())
@@ -289,14 +284,14 @@ async fn hsetnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hstrlen() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection.hset("key", ("field", "value")).send().await?;
+    client.hset("key", ("field", "value")).send().await?;
 
-    let len = connection.hstrlen("key", "field").send().await?;
+    let len = client.hstrlen("key", "field").send().await?;
     assert_eq!(5, len);
 
     Ok(())
@@ -306,17 +301,17 @@ async fn hstrlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hvals() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
     // cleanup
-    connection.del("key").send().await?;
+    client.del("key").send().await?;
 
-    connection
+    client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .send()
         .await?;
 
-    let values: Vec<String> = connection.hvals("key").send().await?;
+    let values: Vec<String> = client.hvals("key").send().await?;
     assert_eq!(2, values.len());
     assert_eq!("Hello", values[0]);
     assert_eq!("World", values[1]);

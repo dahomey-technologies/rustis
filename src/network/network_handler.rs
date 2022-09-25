@@ -1,12 +1,19 @@
 use crate::{
-    message::Message,
-    resp::{Array, BulkString, Value, ValueDecoder},
-    spawn, CommandEncoder, ConnectionFactory, Error, MsgReceiver, MsgSender, PubSubSender, Result,
-    TcpStreamReader, TcpStreamWriter, ValueSender,
+    resp::{Array, BulkString, Value},
+    spawn, Connection, Error, Message, Result,
 };
-use futures::{channel::mpsc, select, FutureExt, SinkExt, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    select, FutureExt, SinkExt, StreamExt,
+};
 use std::collections::{HashMap, VecDeque};
-use tokio_util::codec::{FramedRead, FramedWrite};
+
+pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
+pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
+pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
+pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
+pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
+pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 
 enum Status {
     Disconnected,
@@ -17,35 +24,28 @@ enum Status {
 
 pub(crate) struct NetworkHandler {
     status: Status,
-    connection_factory: ConnectionFactory,
+    connection: Connection,
     msg_receiver: MsgReceiver,
     value_senders: VecDeque<Option<ValueSender>>,
-    framed_read: FramedRead<TcpStreamReader, ValueDecoder>,
-    framed_write: FramedWrite<TcpStreamWriter, CommandEncoder>,
     pending_pub_sub_sender: Option<PubSubSender>,
     subscriptions: HashMap<Vec<u8>, PubSubSender>,
 }
 
 impl NetworkHandler {
     pub async fn connect(addr: impl Into<String>) -> Result<MsgSender> {
-        let connection_factory = ConnectionFactory::initialize(addr).await?;
+        let connection = Connection::initialize(addr).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let value_senders = VecDeque::new();
-        let (reader, writer) = connection_factory.get_connection().await?;
-        let framed_read = FramedRead::new(reader, ValueDecoder);
-        let framed_write = FramedWrite::new(writer, CommandEncoder);
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
-            connection_factory,
+            connection,
             msg_receiver,
             value_senders,
-            framed_read,
-            framed_write,
             pending_pub_sub_sender: None,
             subscriptions: HashMap::new(),
         };
-        
+
         spawn(async move {
             if let Err(e) = network_handler.network_loop().await {
                 eprintln!("{}", e);
@@ -59,7 +59,7 @@ impl NetworkHandler {
         loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => if !self.handle_message(msg).await { break; },
-                value = self.framed_read.next().fuse() => self.handle_result(value).await?,
+                value = self.connection.read().fuse() => self.handle_result(value).await?,
             }
         }
 
@@ -111,8 +111,7 @@ impl NetworkHandler {
     async fn send_message(&mut self, msg: Message) {
         let command = msg.command;
         let value_sender = msg.value_sender;
-        println!("Sending {command:?}");
-        match self.framed_write.send(command).await {
+        match self.connection.write(command).await {
             Ok(()) => self.value_senders.push_back(value_sender),
             Err(_e) => self.value_senders.push_back(value_sender),
         }
@@ -133,7 +132,7 @@ impl NetworkHandler {
                     } else {
                         self.status = Status::Connected;
                     }
-                    println!("value: {:?}", value);
+
                     if let Some(value) = self.try_match_pubsub_message(value).await? {
                         self.receive_result(value);
                     }
@@ -147,13 +146,6 @@ impl NetworkHandler {
             // disconnection
             None => {
                 self.status = Status::Disconnected;
-                while let Some(value_sender) = self.value_senders.pop_front() {
-                    if let Some(value_sender) = value_sender {
-                        let _result = value_sender
-                            .send(Err(Error::Network("Disconnected from server".to_string())));
-                    }
-                }
-
                 // reconnect
                 println!("reconnecting");
                 if self.reconnect().await {
@@ -167,7 +159,7 @@ impl NetworkHandler {
     }
 
     fn receive_result(&mut self, value: Result<Value>) {
-        println!("Received result {value:?}");
+        //println!("Received result {value:?}");
 
         match self.value_senders.pop_front() {
             Some(Some(value_sender)) => {
@@ -218,8 +210,6 @@ impl NetworkHandler {
             return Ok(Some(value));
         }
 
-        println!("Received result {value:?}");
-
         // second pass, move payload into pub_sub_sender by consuming received value
         if let Ok(Value::Array(Array::Vec(mut items))) = value {
             if let (
@@ -254,17 +244,6 @@ impl NetworkHandler {
             }
         }
 
-        // reconnect
-        match self.connection_factory.get_connection().await {
-            Ok((reader, writer)) => {
-                self.framed_read = FramedRead::new(reader, ValueDecoder);
-                self.framed_write = FramedWrite::new(writer, CommandEncoder);
-                true
-            }
-            Err(e) => {
-                println!("Failed to reconnect: {:?}", e);
-                false
-            }
-        }
+        self.connection.reconnect().await
     }
 }

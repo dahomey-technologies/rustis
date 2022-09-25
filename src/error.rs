@@ -3,9 +3,7 @@ use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
 };
-use std::{num::ParseFloatError, result, str::Utf8Error};
-
-pub type Result<T> = result::Result<T, Error>;
+use std::{num::ParseFloatError, str::Utf8Error};
 
 #[derive(Debug)]
 pub enum Error {

@@ -1,8 +1,9 @@
 use crate::{
-    cmd,
-    resp::{BulkString, FromSingleValueArray, FromValue, Value},
-    ArgsOrCollection, CommandArgs, CommandResult, Error, IntoArgs, PrepareCommand, Result,
-    SingleArgOrCollection,
+    resp::{
+        cmd, ArgsOrCollection, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        SingleArgOrCollection, Value,
+    },
+    CommandResult, Error, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Geospatial indices
@@ -124,13 +125,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
-        self.prepare_command(
-            cmd("GEOSEARCH")
-                .arg(key)
-                .arg(from)
-                .arg(by)
-                .arg(options),
-        )
+        self.prepare_command(cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(options))
     }
 
     /// This command is like [geosearch](crate::GeoCommands::geosearch), but stores the result in destination key.
@@ -182,7 +177,7 @@ impl Default for GeoAddCondition {
 }
 
 impl IntoArgs for GeoAddCondition {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             GeoAddCondition::None => args,
             GeoAddCondition::NX => args.arg("NX"),
@@ -200,7 +195,7 @@ pub enum GeoUnit {
 }
 
 impl IntoArgs for GeoUnit {
-    fn into_args(self, args: CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
             GeoUnit::Meters => BulkString::Str("m"),
             GeoUnit::Kilometers => BulkString::Str("km"),
@@ -225,7 +220,7 @@ impl<M> IntoArgs for GeoSearchFrom<M>
 where
     M: Into<BulkString>,
 {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             GeoSearchFrom::FromMember { member } => args.arg("FROMMEMBER").arg(member),
             GeoSearchFrom::FromLonLat {
@@ -249,7 +244,7 @@ pub enum GeoSearchBy {
 }
 
 impl IntoArgs for GeoSearchBy {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             GeoSearchBy::ByRadius { radius, unit } => args.arg("BYRADIUS").arg(radius).arg(unit),
             GeoSearchBy::ByBox {
@@ -271,7 +266,7 @@ pub enum GeoSearchOrder {
 }
 
 impl IntoArgs for GeoSearchOrder {
-    fn into_args(self, args: crate::CommandArgs) -> crate::CommandArgs {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             GeoSearchOrder::Asc => args.arg("ASC"),
             GeoSearchOrder::Desc => args.arg("DESC"),
@@ -306,7 +301,7 @@ impl GeoSearchOptions {
             command_args: self.command_args.arg("WITHCOORD"),
         }
     }
-   
+
     #[must_use]
     pub fn with_dist(self) -> Self {
         Self {
@@ -365,31 +360,33 @@ where
                 let mut distance: Option<f64> = None;
                 let mut geo_hash: Option<i64> = None;
                 let mut coordinates: Option<(f64, f64)> = None;
-        
+
                 let member = match it.next() {
                     Some(value) => value.into()?,
                     None => {
                         return Err(Error::Internal("Unexpected geo search result".to_owned()));
                     }
                 };
-        
+
                 for value in it {
                     match value {
                         Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
-                        _ => return Err(Error::Internal("Unexpected geo search result".to_owned())),
+                        _ => {
+                            return Err(Error::Internal("Unexpected geo search result".to_owned()))
+                        }
                     }
                 }
-        
+
                 Ok(GeoSearchResult {
                     member,
                     distance,
                     geo_hash,
                     coordinates,
                 })
-            },
-            _ => Err(Error::Internal("Unexpected geo search result".to_owned()))
+            }
+            _ => Err(Error::Internal("Unexpected geo search result".to_owned())),
         }
     }
 }

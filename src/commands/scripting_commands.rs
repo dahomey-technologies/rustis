@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    cmd,
-    resp::{Array, BulkString, FromValue, Value},
-    CommandArgs, CommandResult, Error, FlushingMode, IntoArgs, PrepareCommand, Result,
-    SingleArgOrCollection,
+    resp::{
+        cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+    },
+    CommandResult, Error, FlushingMode, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Scripting and Functions
@@ -157,8 +157,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/function-list/](https://redis.io/commands/function-list/)
     #[must_use]
-    fn function_list(&self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>>
-    {
+    fn function_list(&self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>> {
         self.prepare_command(cmd("FUNCTION").arg("LIST").arg(options))
     }
 

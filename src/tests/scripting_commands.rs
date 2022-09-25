@@ -1,7 +1,7 @@
 use crate::{
-    resp::BulkString, spawn, tests::get_default_addr, CallBuilder, Connection,
-    ConnectionCommandResult, FlushingMode, FunctionListOptions, LibraryInfo, Result,
-    ScriptingCommands, ServerCommands, StringCommands,
+    resp::BulkString, spawn, tests::get_test_client, CallBuilder, ConnectionCommandResult,
+    FlushingMode, FunctionListOptions, LibraryInfo, Result, ScriptingCommands, ServerCommands,
+    StringCommands,
 };
 use serial_test::serial;
 
@@ -9,23 +9,23 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn eval() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let result: String = connection
+    let result: String = client
         .eval(CallBuilder::script("return ARGV[1]").args("hello"))
         .send()
         .await?;
     assert_eq!("hello", result);
 
-    connection.set("key", "hello").send().await?;
-    let result: String = connection
+    client.set("key", "hello").send().await?;
+    let result: String = client
         .eval(CallBuilder::script("return redis.call('GET', KEYS[1])").keys("key"))
         .send()
         .await?;
     assert_eq!("hello", result);
 
-    connection.set("key", "hello").send().await?;
-    let result: String = connection
+    client.set("key", "hello").send().await?;
+    let result: String = client
         .eval(
             CallBuilder::script("return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"")
                 .keys("key")
@@ -42,11 +42,11 @@ async fn eval() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn evalsha() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let sha1: String = connection.script_load("return ARGV[1]").send().await?;
+    let sha1: String = client.script_load("return ARGV[1]").send().await?;
 
-    let result: String = connection
+    let result: String = client
         .evalsha(CallBuilder::sha1(sha1).args("hello"))
         .send()
         .await?;
@@ -59,12 +59,12 @@ async fn evalsha() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn fcall() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let library: String = connection.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
+    let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
-    let result: String = connection
+    let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .send()
         .await?;
@@ -77,20 +77,20 @@ async fn fcall() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_delete() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let library: String = connection.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
+    let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
-    let result: String = connection
+    let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .send()
         .await?;
     assert_eq!("hello", result);
 
-    connection.function_delete("mylib").send().await?;
+    client.function_delete("mylib").send().await?;
 
-    let result: Result<String> = connection
+    let result: Result<String> = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .send()
         .await;
@@ -103,30 +103,30 @@ async fn function_delete() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_dump() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    let library: String = connection.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
+    let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
-    let result: String = connection
+    let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .send()
         .await?;
     assert_eq!("hello", result);
 
-    let serialized_payload: BulkString = connection.function_dump().send().await?;
+    let serialized_payload: BulkString = client.function_dump().send().await?;
     assert!(serialized_payload.len() > 0);
 
-    connection.function_delete("mylib").send().await?;
+    client.function_delete("mylib").send().await?;
 
-    connection
+    client
         .function_restore(serialized_payload, Default::default())
         .send()
         .await?;
 
-    let result: String = connection
+    let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .send()
         .await?;
@@ -139,14 +139,14 @@ async fn function_dump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_flush() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let library: String = connection.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
+    let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").send().await?;
     assert_eq!("mylib", library);
 
-    connection.function_flush(FlushingMode::Sync).send().await?;
+    client.function_flush(FlushingMode::Sync).send().await?;
 
-    let list: Vec<LibraryInfo> = connection
+    let list: Vec<LibraryInfo> = client
         .function_list(FunctionListOptions::default())
         .send()
         .await?;
@@ -159,15 +159,15 @@ async fn function_flush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_list() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.function_flush(FlushingMode::Sync).send().await?;
+    client.function_flush(FlushingMode::Sync).send().await?;
 
     let code = "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) return args[1] end, flags={ 'no-writes' }, description='My description'}";
-    let library: String = connection.function_load(true, code).send().await?;
+    let library: String = client.function_load(true, code).send().await?;
     assert_eq!("mylib", library);
 
-    let libs: Vec<LibraryInfo> = connection
+    let libs: Vec<LibraryInfo> = client
         .function_list(FunctionListOptions::default())
         .send()
         .await?;
@@ -181,7 +181,7 @@ async fn function_list() -> Result<()> {
     assert_eq!("no-writes", libs[0].functions[0].flags[0]);
     assert_eq!(None, libs[0].library_code);
 
-    let libs: Vec<LibraryInfo> = connection
+    let libs: Vec<LibraryInfo> = client
         .function_list(FunctionListOptions::default().with_code())
         .send()
         .await?;
@@ -202,21 +202,21 @@ async fn function_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_stats() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.function_kill().send_and_forget()?;
+    client.function_kill().send_and_forget()?;
 
-    connection.function_flush(FlushingMode::Sync).send().await?;
+    client.function_flush(FlushingMode::Sync).send().await?;
 
     let code = "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) while (true) do end return args[1] end, flags={ 'no-writes' }, description='My description'}";
-    let library: String = connection.function_load(true, code).send().await?;
+    let library: String = client.function_load(true, code).send().await?;
     assert_eq!("mylib", library);
 
     spawn(async move {
         async fn blocking_fcall() -> Result<()> {
-            let connection = Connection::connect(get_default_addr()).await?;
+            let client = get_test_client().await?;
 
-            let _ = connection
+            let _ = client
                 .fcall::<String>(CallBuilder::function("myfunc").args("hello"))
                 .send()
                 .await?;
@@ -229,7 +229,7 @@ async fn function_stats() -> Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let function_stat = connection.function_stats().send().await?;
+    let function_stat = client.function_stats().send().await?;
     assert!(function_stat.running_script.is_some());
     if let Some(running_script) = function_stat.running_script {
         assert_eq!("myfunc", running_script.name);
@@ -244,7 +244,7 @@ async fn function_stats() -> Result<()> {
     assert_eq!(1, function_stat.engines["LUA"].libraries_count);
     assert_eq!(1, function_stat.engines["LUA"].functions_count);
 
-    connection.function_kill().send().await?;
+    client.function_kill().send().await?;
 
     Ok(())
 }
@@ -253,15 +253,15 @@ async fn function_stats() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_exists() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let sha11: String = connection.script_load("return ARGV[1]").send().await?;
-    let sha12: String = connection
+    let sha11: String = client.script_load("return ARGV[1]").send().await?;
+    let sha12: String = client
         .script_load("return redis.call('GET', KEYS[1])")
         .send()
         .await?;
 
-    let result = connection
+    let result = client
         .script_exists([sha11, sha12, "unknwon".to_owned()])
         .send()
         .await?;
@@ -274,17 +274,17 @@ async fn script_exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_flush() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let sha11: String = connection.script_load("return ARGV[1]").send().await?;
-    let sha12: String = connection
+    let sha11: String = client.script_load("return ARGV[1]").send().await?;
+    let sha12: String = client
         .script_load("return redis.call('GET', KEYS[1])")
         .send()
         .await?;
 
-    connection.script_flush(FlushingMode::Sync).send().await?;
+    client.script_flush(FlushingMode::Sync).send().await?;
 
-    let result = connection.script_exists([sha11, sha12]).send().await?;
+    let result = client.script_exists([sha11, sha12]).send().await?;
     assert_eq!([false, false], &result[..]);
 
     Ok(())
@@ -294,20 +294,20 @@ async fn script_flush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_kill() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    let _ = connection.script_kill().send().await;
+    let _ = client.script_kill().send().await;
 
-    let sha1: String = connection
+    let sha1: String = client
         .script_load("while (true) do end return ARGV[1]")
         .send()
         .await?;
 
     spawn(async move {
         async fn blocking_script(sha1: String) -> Result<()> {
-            let connection = Connection::connect(get_default_addr()).await?;
+            let client = get_test_client().await?;
 
-            let _ = connection
+            let _ = client
                 .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
                 .send()
                 .await?;
@@ -320,7 +320,7 @@ async fn script_kill() -> Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    connection.script_kill().send().await?;
+    client.script_kill().send().await?;
 
     Ok(())
 }

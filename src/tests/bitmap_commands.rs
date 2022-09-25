@@ -1,7 +1,7 @@
 use crate::{
-    resp::BulkString, tests::get_default_addr, BitFieldGetSubCommand, BitFieldOverflow,
-    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands, Connection,
-    ConnectionCommandResult, Result, StringCommands,
+    resp::BulkString, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
+    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands, ConnectionCommandResult,
+    Result, StringCommands,
 };
 use serial_test::serial;
 
@@ -9,35 +9,32 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitcount() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let count = connection
-        .bitcount("mykey", BitRange::default())
-        .send()
-        .await?;
+    let count = client.bitcount("mykey", BitRange::default()).send().await?;
     assert_eq!(26, count);
 
-    let count = connection
+    let count = client
         .bitcount("mykey", BitRange::range(0, 0))
         .send()
         .await?;
     assert_eq!(4, count);
 
-    let count = connection
+    let count = client
         .bitcount("mykey", BitRange::range(1, 1))
         .send()
         .await?;
     assert_eq!(6, count);
 
-    let count = connection
+    let count = client
         .bitcount("mykey", BitRange::range(1, 1).unit(BitUnit::Byte))
         .send()
         .await?;
     assert_eq!(6, count);
 
-    let count = connection
+    let count = client
         .bitcount("mykey", BitRange::range(5, 30).unit(BitUnit::Bit))
         .send()
         .await?;
@@ -50,11 +47,11 @@ async fn bitcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitfield() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let results = connection
+    let results = client
         .bitfield(
             "mykey",
             [
@@ -66,9 +63,9 @@ async fn bitfield() -> Result<()> {
         .await?;
     assert!(matches!(results[..], [1, 6]));
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let results = connection
+    let results = client
         .bitfield(
             "mykey",
             [
@@ -80,9 +77,9 @@ async fn bitfield() -> Result<()> {
         .await?;
     assert!(matches!(results[..], [102, 111]));
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let results = connection
+    let results = client
         .bitfield(
             "mykey",
             [
@@ -95,7 +92,7 @@ async fn bitfield() -> Result<()> {
         .await?;
     assert!(matches!(results[..], [1, 1]));
 
-    let results = connection
+    let results = client
         .bitfield(
             "mykey",
             [BitFieldSubCommand::<String, String>::overflow(
@@ -113,11 +110,11 @@ async fn bitfield() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitfield_readonly() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let results = connection
+    let results = client
         .bitfield_readonly("mykey", [BitFieldGetSubCommand::new("i8", 0)])
         .send()
         .await?;
@@ -131,18 +128,18 @@ async fn bitfield_readonly() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitop() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("key1", "foobar").send().await?;
-    connection.set("key2", "abcdef").send().await?;
+    client.set("key1", "foobar").send().await?;
+    client.set("key2", "abcdef").send().await?;
 
-    let len = connection
+    let len = client
         .bitop(BitOperation::And, "dest", ["key1", "key2"])
         .send()
         .await?;
     assert_eq!(6, len);
 
-    let value: String = connection.get("dest").send().await?;
+    let value: String = client.get("dest").send().await?;
     assert_eq!("`bc`ab", value);
 
     Ok(())
@@ -152,48 +149,48 @@ async fn bitop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitpos() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection
+    client
         .set("mykey", BulkString::Binary(vec![0xFFu8, 0xF0u8, 0x00u8]))
         .send()
         .await?;
 
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 1, BitRange::default())
         .send()
         .await?;
     assert_eq!(0, pos);
 
-    connection
+    client
         .set("mykey", BulkString::Binary(vec![0x00u8, 0xFFu8, 0xF0u8]))
         .send()
         .await?;
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 0, BitRange::range(0, -1))
         .send()
         .await?;
     assert_eq!(0, pos);
 
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 1, BitRange::range(2, -1))
         .send()
         .await?;
     assert_eq!(16, pos);
 
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 1, BitRange::range(2, -1).unit(BitUnit::Byte))
         .send()
         .await?;
     assert_eq!(16, pos);
 
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 1, BitRange::range(7, 15).unit(BitUnit::Bit))
         .send()
         .await?;
     assert_eq!(8, pos);
 
-    let pos = connection
+    let pos = client
         .bitpos("mykey", 1, BitRange::range(7, -3).unit(BitUnit::Bit))
         .send()
         .await?;
@@ -206,11 +203,11 @@ async fn bitpos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getbit() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let value = connection.getbit("mykey", 6).send().await?;
+    let value = client.getbit("mykey", 6).send().await?;
     assert_eq!(1, value);
 
     Ok(())
@@ -220,17 +217,17 @@ async fn getbit() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setbit() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
+    let client = get_test_client().await?;
 
-    connection.set("mykey", "foobar").send().await?;
+    client.set("mykey", "foobar").send().await?;
 
-    let value = connection.setbit("mykey", 7, 1).send().await?;
+    let value = client.setbit("mykey", 7, 1).send().await?;
     assert_eq!(0, value);
 
-    let value = connection.setbit("mykey", 7, 0).send().await?;
+    let value = client.setbit("mykey", 7, 0).send().await?;
     assert_eq!(1, value);
 
-    let value = connection.getbit("mykey", 7).send().await?;
+    let value = client.getbit("mykey", 7).send().await?;
     assert_eq!(0, value);
 
     Ok(())

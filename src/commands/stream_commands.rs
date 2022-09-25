@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    cmd,
-    resp::{BulkString, FromValue, HashMapExt, Value},
-    CommandArgs, CommandResult, IntoArgs, KeyValueArgOrCollection, PrepareCommand, Result,
-    SingleArgOrCollection,
+    resp::{
+        cmd, BulkString, CommandArgs, FromValue, HashMapExt, IntoArgs, KeyValueArgOrCollection,
+        SingleArgOrCollection, Value,
+    },
+    CommandResult, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Streams

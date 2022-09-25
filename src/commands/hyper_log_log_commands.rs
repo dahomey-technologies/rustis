@@ -1,4 +1,7 @@
-use crate::{cmd, resp::BulkString, CommandResult, PrepareCommand, SingleArgOrCollection};
+use crate::{
+    resp::{cmd, BulkString, SingleArgOrCollection},
+    CommandResult, PrepareCommand,
+};
 
 /// A group of Redis commands related to HyperLogLog
 ///
@@ -6,9 +9,9 @@ use crate::{cmd, resp::BulkString, CommandResult, PrepareCommand, SingleArgOrCol
 /// [Redis Hash Commands](https://redis.io/commands/?group=hyperloglog)
 pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     /// Adds the specified elements to the specified HyperLogLog.
-    /// 
+    ///
     /// # Return
-    /// * `true` if at least 1 HyperLogLog internal register was altered. 
+    /// * `true` if at least 1 HyperLogLog inFternal register was altered.
     /// * `false` otherwise.
     ///
     /// # See Also
@@ -22,9 +25,9 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("PFADD").arg(key).arg(elements))
     }
 
-    /// Return the approximated cardinality of the set(s) 
+    /// Return the approximated cardinality of the set(s)
     /// observed by the HyperLogLog at key(s).
-    /// 
+    ///
     /// # Return
     /// The approximated number of unique elements observed via PFADD.
     ///

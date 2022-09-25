@@ -1,4 +1,4 @@
-use crate::{Command, PubSubSender, ValueSender};
+use crate::{resp::Command, PubSubSender, ValueSender};
 
 #[derive(Debug)]
 pub(crate) struct Message {

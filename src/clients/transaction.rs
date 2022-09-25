@@ -1,10 +1,8 @@
 use crate::{
-    cmd,
-    resp::{Array, FromValue, ResultValueExt, Value},
-    BitmapCommands, Command, CommandResult, Connection, Error, Future, GenericCommands,
-    GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result,
-    ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
-    StringCommands,
+    resp::{Array, FromValue, ResultValueExt, Value, cmd, Command},
+    BitmapCommands, Client, CommandResult, Error, Future, GenericCommands, GeoCommands,
+    HashCommands, HyperLogLogCommands, ListCommands, PrepareCommand, Result, ScriptingCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
 use std::{
     iter::zip,
@@ -14,12 +12,12 @@ use std::{
 
 pub struct Transaction<T> {
     phantom: PhantomData<T>,
-    connection: Connection,
+    connection: Client,
     forget_flags: Arc<Mutex<Vec<bool>>>,
 }
 
 impl<T: Send + Sync> Transaction<T> {
-    pub(crate) async fn initialize(connection: Connection) -> Result<Self> {
+    pub(crate) async fn initialize(connection: Client) -> Result<Self> {
         connection.send(cmd("MULTI")).await?.into::<()>()?;
         Ok(Self {
             phantom: PhantomData,

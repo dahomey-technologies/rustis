@@ -1,25 +1,22 @@
 use crate::{
-    cmd,
-    message::Message,
-    resp::{BulkString, FromValue, ResultValueExt, Value},
-    BitmapCommands, Command, CommandResult, ConnectionCommands,
-    ConnectionResult, Future, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
-    ListCommands, MsgSender, NetworkHandler, PrepareCommand, PubSubCommands,
-    PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
-    ValueReceiver, ValueSender, Transaction, TransactionResult0,
+    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, Value},
+    BitmapCommands, CommandResult, ConnectionCommands, ConnectionResult, Future, GenericCommands,
+    GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, Message, MsgSender,
+    NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream,
+    Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
+    StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
+    ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::sync::Arc;
 
-
 #[derive(Clone)]
-pub struct Connection {
+pub struct Client {
     msg_sender: Arc<MsgSender>,
 }
 
-impl Connection {
-    /// Establish connection to the Redis server
+impl Client {
+    /// Client with a unique connection to a Redis server
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
@@ -39,7 +36,7 @@ impl Connection {
     /// # Arguments
     /// * `name` - Command name in uppercase.
     /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`BulkString`](crate::resp::BulkString).
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     ///
@@ -92,7 +89,7 @@ impl Connection {
     }
 }
 
-impl PrepareCommand<ConnectionResult> for Connection {
+impl PrepareCommand<ConnectionResult> for Client {
     fn prepare_command<R: FromValue>(
         &self,
         command: Command,
@@ -101,22 +98,22 @@ impl PrepareCommand<ConnectionResult> for Connection {
     }
 }
 
-impl BitmapCommands<ConnectionResult> for Connection {}
-impl ConnectionCommands<ConnectionResult> for Connection {}
-impl GenericCommands<ConnectionResult> for Connection {}
-impl GeoCommands<ConnectionResult> for Connection {}
-impl HashCommands<ConnectionResult> for Connection {}
-impl HyperLogLogCommands<ConnectionResult> for Connection {}
-impl ListCommands<ConnectionResult> for Connection {}
-impl ScriptingCommands<ConnectionResult> for Connection {}
-impl ServerCommands<ConnectionResult> for Connection {}
-impl SetCommands<ConnectionResult> for Connection {}
-impl SortedSetCommands<ConnectionResult> for Connection {}
-impl StreamCommands<ConnectionResult> for Connection {}
-impl StringCommands<ConnectionResult> for Connection {}
-impl TransactionCommands<ConnectionResult> for Connection {}
+impl BitmapCommands<ConnectionResult> for Client {}
+impl ConnectionCommands<ConnectionResult> for Client {}
+impl GenericCommands<ConnectionResult> for Client {}
+impl GeoCommands<ConnectionResult> for Client {}
+impl HashCommands<ConnectionResult> for Client {}
+impl HyperLogLogCommands<ConnectionResult> for Client {}
+impl ListCommands<ConnectionResult> for Client {}
+impl ScriptingCommands<ConnectionResult> for Client {}
+impl ServerCommands<ConnectionResult> for Client {}
+impl SetCommands<ConnectionResult> for Client {}
+impl SortedSetCommands<ConnectionResult> for Client {}
+impl StreamCommands<ConnectionResult> for Client {}
+impl StringCommands<ConnectionResult> for Client {}
+impl TransactionCommands<ConnectionResult> for Client {}
 
-impl PubSubCommands<ConnectionResult> for Connection {
+impl PubSubCommands<ConnectionResult> for Client {
     fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,

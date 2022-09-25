@@ -1,4 +1,7 @@
-use crate::{resp::FromValue, Command, Connection, Error, Future, Result, Transaction};
+use crate::{
+    resp::{Command, FromValue},
+    Client, Error, Future, Result, Transaction,
+};
 use futures::future::ready;
 use std::marker::PhantomData;
 
@@ -6,7 +9,7 @@ pub enum CommandResult<'a, T, R>
 where
     R: FromValue,
 {
-    Connection(PhantomData<(R, T)>, Command, &'a Connection),
+    Connection(PhantomData<(R, T)>, Command, &'a Client),
     Transaction(PhantomData<R>, Command, &'a Transaction<T>),
 }
 
@@ -16,7 +19,7 @@ where
     T: Send + Sync,
 {
     #[must_use]
-    pub fn from_connection(command: Command, connection: &'a Connection) -> Self {
+    pub fn from_connection(command: Command, connection: &'a Client) -> Self {
         CommandResult::Connection(PhantomData, command, connection)
     }
 
@@ -78,7 +81,6 @@ where
             Box::pin(async move { fut.await?.into() })
         } else {
             Box::pin(ready(Err(Error::Internal(
-
                 "send method must be called with a valid connection".to_owned(),
             ))))
         }

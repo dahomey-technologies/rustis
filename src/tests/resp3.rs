@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, Connection, ConnectionCommandResult, ConnectionCommands, FlushingMode,
+    tests::get_test_client, ConnectionCommandResult, ConnectionCommands, FlushingMode,
     HelloOptions, Result, ServerCommands, SortedSetCommands, StringCommands,
 };
 use serial_test::serial;
@@ -8,12 +8,12 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn double() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    connection.hello(HelloOptions::new(3)).send().await?;
+    client.hello(HelloOptions::new(3)).send().await?;
 
-    connection
+    client
         .zadd(
             "key",
             [(1.1, "one"), (2.2, "two"), (3.3, "three")],
@@ -22,7 +22,7 @@ async fn double() -> Result<()> {
         .send()
         .await?;
 
-    let values: Vec<(String, f64)> = connection
+    let values: Vec<(String, f64)> = client
         .zrange_with_scores("key", 0, -1, Default::default())
         .send()
         .await?;
@@ -38,12 +38,12 @@ async fn double() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn null() -> Result<()> {
-    let connection = Connection::connect(get_default_addr()).await?;
-    connection.flushdb(FlushingMode::Sync).send().await?;
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).send().await?;
 
-    connection.hello(HelloOptions::new(3)).send().await?;
+    client.hello(HelloOptions::new(3)).send().await?;
 
-    let value: Option<String> = connection.get("key").send().await?;
+    let value: Option<String> = client.get("key").send().await?;
     assert_eq!(None, value);
 
     Ok(())

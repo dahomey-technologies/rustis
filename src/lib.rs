@@ -1,30 +1,18 @@
-//! A Redis client for Rust inspired by [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis)
-//! & [redis-async-rs](https://github.com/benashford/redis-async-rs)
+//! A Redis client for Rust
 
+mod clients;
 mod commands;
-mod connection;
 mod error;
-mod message;
 mod network;
 pub mod resp;
-mod transaction;
+
+pub use clients::*;
+pub use commands::*;
+pub use error::*;
+use network::*;
+
+pub type Result<T> = std::result::Result<T, Error>;
+pub type Future<'a, T> = futures::future::BoxFuture<'a, Result<T>>;
 
 #[cfg(test)]
 mod tests;
-
-pub use commands::*;
-pub use connection::*;
-pub use error::*;
-pub(crate) use message::Message;
-pub use network::*;
-pub use transaction::*;
-
-use futures::channel::{mpsc, oneshot};
-
-pub type Future<'a, T> = futures::future::BoxFuture<'a, Result<T>>;
-type MsgSender = mpsc::UnboundedSender<Message>;
-type MsgReceiver = mpsc::UnboundedReceiver<Message>;
-type ValueSender = oneshot::Sender<Result<resp::Value>>;
-type ValueReceiver = oneshot::Receiver<Result<resp::Value>>;
-type PubSubSender = mpsc::UnboundedSender<Result<resp::Value>>;
-type PubSubReceiver = mpsc::UnboundedReceiver<Result<resp::Value>>;

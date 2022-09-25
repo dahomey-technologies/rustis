@@ -1,8 +1,9 @@
 use crate::{
-    cmd,
-    resp::{BulkString, FromKeyValueValueArray, FromSingleValueArray, FromValue},
-    CommandArgs, CommandResult, IntoArgs, KeyValueArgOrCollection, PrepareCommand,
-    SingleArgOrCollection,
+    resp::{
+        cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
+        IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection,
+    },
+    CommandResult, PrepareCommand,
 };
 
 /// A group of Redis commands related to Hashes

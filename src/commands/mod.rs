@@ -1,7 +1,4 @@
 mod bitmap_commands;
-mod command;
-mod command_args;
-mod command_encoder;
 mod command_result;
 mod connection_commands;
 mod generic_commands;
@@ -19,9 +16,6 @@ mod string_commands;
 mod transaction_commands;
 
 pub use bitmap_commands::*;
-pub use command::*;
-pub use command_args::*;
-pub(crate) use command_encoder::*;
 pub use command_result::*;
 pub use connection_commands::*;
 pub use generic_commands::*;

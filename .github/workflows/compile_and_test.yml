@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/**'
       - '.github/workflows/**'
+      - 'Cargo.toml'
     branches:
       - '**'
     tags-ignore:
@@ -13,6 +14,7 @@ on:
     paths:
       - 'src/**'
       - '.github/workflows/**'
+      - 'Cargo.toml'
     branches:
       - '**'
     tags-ignore:

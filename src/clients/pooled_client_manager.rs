@@ -1,4 +1,4 @@
-use crate::{Client, Error, Future, ConnectionCommands, ConnectionCommandResult};
+use crate::{Client, Error, Future, ConnectionCommands, ClientCommandResult};
 use bb8::ManageConnection;
 
 pub struct PooledClientManager {

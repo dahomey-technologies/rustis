@@ -83,7 +83,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::{cmd}, Client, ConnectionCommandResult, FlushingMode,
+    ///     resp::{cmd}, Client, ClientCommandResult, FlushingMode,
     ///     ServerCommands, StringCommands, Result
     /// };
     ///
@@ -154,7 +154,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, Client, ConnectionCommandResult, FlushingMode,
+    ///     resp::cmd, Client, ClientCommandResult, FlushingMode,
     ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
     /// };
     ///

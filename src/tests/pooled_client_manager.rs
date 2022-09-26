@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, ConnectionCommandResult, PooledClientManager, Result, StringCommands,
+    tests::get_default_addr, ClientCommandResult, PooledClientManager, Result, StringCommands,
 };
 use serial_test::serial;
 

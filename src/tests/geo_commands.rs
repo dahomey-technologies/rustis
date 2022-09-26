@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, GenericCommands, GeoAddCondition, GeoCommands,
+    tests::get_test_client, ClientCommandResult, GenericCommands, GeoAddCondition, GeoCommands,
     GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult,
     GeoSearchStoreOptions, GeoUnit, Result,
 };

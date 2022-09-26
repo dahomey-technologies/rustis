@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, GenericCommands, Result, SortedSetCommands,
+    tests::get_test_client, ClientCommandResult, GenericCommands, Result, SortedSetCommands,
     ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZWhere,
 };
 use serial_test::serial;

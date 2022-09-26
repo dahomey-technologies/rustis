@@ -1,7 +1,7 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    ConnectionCommandResult, ConnectionCommands, ExpireOption, FlushingMode, GenericCommands,
+    ClientCommandResult, ConnectionCommands, ExpireOption, FlushingMode, GenericCommands,
     ListCommands, RestoreOptions, Result, ScanOptions, ServerCommands, SetCommands, SortOptions,
     StringCommands,
 };

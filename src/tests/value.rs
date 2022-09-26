@@ -1,7 +1,7 @@
 use crate::{
     resp::{Array, Value},
     tests::get_test_client,
-    ConnectionCommandResult, GenericCommands, Result, SetCommands,
+    ClientCommandResult, GenericCommands, Result, SetCommands,
 };
 use serial_test::serial;
 use std::collections::{BTreeSet, HashSet};

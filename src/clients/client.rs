@@ -1,6 +1,6 @@
 use crate::{
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, CommandResult, ConnectionCommands, ConnectionResult, Future, GenericCommands,
+    BitmapCommands, CommandResult, ConnectionCommands, ClientResult, Future, GenericCommands,
     GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, Message, MsgSender,
     NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream,
     Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
@@ -89,31 +89,31 @@ impl Client {
     }
 }
 
-impl PrepareCommand<ConnectionResult> for Client {
+impl PrepareCommand<ClientResult> for Client {
     fn prepare_command<R: FromValue>(
         &self,
         command: Command,
-    ) -> CommandResult<ConnectionResult, R> {
-        CommandResult::from_connection(command, self)
+    ) -> CommandResult<ClientResult, R> {
+        CommandResult::from_client(command, self)
     }
 }
 
-impl BitmapCommands<ConnectionResult> for Client {}
-impl ConnectionCommands<ConnectionResult> for Client {}
-impl GenericCommands<ConnectionResult> for Client {}
-impl GeoCommands<ConnectionResult> for Client {}
-impl HashCommands<ConnectionResult> for Client {}
-impl HyperLogLogCommands<ConnectionResult> for Client {}
-impl ListCommands<ConnectionResult> for Client {}
-impl ScriptingCommands<ConnectionResult> for Client {}
-impl ServerCommands<ConnectionResult> for Client {}
-impl SetCommands<ConnectionResult> for Client {}
-impl SortedSetCommands<ConnectionResult> for Client {}
-impl StreamCommands<ConnectionResult> for Client {}
-impl StringCommands<ConnectionResult> for Client {}
-impl TransactionCommands<ConnectionResult> for Client {}
+impl BitmapCommands<ClientResult> for Client {}
+impl ConnectionCommands<ClientResult> for Client {}
+impl GenericCommands<ClientResult> for Client {}
+impl GeoCommands<ClientResult> for Client {}
+impl HashCommands<ClientResult> for Client {}
+impl HyperLogLogCommands<ClientResult> for Client {}
+impl ListCommands<ClientResult> for Client {}
+impl ScriptingCommands<ClientResult> for Client {}
+impl ServerCommands<ClientResult> for Client {}
+impl SetCommands<ClientResult> for Client {}
+impl SortedSetCommands<ClientResult> for Client {}
+impl StreamCommands<ClientResult> for Client {}
+impl StringCommands<ClientResult> for Client {}
+impl TransactionCommands<ClientResult> for Client {}
 
-impl PubSubCommands<ConnectionResult> for Client {
+impl PubSubCommands<ClientResult> for Client {
     fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,

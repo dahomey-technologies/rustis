@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, ConnectionCommands, FlushingMode,
+    tests::get_test_client, ClientCommandResult, ConnectionCommands, FlushingMode,
     HelloOptions, Result, ServerCommands, SortedSetCommands, StringCommands,
 };
 use serial_test::serial;

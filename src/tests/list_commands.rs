@@ -1,7 +1,7 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    ConnectionCommandResult, GenericCommands, LInsertWhere,
+    ClientCommandResult, GenericCommands, LInsertWhere,
     LMoveWhere::Left,
     LMoveWhere::Right,
     ListCommands, Result,

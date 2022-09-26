@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, GenericCommands, Result, SScanOptions,
+    tests::get_test_client, ClientCommandResult, GenericCommands, Result, SScanOptions,
     SetCommands,
 };
 use serial_test::serial;

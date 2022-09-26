@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, Error, FlushingMode, PubSubCommands, Result,
+    tests::get_test_client, ClientCommandResult, Error, FlushingMode, PubSubCommands, Result,
     ServerCommands, StringCommands,
 };
 use futures::StreamExt;

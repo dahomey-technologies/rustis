@@ -1,7 +1,7 @@
 use crate::{
     resp::{cmd, Value},
     tests::get_test_client,
-    ConnectionCommandResult, Error, FlushingMode, ListCommands, PrepareCommand, Result,
+    ClientCommandResult, Error, FlushingMode, ListCommands, PrepareCommand, Result,
     ServerCommands, StringCommands, TransactionCommandResult, TransactionCommands, TransactionExt,
 };
 use serial_test::serial;

@@ -1,7 +1,7 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    ConnectionCommandResult, ConnectionCommands, FlushingMode, Result, ServerCommands,
+    ClientCommandResult, ConnectionCommands, FlushingMode, Result, ServerCommands,
     StringCommands,
 };
 use serial_test::serial;

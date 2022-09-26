@@ -1,4 +1,4 @@
-use crate::{resp::Value, Client, ConnectionCommandResult, PubSubCommands, PubSubReceiver, Result};
+use crate::{resp::Value, Client, ClientCommandResult, PubSubCommands, PubSubReceiver, Result};
 use futures::{Stream, StreamExt};
 use std::{
     pin::Pin,
@@ -9,15 +9,15 @@ use std::{
 pub struct PubSubStream {
     channel: String,
     receiver: PubSubReceiver,
-    connection: Client,
+    client: Client,
 }
 
 impl PubSubStream {
-    pub(crate) fn new(channel: String, receiver: PubSubReceiver, connection: Client) -> Self {
+    pub(crate) fn new(channel: String, receiver: PubSubReceiver, client: Client) -> Self {
         Self {
             channel,
             receiver,
-            connection,
+            client,
         }
     }
 }
@@ -34,6 +34,6 @@ impl Drop for PubSubStream {
     fn drop(&mut self) {
         let mut channel = String::new();
         std::mem::swap(&mut channel, &mut self.channel);
-        let _result = self.connection.unsubscribe(channel).send_and_forget();
+        let _result = self.client.unsubscribe(channel).send_and_forget();
     }
 }

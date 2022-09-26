@@ -1,6 +1,6 @@
 use crate::{
     resp::BulkString, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
-    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands, ConnectionCommandResult,
+    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands, ClientCommandResult,
     Result, StringCommands,
 };
 use serial_test::serial;

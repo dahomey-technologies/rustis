@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ConnectionCommandResult, ConnectionCommands, GenericCommands,
+    tests::get_test_client, ClientCommandResult, ConnectionCommands, GenericCommands,
     HelloOptions, PingOptions, Result, ServerCommands, StringCommands,
 };
 use serial_test::serial;

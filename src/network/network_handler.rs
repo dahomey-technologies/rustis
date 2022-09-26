@@ -27,7 +27,9 @@ pub(crate) struct NetworkHandler {
     connection: Connection,
     msg_receiver: MsgReceiver,
     value_senders: VecDeque<Option<ValueSender>>,
-    pending_pub_sub_sender: Option<PubSubSender>,
+    pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
+    /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unscribe from
+    pending_unsubscriptions: VecDeque<usize>,
     subscriptions: HashMap<Vec<u8>, PubSubSender>,
 }
 
@@ -42,7 +44,8 @@ impl NetworkHandler {
             connection,
             msg_receiver,
             value_senders,
-            pending_pub_sub_sender: None,
+            pending_subscriptions: HashMap::new(),
+            pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
         };
 
@@ -63,37 +66,34 @@ impl NetworkHandler {
             }
         }
 
+        println!("end of network loop");
         Ok(())
     }
 
     async fn handle_message(&mut self, msg: Option<Message>) -> bool {
         if let Some(mut msg) = msg {
-            let mut pub_sub_sender: Option<PubSubSender> = None;
-            std::mem::swap(&mut pub_sub_sender, &mut msg.pub_sub_sender);
-            self.pending_pub_sub_sender = pub_sub_sender;
+            let pub_sub_senders = msg.pub_sub_senders.take();
+            if let Some(pub_sub_senders) = pub_sub_senders {
+                self.pending_subscriptions.extend(pub_sub_senders);
+            }
 
             match &self.status {
                 Status::Connected => {
-                    if let "SUBSCRIBE" | "SSUBSCRIBE" | "PSUBSCRIBE" = msg.command.name {
+                    if let "SUBSCRIBE" | "PSUBSCRIBE" = msg.command.name {
                         self.status = Status::Subscribing;
                     }
                     self.send_message(msg).await;
                 }
-                Status::Subscribing | Status::Subscribed => match msg.command.name {
-                    "SUBSCRIBE" | "SSUBSCRIBE" | "PSUBSCRIBE" | "UNSUBSCRIBE" | "SUNSUBSCRIBE"
-                    | "PUNSUBSCRIBE" | "PING" | "RESET" | "QUIT" => {
-                        self.send_message(msg).await;
+                Status::Subscribing => {
+                    self.send_message(msg).await;
+                }
+                Status::Subscribed => {
+                    if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = msg.command.name {
+                        self.pending_unsubscriptions
+                            .push_back(msg.command.args.len());
                     }
-                    _ => {
-                        let value_sender = msg.value_sender;
-                        if let Some(value_sender) = value_sender {
-                            let _result = value_sender.send(Err(Error::Internal(format!(
-                                "Command {} not allowed when connection is in subscribed state",
-                                msg.command.name
-                            ))));
-                        }
-                    }
-                },
+                    self.send_message(msg).await;
+                }
                 Status::Disconnected => {
                     let value_sender = msg.value_sender;
                     if let Some(value_sender) = value_sender {
@@ -180,24 +180,39 @@ impl NetworkHandler {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
             Ok(Value::Array(Array::Vec(ref items))) => match &items[..] {
-                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] => {
+                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
+                {
                     match command.as_slice() {
                         b"message" => true,
-                        b"subscribe" => {
-                            let mut pub_sub_sender: Option<PubSubSender> = None;
-                            std::mem::swap(&mut pub_sub_sender, &mut self.pending_pub_sub_sender);
-
-                            if let Some(pub_sub_sender) = pub_sub_sender {
+                        b"subscribe" | b"psubscribe" => {
+                            if let Some(pub_sub_sender) = self.pending_subscriptions.remove(channel)
+                            {
                                 self.subscriptions.insert(channel.clone(), pub_sub_sender);
+                            }
+                            if !self.pending_subscriptions.is_empty() {
+                                return Ok(None);
                             }
                             false
                         }
-                        b"unsubscribe" => {
+                        b"unsubscribe" | b"punsubscribe" => {
                             self.subscriptions.remove(channel);
+                            if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
+                                if *remaining > 1 {
+                                    *remaining -= 1;
+                                    return Ok(None);
+                                } else {
+                                    // last unsubscription notification received
+                                    self.pending_unsubscriptions.pop_front();
+                                    return Ok(Some(Ok(Value::SimpleString("OK".to_owned()))));
+                                }
+                            }
                             false
                         }
                         _ => false,
                     }
+                }
+                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_pattern)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] => {
+                    command.as_slice() == b"pmessage"
                 }
                 _ => false,
             },
@@ -211,16 +226,30 @@ impl NetworkHandler {
         }
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(Array::Vec(mut items))) = value {
-            if let (
-                Some(payload),
-                Some(Value::BulkString(BulkString::Binary(channel))),
-                Some(Value::BulkString(BulkString::Binary(_command))),
-            ) = (items.pop(), items.pop(), items.pop())
-            {
-                match self.subscriptions.get_mut(&channel) {
+        if let Ok(Value::Array(Array::Vec(items))) = value {
+            let mut iter = items.into_iter();
+            match (
+                iter.next(),
+                iter.next(),
+                iter.next(),
+                iter.next(),
+                iter.next(),
+            ) {
+                // message
+                (
+                    Some(Value::BulkString(BulkString::Binary(_command))),
+                    Some(Value::BulkString(BulkString::Binary(channel))),
+                    Some(payload),
+                    None,
+                    None,
+                ) => match self.subscriptions.get_mut(&channel) {
                     Some(pub_sub_sender) => {
-                        pub_sub_sender.send(Ok(payload)).await?;
+                        pub_sub_sender
+                            .send(Ok(Value::Array(Array::Vec(vec![
+                                Value::BulkString(BulkString::Binary(channel)),
+                                payload,
+                            ]))))
+                            .await?;
                         return Ok(None);
                     }
                     None => {
@@ -229,7 +258,33 @@ impl NetworkHandler {
                             String::from_utf8(channel).unwrap()
                         )));
                     }
-                }
+                },
+                // pmessage
+                (
+                    Some(Value::BulkString(BulkString::Binary(_command))),
+                    Some(Value::BulkString(BulkString::Binary(pattern))),
+                    Some(channel),
+                    Some(payload),
+                    None,
+                ) => match self.subscriptions.get_mut(&pattern) {
+                    Some(pub_sub_sender) => {
+                        pub_sub_sender
+                            .send(Ok(Value::Array(Array::Vec(vec![
+                                Value::BulkString(BulkString::Binary(pattern)),
+                                channel,
+                                payload,
+                            ]))))
+                            .await?;
+                        return Ok(None);
+                    }
+                    None => {
+                        return Err(Error::Internal(format!(
+                            "Unexpected pmessage on channel: {:?}",
+                            String::from_utf8(pattern).unwrap()
+                        )));
+                    }
+                },
+                _ => (),
             }
         }
 

@@ -1,6 +1,6 @@
 use crate::{
-    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, CommandResult, ConnectionCommands, ClientResult, Future, GenericCommands,
+    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    BitmapCommands, ClientResult, CommandResult, ConnectionCommands, Future, GenericCommands,
     GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, Message, MsgSender,
     NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream,
     Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
@@ -90,10 +90,7 @@ impl Client {
 }
 
 impl PrepareCommand<ClientResult> for Client {
-    fn prepare_command<R: FromValue>(
-        &self,
-        command: Command,
-    ) -> CommandResult<ClientResult, R> {
+    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<ClientResult, R> {
         CommandResult::from_client(command, self)
     }
 }
@@ -114,27 +111,59 @@ impl StringCommands<ClientResult> for Client {}
 impl TransactionCommands<ClientResult> for Client {}
 
 impl PubSubCommands<ClientResult> for Client {
-    fn subscribe<'a, C>(&'a self, channel: C) -> Future<'a, PubSubStream>
+    fn subscribe<'a, C, CC>(&'a self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,
+        CC: SingleArgOrCollection<C>,
     {
+        let channels: Vec<String> = channels.into_iter().map(|c| c.into().to_string()).collect();
+
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            let channel: BulkString = channel.into();
-            let channel_name = channel.to_string();
-            let message = Message::new(cmd("SUBSCRIBE").arg(channel))
+            let pub_sub_senders = channels
+                .iter()
+                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+                .collect::<Vec<_>>();
+
+            let message = Message::new(cmd("SUBSCRIBE").arg(channels.clone()))
                 .value_sender(value_sender)
-                .pub_sub_sender(pub_sub_sender);
+                .pub_sub_senders(pub_sub_senders);
 
             self.send_message(message)?;
 
             let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::new(channel_name, pub_sub_receiver, self.clone())
-            })
+            value.map_into_result(|_| PubSubStream::from_channels(channels, pub_sub_receiver, self.clone()))
+        })
+    }
+
+    fn psubscribe<'a, P, PP>(&'a self, patterns: PP) -> Future<'a, PubSubStream>
+    where
+        P: Into<BulkString> + Send + 'a,
+        PP: SingleArgOrCollection<P>,
+    {
+        let patterns: Vec<String> = patterns.into_iter().map(|p| p.into().to_string()).collect();
+
+        Box::pin(async move {
+            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+                mpsc::unbounded();
+
+            let pub_sub_senders = patterns
+                .iter()
+                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+                .collect::<Vec<_>>();
+
+            let message = Message::new(cmd("PSUBSCRIBE").arg(patterns.clone()))
+                .value_sender(value_sender)
+                .pub_sub_senders(pub_sub_senders);
+
+            self.send_message(message)?;
+
+            let value = value_receiver.await?;
+            value.map_into_result(|_| PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone()))
         })
     }
 }

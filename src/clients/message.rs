@@ -3,25 +3,17 @@ use crate::{resp::Command, PubSubSender, ValueSender};
 #[derive(Debug)]
 pub(crate) struct Message {
     pub command: Command,
-    pub database: usize,
     pub value_sender: Option<ValueSender>,
-    pub pub_sub_sender: Option<PubSubSender>,
+    pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
 }
 
 impl Message {
     pub fn new(command: Command) -> Self {
         Self {
             command,
-            database: 0,
             value_sender: None,
-            pub_sub_sender: None,
+            pub_sub_senders: None,
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn database(mut self, database: usize) -> Self {
-        self.database = database;
-        self
     }
 
     #[allow(dead_code)]
@@ -31,8 +23,8 @@ impl Message {
     }
 
     #[allow(dead_code)]
-    pub fn pub_sub_sender(mut self, pub_sub_sender: PubSubSender) -> Self {
-        self.pub_sub_sender = Some(pub_sub_sender);
+    pub fn pub_sub_senders(mut self, pub_sub_senders: Vec<(Vec<u8>, PubSubSender)>) -> Self {
+        self.pub_sub_senders = Some(pub_sub_senders);
         self
     }
 }

@@ -17,7 +17,7 @@ async fn pubsub() -> Result<()> {
 
     let mut pub_sub_stream = pub_sub.subscribe("mychannel").await?;
     client.publish("mychannel", "mymessage").send().await?;
-
+    
     let value: String = pub_sub_stream
         .next()
         .await

@@ -1,6 +1,8 @@
+use std::collections::{HashSet, HashMap};
+
 use crate::{
-    tests::get_test_client, Error, FlushingMode, PubSubCommands, Result, ServerCommands,
-    StringCommands,
+    tests::get_test_client, Error, FlushingMode, PubSubChannelsOptions, PubSubCommands, Result,
+    ServerCommands, StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -173,6 +175,90 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     assert_eq!("mymessage22", message.to_string());
 
     pub_sub_stream.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn pub_sub_channels() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    let mut stream = pub_sub_client
+        .subscribe(["mychannel1", "mychannel2", "mychannel3", "otherchannel"])
+        .await?;
+
+    let channels: HashSet<String> = regular_client.pub_sub_channels(Default::default()).await?;
+    assert_eq!(4, channels.len());
+    assert!(channels.contains("mychannel1"));
+    assert!(channels.contains("mychannel2"));
+    assert!(channels.contains("mychannel3"));
+    assert!(channels.contains("otherchannel"));
+
+    let channels: HashSet<String> = regular_client
+        .pub_sub_channels(PubSubChannelsOptions::default().pattern("mychannel*"))
+        .await?;
+    assert_eq!(3, channels.len());
+    assert!(channels.contains("mychannel1"));
+    assert!(channels.contains("mychannel2"));
+    assert!(channels.contains("mychannel3"));
+
+    stream.close().await?;
+
+    let channels: HashSet<String> = regular_client.pub_sub_channels(Default::default()).await?;
+    assert_eq!(0, channels.len());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn pub_sub_numpat() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    let num_patterns = regular_client.pub_sub_numpat().await?;
+    assert_eq!(0, num_patterns);
+
+    let mut stream = pub_sub_client.psubscribe(["mychannel*"]).await?;
+
+    let num_patterns = regular_client.pub_sub_numpat().await?;
+    assert_eq!(1, num_patterns);
+
+    stream.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn pub_sub_numsub() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    let num_sub: Vec<(String, usize)> = regular_client
+        .pub_sub_numsub(["mychannel1", "mychannel2"])
+        .await?;
+    assert_eq!(2, num_sub.len());
+    assert_eq!(("mychannel1".to_string(), 0), num_sub[0]);
+    assert_eq!(("mychannel2".to_string(), 0), num_sub[1]);
+
+    let mut stream = pub_sub_client
+        .subscribe(["mychannel1", "mychannel2"])
+        .await?;
+
+    let num_sub: HashMap<String, usize> = regular_client
+        .pub_sub_numsub(["mychannel1", "mychannel2"])
+        .await?;
+    assert_eq!(2, num_sub.len());
+    assert_eq!(Some(&1usize), num_sub.get("mychannel1"));
+    assert_eq!(Some(&1usize), num_sub.get("mychannel2"));
+
+    stream.close().await?;
 
     Ok(())
 }

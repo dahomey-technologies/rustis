@@ -1,4 +1,4 @@
-use crate::{Client, Error, Future, ConnectionCommands, ClientCommandResult};
+use crate::{Client, Error, Future, ConnectionCommands};
 use bb8::ManageConnection;
 
 pub struct PooledClientManager {
@@ -31,7 +31,7 @@ impl ManageConnection for PooledClientManager {
         Self: 'a,
     {
         Box::pin(async move { 
-            client.ping(Default::default()).send().await?;
+            client.ping(Default::default()).await?;
             Ok(())
         })
     }

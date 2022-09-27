@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_default_addr, ClientCommandResult, PooledClientManager, Result, StringCommands,
+    tests::get_default_addr, PooledClientManager, Result, StringCommands,
 };
 use serial_test::serial;
 
@@ -11,8 +11,8 @@ async fn pooled_client_manager() -> Result<()> {
     let pool = crate::bb8::Pool::builder().build(manager).await?;
     let client = pool.get().await.unwrap();
 
-    client.set("key", "value").send().await?;
-    let value: String = client.get("key").send().await?;
+    client.set("key", "value").await?;
+    let value: String = client.get("key").await?;
     assert_eq!("value", value);
 
     Ok(())

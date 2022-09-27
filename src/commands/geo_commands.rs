@@ -323,7 +323,7 @@ impl IntoArgs for GeoSearchOptions {
     }
 }
 
-/// Result of the [`geosearch_with_options`](crate::GeoCommands::geosearch_with_options) command.
+/// Result of the [`geosearch`](crate::GeoCommands::geosearch) command.
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where

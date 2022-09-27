@@ -7,6 +7,31 @@ use serial_test::serial;
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn echo() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result: String = client.echo("hello").await?;
+    assert_eq!("hello", result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_setname_getname() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.client_setname("Mike").await?;
+    let client_name: Option<String> = client.client_getname().await?;
+    assert_eq!(Some("Mike".to_string()), client_name);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn hello_v2() -> Result<()> {
     let client = get_test_client().await?;
 

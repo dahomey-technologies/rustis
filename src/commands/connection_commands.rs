@@ -9,10 +9,52 @@ use std::collections::HashMap;
 /// # See Also
 /// [Redis Connection Management Commands](https://redis.io/commands/?group=connection)
 pub trait ConnectionCommands<T>: PrepareCommand<T> {
-    /// Delete all the keys of the currently selected DB.
+    /// Returns the name of the current connection as set by [CLIENT SETNAME].
+    /// 
+    /// # Return
+    /// The connection name, or a None if no name is set.
     ///
     /// # See Also
-    /// [https://redis.io/commands/flushdb/](https://redis.io/commands/flushdb/)
+    /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
+    #[must_use]
+    fn client_getname<CN>(&self) -> CommandResult<T, Option<CN>>
+    where
+        CN: FromValue,
+    {
+        self.prepare_command(cmd("CLIENT").arg("GETNAME"))
+    }
+
+    /// Assigns a name to the current connection.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
+    #[must_use]
+    fn client_setname<CN>(&self, connection_name: CN) -> CommandResult<T, ()>
+    where
+        CN: Into<BulkString>,
+    {
+        self.prepare_command(cmd("CLIENT").arg("SETNAME").arg(connection_name))
+    }
+
+    /// Returns `message`.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
+    #[must_use]
+    fn echo<M, R>(&self, message: M) -> CommandResult<T, R>
+    where
+        M: Into<BulkString>,
+        R: FromValue,
+    {
+        self.prepare_command(cmd("ECHO").arg(message))
+    }
+
+    /// Switch to a different protocol, 
+    /// optionally authenticating and setting the connection's name, 
+    /// or provide a contextual client report.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
     #[must_use]
     fn hello(&self, options: HelloOptions) -> CommandResult<T, HelloResult> {
         self.prepare_command(cmd("HELLO").arg(options))
@@ -21,7 +63,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk.
     ///
     /// # See Also
-    /// [https://redis.io/commands/ping/](https://redis.io/commands/ping/)
+    /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
     fn ping<R>(&self, options: PingOptions) -> CommandResult<T, R>
     where
@@ -33,7 +75,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// Ask the server to close the connection.
     ///
     /// # See Also
-    /// [https://redis.io/commands/quit/](https://redis.io/commands/quit/)
+    /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
     #[must_use]
     fn quit(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("QUIT"))
@@ -43,7 +85,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// mimicking the effect of disconnecting and reconnecting again.
     ///
     /// # See Also
-    /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
+    /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
     fn reset(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("RESET"))
@@ -52,7 +94,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// Select the Redis logical database having the specified zero-based numeric index.
     ///
     /// # See Also
-    /// [https://redis.io/commands/reset/](https://redis.io/commands/reset/)
+    /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
     fn select(&self, index: usize) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SELECT").arg(index))
@@ -135,17 +177,14 @@ impl FromValue for HelloResult {
     }
 }
 
-
 /// Options for the [`ping`](crate::ConnectionCommands::ping) command.
 #[derive(Default)]
 pub struct PingOptions {
     command_args: CommandArgs,
 }
 
-
 impl PingOptions {
-    pub fn message<M: Into<BulkString>>(self, message: M) -> Self 
-    {
+    pub fn message<M: Into<BulkString>>(self, message: M) -> Self {
         Self {
             command_args: self.command_args.arg(message),
         }

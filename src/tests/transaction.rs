@@ -9,7 +9,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn transaction() -> Result<()> {
+async fn transaction_exec() -> Result<()> {
     let client = get_test_client().await?;
 
     let transaction = client.create_transaction().await?;
@@ -123,6 +123,33 @@ async fn unwatch() -> Result<()> {
 
     let value: i32 = client.get("key").await?;
     assert_eq!(2, value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn transaction_discard() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let transaction = client.create_transaction().await?;
+
+    transaction
+        .set("key1", "value1")
+        .forget()
+        .await?
+        .set("key2", "value2")
+        .forget()
+        .await?
+        .get::<_, String>("key1")
+        .await?
+        .discard()
+        .await?;
+
+    client.set("key", "value").await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
 
     Ok(())
 }

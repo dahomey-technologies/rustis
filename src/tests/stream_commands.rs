@@ -574,7 +574,7 @@ async fn xclaim() -> Result<()> {
             "mystream",
             "mygroup",
             "Bob",
-            1,
+            0,
             [id4.clone(), id5.clone()],
             Default::default(),
         )
@@ -703,7 +703,7 @@ async fn xautoclaim() -> Result<()> {
             "mystream",
             "mygroup",
             "Bob",
-            1,
+            0,
             "0-0",
             XAutoClaimOptions::default().count(1),
         )

@@ -26,10 +26,7 @@ use std::{
 ///
 ///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
 ///
-///     regular_client
-///         .publish("mychannel", "mymessage")
-///         .send()
-///         .await?;
+///     regular_client.publish("mychannel", "mymessage").await?;
 ///
 ///     let (channel, message): (String, String) = pub_sub_stream
 ///         .next()

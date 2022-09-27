@@ -22,14 +22,11 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let regular_client = Client::connect("127.0.0.1:6379").await?;
     ///
-    ///     regular_client.flushdb(FlushingMode::Sync).send().await?;
+    ///     regular_client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     let mut pub_sub_stream = pub_sub_client.psubscribe("mychannel*").await?;
     ///
-    ///     regular_client
-    ///         .publish("mychannel1", "mymessage")
-    ///         .send()
-    ///         .await?;
+    ///     regular_client.publish("mychannel1", "mymessage").await?;
     ///
     ///     let (pattern, channel, message): (String, String, String) = pub_sub_stream
     ///         .next()
@@ -87,14 +84,11 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let regular_client = Client::connect("127.0.0.1:6379").await?;
     ///
-    ///     regular_client.flushdb(FlushingMode::Sync).send().await?;
+    ///     regular_client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
     ///
-    ///     regular_client
-    ///         .publish("mychannel", "mymessage")
-    ///         .send()
-    ///         .await?;
+    ///     regular_client.publish("mychannel", "mymessage").await?;
     ///
     ///     let (channel, message): (String, String) = pub_sub_stream
     ///         .next()

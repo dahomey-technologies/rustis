@@ -90,19 +90,19 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
-    ///     client.flushdb(FlushingMode::Sync).send().await?;
+    ///     client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     // return value can be an Option<String>...
-    ///     let value: Option<String> = client.get("key").send().await?;
+    ///     let value: Option<String> = client.get("key").await?;
     ///     assert_eq!(None, value);
     ///
     ///     // ... or it can be directly a String.
     ///     // In this cas a `nil` value will result in an empty String
-    ///     let value: String = client.get("key").send().await?;
+    ///     let value: String = client.get("key").await?;
     ///     assert_eq!("", &value);
     ///
-    ///     client.set("key", "value").send().await?;
-    ///     let value: String = client.get("key").send().await?;
+    ///     client.set("key", "value").await?;
+    ///     let value: String = client.get("key").await?;
     ///     assert_eq!("value", value);
     ///
     ///     Ok(())
@@ -161,13 +161,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
-    ///     client.flushdb(FlushingMode::Sync).send().await?;
+    ///     client.flushdb(FlushingMode::Sync).await?;
     ///
-    ///     client.set("key", "value").send().await?;
-    ///     let value: String = client.getex("key", GetExOptions::Ex(60)).send().await?;
+    ///     client.set("key", "value").await?;
+    ///     let value: String = client.getex("key", GetExOptions::Ex(60)).await?;
     ///     assert_eq!("value", value);
     ///
-    ///     let ttl = client.ttl("key").send().await?;
+    ///     let ttl = client.ttl("key").await?;
     ///     assert!(59 <= ttl && ttl <= 60);
     ///
     ///     Ok(())

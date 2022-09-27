@@ -128,7 +128,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         V: FromValue + Default,
     {
         self.prepare_command(
-            cmd("XAUTOCLAIM")
+            cmd("XCLAIM")
                 .arg(key)
                 .arg(group)
                 .arg(consumer)
@@ -319,11 +319,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/xinfo-stream/](https://redis.io/commands/xinfo-stream/)
-    fn xinfo_stream<K>(
-        &self,
-        key: K,
-        options: XInfoStreamOptions,
-    ) -> CommandResult<T, Vec<XStreamInfo>>
+    fn xinfo_stream<K>(&self, key: K, options: XInfoStreamOptions) -> CommandResult<T, XStreamInfo>
     where
         K: Into<BulkString>,
     {
@@ -348,33 +344,29 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [https://redis.io/commands/xpending/](https://redis.io/commands/xpending/)
-    fn xpending<K, G, S, E, C>(
-        &self,
-        key: K,
-        group: G,
-        min_idle_time: Option<u64>,
-        start: S,
-        end: E,
-        count: usize,
-        consumer: Option<C>,
-    ) -> CommandResult<T, Value>
+    fn xpending<K, G>(&self, key: K, group: G) -> CommandResult<T, XPendingResult>
     where
         K: Into<BulkString>,
         G: Into<BulkString>,
-        S: Into<BulkString>,
-        E: Into<BulkString>,
-        C: Into<BulkString>,
     {
-        self.prepare_command(
-            cmd("XPENDING")
-                .arg(key)
-                .arg(group)
-                .arg(min_idle_time.map(|t| ("IDLE", t)))
-                .arg(start)
-                .arg(end)
-                .arg(count)
-                .arg(consumer),
-        )
+        self.prepare_command(cmd("XPENDING").arg(key).arg(group))
+    }
+
+    /// The XPENDING command is the interface to inspect the list of pending messages.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/xpending/](https://redis.io/commands/xpending/)
+    fn xpending_with_options<K, G>(
+        &self,
+        key: K,
+        group: G,
+        options: XPendingOptions,
+    ) -> CommandResult<T, Vec<XPendingMessageResult>>
+    where
+        K: Into<BulkString>,
+        G: Into<BulkString>,
+    {
+        self.prepare_command(cmd("XPENDING").arg(key).arg(group).arg(options))
     }
 
     /// The command returns the stream entries matching a given range of IDs.
@@ -463,8 +455,8 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
             cmd("XREADGROUP")
                 .arg("GROUP")
                 .arg(group)
-                .arg(options)
                 .arg(consumer)
+                .arg(options)
                 .arg("STREAMS")
                 .arg(keys)
                 .arg(ids),
@@ -548,6 +540,7 @@ impl IntoArgs for XAddOptions {
 /// Stream Trim operator for the [`xadd`](crate::StreamCommands::xadd)
 /// and [`xtrim`](crate::StreamCommands::xtrim) commands
 pub enum XTrimOperator {
+    None,
     /// =
     Equal,
     /// ~
@@ -556,10 +549,17 @@ pub enum XTrimOperator {
 
 impl IntoArgs for XTrimOperator {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(match self {
-            XTrimOperator::Equal => BulkString::Str("="),
-            XTrimOperator::Approximately => BulkString::Str("~"),
-        })
+        match self {
+            XTrimOperator::None => args,
+            XTrimOperator::Equal => args.arg(BulkString::Str("=")),
+            XTrimOperator::Approximately => args.arg(BulkString::Str("~")),
+        }
+    }
+}
+
+impl Default for XTrimOperator {
+    fn default() -> Self {
+        XTrimOperator::None
     }
 }
 
@@ -887,10 +887,12 @@ pub struct XStreamInfo {
     pub entries_added: usize,
 
     /// the ID and field-value tuples of the first entry in the stream
-    pub first_entry: String,
+    pub first_entry: StreamEntry<String>,
 
     /// the ID and field-value tuples of the last entry in the stream
-    pub last_entry: String,
+    pub last_entry: StreamEntry<String>,
+
+    pub recorded_first_entry_id: String,
 }
 
 impl FromValue for XStreamInfo {
@@ -907,6 +909,9 @@ impl FromValue for XStreamInfo {
             entries_added: values.remove_with_result("entries-added")?.into()?,
             first_entry: values.remove_with_result("first-entry")?.into()?,
             last_entry: values.remove_with_result("last-entry")?.into()?,
+            recorded_first_entry_id: values
+                .remove_with_result("recorded-first-entry-id")?
+                .into()?,
         })
     }
 }
@@ -991,5 +996,116 @@ impl XReadGroupOptions {
 impl IntoArgs for XReadGroupOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
+    }
+}
+
+/// Options for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+#[derive(Default)]
+pub struct XPendingOptions {
+    command_args: CommandArgs,
+}
+
+impl XPendingOptions {
+    #[must_use]
+    pub fn idle(self, min_idle_time: u64) -> Self {
+        Self {
+            command_args: self.command_args.arg("IDLE").arg(min_idle_time),
+        }
+    }
+
+    #[must_use]
+    pub fn start<S: Into<BulkString>>(self, start: S) -> Self {
+        Self {
+            command_args: self.command_args.arg(start),
+        }
+    }
+
+    #[must_use]
+    pub fn end<E: Into<BulkString>>(self, end: E) -> Self {
+        Self {
+            command_args: self.command_args.arg(end),
+        }
+    }
+
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg(count),
+        }
+    }
+
+    #[must_use]
+    pub fn consumer<C: Into<BulkString>>(self, consumer: C) -> Self {
+        Self {
+            command_args: self.command_args.arg(consumer),
+        }
+    }
+}
+
+impl IntoArgs for XPendingOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Result for the [`xpending`](crate::StreamCommands::xpending) command
+pub struct XPendingResult {
+    pub num_pending_messages: usize,
+    pub smallest_id: String,
+    pub greatest_id: String,
+    pub consumers: Vec<XPendingConsumer>,
+}
+
+impl FromValue for XPendingResult {
+    fn from_value(value: Value) -> Result<Self> {
+        let (num_pending_messages, smallest_id, greatest_id, consumers): (
+            usize,
+            String,
+            String,
+            Vec<XPendingConsumer>,
+        ) = value.into()?;
+        Ok(Self {
+            num_pending_messages,
+            smallest_id,
+            greatest_id,
+            consumers,
+        })
+    }
+}
+
+/// Customer info result for the [`xpending`](crate::StreamCommands::xpending) command
+pub struct XPendingConsumer {
+    pub consumer: String,
+    pub num_messages: usize,
+}
+
+impl FromValue for XPendingConsumer {
+    fn from_value(value: Value) -> Result<Self> {
+        let (consumer, num_messages): (String, usize) = value.into()?;
+        Ok(Self {
+            consumer,
+            num_messages,
+        })
+    }
+}
+
+/// Message result for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+pub struct XPendingMessageResult {
+    pub message_id: String,
+    pub consumer: String,
+    pub elapsed_millis: u64,
+    pub times_delivered: usize,
+}
+
+impl FromValue for XPendingMessageResult {
+    fn from_value(value: Value) -> Result<Self> {
+        let (message_id, consumer, elapsed_millis, times_delivered): (String, String, u64, usize) =
+            value.into()?;
+        Ok(Self {
+            message_id,
+            consumer,
+            elapsed_millis,
+            times_delivered,
+        })
     }
 }

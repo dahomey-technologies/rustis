@@ -1,11 +1,11 @@
 use crate::{
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, ClientResult, CommandResult, ConnectionCommands, Future, GenericCommands,
-    GeoCommands, HashCommands, HyperLogLogCommands, ListCommands, Message, MsgSender,
-    NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream,
-    Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
-    StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
-    ValueSender,
+    GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands, Message,
+    MsgSender, NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender,
+    PubSubStream, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
+    StreamCommands, StringCommands, Transaction, TransactionCommands, TransactionResult0,
+    ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::sync::Arc;
@@ -101,6 +101,7 @@ impl GenericCommands<ClientResult> for Client {}
 impl GeoCommands<ClientResult> for Client {}
 impl HashCommands<ClientResult> for Client {}
 impl HyperLogLogCommands<ClientResult> for Client {}
+impl InternalPubSubCommands<ClientResult> for Client {}
 impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
 impl ServerCommands<ClientResult> for Client {}
@@ -135,7 +136,9 @@ impl PubSubCommands<ClientResult> for Client {
             self.send_message(message)?;
 
             let value = value_receiver.await?;
-            value.map_into_result(|_| PubSubStream::from_channels(channels, pub_sub_receiver, self.clone()))
+            value.map_into_result(|_| {
+                PubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
+            })
         })
     }
 
@@ -163,7 +166,9 @@ impl PubSubCommands<ClientResult> for Client {
             self.send_message(message)?;
 
             let value = value_receiver.await?;
-            value.map_into_result(|_| PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone()))
+            value.map_into_result(|_| {
+                PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
+            })
         })
     }
 }

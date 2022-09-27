@@ -1,4 +1,6 @@
-use crate::{resp::Value, Client, ClientCommandResult, PubSubCommands, PubSubReceiver, Result};
+use crate::{
+    resp::Value, Client, ClientCommandResult, InternalPubSubCommands, PubSubReceiver, Result,
+};
 use futures::{Stream, StreamExt};
 use std::{
     pin::Pin,
@@ -23,7 +25,7 @@ use std::{
 ///     regular_client.flushdb(FlushingMode::Sync).send().await?;
 ///
 ///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
-/// 
+///
 ///     regular_client
 ///         .publish("mychannel", "mymessage")
 ///         .send()
@@ -34,10 +36,10 @@ use std::{
 ///         .await
 ///         .unwrap()?
 ///         .into()?;
-/// 
+///
 ///     assert_eq!("mychannel", channel);
 ///     assert_eq!("mymessage", message);
-/// 
+///
 ///     pub_sub_stream.close().await?;
 ///
 ///     Ok(())

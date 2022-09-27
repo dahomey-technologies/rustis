@@ -1,5 +1,5 @@
 use crate::{
-    tests::get_test_client, ClientCommandResult, FlushingMode, Result, ServerCommands,
+    tests::get_test_client, FlushingMode, Result, ServerCommands,
     StreamCommands, StreamEntry, XAddOptions, XGroupCreateOptions,
 };
 use serial_test::serial;
@@ -9,7 +9,7 @@ use serial_test::serial;
 #[serial]
 async fn xadd() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
         .xadd(
@@ -18,7 +18,7 @@ async fn xadd() -> Result<()> {
             [("name", "John"), ("surname", "Doe")],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert_eq!("123456-0", &id1);
 
@@ -33,7 +33,7 @@ async fn xadd() -> Result<()> {
             ],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id2.is_empty());
 
@@ -45,7 +45,7 @@ async fn xadd() -> Result<()> {
 #[serial]
 async fn xgroup() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     client
         .xgroup_create(
@@ -54,10 +54,10 @@ async fn xgroup() -> Result<()> {
             "$",
             XGroupCreateOptions::default().mk_stream(),
         )
-        .send()
+
         .await?;
 
-    let results = client.xinfo_groups("mystream").send().await?;
+    let results = client.xinfo_groups("mystream").await?;
     assert_eq!(1, results.len());
     assert_eq!("mygroup", results[0].name);
     assert_eq!(0, results[0].consumers);
@@ -66,7 +66,7 @@ async fn xgroup() -> Result<()> {
     assert_eq!(None, results[0].entries_read);
     assert_eq!(Some(0), results[0].lag);
 
-    let result = client.xgroup_destroy("mystream", "mygroup").send().await?;
+    let result = client.xgroup_destroy("mystream", "mygroup").await?;
     assert!(result);
 
     Ok(())
@@ -77,7 +77,7 @@ async fn xgroup() -> Result<()> {
 #[serial]
 async fn xlen() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
         .xadd(
@@ -86,7 +86,7 @@ async fn xlen() -> Result<()> {
             [("name", "John"), ("surname", "Doe")],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id1.is_empty());
 
@@ -101,11 +101,11 @@ async fn xlen() -> Result<()> {
             ],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id2.is_empty());
 
-    let len = client.xlen("mystream").send().await?;
+    let len = client.xlen("mystream").await?;
     assert_eq!(2, len);
 
     Ok(())
@@ -116,7 +116,7 @@ async fn xlen() -> Result<()> {
 #[serial]
 async fn xrange() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
         .xadd(
@@ -125,7 +125,7 @@ async fn xrange() -> Result<()> {
             [("name", "John"), ("surname", "Doe")],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id1.is_empty());
 
@@ -140,12 +140,12 @@ async fn xrange() -> Result<()> {
             ],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id2.is_empty());
 
     let results: Vec<StreamEntry<String>> =
-        client.xrange("mystream", "-", "+", None).send().await?;
+        client.xrange("mystream", "-", "+", None).await?;
     assert_eq!(2, results.len());
     assert_eq!(id1, results[0].stream_id);
     assert_eq!(Some(&"John".to_owned()), results[0].items.get("name"));
@@ -163,7 +163,7 @@ async fn xrange() -> Result<()> {
 #[serial]
 async fn xrevrange() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
         .xadd(
@@ -172,7 +172,7 @@ async fn xrevrange() -> Result<()> {
             [("name", "John"), ("surname", "Doe")],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id1.is_empty());
 
@@ -187,12 +187,12 @@ async fn xrevrange() -> Result<()> {
             ],
             XAddOptions::default(),
         )
-        .send()
+
         .await?;
     assert!(!id2.is_empty());
 
     let results: Vec<StreamEntry<String>> =
-        client.xrevrange("mystream", "+", "-", None).send().await?;
+        client.xrevrange("mystream", "+", "-", None).await?;
     assert_eq!(2, results.len());
     assert_eq!(id2, results[0].stream_id);
     assert_eq!(Some(&"value1".to_owned()), results[0].items.get("field1"));

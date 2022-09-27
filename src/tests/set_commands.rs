@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{
-    tests::get_test_client, ClientCommandResult, GenericCommands, Result, SScanOptions,
-    SetCommands,
-};
+use crate::{tests::get_test_client, GenericCommands, Result, SScanOptions, SetCommands};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -13,12 +10,9 @@ async fn sadd() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    let len = client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    let len = client.sadd("key", ["value1", "value2", "value3"]).await?;
     assert_eq!(3, len);
 
     Ok(())
@@ -31,13 +25,10 @@ async fn scard() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
-    let len = client.scard("key").send().await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
+    let len = client.scard("key").await?;
     assert_eq!(3, len);
 
     Ok(())
@@ -50,13 +41,13 @@ async fn sdiff() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let members: HashSet<String> = client.sdiff(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sdiff(["key1", "key2", "key3"]).await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -71,19 +62,16 @@ async fn sdiffstore() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3", "key4"]).send().await?;
+    client.del(["key1", "key2", "key3", "key4"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let len = client
-        .sdiffstore("key4", ["key1", "key2", "key3"])
-        .send()
-        .await?;
+    let len = client.sdiffstore("key4", ["key1", "key2", "key3"]).await?;
     assert_eq!(2, len);
 
-    let members: HashSet<String> = client.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").await?;
     assert_eq!(2, members.len());
     assert!(members.contains("b"));
     assert!(members.contains("d"));
@@ -98,13 +86,13 @@ async fn sinter() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let members: HashSet<String> = client.sinter(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sinter(["key1", "key2", "key3"]).await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -118,16 +106,13 @@ async fn sintercard() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let len = client
-        .sintercard(["key1", "key2", "key3"], 0)
-        .send()
-        .await?;
+    let len = client.sintercard(["key1", "key2", "key3"], 0).await?;
     assert_eq!(1, len);
 
     Ok(())
@@ -140,19 +125,16 @@ async fn sinterstore() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3", "key4"]).send().await?;
+    client.del(["key1", "key2", "key3", "key4"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let len = client
-        .sinterstore("key4", ["key1", "key2", "key3"])
-        .send()
-        .await?;
+    let len = client.sinterstore("key4", ["key1", "key2", "key3"]).await?;
     assert_eq!(1, len);
 
-    let members: HashSet<String> = client.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").await?;
     assert_eq!(1, members.len());
     assert!(members.contains("c"));
 
@@ -166,17 +148,14 @@ async fn sismember() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result = client.sismember("key", "value1").send().await?;
+    let result = client.sismember("key", "value1").await?;
     assert!(result);
 
-    let result = client.sismember("key", "value4").send().await?;
+    let result = client.sismember("key", "value4").await?;
     assert!(!result);
 
     Ok(())
@@ -189,14 +168,11 @@ async fn smembers() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let members: HashSet<String> = client.smembers("key").send().await?;
+    let members: HashSet<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
     assert!(members.contains("value1"));
     assert!(members.contains("value2"));
@@ -212,17 +188,11 @@ async fn smismember() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result = client
-        .smismember("key", ["value1", "value4"])
-        .send()
-        .await?;
+    let result = client.smismember("key", ["value1", "value4"]).await?;
     assert_eq!(2, result.len());
     assert!(result[0]);
     assert!(!result[1]);
@@ -237,18 +207,12 @@ async fn smove() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2"]).send().await?;
+    client.del(["key1", "key2"]).await?;
 
-    client
-        .sadd("key1", ["value1", "value2", "value3"])
-        .send()
-        .await?;
-    client
-        .sadd("key2", ["value4", "value5", "value6"])
-        .send()
-        .await?;
+    client.sadd("key1", ["value1", "value2", "value3"]).await?;
+    client.sadd("key2", ["value4", "value5", "value6"]).await?;
 
-    let result = client.smove("key1", "key2", "value3").send().await?;
+    let result = client.smove("key1", "key2", "value3").await?;
     assert!(result);
 
     Ok(())
@@ -261,14 +225,11 @@ async fn spop() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result: HashSet<String> = client.spop("key", 2).send().await?;
+    let result: HashSet<String> = client.spop("key", 2).await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -281,14 +242,11 @@ async fn srandmember() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result: HashSet<String> = client.srandmember("key", 2).send().await?;
+    let result: HashSet<String> = client.srandmember("key", 2).await?;
     assert_eq!(2, result.len());
 
     Ok(())
@@ -301,17 +259,11 @@ async fn srem() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result = client
-        .srem("key", ["value1", "value2", "value4"])
-        .send()
-        .await?;
+    let result = client.srem("key", ["value1", "value2", "value4"]).await?;
     assert_eq!(2, result);
 
     Ok(())
@@ -324,17 +276,11 @@ async fn sscan() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
-    client
-        .sadd("key", ["value1", "value2", "value3"])
-        .send()
-        .await?;
+    client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result: (u64, Vec<String>) = client
-        .sscan("key", 0, SScanOptions::default())
-        .send()
-        .await?;
+    let result: (u64, Vec<String>) = client.sscan("key", 0, SScanOptions::default()).await?;
     assert_eq!(0, result.0);
     assert_eq!(3, result.1.len());
 
@@ -348,13 +294,13 @@ async fn sunion() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let members: HashSet<String> = client.sunion(["key1", "key2", "key3"]).send().await?;
+    let members: HashSet<String> = client.sunion(["key1", "key2", "key3"]).await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));
@@ -372,19 +318,16 @@ async fn sunionstore() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3", "key4"]).send().await?;
+    client.del(["key1", "key2", "key3", "key4"]).await?;
 
-    client.sadd("key1", ["a", "b", "c", "d"]).send().await?;
-    client.sadd("key2", "c").send().await?;
-    client.sadd("key3", ["a", "c", "e"]).send().await?;
+    client.sadd("key1", ["a", "b", "c", "d"]).await?;
+    client.sadd("key2", "c").await?;
+    client.sadd("key3", ["a", "c", "e"]).await?;
 
-    let len = client
-        .sunionstore("key4", ["key1", "key2", "key3"])
-        .send()
-        .await?;
+    let len = client.sunionstore("key4", ["key1", "key2", "key3"]).await?;
     assert_eq!(5, len);
 
-    let members: HashSet<String> = client.smembers("key4").send().await?;
+    let members: HashSet<String> = client.smembers("key4").await?;
     assert_eq!(5, members.len());
     assert!(members.contains("a"));
     assert!(members.contains("b"));

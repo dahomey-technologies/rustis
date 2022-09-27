@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_test_client, ClientCommandResult, ConnectionCommands, FlushingMode,
-    HelloOptions, Result, ServerCommands, SortedSetCommands, StringCommands,
+    tests::get_test_client, ConnectionCommands, FlushingMode, HelloOptions, Result, ServerCommands,
+    SortedSetCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -9,9 +9,9 @@ use serial_test::serial;
 #[serial]
 async fn double() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
-    client.hello(HelloOptions::new(3)).send().await?;
+    client.hello(HelloOptions::new(3)).await?;
 
     client
         .zadd(
@@ -19,12 +19,10 @@ async fn double() -> Result<()> {
             [(1.1, "one"), (2.2, "two"), (3.3, "three")],
             Default::default(),
         )
-        .send()
         .await?;
 
     let values: Vec<(String, f64)> = client
         .zrange_with_scores("key", 0, -1, Default::default())
-        .send()
         .await?;
     assert_eq!(3, values.len());
     assert_eq!(("one".to_owned(), 1.1), values[0]);
@@ -39,11 +37,11 @@ async fn double() -> Result<()> {
 #[serial]
 async fn null() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
-    client.hello(HelloOptions::new(3)).send().await?;
+    client.hello(HelloOptions::new(3)).await?;
 
-    let value: Option<String> = client.get("key").send().await?;
+    let value: Option<String> = client.get("key").await?;
     assert_eq!(None, value);
 
     Ok(())

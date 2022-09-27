@@ -1,9 +1,8 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    ClientCommandResult, ConnectionCommands, ExpireOption, FlushingMode, GenericCommands,
-    ListCommands, RestoreOptions, Result, ScanOptions, ServerCommands, SetCommands, SortOptions,
-    StringCommands,
+    ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands, RestoreOptions,
+    Result, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -14,33 +13,33 @@ use std::{collections::HashSet, time::SystemTime};
 async fn copy() -> Result<()> {
     let client0 = get_test_client().await?;
     let client1 = get_test_client().await?;
-    client1.select(1).send().await?;
+    client1.select(1).await?;
 
     // cleanup
-    client0.del(["key", "key1"]).send().await?;
-    client1.del(["key", "key1"]).send().await?;
+    client0.del(["key", "key1"]).await?;
+    client1.del(["key", "key1"]).await?;
 
-    client0.set("key", "value").send().await?;
+    client0.set("key", "value").await?;
 
-    let result = client0.copy("key", "key1", None, false).send().await?;
+    let result = client0.copy("key", "key1", None, false).await?;
     assert!(result);
-    let value: String = client0.get("key1").send().await?;
+    let value: String = client0.get("key1").await?;
     assert_eq!("value", value);
 
-    client0.set("key", "new_value").send().await?;
-    let result = client0.copy("key", "key1", None, false).send().await?;
+    client0.set("key", "new_value").await?;
+    let result = client0.copy("key", "key1", None, false).await?;
     assert!(!result);
-    let value: String = client0.get("key1").send().await?;
+    let value: String = client0.get("key1").await?;
     assert_eq!("value", value);
 
-    let result = client0.copy("key", "key1", None, true).send().await?;
+    let result = client0.copy("key", "key1", None, true).await?;
     assert!(result);
-    let value: String = client0.get("key1").send().await?;
+    let value: String = client0.get("key1").await?;
     assert_eq!("new_value", value);
 
-    let result = client0.copy("key", "key", Some(1), false).send().await?;
+    let result = client0.copy("key", "key", Some(1), false).await?;
     assert!(result);
-    let value: String = client1.get("key").send().await?;
+    let value: String = client1.get("key").await?;
     assert_eq!("new_value", value);
 
     Ok(())
@@ -52,17 +51,17 @@ async fn copy() -> Result<()> {
 async fn del() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key1", "value1").send().await?;
-    client.set("key2", "value2").send().await?;
-    client.set("key3", "value3").send().await?;
+    client.set("key1", "value1").await?;
+    client.set("key2", "value2").await?;
+    client.set("key3", "value3").await?;
 
-    let deleted = client.del("key1").send().await?;
+    let deleted = client.del("key1").await?;
     assert_eq!(1, deleted);
 
-    let deleted = client.del(["key1", "key2", "key3"]).send().await?;
+    let deleted = client.del(["key1", "key2", "key3"]).await?;
     assert_eq!(2, deleted);
 
-    let deleted = client.del("key1").send().await?;
+    let deleted = client.del("key1").await?;
     assert_eq!(0, deleted);
 
     Ok(())
@@ -74,9 +73,9 @@ async fn del() -> Result<()> {
 async fn dump() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
 
-    let dump = client.dump("key").send().await?;
+    let dump = client.dump("key").await?;
     assert!(dump.serialized_value.len() > 0);
 
     Ok(())
@@ -89,17 +88,17 @@ async fn exists() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2"]).send().await?;
+    client.del(["key1", "key2"]).await?;
 
-    client.set("key1", "value1").send().await?;
+    client.set("key1", "value1").await?;
 
-    let result = client.exists("key1").send().await?;
+    let result = client.exists("key1").await?;
     assert_eq!(1, result);
 
-    let result = client.exists(["key1", "key2"]).send().await?;
+    let result = client.exists(["key1", "key2"]).await?;
     assert_eq!(1, result);
 
-    let result = client.exists("key2").send().await?;
+    let result = client.exists("key2").await?;
     assert_eq!(0, result);
 
     Ok(())
@@ -112,37 +111,37 @@ async fn expire() -> Result<()> {
     let client = get_test_client().await?;
 
     // no option
-    client.set("key", "value").send().await?;
-    let result = client.expire("key", 10, ExpireOption::None).send().await?;
+    client.set("key", "value").await?;
+    let result = client.expire("key", 10, ExpireOption::None).await?;
     assert!(result);
-    assert_eq!(10, client.ttl("key").send().await?);
+    assert_eq!(10, client.ttl("key").await?);
 
     // xx
-    client.set("key", "value").send().await?;
-    let result = client.expire("key", 10, ExpireOption::Xx).send().await?;
+    client.set("key", "value").await?;
+    let result = client.expire("key", 10, ExpireOption::Xx).await?;
     assert!(!result);
-    assert_eq!(-1, client.ttl("key").send().await?);
+    assert_eq!(-1, client.ttl("key").await?);
 
     // nx
-    let result = client.expire("key", 10, ExpireOption::Nx).send().await?;
+    let result = client.expire("key", 10, ExpireOption::Nx).await?;
     assert!(result);
-    assert_eq!(10, client.ttl("key").send().await?);
+    assert_eq!(10, client.ttl("key").await?);
 
     // gt
-    let result = client.expire("key", 5, ExpireOption::Gt).send().await?;
+    let result = client.expire("key", 5, ExpireOption::Gt).await?;
     assert!(!result);
-    assert_eq!(10, client.ttl("key").send().await?);
-    let result = client.expire("key", 15, ExpireOption::Gt).send().await?;
+    assert_eq!(10, client.ttl("key").await?);
+    let result = client.expire("key", 15, ExpireOption::Gt).await?;
     assert!(result);
-    assert_eq!(15, client.ttl("key").send().await?);
+    assert_eq!(15, client.ttl("key").await?);
 
     // lt
-    let result = client.expire("key", 20, ExpireOption::Lt).send().await?;
+    let result = client.expire("key", 20, ExpireOption::Lt).await?;
     assert!(!result);
-    assert_eq!(15, client.ttl("key").send().await?);
-    let result = client.expire("key", 5, ExpireOption::Lt).send().await?;
+    assert_eq!(15, client.ttl("key").await?);
+    let result = client.expire("key", 5, ExpireOption::Lt).await?;
     assert!(result);
-    assert_eq!(5, client.ttl("key").send().await?);
+    assert_eq!(5, client.ttl("key").await?);
 
     Ok(())
 }
@@ -160,61 +159,42 @@ async fn expireat() -> Result<()> {
         .as_secs();
 
     // no option
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     let result = client
         .expireat("key", now + 10, ExpireOption::default())
-        .send()
         .await?;
     assert!(result);
-    let ttl = client.ttl("key").send().await?;
+    let ttl = client.ttl("key").await?;
     assert!(9 <= ttl && ttl <= 10);
 
     // xx
-    client.set("key", "value").send().await?;
-    let result = client
-        .expireat("key", now + 10, ExpireOption::Xx)
-        .send()
-        .await?;
+    client.set("key", "value").await?;
+    let result = client.expireat("key", now + 10, ExpireOption::Xx).await?;
     assert!(!result);
-    assert_eq!(-1, client.ttl("key").send().await?);
+    assert_eq!(-1, client.ttl("key").await?);
 
     // nx
-    let result = client
-        .expireat("key", now + 10, ExpireOption::Nx)
-        .send()
-        .await?;
+    let result = client.expireat("key", now + 10, ExpireOption::Nx).await?;
     assert!(result);
     assert!(9 <= ttl && ttl <= 10);
 
     // gt
-    let result = client
-        .expireat("key", now + 5, ExpireOption::Gt)
-        .send()
-        .await?;
+    let result = client.expireat("key", now + 5, ExpireOption::Gt).await?;
     assert!(!result);
     assert!(9 <= ttl && ttl <= 10);
-    let result = client
-        .expireat("key", now + 15, ExpireOption::Gt)
-        .send()
-        .await?;
+    let result = client.expireat("key", now + 15, ExpireOption::Gt).await?;
     assert!(result);
-    let ttl = client.ttl("key").send().await?;
+    let ttl = client.ttl("key").await?;
     assert!(14 <= ttl && ttl <= 15);
 
     // lt
-    let result = client
-        .expireat("key", now + 20, ExpireOption::Lt)
-        .send()
-        .await?;
+    let result = client.expireat("key", now + 20, ExpireOption::Lt).await?;
     assert!(!result);
-    let ttl = client.ttl("key").send().await?;
+    let ttl = client.ttl("key").await?;
     assert!(14 <= ttl && ttl <= 15);
-    let result = client
-        .expireat("key", now + 5, ExpireOption::Lt)
-        .send()
-        .await?;
+    let result = client.expireat("key", now + 5, ExpireOption::Lt).await?;
     assert!(result);
-    let ttl = client.ttl("key").send().await?;
+    let ttl = client.ttl("key").await?;
     assert!(4 <= ttl && ttl <= 5);
 
     Ok(())
@@ -226,14 +206,13 @@ async fn expireat() -> Result<()> {
 async fn expiretime() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     assert!(
         client
             .expireat("key", 33177117420, ExpireOption::default())
-            .send()
             .await?
     );
-    let time = client.expiretime("key").send().await?;
+    let time = client.expiretime("key").await?;
     assert_eq!(time, 33177117420);
 
     Ok(())
@@ -245,26 +224,25 @@ async fn expiretime() -> Result<()> {
 async fn keys() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
     client
         .mset([
             ("firstname", "Jack"),
             ("lastname", "Stuntman"),
             ("age", "35"),
         ])
-        .send()
         .await?;
 
-    let keys: HashSet<String> = client.keys("*name*").send().await?;
+    let keys: HashSet<String> = client.keys("*name*").await?;
     assert_eq!(2, keys.len());
     assert!(keys.contains("firstname"));
     assert!(keys.contains("lastname"));
 
-    let keys: HashSet<String> = client.keys("a??").send().await?;
+    let keys: HashSet<String> = client.keys("a??").await?;
     assert_eq!(1, keys.len());
     assert!(keys.contains("age"));
 
-    let keys: HashSet<String> = client.keys("*").send().await?;
+    let keys: HashSet<String> = client.keys("*").await?;
     assert_eq!(3, keys.len());
     assert!(keys.contains("firstname"));
     assert!(keys.contains("lastname"));
@@ -279,16 +257,16 @@ async fn keys() -> Result<()> {
 async fn move_() -> Result<()> {
     let client0 = get_test_client().await?;
     let client1 = get_test_client().await?;
-    client1.select(1).send().await?;
+    client1.select(1).await?;
 
     // cleanup
-    client0.del("key").send().await?;
-    client1.del("key").send().await?;
+    client0.del("key").await?;
+    client1.del("key").await?;
 
-    client0.set("key", "value").send().await?;
-    client0.move_("key", 1).send().await?;
-    assert_eq!(0, client0.exists("key").send().await?);
-    assert_eq!(1, client1.exists("key").send().await?);
+    client0.set("key", "value").await?;
+    client0.move_("key", 1).await?;
+    assert_eq!(0, client0.exists("key").await?);
+    assert_eq!(1, client1.exists("key").await?);
 
     Ok(())
 }
@@ -299,17 +277,17 @@ async fn move_() -> Result<()> {
 async fn object_encoding() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.del(["key1", "key2", "unknown"]).send().await?;
-    client.set("key1", "value").send().await?;
-    client.set("key2", "12").send().await?;
+    client.del(["key1", "key2", "unknown"]).await?;
+    client.set("key1", "value").await?;
+    client.set("key2", "12").await?;
 
-    let encoding: String = client.object_encoding("key1").send().await?;
+    let encoding: String = client.object_encoding("key1").await?;
     assert_eq!("embstr", encoding);
 
-    let encoding: String = client.object_encoding("key2").send().await?;
+    let encoding: String = client.object_encoding("key2").await?;
     assert_eq!("int", encoding);
 
-    let encoding: String = client.object_encoding("unknown").send().await?;
+    let encoding: String = client.object_encoding("unknown").await?;
     assert_eq!("", encoding);
 
     Ok(())
@@ -321,10 +299,10 @@ async fn object_encoding() -> Result<()> {
 async fn object_freq() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.del("key").send().await?;
-    client.set("key", "value").send().await?;
+    client.del("key").await?;
+    client.set("key", "value").await?;
 
-    let frequency = client.object_freq("key").send().await;
+    let frequency = client.object_freq("key").await;
     // ERR An LFU maxmemory policy is not selected, access frequency not tracked.
     assert!(frequency.is_err());
 
@@ -337,10 +315,10 @@ async fn object_freq() -> Result<()> {
 async fn object_idle_time() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.del("key").send().await?;
-    client.set("key", "value").send().await?;
+    client.del("key").await?;
+    client.set("key", "value").await?;
 
-    let idle_time = client.object_idle_time("key").send().await?;
+    let idle_time = client.object_idle_time("key").await?;
     assert!(idle_time < 1);
 
     Ok(())
@@ -352,10 +330,10 @@ async fn object_idle_time() -> Result<()> {
 async fn object_refcount() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.del("key").send().await?;
-    client.set("key", "value").send().await?;
+    client.del("key").await?;
+    client.set("key", "value").await?;
 
-    let refcount = client.object_refcount("key").send().await?;
+    let refcount = client.object_refcount("key").await?;
     assert_eq!(1, refcount);
 
     Ok(())
@@ -367,11 +345,11 @@ async fn object_refcount() -> Result<()> {
 async fn persist() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").send().await?;
-    assert!(client.expire("key", 10, ExpireOption::None).send().await?);
-    assert_eq!(10, client.ttl("key").send().await?);
-    assert!(client.persist("key").send().await?);
-    assert_eq!(-1, client.ttl("key").send().await?);
+    client.set("key", "value").await?;
+    assert!(client.expire("key", 10, ExpireOption::None).await?);
+    assert_eq!(10, client.ttl("key").await?);
+    assert!(client.persist("key").await?);
+    assert_eq!(-1, client.ttl("key").await?);
 
     Ok(())
 }
@@ -383,52 +361,39 @@ async fn pexpire() -> Result<()> {
     let client = get_test_client().await?;
 
     // no option
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     let result = client
         .pexpire("key", 10000, ExpireOption::default())
-        .send()
         .await?;
     assert!(result);
-    assert_eq!(10, client.ttl("key").send().await?);
+    assert_eq!(10, client.ttl("key").await?);
 
     // xx
-    client.set("key", "value").send().await?;
-    let result = client
-        .pexpire("key", 10000, ExpireOption::Xx)
-        .send()
-        .await?;
+    client.set("key", "value").await?;
+    let result = client.pexpire("key", 10000, ExpireOption::Xx).await?;
     assert!(!result);
-    assert_eq!(-1, client.ttl("key").send().await?);
+    assert_eq!(-1, client.ttl("key").await?);
 
     // nx
-    let result = client
-        .pexpire("key", 10000, ExpireOption::Nx)
-        .send()
-        .await?;
+    let result = client.pexpire("key", 10000, ExpireOption::Nx).await?;
     assert!(result);
-    assert_eq!(10, client.ttl("key").send().await?);
+    assert_eq!(10, client.ttl("key").await?);
 
     // gt
-    let result = client.pexpire("key", 5000, ExpireOption::Gt).send().await?;
+    let result = client.pexpire("key", 5000, ExpireOption::Gt).await?;
     assert!(!result);
-    assert_eq!(10, client.ttl("key").send().await?);
-    let result = client
-        .pexpire("key", 15000, ExpireOption::Gt)
-        .send()
-        .await?;
+    assert_eq!(10, client.ttl("key").await?);
+    let result = client.pexpire("key", 15000, ExpireOption::Gt).await?;
     assert!(result);
-    assert_eq!(15, client.ttl("key").send().await?);
+    assert_eq!(15, client.ttl("key").await?);
 
     // lt
-    let result = client
-        .pexpire("key", 20000, ExpireOption::Lt)
-        .send()
-        .await?;
+    let result = client.pexpire("key", 20000, ExpireOption::Lt).await?;
     assert!(!result);
-    assert_eq!(15, client.ttl("key").send().await?);
-    let result = client.pexpire("key", 5000, ExpireOption::Lt).send().await?;
+    assert_eq!(15, client.ttl("key").await?);
+    let result = client.pexpire("key", 5000, ExpireOption::Lt).await?;
     assert!(result);
-    assert_eq!(5, client.ttl("key").send().await?);
+    assert_eq!(5, client.ttl("key").await?);
 
     Ok(())
 }
@@ -446,58 +411,51 @@ async fn pexpireat() -> Result<()> {
         .as_millis() as u64;
 
     // no option
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     let result = client
         .pexpireat("key", now + 10000, ExpireOption::default())
-        .send()
         .await?;
     assert!(result);
-    assert!(10000 >= client.pttl("key").send().await?);
+    assert!(10000 >= client.pttl("key").await?);
 
     // xx
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     let result = client
         .pexpireat("key", now + 10000, ExpireOption::Xx)
-        .send()
         .await?;
     assert!(!result);
-    assert_eq!(-1, client.pttl("key").send().await?);
+    assert_eq!(-1, client.pttl("key").await?);
 
     // nx
     let result = client
         .pexpireat("key", now + 10000, ExpireOption::Nx)
-        .send()
         .await?;
     assert!(result);
-    assert!(10000 >= client.pttl("key").send().await?);
+    assert!(10000 >= client.pttl("key").await?);
 
     // gt
     let result = client
         .pexpireat("key", now + 5000, ExpireOption::Gt)
-        .send()
         .await?;
     assert!(!result);
-    assert!(10000 >= client.pttl("key").send().await?);
+    assert!(10000 >= client.pttl("key").await?);
     let result = client
         .pexpireat("key", now + 15000, ExpireOption::Gt)
-        .send()
         .await?;
     assert!(result);
-    assert!(15000 >= client.pttl("key").send().await?);
+    assert!(15000 >= client.pttl("key").await?);
 
     // lt
     let result = client
         .pexpireat("key", now + 20000, ExpireOption::Lt)
-        .send()
         .await?;
     assert!(!result);
-    assert!(20000 >= client.pttl("key").send().await?);
+    assert!(20000 >= client.pttl("key").await?);
     let result = client
         .pexpireat("key", now + 5000, ExpireOption::Lt)
-        .send()
         .await?;
     assert!(result);
-    assert!(5000 >= client.pttl("key").send().await?);
+    assert!(5000 >= client.pttl("key").await?);
 
     Ok(())
 }
@@ -508,14 +466,13 @@ async fn pexpireat() -> Result<()> {
 async fn pexpiretime() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
     assert!(
         client
             .pexpireat("key", 33177117420000, ExpireOption::default())
-            .send()
             .await?
     );
-    let time = client.pexpiretime("key").send().await?;
+    let time = client.pexpiretime("key").await?;
     assert_eq!(time, 33177117420000);
 
     Ok(())
@@ -527,12 +484,12 @@ async fn pexpiretime() -> Result<()> {
 async fn randomkey() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
-    client.set("key1", "value1").send().await?;
-    client.set("key2", "value2").send().await?;
-    client.set("key3", "value3").send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+    client.set("key1", "value1").await?;
+    client.set("key2", "value2").await?;
+    client.set("key3", "value3").await?;
 
-    let key: String = client.randomkey().send().await?;
+    let key: String = client.randomkey().await?;
     assert!(["key1", "key2", "key3"].contains(&key.as_str()));
 
     Ok(())
@@ -544,16 +501,16 @@ async fn randomkey() -> Result<()> {
 async fn rename() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
-    client.set("key1", "value1").send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+    client.set("key1", "value1").await?;
 
-    client.rename("key1", "key2").send().await?;
-    let value: Value = client.get("key1").send().await?;
+    client.rename("key1", "key2").await?;
+    let value: Value = client.get("key1").await?;
     assert!(matches!(value, Value::BulkString(BulkString::Nil)));
-    let value: String = client.get("key2").send().await?;
+    let value: String = client.get("key2").await?;
     assert_eq!("value1", value);
 
-    let result = client.rename("unknown", "key2").send().await;
+    let result = client.rename("unknown", "key2").await;
     assert!(result.is_err());
 
     Ok(())
@@ -565,14 +522,14 @@ async fn rename() -> Result<()> {
 async fn renamenx() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
-    client.set("key1", "value1").send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+    client.set("key1", "value1").await?;
 
-    let success = client.renamenx("key1", "key2").send().await?;
+    let success = client.renamenx("key1", "key2").await?;
     assert!(success);
 
-    client.set("key1", "value1").send().await?;
-    let success = client.renamenx("key1", "key2").send().await?;
+    client.set("key1", "value1").await?;
+    let success = client.renamenx("key1", "key2").await?;
     assert!(!success);
 
     Ok(())
@@ -584,15 +541,14 @@ async fn renamenx() -> Result<()> {
 async fn restore() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").send().await?;
+    client.set("key", "value").await?;
 
-    let dump = client.dump("key").send().await?;
-    client.del("key").send().await?;
+    let dump = client.dump("key").await?;
+    client.del("key").await?;
     client
         .restore("key", 0, dump.serialized_value, RestoreOptions::default())
-        .send()
         .await?;
-    let value: String = client.get("key").send().await?;
+    let value: String = client.get("key").await?;
     assert_eq!("value", value);
 
     Ok(())
@@ -604,13 +560,13 @@ async fn restore() -> Result<()> {
 async fn scan() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
-    client.set("key1", "value").send().await?;
-    client.set("key2", "value").send().await?;
-    client.set("key3", "value").send().await?;
+    client.set("key1", "value").await?;
+    client.set("key2", "value").await?;
+    client.set("key3", "value").await?;
 
-    let keys: (u64, HashSet<String>) = client.scan(0, ScanOptions::default()).send().await?;
+    let keys: (u64, HashSet<String>) = client.scan(0, ScanOptions::default()).await?;
     assert_eq!(3, keys.1.len());
     assert!(keys.1.contains("key1"));
     assert!(keys.1.contains("key2"));
@@ -625,17 +581,13 @@ async fn scan() -> Result<()> {
 async fn sort() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     client
         .rpush("key", ["member3", "member1", "member2"])
-        .send()
         .await?;
 
-    let values: Vec<String> = client
-        .sort("key", SortOptions::default().alpha())
-        .send()
-        .await?;
+    let values: Vec<String> = client.sort("key", SortOptions::default().alpha()).await?;
     assert_eq!(3, values.len());
     assert_eq!("member1".to_owned(), values[0]);
     assert_eq!("member2".to_owned(), values[1]);
@@ -643,11 +595,10 @@ async fn sort() -> Result<()> {
 
     let len = client
         .sort_and_store("key", "out", SortOptions::default().alpha())
-        .send()
         .await?;
     assert_eq!(3, len);
 
-    let values: Vec<String> = client.lrange("out", 0, -1).send().await?;
+    let values: Vec<String> = client.lrange("out", 0, -1).await?;
     assert_eq!(3, values.len());
     assert_eq!("member1".to_owned(), values[0]);
     assert_eq!("member2".to_owned(), values[1]);
@@ -662,10 +613,10 @@ async fn sort() -> Result<()> {
 async fn touch() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key1", "Hello").send().await?;
-    client.set("key2", "World").send().await?;
+    client.set("key1", "Hello").await?;
+    client.set("key2", "World").await?;
 
-    let num_keys = client.touch(["key1", "key2"]).send().await?;
+    let num_keys = client.touch(["key1", "key2"]).await?;
     assert_eq!(2, num_keys);
 
     Ok(())
@@ -678,19 +629,19 @@ async fn type_() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["key1", "key2", "key3"]).send().await?;
+    client.del(["key1", "key2", "key3"]).await?;
 
-    client.set("key1", "value").send().await?;
-    client.lpush("key2", "value").send().await?;
-    client.sadd("key3", "value").send().await?;
+    client.set("key1", "value").await?;
+    client.lpush("key2", "value").await?;
+    client.sadd("key3", "value").await?;
 
-    let result = client.type_("key1").send().await?;
+    let result = client.type_("key1").await?;
     assert_eq!(&result, "string");
 
-    let result = client.type_("key2").send().await?;
+    let result = client.type_("key2").await?;
     assert_eq!(&result, "list");
 
-    let result = client.type_("key3").send().await?;
+    let result = client.type_("key3").await?;
     assert_eq!(&result, "set");
 
     Ok(())
@@ -702,14 +653,14 @@ async fn type_() -> Result<()> {
 async fn unlink() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key1", "value1").send().await?;
-    client.set("key2", "value2").send().await?;
-    client.set("key3", "value3").send().await?;
+    client.set("key1", "value1").await?;
+    client.set("key2", "value2").await?;
+    client.set("key3", "value3").await?;
 
-    let unlinked = client.unlink("key1").send().await?;
+    let unlinked = client.unlink("key1").await?;
     assert_eq!(1, unlinked);
 
-    let unlinked = client.unlink(["key1", "key2", "key3"]).send().await?;
+    let unlinked = client.unlink(["key1", "key2", "key3"]).await?;
     assert_eq!(2, unlinked);
 
     Ok(())

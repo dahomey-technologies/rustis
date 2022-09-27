@@ -35,17 +35,17 @@ impl<T: Send + Sync> Transaction<T> {
         }
     }
 
-    pub(crate) async fn internal_queue(&self, command: Command) -> Result<()> {
+    pub(crate) async fn queue(&self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(false);
         self.connection.send(command).await?.into()
     }
 
-    pub(crate) async fn internal_queue_and_forget(&self, command: Command) -> Result<()> {
+    pub(crate) async fn queue_and_forget(&self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(true);
         self.connection.send(command).await?.into()
     }
 
-    pub(crate) fn internal_exec<R: FromValue>(&self) -> Future<'_, R> {
+    pub(crate) fn execute<R: FromValue>(self) -> Future<'static, R> {
         Box::pin(async move {
             let result = self.connection.send(cmd("EXEC")).await?;
 

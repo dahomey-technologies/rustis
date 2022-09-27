@@ -1,7 +1,4 @@
-use crate::{
-    tests::get_test_client, ClientCommandResult, FlushingMode, HyperLogLogCommands, Result,
-    ServerCommands,
-};
+use crate::{tests::get_test_client, FlushingMode, HyperLogLogCommands, Result, ServerCommands};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -9,21 +6,18 @@ use serial_test::serial;
 #[serial]
 async fn pfadd() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
-    let result = client.pfadd("key", "a").send().await?;
+    let result = client.pfadd("key", "a").await?;
     assert!(result);
 
-    let result = client
-        .pfadd("key", ["b", "c", "d", "e", "f", "g"])
-        .send()
-        .await?;
+    let result = client.pfadd("key", ["b", "c", "d", "e", "f", "g"]).await?;
     assert!(result);
 
-    let result = client.pfadd("key", "a").send().await?;
+    let result = client.pfadd("key", "a").await?;
     assert!(!result);
 
-    let result = client.pfadd("key", ["c", "d", "e"]).send().await?;
+    let result = client.pfadd("key", ["c", "d", "e"]).await?;
     assert!(!result);
 
     Ok(())
@@ -34,19 +28,18 @@ async fn pfadd() -> Result<()> {
 #[serial]
 async fn pfcount() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
     client
         .pfadd("key1", ["a", "b", "c", "d", "e", "f", "g"])
-        .send()
         .await?;
 
-    let count = client.pfcount("key1").send().await?;
+    let count = client.pfcount("key1").await?;
     assert_eq!(7, count);
 
-    client.pfadd("key2", ["f", "g", "h", "i"]).send().await?;
+    client.pfadd("key2", ["f", "g", "h", "i"]).await?;
 
-    let count = client.pfcount(["key1", "key2"]).send().await?;
+    let count = client.pfcount(["key1", "key2"]).await?;
     assert_eq!(9, count);
 
     Ok(())
@@ -57,18 +50,15 @@ async fn pfcount() -> Result<()> {
 #[serial]
 async fn pfmerge() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).send().await?;
+    client.flushdb(FlushingMode::Sync).await?;
 
-    client
-        .pfadd("key1", ["foo", "bar", "zap", "a"])
-        .send()
-        .await?;
+    client.pfadd("key1", ["foo", "bar", "zap", "a"]).await?;
 
-    client.pfadd("key2", ["a", "b", "c", "foo"]).send().await?;
+    client.pfadd("key2", ["a", "b", "c", "foo"]).await?;
 
-    client.pfmerge("out", ["key1", "key2"]).send().await?;
+    client.pfmerge("out", ["key1", "key2"]).await?;
 
-    let count = client.pfcount("out").send().await?;
+    let count = client.pfcount("out").await?;
     assert_eq!(6, count);
 
     Ok(())

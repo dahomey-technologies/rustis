@@ -1,7 +1,7 @@
 use crate::{
-    tests::get_test_client, ClientCommandResult, GenericCommands, GeoAddCondition, GeoCommands,
-    GeoSearchBy, GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult,
-    GeoSearchStoreOptions, GeoUnit, Result,
+    tests::get_test_client, GenericCommands, GeoAddCondition, GeoCommands, GeoSearchBy,
+    GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult, GeoSearchStoreOptions,
+    GeoUnit, Result,
 };
 use serial_test::serial;
 
@@ -12,7 +12,7 @@ async fn geoadd() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").send().await?;
+    client.del("key").await?;
 
     let len = client
         .geoadd(
@@ -21,7 +21,6 @@ async fn geoadd() -> Result<()> {
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -32,7 +31,6 @@ async fn geoadd() -> Result<()> {
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
-        .send()
         .await?;
     assert_eq!(0, len);
 
@@ -43,7 +41,6 @@ async fn geoadd() -> Result<()> {
             true,
             [(2.0, 2.0, "location1"), (2.0, 2.0, "location2")],
         )
-        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -58,7 +55,6 @@ async fn geoadd() -> Result<()> {
                 (3.0, 3.0, "location3"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -73,7 +69,6 @@ async fn geoadd() -> Result<()> {
                 (3.0, 3.0, "location3"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(1, len);
 
@@ -87,7 +82,7 @@ async fn geodist() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("Sicily").send().await?;
+    client.del("Sicily").await?;
 
     let len = client
         .geoadd(
@@ -99,31 +94,26 @@ async fn geodist() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
     let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Meters)
-        .send()
         .await?;
     assert_eq!(Some(166274.1516), dist);
 
     let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Kilometers)
-        .send()
         .await?;
     assert_eq!(Some(166.2742), dist);
 
     let dist = client
         .geodist("Sicily", "Palermo", "Catania", GeoUnit::Miles)
-        .send()
         .await?;
     assert_eq!(Some(103.3182), dist);
 
     let dist = client
         .geodist("Sicily", "Foo", "Bar", GeoUnit::Meters)
-        .send()
         .await?;
     assert_eq!(None, dist);
 
@@ -137,7 +127,7 @@ async fn geohash() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("Sicily").send().await?;
+    client.del("Sicily").await?;
 
     let len = client
         .geoadd(
@@ -149,14 +139,10 @@ async fn geohash() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
-    let hashes = client
-        .geohash("Sicily", ["Palermo", "Catania"])
-        .send()
-        .await?;
+    let hashes = client.geohash("Sicily", ["Palermo", "Catania"]).await?;
     assert_eq!(2, hashes.len());
     assert_eq!("sqc8b49rny0", hashes[0]);
     assert_eq!("sqdtr74hyu0", hashes[1]);
@@ -171,7 +157,7 @@ async fn geopos() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("Sicily").send().await?;
+    client.del("Sicily").await?;
 
     let len = client
         .geoadd(
@@ -183,13 +169,11 @@ async fn geopos() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
     let hashes = client
         .geopos("Sicily", ["Palermo", "Catania", "NonExisting"])
-        .send()
         .await?;
     assert_eq!(3, hashes.len());
     assert_eq!(
@@ -212,7 +196,7 @@ async fn geosearch() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("Sicily").send().await?;
+    client.del("Sicily").await?;
 
     let len = client
         .geoadd(
@@ -224,7 +208,6 @@ async fn geosearch() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -238,7 +221,6 @@ async fn geosearch() -> Result<()> {
                 (17.241510, 38.788135, "edge2"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -255,7 +237,6 @@ async fn geosearch() -> Result<()> {
             },
             GeoSearchOptions::default(),
         )
-        .send()
         .await?;
     assert_eq!(2, results.len());
     assert!(results.iter().any(|r| r.member == "Palermo",));
@@ -278,7 +259,6 @@ async fn geosearch() -> Result<()> {
                 .with_coord()
                 .with_dist(),
         )
-        .send()
         .await?;
 
     assert_eq!(4, results.len());
@@ -321,7 +301,7 @@ async fn geosearchstore() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del(["Sicily", "out"]).send().await?;
+    client.del(["Sicily", "out"]).await?;
 
     let len = client
         .geoadd(
@@ -333,7 +313,6 @@ async fn geosearchstore() -> Result<()> {
                 (15.087269, 37.502669, "Catania"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -347,7 +326,6 @@ async fn geosearchstore() -> Result<()> {
                 (17.241510, 38.788135, "edge2"),
             ],
         )
-        .send()
         .await?;
     assert_eq!(2, len);
 
@@ -368,7 +346,6 @@ async fn geosearchstore() -> Result<()> {
                 .order(GeoSearchOrder::Asc)
                 .count(3, false),
         )
-        .send()
         .await?;
     assert_eq!(3, len);
 
@@ -390,7 +367,6 @@ async fn geosearchstore() -> Result<()> {
                 .with_dist()
                 .with_hash(),
         )
-        .send()
         .await?;
 
     assert_eq!(3, results.len());

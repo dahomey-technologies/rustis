@@ -1,6 +1,6 @@
 use crate::{
-    tests::get_test_client, ClientCommandResult, ConnectionCommands, GenericCommands,
-    HelloOptions, PingOptions, Result, ServerCommands, StringCommands,
+    tests::get_test_client, ConnectionCommands, GenericCommands, HelloOptions, PingOptions, Result,
+    ServerCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -10,7 +10,7 @@ use serial_test::serial;
 async fn hello_v2() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result = client.hello(HelloOptions::new(2)).send().await?;
+    let result = client.hello(HelloOptions::new(2)).await?;
     assert_eq!("redis", result.server);
     assert!(result.version.starts_with("7"));
     assert_eq!(2, result.proto);
@@ -28,7 +28,7 @@ async fn hello_v2() -> Result<()> {
 async fn hello_v3() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result = client.hello(HelloOptions::new(3)).send().await?;
+    let result = client.hello(HelloOptions::new(3)).await?;
     assert_eq!("redis", result.server);
     assert!(result.version.starts_with("7"));
     assert_eq!(3, result.proto);
@@ -46,11 +46,8 @@ async fn hello_v3() -> Result<()> {
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.ping(PingOptions::default()).send().await?;
-    let result: String = client
-        .ping(PingOptions::default().message("value"))
-        .send()
-        .await?;
+    client.ping(PingOptions::default()).await?;
+    let result: String = client.ping(PingOptions::default().message("value")).await?;
     assert_eq!("value", result);
 
     Ok(())
@@ -62,10 +59,10 @@ async fn ping() -> Result<()> {
 // async fn quit() -> Result<()> {
 //     let client = Connection::connect(get_default_addr()).await?;
 
-//     client.quit().send().await?;
+//     client.quit().await?;
 
 //     // reconnection here
-//     client.ping::<String, ()>(None).send().await?;
+//     client.ping::<String, ()>(None).await?;
 
 //     Ok(())
 // }
@@ -76,7 +73,7 @@ async fn ping() -> Result<()> {
 async fn reset() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.reset().send().await?;
+    client.reset().await?;
 
     Ok(())
 }
@@ -86,12 +83,12 @@ async fn reset() -> Result<()> {
 #[serial]
 async fn select() -> Result<()> {
     let client = get_test_client().await?;
-    client.flushall(crate::FlushingMode::Sync).send().await?;
+    client.flushall(crate::FlushingMode::Sync).await?;
 
-    client.set("key", "value").send().await?;
-    client.move_("key", 1).send().await?;
-    client.select(1).send().await?;
-    let value: String = client.get("key").send().await?;
+    client.set("key", "value").await?;
+    client.move_("key", 1).await?;
+    client.select(1).await?;
+    let value: String = client.get("key").await?;
     assert_eq!("value", value);
 
     Ok(())

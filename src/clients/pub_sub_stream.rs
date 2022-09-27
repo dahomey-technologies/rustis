@@ -22,7 +22,7 @@ use std::{
 ///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
 ///     let regular_client = Client::connect("127.0.0.1:6379").await?;
 ///
-///     regular_client.flushdb(FlushingMode::Sync).send().await?;
+///     regular_client.flushdb(FlushingMode::Sync).await?;
 ///
 ///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
 ///
@@ -86,13 +86,13 @@ impl PubSubStream {
         let mut channels = Vec::<String>::new();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
-            let _result = self.client.unsubscribe(channels).send().await?;
+            let _result = self.client.unsubscribe(channels).await?;
         }
 
         let mut patterns = Vec::<String>::new();
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
-            let _result = self.client.punsubscribe(patterns).send().await?;
+            let _result = self.client.punsubscribe(patterns).await?;
         }
 
         self.closed = true;
@@ -122,13 +122,13 @@ impl Drop for PubSubStream {
         let mut channels = Vec::<String>::new();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
-            let _result = self.client.unsubscribe(channels).send_and_forget();
+            let _result = self.client.unsubscribe(channels).forget();
         }
 
         let mut patterns = Vec::<String>::new();
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
-            let _result = self.client.punsubscribe(patterns).send_and_forget();
+            let _result = self.client.punsubscribe(patterns).forget();
         }
     }
 }

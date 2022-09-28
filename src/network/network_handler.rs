@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Value},
+    resp::{Array, BulkString, Value, CommandArgs},
     spawn, Connection, Error, Message, Result,
 };
 use futures::{
@@ -31,6 +31,7 @@ pub(crate) struct NetworkHandler {
     /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unscribe from
     pending_unsubscriptions: VecDeque<usize>,
     subscriptions: HashMap<Vec<u8>, PubSubSender>,
+    is_reply_on: bool,
 }
 
 impl NetworkHandler {
@@ -47,6 +48,7 @@ impl NetworkHandler {
             pending_subscriptions: HashMap::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
+            is_reply_on: true,
         };
 
         spawn(async move {
@@ -79,8 +81,26 @@ impl NetworkHandler {
 
             match &self.status {
                 Status::Connected => {
-                    if let "SUBSCRIBE" | "PSUBSCRIBE" = msg.command.name {
-                        self.status = Status::Subscribing;
+                    match msg.command.name {
+                        "SUBSCRIBE" | "PSUBSCRIBE" => {
+                            self.status = Status::Subscribing;
+                        }
+                        "CLIENT" => match &msg.command.args {
+                            CommandArgs::Array2(args)
+                                if args[0].as_bytes() == b"REPLY"
+                                    && (args[1].as_bytes() == b"OFF" || args[1].as_bytes() == b"SKIP") =>
+                            {
+                                self.is_reply_on = false
+                            }
+                            CommandArgs::Array2(args)
+                                if args[0].as_bytes() == b"REPLY"
+                                    && args[1].as_bytes() == b"ON" =>
+                            {
+                                self.is_reply_on = true
+                            },
+                            _ => ()
+                        },
+                        _ => (),
                     }
                     self.send_message(msg).await;
                 }
@@ -111,9 +131,9 @@ impl NetworkHandler {
     async fn send_message(&mut self, msg: Message) {
         let command = msg.command;
         let value_sender = msg.value_sender;
-        match self.connection.write(command).await {
-            Ok(()) => self.value_senders.push_back(value_sender),
-            Err(_e) => self.value_senders.push_back(value_sender),
+        match (self.is_reply_on, self.connection.write(command).await) {
+            (true, _) => self.value_senders.push_back(value_sender),
+            (false, _) => ()
         }
     }
 
@@ -159,13 +179,13 @@ impl NetworkHandler {
     }
 
     fn receive_result(&mut self, value: Result<Value>) {
-        //println!("Received result {value:?}");
-
         match self.value_senders.pop_front() {
             Some(Some(value_sender)) => {
                 let _result = value_sender.send(value);
             }
-            Some(None) => (), // fire & forget
+            Some(None) => {
+                println!("forget value {value:?}"); // fire & forget
+            }
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance
                 assert!(value.is_err(), "Received unexpected message: {value:?}",);

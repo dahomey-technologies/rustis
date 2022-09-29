@@ -1,6 +1,6 @@
 use crate::{
-    network::spawn, tests::get_test_client, ClientCommandResult, ClientKillOptions,
-    ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
+    network::spawn, tests::get_test_client, ClientCachingMode, ClientCommandResult,
+    ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
     ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error, FlushingMode,
     GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result, ServerCommands,
     StringCommands,
@@ -196,6 +196,62 @@ async fn client_tracking() -> Result<()> {
     client1
         .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
         .await?;
+
+    // optin
+    client1
+        .client_tracking(
+            ClientTrackingStatus::On,
+            ClientTrackingOptions::default()
+                .redirect(invalidation_id)
+                .optin(),
+        )
+        .await?;
+
+    // Redis will not track our local caching because we are optin
+    let _value: String = client1.get("key").await?;
+
+    client2.set("key", "new_value2").await?;
+
+    // Redis will track our local caching because of the client_caching command
+    client1.client_caching(ClientCachingMode::Yes).await?;
+    let _value: String = client1.get("key").await?;
+
+    client2.set("key", "new_value3").await?;
+
+    let (_channel, keys_to_invalidate): (String, Vec<String>) =
+        invalidation_stream.next().await.unwrap()?.into()?;
+    assert_eq!(1, keys_to_invalidate.len());
+    assert_eq!("key", keys_to_invalidate[0]);
+
+    // broadcasting mode
+    client1
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
+
+    client1
+        .client_tracking(
+            ClientTrackingStatus::On,
+            ClientTrackingOptions::default()
+                .redirect(invalidation_id)
+                .prefix("k")
+                .broadcasting(),
+        )
+        .await?;
+
+    invalidation_stream.close().await?;
+    let mut invalidation_stream = client1_invalidations
+        .subscribe("__redis__:invalidate")
+        .await?;
+
+    // Redis will track our local caching because key is in the prefix pattern we just set
+    let _value: String = client1.get("key").await?;
+
+    client2.set("key", "new_value4").await?;
+
+    let (_channel, keys_to_invalidate): (String, Vec<String>) =
+        invalidation_stream.next().await.unwrap()?.into()?;
+    assert_eq!(1, keys_to_invalidate.len());
+    assert_eq!("key", keys_to_invalidate[0]);
 
     Ok(())
 }

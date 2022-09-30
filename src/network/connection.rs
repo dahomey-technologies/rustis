@@ -1,6 +1,6 @@
 use crate::{
     resp::{Command, CommandEncoder, Value, ValueDecoder},
-    tcp_connect, Result, TcpStreamReader, TcpStreamWriter,
+    tcp_connect, Config, Result, TcpStreamReader, TcpStreamWriter,
 };
 use futures::{SinkExt, StreamExt};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -12,8 +12,8 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub async fn initialize(addr: impl Into<String>) -> Result<Self> {
-        let addr = addr.into();
+    pub async fn initialize(config: Config) -> Result<Self> {
+        let addr = config.to_addr();
         let (reader, writer) = tcp_connect(&addr).await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);

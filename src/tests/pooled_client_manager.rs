@@ -7,7 +7,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pooled_client_manager() -> Result<()> {
-    let manager = PooledClientManager::new(get_default_addr());
+    let manager = PooledClientManager::new(get_default_addr())?;
     let pool = crate::bb8::Pool::builder().build(manager).await?;
     let client = pool.get().await.unwrap();
 

@@ -1,6 +1,6 @@
 use crate::{
-    resp::{Array, BulkString, Value, CommandArgs},
-    spawn, Connection, Error, Message, Result,
+    resp::{cmd, Array, BulkString, CommandArgs, ResultValueExt, Value},
+    spawn, Config, Connection, Error, Message, Result,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -23,6 +23,7 @@ enum Status {
 }
 
 pub(crate) struct NetworkHandler {
+    config: Config,
     status: Status,
     connection: Connection,
     msg_receiver: MsgReceiver,
@@ -35,12 +36,13 @@ pub(crate) struct NetworkHandler {
 }
 
 impl NetworkHandler {
-    pub async fn connect(addr: impl Into<String>) -> Result<MsgSender> {
-        let connection = Connection::initialize(addr).await?;
+    pub async fn connect(config: Config) -> Result<MsgSender> {
+        let connection = Connection::initialize(config.clone()).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let value_senders = VecDeque::new();
 
         let mut network_handler = NetworkHandler {
+            config,
             status: Status::Connected,
             connection,
             msg_receiver,
@@ -60,7 +62,53 @@ impl NetworkHandler {
         Ok(msg_sender)
     }
 
-    pub async fn network_loop(&mut self) -> Result<()> {
+    async fn post_connect(&mut self) -> Result<()> {
+        self.authenticate().await?;
+        self.select().await?;
+
+        Ok(())
+    }
+
+    async fn authenticate(&mut self) -> Result<()> {
+        if let Some(password) = &self.config.password {
+            let mut command = cmd("AUTH");
+
+            if let Some(username) = &self.config.username {
+                command = command.arg(username.clone());
+            }
+
+            command = command.arg(password.clone());
+
+            self.connection.write(command).await?;
+            self.connection
+                .read()
+                .await
+                .ok_or(Error::Internal("Disconnected".to_owned()))?
+                .into_result()?;
+        }
+
+        Ok(())
+    }
+
+    /// Select default database
+    async fn select(&mut self) -> Result<()> {
+        if self.config.database != 0 {
+            let command = cmd("SELECT").arg(self.config.database);
+
+            self.connection.write(command).await?;
+            self.connection
+                .read()
+                .await
+                .ok_or(Error::Internal("Disconnected".to_owned()))?
+                .into_result()?;
+        }
+
+        Ok(())
+    }
+
+    async fn network_loop(&mut self) -> Result<()> {
+        self.post_connect().await?;
+
         loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => if !self.handle_message(msg).await { break; },
@@ -88,7 +136,8 @@ impl NetworkHandler {
                         "CLIENT" => match &msg.command.args {
                             CommandArgs::Array2(args)
                                 if args[0].as_bytes() == b"REPLY"
-                                    && (args[1].as_bytes() == b"OFF" || args[1].as_bytes() == b"SKIP") =>
+                                    && (args[1].as_bytes() == b"OFF"
+                                        || args[1].as_bytes() == b"SKIP") =>
                             {
                                 self.is_reply_on = false
                             }
@@ -97,8 +146,8 @@ impl NetworkHandler {
                                     && args[1].as_bytes() == b"ON" =>
                             {
                                 self.is_reply_on = true
-                            },
-                            _ => ()
+                            }
+                            _ => (),
                         },
                         _ => (),
                     }
@@ -133,7 +182,7 @@ impl NetworkHandler {
         let value_sender = msg.value_sender;
         match (self.is_reply_on, self.connection.write(command).await) {
             (true, _) => self.value_senders.push_back(value_sender),
-            (false, _) => ()
+            (false, _) => (),
         }
     }
 
@@ -319,6 +368,10 @@ impl NetworkHandler {
             }
         }
 
-        self.connection.reconnect().await
+        if self.connection.reconnect().await {
+            self.post_connect().await.is_ok()
+        } else {
+            false
+        }
     }
 }

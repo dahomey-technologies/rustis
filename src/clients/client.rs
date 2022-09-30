@@ -1,11 +1,11 @@
 use crate::{
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, ClientResult, CommandResult, ConnectionCommands, Future, GenericCommands,
-    GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands, Message,
-    MsgSender, NetworkHandler, PrepareCommand, PubSubCommands, PubSubReceiver, PubSubSender,
-    PubSubStream, Result, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StreamCommands, StringCommands, Transaction, TransactionCommands, TransactionResult0,
-    ValueReceiver, ValueSender,
+    GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig,
+    ListCommands, Message, MsgSender, NetworkHandler, PrepareCommand, PubSubCommands,
+    PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands, ServerCommands,
+    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    TransactionCommands, TransactionResult0, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::sync::Arc;
@@ -20,8 +20,8 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
-    pub async fn connect(addr: impl Into<String>) -> Result<Self> {
-        let msg_sender = NetworkHandler::connect(addr).await?;
+    pub async fn connect(config: impl IntoConfig) -> Result<Self> {
+        let msg_sender = NetworkHandler::connect(config.into_config()?).await?;
 
         Ok(Self {
             msg_sender: Arc::new(msg_sender),

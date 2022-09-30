@@ -34,6 +34,8 @@ async fn config_set() -> Result<()> {
     assert_eq!(Some(&"513".to_owned()), configs.get("hash-max-listpack-entries"));
     assert_eq!(Some(&"129".to_owned()), configs.get("zset-max-listpack-entries"));
 
+    client.config_set([("hash-max-listpack-entries", 512), ("zset-max-listpack-entries", 128)]).await?;
+
     Ok(())
 }
 

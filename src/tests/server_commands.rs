@@ -1,9 +1,41 @@
+use std::collections::HashMap;
+
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
     ConnectionCommands, FlushingMode, Result, ServerCommands, StringCommands,
 };
 use serial_test::serial;
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn config_get() -> Result<()> {
+    let client  = get_test_client().await?;
+
+    let configs: HashMap<String, String> = client.config_get(["hash-max-listpack-entries", "zset-max-listpack-entries"]).await?;
+    assert_eq!(2, configs.len());
+    assert_eq!(Some(&"512".to_owned()), configs.get("hash-max-listpack-entries"));
+    assert_eq!(Some(&"128".to_owned()), configs.get("zset-max-listpack-entries"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn config_set() -> Result<()> {
+    let client  = get_test_client().await?;
+
+    client.config_set([("hash-max-listpack-entries", 513), ("zset-max-listpack-entries", 129)]).await?;
+
+    let configs: HashMap<String, String> = client.config_get(["hash-max-listpack-entries", "zset-max-listpack-entries"]).await?;
+    assert_eq!(2, configs.len());
+    assert_eq!(Some(&"513".to_owned()), configs.get("hash-max-listpack-entries"));
+    assert_eq!(Some(&"129".to_owned()), configs.get("zset-max-listpack-entries"));
+
+    Ok(())
+}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

@@ -1,5 +1,8 @@
 use crate::{
-    resp::{cmd, CommandArgs, IntoArgs},
+    resp::{
+        cmd, BulkString, CommandArgs, FromValue, IntoArgs, KeyValueArgOrCollection,
+        SingleArgOrCollection, FromKeyValueValueArray,
+    },
     CommandResult, PrepareCommand,
 };
 
@@ -7,6 +10,41 @@ use crate::{
 /// # See Also
 /// [Redis Server Management Commands](https://redis.io/commands/?group=server)
 pub trait ServerCommands<T>: PrepareCommand<T> {
+    /// Used to read the configuration parameters of a running Redis server.
+    ///
+    /// For every key that does not hold a string value or does not exist,
+    /// the special value nil is returned. Because of this, the operation never fails.
+    ///
+    /// # Return
+    /// Array reply: collection of the requested params with their matching values.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/mget/](https://redis.io/commands/mget/)
+    #[must_use]
+    fn config_get<P, PP, V, VV>(&self, params: PP) -> CommandResult<T, VV>
+    where
+        P: Into<BulkString>,
+        PP: SingleArgOrCollection<P>,
+        V: FromValue,
+        VV: FromKeyValueValueArray<String, V>
+    {
+        self.prepare_command(cmd("CONFIG").arg("GET").arg(params))
+    }
+
+    /// Used in order to reconfigure the server at run time without the need to restart Redis.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/config-set/](https://redis.io/commands/config-set/)
+    #[must_use]
+    fn config_set<P, V, C>(&self, configs: C) -> CommandResult<T, ()>
+    where
+        P: Into<BulkString>,
+        V: Into<BulkString>,
+        C: KeyValueArgOrCollection<P, V>,
+    {
+        self.prepare_command(cmd("CONFIG").arg("SET").arg(configs))
+    }
+
     /// Delete all the keys of the currently selected DB.
     ///
     /// # See Also

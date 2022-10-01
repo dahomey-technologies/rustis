@@ -1,15 +1,16 @@
-use crate::{Result, TlsConfig};
+use crate::Result;
+#[cfg(feature = "tls")]
+use crate::TlsConfig;
 use futures::Future;
-use std::time::Duration;
 
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamWriter = tokio::io::WriteHalf<tokio::net::TcpStream>;
-#[cfg(feature = "tokio-runtime")]
+#[cfg(feature = "tokio-tls")]
 pub(crate) type TcpTlsStreamReader =
     tokio::io::ReadHalf<tokio_native_tls::TlsStream<tokio::net::TcpStream>>;
-#[cfg(feature = "tokio-runtime")]
+#[cfg(feature = "tokio-tls")]
 pub(crate) type TcpTlsStreamWriter =
     tokio::io::WriteHalf<tokio_native_tls::TlsStream<tokio::net::TcpStream>>;
 
@@ -19,11 +20,11 @@ pub(crate) type TcpStreamReader =
 #[cfg(feature = "async-std-runtime")]
 pub(crate) type TcpStreamWriter =
     tokio_util::compat::Compat<futures::io::WriteHalf<async_std::net::TcpStream>>;
-#[cfg(feature = "async-std-runtime")]
+#[cfg(feature = "async-std-tls")]
 pub(crate) type TcpTlsStreamReader = tokio_util::compat::Compat<
     futures::io::ReadHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
 >;
-#[cfg(feature = "async-std-runtime")]
+#[cfg(feature = "async-std-tls")]
 pub(crate) type TcpTlsStreamWriter = tokio_util::compat::Compat<
     futures::io::WriteHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
 >;
@@ -44,6 +45,8 @@ pub(crate) async fn tcp_connect(
 }
 
 #[cfg(feature = "tokio-runtime")]
+#[cfg(feature = "tokio-tls")]
+#[cfg(feature = "tls")]
 pub(crate) async fn tcp_tls_connect(
     host: &str,
     port: u16,
@@ -84,6 +87,8 @@ pub(crate) async fn tcp_connect(
 }
 
 #[cfg(feature = "async-std-runtime")]
+#[cfg(feature = "async-std-tls")]
+#[cfg(feature = "tls")]
 pub(crate) async fn tcp_tls_connect(
     host: &str,
     port: u16,
@@ -123,16 +128,4 @@ where
     T: Send + 'static,
 {
     async_std::task::spawn(future);
-}
-
-#[allow(dead_code)]
-#[cfg(feature = "tokio-runtime")]
-pub(crate) async fn sleep(duration: Duration) {
-    tokio::time::sleep(duration).await;
-}
-
-#[allow(dead_code)]
-#[cfg(feature = "async-std-runtime")]
-pub(crate) async fn sleep(duration: Duration) {
-    async_std::task::sleep(duration).await;
 }

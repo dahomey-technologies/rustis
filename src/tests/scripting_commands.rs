@@ -1,7 +1,9 @@
 use crate::{
-    network::sleep, resp::BulkString, spawn, tests::get_test_client, CallBuilder,
-    ClientCommandResult, FlushingMode, FunctionListOptions, LibraryInfo, Result, ScriptingCommands,
-    ServerCommands, StringCommands,
+    resp::BulkString,
+    spawn,
+    tests::{get_test_client, sleep},
+    CallBuilder, ClientCommandResult, FlushingMode, FunctionListOptions, LibraryInfo, Result,
+    ScriptingCommands, ServerCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -11,7 +13,7 @@ use serial_test::serial;
 async fn eval() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: String = client
+    let result: String = client 
         .eval(CallBuilder::script("return ARGV[1]").args("hello"))
         .await?;
     assert_eq!("hello", result);

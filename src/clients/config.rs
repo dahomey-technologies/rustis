@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+#[cfg(feature = "tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
 use url::Url;
 
@@ -12,6 +13,7 @@ pub struct Config {
     pub username: Option<String>,
     pub password: Option<String>,
     pub database: usize,
+    #[cfg(feature = "tls")]
     pub tls_config: Option<TlsConfig>,
 }
 
@@ -56,6 +58,7 @@ impl Config {
                         username,
                         password,
                         database,
+                        #[cfg(feature = "tls")]
                         tls_config: if scheme == "rediss" {
                             Some(TlsConfig::default())
                         } else {
@@ -89,11 +92,15 @@ impl Config {
 
 impl ToString for Config {
     fn to_string(&self) -> String {
+        #[cfg(feature = "tls")]
         let mut s = String::from(if self.tls_config.is_some() {
             "rediss://"
         } else {
             "redis://"
         });
+
+        #[cfg(not(feature = "tls"))]
+        let mut s = String::from("redis://");
 
         if let Some(username) = &self.username {
             s.push_str(&username);
@@ -121,6 +128,7 @@ impl ToString for Config {
 /// Config for TLS.
 ///
 /// See [TlsConnectorBuilder](https://docs.rs/tokio-native-tls/0.3.0/tokio_native_tls/native_tls/struct.TlsConnectorBuilder.html) documentation
+#[cfg(feature = "tls")]
 #[derive(Clone)]
 pub struct TlsConfig {
     identity: Option<Identity>,
@@ -133,6 +141,7 @@ pub struct TlsConfig {
     use_sni: bool,
 }
 
+#[cfg(feature = "tls")]
 impl Default for TlsConfig {
     fn default() -> Self {
         Self {
@@ -148,6 +157,7 @@ impl Default for TlsConfig {
     }
 }
 
+#[cfg(feature = "tls")]
 impl TlsConfig {
     pub fn identity(&mut self, identity: Identity) -> &mut Self {
         self.identity = Some(identity);
@@ -230,6 +240,7 @@ impl<T: Into<String>> IntoConfig for (T, u16) {
             username: None,
             password: None,
             database: 0,
+            #[cfg(feature = "tls")]
             tls_config: None,
         })
     }

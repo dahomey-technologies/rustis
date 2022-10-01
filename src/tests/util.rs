@@ -1,7 +1,12 @@
-use crate::{Client, IntoConfig, Result};
+#[cfg(feature = "tls")]
+use crate::IntoConfig;
+use crate::{Client, Result};
+#[cfg(feature = "tls")]
 use native_tls::Certificate;
+use std::time::Duration;
 
 /// copy-paste of the root certificate located at crt/certs/ca.crt
+#[cfg(feature = "tls")]
 const ROOT_CERTIFICATE: &str = r#"-----BEGIN CERTIFICATE-----
 MIIFSzCCAzOgAwIBAgIULTp8cWRl326SijHSTdHpP0y/SkAwDQYJKoZIhvcNAQEL
 BQAwNTETMBEGA1UECgwKUmVkaXMgVGVzdDEeMBwGA1UEAwwVQ2VydGlmaWNhdGUg
@@ -49,6 +54,7 @@ pub(crate) fn get_default_port() -> u16 {
     }
 }
 
+#[cfg(feature = "tls")]
 pub(crate) fn get_default_tls_port() -> u16 {
     match std::env::var("REDIS_TLS_PORT") {
         Ok(port) => port.parse::<u16>().unwrap(),
@@ -64,6 +70,7 @@ pub(crate) async fn get_test_client() -> Result<Client> {
     Client::connect(get_default_addr()).await
 }
 
+#[cfg(feature = "tls")]
 pub(crate) async fn get_tls_test_client() -> Result<Client> {
     let uri = format!(
         "rediss://:pwd@{}:{}",
@@ -81,4 +88,16 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
     }
 
     Client::connect(config).await
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "tokio-runtime")]
+pub(crate) async fn sleep(duration: Duration) {
+    tokio::time::sleep(duration).await;
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "async-std-runtime")]
+pub(crate) async fn sleep(duration: Duration) {
+    async_std::task::sleep(duration).await;
 }

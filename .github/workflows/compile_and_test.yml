@@ -72,7 +72,7 @@ jobs:
         ports:
           - 6380:6379
         volumes:
-          - ./certs:/certs
+          - certs:/certs
 
     steps:
       - name: Checkout sources

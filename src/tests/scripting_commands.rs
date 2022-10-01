@@ -1,7 +1,7 @@
 use crate::{
-    resp::BulkString, spawn, tests::get_test_client, CallBuilder, ClientCommandResult,
-    FlushingMode, FunctionListOptions, LibraryInfo, Result, ScriptingCommands, ServerCommands,
-    StringCommands,
+    network::sleep, resp::BulkString, spawn, tests::get_test_client, CallBuilder,
+    ClientCommandResult, FlushingMode, FunctionListOptions, LibraryInfo, Result, ScriptingCommands,
+    ServerCommands, StringCommands,
 };
 use serial_test::serial;
 
@@ -209,7 +209,7 @@ async fn function_stats() -> Result<()> {
         let _ = blocking_fcall().await;
     });
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    sleep(std::time::Duration::from_millis(100)).await;
 
     let function_stat = client.function_stats().await?;
     assert!(function_stat.running_script.is_some());
@@ -295,7 +295,7 @@ async fn script_kill() -> Result<()> {
         let _ = blocking_script(sha1).await;
     });
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    sleep(std::time::Duration::from_millis(100)).await;
 
     client.script_kill().await?;
 

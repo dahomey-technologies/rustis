@@ -1,5 +1,6 @@
 use crate::Result;
 use futures::Future;
+use std::time::Duration;
 
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
@@ -52,4 +53,16 @@ where
     T: Send + 'static,
 {
     async_std::task::spawn(future);
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "tokio-runtime")]
+pub(crate) async fn sleep(duration: Duration) {
+    tokio::time::sleep(duration).await;
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "async-std-runtime")]
+pub(crate) async fn sleep(duration: Duration) {
+    async_std::task::sleep(duration).await;
 }

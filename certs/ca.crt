@@ -1,7 +1,4 @@
-use crate::{Client, Result, IntoConfig};
-
-/// copy-paste of the root certificate located at crt/certs/ca.crt
-const ROOT_CERTIFICATE: &str = r#"-----BEGIN CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
 MIIFSzCCAzOgAwIBAgIULTp8cWRl326SijHSTdHpP0y/SkAwDQYJKoZIhvcNAQEL
 BQAwNTETMBEGA1UECgwKUmVkaXMgVGVzdDEeMBwGA1UEAwwVQ2VydGlmaWNhdGUg
 QXV0aG9yaXR5MB4XDTIyMTAwMTA4MjMyM1oXDTMyMDkyODA4MjMyM1owNTETMBEG
@@ -32,52 +29,3 @@ I22ZhrayIRlXmMUmivMWBriz44yu6bo74EV6zHNvF1LYR7u2ajtdzlk1fHSE4OfM
 +J8SNDwRYRFTxZPTK2Yf/PQtyl+xaWAHcT7NumXQcqOVxq9jfaurIOCWz4i4BIeK
 bsPEVuonk6XLwUlSNI2W
 -----END CERTIFICATE-----
-"#;
-
-pub(crate) fn get_default_host() -> String {
-    match std::env::var("REDIS_HOST") {
-        Ok(host) => host,
-        Err(_) => "127.0.0.1".to_string(),
-    }
-}
-
-pub(crate) fn get_default_port() -> u16 {
-    match std::env::var("REDIS_PORT") {
-        Ok(port) => port.parse::<u16>().unwrap(),
-        Err(_) => 6379,
-    }
-}
-
-pub(crate) fn get_default_tls_port() -> u16 {
-    match std::env::var("REDIS_TLS_PORT") {
-        Ok(port) => port.parse::<u16>().unwrap(),
-        Err(_) => 6380,
-    }
-}
-
-pub(crate) fn get_default_addr() -> String {
-    format!("{}:{}", get_default_host(), get_default_port())
-}
-
-pub(crate) async fn get_test_client() -> Result<Client> {
-    Client::connect(get_default_addr()).await
-}
-
-pub(crate) async fn get_tls_test_client() -> Result<Client> {
-    let uri = format!(
-        "rediss://:pwd@{}:{}",
-        get_default_host(),
-        get_default_tls_port()
-    );
-
-    let mut config = uri.into_config()?;
-
-    if let Some(tls_config) = &mut config.tls_config {
-        let root_cert = tokio_native_tls::native_tls::Certificate::from_pem(ROOT_CERTIFICATE.as_bytes())?;
-        tls_config.root_certificates(vec![root_cert]);
-        // non trusted cert for tests   
-        tls_config.danger_accept_invalid_certs(true);
-    }
-
-    Client::connect(config).await
-}

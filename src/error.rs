@@ -71,3 +71,9 @@ impl From<ParseFloatError> for Error {
         Error::Parse(e.to_string())
     }
 }
+
+impl From<tokio_native_tls::native_tls::Error> for Error {
+    fn from(e: tokio_native_tls::native_tls::Error) -> Self {
+        Error::Network(e.to_string())
+    }
+}

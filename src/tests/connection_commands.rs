@@ -1,5 +1,5 @@
 use crate::{
-    network::spawn, tests::get_test_client, ClientCachingMode, ClientCommandResult,
+    network::{spawn, sleep}, tests::get_test_client, ClientCachingMode, ClientCommandResult,
     ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
     ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error, FlushingMode,
     GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result, ServerCommands,
@@ -134,15 +134,10 @@ async fn client_reply() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     client.client_reply(ClientReplyMode::Off).forget()?;
-    //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     client.set("key", "value").forget()?;
-    //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     client.client_reply(ClientReplyMode::On).await?;
-    //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     let value: String = client.get::<&str, String>("key").await?;
     assert_eq!("value", value);
-
-    //tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())
 }
@@ -301,7 +296,7 @@ async fn client_unblock() -> Result<()> {
         assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("UNBLOCKED")));
     });
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    sleep(std::time::Duration::from_millis(100)).await;
     client2
         .client_unblock(client_id, ClientUnblockMode::Error)
         .await?;

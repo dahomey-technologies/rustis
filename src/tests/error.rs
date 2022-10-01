@@ -32,7 +32,7 @@ async fn unknown_command() -> Result<()> {
 //         let key = format!("key{}", i);
 //         let result: Result<String> = client.get(key.clone()).await;
 //         println!("test key: {:?}, value: {:?}", key, result);
-//         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+//         sleep(std::time::Duration::from_secs(1)).await;
 //     }
 
 //     Ok(())
@@ -62,7 +62,6 @@ async fn unknown_command() -> Result<()> {
 //                     let key = format!("key{}", i);
 //                     let result: Result<String> = db.get(key.clone()).await;
 //                     println!("test key: {:?}, value: {:?}", key, result);
-//                     //tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 //                 }
 //             })
 //         })

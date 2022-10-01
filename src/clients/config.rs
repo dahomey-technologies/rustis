@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use tokio_native_tls::native_tls::{Certificate, Protocol, TlsConnector, Identity};
+use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
 use url::Url;
 
 const DEFAULT_PORT: u16 = 6379;
@@ -56,7 +56,11 @@ impl Config {
                         username,
                         password,
                         database,
-                        tls_config: if scheme == "rediss" { Some(TlsConfig::default()) } else { None},
+                        tls_config: if scheme == "rediss" {
+                            Some(TlsConfig::default())
+                        } else {
+                            None
+                        },
                     });
                 }
             }
@@ -85,7 +89,11 @@ impl Config {
 
 impl ToString for Config {
     fn to_string(&self) -> String {
-        let mut s = String::from(if self.tls_config.is_some() { "rediss://" } else { "redis://" });
+        let mut s = String::from(if self.tls_config.is_some() {
+            "rediss://"
+        } else {
+            "redis://"
+        });
 
         if let Some(username) = &self.username {
             s.push_str(&username);
@@ -111,7 +119,7 @@ impl ToString for Config {
 }
 
 /// Config for TLS.
-/// 
+///
 /// See [TlsConnectorBuilder](https://docs.rs/tokio-native-tls/0.3.0/tokio_native_tls/native_tls/struct.TlsConnectorBuilder.html) documentation
 #[derive(Clone)]
 pub struct TlsConfig {
@@ -176,12 +184,15 @@ impl TlsConfig {
         self
     }
 
-    pub fn danger_accept_invalid_hostnames(&mut self, danger_accept_invalid_hostnames: bool) -> &mut Self {
+    pub fn danger_accept_invalid_hostnames(
+        &mut self,
+        danger_accept_invalid_hostnames: bool,
+    ) -> &mut Self {
         self.danger_accept_invalid_hostnames = danger_accept_invalid_hostnames;
         self
     }
 
-    pub fn into_tls_connector(&self) -> Result<TlsConnector> {
+    pub fn into_tls_connector_builder(&self) ->TlsConnectorBuilder {
         let mut builder = TlsConnector::builder();
 
         if let Some(root_certificates) = &self.root_certificates {
@@ -197,8 +208,7 @@ impl TlsConfig {
         builder.danger_accept_invalid_hostnames(self.danger_accept_invalid_hostnames);
         builder.use_sni(self.use_sni);
 
-        let connector = builder.build()?;
-        Ok(connector)
+       builder
     }
 }
 

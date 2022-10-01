@@ -1,4 +1,5 @@
-use crate::{Client, Result, IntoConfig};
+use crate::{Client, IntoConfig, Result};
+use native_tls::Certificate;
 
 /// copy-paste of the root certificate located at crt/certs/ca.crt
 const ROOT_CERTIFICATE: &str = r#"-----BEGIN CERTIFICATE-----
@@ -73,9 +74,9 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
     let mut config = uri.into_config()?;
 
     if let Some(tls_config) = &mut config.tls_config {
-        let root_cert = tokio_native_tls::native_tls::Certificate::from_pem(ROOT_CERTIFICATE.as_bytes())?;
+        let root_cert = Certificate::from_pem(ROOT_CERTIFICATE.as_bytes())?;
         tls_config.root_certificates(vec![root_cert]);
-        // non trusted cert for tests   
+        // non trusted cert for tests
         tls_config.danger_accept_invalid_certs(true);
     }
 

@@ -1,10 +1,9 @@
 use crate::{
     resp::{Command, CommandEncoder, Value, ValueDecoder},
     tcp_connect, tcp_tls_connect, Config, Result, TcpStreamReader, TcpStreamWriter,
-    TcpTlsStreamReader, TcpTlsStreamWriter,
+    TcpTlsStreamReader, TcpTlsStreamWriter, TlsConfig,
 };
 use futures::{SinkExt, StreamExt};
-use tokio_native_tls::native_tls::TlsConnector;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 enum Streams {
@@ -21,7 +20,7 @@ enum Streams {
 pub struct Connection {
     host: String,
     port: u16,
-    tls_connector: Option<TlsConnector>,
+    tls_config: Option<TlsConfig>,
     streams: Streams,
 }
 
@@ -29,17 +28,14 @@ impl Connection {
     pub async fn initialize(config: Config) -> Result<Self> {
         let host = config.host.clone();
         let port = config.port;
-        let tls_connector = config
-            .tls_config
-            .map(|c| c.into_tls_connector())
-            .transpose()?;
+        let tls_config = config.tls_config.clone();
 
-        let streams = Self::connect(&host, port, &tls_connector).await?;
+        let streams = Self::connect(&host, port, &tls_config).await?;
 
         Ok(Self {
             host,
             port,
-            tls_connector,
+            tls_config,
             streams,
         })
     }
@@ -65,7 +61,7 @@ impl Connection {
     }
 
     pub(crate) async fn reconnect(&mut self) -> bool {
-        match Self::connect(&self.host, self.port, &&self.tls_connector.clone()).await {
+        match Self::connect(&self.host, self.port, &self.tls_config).await {
             Ok(streams) => {
                 self.streams = streams;
                 true
@@ -82,10 +78,10 @@ impl Connection {
     async fn connect(
         host: &str,
         port: u16,
-        tls_connector: &Option<TlsConnector>,
+        tls_config: &Option<TlsConfig>,
     ) -> Result<Streams> {
-        if let Some(tls_connector) = tls_connector {
-            let (reader, writer) = tcp_tls_connect(&host, port, tls_connector.clone()).await?;
+        if let Some(tls_config) = tls_config {
+            let (reader, writer) = tcp_tls_connect(&host, port, tls_config).await?;
             let framed_read = FramedRead::new(reader, ValueDecoder);
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))

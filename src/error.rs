@@ -71,3 +71,10 @@ impl From<ParseFloatError> for Error {
         Error::Parse(e.to_string())
     }
 }
+
+#[cfg(feature = "tls")]
+impl From<native_tls::Error> for Error {
+    fn from(e: native_tls::Error) -> Self {
+        Error::Network(e.to_string())
+    }
+}

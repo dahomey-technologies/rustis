@@ -113,6 +113,13 @@ fn into_config() -> Result<()> {
             .into_config()?
             .to_string()
     );
+    #[cfg(feature = "tls")]
+    assert_eq!(
+        "rediss://username:pwd@127.0.0.1:6379/1",
+        "rediss://username:pwd@127.0.0.1/1"
+            .into_config()?
+            .to_string()
+    );
     assert!("127.0.0.1:xyz".into_config().is_err());
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());

@@ -19,6 +19,7 @@ mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
 mod transaction;
+mod tls;
 mod util;
 mod value;
 

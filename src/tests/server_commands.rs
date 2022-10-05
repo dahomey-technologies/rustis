@@ -1,8 +1,9 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo,
-    ConnectionCommands, Error, FlushingMode, Result, ServerCommands, StringCommands, CommandDoc,
+    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
+    CommandListOptions, ConnectionCommands, Error, FlushingMode, Result, ServerCommands,
+    StringCommands,
 };
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
@@ -235,7 +236,9 @@ async fn acl_whoami() -> Result<()> {
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("default", current_user);
 
-    client.acl_setuser("foo", ["on", ">pwd", "+ACL|WHOAMI"]).await?;
+    client
+        .acl_setuser("foo", ["on", ">pwd", "+ACL|WHOAMI"])
+        .await?;
     client.auth(Some("foo"), "pwd").await?;
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("foo", current_user);
@@ -290,7 +293,97 @@ async fn command_count() -> Result<()> {
 async fn command_docs() -> Result<()> {
     let client = get_test_client().await?;
 
-    let _command_docs: HashMap<String, CommandDoc> = client.command_docs(["XADD", "GET", "SET"]).await?;
+    let _command_docs: HashMap<String, CommandDoc> =
+        client.command_docs(["XADD", "GET", "SET"]).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_getkeys() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let keys: Vec<String> = client
+        .command_getkeys(["MSET", "a", "b", "c", "d", "e", "f"])
+        .await?;
+    assert!(keys.contains(&"a".to_owned()));
+    assert!(keys.contains(&"c".to_owned()));
+    assert!(keys.contains(&"e".to_owned()));
+
+    let keys: Vec<String> = client
+        .command_getkeys(["EVAL", "not consulted", "3", "key1", "key2", "key3", "arg1"])
+        .await?;
+    assert!(keys.contains(&"key1".to_owned()));
+    assert!(keys.contains(&"key2".to_owned()));
+    assert!(keys.contains(&"key3".to_owned()));
+
+    let keys: Vec<String> = client
+        .command_getkeys(["SORT", "mylist", "ALPHA", "STORE", "outlist"])
+        .await?;
+    assert!(keys.contains(&"mylist".to_owned()));
+    assert!(keys.contains(&"outlist".to_owned()));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_getkeysandflags() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let keys_and_flags: HashMap<String, Vec<String>> = client
+        .command_getkeysandflags(["MSET", "a", "b", "c", "d", "e", "f"])
+        .await?;
+    assert!(keys_and_flags.contains_key(&"a".to_owned()));
+    assert!(keys_and_flags.contains_key(&"c".to_owned()));
+    assert!(keys_and_flags.contains_key(&"e".to_owned()));
+
+    let keys_and_flags: HashMap<String, Vec<String>> = client
+        .command_getkeysandflags(["EVAL", "not consulted", "3", "key1", "key2", "key3", "arg1"])
+        .await?;
+    assert!(keys_and_flags.contains_key(&"key1".to_owned()));
+    assert!(keys_and_flags.contains_key(&"key2".to_owned()));
+    assert!(keys_and_flags.contains_key(&"key3".to_owned()));
+
+    let keys_and_flags: HashMap<String, Vec<String>> = client
+        .command_getkeysandflags(["LMOVE", "mylist1", "mylist2", "left", "left"])
+        .await?;
+    let flags = keys_and_flags.get(&"mylist1".to_owned()).unwrap();
+    assert_eq!("RW", flags[0]);
+    assert_eq!("access", flags[1]);
+    assert_eq!("delete", flags[2]);
+    let flags = keys_and_flags.get(&"mylist2".to_owned()).unwrap();
+    assert_eq!("RW", flags[0]);
+    assert_eq!("insert", flags[1]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_list() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let all_commands: Vec<String> = client.command_list(CommandListOptions::default()).await?;
+    assert!(all_commands.len() > 0);
+
+    let string_commands: Vec<String> = client
+        .command_list(CommandListOptions::default().filter_by_acl_category("string"))
+        .await?;
+    assert!(string_commands.len() > 0);
+    assert!(string_commands.contains(&"get".to_owned()));
+    assert!(string_commands.contains(&"set".to_owned()));
+
+    let config_commands: Vec<String> = client
+    .command_list(CommandListOptions::default().filter_by_pattern("config*"))
+    .await?;
+    assert!(config_commands.len() > 0);
+    assert!(config_commands.contains(&"config|get".to_owned()));
+    assert!(config_commands.contains(&"config|set".to_owned()));
 
     Ok(())
 }

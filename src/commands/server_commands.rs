@@ -241,7 +241,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// map key=command name, value=command doc
     ///
     /// # See Also
-    /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
+    /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
     fn command_docs<N, NN, DD>(&self, command_names: NN) -> CommandResult<T, DD>
     where
         N: Into<BulkString>,
@@ -249,6 +249,38 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         DD: FromKeyValueValueArray<String, CommandDoc>,
     {
         self.prepare_command(cmd("COMMAND").arg("DOCS").arg(command_names))
+    }
+
+    /// A helper command to let you find the keys from a full Redis command.
+    ///
+    /// # Return
+    /// list of keys from your command.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
+    fn command_getkeys<A, AA, KK>(&self, args: AA) -> CommandResult<T, KK>
+    where
+        A: Into<BulkString>,
+        AA: SingleArgOrCollection<A>,
+        KK: FromSingleValueArray<String>,
+    {
+        self.prepare_command(cmd("COMMAND").arg("GETKEYS").arg(args))
+    }
+
+    /// A helper command to let you find the keys from a full Redis command together with flags indicating what each key is used for.
+    ///
+    /// # Return
+    /// map of keys with their flags from your command.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
+    fn command_getkeysandflags<A, AA, KK>(&self, args: AA) -> CommandResult<T, KK>
+    where
+        A: Into<BulkString>,
+        AA: SingleArgOrCollection<A>,
+        KK: FromKeyValueValueArray<String, Vec<String>>,
+    {
+        self.prepare_command(cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
 
     /// Return an array with details about multiple Redis command.
@@ -264,6 +296,20 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         NN: SingleArgOrCollection<N>,
     {
         self.prepare_command(cmd("COMMAND").arg("INFO").arg(command_names))
+    }
+
+    /// Return an array of the server's command names based on optional filters
+    ///
+    /// # Return
+    /// an array of the server's command names.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-list/>](https://redis.io/commands/command-list/)
+    fn command_list<CC>(&self, options: CommandListOptions) -> CommandResult<T, CC>
+    where
+        CC: FromSingleValueArray<String>,
+    {
+        self.prepare_command(cmd("COMMAND").arg("LIST").arg(options))
     }
 
     /// Used to read the configuration parameters of a running Redis server.
@@ -841,7 +887,6 @@ impl FromValue for CommandDocFlag {
     }
 }
 
-
 #[derive(Debug)]
 pub struct HistoricalNote {
     pub version: String,
@@ -983,5 +1028,55 @@ impl FromValue for ArgumentFlag {
                 "Cannot parse ArgumentFlag from result".to_owned(),
             )),
         }
+    }
+}
+
+/// Options for the [`command_list`](crate::ServerCommands::command_list) command.
+#[derive(Default)]
+pub struct CommandListOptions {
+    command_args: CommandArgs,
+}
+
+impl CommandListOptions {
+    /// get the commands that belong to the module specified by `module-name`.
+    #[must_use]
+    pub fn filter_by_module_name<M: Into<BulkString>>(self, module_name: M) -> Self {
+        Self {
+            command_args: self
+                .command_args
+                .arg("FILTERBY")
+                .arg("MODULE")
+                .arg(module_name),
+        }
+    }
+
+    /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
+    #[must_use]
+    pub fn filter_by_acl_category<C: Into<BulkString>>(self, category: C) -> Self {
+        Self {
+            command_args: self
+                .command_args
+                .arg("FILTERBY")
+                .arg("ACLCAT")
+                .arg(category),
+        }
+    }
+
+    /// get the commands that match the given glob-like `pattern`.
+    #[must_use]
+    pub fn filter_by_pattern<P: Into<BulkString>>(self, pattern: P) -> Self {
+        Self {
+            command_args: self
+                .command_args
+                .arg("FILTERBY")
+                .arg("PATTERN")
+                .arg(pattern),
+        }
+    }
+}
+
+impl IntoArgs for CommandListOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

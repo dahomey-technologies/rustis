@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Command, CommandEncoder, Value, ValueDecoder},
+    resp::{Command, CommandEncoder, Value, ValueDecoder, Array},
     tcp_connect, Config, Result, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
@@ -49,7 +49,16 @@ impl Connection {
             #[cfg(feature = "tls")]
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
         } {
-            println!("Received result {value:?}");
+            match &value {
+                Ok(Value::Array(Array::Vec(array))) => {
+                    if array.len() > 100 {
+                        println!("Received result Array(Vec([...]))");                     
+                    } else {
+                        println!("Received result {value:?}");
+                    }
+                },
+                _ => println!("Received result {value:?}")
+            }
             Some(value)
         } else {
             None

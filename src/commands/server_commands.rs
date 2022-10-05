@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use crate::{
     resp::{
         cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    CommandResult, PrepareCommand,
+    CommandResult, Error, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Server Management
@@ -30,11 +32,11 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("ACL").arg("CAT").arg(options))
     }
 
-    /// Delete all the specified ACL users and terminate all 
+    /// Delete all the specified ACL users and terminate all
     /// the connections that are authenticated with such users.
     ///
     /// # Return
-    /// The number of users that were deleted. 
+    /// The number of users that were deleted.
     /// This number will not always match the number of arguments since certain users may not exist.
     ///
     /// # See Also
@@ -47,7 +49,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("ACL").arg("DELUSER").arg(usernames))
     }
 
-    /// Simulate the execution of a given command by a given user. 
+    /// Simulate the execution of a given command by a given user.
     ///
     /// # Return
     /// OK on success.
@@ -55,28 +57,38 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
-    fn acl_dryrun<U, C, R>(&self, username: U, command: C, options: AclDryRunOptions) -> CommandResult<T, R>
+    fn acl_dryrun<U, C, R>(
+        &self,
+        username: U,
+        command: C,
+        options: AclDryRunOptions,
+    ) -> CommandResult<T, R>
     where
         U: Into<BulkString>,
         C: Into<BulkString>,
-        R: FromValue
+        R: FromValue,
     {
-        self.prepare_command(cmd("ACL").arg("DRYRUN").arg(username).arg(command).arg(options))
+        self.prepare_command(
+            cmd("ACL")
+                .arg("DRYRUN")
+                .arg(username)
+                .arg(command)
+                .arg(options),
+        )
     }
 
-    /// Generates a password starting from /dev/urandom if available, 
-    /// otherwise (in systems without /dev/urandom) it uses a weaker 
+    /// Generates a password starting from /dev/urandom if available,
+    /// otherwise (in systems without /dev/urandom) it uses a weaker
     /// system that is likely still better than picking a weak password by hand.
     ///
     /// # Return
-    /// by default 64 bytes string representing 256 bits of pseudorandom data. 
-    /// Otherwise if an argument if needed, the output string length is the number 
+    /// by default 64 bytes string representing 256 bits of pseudorandom data.
+    /// Otherwise if an argument if needed, the output string length is the number
     /// of specified bits (rounded to the next multiple of 4) divided by 4.
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: FromValue>(&self, options: AclGenPassOptions) -> CommandResult<T, R>
-    {
+    fn acl_genpass<R: FromValue>(&self, options: AclGenPassOptions) -> CommandResult<T, R> {
         self.prepare_command(cmd("ACL").arg("GENPASS").arg(options))
     }
 
@@ -90,8 +102,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     fn acl_getuser<U, RR>(&self, username: U) -> CommandResult<T, RR>
     where
         U: Into<BulkString>,
-        RR: FromKeyValueValueArray<String, Value>
-
+        RR: FromKeyValueValueArray<String, Value>,
     {
         self.prepare_command(cmd("ACL").arg("GETUSER").arg(username))
     }
@@ -100,35 +111,33 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # Return
     /// An array of strings.
-    /// Each line in the returned array defines a different user, and the 
+    /// Each line in the returned array defines a different user, and the
     /// format is the same used in the redis.conf file or the external ACL file
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-list/>](https://redis.io/commands/acl-list/)
-    fn acl_list(&self) -> CommandResult<T, Vec<String>>
-    {
+    fn acl_list(&self) -> CommandResult<T, Vec<String>> {
         self.prepare_command(cmd("ACL").arg("LIST"))
     }
 
-    /// When Redis is configured to use an ACL file (with the aclfile configuration option), 
-    /// this command will reload the ACLs from the file, replacing all the current ACL rules 
-    /// with the ones defined in the file. 
+    /// When Redis is configured to use an ACL file (with the aclfile configuration option),
+    /// this command will reload the ACLs from the file, replacing all the current ACL rules
+    /// with the ones defined in the file.
     ///
     /// # Return
     /// An array of strings.
-    /// Each line in the returned array defines a different user, and the 
+    /// Each line in the returned array defines a different user, and the
     /// format is the same used in the redis.conf file or the external ACL file
-    /// 
+    ///
     /// # Errors
-    /// The command may fail with an error for several reasons: 
-    /// - if the file is not readable, 
+    /// The command may fail with an error for several reasons:
+    /// - if the file is not readable,
     /// - if there is an error inside the file, and in such case the error will be reported to the user in the error.
     /// - Finally the command will fail if the server is not configured to use an external ACL file.
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-load/>](https://redis.io/commands/acl-load/)
-    fn acl_load(&self) -> CommandResult<T, ()>
-    {
+    fn acl_load(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("ACL").arg("LOAD"))
     }
 
@@ -141,29 +150,28 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
     fn acl_log<EE>(&self, options: AclLogOptions) -> CommandResult<T, Vec<EE>>
-    where 
-        EE: FromKeyValueValueArray<String, Value>
+    where
+        EE: FromKeyValueValueArray<String, Value>,
     {
         self.prepare_command(cmd("ACL").arg("LOG").arg(options))
     }
 
-    /// When Redis is configured to use an ACL file (with the aclfile configuration option), 
+    /// When Redis is configured to use an ACL file (with the aclfile configuration option),
     /// this command will save the currently defined ACLs from the server memory to the ACL file.
-    /// 
+    ///
     /// # Errors
-    /// The command may fail with an error for several reasons: 
-    /// - if the file cannot be written 
+    /// The command may fail with an error for several reasons:
+    /// - if the file cannot be written
     /// - if the server is not configured to use an external ACL file.
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-save/>](https://redis.io/commands/acl-save/)
-    fn acl_save(&self) -> CommandResult<T, ()>
-    {
+    fn acl_save(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("ACL").arg("SAVE"))
     }
 
-    /// Create an ACL user with the specified rules or modify the rules of an existing user. 
-    /// 
+    /// Create an ACL user with the specified rules or modify the rules of an existing user.
+    ///
     /// # Errors
     /// If the rules contain errors, the error is returned.
     ///
@@ -173,13 +181,13 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     where
         U: Into<BulkString>,
         R: Into<BulkString>,
-        RR: SingleArgOrCollection<R>
+        RR: SingleArgOrCollection<R>,
     {
         self.prepare_command(cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
 
     /// The command shows a list of all the usernames of the currently configured users in the Redis ACL system.
-    /// 
+    ///
     /// # Return
     /// A collection of usernames
     ///
@@ -193,18 +201,44 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("ACL").arg("USERS"))
     }
 
-    /// Return the username the current connection is authenticated with. 
-    /// 
+    /// Return the username the current connection is authenticated with.
+    ///
     /// # Return
     /// The username of the current connection.
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: FromValue>(&self) -> CommandResult<T, U>
-    {
+    fn acl_whoami<U: FromValue>(&self) -> CommandResult<T, U> {
         self.prepare_command(cmd("ACL").arg("WHOAMI"))
     }
-    
+
+    /// Return an array with details about every Redis command.
+    ///
+    /// # Return
+    /// A nested list of command details.
+    /// The order of commands in the array is random.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command/>](https://redis.io/commands/command/)
+    fn command(&self) -> CommandResult<T, Vec<CommandInfo>> {
+        self.prepare_command(cmd("COMMAND"))
+    }
+
+    /// Return an array with details about multiple Redis command.
+    ///
+    /// # Return
+    /// A nested list of command details.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
+    fn command_info<N, NN>(&self, command_names: NN) -> CommandResult<T, Vec<CommandInfo>>
+    where
+        N: Into<BulkString>,
+        NN: SingleArgOrCollection<N>,
+    {
+        self.prepare_command(cmd("COMMAND").arg("INFO").arg(command_names))
+    }
+
     /// Used to read the configuration parameters of a running Redis server.
     ///
     /// For every key that does not hold a string value or does not exist,
@@ -323,10 +357,10 @@ pub struct AclDryRunOptions {
 
 impl AclDryRunOptions {
     #[must_use]
-    pub fn arg<A, AA>(self, args: AA) -> Self 
+    pub fn arg<A, AA>(self, args: AA) -> Self
     where
         A: Into<BulkString>,
-        AA: SingleArgOrCollection<A>
+        AA: SingleArgOrCollection<A>,
     {
         Self {
             command_args: self.command_args.arg(args),
@@ -347,14 +381,13 @@ pub struct AclGenPassOptions {
 }
 
 impl AclGenPassOptions {
-    /// The command output is a hexadecimal representation of a binary string. 
-    /// By default it emits 256 bits (so 64 hex characters). 
-    /// The user can provide an argument in form of number of bits to emit from 1 to 1024 to change the output length. 
-    /// Note that the number of bits provided is always rounded to the next multiple of 4. 
+    /// The command output is a hexadecimal representation of a binary string.
+    /// By default it emits 256 bits (so 64 hex characters).
+    /// The user can provide an argument in form of number of bits to emit from 1 to 1024 to change the output length.
+    /// Note that the number of bits provided is always rounded to the next multiple of 4.
     /// So for instance asking for just 1 bit password will result in 4 bits to be emitted, in the form of a single hex character.
     #[must_use]
-    pub fn bits(self, bits: usize) -> Self 
-    {
+    pub fn bits(self, bits: usize) -> Self {
         Self {
             command_args: self.command_args.arg(bits),
         }
@@ -374,20 +407,18 @@ pub struct AclLogOptions {
 }
 
 impl AclLogOptions {
-    /// This optional argument specifies how many entries to show. 
+    /// This optional argument specifies how many entries to show.
     /// By default up to ten failures are returned.
     #[must_use]
-    pub fn count(self, count: usize) -> Self 
-    {
+    pub fn count(self, count: usize) -> Self {
         Self {
             command_args: self.command_args.arg(count),
         }
     }
 
-    /// The special RESET argument clears the log. 
+    /// The special RESET argument clears the log.
     #[must_use]
-    pub fn reset(self) -> Self 
-    {
+    pub fn reset(self) -> Self {
         Self {
             command_args: self.command_args.arg("RESET"),
         }
@@ -397,5 +428,322 @@ impl AclLogOptions {
 impl IntoArgs for AclLogOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
+    }
+}
+
+/// Command info result for the [`command`](crate::ServerCommands::command) command.
+#[derive(Debug)]
+pub struct CommandInfo {
+    /// This is the command's name in lowercase.
+    pub name: String,
+    /// Arity is the number of arguments a command expects. It follows a simple pattern:
+    /// - A positive integer means a fixed number of arguments.
+    /// - A negative integer means a minimal number of arguments.
+    pub arity: isize,
+    /// Command flags are an array.
+    /// See [COMMAND documentation](https://redis.io/commands/command/) for the list of flags
+    pub flags: Vec<String>,
+    /// The position of the command's first key name argument.
+    /// For most commands, the first key's position is 1. Position 0 is always the command name itself.
+    pub first_key: usize,
+    /// The position of the command's last key name argument.
+    pub last_key: isize,
+    /// The step, or increment, between the first key and the position of the next key.
+    pub step: usize,
+    /// [From Redis 6.0] This is an array of simple strings that are the ACL categories to which the command belongs.
+    pub acl_categories: Vec<String>,
+    /// [From Redis 7.0] Helpful information about the command. To be used by clients/proxies.
+    /// See [<https://redis.io/docs/reference/command-tips/>](https://redis.io/docs/reference/command-tips/)
+    pub command_tips: Vec<CommandTip>,
+    /// [From Redis 7.0] This is an array consisting of the command's key specifications.
+    /// See [<https://redis.io/docs/reference/key-specs/>](https://redis.io/docs/reference/key-specs/)
+    pub key_specifications: Vec<KeySpecification>,
+    pub sub_commands: Vec<CommandInfo>,
+}
+
+impl FromValue for CommandInfo {
+    fn from_value(value: Value) -> Result<Self> {
+        let values: Vec<Value> = value.into()?;
+        let mut iter = values.into_iter();
+
+        match (
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+        ) {
+            (
+                Some(name),
+                Some(arity),
+                Some(flags),
+                Some(first_key),
+                Some(last_key),
+                Some(step),
+                Some(acl_categories),
+                Some(command_tips),
+                Some(key_specifications),
+                Some(sub_commands),
+            ) => Ok(Self {
+                name: name.into()?,
+                arity: arity.into()?,
+                flags: flags.into()?,
+                first_key: first_key.into()?,
+                last_key: last_key.into()?,
+                step: step.into()?,
+                acl_categories: acl_categories.into()?,
+                command_tips: command_tips.into()?,
+                key_specifications: key_specifications.into()?,
+                sub_commands: sub_commands.into()?,
+            }),
+            (
+                Some(name),
+                Some(arity),
+                Some(flags),
+                Some(first_key),
+                Some(last_key),
+                Some(step),
+                Some(acl_categories),
+                None,
+                None,
+                None,
+            ) => Ok(Self {
+                name: name.into()?,
+                arity: arity.into()?,
+                flags: flags.into()?,
+                first_key: first_key.into()?,
+                last_key: last_key.into()?,
+                step: step.into()?,
+                acl_categories: acl_categories.into()?,
+                command_tips: Vec::new(),
+                key_specifications: Vec::new(),
+                sub_commands: Vec::new(),
+            }),
+            (
+                Some(name),
+                Some(arity),
+                Some(flags),
+                Some(first_key),
+                Some(last_key),
+                Some(step),
+                None,
+                None,
+                None,
+                None,
+            ) => Ok(Self {
+                name: name.into()?,
+                arity: arity.into()?,
+                flags: flags.into()?,
+                first_key: first_key.into()?,
+                last_key: last_key.into()?,
+                step: step.into()?,
+                acl_categories: Vec::new(),
+                command_tips: Vec::new(),
+                key_specifications: Vec::new(),
+                sub_commands: Vec::new(),
+            }),
+            _ => Err(Error::Parse(
+                "Cannot parse CommandInfo from result".to_owned(),
+            )),
+        }
+
+        //let (name, arity, flags, first_key, last_key, step, acl_categories, command_tips, key_specifications, sub_commands)
+    }
+}
+
+/// Get additional information about a command
+/// See <https://redis.io/docs/reference/command-tips/>
+#[derive(Debug)]
+pub enum CommandTip {
+    NonDeterministricOutput,
+    NonDeterministricOutputOrder,
+    RequestPolicy(RequestPolicy),
+    ResponsePolicy(ResponsePolicy),
+}
+
+impl FromValue for CommandTip {
+    fn from_value(value: Value) -> Result<Self> {
+        let tip: String = value.into()?;
+        match tip.as_str() {
+            "nondeterministic_output" => Ok(CommandTip::NonDeterministricOutput),
+            "nondeterministic_output_order" => Ok(CommandTip::NonDeterministricOutputOrder),
+            _ => {
+                let mut parts = tip.split(':');
+                match (parts.next(), parts.next(), parts.next()) {
+                    (Some("request_policy"), Some(policy), None) => {
+                        Ok(CommandTip::RequestPolicy(RequestPolicy::from_str(policy)?))
+                    },
+                    (Some("response_policy"), Some(policy), None) => {
+                        Ok(CommandTip::ResponsePolicy(ResponsePolicy::from_str(policy)?))
+                    },
+                    _ => Err(Error::Parse(
+                        "Cannot parse CommandTip from result".to_owned(),
+                    ))
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RequestPolicy {
+    AllNodes,
+    AllShards,
+    MultiShard,
+    Special,
+}
+
+impl RequestPolicy {
+    pub fn from_str(str: &str) -> Result<Self> {
+        match str {
+            "all_nodes" => Ok(RequestPolicy::AllNodes),
+            "all_shards" => Ok(RequestPolicy::AllShards),
+            "multi_shard" => Ok(RequestPolicy::MultiShard),
+            "special" => Ok(RequestPolicy::Special),
+            _ => Err(Error::Parse(
+                "Cannot parse RequestPolicy from result".to_owned(),
+            )),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ResponsePolicy {
+    OneSucceeded,
+    AllSucceeded,
+    AggLogicalAnd,
+    AggLogicalOr,
+    AggMin,
+    AggMax,
+    AggSum,
+    Special,
+}
+
+impl ResponsePolicy {
+    pub fn from_str(str: &str) -> Result<Self> {
+        match str {
+            "one_succeeded" => Ok(ResponsePolicy::OneSucceeded),
+            "all_succeeded" => Ok(ResponsePolicy::AllSucceeded),
+            "agg_logical_and" => Ok(ResponsePolicy::AggLogicalAnd),
+            "agg_logical_or" => Ok(ResponsePolicy::AggLogicalOr),
+            "agg_min" => Ok(ResponsePolicy::AggMin),
+            "agg_max" => Ok(ResponsePolicy::AggMax),
+            "agg_sum" => Ok(ResponsePolicy::AggSum),
+            "special" => Ok(ResponsePolicy::Special),
+            _ => Err(Error::Parse(
+                "Cannot parse ResponsePolicy from result".to_owned(),
+            )),
+        }
+    }
+}
+
+/// Key specifications of a command for the [`command`](crate::ServerCommands::command) command.
+#[derive(Debug)]
+pub struct KeySpecification {
+    pub begin_search: BeginSearch,
+    pub find_keys: FindKeys,
+    pub flags: Vec<String>,
+    pub notes: String,
+}
+
+impl FromValue for KeySpecification {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        let notes: String = match values.remove("notes") {
+            Some(notes) => notes.into()?,
+            None => "".to_owned(),
+        };
+
+        Ok(Self {
+            begin_search: values.remove_with_result("begin_search")?.into()?,
+            find_keys: values.remove_with_result("find_keys")?.into()?,
+            flags: values.remove_with_result("flags")?.into()?,
+            notes,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum BeginSearch {
+    Index(usize),
+    Keyword { keyword: String, start_from: isize },
+    Unknown,
+}
+
+impl FromValue for BeginSearch {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        let type_: String = values.remove_with_result("type")?.into()?;
+        match type_.as_str() {
+            "index" => {
+                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
+                Ok(BeginSearch::Index(
+                    spec.remove_with_result("index")?.into()?,
+                ))
+            }
+            "keyword" => {
+                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
+                Ok(BeginSearch::Keyword {
+                    keyword: spec.remove_with_result("keyword")?.into()?,
+                    start_from: spec.remove_with_result("startfrom")?.into()?,
+                })
+            }
+            "unknown" => Ok(BeginSearch::Unknown),
+            _ => Err(Error::Parse(
+                "Cannot parse BeginSearch from result".to_owned(),
+            )),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum FindKeys {
+    Range {
+        last_key: isize,
+        key_step: usize,
+        limit: isize,
+    },
+    KeyEnum {
+        key_num_idx: isize,
+        first_key: isize,
+        key_step: usize,
+    },
+    Unknown,
+}
+
+impl FromValue for FindKeys {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        let type_: String = values.remove_with_result("type")?.into()?;
+        match type_.as_str() {
+            "range" => {
+                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
+                Ok(FindKeys::Range {
+                    last_key: spec.remove_with_result("lastkey")?.into()?,
+                    key_step: spec.remove_with_result("keystep")?.into()?,
+                    limit: spec.remove_with_result("limit")?.into()?,
+                })
+            }
+            "keynum" => {
+                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
+                Ok(FindKeys::KeyEnum {
+                    key_num_idx: spec.remove_with_result("keynumidx")?.into()?,
+                    first_key: spec.remove_with_result("firstkey")?.into()?,
+                    key_step: spec.remove_with_result("keystep")?.into()?,
+                })
+            }
+            "unknown" => Ok(FindKeys::Unknown),
+            _ => Err(Error::Parse(
+                "Cannot parse BeginSearch from result".to_owned(),
+            )),
+        }
     }
 }

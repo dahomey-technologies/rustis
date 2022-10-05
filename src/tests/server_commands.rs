@@ -105,6 +105,8 @@ async fn acl_getuser() -> Result<()> {
         matches!(rules.get("commands"), Some(Value::BulkString(BulkString::Binary(rule))) if rule == b"-@all")
     );
 
+    client.acl_deluser("foo").await?;
+
     Ok(())
 }
 
@@ -196,6 +198,8 @@ async fn acl_setuser() -> Result<()> {
     let _rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
     client.set("key", "value").await?;
 
+    client.acl_deluser("foo").await?;
+
     Ok(())
 }
 
@@ -215,6 +219,8 @@ async fn acl_users() -> Result<()> {
     assert_eq!("default", users[1]);
     assert_eq!("foo", users[2]);
 
+    client.acl_deluser("foo").await?;
+
     Ok(())
 }
 
@@ -232,6 +238,8 @@ async fn acl_whoami() -> Result<()> {
     client.auth(Some("foo"), "pwd").await?;
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("foo", current_user);
+
+    client.acl_deluser("foo").await?;
 
     Ok(())
 }

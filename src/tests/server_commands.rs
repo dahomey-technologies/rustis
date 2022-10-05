@@ -2,7 +2,7 @@ use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo,
-    ConnectionCommands, Error, FlushingMode, Result, ServerCommands, StringCommands,
+    ConnectionCommands, Error, FlushingMode, Result, ServerCommands, StringCommands, CommandDoc,
 };
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
@@ -280,6 +280,17 @@ async fn command_count() -> Result<()> {
     let command_infos = client.command().await?;
     let num_commands = client.command_count().await?;
     assert_eq!(command_infos.len(), num_commands);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_docs() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let _command_docs: HashMap<String, CommandDoc> = client.command_docs(["XADD", "GET", "SET"]).await?;
 
     Ok(())
 }

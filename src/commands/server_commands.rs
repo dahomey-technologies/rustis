@@ -235,6 +235,22 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("COMMAND").arg("COUNT"))
     }
 
+    /// Number of total commands in this Redis server.
+    ///
+    /// # Return
+    /// map key=command name, value=command doc
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
+    fn command_docs<N, NN, DD>(&self, command_names: NN) -> CommandResult<T, DD>
+    where
+        N: Into<BulkString>,
+        NN: SingleArgOrCollection<N>,
+        DD: FromKeyValueValueArray<String, CommandDoc>,
+    {
+        self.prepare_command(cmd("COMMAND").arg("DOCS").arg(command_names))
+    }
+
     /// Return an array with details about multiple Redis command.
     ///
     /// # Return
@@ -588,13 +604,13 @@ impl FromValue for CommandTip {
                 match (parts.next(), parts.next(), parts.next()) {
                     (Some("request_policy"), Some(policy), None) => {
                         Ok(CommandTip::RequestPolicy(RequestPolicy::from_str(policy)?))
-                    },
-                    (Some("response_policy"), Some(policy), None) => {
-                        Ok(CommandTip::ResponsePolicy(ResponsePolicy::from_str(policy)?))
-                    },
+                    }
+                    (Some("response_policy"), Some(policy), None) => Ok(
+                        CommandTip::ResponsePolicy(ResponsePolicy::from_str(policy)?),
+                    ),
                     _ => Err(Error::Parse(
                         "Cannot parse CommandTip from result".to_owned(),
-                    ))
+                    )),
                 }
             }
         }
@@ -754,6 +770,217 @@ impl FromValue for FindKeys {
             "unknown" => Ok(FindKeys::Unknown),
             _ => Err(Error::Parse(
                 "Cannot parse BeginSearch from result".to_owned(),
+            )),
+        }
+    }
+}
+
+/// Command doc result for the [`command_docs`](crate::ServerCommands::command_docs) command
+#[derive(Debug, Default)]
+pub struct CommandDoc {
+    /// short command description.
+    pub summary: String,
+    /// the Redis version that added the command (or for module commands, the module version).
+    pub since: String,
+    /// he functional group to which the command belongs.
+    pub group: String,
+    /// a short explanation about the command's time complexity.
+    pub complexity: String,
+    /// an array of documentation flags. Possible values are:
+    /// - `deprecated`: the command is deprecated.
+    /// - `syscmd`: a system command that isn't meant to be called by users.
+    pub doc_flags: Vec<CommandDocFlag>,
+    /// the Redis version that deprecated the command (or for module commands, the module version).
+    pub deprecated_since: String,
+    /// the alternative for a deprecated command.
+    pub replaced_by: String,
+    /// an array of historical notes describing changes to the command's behavior or arguments.
+    pub history: Vec<HistoricalNote>,
+    /// an array of [`command arguments`](https://redis.io/docs/reference/command-arguments/)
+    pub arguments: Vec<CommandArgument>,
+}
+
+impl FromValue for CommandDoc {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            summary: values.remove_with_result("summary")?.into()?,
+            since: values.remove_with_result("since")?.into()?,
+            group: values.remove_with_result("group")?.into()?,
+            complexity: values.remove_with_result("complexity")?.into()?,
+            doc_flags: values.remove_or_default("doc_flags").into()?,
+            deprecated_since: values.remove_or_default("deprecated_since").into()?,
+            replaced_by: values.remove_or_default("replaced_by").into()?,
+            history: values.remove_or_default("history").into()?,
+            arguments: values.remove_with_result("arguments")?.into()?,
+        })
+    }
+}
+
+/// Command documenation flag
+#[derive(Debug)]
+pub enum CommandDocFlag {
+    /// the command is deprecated.
+    Deprecated,
+    /// a system command that isn't meant to be called by users.
+    SystemCommand,
+}
+
+impl FromValue for CommandDocFlag {
+    fn from_value(value: Value) -> Result<Self> {
+        let f: String = value.into()?;
+
+        match f.as_str() {
+            "deprecated" => Ok(CommandDocFlag::Deprecated),
+            "syscmd" => Ok(CommandDocFlag::SystemCommand),
+            _ => Err(Error::Parse(
+                "Cannot parse CommandDocFlag from result".to_owned(),
+            )),
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct HistoricalNote {
+    pub version: String,
+    pub description: String,
+}
+
+impl FromValue for HistoricalNote {
+    fn from_value(value: Value) -> Result<Self> {
+        let (version, description): (String, String) = value.into()?;
+
+        Ok(Self {
+            version,
+            description,
+        })
+    }
+}
+
+/// [`command argument`](https://redis.io/docs/reference/command-arguments/)
+#[derive(Debug)]
+pub struct CommandArgument {
+    ///  the argument's name, always present.
+    pub name: String,
+    /// the argument's display string, present in arguments that have a displayable representation
+    pub display_text: String,
+    ///  the argument's type, always present.
+    pub type_: CommandArgumentType,
+    /// this value is available for every argument of the `key` type.
+    /// t is a 0-based index of the specification in the command's [`key specifications`](https://redis.io/topics/key-specs)
+    /// that corresponds to the argument.
+    pub key_spec_index: usize,
+    /// a constant literal that precedes the argument (user input) itself.
+    pub token: String,
+    /// a short description of the argument.
+    pub summary: String,
+    /// the debut Redis version of the argument (or for module commands, the module version).
+    pub since: String,
+    /// the Redis version that deprecated the command (or for module commands, the module version).
+    pub deprecated_since: String,
+    /// an array of argument flags.
+    pub flags: Vec<ArgumentFlag>,
+    /// the argument's value.
+    pub value: Vec<String>,
+}
+
+impl FromValue for CommandArgument {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            name: values.remove_with_result("name")?.into()?,
+            display_text: values.remove_or_default("display_text").into()?,
+            type_: values.remove_with_result("type")?.into()?,
+            key_spec_index: values.remove_or_default("key_spec_index").into()?,
+            token: values.remove_or_default("token").into()?,
+            summary: values.remove_or_default("summary").into()?,
+            since: values.remove_or_default("since").into()?,
+            deprecated_since: values.remove_or_default("deprecated_since").into()?,
+            flags: values.remove_or_default("flags").into()?,
+            value: match values.remove_or_default("value") {
+                value @ Value::BulkString(_) => vec![value.into()?],
+                value @ Value::Array(_) => value.into()?,
+                _ => {
+                    return Err(Error::Parse(
+                        "Cannot parse CommandArgument from result".to_owned(),
+                    ))
+                }
+            },
+        })
+    }
+}
+
+/// An argument must have one of the following types:
+#[derive(Debug)]
+pub enum CommandArgumentType {
+    /// a string argument.
+    String,
+    /// an integer argument.
+    Integer,
+    /// a double-precision argument.
+    Double,
+    /// a string that represents the name of a key.
+    Key,
+    /// a string that represents a glob-like pattern.
+    Pattern,
+    /// an integer that represents a Unix timestamp.
+    UnixTime,
+    /// a token, i.e. a reserved keyword, which may or may not be provided.
+    /// Not to be confused with free-text user input.
+    PureToken,
+    /// the argument is a container for nested arguments.
+    /// This type enables choice among several nested arguments
+    OneOf,
+    /// the argument is a container for nested arguments.
+    /// This type enables grouping arguments and applying a property (such as optional) to all
+    Block,
+}
+
+impl FromValue for CommandArgumentType {
+    fn from_value(value: Value) -> Result<Self> {
+        let t: String = value.into()?;
+
+        match t.as_str() {
+            "string" => Ok(CommandArgumentType::String),
+            "integer" => Ok(CommandArgumentType::Integer),
+            "double" => Ok(CommandArgumentType::Double),
+            "key" => Ok(CommandArgumentType::Key),
+            "pattern" => Ok(CommandArgumentType::Pattern),
+            "unix-time" => Ok(CommandArgumentType::UnixTime),
+            "pure-token" => Ok(CommandArgumentType::PureToken),
+            "oneof" => Ok(CommandArgumentType::OneOf),
+            "block" => Ok(CommandArgumentType::Block),
+            _ => Err(Error::Parse(
+                "Cannot parse CommandArgumentType from result".to_owned(),
+            )),
+        }
+    }
+}
+
+/// Flag for a command argument
+#[derive(Debug)]
+pub enum ArgumentFlag {
+    /// denotes that the argument is optional (for example, the GET clause of the SET command).
+    Optional,
+    /// denotes that the argument may be repeated (such as the key argument of DEL).
+    Multiple,
+    ///  denotes the possible repetition of the argument with its preceding token (see SORT's GET pattern clause).
+    MultipleToken,
+}
+
+impl FromValue for ArgumentFlag {
+    fn from_value(value: Value) -> Result<Self> {
+        let f: String = value.into()?;
+
+        match f.as_str() {
+            "optional" => Ok(ArgumentFlag::Optional),
+            "multiple" => Ok(ArgumentFlag::Multiple),
+            "multiple-token" => Ok(ArgumentFlag::MultipleToken),
+            _ => Err(Error::Parse(
+                "Cannot parse ArgumentFlag from result".to_owned(),
             )),
         }
     }

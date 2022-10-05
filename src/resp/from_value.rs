@@ -5,7 +5,8 @@ use crate::{
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    hash::{BuildHasher, Hash}, fmt::Display,
+    fmt::Display,
+    hash::{BuildHasher, Hash},
 };
 
 pub trait FromValue: Sized {
@@ -143,6 +144,7 @@ impl FromValue for i64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<i64>() {
@@ -151,7 +153,7 @@ impl FromValue for i64 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i64",
                 value
@@ -164,6 +166,7 @@ impl FromValue for u64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u64::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<u64>() {
@@ -172,7 +175,7 @@ impl FromValue for u64 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u64",
                 value
@@ -185,6 +188,7 @@ impl FromValue for i32 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i32::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<i32>() {
@@ -193,7 +197,7 @@ impl FromValue for i32 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i32",
                 value
@@ -206,6 +210,7 @@ impl FromValue for u32 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u32::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<u32>() {
@@ -214,7 +219,7 @@ impl FromValue for u32 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u32",
                 value
@@ -227,6 +232,7 @@ impl FromValue for i16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i16::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<i16>() {
@@ -235,7 +241,7 @@ impl FromValue for i16 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i16",
                 value
@@ -248,6 +254,7 @@ impl FromValue for u16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u16::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<u16>() {
@@ -256,7 +263,7 @@ impl FromValue for u16 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u16",
                 value
@@ -269,6 +276,7 @@ impl FromValue for i8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i8::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<i8>() {
@@ -277,7 +285,7 @@ impl FromValue for i8 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to i8",
                 value
@@ -290,6 +298,7 @@ impl FromValue for u8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(u8::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<u8>() {
@@ -298,7 +307,7 @@ impl FromValue for u8 {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to u8",
                 value
@@ -311,6 +320,7 @@ impl FromValue for isize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(isize::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<isize>() {
@@ -319,7 +329,7 @@ impl FromValue for isize {
                     },
                     Err(e) => Err(e),
                 }
-            },
+            }
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to isize",
                 value
@@ -332,6 +342,7 @@ impl FromValue for usize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(usize::try_from(i).unwrap()),
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())) {
                     Ok(s) => match s.parse::<usize>() {
@@ -354,7 +365,8 @@ impl FromValue for f32 {
         match value {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f32>().unwrap())
-            }
+            },
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f32),
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to f32",
                 value
@@ -368,7 +380,8 @@ impl FromValue for f64 {
         match value {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f64>()?)
-            }
+            },
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f64),
             Value::Double(d) => Ok(d),
             _ => Err(Error::Parse(format!(
                 "Cannot parse result {:?} to f64",
@@ -452,6 +465,13 @@ pub trait HashMapExt<K, V, S> {
         K: Borrow<Q> + Hash + Eq,
         Q: Hash + Eq + Display,
         S: BuildHasher;
+
+    fn remove_or_default<Q: ?Sized>(&mut self, k: &Q) -> V
+    where
+        K: Borrow<Q> + Hash + Eq,
+        Q: Hash + Eq + Display,
+        S: BuildHasher,
+        V: Default;
 }
 
 impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
@@ -461,6 +481,17 @@ impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
         Q: Hash + Eq + Display,
         S: BuildHasher,
     {
-        self.remove(k).ok_or_else(|| Error::Parse(format!("Cannot parse field {}", k)))
+        self.remove(k)
+            .ok_or_else(|| Error::Parse(format!("Cannot parse field {}", k)))
+    }
+
+    fn remove_or_default<Q: ?Sized>(&mut self, k: &Q) -> V
+    where
+        K: Borrow<Q> + Hash + Eq,
+        Q: Hash + Eq + Display,
+        S: BuildHasher,
+        V: Default,
+    {
+        self.remove(k).unwrap_or_default()
     }
 }

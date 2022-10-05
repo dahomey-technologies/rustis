@@ -255,7 +255,7 @@ async fn acl_whoami() -> Result<()> {
 async fn command() -> Result<()> {
     let client = get_test_client().await?;
 
-    let value = client.command().await?;
+    let _command_infos = client.command().await?;
 
     Ok(())
 }
@@ -266,8 +266,20 @@ async fn command() -> Result<()> {
 async fn command_info() -> Result<()> {
     let client = get_test_client().await?;
 
-    let value = client.command_info("MGET").await?;
-    println!("value {value:?}");
+    let _command_infos = client.command_info("MGET").await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_count() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let command_infos = client.command().await?;
+    let num_commands = client.command_count().await?;
+    assert_eq!(command_infos.len(), num_commands);
 
     Ok(())
 }

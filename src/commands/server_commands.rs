@@ -224,6 +224,17 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("COMMAND"))
     }
 
+    /// Number of total commands in this Redis server.
+    ///
+    /// # Return
+    /// number of commands returned by [`command`](crate::ServerCommands::command)
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
+    fn command_count(&self) -> CommandResult<T, usize> {
+        self.prepare_command(cmd("COMMAND").arg("COUNT"))
+    }
+
     /// Return an array with details about multiple Redis command.
     ///
     /// # Return

@@ -235,11 +235,12 @@ async fn acl_whoami() -> Result<()> {
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("default", current_user);
 
-    client.acl_setuser("foo", ["on", ">pwd", "+ACL|WHOAMI", "+ACL|DELUSER"]).await?;
+    client.acl_setuser("foo", ["on", ">pwd", "+ACL|WHOAMI"]).await?;
     client.auth(Some("foo"), "pwd").await?;
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("foo", current_user);
 
+    client.auth(Some("default"), "").await?;
     client.acl_deluser("foo").await?;
 
     let current_user: String = client.acl_whoami().await?;

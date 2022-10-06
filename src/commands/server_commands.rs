@@ -321,7 +321,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// Array reply: collection of the requested params with their matching values.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
+    /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
     fn config_get<P, PP, V, VV>(&self, params: PP) -> CommandResult<T, VV>
     where
@@ -331,6 +331,27 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         VV: FromKeyValueValueArray<String, V>,
     {
         self.prepare_command(cmd("CONFIG").arg("GET").arg(params))
+    }
+
+    /// Resets the statistics reported by Redis using the [`info`](crate::ServerCommands::info) command.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/config-resetstat/>](https://redis.io/commands/config-resetstat/)
+    #[must_use]
+    fn config_resetstat(&self) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("CONFIG").arg("RESETSTAT"))
+    }
+
+    /// Rewrites the redis.conf file the server was started with,
+    /// applying the minimal changes needed to make it reflect the configuration currently used by the server,
+    /// which may be different compared to the original one because of the use of the
+    /// [`config_set`](crate::ServerCommands::config_set) command.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/config-rewrite/>](https://redis.io/commands/config-rewrite/)
+    #[must_use]
+    fn config_rewrite(&self) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("CONFIG").arg("REWRITE"))
     }
 
     /// Used in order to reconfigure the server at run time without the need to restart Redis.
@@ -345,6 +366,38 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         C: KeyValueArgOrCollection<P, V>,
     {
         self.prepare_command(cmd("CONFIG").arg("SET").arg(configs))
+    }
+
+    /// Return the number of keys in the currently-selected database.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/dbsize/>](https://redis.io/commands/dbsize/)
+    #[must_use]
+    fn dbsize(&self) -> CommandResult<T, usize> {
+        self.prepare_command(cmd("DBSIZE"))
+    }
+
+    /// This command will start a coordinated failover between
+    /// the currently-connected-to master and one of its replicas.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/failover/>](https://redis.io/commands/failover/)
+    #[must_use]
+    fn failover(&self, options: FailOverOptions) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("FAILOVER").arg(options))
+    }
+
+    /// This command returns information and statistics about the server 
+    /// in a format that is simple to parse by computers and easy to read by humans.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
+    #[must_use]
+    fn info<SS>(&self, sections: SS) -> CommandResult<T, String> 
+    where
+        SS: SingleArgOrCollection<InfoSection>
+    {
+        self.prepare_command(cmd("INFO").arg(sections))
     }
 
     /// Delete all the keys of the currently selected DB.
@@ -1078,5 +1131,97 @@ impl CommandListOptions {
 impl IntoArgs for CommandListOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
+    }
+}
+
+/// Options for the [`failover`](crate::ServerCommands::failover) command.
+#[derive(Default)]
+pub struct FailOverOptions {
+    command_args: CommandArgs,
+}
+
+impl FailOverOptions {
+    /// This option allows designating a specific replica, by its host and port, to failover to.
+    #[must_use]
+    pub fn to<H: Into<BulkString>>(self, host: H, port: u16) -> Self {
+        Self {
+            command_args: self.command_args.arg("TO").arg(host).arg(port),
+        }
+    }
+
+    /// This option allows specifying a maximum time a master will wait in the waiting-for-sync state
+    /// before aborting the failover attempt and rolling back.
+    #[must_use]
+    pub fn timeout(self, milliseconds: u64) -> Self {
+        Self {
+            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds),
+        }
+    }
+
+    /// If both the [`timeout`](crate::FailOverOptions::timeout) and [`to`](crate::FailOverOptions::to) options are set,
+    /// the force flag can also be used to designate that that once the timeout has elapsed,
+    /// the master should failover to the target replica instead of rolling back.
+    #[must_use]
+    pub fn force(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("FORCE"),
+        }
+    }
+
+    /// This command will abort an ongoing failover and return the master to its normal state. 
+    #[must_use]
+    pub fn abort(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("ABORT"),
+        }
+    }
+}
+
+impl IntoArgs for FailOverOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Section for the [`info`](crate::ServerCommands::info) command.
+pub enum InfoSection {
+    Server,
+    Clients,
+    Memory,
+    Persistence,
+    Stats,
+    Replication,
+    Cpu,
+    Commandstats,
+    Latencystats,
+    Cluster,
+    Keyspace,
+    Modules,
+    Errorstats,
+    All,
+    Default,
+    Everything
+}
+
+impl From<InfoSection> for BulkString {
+    fn from(s: InfoSection) -> Self {
+        match s {
+            InfoSection::Server => BulkString::Str("server"),
+            InfoSection::Clients => BulkString::Str("clients"),
+            InfoSection::Memory => BulkString::Str("memory"),
+            InfoSection::Persistence => BulkString::Str("persistence"),
+            InfoSection::Stats => BulkString::Str("stats"),
+            InfoSection::Replication => BulkString::Str("replication"),
+            InfoSection::Cpu => BulkString::Str("cpu"),
+            InfoSection::Commandstats => BulkString::Str("commandstats"),
+            InfoSection::Latencystats => BulkString::Str("latencystats"),
+            InfoSection::Cluster => BulkString::Str("cluster"),
+            InfoSection::Keyspace => BulkString::Str("keyspace"),
+            InfoSection::Modules => BulkString::Str("modules"),
+            InfoSection::Errorstats => BulkString::Str("errorstats"),
+            InfoSection::All => BulkString::Str("all"),
+            InfoSection::Default => BulkString::Str("default"),
+            InfoSection::Everything => BulkString::Str("everything"),
+        }
     }
 }

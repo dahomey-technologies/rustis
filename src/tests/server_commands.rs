@@ -3,7 +3,7 @@ use crate::{
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
     CommandListOptions, ConnectionCommands, Error, FlushingMode, Result, ServerCommands,
-    StringCommands,
+    StringCommands, FailOverOptions, InfoSection,
 };
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
@@ -379,8 +379,8 @@ async fn command_list() -> Result<()> {
     assert!(string_commands.contains(&"set".to_owned()));
 
     let config_commands: Vec<String> = client
-    .command_list(CommandListOptions::default().filter_by_pattern("config*"))
-    .await?;
+        .command_list(CommandListOptions::default().filter_by_pattern("config*"))
+        .await?;
     assert!(config_commands.len() > 0);
     assert!(config_commands.contains(&"config|get".to_owned()));
     assert!(config_commands.contains(&"config|set".to_owned()));
@@ -405,6 +405,31 @@ async fn config_get() -> Result<()> {
     assert_eq!(
         Some(&"128".to_owned()),
         configs.get("zset-max-listpack-entries")
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn config_resetstat() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.config_resetstat().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn config_rewrite() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result = client.config_rewrite().await;
+    assert!(
+        matches!(result, Err(Error::Redis(e)) if e == "ERR The server is running without a config file")
     );
 
     Ok(())
@@ -442,6 +467,36 @@ async fn config_set() -> Result<()> {
             ("zset-max-listpack-entries", 128),
         ])
         .await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn dbsize() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.mset([("key1", "value1"), ("key2", "value2")]).await?;
+
+    let size = client.dbsize().await?;
+    assert_eq!(2, size);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn failover() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result = client.failover(FailOverOptions::default()).await;
+    assert!(
+        matches!(result, Err(Error::Redis(e)) if e == "ERR FAILOVER requires connected replicas.")
+    );
 
     Ok(())
 }
@@ -504,6 +559,23 @@ async fn flushall() -> Result<()> {
 
     let value: Value = client1.get("key2").await?;
     assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn info() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let info = client.info([]).await?;
+    assert!(info.len() > 0);
+
+    let info = client.info([InfoSection::Cpu, InfoSection::Clients]).await?;
+    assert!(info.contains("# CPU"));   
+    assert!(info.contains("# Clients"));   
 
     Ok(())
 }

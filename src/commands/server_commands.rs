@@ -387,19 +387,6 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("FAILOVER").arg(options))
     }
 
-    /// This command returns information and statistics about the server 
-    /// in a format that is simple to parse by computers and easy to read by humans.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
-    #[must_use]
-    fn info<SS>(&self, sections: SS) -> CommandResult<T, String> 
-    where
-        SS: SingleArgOrCollection<InfoSection>
-    {
-        self.prepare_command(cmd("INFO").arg(sections))
-    }
-
     /// Delete all the keys of the currently selected DB.
     ///
     /// # See Also
@@ -416,6 +403,29 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     #[must_use]
     fn flushall(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
+    }
+
+    /// This command returns information and statistics about the server 
+    /// in a format that is simple to parse by computers and easy to read by humans.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
+    #[must_use]
+    fn info<SS>(&self, sections: SS) -> CommandResult<T, String> 
+    where
+        SS: SingleArgOrCollection<InfoSection>
+    {
+        self.prepare_command(cmd("INFO").arg(sections))
+    }
+
+    /// Return the UNIX TIME of the last DB save executed with success.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/lastsave/>](https://redis.io/commands/lastsave/)
+    #[must_use]
+    fn lastsave(&self) -> CommandResult<T, u64> 
+    {
+        self.prepare_command(cmd("LASTSAVE"))
     }
 
     /// The TIME command returns the current server time as a two items lists:

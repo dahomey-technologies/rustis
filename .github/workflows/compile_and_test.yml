@@ -74,7 +74,7 @@ jobs:
             -e REDIS_TLS_ENABLED=yes \
             -e REDIS_TLS_PORT=6379 \
             -e REDIS_TLS_AUTH_CLIENTS=no \
-            docker.io/bitnami/redis
+            -d docker.io/bitnami/redis
           docker port redis-tls
 
       - name: Install stable toolchain

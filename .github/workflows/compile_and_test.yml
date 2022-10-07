@@ -65,7 +65,7 @@ jobs:
           pwd
           docker run --name redis-tls \
             -p 6380:6379 \
-            -v certs:/certs \
+            -v /home/runner/work/redis-driver-rs/redis-driver-rs/certs:/certs \
             -e ALLOW_EMPTY_PASSWORD=false \
             -e REDIS_PASSWORD=pwd \
             -e REDIS_TLS_CERT_FILE=/certs/redis.crt \
@@ -74,7 +74,7 @@ jobs:
             -e REDIS_TLS_ENABLED=yes \
             -e REDIS_TLS_PORT=6379 \
             -e REDIS_TLS_AUTH_CLIENTS=no \
-            -d docker.io/bitnami/redis
+            docker.io/bitnami/redis
           docker port redis-tls
 
       - name: Install stable toolchain

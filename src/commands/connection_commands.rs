@@ -380,7 +380,7 @@ pub struct ClientInfo {
 }
 
 impl ClientInfo {
-    fn from_line(line: &str) -> Result<ClientInfo> {
+    pub fn from_line(line: &str) -> Result<ClientInfo> {
         // Each line is composed of a succession of property=value fields separated by a space character.
         let mut values: HashMap<String, String> = line
             .trim_end()

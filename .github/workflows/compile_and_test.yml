@@ -64,7 +64,7 @@ jobs:
         run: |
           docker run --name redis-tls \
             -p 6380:6379 \
-            -v ./certs:/certs \
+            -v /certs:/certs \
             -e ALLOW_EMPTY_PASSWORD=false \
             -e REDIS_PASSWORD=pwd \
             -e REDIS_TLS_CERT_FILE=/certs/redis.crt \

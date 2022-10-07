@@ -428,7 +428,7 @@ async fn config_resetstat() -> Result<()> {
 async fn config_rewrite() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.config_rewrite().await?;
+    let _result = client.config_rewrite().await;
 
     Ok(())
 }

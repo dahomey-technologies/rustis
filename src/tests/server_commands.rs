@@ -428,10 +428,7 @@ async fn config_resetstat() -> Result<()> {
 async fn config_rewrite() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result = client.config_rewrite().await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR The server is running without a config file")
-    );
+    client.config_rewrite().await?;
 
     Ok(())
 }

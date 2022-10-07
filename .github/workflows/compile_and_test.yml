@@ -43,22 +43,39 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      # Label used to access the service container
-      redis:
-        # Docker Hub image
-        image: redis:alpine
-        ports:
-          - 6379:6379
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+        
+      - name: Create Redis container
+        run: |
+          docker run --name redis \
+            -p 6379:6379 \
+            --health-cmd "redis-cli ping" \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            -e GITHUB_ACTIONS=true \
+            -e CI=true \
+            -d redis:alpine
+          docker port redis
+        
+      - name: Create Redis TLS container
+        run: |
+          pwd
+          docker run --name redis-tls \
+            -p 6380:6379 \
+            -v /home/runner/work/redis-driver-rs/redis-driver-rs/certs:/certs \
+            -e ALLOW_EMPTY_PASSWORD=false \
+            -e REDIS_PASSWORD=pwd \
+            -e REDIS_TLS_CERT_FILE=/certs/redis.crt \
+            -e REDIS_TLS_KEY_FILE=/certs/redis.key \
+            -e REDIS_TLS_CA_FILE=/certs/ca.crt \
+            -e REDIS_TLS_ENABLED=yes \
+            -e REDIS_TLS_PORT=6379 \
+            -e REDIS_TLS_AUTH_CLIENTS=no \
+            -d docker.io/bitnami/redis
+          docker port redis-tls
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -71,4 +88,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features pool
+          args: --features pool,tokio-tls

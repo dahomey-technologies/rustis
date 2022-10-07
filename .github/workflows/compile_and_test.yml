@@ -57,7 +57,8 @@ jobs:
             --health-retries 5 \
             -e GITHUB_ACTIONS=true \
             -e CI=true \
-            redis:alpine
+            -d redis:alpine
+          docker port redis
         
       - name: Create Redis TLS container
         run: |

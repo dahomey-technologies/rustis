@@ -49,9 +49,12 @@ jobs:
         
       - name: Create Redis container
         run: |
+          mkdir /tmp/redis
+          cp /home/runner/work/redis-driver-rs/redis-driver-rs/redis/redis.conf /tmp/redis
+          ls -l /tmp/redis
           docker run --name redis \
             -p 6379:6379 \
-            -v /home/runner/work/redis-driver-rs/redis-driver-rs/redis:/redis \
+            -v /tmp/redis:/redis \
             --health-cmd "redis-cli ping" \
             --health-interval 10s \
             --health-timeout 5s \
@@ -64,7 +67,6 @@ jobs:
         
       - name: Create Redis TLS container
         run: |
-          pwd
           docker run --name redis-tls \
             -p 6380:6379 \
             -v /home/runner/work/redis-driver-rs/redis-driver-rs/certs:/certs \

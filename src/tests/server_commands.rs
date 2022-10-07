@@ -1,10 +1,11 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{cmd, BulkString, Value},
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
-    CommandListOptions, ConnectionCommands, Error, FlushingMode, Result, ServerCommands,
-    StringCommands, FailOverOptions, InfoSection,
+    CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions, FlushingMode,
+    InfoSection, LatencyHistoryEvent, Result, ServerCommands, StringCommands,
 };
+use futures::join;
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 
@@ -478,7 +479,9 @@ async fn dbsize() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
-    client.mset([("key1", "value1"), ("key2", "value2")]).await?;
+    client
+        .mset([("key1", "value1"), ("key2", "value2")])
+        .await?;
 
     let size = client.dbsize().await?;
     assert_eq!(2, size);
@@ -573,9 +576,11 @@ async fn info() -> Result<()> {
     let info = client.info([]).await?;
     assert!(info.len() > 0);
 
-    let info = client.info([InfoSection::Cpu, InfoSection::Clients]).await?;
-    assert!(info.contains("# CPU"));   
-    assert!(info.contains("# Clients"));   
+    let info = client
+        .info([InfoSection::Cpu, InfoSection::Clients])
+        .await?;
+    assert!(info.contains("# CPU"));
+    assert!(info.contains("# Clients"));
 
     Ok(())
 }
@@ -589,6 +594,142 @@ async fn lastsave() -> Result<()> {
 
     let lastsave = client.lastsave().await?;
     assert!(lastsave > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_doctor() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let report = client.latency_doctor().await?;
+    assert!(report.len() > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_graph() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .config_set(("latency-monitor-threshold", "50"))
+        .await?;
+
+    client.latency_reset([LatencyHistoryEvent::Command]).await?;
+
+    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
+    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
+    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.3));
+    let fut5 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.5));
+    let fut4 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.4));
+
+    let _result = join!(fut1, fut2, fut3, fut4, fut5);
+
+    let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
+    assert!(report.len() > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_histogram() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.latency_reset([LatencyHistoryEvent::Command]).await?;
+
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+    client.set("key", "value").await?;
+
+    let report: HashMap<String, CommandHistogram> = client.latency_histogram("set").await?;
+    assert_eq!(1, report.len());
+    assert!(report.get("set").unwrap().calls >= 10);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_history() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .config_set(("latency-monitor-threshold", "50"))
+        .await?;
+
+    client.latency_reset([LatencyHistoryEvent::Command]).await?;
+
+    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
+    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
+    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
+
+    let _result = join!(fut1, fut2, fut3);
+
+    let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
+    assert!(report.len() > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_latest() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .config_set(("latency-monitor-threshold", "50"))
+        .await?;
+
+    client.latency_reset([LatencyHistoryEvent::Command]).await?;
+
+    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
+    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
+    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
+
+    let _result = join!(fut1, fut2, fut3);
+
+    let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
+    assert!(report.len() > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn latency_reset() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .config_set(("latency-monitor-threshold", "50"))
+        .await?;
+
+    client.latency_reset([LatencyHistoryEvent::Command]).await?;
+
+    let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
+    assert_eq!(0, report.len());
 
     Ok(())
 }

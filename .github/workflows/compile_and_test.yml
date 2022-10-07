@@ -51,13 +51,15 @@ jobs:
         run: |
           docker run --name redis \
             -p 6379:6379 \
+            -v /home/runner/work/redis-driver-rs/redis-driver-rs/redis:/redis \
             --health-cmd "redis-cli ping" \
             --health-interval 10s \
             --health-timeout 5s \
             --health-retries 5 \
             -e GITHUB_ACTIONS=true \
             -e CI=true \
-            -d redis:alpine
+            -d redis:alpine \
+            redis-server /redis/redis.conf
           docker port redis
         
       - name: Create Redis TLS container

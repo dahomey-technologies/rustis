@@ -405,15 +405,15 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
     }
 
-    /// This command returns information and statistics about the server 
+    /// This command returns information and statistics about the server
     /// in a format that is simple to parse by computers and easy to read by humans.
     ///
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<SS>(&self, sections: SS) -> CommandResult<T, String> 
+    fn info<SS>(&self, sections: SS) -> CommandResult<T, String>
     where
-        SS: SingleArgOrCollection<InfoSection>
+        SS: SingleArgOrCollection<InfoSection>,
     {
         self.prepare_command(cmd("INFO").arg(sections))
     }
@@ -423,9 +423,105 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lastsave/>](https://redis.io/commands/lastsave/)
     #[must_use]
-    fn lastsave(&self) -> CommandResult<T, u64> 
-    {
+    fn lastsave(&self) -> CommandResult<T, u64> {
         self.prepare_command(cmd("LASTSAVE"))
+    }
+
+    /// This command reports about different latency-related issues and advises about possible remedies.
+    ///
+    /// # Return
+    /// String report
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-doctor/>](https://redis.io/commands/latency-doctor/)
+    #[must_use]
+    fn latency_doctor(&self) -> CommandResult<T, String> {
+        self.prepare_command(cmd("LATENCY").arg("DOCTOR"))
+    }
+
+    /// Produces an ASCII-art style graph for the specified event.
+    ///
+    /// # Return
+    /// String graph
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-graph/>](https://redis.io/commands/latency-graph/)
+    #[must_use]
+    fn latency_graph(&self, event: LatencyHistoryEvent) -> CommandResult<T, String> {
+        self.prepare_command(cmd("LATENCY").arg("GRAPH").arg(event))
+    }
+
+    /// This command reports a cumulative distribution of latencies
+    /// in the format of a histogram for each of the specified command names.
+    ///
+    /// # Return
+    /// The command returns a map where each key is a command name, and each value is a CommandHistogram instance.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
+    #[must_use]
+    fn latency_histogram<C, CC, RR>(&self, commands: CC) -> CommandResult<T, RR>
+    where
+        C: Into<BulkString>,
+        CC: SingleArgOrCollection<C>,
+        RR: FromKeyValueValueArray<String, CommandHistogram>,
+    {
+        self.prepare_command(cmd("LATENCY").arg("HISTOGRAM").arg(commands))
+    }
+
+    /// This command returns the raw data of the event's latency spikes time series.
+    ///
+    /// # Return
+    /// The command returns a collection where each element is a two elements tuple representing
+    /// - the unix timestamp in seconds
+    /// - the latency of the event in milliseconds
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-history/>](https://redis.io/commands/latency-history/)
+    #[must_use]
+    fn latency_history<RR>(&self, event: LatencyHistoryEvent) -> CommandResult<T, RR>
+    where
+        RR: FromSingleValueArray<(u32, u32)>,
+    {
+        self.prepare_command(cmd("LATENCY").arg("HISTORY").arg(event))
+    }
+
+    /// This command reports the latest latency events logged.
+    ///
+    /// # Return
+    /// A collection of the latest latency events logged.
+    /// Each reported event has the following fields:
+    /// - Event name.
+    /// - Unix timestamp of the latest latency spike for the event.
+    /// - Latest event latency in millisecond.
+    /// - All-time maximum latency for this event.
+    ///
+    /// "All-time" means the maximum latency since the Redis instance was started,
+    /// or the time that events were [`reset`](crate::ServerCommands::reset).
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
+    #[must_use]
+    fn latency_latest<RR>(&self) -> CommandResult<T, RR>
+    where
+        RR: FromSingleValueArray<(String, u32, u32, u32)>,
+    {
+        self.prepare_command(cmd("LATENCY").arg("LATEST"))
+    }
+
+    /// This command resets the latency spikes time series of all, or only some, events.
+    ///
+    /// # Return
+    /// the number of event time series that were reset.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
+    #[must_use]
+    fn latency_reset<EE>(&self, events: EE) -> CommandResult<T, usize>
+    where
+        EE: SingleArgOrCollection<LatencyHistoryEvent>,
+    {
+        self.prepare_command(cmd("LATENCY").arg("RESET").arg(events))
     }
 
     /// The TIME command returns the current server time as a two items lists:
@@ -1178,7 +1274,7 @@ impl FailOverOptions {
         }
     }
 
-    /// This command will abort an ongoing failover and return the master to its normal state. 
+    /// This command will abort an ongoing failover and return the master to its normal state.
     #[must_use]
     pub fn abort(self) -> Self {
         Self {
@@ -1210,7 +1306,7 @@ pub enum InfoSection {
     Errorstats,
     All,
     Default,
-    Everything
+    Everything,
 }
 
 impl From<InfoSection> for BulkString {
@@ -1233,5 +1329,76 @@ impl From<InfoSection> for BulkString {
             InfoSection::Default => BulkString::Str("default"),
             InfoSection::Everything => BulkString::Str("everything"),
         }
+    }
+}
+
+/// Latency history event for the [`latency_graph`](crate::ServerCommands::latency_graph)
+/// & [`latency_history`](crate::ServerCommands::latency_history) commands.
+pub enum LatencyHistoryEvent {
+    ActiveDefragCycle,
+    AofFsyncAlways,
+    AofStat,
+    AofRewriteDiffWrite,
+    AofRename,
+    AofWrite,
+    AofWriteActiveChild,
+    AofWriteAlone,
+    AofWritePendingFsync,
+    Command,
+    ExpireCycle,
+    EvictionCycle,
+    EvictionDel,
+    FastCommand,
+    Fork,
+    RdbUnlinkTempFile,
+}
+
+impl From<LatencyHistoryEvent> for BulkString {
+    fn from(e: LatencyHistoryEvent) -> Self {
+        match e {
+            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle".into(),
+            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always".into(),
+            LatencyHistoryEvent::AofStat => "aof-stat".into(),
+            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write".into(),
+            LatencyHistoryEvent::AofRename => "aof-rename".into(),
+            LatencyHistoryEvent::AofWrite => "aof-write".into(),
+            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child".into(),
+            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone".into(),
+            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync".into(),
+            LatencyHistoryEvent::Command => "command".into(),
+            LatencyHistoryEvent::ExpireCycle => "expire-cycle".into(),
+            LatencyHistoryEvent::EvictionCycle => "eviction-cycle".into(),
+            LatencyHistoryEvent::EvictionDel => "eviction-del".into(),
+            LatencyHistoryEvent::FastCommand => "fast-command".into(),
+            LatencyHistoryEvent::Fork => "fork".into(),
+            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file".into(),
+        }
+    }
+}
+
+/// Command Histogram for the [`latency_histogram`](crate::ServerCommands::latency_histogram) commands.
+#[derive(Default)]
+pub struct CommandHistogram {
+    /// The total calls for that command.
+    pub calls: usize,
+
+    /// A map of time buckets:
+    /// - Each bucket represents a latency range.
+    /// - Each bucket covers twice the previous bucket's range.
+    /// - Empty buckets are not printed.
+    /// - The tracked latencies are between 1 microsecond and roughly 1 second.
+    /// - Everything above 1 sec is considered +Inf.
+    /// - At max there will be log2(1000000000)=30 buckets.
+    pub histogram_usec: HashMap<u32, u32>,
+}
+
+impl FromValue for CommandHistogram {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            calls: values.remove_with_result("calls")?.into()?,
+            histogram_usec: values.remove_with_result("histogram_usec")?.into()?,
+        })
     }
 }

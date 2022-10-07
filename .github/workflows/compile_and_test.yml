@@ -49,12 +49,9 @@ jobs:
         
       - name: Create Redis container
         run: |
-          mkdir /tmp/redis
-          cp /home/runner/work/redis-driver-rs/redis-driver-rs/redis/redis.conf /tmp/redis
-          ls -l /tmp/redis
           docker run --name redis \
             -p 6379:6379 \
-            -v /tmp/redis:/redis \
+            -v /home/runner/work/redis-driver-rs/redis-driver-rs/redis:/redis \
             --health-cmd "redis-cli ping" \
             --health-interval 10s \
             --health-timeout 5s \

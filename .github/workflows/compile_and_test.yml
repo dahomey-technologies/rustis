@@ -43,22 +43,21 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      # Label used to access the service container
-      redis:
-        # Docker Hub image
-        image: redis:alpine
-        ports:
-          - 6379:6379
-        # Set health checks to wait until redis has started
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+        
+      - name: Create Redis container
+        run: |
+          docker run --name redis \
+            -p 6379:6379 \
+            --health-cmd "redis-cli ping" \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            -e GITHUB_ACTIONS=true \
+            -e CI=true \
+            redis:alpine
         
       - name: Create Redis TLS container
         run: |

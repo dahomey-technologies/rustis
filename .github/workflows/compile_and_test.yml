@@ -56,27 +56,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      # Label used to access the service container
-      redis-tls:
-        # Docker Hub image
-        image: docker.io/bitnami/redis
-        env:
-          ALLOW_EMPTY_PASSWORD: false
-          REDIS_PASSWORD: pwd
-          REDIS_TLS_CERT_FILE: /certs/redis.crt
-          REDIS_TLS_KEY_FILE: /certs/redis.key
-          REDIS_TLS_CA_FILE: /certs/ca.crt
-          REDIS_TLS_ENABLED: yes
-          REDIS_TLS_PORT: 6379
-          REDIS_TLS_AUTH_CLIENTS: no
-        ports:
-          - 6380:6379
-        volumes:
-          - certs:/certs
-
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+        
+      - name: Create Redis TLS container
+        run: |
+          docker run --name redis-tls \
+            -p 6380:6379 \
+            -v ./certs:/certs \
+            -e ALLOW_EMPTY_PASSWORD=false \
+            -e REDIS_PASSWORD=pwd \
+            -e REDIS_TLS_CERT_FILE=/certs/redis.crt \
+            -e REDIS_TLS_KEY_FILE=/certs/redis.key \
+            -e REDIS_TLS_CA_FILE=/certs/ca.crt \
+            -e REDIS_TLS_ENABLED=yes \
+            -e REDIS_TLS_PORT=6379 \
+            -e REDIS_TLS_AUTH_CLIENTS=no \
+            -d docker.io/bitnami/redis
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1

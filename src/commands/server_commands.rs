@@ -524,6 +524,65 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("LATENCY").arg("RESET").arg(events))
     }
 
+    /// The LOLWUT command displays the Redis version: however as a side effect of doing so,
+    /// it also creates a piece of generative computer art that is different with each version of Redis.
+    ///
+    /// # Return
+    /// the string containing the generative computer art, and a text with the Redis version.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/lolwut/>](https://redis.io/commands/lolwut/)
+    #[must_use]
+    fn lolwut(&self, options: LolWutOptions) -> CommandResult<T, String> {
+        self.prepare_command(cmd("LOLWUT").arg(options))
+    }
+
+    /// This command reports about different memory-related issues that
+    /// the Redis server experiences, and advises about possible remedies.
+    ///
+    /// # Return
+    /// the string report.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/memory-doctor/>](https://redis.io/commands/memory-doctor/)
+    #[must_use]
+    fn memory_doctor(&self) -> CommandResult<T, String> {
+        self.prepare_command(cmd("MEMORY").arg("DOCTOR"))
+    }
+
+    /// This command provides an internal statistics report from the memory allocator.
+    ///
+    /// # Return
+    /// the memory allocator's internal statistics report.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/memory-malloc-stats/>](https://redis.io/commands/memory-malloc-stats/)
+    #[must_use]
+    fn memory_malloc_stats(&self) -> CommandResult<T, String> {
+        self.prepare_command(cmd("MEMORY").arg("MALLOC-STATS"))
+    }
+
+    /// This command attempts to purge dirty pages so these can be reclaimed by the allocator.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/memory-purge/>](https://redis.io/commands/memory-purge/)
+    #[must_use]
+    fn memory_purge(&self) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("MEMORY").arg("PURGE"))
+    }
+
+    /// This command returns information about the memory usage of the server.
+    ///
+    /// # Return
+    /// the memory allocator's internal statistics report.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/memory-tats/>](https://redis.io/commands/memory-stats/)
+    #[must_use]
+    fn memory_stats(&self) -> CommandResult<T, MemoryStats> {
+        self.prepare_command(cmd("MEMORY").arg("STATS"))
+    }
+
     /// The TIME command returns the current server time as a two items lists:
     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
     ///
@@ -1399,6 +1458,193 @@ impl FromValue for CommandHistogram {
         Ok(Self {
             calls: values.remove_with_result("calls")?.into()?,
             histogram_usec: values.remove_with_result("histogram_usec")?.into()?,
+        })
+    }
+}
+
+/// Options for the [`lolwut`](crate::ServerCommands::lolwut) command
+#[derive(Default)]
+pub struct LolWutOptions {
+    command_args: CommandArgs,
+}
+
+impl LolWutOptions {
+    #[must_use]
+    pub fn version(self, version: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("VERSION").arg(version),
+        }
+    }
+
+    #[must_use]
+    pub fn optional_arg<A: Into<BulkString>>(self, arg: A) -> Self {
+        Self {
+            command_args: self.command_args.arg(arg),
+        }
+    }
+}
+
+impl IntoArgs for LolWutOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Result for the [`memory_stats`](crate::ServerCommands::memory_stats) command.
+#[derive(Debug)]
+pub struct MemoryStats {
+    /// Peak memory consumed by Redis in bytes
+    /// (see [`INFO`](https://redis.io/commands/info)'s used_memory_peak)
+    pub peak_allocated: usize,
+
+    /// Total number of bytes allocated by Redis using its allocator
+    /// (see [`INFO`](https://redis.io/commands/info)'s used_memory)
+    pub total_allocated: usize,
+
+    /// Initial amount of memory consumed by Redis at startup in bytes
+    /// (see [`INFO`](https://redis.io/commands/info)'s used_memory_startup)
+    pub startup_allocated: usize,
+
+    /// Size in bytes of the replication backlog
+    /// (see [`INFO`](https://redis.io/commands/info)'s repl_backlog_active)
+    pub replication_backlog: usize,
+
+    /// The total size in bytes of all replicas overheads
+    /// (output and query buffers, connection contexts)
+    pub clients_slaves: usize,
+
+    /// The total size in bytes of all clients overheads
+    /// (output and query buffers, connection contexts)
+    pub clients_normal: usize,
+
+    /// Memory usage by cluster links
+    /// (Added in Redis 7.0, see [`INFO`](https://redis.io/commands/info)'s mem_cluster_links).
+    pub cluster_links: usize,
+
+    /// The summed size in bytes of AOF related buffers.
+    pub aof_buffer: usize,
+
+    /// the summed size in bytes of the overheads of the Lua scripts' caches
+    pub lua_caches: usize,
+
+    /// the summed size in bytes of the overheads of the functions' caches
+    pub functions_caches: usize,
+
+    /// For each of the server's databases (key = db index),
+    /// the overheads of the main and expiry dictionaries are reported in bytes
+    pub databases: HashMap<usize, DatabaseOverhead>,
+
+    /// The sum of all overheads, i.e. `startup.allocated`, `replication.backlog`,
+    /// `clients.slaves`, `clients.normal`, `aof.buffer` and those of the internal data structures
+    /// that are used in managing the Redis keyspace (see [`INFO`](https://redis.io/commands/info)'s used_memory_overhead)
+    pub overhead_total: usize,
+
+    /// The total number of keys stored across all databases in the server
+    pub keys_count: usize,
+
+    /// The ratio between net memory usage (`total.allocated` minus `startup.allocated`) and `keys.count`
+    pub keys_bytes_per_key: usize,
+
+    /// The size in bytes of the dataset, i.e. `overhead.total` subtracted from `total.allocated`
+    ///  (see [`INFO`](https://redis.io/commands/info)'s used_memory_dataset)
+    pub dataset_bytes: usize,
+
+    /// The percentage of `dataset.bytes` out of the net memory usage
+    pub dataset_percentage: f64,
+
+    /// The percentage of `peak.allocated` out of `total.allocated`
+    pub peak_percentage: f64,
+
+    pub allocator_allocated: usize,
+
+    pub allocator_active: usize,
+
+    pub allocator_resident: usize,
+
+    pub allocator_fragmentation_ratio: f64,
+
+    pub allocator_fragmentation_bytes: usize,
+
+    pub allocator_rss_ratio: f64,
+
+    pub allocator_rss_bytes: usize,
+
+    pub rss_overhead_ratio: f64,
+
+    pub rss_overhead_bytes: usize,
+
+    /// See [`INFO`](https://redis.io/commands/info)'s mem_fragmentation_ratio
+    pub fragmentation: f64,
+
+    pub fragmentation_bytes: usize,
+
+    pub additional_stats: HashMap<String, Value>,
+}
+
+impl FromValue for MemoryStats {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            peak_allocated: values.remove_or_default("peak.allocated").into()?,
+            total_allocated: values.remove_or_default("total.allocated").into()?,
+            startup_allocated: values.remove_or_default("startup.allocated").into()?,
+            replication_backlog: values.remove_or_default("replication.backlog").into()?,
+            clients_slaves: values.remove_or_default("clients.slaves").into()?,
+            clients_normal: values.remove_or_default("clients.normal").into()?,
+            cluster_links: values.remove_or_default("cluster.links").into()?,
+            aof_buffer: values.remove_or_default("aof.buffer").into()?,
+            lua_caches: values.remove_or_default("lua.caches").into()?,
+            functions_caches: values.remove_or_default("functions.caches").into()?,
+            databases: (0..16)
+                .into_iter()
+                .filter_map(|i| {
+                    values
+                        .remove(&format!("db.{i}"))
+                        .map(|v| DatabaseOverhead::from_value(v).map(|o| (i, o)))
+                })
+                .collect::<Result<HashMap<usize, DatabaseOverhead>>>()?,
+            overhead_total: values.remove_or_default("overhead.total").into()?,
+            keys_count: values.remove_or_default("keys.count").into()?,
+            keys_bytes_per_key: values.remove_or_default("keys.bytes-per-key").into()?,
+            dataset_bytes: values.remove_or_default("dataset.bytes").into()?,
+            dataset_percentage: values.remove_or_default("dataset.percentage").into()?,
+            peak_percentage: values.remove_or_default("peak.percentage").into()?,
+            allocator_allocated: values.remove_or_default("allocator.allocated").into()?,
+            allocator_active: values.remove_or_default("allocator.active").into()?,
+            allocator_resident: values.remove_or_default("allocator.resident").into()?,
+            allocator_fragmentation_ratio: values.remove_or_default("allocator-fragmentation.ratio").into()?,
+            allocator_fragmentation_bytes: values.remove_or_default("allocator-fragmentation.bytes").into()?,
+            allocator_rss_ratio: values.remove_or_default("allocator-rss.ratio").into()?,
+            allocator_rss_bytes: values.remove_or_default("allocator-rss.bytes").into()?,
+            rss_overhead_ratio: values.remove_or_default("rss-overhead.ratio").into()?,
+            rss_overhead_bytes: values.remove_or_default("rss-overhead.bytes").into()?,
+            fragmentation: values.remove_or_default("fragmentation").into()?,
+            fragmentation_bytes: values.remove_or_default("fragmentation.bytes").into()?,
+            additional_stats: values,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct DatabaseOverhead {
+    pub overhead_hashtable_main: usize,
+    pub overhead_hashtable_expires: usize,
+    pub overhead_hashtable_slot_to_keys: usize,
+}
+
+impl FromValue for DatabaseOverhead {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            overhead_hashtable_main: values.remove_or_default("overhead.hashtable.main").into()?,
+            overhead_hashtable_expires: values
+                .remove_or_default("overhead.hashtable.expires")
+                .into()?,
+            overhead_hashtable_slot_to_keys: values
+                .remove_or_default("overhead.hashtable.slot-to-keys")
+                .into()?,
         })
     }
 }

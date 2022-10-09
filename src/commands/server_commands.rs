@@ -591,11 +591,55 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/memory-usage/>](https://redis.io/commands/memory-usage/)
     #[must_use]
-    fn memory_usage<K>(&self, key: K, options: MemoryUsageOptions) -> CommandResult<T, Option<usize>> 
+    fn memory_usage<K>(
+        &self,
+        key: K,
+        options: MemoryUsageOptions,
+    ) -> CommandResult<T, Option<usize>>
     where
-        K: Into<BulkString>
+        K: Into<BulkString>,
     {
         self.prepare_command(cmd("MEMORY").arg("USAGE").arg(key).arg(options))
+    }
+
+    /// Returns information about the modules loaded to the server.
+    ///
+    /// # Return
+    /// list of loaded modules.
+    /// Each element in the list represents a module as an instance of [`ModuleInfo`](crate::ModuleInfo)
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
+    #[must_use]
+    fn module_list<MM>(&self) -> CommandResult<T, MM>
+    where
+        MM: FromSingleValueArray<ModuleInfo>,
+    {
+        self.prepare_command(cmd("MODULE").arg("LIST"))
+    }
+
+    /// Loads a module from a dynamic library at runtime.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/module-load/>](https://redis.io/commands/module-load/)
+    #[must_use]
+    fn module_load<P>(&self, path: P, options: ModuleLoadOptions) -> CommandResult<T, ()>
+    where
+        P: Into<BulkString>,
+    {
+        self.prepare_command(cmd("MODULE").arg("LOADEX").arg(path).arg(options))
+    }
+
+    /// Unloads a module.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
+    #[must_use]
+    fn module_unload<N>(&self, name: N) -> CommandResult<T, ()>
+    where
+        N: Into<BulkString>,
+    {
+        self.prepare_command(cmd("MODULE").arg("UNLOAD").arg(name))
     }
 
     /// The TIME command returns the current server time as a two items lists:
@@ -1628,8 +1672,12 @@ impl FromValue for MemoryStats {
             allocator_allocated: values.remove_or_default("allocator.allocated").into()?,
             allocator_active: values.remove_or_default("allocator.active").into()?,
             allocator_resident: values.remove_or_default("allocator.resident").into()?,
-            allocator_fragmentation_ratio: values.remove_or_default("allocator-fragmentation.ratio").into()?,
-            allocator_fragmentation_bytes: values.remove_or_default("allocator-fragmentation.bytes").into()?,
+            allocator_fragmentation_ratio: values
+                .remove_or_default("allocator-fragmentation.ratio")
+                .into()?,
+            allocator_fragmentation_bytes: values
+                .remove_or_default("allocator-fragmentation.bytes")
+                .into()?,
             allocator_rss_ratio: values.remove_or_default("allocator-rss.ratio").into()?,
             allocator_rss_bytes: values.remove_or_default("allocator-rss.bytes").into()?,
             rss_overhead_ratio: values.remove_or_default("rss-overhead.ratio").into()?,
@@ -1664,22 +1712,95 @@ impl FromValue for DatabaseOverhead {
     }
 }
 
-/// Options for the [`lolwut`](crate::ServerCommands::lolwut) command
+/// Options for the [`memory_usage`](crate::ServerCommands::memory_usage) command
 #[derive(Default)]
 pub struct MemoryUsageOptions {
     command_args: CommandArgs,
 }
 
 impl MemoryUsageOptions {
+    /// For nested data types, the optional `samples` option can be provided,
+    /// where count is the number of sampled nested values.
+    /// By default, this option is set to 5.
+    /// To sample the all of the nested values, use samples(0).
     #[must_use]
     pub fn samples(self, count: usize) -> Self {
         Self {
             command_args: self.command_args.arg("SAMPLES").arg(count),
-        }        
-    }    
+        }
+    }
 }
 
 impl IntoArgs for MemoryUsageOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Module information result for the [`module_list`](crate::ServerCommands::module_list) command.
+pub struct ModuleInfo {
+    /// Name of the module
+    pub name: String,
+    /// Version of the module
+    pub version: String,
+}
+
+impl FromValue for ModuleInfo {
+    fn from_value(value: Value) -> Result<Self> {
+        let mut values: HashMap<String, Value> = value.into()?;
+
+        Ok(Self {
+            name: values.remove_or_default("name").into()?,
+            version: values.remove_or_default("ver").into()?,
+        })
+    }
+}
+
+/// Options for the [`module_load`](crate::ServerCommands::module_load) command
+#[derive(Default)]
+pub struct ModuleLoadOptions {
+    command_args: CommandArgs,
+    args_added: bool,
+}
+
+impl ModuleLoadOptions {
+    /// You can use this optional method to provide the module with configuration directives.
+    /// This method can be called multiple times
+    #[must_use]
+    pub fn config<N, V>(self, name: N, value: V) -> Self
+    where
+        N: Into<BulkString>,
+        V: Into<BulkString>,
+    {
+        if self.args_added {
+            panic!("method config should be called before method arg");
+        }
+
+        Self {
+            command_args: self.command_args.arg("CONFIG").arg(name).arg(value),
+            args_added: false,
+        }
+    }
+
+    /// Any additional arguments are passed unmodified to the module.
+    /// This method can be called multiple times
+    #[must_use]
+    pub fn arg<A: Into<BulkString>>(self, arg: A) -> Self {
+        if !self.args_added {
+            Self {
+                command_args: self.command_args.arg("ARGS").arg(arg),
+                args_added: true,
+            }
+        } else {
+            Self {
+                command_args: self.command_args.arg(arg),
+                args_added: false,
+            }
+        }
+    }
+}
+
+impl IntoArgs for ModuleLoadOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }

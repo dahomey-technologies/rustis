@@ -3,7 +3,8 @@ use crate::{
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
     CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions, FlushingMode,
-    InfoSection, LatencyHistoryEvent, Result, ServerCommands, StringCommands, MemoryUsageOptions,
+    InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, Result,
+    ServerCommands, StringCommands,
 };
 use futures::join;
 use serial_test::serial;
@@ -802,15 +803,73 @@ async fn memory_usage() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
-    let size = client.memory_usage("key", Default::default()).await?.unwrap();
+    let size = client
+        .memory_usage("key", Default::default())
+        .await?
+        .unwrap();
     assert!(size > 0);
 
     let size = client.memory_usage("unknown", Default::default()).await?;
     assert_eq!(None, size);
 
     client.set("key", "value").await?;
-    let size = client.memory_usage("key", MemoryUsageOptions::default().samples(5)).await?.unwrap();
+    let size = client
+        .memory_usage("key", MemoryUsageOptions::default().samples(5))
+        .await?
+        .unwrap();
     assert!(size > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn module_list() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let modules: Vec<ModuleInfo> = client.module_list().await?;
+    assert_eq!(0, modules.len());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn module_load() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result = client
+        .module_load(
+            "path",
+            ModuleLoadOptions::default()
+                .config("name", "value")
+                .config("name2", "value2")
+                .arg("arg1")
+                .arg(23),
+        )
+        .await;
+    assert!(
+        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR MODULE command not allowed."))
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn module_unload() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result = client.module_unload("mymodule").await;
+    assert!(
+        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR MODULE command not allowed."))
+    );
 
     Ok(())
 }

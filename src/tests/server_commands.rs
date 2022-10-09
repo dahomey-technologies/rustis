@@ -5,7 +5,7 @@ use crate::{
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, Client, ClientInfo,
     CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions,
     FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
-    ModuleLoadOptions, Result, ServerCommands, StringCommands,
+    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions,
 };
 use futures::{join, StreamExt};
 use serial_test::serial;
@@ -920,6 +920,18 @@ async fn monitor() -> Result<()> {
     client.select(2).await?;
     let value: String = client.get("key").await?;
     assert_eq!("value3", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn replicaof() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.replicaof(ReplicaOfOptions::no_one()).await?;
+    client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
 
     Ok(())
 }

@@ -5,7 +5,7 @@ use crate::{
         cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    CommandResult, Error, MonitorStream, PrepareCommand, Result, Future,
+    CommandResult, Error, Future, MonitorStream, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Server Management
@@ -648,6 +648,15 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
     #[must_use]
     fn monitor<'a>(&'a self) -> Future<'a, MonitorStream>;
+
+    /// This command can change the replication settings of a replica on the fly.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/replicaof/>](https://redis.io/commands/replicaof/)
+    #[must_use]
+    fn replicaof(& self, options: ReplicaOfOptions) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("REPLICAOF").arg(options))
+    }
 
     /// The TIME command returns the current server time as a two items lists:
     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
@@ -1808,6 +1817,39 @@ impl ModuleLoadOptions {
 }
 
 impl IntoArgs for ModuleLoadOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// options for the [`replicaof`](crate::ServerCommands::replicaof) command.
+pub struct ReplicaOfOptions {    
+    command_args: CommandArgs,
+}
+
+impl ReplicaOfOptions {
+    /// If a Redis server is already acting as replica, 
+    /// the command REPLICAOF NO ONE will turn off the replication, 
+    /// turning the Redis server into a MASTER.
+    #[must_use]
+    pub fn no_one() -> Self
+    {
+        Self {
+            command_args: CommandArgs::Empty.arg("NO").arg("ONE"),
+        }
+    }
+
+    /// In the proper form REPLICAOF hostname port will make the server 
+    /// a replica of another server listening at the specified hostname and port.
+    #[must_use]
+    pub fn master<H: Into<BulkString>>(host: H, port: u16) -> Self {
+        Self {
+            command_args: CommandArgs::Empty.arg(host).arg(port),
+        }      
+    }
+}
+
+impl IntoArgs for ReplicaOfOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }

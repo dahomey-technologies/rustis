@@ -1,10 +1,11 @@
 use crate::{
+    network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, ClientResult, CommandResult, ConnectionCommands, Future, GenericCommands,
     GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig,
-    ListCommands, Message, MsgSender, NetworkHandler, PrepareCommand, PubSubCommands,
-    PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
+    PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
     TransactionCommands, TransactionResult0, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -104,7 +105,24 @@ impl HyperLogLogCommands<ClientResult> for Client {}
 impl InternalPubSubCommands<ClientResult> for Client {}
 impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
-impl ServerCommands<ClientResult> for Client {}
+impl ServerCommands<ClientResult> for Client {
+    fn monitor<'a>(&'a self) -> Future<'a, crate::MonitorStream> {
+        Box::pin(async move {
+            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+            let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
+                mpsc::unbounded();
+
+            let message = Message::new(cmd("MONITOR"))
+                .value_sender(value_sender)
+                .monitor_sender(monitor_sender);
+
+            self.send_message(message)?;
+
+            let value = value_receiver.await?;
+            value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
+        })
+    }
+}
 impl SetCommands<ClientResult> for Client {}
 impl SortedSetCommands<ClientResult> for Client {}
 impl StreamCommands<ClientResult> for Client {}

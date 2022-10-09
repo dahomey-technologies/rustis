@@ -14,12 +14,17 @@ pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
 pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type MonitorSender = mpsc::UnboundedSender<Result<Value>>;
+pub(crate) type MonitorReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 
 enum Status {
     Disconnected,
     Connected,
     Subscribing,
     Subscribed,
+    EnteringMonitor,
+    Monitor,
+    LeavingMonitor
 }
 
 pub(crate) struct NetworkHandler {
@@ -29,10 +34,11 @@ pub(crate) struct NetworkHandler {
     msg_receiver: MsgReceiver,
     value_senders: VecDeque<Option<ValueSender>>,
     pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
-    /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unscribe from
+    /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
     pending_unsubscriptions: VecDeque<usize>,
     subscriptions: HashMap<Vec<u8>, PubSubSender>,
     is_reply_on: bool,
+    monitor_sender: Option<MonitorSender>,
 }
 
 impl NetworkHandler {
@@ -51,6 +57,7 @@ impl NetworkHandler {
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
             is_reply_on: true,
+            monitor_sender: None,
         };
 
         spawn(async move {
@@ -149,6 +156,10 @@ impl NetworkHandler {
                             }
                             _ => (),
                         },
+                        "MONITOR" => {
+                            self.monitor_sender = msg.monitor_sender.take();
+                            self.status = Status::EnteringMonitor;
+                        }
                         _ => (),
                     }
                     self.send_message(msg).await;
@@ -169,6 +180,16 @@ impl NetworkHandler {
                         let _result = value_sender
                             .send(Err(Error::Network("Disconnected from server".to_string())));
                     }
+                }
+                Status::EnteringMonitor => self.send_message(msg).await,
+                Status::Monitor => {
+                    if msg.command.name == "RESET" {
+                        self.status = Status::LeavingMonitor;
+                    }
+                    self.send_message(msg).await;
+                },
+                Status::LeavingMonitor => {
+                    self.send_message(msg).await;
                 }
             }
             true
@@ -211,6 +232,35 @@ impl NetworkHandler {
                         self.receive_result(value);
                     }
                 }
+                Status::EnteringMonitor => {
+                    self.receive_result(value);
+                    self.status = Status::Monitor;
+                }
+                Status::Monitor => match &value {
+                    // monitor events are a SimpleString beginning by a numeric (unix timestamp)
+                    Ok(Value::SimpleString(monitor_event))
+                        if monitor_event.starts_with(char::is_numeric) =>
+                    {
+                        if let Some(monitor_sender) = &mut self.monitor_sender {
+                            monitor_sender.send(value).await?;
+                        }
+                    }
+                    _ => self.receive_result(value),
+                },
+                Status::LeavingMonitor => match &value {
+                    // monitor events are a SimpleString beginning by a numeric (unix timestamp)
+                    Ok(Value::SimpleString(monitor_event))
+                        if monitor_event.starts_with(char::is_numeric) =>
+                    {
+                        if let Some(monitor_sender) = &mut self.monitor_sender {
+                            monitor_sender.send(value).await?;
+                        }
+                    }
+                    _ =>  {
+                        self.receive_result(value);
+                        self.status = Status::Connected;
+                    },
+                },
             },
             // disconnection
             None => {

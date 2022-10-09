@@ -5,7 +5,7 @@ use crate::{
         cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    CommandResult, Error, PrepareCommand, Result,
+    CommandResult, Error, MonitorStream, PrepareCommand, Result, Future,
 };
 
 /// A group of Redis commands related to Server Management
@@ -641,6 +641,13 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     {
         self.prepare_command(cmd("MODULE").arg("UNLOAD").arg(name))
     }
+
+    /// Debugging command that streams back every command processed by the Redis server.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
+    #[must_use]
+    fn monitor<'a>(&'a self) -> Future<'a, MonitorStream>;
 
     /// The TIME command returns the current server time as a two items lists:
     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.

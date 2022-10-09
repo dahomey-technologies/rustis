@@ -1,12 +1,13 @@
 use crate::{
     resp::{cmd, BulkString, Value},
+    spawn,
     tests::get_test_client,
-    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
-    CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions, FlushingMode,
-    InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, Result,
-    ServerCommands, StringCommands,
+    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, Client, ClientInfo,
+    CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions,
+    FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
+    ModuleLoadOptions, Result, ServerCommands, StringCommands,
 };
-use futures::join;
+use futures::{join, StreamExt};
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 
@@ -870,6 +871,55 @@ async fn module_unload() -> Result<()> {
     assert!(
         matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR MODULE command not allowed."))
     );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn monitor() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let client2 = get_test_client().await?;
+    client2.select(2).await?;
+
+    let mut monitor_stream = client.monitor().await?;
+
+    spawn(async move {
+        async fn calls(client: &Client) -> Result<()> {
+            client.set("key", "value1").await?;
+            client.set("key", "value2").await?;
+            client.set("key", "value3").await?;
+
+            Ok(())
+        }
+
+        let _result = calls(&client2).await;
+    });
+
+    for _ in 0..3 {
+        let result = monitor_stream
+            .next()
+            .await
+            .ok_or(Error::Internal("fail".to_owned()))?;
+
+        assert!(result.unix_timestamp_millis > 0.0);
+        assert_eq!(2, result.database);
+        assert_eq!("SET", result.command);
+        assert_eq!(2, result.command_args.len());
+    }
+
+    // RESET is the only command allowed during a MONITOR session
+    let result: Result<String> = client.get("key").await;
+    assert!(result.is_err());
+
+    monitor_stream.close().await?;
+
+    client.select(2).await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value3", value);
 
     Ok(())
 }

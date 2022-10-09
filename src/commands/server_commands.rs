@@ -654,8 +654,37 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/replicaof/>](https://redis.io/commands/replicaof/)
     #[must_use]
-    fn replicaof(& self, options: ReplicaOfOptions) -> CommandResult<T, ()> {
+    fn replicaof(&self, options: ReplicaOfOptions) -> CommandResult<T, ()> {
         self.prepare_command(cmd("REPLICAOF").arg(options))
+    }
+
+    /// Provide information on the role of a Redis instance in the context of replication,
+    /// by returning if the instance is currently a `master`, `slave`, or `sentinel`.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/role/>](https://redis.io/commands/role/)
+    #[must_use]
+    fn role(&self) -> CommandResult<T, RoleResult> {
+        self.prepare_command(cmd("ROLE"))
+    }
+
+    /// This command performs a synchronous save of the dataset producing a point in time snapshot
+    /// of all the data inside the Redis instance, in the form of an RDB file.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/save/>](https://redis.io/commands/save/)
+    #[must_use]
+    fn save(&self) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("SAVE"))
+    }
+
+    /// Shutdown the server
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/shutdown/>](https://redis.io/commands/shutdown/)
+    #[must_use]
+    fn shutdown(&self, options: ShutdownOptions) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("SHUTDOWN").arg(options))
     }
 
     /// The TIME command returns the current server time as a two items lists:
@@ -1823,33 +1852,204 @@ impl IntoArgs for ModuleLoadOptions {
 }
 
 /// options for the [`replicaof`](crate::ServerCommands::replicaof) command.
-pub struct ReplicaOfOptions {    
+pub struct ReplicaOfOptions {
     command_args: CommandArgs,
 }
 
 impl ReplicaOfOptions {
-    /// If a Redis server is already acting as replica, 
-    /// the command REPLICAOF NO ONE will turn off the replication, 
+    /// If a Redis server is already acting as replica,
+    /// the command REPLICAOF NO ONE will turn off the replication,
     /// turning the Redis server into a MASTER.
     #[must_use]
-    pub fn no_one() -> Self
-    {
+    pub fn no_one() -> Self {
         Self {
             command_args: CommandArgs::Empty.arg("NO").arg("ONE"),
         }
     }
 
-    /// In the proper form REPLICAOF hostname port will make the server 
+    /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
     pub fn master<H: Into<BulkString>>(host: H, port: u16) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(host).arg(port),
-        }      
+        }
     }
 }
 
 impl IntoArgs for ReplicaOfOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Result for the [`role`](crate::ServerCommands::role) command.
+pub enum RoleResult {
+    Master {
+        /// The current master replication offset,
+        /// which is an offset that masters and replicas share to understand,
+        /// in partial resynchronizations,
+        /// the part of the replication stream the replicas needs to fetch to continue.
+        master_replication_offset: usize,
+        /// information av=bout the connected replicas
+        replica_infos: Vec<ReplicaInfo>,
+    },
+    Replica {
+        /// The IP of the master.
+        master_ip: String,
+        /// The port number of the master.
+        master_port: u16,
+        /// The state of the replication from the point of view of the master
+        state: ReplicationState,
+        /// The amount of data received from the replica
+        /// so far in terms of master replication offset.
+        amount_data_received: isize,
+    },
+    Sentinel {
+        /// An array of master names monitored by this Sentinel instance.
+        master_names: Vec<String>,
+    },
+}
+
+impl FromValue for RoleResult {
+    fn from_value(value: Value) -> Result<Self> {
+        let values: Vec<Value> = value.into()?;
+        let mut iter = values.into_iter();
+
+        match (
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+            iter.next(),
+        ) {
+            (
+                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(master_replication_offset),
+                Some(replica_infos),
+                None,
+                None,
+                None,
+            ) if s == b"master" => Ok(Self::Master {
+                master_replication_offset: master_replication_offset.into()?,
+                replica_infos: replica_infos.into()?,
+            }),
+            (
+                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(master_ip),
+                Some(master_port),
+                Some(state),
+                Some(amount_data_received),
+                None,
+            ) if s == b"slave" => Ok(Self::Replica {
+                master_ip: master_ip.into()?,
+                master_port: master_port.into()?,
+                state: state.into()?,
+                amount_data_received: amount_data_received.into()?,
+            }),
+            (
+                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(master_names),
+                None,
+                None,
+                None,
+                None,
+            ) if s == b"sentinel" => Ok(Self::Sentinel {
+                master_names: master_names.into()?,
+            }),
+            _ => Err(Error::Internal(
+                "Cannot parse RoleResult from result".to_string(),
+            )),
+        }
+    }
+}
+
+pub struct ReplicaInfo {
+    /// the replica IP
+    pub ip: String,
+    /// the replica port
+    pub port: u16,
+    /// the last acknowledged replication offset.
+    pub last_ack_offset: usize,
+}
+
+impl FromValue for ReplicaInfo {
+    fn from_value(value: Value) -> Result<Self> {
+        let (ip, port, last_ack_offset) = value.into()?;
+        Ok(Self {
+            ip,
+            port,
+            last_ack_offset,
+        })
+    }
+}
+
+pub enum ReplicationState {
+    Connect,
+    Connecting,
+    Sync,
+    Connected,
+}
+
+impl FromValue for ReplicationState {
+    fn from_value(value: Value) -> Result<Self> {
+        let str: String = value.into()?;
+
+        match str.as_str() {
+            "connect" => Ok(Self::Connect),
+            "connecting" => Ok(Self::Connecting),
+            "sync" => Ok(Self::Sync),
+            "connected" => Ok(Self::Connected),
+            _ => Err(Error::Internal(format!(
+                "Cannot parse {str} to ReplicationState"
+            ))),
+        }
+    }
+}
+
+/// options for the [`shutdown`](crate::ServerCommands::shutdown) command.
+#[derive(Default)]
+pub struct ShutdownOptions {
+    command_args: CommandArgs,
+}
+
+impl ShutdownOptions {
+    /// - if save is true, will force a DB saving operation even if no save points are configured
+    /// - if save is false, will prevent a DB saving operation even if one or more save points are configured.
+    #[must_use]
+    pub fn save(self, save: bool) -> Self {
+        Self {
+            command_args: self.command_args.arg(if save { "SAVE" } else { "NOSAVE" }),
+        }
+    }
+
+    /// skips waiting for lagging replicas, i.e. it bypasses the first step in the shutdown sequence.
+    #[must_use]
+    pub fn now(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("NOW"),
+        }
+    }
+
+    /// ignores any errors that would normally prevent the server from exiting. 
+    #[must_use]
+    pub fn force(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("FORCE"),
+        }
+    }
+
+    /// cancels an ongoing shutdown and cannot be combined with other flags.
+    #[must_use]
+    pub fn abort(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("ABORT"),
+        }
+    }
+}
+
+impl IntoArgs for ShutdownOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }

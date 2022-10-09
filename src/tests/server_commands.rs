@@ -5,7 +5,7 @@ use crate::{
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, Client, ClientInfo,
     CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions,
     FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
-    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions,
+    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions, RoleResult, ShutdownOptions,
 };
 use futures::{join, StreamExt};
 use serial_test::serial;
@@ -930,8 +930,38 @@ async fn monitor() -> Result<()> {
 async fn replicaof() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.replicaof(ReplicaOfOptions::no_one()).await?;
     client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
+    client.replicaof(ReplicaOfOptions::no_one()).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn role() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let role_result = client.role().await?;
+    assert!(matches!(role_result, RoleResult::Master{ master_replication_offset: _, replica_infos: _ }));
+
+    client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
+
+    let role_result = client.role().await?;
+    assert!(matches!(role_result, RoleResult::Replica { master_ip: _, master_port: _, state: _, amount_data_received: _ }));
+
+    client.replicaof(ReplicaOfOptions::no_one()).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn save() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.save().await?;
 
     Ok(())
 }

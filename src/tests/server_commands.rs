@@ -3,7 +3,7 @@ use crate::{
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, ClientInfo, CommandDoc,
     CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions, FlushingMode,
-    InfoSection, LatencyHistoryEvent, Result, ServerCommands, StringCommands,
+    InfoSection, LatencyHistoryEvent, Result, ServerCommands, StringCommands, MemoryUsageOptions,
 };
 use futures::join;
 use serial_test::serial;
@@ -790,6 +790,27 @@ async fn memory_stats() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let _memory_stats = client.memory_stats().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn memory_usage() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.set("key", "value").await?;
+    let size = client.memory_usage("key", Default::default()).await?.unwrap();
+    assert!(size > 0);
+
+    let size = client.memory_usage("unknown", Default::default()).await?;
+    assert_eq!(None, size);
+
+    client.set("key", "value").await?;
+    let size = client.memory_usage("key", MemoryUsageOptions::default().samples(5)).await?.unwrap();
+    assert!(size > 0);
 
     Ok(())
 }

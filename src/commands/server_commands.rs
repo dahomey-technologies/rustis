@@ -577,10 +577,25 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// the memory allocator's internal statistics report.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/memory-tats/>](https://redis.io/commands/memory-stats/)
+    /// [<https://redis.io/commands/memory-stats/>](https://redis.io/commands/memory-stats/)
     #[must_use]
     fn memory_stats(&self) -> CommandResult<T, MemoryStats> {
         self.prepare_command(cmd("MEMORY").arg("STATS"))
+    }
+
+    /// This command reports the number of bytes that a key and its value require to be stored in RAM.
+    ///
+    /// # Return
+    /// the memory usage in bytes, or None when the key does not exist.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/memory-usage/>](https://redis.io/commands/memory-usage/)
+    #[must_use]
+    fn memory_usage<K>(&self, key: K, options: MemoryUsageOptions) -> CommandResult<T, Option<usize>> 
+    where
+        K: Into<BulkString>
+    {
+        self.prepare_command(cmd("MEMORY").arg("USAGE").arg(key).arg(options))
     }
 
     /// The TIME command returns the current server time as a two items lists:
@@ -1646,5 +1661,26 @@ impl FromValue for DatabaseOverhead {
                 .remove_or_default("overhead.hashtable.slot-to-keys")
                 .into()?,
         })
+    }
+}
+
+/// Options for the [`lolwut`](crate::ServerCommands::lolwut) command
+#[derive(Default)]
+pub struct MemoryUsageOptions {
+    command_args: CommandArgs,
+}
+
+impl MemoryUsageOptions {
+    #[must_use]
+    pub fn samples(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("SAMPLES").arg(count),
+        }        
+    }    
+}
+
+impl IntoArgs for MemoryUsageOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
     }
 }

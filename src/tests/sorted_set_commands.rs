@@ -1,8 +1,239 @@
 use crate::{
-    tests::get_test_client, GenericCommands, Result, SortedSetCommands, ZAddOptions, ZRangeOptions,
-    ZRangeSortBy, ZScanOptions, ZWhere,
+    spawn,
+    tests::{get_test_client, sleep},
+    FlushingMode, GenericCommands, Result, ServerCommands, SortedSetCommands, ZAddOptions,
+    ZRangeOptions, ZRangeSortBy, ZScanOptions, ZWhere,
 };
 use serial_test::serial;
+use std::time::Duration;
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bzmpop() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result: Option<(String, Vec<(String, f64)>)> =
+        client.bzmpop(0.01, "unknown", ZWhere::Min, 1).await?;
+    assert!(result.is_none());
+
+    client
+        .zadd(
+            "key",
+            [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
+        )
+        .await?;
+
+    let result: Option<(String, Vec<(String, f64)>)> =
+        client.bzmpop(0.0, "key", ZWhere::Min, 1).await?;
+    match result {
+        Some(result) => {
+            assert_eq!("key".to_owned(), result.0);
+            assert_eq!(1, result.1.len());
+            assert_eq!(("one".to_owned(), 1.0), result.1[0]);
+        }
+        None => assert!(false),
+    }
+
+    let values: Vec<(String, f64)> = client
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(2, values.len());
+    assert_eq!(("two".to_owned(), 2.0), values[0]);
+    assert_eq!(("three".to_owned(), 3.0), values[1]);
+
+    let result: Option<(String, Vec<(String, f64)>)> =
+        client.bzmpop(0.0, "key", ZWhere::Max, 10).await?;
+    match result {
+        Some(result) => {
+            assert_eq!("key".to_owned(), result.0);
+            assert_eq!(2, result.1.len());
+            assert_eq!(("three".to_owned(), 3.0), result.1[0]);
+            assert_eq!(("two".to_owned(), 2.0), result.1[1]);
+        }
+        None => assert!(false),
+    }
+
+    client
+        .zadd(
+            "key2",
+            [(4.0, "four"), (5.0, "five"), (6.0, "six")],
+            ZAddOptions::default(),
+        )
+        .await?;
+
+    let result: Option<(String, Vec<(String, f64)>)> =
+        client.bzmpop(0.0, ["key", "key2"], ZWhere::Min, 10).await?;
+    match result {
+        Some(result) => {
+            assert_eq!("key2".to_owned(), result.0);
+            assert_eq!(3, result.1.len());
+            assert_eq!(("four".to_owned(), 4.0), result.1[0]);
+            assert_eq!(("five".to_owned(), 5.0), result.1[1]);
+            assert_eq!(("six".to_owned(), 6.0), result.1[2]);
+        }
+        None => assert!(false),
+    }
+
+    let values: Vec<(String, f64)> = client
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(0, values.len());
+
+    let result: Option<(String, Vec<(String, f64)>)> = client
+        .bzmpop(0.01, ["key", "key2"], ZWhere::Min, 10)
+        .await?;
+    assert!(result.is_none());
+
+    let values: Vec<(String, f64)> = client
+        .zrange_with_scores("key2", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(0, values.len());
+
+    let len = client.exists(["key", "key2"]).await?;
+    assert_eq!(0, len);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let result: Option<(String, Vec<(String, f64)>)> =
+                client.bzmpop(0.0, "key", ZWhere::Min, 1).await?;
+            match result {
+                Some((key, elements)) => {
+                    assert_eq!("key", key);
+                    assert_eq!(1, elements.len());
+                    assert_eq!(("four".to_owned(), 4.0), elements[0]);
+                }
+                None => assert!(false),
+            }
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client
+        .zadd("key", (4.0, "four"), ZAddOptions::default())
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bzpopmax() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .zadd("key", (1.0, "one"), ZAddOptions::default())
+        .await?;
+
+    let result: Option<Vec<(String, String, f64)>> =
+        client.bzpopmax(["key", "unknown"], 0.0).await?;
+
+    match result {
+        Some(result) => {
+            assert_eq!(1, result.len());
+            assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
+        }
+        None => assert!(false),
+    }
+
+    let result: Option<Vec<(String, String, f64)>> = client.bzpopmax("unknown", 0.01).await?;
+    assert_eq!(None, result);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let result: Option<Vec<(String, String, f64)>> =
+                client.bzpopmax(["key", "unknown"], 0.0).await?;
+
+            match result {
+                Some(result) => {
+                    assert_eq!(1, result.len());
+                    assert_eq!(("key".to_owned(), "two".to_owned(), 2.0), result[0]);
+                }
+                None => assert!(false),
+            }
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client
+        .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bzpopmin() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .zadd("key", (1.0, "one"), ZAddOptions::default())
+        .await?;
+
+    let result: Option<Vec<(String, String, f64)>> =
+        client.bzpopmin(["key", "unknown"], 0.0).await?;
+
+    match result {
+        Some(result) => {
+            assert_eq!(1, result.len());
+            assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
+        }
+        None => assert!(false),
+    }
+
+    let result: Option<Vec<(String, String, f64)>> = client.bzpopmin("unknown", 0.01).await?;
+    assert_eq!(None, result);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let result: Option<Vec<(String, String, f64)>> =
+                client.bzpopmin(["key", "unknown"], 0.0).await?;
+
+            match result {
+                Some(result) => {
+                    assert_eq!(1, result.len());
+                    assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
+                }
+                None => assert!(false),
+            }
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client
+        .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

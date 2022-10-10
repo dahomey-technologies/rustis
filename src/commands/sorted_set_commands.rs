@@ -10,6 +10,84 @@ use crate::{
 /// # See Also
 /// [Redis Sorted Set Commands](https://redis.io/commands/?group=sorted-set)
 pub trait SortedSetCommands<T>: PrepareCommand<T> {
+    /// This command is the blocking variant of [`zmpop`](crate::SortedSetCommands::zmpop).
+    ///
+    /// # Return
+    /// * `None` if no element could be popped
+    /// * A tuple made up of
+    ///     * The name of the key from which elements were popped
+    ///     * An array of tuples with all the popped members and their scores
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/bzmpop/](https://redis.io/commands/bzmpop/)
+    #[must_use]
+    fn bzmpop<K, C, E>(
+        &self,
+        timeout: f64,
+        keys: C,
+        where_: ZWhere,
+        count: usize,
+    ) -> CommandResult<T, Option<ZMPopResult<E>>>
+    where
+        K: Into<BulkString>,
+        C: SingleArgOrCollection<K>,
+        E: FromValue + Default,
+    {
+        self.prepare_command(
+            cmd("BZMPOP")
+                .arg(timeout)
+                .arg(keys.num_args())
+                .arg(keys)
+                .arg(where_)
+                .arg("COUNT")
+                .arg(count),
+        )
+    }
+
+    /// This command is the blocking variant of [`zpopmax`](crate::SortedSetCommands::zpopmax).
+    ///
+    /// # Return
+    /// * `None` when no element could be popped and the timeout expired.
+    /// * The list of tuple with 
+    ///     * the first element being the name of the key where a member was popped,
+    ///     * the second element is the popped member itself, 
+    ///     * and the third element is the score of the popped element.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/bzpopmax/](https://redis.io/commands/bzpopmax/)
+    #[must_use]
+    fn bzpopmax<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<Vec<(K1, E, f64)>>>
+    where
+        K: Into<BulkString>,
+        KK: SingleArgOrCollection<K>,
+        K1: FromValue + Default,
+        E: FromValue + Default,
+    {
+        self.prepare_command(cmd("BZPOPMAX").arg(keys).arg(timeout))
+    }
+
+    /// This command is the blocking variant of [`zpopmin`](crate::SortedSetCommands::zpopmin).
+    ///
+    /// # Return
+    /// * `None` when no element could be popped and the timeout expired.
+    /// * The list of tuple with 
+    ///     * the first element being the name of the key where a member was popped,
+    ///     * the second element is the popped member itself, 
+    ///     * and the third element is the score of the popped element.
+    ///
+    /// # See Also
+    /// [https://redis.io/commands/bzpopmin/](https://redis.io/commands/bzpopmin/)
+    #[must_use]
+    fn bzpopmin<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<Vec<(K1, E, f64)>>>
+    where
+        K: Into<BulkString>,
+        KK: SingleArgOrCollection<K>,
+        K1: FromValue + Default,
+        E: FromValue + Default,
+    {
+        self.prepare_command(cmd("BZPOPMIN").arg(keys).arg(timeout))
+    }
+
     /// Adds all the specified members with the specified scores
     /// to the sorted set stored at key.
     ///

@@ -1005,6 +1005,25 @@ async fn slowlog_reset() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn swapdb() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.select(1).await?;
+    client.set("key", "value").await?;
+
+    client.swapdb(0, 1).await?;
+
+    client.select(0).await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn time() -> Result<()> {
     let client = get_test_client().await?;
 

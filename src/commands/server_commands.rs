@@ -714,6 +714,17 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("SLOWLOG").arg("RESET"))
     }
 
+    /// This command swaps two Redis databases, 
+    /// so that immediately all the clients connected to a given database 
+    /// will see the data of the other database, and the other way around.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/swapdb/>](https://redis.io/commands/swapdb/)
+    #[must_use]
+    fn swapdb(&self, index1: usize, index2: usize) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("SWAPDB").arg(index1).arg(index2))
+    }
+
     /// The TIME command returns the current server time as a two items lists:
     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
     ///
@@ -2104,6 +2115,8 @@ impl IntoArgs for SlowLogOptions {
     }
 }
 
+
+/// Result [`slowlog_get`](crate::ServerCommands::slowlog_get) for the command.
 pub struct SlowLogEntry {
     /// A unique progressive identifier for every slow log entry.
     pub id: i64,

@@ -67,11 +67,14 @@ pub(crate) fn get_default_addr() -> String {
 }
 
 pub(crate) async fn get_test_client() -> Result<Client> {
+    log_try_init();
     Client::connect(get_default_addr()).await
 }
 
 #[cfg(feature = "tls")]
 pub(crate) async fn get_tls_test_client() -> Result<Client> {
+    log_try_init();
+
     let uri = format!(
         "rediss://:pwd@{}:{}",
         get_default_host(),
@@ -100,4 +103,14 @@ pub(crate) async fn sleep(duration: Duration) {
 #[cfg(feature = "async-std-runtime")]
 pub(crate) async fn sleep(duration: Duration) {
     async_std::task::sleep(duration).await;
+}
+
+fn log_try_init() {
+    let _ = env_logger::builder()
+        .format_target(false)
+        .format_timestamp(None)
+        .filter_level(log::LevelFilter::Debug)
+        .target(env_logger::Target::Stdout)
+        .is_test(true)
+        .try_init();
 }

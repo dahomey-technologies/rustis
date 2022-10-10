@@ -6,6 +6,7 @@ use futures::{
     channel::{mpsc, oneshot},
     select, FutureExt, SinkExt, StreamExt,
 };
+use log::{debug, error, info};
 use std::collections::{HashMap, VecDeque};
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
@@ -24,7 +25,7 @@ enum Status {
     Subscribed,
     EnteringMonitor,
     Monitor,
-    LeavingMonitor
+    LeavingMonitor,
 }
 
 pub(crate) struct NetworkHandler {
@@ -62,7 +63,7 @@ impl NetworkHandler {
 
         spawn(async move {
             if let Err(e) = network_handler.network_loop().await {
-                eprintln!("{}", e);
+                error!( "network loop ended in error: {e}");
             }
         });
 
@@ -123,7 +124,7 @@ impl NetworkHandler {
             }
         }
 
-        println!("end of network loop");
+        debug!("end of network loop");
         Ok(())
     }
 
@@ -187,7 +188,7 @@ impl NetworkHandler {
                         self.status = Status::LeavingMonitor;
                     }
                     self.send_message(msg).await;
-                },
+                }
                 Status::LeavingMonitor => {
                     self.send_message(msg).await;
                 }
@@ -256,20 +257,20 @@ impl NetworkHandler {
                             monitor_sender.send(value).await?;
                         }
                     }
-                    _ =>  {
+                    _ => {
                         self.receive_result(value);
                         self.status = Status::Connected;
-                    },
+                    }
                 },
             },
             // disconnection
             None => {
                 self.status = Status::Disconnected;
                 // reconnect
-                println!("reconnecting");
+                debug!( "reconnecting");
                 if self.reconnect().await {
                     self.status = Status::Connected;
-                    println!("reconnected!");
+                    info!( "reconnected!");
                 }
             }
         }
@@ -283,7 +284,7 @@ impl NetworkHandler {
                 let _result = value_sender.send(value);
             }
             Some(None) => {
-                println!("forget value {value:?}"); // fire & forget
+                debug!( "forget value {value:?}"); // fire & forget
             }
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance

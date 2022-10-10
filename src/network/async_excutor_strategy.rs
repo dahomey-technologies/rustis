@@ -2,6 +2,7 @@ use crate::Result;
 #[cfg(feature = "tls")]
 use crate::TlsConfig;
 use futures::Future;
+use log::{debug,info};
 
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
@@ -34,12 +35,12 @@ pub(crate) async fn tcp_connect(
     host: &str,
     port: u16,
 ) -> Result<(TcpStreamReader, TcpStreamWriter)> {
-    println!("Connecting to {host}:{port}...");
+    debug!("Connecting to {host}:{port}...");
 
     let stream = tokio::net::TcpStream::connect((host, port)).await?;
     let (reader, writer) = tokio::io::split(stream);
 
-    println!("Connected to {host}:{port}");
+    info!("Connected to {host}:{port}");
 
     Ok((reader, writer))
 }
@@ -52,7 +53,7 @@ pub(crate) async fn tcp_tls_connect(
     port: u16,
     tls_config: &TlsConfig,
 ) -> Result<(TcpTlsStreamReader, TcpTlsStreamWriter)> {
-    println!("Connecting to {host}:{port}...");
+    debug!("Connecting to {host}:{port}...");
 
     let stream = tokio::net::TcpStream::connect((host, port)).await?;
     let builder = tls_config.into_tls_connector_builder();
@@ -61,7 +62,7 @@ pub(crate) async fn tcp_tls_connect(
     let tls_stream = tls_connector.connect(host, stream).await?;
     let (reader, writer) = tokio::io::split(tls_stream);
 
-    println!("Connected to {host}:{port}");
+    info!("Connected to {host}:{port}");
 
     Ok((reader, writer))
 }
@@ -74,14 +75,14 @@ pub(crate) async fn tcp_connect(
     use futures::AsyncReadExt;
     use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-    println!("Connecting to {host}:{port}...");
+    debug!("Connecting to {host}:{port}...");
 
     let stream = async_std::net::TcpStream::connect((host, port)).await?;
     let (reader, writer) = stream.split();
     let reader = reader.compat();
     let writer = writer.compat_write();
 
-    println!("Connected to {host}:{port}");
+    info!("Connected to {host}:{port}");
 
     Ok((reader, writer))
 }
@@ -97,7 +98,7 @@ pub(crate) async fn tcp_tls_connect(
     use futures::AsyncReadExt;
     use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-    println!("Connecting to {host}:{port}...");
+    debug!("Connecting to {host}:{port}...");
 
     let stream = async_std::net::TcpStream::connect((host, port)).await?;
     let builder = tls_config.into_tls_connector_builder();
@@ -107,7 +108,7 @@ pub(crate) async fn tcp_tls_connect(
     let reader = reader.compat();
     let writer = writer.compat_write();
 
-    println!("Connected to {host}:{port}");
+    info!("Connected to {host}:{port}");
 
     Ok((reader, writer))
 }

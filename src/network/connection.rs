@@ -1,10 +1,11 @@
 use crate::{
-    resp::{Command, CommandEncoder, Value, ValueDecoder, Array},
+    resp::{Array, Command, CommandEncoder, Value, ValueDecoder},
     tcp_connect, Config, Result, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use futures::{SinkExt, StreamExt};
+use log::{debug, error};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 enum Streams {
@@ -28,14 +29,11 @@ impl Connection {
     pub async fn initialize(config: Config) -> Result<Self> {
         let streams = Self::connect(&config).await?;
 
-        Ok(Self {
-            config,
-            streams,
-        })
+        Ok(Self { config, streams })
     }
 
     pub async fn write(&mut self, command: Command) -> Result<()> {
-        println!("Sending {command:?}");
+        debug!("Sending {command:?}");
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(feature = "tls")]
@@ -52,12 +50,12 @@ impl Connection {
             match &value {
                 Ok(Value::Array(Array::Vec(array))) => {
                     if array.len() > 100 {
-                        println!("Received result Array(Vec([...]))");                     
+                        debug!("Received result Array(Vec([...]))");
                     } else {
-                        println!("Received result {value:?}");
+                        debug!("Received result {value:?}");
                     }
-                },
-                _ => println!("Received result {value:?}")
+                }
+                _ => debug!("Received result {value:?}"),
             }
             Some(value)
         } else {
@@ -72,7 +70,7 @@ impl Connection {
                 true
             }
             Err(e) => {
-                println!("Failed to reconnect: {:?}", e);
+                error!("Failed to reconnect: {:?}", e);
                 false
             }
         }
@@ -94,7 +92,8 @@ impl Connection {
             Ok(Streams::Tcp(framed_read, framed_write))
         }
 
-        #[cfg(not(feature = "tls"))] {
+        #[cfg(not(feature = "tls"))]
+        {
             let (reader, writer) = tcp_connect(&config.host, config.port).await?;
             let framed_read = FramedRead::new(reader, ValueDecoder);
             let framed_write = FramedWrite::new(writer, CommandEncoder);

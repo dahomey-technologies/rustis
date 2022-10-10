@@ -1,12 +1,191 @@
 use crate::{
     resp::{BulkString, Value},
-    tests::get_test_client,
-    GenericCommands, LInsertWhere,
+    spawn,
+    tests::{get_test_client, sleep},
+    FlushingMode, GenericCommands, LInsertWhere,
     LMoveWhere::Left,
     LMoveWhere::Right,
-    ListCommands, Result,
+    ListCommands, Result, ServerCommands,
 };
 use serial_test::serial;
+use std::time::Duration;
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn blmove() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .rpush("mylist", ["element1", "element2", "element3"])
+        .await?;
+
+    let element: String = client
+        .blmove("mylist", "myotherlist", Right, Left, 0.0)
+        .await?;
+    assert_eq!("element3", element);
+
+    let element: String = client
+        .blmove("mylist", "myotherlist", Left, Right, 0.0)
+        .await?;
+    assert_eq!("element1", element);
+
+    let elements: Vec<String> = client.lrange("mylist", 0, -1).await?;
+    assert_eq!(1, elements.len());
+    assert_eq!("element2".to_string(), elements[0]);
+
+    let elements: Vec<String> = client.lrange("myotherlist", 0, -1).await?;
+    assert_eq!(2, elements.len());
+    assert_eq!("element3".to_string(), elements[0]);
+    assert_eq!("element1".to_string(), elements[1]);
+
+    let element: Option<String> = client
+        .blmove("uknown", "myotherlist", Right, Left, 0.01)
+        .await?;
+    assert_eq!(None, element);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let element: String = client
+                .blmove("mylist", "myotherlist", Right, Left, 0.0)
+                .await?;
+            assert_eq!("element4", element);
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client.rpush("mylist", "element4").await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn blmpop() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("mylist").await?;
+
+    client
+        .lpush(
+            "mylist",
+            ["element1", "element2", "element3", "element4", "element5"],
+        )
+        .await?;
+
+    let (key, elements): (String, Vec<String>) =
+        client.blmpop(0.0, "mylist", Left, 5).await?.unwrap();
+    assert_eq!("mylist", key);
+    assert_eq!(5, elements.len());
+    assert_eq!("element5".to_string(), elements[0]);
+    assert_eq!("element4".to_string(), elements[1]);
+    assert_eq!("element3".to_string(), elements[2]);
+    assert_eq!("element2".to_string(), elements[3]);
+    assert_eq!("element1".to_string(), elements[4]);
+
+    let result: Option<(String, Vec<String>)> = client.blmpop(0.01, "unknown", Left, 1).await?;
+    assert_eq!(None, result);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let (key, elements): (String, Vec<String>) =
+                client.blmpop(0.0, "mylist", Left, 1).await?.unwrap();
+            assert_eq!("mylist", key);
+            assert_eq!(1, elements.len());
+            assert_eq!("element6".to_string(), elements[0]);
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client.lpush("mylist", "element6").await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn blpop() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result: Option<(String, String)> = client.blpop(["list", "other"], 0.01).await?;
+    assert_eq!(None, result);
+
+    client.rpush("list", "element1").await?;
+    let result: Option<(String, String)> = client.blpop(["list", "other"], 0.0).await?;
+    assert_eq!(Some(("list".to_owned(), "element1".to_owned())), result);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let result: Option<(String, String)> = client.blpop("list", 0.0).await?;
+            assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client.rpush("list", "element2").await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn brpop() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let result: Option<(String, String)> = client.brpop(["list", "other"], 0.01).await?;
+    assert_eq!(None, result);
+
+    client.lpush("list", "element1").await?;
+    let result: Option<(String, String)> = client.brpop(["list", "other"], 0.0).await?;
+    assert_eq!(Some(("list".to_owned(), "element1".to_owned())), result);
+
+    spawn(async move {
+        async fn calls() -> Result<()> {
+            let client = get_test_client().await?;
+
+            let result: Option<(String, String)> = client.brpop("list", 0.0).await?;
+            assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);
+
+            Ok(())
+        }
+
+        let _result = calls().await;
+    });
+
+    client.lpush("list", "element2").await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

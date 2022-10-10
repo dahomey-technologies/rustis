@@ -994,6 +994,7 @@ async fn slowlog_len() -> Result<()> {
 async fn slowlog_reset() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.slowlog_reset().await?;
     let len = client.slowlog_len().await?;
     assert_eq!(0, len);
 

@@ -5,7 +5,7 @@ use crate::{
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, Client, ClientInfo,
     CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions,
     FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
-    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions, RoleResult, ShutdownOptions,
+    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions, RoleResult, SlowLogOptions,
 };
 use futures::{join, StreamExt};
 use serial_test::serial;
@@ -962,6 +962,42 @@ async fn save() -> Result<()> {
     let client = get_test_client().await?;
 
     client.save().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn slowlog_get() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let _entries = client.slowlog_get(SlowLogOptions::default()).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn slowlog_len() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let entries = client.slowlog_get(SlowLogOptions::default()).await?;
+    let len = client.slowlog_len().await?;
+    assert_eq!(entries.len(), len);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn slowlog_reset() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let len = client.slowlog_len().await?;
+    assert_eq!(0, len);
 
     Ok(())
 }

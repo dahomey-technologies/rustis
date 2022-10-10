@@ -687,6 +687,33 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
         self.prepare_command(cmd("SHUTDOWN").arg(options))
     }
 
+    /// This command returns entries from the slow log in chronological order.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/slowlog-get/>](https://redis.io/commands/slowlog-get/)
+    #[must_use]
+    fn slowlog_get(&self, options: SlowLogOptions) -> CommandResult<T, Vec<SlowLogEntry>> {
+        self.prepare_command(cmd("SLOWLOG").arg("GET").arg(options))
+    }
+
+    /// This command returns the current number of entries in the slow log.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/slowlog-len/>](https://redis.io/commands/slowlog-len/)
+    #[must_use]
+    fn slowlog_len(&self) -> CommandResult<T, usize> {
+        self.prepare_command(cmd("SLOWLOG").arg("LEN"))
+    }
+
+    /// This command resets the slow log, clearing all entries in it.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/slowlog-reset/>](https://redis.io/commands/slowlog-reset/)
+    #[must_use]
+    fn slowlog_reset(&self) -> CommandResult<T, ()> {
+        self.prepare_command(cmd("SLOWLOG").arg("RESET"))
+    }
+
     /// The TIME command returns the current server time as a two items lists:
     /// a Unix timestamp and the amount of microseconds already elapsed in the current second.
     ///
@@ -2032,7 +2059,7 @@ impl ShutdownOptions {
         }
     }
 
-    /// ignores any errors that would normally prevent the server from exiting. 
+    /// ignores any errors that would normally prevent the server from exiting.
     #[must_use]
     pub fn force(self) -> Self {
         Self {
@@ -2052,5 +2079,58 @@ impl ShutdownOptions {
 impl IntoArgs for ShutdownOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
+    }
+}
+
+/// options for the [`slowlog_get`](crate::ServerCommands::slowlog_get) command.
+#[derive(Default)]
+pub struct SlowLogOptions {
+    command_args: CommandArgs,
+}
+
+impl SlowLogOptions {
+    /// limits the number of returned entries, so the command returns at most up to `count` entries.
+    #[must_use]
+    pub fn count(self, count: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg(count),
+        }
+    }
+}
+
+impl IntoArgs for SlowLogOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+pub struct SlowLogEntry {
+    /// A unique progressive identifier for every slow log entry.
+    pub id: i64,
+    /// A unique progressive identifier for every slow log entry.
+    pub unix_timestamp: u32,
+    /// The amount of time needed for its execution, in microseconds.
+    pub execution_time_micros: u64,
+    /// The array composing the arguments of the command.
+    pub command: Vec<String>,
+    /// Client IP address and port.
+    pub client_address: String,
+    /// Client name if set via the CLIENT SETNAME command.
+    pub client_name: String,
+}
+
+impl FromValue for SlowLogEntry {
+    fn from_value(value: Value) -> Result<Self> {
+        let (id, unix_timestamp, execution_time_micros, command, client_address, client_name) =
+            value.into()?;
+
+        Ok(Self {
+            id,
+            unix_timestamp,
+            execution_time_micros,
+            command,
+            client_address,
+            client_name,
+        })
     }
 }

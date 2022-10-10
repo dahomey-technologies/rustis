@@ -659,12 +659,12 @@ impl FromValue for LcsResult {
                                                     (pos2_left, pos2_right),
                                                     Some(len),
                                                 )),
-                                                _ => Err(Error::Internal(
+                                                _ => Err(Error::Client(
                                                     "Cannot parse LCS result".to_owned(),
                                                 )),
                                             }
                                         }
-                                        _ => Err(Error::Internal(
+                                        _ => Err(Error::Client(
                                             "Cannot parse LCS result".to_owned(),
                                         )),
                                     }
@@ -681,17 +681,17 @@ impl FromValue for LcsResult {
                                                     (pos2_left, pos2_right),
                                                     None,
                                                 )),
-                                                _ => Err(Error::Internal(
+                                                _ => Err(Error::Client(
                                                     "Cannot parse LCS result".to_owned(),
                                                 )),
                                             }
                                         }
-                                        _ => Err(Error::Internal(
+                                        _ => Err(Error::Client(
                                             "Cannot parse LCS result".to_owned(),
                                         )),
                                     }
                                 }
-                                _ => Err(Error::Internal("Cannot parse LCS result".to_owned())),
+                                _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
                             }
                         })
                         .collect();
@@ -704,7 +704,7 @@ impl FromValue for LcsResult {
             }
         }
 
-        Err(Error::Parse("Cannot parse result to LcsResult".to_string()))
+        Err(Error::Client("Cannot parse result to LcsResult".to_string()))
     }
 }
 

@@ -364,7 +364,7 @@ where
                 let member = match it.next() {
                     Some(value) => value.into()?,
                     None => {
-                        return Err(Error::Internal("Unexpected geo search result".to_owned()));
+                        return Err(Error::Client("Unexpected geo search result".to_owned()));
                     }
                 };
 
@@ -374,7 +374,7 @@ where
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
                         _ => {
-                            return Err(Error::Internal("Unexpected geo search result".to_owned()))
+                            return Err(Error::Client("Unexpected geo search result".to_owned()))
                         }
                     }
                 }
@@ -386,7 +386,7 @@ where
                     coordinates,
                 })
             }
-            _ => Err(Error::Internal("Unexpected geo search result".to_owned())),
+            _ => Err(Error::Client("Unexpected geo search result".to_owned())),
         }
     }
 }

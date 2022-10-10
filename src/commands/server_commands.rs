@@ -980,7 +980,7 @@ impl FromValue for CommandInfo {
                 key_specifications: Vec::new(),
                 sub_commands: Vec::new(),
             }),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse CommandInfo from result".to_owned(),
             )),
         }
@@ -1014,7 +1014,7 @@ impl FromValue for CommandTip {
                     (Some("response_policy"), Some(policy), None) => Ok(
                         CommandTip::ResponsePolicy(ResponsePolicy::from_str(policy)?),
                     ),
-                    _ => Err(Error::Parse(
+                    _ => Err(Error::Client(
                         "Cannot parse CommandTip from result".to_owned(),
                     )),
                 }
@@ -1038,7 +1038,7 @@ impl RequestPolicy {
             "all_shards" => Ok(RequestPolicy::AllShards),
             "multi_shard" => Ok(RequestPolicy::MultiShard),
             "special" => Ok(RequestPolicy::Special),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse RequestPolicy from result".to_owned(),
             )),
         }
@@ -1068,7 +1068,7 @@ impl ResponsePolicy {
             "agg_max" => Ok(ResponsePolicy::AggMax),
             "agg_sum" => Ok(ResponsePolicy::AggSum),
             "special" => Ok(ResponsePolicy::Special),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse ResponsePolicy from result".to_owned(),
             )),
         }
@@ -1129,7 +1129,7 @@ impl FromValue for BeginSearch {
                 })
             }
             "unknown" => Ok(BeginSearch::Unknown),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse BeginSearch from result".to_owned(),
             )),
         }
@@ -1174,7 +1174,7 @@ impl FromValue for FindKeys {
                 })
             }
             "unknown" => Ok(FindKeys::Unknown),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse BeginSearch from result".to_owned(),
             )),
         }
@@ -1240,7 +1240,7 @@ impl FromValue for CommandDocFlag {
         match f.as_str() {
             "deprecated" => Ok(CommandDocFlag::Deprecated),
             "syscmd" => Ok(CommandDocFlag::SystemCommand),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse CommandDocFlag from result".to_owned(),
             )),
         }
@@ -1309,7 +1309,7 @@ impl FromValue for CommandArgument {
                 value @ Value::BulkString(_) => vec![value.into()?],
                 value @ Value::Array(_) => value.into()?,
                 _ => {
-                    return Err(Error::Parse(
+                    return Err(Error::Client(
                         "Cannot parse CommandArgument from result".to_owned(),
                     ))
                 }
@@ -1358,7 +1358,7 @@ impl FromValue for CommandArgumentType {
             "pure-token" => Ok(CommandArgumentType::PureToken),
             "oneof" => Ok(CommandArgumentType::OneOf),
             "block" => Ok(CommandArgumentType::Block),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse CommandArgumentType from result".to_owned(),
             )),
         }
@@ -1384,7 +1384,7 @@ impl FromValue for ArgumentFlag {
             "optional" => Ok(ArgumentFlag::Optional),
             "multiple" => Ok(ArgumentFlag::Multiple),
             "multiple-token" => Ok(ArgumentFlag::MultipleToken),
-            _ => Err(Error::Parse(
+            _ => Err(Error::Client(
                 "Cannot parse ArgumentFlag from result".to_owned(),
             )),
         }
@@ -1996,7 +1996,7 @@ impl FromValue for RoleResult {
             ) if s == b"sentinel" => Ok(Self::Sentinel {
                 master_names: master_names.into()?,
             }),
-            _ => Err(Error::Internal(
+            _ => Err(Error::Client(
                 "Cannot parse RoleResult from result".to_string(),
             )),
         }
@@ -2039,7 +2039,7 @@ impl FromValue for ReplicationState {
             "connecting" => Ok(Self::Connecting),
             "sync" => Ok(Self::Sync),
             "connected" => Ok(Self::Connected),
-            _ => Err(Error::Internal(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse {str} to ReplicationState"
             ))),
         }

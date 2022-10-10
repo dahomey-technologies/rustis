@@ -797,7 +797,7 @@ impl FromValue for DumpResult {
             Value::BulkString(BulkString::Binary(b)) => Ok(DumpResult {
                 serialized_value: b,
             }),
-            _ => Err(Error::Internal("Unexpected dump format".to_owned())),
+            _ => Err(Error::Client("Unexpected dump format".to_owned())),
         }
     }
 }

@@ -33,7 +33,7 @@ where
             transaction.queue(command).await?;
             Ok(Transaction::from_transaction(transaction))
         } else {
-            Err(Error::Internal(
+            Err(Error::Client(
                 "queue method must be called with a valid transaction".to_owned(),
             ))
         }
@@ -44,7 +44,7 @@ where
             transaction.queue_and_forget(command).await?;
             Ok(Transaction::from_transaction(transaction))
         } else {
-            Err(Error::Internal(
+            Err(Error::Client(
                 "queue method must be called with a valid transaction".to_owned(),
             ))
         }
@@ -81,7 +81,7 @@ where
         if let CommandResult::Client(_, command, client) = self {
             client.send_and_forget(command)
         } else {
-            Err(Error::Internal(
+            Err(Error::Client(
                 "send_and_forget method must be called with a valid client".to_owned(),
             ))
         }
@@ -100,7 +100,7 @@ where
             let fut = client.send(command);
             Box::pin(async move { fut.await?.into() })
         } else {
-            Box::pin(ready(Err(Error::Internal(
+            Box::pin(ready(Err(Error::Client(
                 "send method must be called with a valid client".to_owned(),
             ))))
         }

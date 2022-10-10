@@ -404,7 +404,7 @@ impl FromValue for LibraryInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse LibraryInfo".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse LibraryInfo".to_owned()))
             }
             _ => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
@@ -417,7 +417,7 @@ impl FromValue for LibraryInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse LibraryInfo".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse LibraryInfo".to_owned()))
             }
         }
     }
@@ -443,9 +443,9 @@ impl FromValue for FunctionInfo {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse FunctionInfo".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse FunctionInfo".to_owned()))
             }
-            _ => Err(Error::Internal("Cannot parse FunctionInfo".to_owned())),
+            _ => Err(Error::Client("Cannot parse FunctionInfo".to_owned())),
         }
     }
 }
@@ -468,9 +468,9 @@ impl FromValue for FunctionStats {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse FunctionStats".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse FunctionStats".to_owned()))
             }
-            _ => Err(Error::Internal("Cannot parse FunctionStats".to_owned())),
+            _ => Err(Error::Client("Cannot parse FunctionStats".to_owned())),
         }
     }
 }
@@ -495,9 +495,9 @@ impl FromValue for RunningScript {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse RunningScript".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse RunningScript".to_owned()))
             }
-            _ => Err(Error::Internal("Cannot parse RunningScript".to_owned())),
+            _ => Err(Error::Client("Cannot parse RunningScript".to_owned())),
         }
     }
 }
@@ -520,9 +520,9 @@ impl FromValue for EngineStats {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse EngineStats".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse EngineStats".to_owned()))
             }
-            _ => Err(Error::Internal("Cannot parse EngineStats".to_owned())),
+            _ => Err(Error::Client("Cannot parse EngineStats".to_owned())),
         }
     }
 }

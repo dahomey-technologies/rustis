@@ -91,7 +91,7 @@ impl NetworkHandler {
             self.connection
                 .read()
                 .await
-                .ok_or(Error::Internal("Disconnected".to_owned()))?
+                .ok_or(Error::Client("Disconnected".to_owned()))?
                 .into_result()?;
         }
 
@@ -107,7 +107,7 @@ impl NetworkHandler {
             self.connection
                 .read()
                 .await
-                .ok_or(Error::Internal("Disconnected".to_owned()))?
+                .ok_or(Error::Client("Disconnected".to_owned()))?
                 .into_result()?;
         }
 
@@ -179,7 +179,7 @@ impl NetworkHandler {
                     let value_sender = msg.value_sender;
                     if let Some(value_sender) = value_sender {
                         let _result = value_sender
-                            .send(Err(Error::Network("Disconnected from server".to_string())));
+                            .send(Err(Error::Client("Disconnected from server".to_string())));
                     }
                 }
                 Status::EnteringMonitor => self.send_message(msg).await,
@@ -373,7 +373,7 @@ impl NetworkHandler {
                         return Ok(None);
                     }
                     None => {
-                        return Err(Error::Internal(format!(
+                        return Err(Error::Client(format!(
                             "Unexpected message on channel: {:?}",
                             String::from_utf8(channel).unwrap()
                         )));
@@ -398,7 +398,7 @@ impl NetworkHandler {
                         return Ok(None);
                     }
                     None => {
-                        return Err(Error::Internal(format!(
+                        return Err(Error::Client(format!(
                             "Unexpected pmessage on channel: {:?}",
                             String::from_utf8(pattern).unwrap()
                         )));
@@ -415,7 +415,7 @@ impl NetworkHandler {
         while let Some(value_sender) = self.value_senders.pop_front() {
             if let Some(value_sender) = value_sender {
                 let _result =
-                    value_sender.send(Err(Error::Network("Disconnected from server".to_string())));
+                    value_sender.send(Err(Error::Client("Disconnected from server".to_string())));
             }
         }
 

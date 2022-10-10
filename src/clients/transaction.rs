@@ -67,7 +67,7 @@ impl<T: Send + Sync> Transaction<T> {
                     }
                 }
                 Value::Array(Array::Nil) => Err(Error::Aborted),
-                _ => Err(Error::Internal("Unexpected transaction reply".to_owned())),
+                _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
             }
         })
     }

@@ -104,6 +104,6 @@ impl FromValue for MonitoredCommandInfo {
             _ => None,
         };
 
-        info.ok_or_else(|| Error::Internal(format!("Cannot parse result from MONITOR event: {line}")))
+        info.ok_or_else(|| Error::Client(format!("Cannot parse result from MONITOR event: {line}")))
     }
 }

@@ -135,7 +135,7 @@ impl From<BulkString> for Result<String> {
         match bs {
             BulkString::Str(s) => Ok(s.to_owned()),
             BulkString::String(s) => Ok(s),
-            BulkString::Binary(s) => String::from_utf8(s).map_err(|e| Error::Parse(e.to_string())),
+            BulkString::Binary(s) => String::from_utf8(s).map_err(|e| Error::Client(e.to_string())),
             BulkString::Integer(i) => Ok(i.to_string()),
             BulkString::F32(f) => Ok(f.to_string()),
             BulkString::F64(f) => Ok(f.to_string()),

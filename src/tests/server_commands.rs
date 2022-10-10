@@ -903,7 +903,7 @@ async fn monitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or(Error::Internal("fail".to_owned()))?;
+            .ok_or(Error::Client("fail".to_owned()))?;
 
         assert!(result.unix_timestamp_millis > 0.0);
         assert_eq!(2, result.database);

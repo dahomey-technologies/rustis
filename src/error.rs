@@ -5,33 +5,34 @@ use futures::channel::{
 };
 use std::{num::ParseFloatError, str::Utf8Error};
 
+/// All error kinds
 #[derive(Debug)]
 pub enum Error {
-    IO(std::io::Error),
-    Redis(String),
-    Parse(String),
-    Send(String),
-    SendError(String),
-    Canceled(oneshot::Canceled),
-    Internal(String),
-    Network(String),
-    Aborted,
+    /// Raised if an error occurs within the driver
+    Client(String),
+    /// Raised if an error occurs in the [`Config`](crate::Config) parsing
     Config(String),
+    /// A transaction has been aborted
+    Aborted,
+    /// Error returned by the Redis sercer
+    Redis(String),
+    /// IO error when connecting the Redis server
+    IO(std::io::Error),
+    #[cfg(feature = "tls")]
+    /// Raised by the TLS library
+    Tls(String),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::IO(e) => f.write_fmt(format_args!("IO: {}", e)),
-            Error::Redis(e) => f.write_fmt(format_args!("Redis: {}", e)),
-            Error::Parse(e) => f.write_fmt(format_args!("Parse: {}", e)),
-            Error::Send(e) => f.write_fmt(format_args!("Send: {}", e)),
-            Error::SendError(e) => f.write_fmt(format_args!("SendError: {}", e)),
-            Error::Canceled(e) => f.write_fmt(format_args!("oneshot::Canceled: {}", e)),
-            Error::Internal(e) => f.write_fmt(format_args!("Internal error: {}", e)),
-            Error::Network(e) => f.write_fmt(format_args!("Network error: {}", e)),
-            Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
+            Error::Client(e) => f.write_fmt(format_args!("Client error: {}", e)),
             Error::Config(e) => f.write_fmt(format_args!("Config error: {}", e)),
+            Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
+            Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
+            Error::IO(e) => f.write_fmt(format_args!("IO erro: {}", e)),
+            #[cfg(feature = "tls")]
+            Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
         }
     }
 }
@@ -44,37 +45,37 @@ impl From<std::io::Error> for Error {
 
 impl From<TrySendError<Message>> for Error {
     fn from(e: TrySendError<Message>) -> Self {
-        Error::Send(e.to_string())
+        Error::Client(e.to_string())
     }
 }
 
 impl From<oneshot::Canceled> for Error {
     fn from(e: oneshot::Canceled) -> Self {
-        Error::Canceled(e)
+        Error::Client(e.to_string())
     }
 }
 
 impl From<mpsc::SendError> for Error {
     fn from(e: mpsc::SendError) -> Self {
-        Error::SendError(e.to_string())
+        Error::Client(e.to_string())
     }
 }
 
 impl From<Utf8Error> for Error {
     fn from(e: Utf8Error) -> Self {
-        Error::Parse(e.to_string())
+        Error::Client(e.to_string())
     }
 }
 
 impl From<ParseFloatError> for Error {
     fn from(e: ParseFloatError) -> Self {
-        Error::Parse(e.to_string())
+        Error::Client(e.to_string())
     }
 }
 
 #[cfg(feature = "tls")]
 impl From<native_tls::Error> for Error {
     fn from(e: native_tls::Error) -> Self {
-        Error::Network(e.to_string())
+        Error::Tls(e.to_string())
     }
 }

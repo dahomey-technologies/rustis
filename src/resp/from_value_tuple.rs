@@ -15,10 +15,10 @@ where
                 match (it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
                     (None, None, None) => Ok((Default::default(), Default::default())),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -57,10 +57,10 @@ where
                     (None, None, None, None) => {
                         Ok((Default::default(), Default::default(), Default::default()))
                     }
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -109,10 +109,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -171,10 +171,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -244,10 +244,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -337,10 +337,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -437,10 +437,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -544,10 +544,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),
@@ -658,10 +658,10 @@ where
                         Default::default(),
                         Default::default(),
                     )),
-                    _ => Err(Error::Parse("Cannot parse result to Tuple".to_owned())),
+                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
             ))),

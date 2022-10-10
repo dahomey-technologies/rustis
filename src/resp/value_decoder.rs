@@ -40,7 +40,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        _ => Err(Error::Parse(format!(
+        _ => Err(Error::Client(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte
         ))),
@@ -56,7 +56,7 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
             if buf.len() - pos < len + 2 {
                 Ok(None) // EOF
             } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
-                Err(Error::Parse(format!(
+                Err(Error::Client(format!(
                     "Expected \\r\\n after bulk string. Got '{}''{}'",
                     buf[pos + len] as char,
                     buf[pos + len + 1] as char
@@ -131,7 +131,7 @@ fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(String, usize
                 )))
             }
             (false, _) => (),
-            _ => return Err(Error::Parse(format!("Unexpected byte {}", byte))),
+            _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
         }
 
         pos += 1;
@@ -156,7 +156,7 @@ fn decode_integer(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>
             (false, true, b'0'..=b'9') => i = i * 10 - i64::from(byte - b'0'),
             (false, _, b'\r') => cr = true,
             (true, _, b'\n') => return Ok(Some((i, pos + 1))),
-            _ => return Err(Error::Parse(format!("Unexpected byte {}", byte))),
+            _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
         }
 
         pos += 1;
@@ -173,13 +173,13 @@ fn decode_double(buf: &mut BytesMut, idx: usize) -> Result<Option<(f64, usize)>>
             let d = str.parse::<f64>()?;
             Ok(Some((d, idx + pos + 2)))
         }
-        _ => Err(Error::Parse("malformed double".to_owned())),
+        _ => Err(Error::Client("malformed double".to_owned())),
     }
 }
 
 fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
     if buf[idx] != b'\r' || buf[idx + 1] != b'\n' {
-        Err(Error::Parse(format!(
+        Err(Error::Client(format!(
             "Expected \\r\\n after null. Got '{}''{}'",
             buf[idx] as char,
             buf[idx + 1] as char
@@ -191,7 +191,7 @@ fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
 
 fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>> {
     if buf[idx + 1] != b'\r' || buf[idx + 2] != b'\n' {
-        Err(Error::Parse(format!(
+        Err(Error::Client(format!(
             "Expected \\r\\n after bulk string. Got '{}''{}'",
             buf[idx + 1] as char,
             buf[idx + 2] as char
@@ -200,7 +200,7 @@ fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>
         match buf[idx] {
             b't' => Ok(Some((1, idx + 2))),
             b'f' => Ok(Some((0, idx + 2))),
-            _ => Err(Error::Parse(format!(
+            _ => Err(Error::Client(format!(
                 "Unexpected boolean character '{}'",
                 buf[idx] as char,
             ))),

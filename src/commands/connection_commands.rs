@@ -767,7 +767,7 @@ impl FromValue for ClientTrackingInfo {
         }
 
         into_result(&mut value.into()?)
-            .ok_or_else(|| Error::Internal("Cannot parse 
+            .ok_or_else(|| Error::Client("Cannot parse 
             ".to_owned()))
     }
 }
@@ -864,9 +864,9 @@ impl FromValue for HelloResult {
                 }
 
                 into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Internal("Cannot parse HelloResult".to_owned()))
+                    .ok_or_else(|| Error::Client("Cannot parse HelloResult".to_owned()))
             }
-            _ => Err(Error::Internal("Cannot parse HelloResult".to_owned())),
+            _ => Err(Error::Client("Cannot parse HelloResult".to_owned())),
         }
     }
 }

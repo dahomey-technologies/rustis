@@ -91,7 +91,7 @@ impl NetworkHandler {
             self.connection
                 .read()
                 .await
-                .ok_or(Error::Client("Disconnected".to_owned()))?
+                .ok_or_else(|| Error::Client("Disconnected".to_owned()))?
                 .into_result()?;
         }
 
@@ -107,7 +107,7 @@ impl NetworkHandler {
             self.connection
                 .read()
                 .await
-                .ok_or(Error::Client("Disconnected".to_owned()))?
+                .ok_or_else(|| Error::Client("Disconnected".to_owned()))?
                 .into_result()?;
         }
 

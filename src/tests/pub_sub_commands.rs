@@ -23,7 +23,7 @@ async fn pubsub() -> Result<()> {
     let (channel, message): (String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
 
     assert_eq!("mychannel", channel);
@@ -41,7 +41,7 @@ async fn pubsub() -> Result<()> {
     let (channel, message): (String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
 
     assert_eq!("mychannel2", channel);
@@ -99,7 +99,7 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     let (channel, message): (String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
 
     assert_eq!("mychannel1", channel);
@@ -108,7 +108,7 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     let (channel, message): (String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
 
     assert_eq!("mychannel2", channel);
@@ -141,7 +141,7 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     let (pattern, channel, message): (String, String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel11", channel);
@@ -150,7 +150,7 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     let (pattern, channel, message): (String, String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel12", channel);
@@ -159,7 +159,7 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     let (pattern, channel, message): (String, String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel21", channel);
@@ -168,7 +168,7 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     let (pattern, channel, message): (String, String, String) = pub_sub_stream
         .next()
         .await
-        .ok_or(Error::Client("fail".to_owned()))??
+        .ok_or_else(|| Error::Client("fail".to_owned()))??
         .into()?;
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel22", channel);

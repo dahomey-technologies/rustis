@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{Error, Result};
 #[cfg(feature = "tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
@@ -17,9 +19,11 @@ pub struct Config {
     pub tls_config: Option<TlsConfig>,
 }
 
-impl Config {
-    /// Build a config from an URI a standard address format `host`:`port`
-    pub fn from_str(str: &str) -> Result<Config> {
+impl FromStr for Config {
+    type Err = Error;
+
+    /// Build a config from an URI or a standard address format `host`:`port`
+    fn from_str(str: &str) -> Result<Config> {
         if let Ok(uri) = url::Url::parse(str) {
             Self::from_uri(uri)
         } else if let Some(addr) = Self::parse_addr(str) {
@@ -28,7 +32,9 @@ impl Config {
             Err(Error::Config(format!("Cannot parse config from {str}")))
         }
     }
+}
 
+impl Config {
     /// Build a config from an URI in the format `redis://[[username]:password@]host[:port]/[database]`
     pub fn from_uri(uri: Url) -> Result<Config> {
         let scheme = uri.scheme();
@@ -103,7 +109,7 @@ impl ToString for Config {
         let mut s = String::from("redis://");
 
         if let Some(username) = &self.username {
-            s.push_str(&username);
+            s.push_str(username);
         }
 
         if let Some(password) = &self.password {
@@ -228,7 +234,7 @@ pub trait IntoConfig {
 
 impl IntoConfig for Config {
     fn into_config(self) -> Result<Config> {
-        return Ok(self);
+        Ok(self)
     }
 }
 

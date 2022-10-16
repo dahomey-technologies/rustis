@@ -372,19 +372,19 @@ async fn command_list() -> Result<()> {
     let client = get_test_client().await?;
 
     let all_commands: Vec<String> = client.command_list(CommandListOptions::default()).await?;
-    assert!(all_commands.len() > 0);
+    assert!(!all_commands.is_empty());
 
     let string_commands: Vec<String> = client
         .command_list(CommandListOptions::default().filter_by_acl_category("string"))
         .await?;
-    assert!(string_commands.len() > 0);
+    assert!(!string_commands.is_empty());
     assert!(string_commands.contains(&"get".to_owned()));
     assert!(string_commands.contains(&"set".to_owned()));
 
     let config_commands: Vec<String> = client
         .command_list(CommandListOptions::default().filter_by_pattern("config*"))
         .await?;
-    assert!(config_commands.len() > 0);
+    assert!(!config_commands.is_empty());
     assert!(config_commands.contains(&"config|get".to_owned()));
     assert!(config_commands.contains(&"config|set".to_owned()));
 
@@ -573,7 +573,7 @@ async fn info() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let info = client.info([]).await?;
-    assert!(info.len() > 0);
+    assert!(!info.is_empty());
 
     let info = client
         .info([InfoSection::Cpu, InfoSection::Clients])
@@ -605,7 +605,7 @@ async fn latency_doctor() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.latency_doctor().await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -632,7 +632,7 @@ async fn latency_graph() -> Result<()> {
     let _result = join!(fut1, fut2, fut3, fut4, fut5);
 
     let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -684,7 +684,7 @@ async fn latency_history() -> Result<()> {
     let _result = join!(fut1, fut2, fut3);
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -709,7 +709,7 @@ async fn latency_latest() -> Result<()> {
     let _result = join!(fut1, fut2, fut3);
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -741,7 +741,7 @@ async fn lolwut() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.lolwut(Default::default()).await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -754,7 +754,7 @@ async fn memory_doctor() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.memory_doctor().await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -767,7 +767,7 @@ async fn memory_malloc_stats() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.memory_malloc_stats().await?;
-    assert!(report.len() > 0);
+    assert!(!report.is_empty());
 
     Ok(())
 }
@@ -903,7 +903,7 @@ async fn monitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or(Error::Client("fail".to_owned()))?;
+            .ok_or_else(|| Error::Client("fail".to_owned()))?;
 
         assert!(result.unix_timestamp_millis > 0.0);
         assert_eq!(2, result.database);

@@ -111,7 +111,7 @@ async fn function_dump() -> Result<()> {
     assert_eq!("hello", result);
 
     let serialized_payload: BulkString = client.function_dump().await?;
-    assert!(serialized_payload.len() > 0);
+    assert!(!serialized_payload.is_empty());
 
     client.function_delete("mylib").await?;
 

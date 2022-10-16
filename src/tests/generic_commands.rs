@@ -76,7 +76,7 @@ async fn dump() -> Result<()> {
     client.set("key", "value").await?;
 
     let dump = client.dump("key").await?;
-    assert!(dump.serialized_value.len() > 0);
+    assert!(!dump.serialized_value.is_empty());
 
     Ok(())
 }
@@ -165,7 +165,7 @@ async fn expireat() -> Result<()> {
         .await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
-    assert!(9 <= ttl && ttl <= 10);
+    assert!((9..=10).contains(&ttl));
 
     // xx
     client.set("key", "value").await?;
@@ -176,26 +176,26 @@ async fn expireat() -> Result<()> {
     // nx
     let result = client.expireat("key", now + 10, ExpireOption::Nx).await?;
     assert!(result);
-    assert!(9 <= ttl && ttl <= 10);
+    assert!((9..=10).contains(&ttl));
 
     // gt
     let result = client.expireat("key", now + 5, ExpireOption::Gt).await?;
     assert!(!result);
-    assert!(9 <= ttl && ttl <= 10);
+    assert!((9..=10).contains(&ttl));
     let result = client.expireat("key", now + 15, ExpireOption::Gt).await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
-    assert!(14 <= ttl && ttl <= 15);
+    assert!((14..=15).contains(&ttl));
 
     // lt
     let result = client.expireat("key", now + 20, ExpireOption::Lt).await?;
     assert!(!result);
     let ttl = client.ttl("key").await?;
-    assert!(14 <= ttl && ttl <= 15);
+    assert!((14..=15).contains(&ttl));
     let result = client.expireat("key", now + 5, ExpireOption::Lt).await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
-    assert!(4 <= ttl && ttl <= 5);
+    assert!((4..=5).contains(&ttl));
 
     Ok(())
 }

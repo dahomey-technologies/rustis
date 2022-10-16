@@ -97,7 +97,7 @@ impl<T: Send + Sync> SetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ScriptingCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> SortedSetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ServerCommands<T> for Transaction<T> {
-    fn monitor<'a>(&'a self) -> Future<'a, crate::MonitorStream> {
+    fn monitor(&self) -> Future<crate::MonitorStream> {
         unimplemented!("MONITOR command cannot be sent within a transaction")
     }
 }

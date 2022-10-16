@@ -159,7 +159,7 @@ impl ToString for BulkString {
 }
 
 impl fmt::Debug for BulkString {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Str(arg0) => f.debug_tuple("Str").field(arg0).finish(),
             Self::String(arg0) => f.debug_tuple("String").field(arg0).finish(),

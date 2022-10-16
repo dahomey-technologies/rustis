@@ -34,7 +34,7 @@ async fn bzmpop() -> Result<()> {
             assert_eq!(1, result.1.len());
             assert_eq!(("one".to_owned(), 1.0), result.1[0]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let values: Vec<(String, f64)> = client
@@ -53,7 +53,7 @@ async fn bzmpop() -> Result<()> {
             assert_eq!(("three".to_owned(), 3.0), result.1[0]);
             assert_eq!(("two".to_owned(), 2.0), result.1[1]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     client
@@ -74,7 +74,7 @@ async fn bzmpop() -> Result<()> {
             assert_eq!(("five".to_owned(), 5.0), result.1[1]);
             assert_eq!(("six".to_owned(), 6.0), result.1[2]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let values: Vec<(String, f64)> = client
@@ -107,7 +107,7 @@ async fn bzmpop() -> Result<()> {
                     assert_eq!(1, elements.len());
                     assert_eq!(("four".to_owned(), 4.0), elements[0]);
                 }
-                None => assert!(false),
+                None => unreachable!(),
             }
 
             Ok(())
@@ -144,7 +144,7 @@ async fn bzpopmax() -> Result<()> {
             assert_eq!(1, result.len());
             assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let result: Option<Vec<(String, String, f64)>> = client.bzpopmax("unknown", 0.01).await?;
@@ -162,7 +162,7 @@ async fn bzpopmax() -> Result<()> {
                     assert_eq!(1, result.len());
                     assert_eq!(("key".to_owned(), "two".to_owned(), 2.0), result[0]);
                 }
-                None => assert!(false),
+                None => unreachable!(),
             }
 
             Ok(())
@@ -199,7 +199,7 @@ async fn bzpopmin() -> Result<()> {
             assert_eq!(1, result.len());
             assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let result: Option<Vec<(String, String, f64)>> = client.bzpopmin("unknown", 0.01).await?;
@@ -217,7 +217,7 @@ async fn bzpopmin() -> Result<()> {
                     assert_eq!(1, result.len());
                     assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
                 }
-                None => assert!(false),
+                None => unreachable!(),
             }
 
             Ok(())
@@ -548,7 +548,7 @@ async fn zmpop() -> Result<()> {
             assert_eq!(1, result.1.len());
             assert_eq!(("one".to_owned(), 1.0), result.1[0]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let values: Vec<(String, f64)> = client
@@ -566,7 +566,7 @@ async fn zmpop() -> Result<()> {
             assert_eq!(("three".to_owned(), 3.0), result.1[0]);
             assert_eq!(("two".to_owned(), 2.0), result.1[1]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     client
@@ -587,7 +587,7 @@ async fn zmpop() -> Result<()> {
             assert_eq!(("five".to_owned(), 5.0), result.1[1]);
             assert_eq!(("six".to_owned(), 6.0), result.1[2]);
         }
-        None => assert!(false),
+        None => unreachable!(),
     }
 
     let values: Vec<(String, f64)> = client

@@ -177,11 +177,11 @@ async fn geopos() -> Result<()> {
         .await?;
     assert_eq!(3, hashes.len());
     assert_eq!(
-        Some((13.36138933897018433, 38.11555639549629859)),
+        Some((13.361389338970184, 38.1155563954963)),
         hashes[0]
     );
     assert_eq!(
-        Some((15.08726745843887329, 37.50266842333162032)),
+        Some((15.087267458438873, 37.50266842333162)),
         hashes[1]
     );
     assert_eq!(None, hashes[2]);
@@ -273,21 +273,21 @@ async fn geosearch() -> Result<()> {
     assert_eq!(Some(190.4424), results[1].distance);
     assert_eq!(None, results[1].geo_hash);
     assert_eq!(
-        Some((13.36138933897018433, 38.11555639549629859)),
+        Some((13.361389338970184, 38.1155563954963)),
         results[1].coordinates
     );
     assert_eq!("edge2", results[2].member);
     assert_eq!(Some(279.7403), results[2].distance);
     assert_eq!(None, results[2].geo_hash);
     assert_eq!(
-        Some((17.24151045083999634, 38.78813451624225195)),
+        Some((17.241510450839996, 38.78813451624225)),
         results[2].coordinates
     );
     assert_eq!("edge1", results[3].member);
     assert_eq!(Some(279.7405), results[3].distance);
     assert_eq!(None, results[3].geo_hash);
     assert_eq!(
-        Some((12.7584877610206604, 38.78813451624225195)),
+        Some((12.75848776102066, 38.78813451624225)),
         results[3].coordinates
     );
 
@@ -381,14 +381,14 @@ async fn geosearchstore() -> Result<()> {
     assert_eq!(Some(190.4424), results[1].distance);
     assert_eq!(Some(3479099956230698), results[1].geo_hash);
     assert_eq!(
-        Some((13.36138933897018433, 38.11555639549629859)),
+        Some((13.361389338970184, 38.1155563954963)),
         results[1].coordinates
     );
     assert_eq!("edge2", results[2].member);
     assert_eq!(Some(279.7403), results[2].distance);
     assert_eq!(Some(3481342659049484), results[2].geo_hash);
     assert_eq!(
-        Some((17.24151045083999634, 38.78813451624225195)),
+        Some((17.241510450839996, 38.78813451624225)),
         results[2].coordinates
     );
 

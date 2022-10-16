@@ -106,7 +106,7 @@ impl InternalPubSubCommands<ClientResult> for Client {}
 impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
 impl ServerCommands<ClientResult> for Client {
-    fn monitor<'a>(&'a self) -> Future<'a, crate::MonitorStream> {
+    fn monitor(&self) -> Future<crate::MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =

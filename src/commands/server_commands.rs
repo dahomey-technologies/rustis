@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     resp::{
@@ -647,7 +647,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
     #[must_use]
-    fn monitor<'a>(&'a self) -> Future<'a, MonitorStream>;
+    fn monitor(&self) -> Future<MonitorStream>;
 
     /// This command can change the replication settings of a replica on the fly.
     ///
@@ -1031,8 +1031,10 @@ pub enum RequestPolicy {
     Special,
 }
 
-impl RequestPolicy {
-    pub fn from_str(str: &str) -> Result<Self> {
+impl FromStr for RequestPolicy {
+    type Err = Error;
+
+    fn from_str(str: &str) -> Result<Self> {
         match str {
             "all_nodes" => Ok(RequestPolicy::AllNodes),
             "all_shards" => Ok(RequestPolicy::AllShards),
@@ -1057,8 +1059,10 @@ pub enum ResponsePolicy {
     Special,
 }
 
-impl ResponsePolicy {
-    pub fn from_str(str: &str) -> Result<Self> {
+impl FromStr for ResponsePolicy {
+    type Err = Error;
+
+    fn from_str(str: &str) -> Result<Self> {
         match str {
             "one_succeeded" => Ok(ResponsePolicy::OneSucceeded),
             "all_succeeded" => Ok(ResponsePolicy::AllSucceeded),

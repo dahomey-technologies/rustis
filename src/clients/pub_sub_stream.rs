@@ -83,13 +83,13 @@ impl PubSubStream {
         let mut channels = Vec::<String>::new();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
-            let _result = self.client.unsubscribe(channels).await?;
+            self.client.unsubscribe(channels).await?;
         }
 
         let mut patterns = Vec::<String>::new();
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
-            let _result = self.client.punsubscribe(patterns).await?;
+            self.client.punsubscribe(patterns).await?;
         }
 
         self.closed = true;

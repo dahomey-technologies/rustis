@@ -551,7 +551,7 @@ impl FromValue for ClientListResult {
 
         let client_infos: Result<Vec<ClientInfo>> = lines
             .split('\n')
-            .map(|l| ClientInfo::from_line(l))
+            .map(ClientInfo::from_line)
             .collect();
 
         Ok(Self {

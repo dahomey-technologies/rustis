@@ -56,7 +56,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/bzpopmax/](https://redis.io/commands/bzpopmax/)
     #[must_use]
-    fn bzpopmax<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<Vec<(K1, E, f64)>>>
+    fn bzpopmax<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -78,7 +78,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [https://redis.io/commands/bzpopmin/](https://redis.io/commands/bzpopmin/)
     #[must_use]
-    fn bzpopmin<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<Vec<(K1, E, f64)>>>
+    fn bzpopmin<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -848,6 +848,8 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
         )
     }
 }
+
+type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 
 /// Condition option for the [zadd](crate::SortedSetCommands::zadd) command
 pub enum ZAddCondition {

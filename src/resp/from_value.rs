@@ -14,7 +14,7 @@ pub trait FromValue: Sized {
     ///
     /// # Errors
     ///
-    /// Any parsing error ([`Error::Parse`](crate::Error::Parse)) due to incompatibility between Value variant and tagert type
+    /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
     fn from_value(value: Value) -> Result<Self>;
     #[must_use]
     #[allow(clippy::complexity)]

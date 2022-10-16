@@ -19,7 +19,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     ///     * An array of tuples with all the popped members and their scores
     ///
     /// # See Also
-    /// [https://redis.io/commands/bzmpop/](https://redis.io/commands/bzmpop/)
+    /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
     fn bzmpop<K, C, E>(
         &self,
@@ -54,7 +54,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     ///     * and the third element is the score of the popped element.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bzpopmax/](https://redis.io/commands/bzpopmax/)
+    /// [<https://redis.io/commands/bzpopmax/>](https://redis.io/commands/bzpopmax/)
     #[must_use]
     fn bzpopmax<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
     where
@@ -76,7 +76,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     ///     * and the third element is the score of the popped element.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bzpopmin/](https://redis.io/commands/bzpopmin/)
+    /// [<https://redis.io/commands/bzpopmin/>](https://redis.io/commands/bzpopmin/)
     #[must_use]
     fn bzpopmin<K, KK, E, K1>(&self, keys: KK, timeout: f64) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
     where
@@ -96,7 +96,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// * If the `change` option is specified, the number of elements that were changed (added or updated).
     ///
     /// # See Also
-    /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
+    /// [<https://redis.io/commands/zadd/>](https://redis.io/commands/zadd/)
     #[must_use]
     fn zadd<K, M, I>(&self, key: K, items: I, options: ZAddOptions) -> CommandResult<T, usize>
     where
@@ -115,7 +115,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// or nil if the operation was aborted (when called with either the XX or the NX option).
     ///
     /// # See Also
-    /// [https://redis.io/commands/zadd/](https://redis.io/commands/zadd/)
+    /// [<https://redis.io/commands/zadd/>](https://redis.io/commands/zadd/)
     #[must_use]
     fn zadd_incr<K, M>(
         &self,
@@ -148,7 +148,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The cardinality (number of elements) of the sorted set, or 0 if key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zcard/](https://redis.io/commands/zcard/)
+    /// [<https://redis.io/commands/zcard/>](https://redis.io/commands/zcard/)
     #[must_use]
     fn zcard<K>(&self, key: K) -> CommandResult<T, usize>
     where
@@ -163,7 +163,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of elements in the specified score range.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zcount/](https://redis.io/commands/zcount/)
+    /// [<https://redis.io/commands/zcount/>](https://redis.io/commands/zcount/)
     #[must_use]
     fn zcount<K, M1, M2>(&self, key: K, min: M1, max: M2) -> CommandResult<T, usize>
     where
@@ -181,7 +181,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the difference
     ///
     /// # See Also
-    /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
+    /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
     fn zdiff<K, C, E>(&self, keys: C) -> CommandResult<T, Vec<E>>
     where
@@ -199,7 +199,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the difference with their scores
     ///
     /// # See Also
-    /// [https://redis.io/commands/zdiff/](https://redis.io/commands/zdiff/)
+    /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
     fn zdiff_with_scores<K, C, E>(&self, keys: C) -> CommandResult<T, Vec<(E, f64)>>
     where
@@ -222,7 +222,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of elements in the resulting sorted set at destination.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zdiffstore/](https://redis.io/commands/zdiffstore/)
+    /// [<https://redis.io/commands/zdiffstore/>](https://redis.io/commands/zdiffstore/)
     #[must_use]
     fn zdiffstore<D, K, C>(&self, destination: D, keys: C) -> CommandResult<T, usize>
     where
@@ -244,7 +244,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the new score of member
     ///
     /// # See Also
-    /// [https://redis.io/commands/zincrby/](https://redis.io/commands/zincrby/)
+    /// [<https://redis.io/commands/zincrby/>](https://redis.io/commands/zincrby/)
     #[must_use]
     fn zincrby<K, M>(&self, key: K, increment: f64, member: M) -> CommandResult<T, f64>
     where
@@ -261,7 +261,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the intersection as an array of members
     ///
     /// # See Also
-    /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
+    /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
     fn zinter<K, C, W, E>(
         &self,
@@ -291,7 +291,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the intersection as an array of members with their scores
     ///
     /// # See Also
-    /// [https://redis.io/commands/zinter/](https://redis.io/commands/zinter/)
+    /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
     fn zinter_with_scores<K, C, W, E>(
         &self,
@@ -322,7 +322,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the algorithm will exit and yield limit as the cardinality. 0 means unlimited
     ///
     /// # See Also
-    /// [https://redis.io/commands/zintercard/](https://redis.io/commands/zintercard/)
+    /// [<https://redis.io/commands/zintercard/>](https://redis.io/commands/zintercard/)
     #[must_use]
     fn zintercard<K, C>(&self, keys: C, limit: usize) -> CommandResult<T, usize>
     where
@@ -345,7 +345,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of elements in the resulting sorted set at destination.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zinterstore/](https://redis.io/commands/zinterstore/)
+    /// [<https://redis.io/commands/zinterstore/>](https://redis.io/commands/zinterstore/)
     #[must_use]
     fn zinterstore<D, K, C, W>(
         &self,
@@ -378,7 +378,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the number of elements in the specified score range.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zlexcount/](https://redis.io/commands/zlexcount/)
+    /// [<https://redis.io/commands/zlexcount/>](https://redis.io/commands/zlexcount/)
     #[must_use]
     fn zlexcount<K, M1, M2>(&self, key: K, min: M1, max: M2) -> CommandResult<T, usize>
     where
@@ -399,7 +399,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     ///     * An array of tuples with all the popped members and their scores
     ///
     /// # See Also
-    /// [https://redis.io/commands/zmpop/](https://redis.io/commands/zmpop/)
+    /// [<https://redis.io/commands/zmpop/>](https://redis.io/commands/zmpop/)
     #[must_use]
     fn zmpop<K, C, E>(
         &self,
@@ -430,7 +430,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The list of scores or nil associated with the specified member value
     ///
     /// # See Also
-    /// [https://redis.io/commands/zmscore/](https://redis.io/commands/zmscore/)
+    /// [<https://redis.io/commands/zmscore/>](https://redis.io/commands/zmscore/)
     #[must_use]
     fn zmscore<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<f64>>>
     where
@@ -447,7 +447,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The list of popped elements and scores.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zpopmax/](https://redis.io/commands/zpopmax/)
+    /// [<https://redis.io/commands/zpopmax/>](https://redis.io/commands/zpopmax/)
     #[must_use]
     fn zpopmax<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
@@ -463,7 +463,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The list of popped elements and scores.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zpopmin/](https://redis.io/commands/zpopmin/)
+    /// [<https://redis.io/commands/zpopmin/>](https://redis.io/commands/zpopmin/)
     #[must_use]
     fn zpopmin<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
@@ -479,7 +479,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The randomly selected element, or nil when key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
     fn zrandmember<K, E>(&self, key: K) -> CommandResult<T, E>
     where
@@ -499,7 +499,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// is the absolute value of the specified count.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
     fn zrandmembers<K, E>(&self, key: K, count: isize) -> CommandResult<T, Vec<E>>
     where
@@ -519,7 +519,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// is the absolute value of the specified count.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrandmember/](https://redis.io/commands/zrandmember/)
+    /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
     fn zrandmembers_with_scores<K, E>(&self, key: K, count: isize) -> CommandResult<T, Vec<E>>
     where
@@ -535,7 +535,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// A collection of elements in the specified range
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
+    /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
     fn zrange<K, S, E>(
         &self,
@@ -558,7 +558,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// A collection of elements and their scores in the specified range
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrange/](https://redis.io/commands/zrange/)
+    /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
     fn zrange_with_scores<K, S, E>(
         &self,
@@ -589,7 +589,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of elements in the resulting sorted set.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrangestore/](https://redis.io/commands/zrangestore/)
+    /// [<https://redis.io/commands/zrangestore/>](https://redis.io/commands/zrangestore/)
     #[must_use]
     fn zrangestore<D, S, SS>(
         &self,
@@ -622,7 +622,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// * If member does not exist in the sorted set or key does not exist, None.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrank/](https://redis.io/commands/zrank/)
+    /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
     #[must_use]
     fn zrank<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<usize>>
     where
@@ -638,7 +638,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of members removed from the sorted set, not including non existing members.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrem/](https://redis.io/commands/zrem/)
+    /// [<https://redis.io/commands/zrem/>](https://redis.io/commands/zrem/)
     #[must_use]
     fn zrem<K, M, C>(&self, key: K, members: C) -> CommandResult<T, usize>
     where
@@ -658,7 +658,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the number of elements removed.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zremrangebylex/](https://redis.io/commands/zremrangebylex/)
+    /// [<https://redis.io/commands/zremrangebylex/>](https://redis.io/commands/zremrangebylex/)
     #[must_use]
     fn zremrangebylex<K, S>(&self, key: K, start: S, stop: S) -> CommandResult<T, usize>
     where
@@ -674,7 +674,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the number of elements removed.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zremrangebyrank/](https://redis.io/commands/zremrangebyrank/)
+    /// [<https://redis.io/commands/zremrangebyrank/>](https://redis.io/commands/zremrangebyrank/)
     #[must_use]
     fn zremrangebyrank<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, usize>
     where
@@ -689,7 +689,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// the number of elements removed.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zremrangebyscore/](https://redis.io/commands/zremrangebyscore/)
+    /// [<https://redis.io/commands/zremrangebyscore/>](https://redis.io/commands/zremrangebyscore/)
     #[must_use]
     fn zremrangebyscore<K, S>(&self, key: K, start: S, stop: S) -> CommandResult<T, usize>
     where
@@ -706,7 +706,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// * If member does not exist in the sorted set or key does not exist, None.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zrevrank/](https://redis.io/commands/zrevrank/)
+    /// [<https://redis.io/commands/zrevrank/>](https://redis.io/commands/zrevrank/)
     #[must_use]
     fn zrevrank<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<usize>>
     where
@@ -724,7 +724,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// * The second value is a list of members and their scores in a Vec of Tuples
     ///
     /// # See Also
-    /// [https://redis.io/commands/zscan/](https://redis.io/commands/zscan/)
+    /// [<https://redis.io/commands/zscan/>](https://redis.io/commands/zscan/)
     #[must_use]
     fn zscan<K, M>(
         &self,
@@ -745,7 +745,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The score of `member` or nil if `key`does not exist
     ///
     /// # See Also
-    /// [https://redis.io/commands/zscore/](https://redis.io/commands/zscore/)
+    /// [<https://redis.io/commands/zscore/>](https://redis.io/commands/zscore/)
     #[must_use]
     fn zscore<K, M>(&self, key: K, member: M) -> CommandResult<T, Option<f64>>
     where
@@ -762,7 +762,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the unionsection as an array of members
     ///
     /// # See Also
-    /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
+    /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
     fn zunion<K, C, W, E>(
         &self,
@@ -792,7 +792,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The result of the unionsection as an array of members with their scores
     ///
     /// # See Also
-    /// [https://redis.io/commands/zunion/](https://redis.io/commands/zunion/)
+    /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
     fn zunion_with_scores<K, C, W, E>(
         &self,
@@ -823,7 +823,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     /// The number of elements in the resulting sorted set at destination.
     ///
     /// # See Also
-    /// [https://redis.io/commands/zunionstore/](https://redis.io/commands/zunionstore/)
+    /// [<https://redis.io/commands/zunionstore/>](https://redis.io/commands/zunionstore/)
     #[must_use]
     fn zunionstore<D, K, C, W>(
         &self,

@@ -497,7 +497,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// - All-time maximum latency for this event.
     ///
     /// "All-time" means the maximum latency since the Redis instance was started,
-    /// or the time that events were [`reset`](crate::ServerCommands::reset).
+    /// or the time that events were [`reset`](crate::ConnectionCommands::reset).
     ///
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)

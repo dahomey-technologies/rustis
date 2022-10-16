@@ -19,7 +19,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the length of the string after the append operation.
     ///
     /// # See Also
-    /// [https://redis.io/commands/append/](https://redis.io/commands/append/)
+    /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
     fn append<K, V>(&self, key: K, value: V) -> CommandResult<T, usize>
     where
@@ -40,7 +40,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key after the decrement
     ///
     /// # See Also
-    /// [https://redis.io/commands/decr/](https://redis.io/commands/decr/)
+    /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
     fn decr<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -60,7 +60,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key after the decrement
     ///
     /// # See Also
-    /// [https://redis.io/commands/decrby/](https://redis.io/commands/decrby/)
+    /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
     fn decrby<K>(&self, key: K, decrement: i64) -> CommandResult<T, i64>
     where
@@ -110,7 +110,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// ```
     ///
     /// # See Also
-    /// [https://redis.io/commands/get/](https://redis.io/commands/get/)
+    /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
     fn get<K, V>(&self, key: K) -> CommandResult<T, V>
     where
@@ -130,7 +130,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key, `nil` when key does not exist, or an error if the key's value type isn't a string.
     ///
     /// # See Also
-    /// [https://redis.io/commands/getdel/](https://redis.io/commands/getdel/)
+    /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
     fn getdel<K, V>(&self, key: K) -> CommandResult<T, V>
     where
@@ -175,7 +175,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// ```
     ///
     /// # See Also
-    /// [https://redis.io/commands/getex/](https://redis.io/commands/getex/)
+    /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
     fn getex<K, V>(&self, key: K, options: GetExOptions) -> CommandResult<T, V>
     where
@@ -193,7 +193,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// The function handles out of range requests by limiting the resulting range to the actual length of the string.
 
     /// # See Also
-    /// [https://redis.io/commands/getrange/](https://redis.io/commands/getrange/)
+    /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
     fn getrange<K, V>(&self, key: K, start: usize, end: isize) -> CommandResult<T, V>
     where
@@ -211,7 +211,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the old value stored at key, or nil when key did not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/getset/](https://redis.io/commands/getset/)
+    /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
     fn getset<K, V, R>(&self, key: K, value: V) -> CommandResult<T, R>
     where
@@ -239,7 +239,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key after the increment
     ///
     /// # See Also
-    /// [https://redis.io/commands/incr/](https://redis.io/commands/incr/)
+    /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
     fn incr<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -261,7 +261,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key after the increment
     ///
     /// # See Also
-    /// [https://redis.io/commands/incrby/](https://redis.io/commands/incrby/)
+    /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
     fn incrby<K>(&self, key: K, increment: i64) -> CommandResult<T, i64>
     where
@@ -294,7 +294,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the value of key after the increment
     ///
     /// # See Also
-    /// [https://redis.io/commands/incrbyfloat/](https://redis.io/commands/incrbyfloat/)
+    /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
     fn incrbyfloat<K>(&self, key: K, increment: f64) -> CommandResult<T, f64>
     where
@@ -309,7 +309,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// The string representing the longest common substring.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
     fn lcs<K, V>(&self, key1: K, key2: K) -> CommandResult<T, V>
     where
@@ -325,7 +325,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// The length of the longest common substring.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
     fn lcs_len<K>(&self, key1: K, key2: K) -> CommandResult<T, usize>
     where
@@ -342,7 +342,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// When `with_match_len` is given each match will also have the length of the match
     ///
     /// # See Also
-    /// [https://redis.io/commands/lcs/](https://redis.io/commands/lcs/)
+    /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
     fn lcs_idx<K>(
         &self,
@@ -373,7 +373,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// Array reply: list of values at the specified keys.
     ///
     /// # See Also
-    /// [https://redis.io/commands/mget/](https://redis.io/commands/mget/)
+    /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
     fn mget<K, V, C>(&self, keys: C) -> CommandResult<T, Vec<Option<V>>>
     where
@@ -390,7 +390,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// always OK since MSET can't fail.
     ///
     /// # See Also
-    /// [https://redis.io/commands/mset/](https://redis.io/commands/mset/)
+    /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
     fn mset<K, V, C>(&self, items: C) -> CommandResult<T, ()>
     where
@@ -417,7 +417,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// - 0 if no key was set (at least one key already existed).
     ///
     /// # See Also
-    /// [https://redis.io/commands/msetnx/](https://redis.io/commands/msetnx/)
+    /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
     fn msetnx<K, V, C>(&self, items: C) -> CommandResult<T, bool>
     where
@@ -435,7 +435,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// Any previous time to live associated with the key is discarded on successful SET operation.
     ///
     /// # See Also
-    /// [https://redis.io/commands/psetex/](https://redis.io/commands/psetex/)
+    /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
     #[must_use]
     fn psetex<K, V>(&self, key: K, milliseconds: u64, value: V) -> CommandResult<T, ()>
     where
@@ -451,7 +451,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// Any previous time to live associated with the key is discarded on successful SET operation.
     ///
     /// # See Also
-    /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set<K, V>(&self, key: K, value: V) -> CommandResult<T, ()>
     where
@@ -470,7 +470,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     ///  specified the NX or XX option but the condition was not met.
     ///
     /// # See Also
-    /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_with_options<K, V>(
         &self,
@@ -497,7 +497,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// Set key to hold the string value wit GET option enforced
     ///
     /// # See Also
-    /// [https://redis.io/commands/set/](https://redis.io/commands/set/)
+    /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_get_with_options<K, V1, V2>(
         &self,
@@ -526,7 +526,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// Set key to hold the string value and set key to timeout after a given number of seconds.
     ///
     /// # See Also
-    /// [https://redis.io/commands/setex/](https://redis.io/commands/setex/)
+    /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
     #[must_use]
     fn setex<K, V>(&self, key: K, seconds: u64, value: V) -> CommandResult<T, ()>
     where
@@ -548,7 +548,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// * `false` - if the key was not set
     ///
     /// # See Also
-    /// [https://redis.io/commands/setnx/](https://redis.io/commands/setnx/)
+    /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
     fn setnx<K, V>(&self, key: K, value: V) -> CommandResult<T, bool>
     where
@@ -566,7 +566,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the length of the string after it was modified by the command.
     ///
     /// # See Also
-    /// [https://redis.io/commands/setrange/](https://redis.io/commands/setrange/)
+    /// [<https://redis.io/commands/setrange/>](https://redis.io/commands/setrange/)
     #[must_use]
     fn setrange<K, V>(&self, key: K, offset: usize, value: V) -> CommandResult<T, usize>
     where
@@ -584,7 +584,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// the length of the string at key, or 0 when key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/strlen/](https://redis.io/commands/strlen/)
+    /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
     fn strlen<K>(&self, key: K) -> CommandResult<T, usize>
     where

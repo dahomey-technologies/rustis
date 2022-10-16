@@ -15,7 +15,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// The number of bits set to 1.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bitcount/](https://redis.io/commands/bitcount/)
+    /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
     fn bitcount<K>(&self, key: K, range: BitRange) -> CommandResult<T, usize>
     where
@@ -33,7 +33,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// given at the same position. OVERFLOW subcommands don't count as generating a reply.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bitfield/](https://redis.io/commands/bitfield/)
+    /// [<https://redis.io/commands/bitfield/>](https://redis.io/commands/bitfield/)
     #[must_use]
     fn bitfield<K, C, E, O>(&self, key: K, sub_commands: C) -> CommandResult<T, Vec<u64>>
     where
@@ -54,7 +54,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// given at the same position.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bitfield_ro/](https://redis.io/commands/bitfield_ro/)
+    /// [<https://redis.io/commands/bitfield_ro/>](https://redis.io/commands/bitfield_ro/)
     #[must_use]
     fn bitfield_readonly<K, C, E, O>(&self, key: K, get_commands: C) -> CommandResult<T, Vec<u64>>
     where
@@ -74,7 +74,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// that is equal to the size of the longest input string.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bitop/](https://redis.io/commands/bitop/)
+    /// [<https://redis.io/commands/bitop/>](https://redis.io/commands/bitop/)
     #[must_use]
     fn bitop<D, K, KK>(
         &self,
@@ -97,7 +97,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// The position of the first bit set to 1 or 0 according to the request.
     ///
     /// # See Also
-    /// [https://redis.io/commands/bitpos/](https://redis.io/commands/bitpos/)
+    /// [<https://redis.io/commands/bitpos/>](https://redis.io/commands/bitpos/)
     #[must_use]
     fn bitpos<K>(&self, key: K, bit: u64, range: BitRange) -> CommandResult<T, usize>
     where
@@ -112,7 +112,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// The bit value stored at offset.
     ///
     /// # See Also
-    /// [https://redis.io/commands/getbit/](https://redis.io/commands/getbit/)
+    /// [<https://redis.io/commands/getbit/>](https://redis.io/commands/getbit/)
     #[must_use]
     fn getbit<K>(&self, key: K, offset: u64) -> CommandResult<T, u64>
     where
@@ -127,7 +127,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// The original bit value stored at offset.
     ///
     /// # See Also
-    /// [https://redis.io/commands/setbit/](https://redis.io/commands/setbit/)
+    /// [<https://redis.io/commands/setbit/>](https://redis.io/commands/setbit/)
     #[must_use]
     fn setbit<K>(&self, key: K, offset: u64, value: u64) -> CommandResult<T, u64>
     where

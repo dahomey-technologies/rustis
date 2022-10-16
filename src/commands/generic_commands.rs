@@ -17,7 +17,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// Success of the operation
     ///
     /// # See Also
-    /// [https://redis.io/commands/copy/](https://redis.io/commands/copy/)
+    /// [<https://redis.io/commands/copy/>](https://redis.io/commands/copy/)
     #[must_use]
     fn copy<S, D>(
         &self,
@@ -45,7 +45,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of keys that were removed.
     ///
     /// # See Also
-    /// [https://redis.io/commands/del/](https://redis.io/commands/del/)
+    /// [<https://redis.io/commands/del/>](https://redis.io/commands/del/)
     #[must_use]
     fn del<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
@@ -61,7 +61,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The serialized value.
     ///
     /// # See Also
-    /// [https://redis.io/commands/dump/](https://redis.io/commands/dump/)
+    /// [<https://redis.io/commands/dump/>](https://redis.io/commands/dump/)
     #[must_use]
     fn dump<K>(&self, key: K) -> CommandResult<T, DumpResult>
     where
@@ -76,7 +76,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of keys that exist from those specified as arguments.
     ///
     /// # See Also
-    /// [https://redis.io/commands/exists/](https://redis.io/commands/exists/)
+    /// [<https://redis.io/commands/exists/>](https://redis.io/commands/exists/)
     #[must_use]
     fn exists<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
@@ -93,7 +93,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
-    /// [https://redis.io/commands/expire/](https://redis.io/commands/expire/)
+    /// [<https://redis.io/commands/expire/>](https://redis.io/commands/expire/)
     #[must_use]
     fn expire<K>(&self, key: K, seconds: u64, option: ExpireOption) -> CommandResult<T, bool>
     where
@@ -113,7 +113,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
-    /// [https://redis.io/commands/expireat/](https://redis.io/commands/expireat/)
+    /// [<https://redis.io/commands/expireat/>](https://redis.io/commands/expireat/)
     #[must_use]
     fn expireat<K>(
         &self,
@@ -135,7 +135,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// - The command returns -2 if the key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/expiretime/](https://redis.io/commands/expiretime/)
+    /// [<https://redis.io/commands/expiretime/>](https://redis.io/commands/expiretime/)
     #[must_use]
     fn expiretime<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -150,7 +150,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// list of keys matching pattern.
     ///
     /// # See Also
-    /// [https://redis.io/commands/keys/](https://redis.io/commands/keys/)
+    /// [<https://redis.io/commands/keys/>](https://redis.io/commands/keys/)
     #[must_use]
     fn keys<P, K, A>(&self, pattern: P) -> CommandResult<T, A>
     where
@@ -168,7 +168,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if no keys were found in the source instance.
     ///
     /// # See Also
-    /// [https://redis.io/commands/migrate/](https://redis.io/commands/migrate/)
+    /// [<https://redis.io/commands/migrate/>](https://redis.io/commands/migrate/)
     #[must_use]
     fn migrate<H, K>(
         &self,
@@ -201,7 +201,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - f key was not moved.
     ///
     /// # See Also
-    /// [https://redis.io/commands/move/](https://redis.io/commands/move/)
+    /// [<https://redis.io/commands/move/>](https://redis.io/commands/move/)
     #[must_use]
     fn move_<K>(&self, key: K, db: usize) -> CommandResult<T, i64>
     where
@@ -216,7 +216,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The encoding of the object, or nil if the key doesn't exist
     ///
     /// # See Also
-    /// [https://redis.io/commands/object-encoding/](https://redis.io/commands/object-encoding/)
+    /// [<https://redis.io/commands/object-encoding/>](https://redis.io/commands/object-encoding/)
     #[must_use]
     fn object_encoding<K, E>(&self, key: K) -> CommandResult<T, E>
     where
@@ -232,7 +232,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The counter's value.
     ///
     /// # See Also
-    /// [https://redis.io/commands/object-freq/](https://redis.io/commands/object-freq/)
+    /// [<https://redis.io/commands/object-freq/>](https://redis.io/commands/object-freq/)
     #[must_use]
     fn object_freq<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -247,7 +247,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The idle time in seconds.
     ///
     /// # See Also
-    /// [https://redis.io/commands/object-idletime/](https://redis.io/commands/object-idletime/)
+    /// [<https://redis.io/commands/object-idletime/>](https://redis.io/commands/object-idletime/)
     #[must_use]
     fn object_idle_time<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -262,7 +262,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of references.
     ///
     /// # See Also
-    /// [https://redis.io/commands/object-refcount/](https://redis.io/commands/object-refcount/)
+    /// [<https://redis.io/commands/object-refcount/>](https://redis.io/commands/object-refcount/)
     #[must_use]
     fn object_refcount<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -280,7 +280,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if key does not exist or does not have an associated timeout.
     ///
     /// # See Also
-    /// [https://redis.io/commands/persist/](https://redis.io/commands/persist/)
+    /// [<https://redis.io/commands/persist/>](https://redis.io/commands/persist/)
     #[must_use]
     fn persist<K>(&self, key: K) -> CommandResult<T, bool>
     where
@@ -296,7 +296,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pexpire/](https://redis.io/commands/pexpire/)
+    /// [<https://redis.io/commands/pexpire/>](https://redis.io/commands/pexpire/)
     #[must_use]
     fn pexpire<K>(&self, key: K, milliseconds: u64, option: ExpireOption) -> CommandResult<T, bool>
     where
@@ -313,7 +313,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `false` - if the timeout was not set. e.g. key doesn't exist, or operation skipped due to the provided arguments.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pexpireat/](https://redis.io/commands/pexpireat/)
+    /// [<https://redis.io/commands/pexpireat/>](https://redis.io/commands/pexpireat/)
     #[must_use]
     fn pexpireat<K>(
         &self,
@@ -341,7 +341,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// - The command returns -2 if the key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pexpiretime/](https://redis.io/commands/pexpiretime/)
+    /// [<https://redis.io/commands/pexpiretime/>](https://redis.io/commands/pexpiretime/)
     #[must_use]
     fn pexpiretime<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -358,7 +358,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// -1 if the key exists but has no associated expire.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pttl/](https://redis.io/commands/pttl/)
+    /// [<https://redis.io/commands/pttl/>](https://redis.io/commands/pttl/)
     #[must_use]
     fn pttl<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -373,7 +373,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of references.
     ///
     /// # See Also
-    /// [https://redis.io/commands/randomkey/](https://redis.io/commands/randomkey/)
+    /// [<https://redis.io/commands/randomkey/>](https://redis.io/commands/randomkey/)
     #[must_use]
     fn randomkey<R>(&self) -> CommandResult<T, R>
     where
@@ -385,7 +385,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// Renames key to newkey.
     ///
     /// # See Also
-    /// [https://redis.io/commands/rename/](https://redis.io/commands/rename/)
+    /// [<https://redis.io/commands/rename/>](https://redis.io/commands/rename/)
     #[must_use]
     fn rename<K1, K2>(&self, key: K1, new_key: K2) -> CommandResult<T, ()>
     where
@@ -402,7 +402,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// * `true` if key was renamed to newkey.
     /// * `false` if newkey already exists.
     /// # See Also
-    /// [https://redis.io/commands/renamenx/](https://redis.io/commands/renamenx/)
+    /// [<https://redis.io/commands/renamenx/>](https://redis.io/commands/renamenx/)
     #[must_use]
     fn renamenx<K1, K2>(&self, key: K1, new_key: K2) -> CommandResult<T, bool>
     where
@@ -419,7 +419,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// Restore command builder
     ///
     /// # See Also
-    /// [https://redis.io/commands/restore/](https://redis.io/commands/restore/)
+    /// [<https://redis.io/commands/restore/>](https://redis.io/commands/restore/)
     #[must_use]
     fn restore<K>(
         &self,
@@ -446,7 +446,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// A list of keys
     ///
     /// # See Also
-    /// [https://redis.io/commands/scan/](https://redis.io/commands/scan/)
+    /// [<https://redis.io/commands/scan/>](https://redis.io/commands/scan/)
     #[must_use]
     fn scan<K, A>(&self, cursor: u64, options: ScanOptions) -> CommandResult<T, (u64, A)>
     where
@@ -462,7 +462,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// A collection of sorted elements.
     ///
     /// # See Also
-    /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    /// [<https://redis.io/commands/sort/>](https://redis.io/commands/sort/)
     #[must_use]
     fn sort<K, M, A>(&self, key: K, options: SortOptions) -> CommandResult<T, A>
     where
@@ -479,7 +479,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of sorted elements in the destination list.
     ///
     /// # See Also
-    /// [https://redis.io/commands/sort/](https://redis.io/commands/sort/)
+    /// [<https://redis.io/commands/sort/>](https://redis.io/commands/sort/)
     #[must_use]
     fn sort_and_store<K, D>(
         &self,
@@ -509,7 +509,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// A collection of sorted elements.
     ///
     /// # See Also
-    /// [https://redis.io/commands/sort_ro/](https://redis.io/commands/sort_ro/)
+    /// [<https://redis.io/commands/sort_ro/>](https://redis.io/commands/sort_ro/)
     #[must_use]
     fn sort_readonly<K, M, A>(&self, key: K, options: SortOptions) -> CommandResult<T, A>
     where
@@ -526,7 +526,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of keys that were touched.
     ///
     /// # See Also
-    /// [https://redis.io/commands/touch/](https://redis.io/commands/touch/)
+    /// [<https://redis.io/commands/touch/>](https://redis.io/commands/touch/)
     #[must_use]
     fn touch<K, KK>(&self, keys: KK) -> CommandResult<T, usize>
     where
@@ -544,7 +544,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// -1 if the key exists but has no associated expire.
     ///
     /// # See Also
-    /// [https://redis.io/commands/ttl/](https://redis.io/commands/ttl/)
+    /// [<https://redis.io/commands/ttl/>](https://redis.io/commands/ttl/)
     #[must_use]
     fn ttl<K>(&self, key: K) -> CommandResult<T, i64>
     where
@@ -561,7 +561,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// type of key, or empty string when key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/type/](https://redis.io/commands/type/)
+    /// [<https://redis.io/commands/type/>](https://redis.io/commands/type/)
     #[must_use]
     fn type_<K>(&self, key: K) -> CommandResult<T, String>
     where
@@ -576,7 +576,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of keys that were unlinked.
     ///
     /// # See Also
-    /// [https://redis.io/commands/unlink/](https://redis.io/commands/unlink/)
+    /// [<https://redis.io/commands/unlink/>](https://redis.io/commands/unlink/)
     #[must_use]
     fn unlink<K, C>(&self, keys: C) -> CommandResult<T, usize>
     where
@@ -593,7 +593,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     /// The number of replicas reached by all the writes performed in the context of the current connection.
     ///
     /// # See Also
-    /// [https://redis.io/commands/wait/](https://redis.io/commands/wait/)
+    /// [<https://redis.io/commands/wait/>](https://redis.io/commands/wait/)
     #[must_use]
     fn wait(&self, num_replicas: usize, timeout: u64) -> CommandResult<T, usize> {
         self.prepare_command(cmd("WAIT").arg(num_replicas).arg(timeout))

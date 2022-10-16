@@ -45,7 +45,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// ```
     ///
     /// # See Also
-    /// [https://redis.io/commands/psubscribe/](https://redis.io/commands/psubscribe/)
+    /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
     fn psubscribe<'a, P, PP>(&'a self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: Into<BulkString> + Send + 'a,
@@ -60,7 +60,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// to the same node as the publishing client are included in the count.
     ///
     /// # See Also
-    /// [https://redis.io/commands/publish/](https://redis.io/commands/publish/)
+    /// [<https://redis.io/commands/publish/>](https://redis.io/commands/publish/)
     fn publish<C, M>(&self, channel: C, message: M) -> CommandResult<T, usize>
     where
         C: Into<BulkString>,
@@ -75,7 +75,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// A collection of active channels, optionally matching the specified pattern.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pubsub-channels/](https://redis.io/commands/pubsub-channels/)
+    /// [<https://redis.io/commands/pubsub-channels/>](https://redis.io/commands/pubsub-channels/)
     fn pub_sub_channels<C, CC>(&self, options: PubSubChannelsOptions) -> CommandResult<T, CC>
     where
         C: FromValue,
@@ -91,7 +91,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// The number of patterns all the clients are subscribed to.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pubsub-numpat/](https://redis.io/commands/pubsub-numpat/)
+    /// [<https://redis.io/commands/pubsub-numpat/>](https://redis.io/commands/pubsub-numpat/)
     fn pub_sub_numpat(&self) -> CommandResult<T, usize>
     {
         self.prepare_command(cmd("PUBSUB").arg("NUMPAT"))
@@ -104,7 +104,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// A collection of channels and number of subscribers for every channel.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pubsub-numsub/](https://redis.io/commands/pubsub-numsub/)
+    /// [<https://redis.io/commands/pubsub-numsub/>](https://redis.io/commands/pubsub-numsub/)
     fn pub_sub_numsub<C, CC, R, RR>(&self, channels: CC) -> CommandResult<T, RR>
     where
         C: Into<BulkString>,
@@ -152,7 +152,7 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     /// ```
     ///
     /// # See Also
-    /// [https://redis.io/commands/subscribe/](https://redis.io/commands/subscribe/)
+    /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     fn subscribe<'a, C, CC>(&'a self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,

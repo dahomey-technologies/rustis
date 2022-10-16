@@ -10,7 +10,7 @@ pub trait TransactionCommands<T>: PrepareCommand<T> {
     /// Marks the given keys to be watched for conditional execution of a transaction.
     ///
     /// # See Also
-    /// [https://redis.io/commands/watch/](https://redis.io/commands/watch/)
+    /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
     fn watch<K, KK>(&self, keys: KK) -> CommandResult<T, ()>
     where
@@ -26,7 +26,7 @@ pub trait TransactionCommands<T>: PrepareCommand<T> {
     /// there's no need to manually call UNWATCH.
     ///
     /// # See Also
-    /// [https://redis.io/commands/unwatch/](https://redis.io/commands/unwatch/)
+    /// [<https://redis.io/commands/unwatch/>](https://redis.io/commands/unwatch/)
     #[must_use]
     fn unwatch(&self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("UNWATCH"))

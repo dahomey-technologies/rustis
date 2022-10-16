@@ -18,7 +18,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// * If the CH option is specified, the number of elements that were changed (added or updated).
     ///
     /// # See Also
-    /// [https://redis.io/commands/geoadd/](https://redis.io/commands/geoadd/)
+    /// [<https://redis.io/commands/geoadd/>](https://redis.io/commands/geoadd/)
     #[must_use]
     fn geoadd<K, M, I>(
         &self,
@@ -48,7 +48,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// The distance in the specified unit, or None if one or both the elements are missing.
     ///
     /// # See Also
-    /// [https://redis.io/commands/geodist/](https://redis.io/commands/geodist/)
+    /// [<https://redis.io/commands/geodist/>](https://redis.io/commands/geodist/)
     #[must_use]
     fn geodist<K, M>(
         &self,
@@ -71,7 +71,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// An array where each element is the Geohash corresponding to each member name passed as argument to the command.
     ///
     /// # See Also
-    /// [https://redis.io/commands/geohash/](https://redis.io/commands/geohash/)
+    /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
     fn geohash<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<String>>
     where
@@ -91,7 +91,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// Non existing elements are reported as NULL elements of the array.
     ///
     /// # See Also
-    /// [https://redis.io/commands/geopos/](https://redis.io/commands/geopos/)
+    /// [<https://redis.io/commands/geopos/>](https://redis.io/commands/geopos/)
     #[must_use]
     fn geopos<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
     where
@@ -110,7 +110,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// on which `with_xyz` options have been selected
     ///
     /// # See Also
-    /// [https://redis.io/commands/geosearch/](https://redis.io/commands/geosearch/)
+    /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
     fn geosearch<K, M1, M2, A>(
         &self,

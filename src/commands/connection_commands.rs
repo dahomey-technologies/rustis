@@ -204,7 +204,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     }
 
     /// Used to resume command processing for all clients that were 
-    /// paused by [`client_pause`](crate:ConnectionCommands:client_pause).
+    /// paused by [`client_pause`](crate::ConnectionCommands::client_pause).
     ///
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)

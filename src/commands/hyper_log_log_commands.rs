@@ -15,7 +15,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     /// * `false` otherwise.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pfadd/](https://redis.io/commands/pfadd/)
+    /// [<https://redis.io/commands/pfadd/>](https://redis.io/commands/pfadd/)
     fn pfadd<K, E, EE>(&self, key: K, elements: EE) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
@@ -32,7 +32,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     /// The approximated number of unique elements observed via PFADD.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pfcount/](https://redis.io/commands/pfcount/)
+    /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
     fn pfcount<K, KK>(&self, keys: KK) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
@@ -44,7 +44,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     /// Merge N different HyperLogLogs into a single one.
     ///
     /// # See Also
-    /// [https://redis.io/commands/pfmerge/](https://redis.io/commands/pfmerge/)
+    /// [<https://redis.io/commands/pfmerge/>](https://redis.io/commands/pfmerge/)
     fn pfmerge<D, S, SS>(&self, dest_key: D, source_keys: SS) -> CommandResult<T, ()>
     where
         D: Into<BulkString>,

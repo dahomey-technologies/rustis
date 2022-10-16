@@ -10,7 +10,7 @@ pub(crate) trait InternalPubSubCommands<T>: PrepareCommand<T> {
     /// Unsubscribes the client from the given patterns, or from all of them if none is given.
     ///
     /// # See Also
-    /// [https://redis.io/commands/punsubscribe/](https://redis.io/commands/punsubscribe/)            
+    /// [<https://redis.io/commands/punsubscribe/>](https://redis.io/commands/punsubscribe/)            
     fn punsubscribe<P, PP>(&self, patterns: PP) -> CommandResult<T, ()>
     where
         P: Into<BulkString> + Send,
@@ -22,7 +22,7 @@ pub(crate) trait InternalPubSubCommands<T>: PrepareCommand<T> {
     /// Unsubscribes the client from the given channels, or from all of them if none is given.
     ///
     /// # See Also
-    /// [https://redis.io/commands/unsubscribe/](https://redis.io/commands/unsubscribe/)            
+    /// [<https://redis.io/commands/unsubscribe/>](https://redis.io/commands/unsubscribe/)            
     fn unsubscribe<C, CC>(&self, channels: CC) -> CommandResult<T, ()>
     where
         C: Into<BulkString>,

@@ -18,7 +18,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// If timeout is reached, a None reply is returned.
     ///
     /// # See Also
-    /// [https://redis.io/commands/blmove/](https://redis.io/commands/blmove/)
+    /// [<https://redis.io/commands/blmove/>](https://redis.io/commands/blmove/)
     #[must_use]
     fn blmove<S, D, E>(
         &self,
@@ -50,7 +50,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// - Tuple composed by the name of the key from which elements were popped and the list of popped element
     ///
     /// # See Also
-    /// [https://redis.io/commands/blmpop/](https://redis.io/commands/blmpop/)
+    /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
     fn blmpop<K, E, C>(
         &self,
@@ -89,7 +89,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// and the second element being the value of the popped element.
     ///
     /// # See Also
-    /// [https://redis.io/commands/blpop/](https://redis.io/commands/blpop/)
+    /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
     fn blpop<K, KK, K1, V>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
     where
@@ -115,7 +115,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// and the second element being the value of the popped element.
     ///
     /// # See Also
-    /// [https://redis.io/commands/brpop/](https://redis.io/commands/brpop/)
+    /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
     fn brpop<K, KK, K1, V>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
     where
@@ -133,7 +133,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The requested element, or nil when index is out of range.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lindex/](https://redis.io/commands/lindex/)
+    /// [<https://redis.io/commands/lindex/>](https://redis.io/commands/lindex/)
     #[must_use]
     fn lindex<K, E>(&self, key: K, index: isize) -> CommandResult<T, E>
     where
@@ -149,7 +149,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list after the insert operation, or -1 when the value pivot was not found.
     ///
     /// # See Also
-    /// [https://redis.io/commands/linsert/](https://redis.io/commands/linsert/)
+    /// [<https://redis.io/commands/linsert/>](https://redis.io/commands/linsert/)
     #[must_use]
     fn linsert<K, E>(
         &self,
@@ -171,7 +171,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list at key.
     ///
     /// # See Also
-    /// [https://redis.io/commands/llen/](https://redis.io/commands/llen/)
+    /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
     fn llen<K>(&self, key: K) -> CommandResult<T, usize>
     where
@@ -188,7 +188,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The element being popped and pushed.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lmove/](https://redis.io/commands/lmove/)
+    /// [<https://redis.io/commands/lmove/>](https://redis.io/commands/lmove/)
     #[must_use]
     fn lmove<S, D, E>(
         &self,
@@ -217,7 +217,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// Tuple composed by the name of the key from which elements were popped and the list of popped element
     ///
     /// # See Also
-    /// [https://redis.io/commands/lmpop/](https://redis.io/commands/lmpop/)
+    /// [<https://redis.io/commands/lmpop/>](https://redis.io/commands/lmpop/)
     #[must_use]
     fn lmpop<K, E, C>(
         &self,
@@ -246,7 +246,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The list of popped elements, or empty collection when key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lpop/](https://redis.io/commands/lpop/)
+    /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
     fn lpop<K, E, A>(&self, key: K, count: usize) -> CommandResult<T, A>
     where
@@ -263,7 +263,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The integer representing the matching element, or nil if there is no match.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
+    /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos<K, E>(
         &self,
@@ -292,7 +292,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// (empty if there are no matches).
     ///
     /// # See Also
-    /// [https://redis.io/commands/lpos/](https://redis.io/commands/lpos/)
+    /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos_with_count<K, E, A>(
         &self,
@@ -324,7 +324,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list after the push operations.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lpush/](https://redis.io/commands/lpush/)
+    /// [<https://redis.io/commands/lpush/>](https://redis.io/commands/lpush/)
     #[must_use]
     fn lpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
@@ -342,7 +342,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list after the push operation.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lpushx/](https://redis.io/commands/lpushx/)
+    /// [<https://redis.io/commands/lpushx/>](https://redis.io/commands/lpushx/)
     #[must_use]
     fn lpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
@@ -359,7 +359,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The list of elements in the specified range.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lrange/](https://redis.io/commands/lrange/)
+    /// [<https://redis.io/commands/lrange/>](https://redis.io/commands/lrange/)
     #[must_use]
     fn lrange<K, E, A>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, A>
     where
@@ -376,7 +376,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The number of removed elements.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lrem/](https://redis.io/commands/lrem/)
+    /// [<https://redis.io/commands/lrem/>](https://redis.io/commands/lrem/)
     #[must_use]
     fn lrem<K, E>(&self, key: K, count: isize, element: E) -> CommandResult<T, usize>
     where
@@ -389,7 +389,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// Sets the list element at index to element.
     ///
     /// # See Also
-    /// [https://redis.io/commands/lset/](https://redis.io/commands/lset/)
+    /// [<https://redis.io/commands/lset/>](https://redis.io/commands/lset/)
     #[must_use]
     fn lset<K, E>(&self, key: K, index: isize, element: E) -> CommandResult<T, ()>
     where
@@ -402,7 +402,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// Trim an existing list so that it will contain only the specified range of elements specified.
     ///
     /// # See Also
-    /// [https://redis.io/commands/ltrim/](https://redis.io/commands/ltrim/)
+    /// [<https://redis.io/commands/ltrim/>](https://redis.io/commands/ltrim/)
     #[must_use]
     fn ltrim<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, ()>
     where
@@ -417,7 +417,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The list of popped elements, or empty collection when key does not exist.
     ///
     /// # See Also
-    /// [https://redis.io/commands/rpop/](https://redis.io/commands/rpop/)
+    /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
     fn rpop<K, E, C>(&self, key: K, count: usize) -> CommandResult<T, C>
     where
@@ -434,7 +434,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list after the push operations.
     ///
     /// # See Also
-    /// [https://redis.io/commands/rpush/](https://redis.io/commands/rpush/)
+    /// [<https://redis.io/commands/rpush/>](https://redis.io/commands/rpush/)
     #[must_use]
     fn rpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where
@@ -452,7 +452,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// The length of the list after the push operations.
     ///
     /// # See Also
-    /// [https://redis.io/commands/rpushx/](https://redis.io/commands/rpushx/)
+    /// [<https://redis.io/commands/rpushx/>](https://redis.io/commands/rpushx/)
     #[must_use]
     fn rpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
     where

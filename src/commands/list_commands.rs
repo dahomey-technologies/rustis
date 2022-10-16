@@ -95,8 +95,8 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
-        K1: FromValue + Default,
-        V: FromValue + Default,
+        K1: FromValue,
+        V: FromValue,
     {
         self.prepare_command(cmd("BLPOP").arg(keys).arg(timeout))
     }
@@ -121,8 +121,8 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
-        K1: FromValue + Default,
-        V: FromValue + Default,
+        K1: FromValue,
+        V: FromValue,
     {
         self.prepare_command(cmd("BRPOP").arg(keys).arg(timeout))
     }

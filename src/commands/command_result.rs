@@ -599,8 +599,8 @@ impl<T: FromValue + Send + Sync> TransactionExt<T> for Transaction<TransactionRe
 
 impl<T1, T2> TransactionExt<(T1, T2)> for Transaction<TransactionResult2<T1, T2>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2)> {
         self.execute()
@@ -609,9 +609,9 @@ where
 
 impl<T1, T2, T3> TransactionExt<(T1, T2, T3)> for Transaction<TransactionResult3<T1, T2, T3>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3)> {
         self.execute()
@@ -621,10 +621,10 @@ where
 impl<T1, T2, T3, T4> TransactionExt<(T1, T2, T3, T4)>
     for Transaction<TransactionResult4<T1, T2, T3, T4>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4)> {
         self.execute()
@@ -634,11 +634,11 @@ where
 impl<T1, T2, T3, T4, T5> TransactionExt<(T1, T2, T3, T4, T5)>
     for Transaction<TransactionResult5<T1, T2, T3, T4, T5>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5)> {
         self.execute()
@@ -648,12 +648,12 @@ where
 impl<T1, T2, T3, T4, T5, T6> TransactionExt<(T1, T2, T3, T4, T5, T6)>
     for Transaction<TransactionResult6<T1, T2, T3, T4, T5, T6>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
-    T6: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
+    T6: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5, T6)> {
         self.execute()
@@ -663,13 +663,13 @@ where
 impl<T1, T2, T3, T4, T5, T6, T7> TransactionExt<(T1, T2, T3, T4, T5, T6, T7)>
     for Transaction<TransactionResult7<T1, T2, T3, T4, T5, T6, T7>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
-    T6: FromValue + Default + Send + Sync,
-    T7: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
+    T6: FromValue + Send + Sync,
+    T7: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5, T6, T7)> {
         self.execute()
@@ -679,14 +679,14 @@ where
 impl<T1, T2, T3, T4, T5, T6, T7, T8> TransactionExt<(T1, T2, T3, T4, T5, T6, T7, T8)>
     for Transaction<TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
-    T6: FromValue + Default + Send + Sync,
-    T7: FromValue + Default + Send + Sync,
-    T8: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
+    T6: FromValue + Send + Sync,
+    T7: FromValue + Send + Sync,
+    T8: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5, T6, T7, T8)> {
         self.execute()
@@ -696,15 +696,15 @@ where
 impl<T1, T2, T3, T4, T5, T6, T7, T8, T9> TransactionExt<(T1, T2, T3, T4, T5, T6, T7, T8, T9)>
     for Transaction<TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
-    T6: FromValue + Default + Send + Sync,
-    T7: FromValue + Default + Send + Sync,
-    T8: FromValue + Default + Send + Sync,
-    T9: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
+    T6: FromValue + Send + Sync,
+    T7: FromValue + Send + Sync,
+    T8: FromValue + Send + Sync,
+    T9: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5, T6, T7, T8, T9)> {
         self.execute()
@@ -715,16 +715,16 @@ impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
     TransactionExt<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>
     for Transaction<TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>
 where
-    T1: FromValue + Default + Send + Sync,
-    T2: FromValue + Default + Send + Sync,
-    T3: FromValue + Default + Send + Sync,
-    T4: FromValue + Default + Send + Sync,
-    T5: FromValue + Default + Send + Sync,
-    T6: FromValue + Default + Send + Sync,
-    T7: FromValue + Default + Send + Sync,
-    T8: FromValue + Default + Send + Sync,
-    T9: FromValue + Default + Send + Sync,
-    T10: FromValue + Default + Send + Sync,
+    T1: FromValue + Send + Sync,
+    T2: FromValue + Send + Sync,
+    T3: FromValue + Send + Sync,
+    T4: FromValue + Send + Sync,
+    T5: FromValue + Send + Sync,
+    T6: FromValue + Send + Sync,
+    T7: FromValue + Send + Sync,
+    T8: FromValue + Send + Sync,
+    T9: FromValue + Send + Sync,
+    T10: FromValue + Send + Sync,
 {
     fn exec(self) -> Future<'static, (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)> {
         self.execute()

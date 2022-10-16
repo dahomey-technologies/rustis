@@ -88,8 +88,8 @@ where
 
 impl<K, V, S: BuildHasher + Default> FromValue for HashMap<K, V, S>
 where
-    K: FromValue + Eq + Hash + Default,
-    V: FromValue + Default,
+    K: FromValue + Eq + Hash,
+    V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -102,8 +102,8 @@ where
 
 impl<K, V> FromValue for BTreeMap<K, V>
 where
-    K: FromValue + Ord + Default,
-    V: FromValue + Default,
+    K: FromValue + Ord,
+    V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -440,22 +440,22 @@ where
 
 impl<K, V> FromKeyValueValueArray<K, V> for Vec<(K, V)>
 where
-    K: FromValue + Default,
-    V: FromValue + Default,
+    K: FromValue,
+    V: FromValue,
 {
 }
 
 impl<K, V, S: BuildHasher + Default> FromKeyValueValueArray<K, V> for HashMap<K, V, S>
 where
-    K: FromValue + Eq + Hash + Default,
-    V: FromValue + Default,
+    K: FromValue + Eq + Hash,
+    V: FromValue,
 {
 }
 
 impl<K, V> FromKeyValueValueArray<K, V> for BTreeMap<K, V>
 where
-    K: FromValue + Ord + Default,
-    V: FromValue + Default,
+    K: FromValue + Ord,
+    V: FromValue,
 {
 }
 

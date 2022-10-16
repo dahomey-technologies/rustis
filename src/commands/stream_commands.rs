@@ -84,7 +84,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         G: Into<BulkString>,
         C: Into<BulkString>,
         I: Into<BulkString>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(
             cmd("XAUTOCLAIM")
@@ -125,7 +125,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         C: Into<BulkString>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(
             cmd("XCLAIM")
@@ -391,7 +391,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         K: Into<BulkString>,
         S: Into<BulkString>,
         E: Into<BulkString>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(
             cmd("XRANGE")
@@ -421,7 +421,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         KK: SingleArgOrCollection<K>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(cmd("XREAD").arg(options).arg("STREAMS").arg(keys).arg(ids))
     }
@@ -449,7 +449,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         KK: SingleArgOrCollection<K>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(
             cmd("XREADGROUP")
@@ -483,7 +483,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         K: Into<BulkString>,
         E: Into<BulkString>,
         S: Into<BulkString>,
-        V: FromValue + Default,
+        V: FromValue,
     {
         self.prepare_command(
             cmd("XREVRANGE")
@@ -643,7 +643,7 @@ where
 
 impl<V> FromValue for StreamEntry<V>
 where
-    V: FromValue + Default,
+    V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (stream_id, items): (String, HashMap<String, V>) = value.into()?;
@@ -662,7 +662,7 @@ where
 
 impl<V> FromValue for XAutoClaimResult<V>
 where
-    V: FromValue + Default,
+    V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (start_stream_id, entries, deleted_id): (String, Vec<StreamEntry<V>>, Vec<String>) =
@@ -955,7 +955,7 @@ where
 
 impl<V> FromValue for XReadStreamResult<V>
 where
-    V: FromValue + Default,
+    V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (key, entries): (String, Vec<StreamEntry<V>>) = value.into()?;

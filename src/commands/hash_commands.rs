@@ -239,8 +239,8 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     ) -> CommandResult<T, (u64, Vec<(F, V)>)>
     where
         K: Into<BulkString>,
-        F: FromValue + Default,
-        V: FromValue + Default,
+        F: FromValue,
+        V: FromValue,
     {
         self.prepare_command(cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }

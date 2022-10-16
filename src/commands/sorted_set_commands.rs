@@ -31,7 +31,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("BZMPOP")
@@ -60,8 +60,8 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
-        K1: FromValue + Default,
-        E: FromValue + Default,
+        K1: FromValue,
+        E: FromValue,
     {
         self.prepare_command(cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
@@ -82,8 +82,8 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
-        K1: FromValue + Default,
-        E: FromValue + Default,
+        K1: FromValue,
+        E: FromValue,
     {
         self.prepare_command(cmd("BZPOPMIN").arg(keys).arg(timeout))
     }
@@ -205,7 +205,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("ZDIFF")
@@ -303,7 +303,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         W: SingleArgOrCollection<f64>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("ZINTER")
@@ -410,7 +410,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("ZMPOP")
@@ -452,7 +452,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     fn zpopmax<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
-        M: FromValue + Default,
+        M: FromValue,
     {
         self.prepare_command(cmd("ZPOPMAX").arg(key).arg(count))
     }
@@ -468,7 +468,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     fn zpopmin<K, M>(&self, key: K, count: usize) -> CommandResult<T, Vec<(M, f64)>>
     where
         K: Into<BulkString>,
-        M: FromValue + Default,
+        M: FromValue,
     {
         self.prepare_command(cmd("ZPOPMIN").arg(key).arg(count))
     }
@@ -570,7 +570,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     where
         K: Into<BulkString>,
         S: Into<BulkString>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("ZRANGE")
@@ -734,7 +734,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
     ) -> CommandResult<T, (u64, Vec<(M, f64)>)>
     where
         K: Into<BulkString>,
-        M: FromValue + Default,
+        M: FromValue,
     {
         self.prepare_command(cmd("ZSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -804,7 +804,7 @@ pub trait SortedSetCommands<T>: PrepareCommand<T> {
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         W: SingleArgOrCollection<f64>,
-        E: FromValue + Default,
+        E: FromValue,
     {
         self.prepare_command(
             cmd("ZUNION")

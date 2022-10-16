@@ -5,8 +5,8 @@ use crate::{
 
 impl<T1, T2> FromValue for (T1, T2)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -14,7 +14,6 @@ where
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
-                    (None, None, None) => Ok((Default::default(), Default::default())),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
@@ -42,9 +41,9 @@ where
 
 impl<T1, T2, T3> FromValue for (T1, T2, T3)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -53,9 +52,6 @@ where
                 match (it.next(), it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), Some(v3), None) => {
                         Ok((v1.into()?, v2.into()?, v3.into()?))
-                    }
-                    (None, None, None, None) => {
-                        Ok((Default::default(), Default::default(), Default::default()))
                     }
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -90,10 +86,10 @@ where
 
 impl<T1, T2, T3, T4> FromValue for (T1, T2, T3, T4)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -103,12 +99,6 @@ where
                     (Some(v1), Some(v2), Some(v3), Some(v4), None) => {
                         Ok((v1.into()?, v2.into()?, v3.into()?, v4.into()?))
                     }
-                    (None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                    )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
@@ -143,11 +133,11 @@ where
 
 impl<T1, T2, T3, T4, T5> FromValue for (T1, T2, T3, T4, T5)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -164,13 +154,6 @@ where
                     (Some(v1), Some(v2), Some(v3), Some(v4), Some(v5), None) => {
                         Ok((v1.into()?, v2.into()?, v3.into()?, v4.into()?, v5.into()?))
                     }
-                    (None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                    )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
@@ -208,12 +191,12 @@ where
 
 impl<T1, T2, T3, T4, T5, T6> FromValue for (T1, T2, T3, T4, T5, T6)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
-    T6: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
+    T6: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -235,14 +218,6 @@ where
                         v4.into()?,
                         v5.into()?,
                         v6.into()?,
-                    )),
-                    (None, None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
                     )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -288,13 +263,13 @@ where
 
 impl<T1, T2, T3, T4, T5, T6, T7> FromValue for (T1, T2, T3, T4, T5, T6, T7)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
-    T6: FromValue + Default,
-    T7: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
+    T6: FromValue,
+    T7: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -327,15 +302,6 @@ where
                         v5.into()?,
                         v6.into()?,
                         v7.into()?,
-                    )),
-                    (None, None, None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
                     )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -383,14 +349,14 @@ where
 
 impl<T1, T2, T3, T4, T5, T6, T7, T8> FromValue for (T1, T2, T3, T4, T5, T6, T7, T8)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
-    T6: FromValue + Default,
-    T7: FromValue + Default,
-    T8: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
+    T6: FromValue,
+    T7: FromValue,
+    T8: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -426,16 +392,6 @@ where
                         v6.into()?,
                         v7.into()?,
                         v8.into()?,
-                    )),
-                    (None, None, None, None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
                     )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -485,15 +441,15 @@ where
 
 impl<T1, T2, T3, T4, T5, T6, T7, T8, T9> FromValue for (T1, T2, T3, T4, T5, T6, T7, T8, T9)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
-    T6: FromValue + Default,
-    T7: FromValue + Default,
-    T8: FromValue + Default,
-    T9: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
+    T6: FromValue,
+    T7: FromValue,
+    T8: FromValue,
+    T9: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -532,17 +488,6 @@ where
                         v7.into()?,
                         v8.into()?,
                         v9.into()?,
-                    )),
-                    (None, None, None, None, None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
                     )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -592,18 +537,19 @@ where
     }
 }
 
-impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> FromValue for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
+impl<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> FromValue
+    for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
 where
-    T1: FromValue + Default,
-    T2: FromValue + Default,
-    T3: FromValue + Default,
-    T4: FromValue + Default,
-    T5: FromValue + Default,
-    T6: FromValue + Default,
-    T7: FromValue + Default,
-    T8: FromValue + Default,
-    T9: FromValue + Default,
-    T10: FromValue + Default,
+    T1: FromValue,
+    T2: FromValue,
+    T3: FromValue,
+    T4: FromValue,
+    T5: FromValue,
+    T6: FromValue,
+    T7: FromValue,
+    T8: FromValue,
+    T9: FromValue,
+    T10: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -645,18 +591,6 @@ where
                         v8.into()?,
                         v9.into()?,
                         v10.into()?,
-                    )),
-                    (None, None, None, None, None, None, None, None, None, None, None) => Ok((
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
                     )),
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
@@ -707,4 +641,3 @@ where
         })
     }
 }
-

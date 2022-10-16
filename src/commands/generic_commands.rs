@@ -451,7 +451,7 @@ pub trait GenericCommands<T>: PrepareCommand<T> {
     fn scan<K, A>(&self, cursor: u64, options: ScanOptions) -> CommandResult<T, (u64, A)>
     where
         K: FromValue,
-        A: FromSingleValueArray<K> + Default,
+        A: FromSingleValueArray<K>,
     {
         self.prepare_command(cmd("SCAN").arg(cursor).arg(options))
     }

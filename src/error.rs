@@ -14,6 +14,8 @@ pub enum Error {
     Config(String),
     /// A transaction has been aborted
     Aborted,
+    /// Raised if an error occurs when contacting Sentinel instances
+    Sentinel(String),
     /// Error returned by the Redis sercer
     Redis(String),
     /// IO error when connecting the Redis server
@@ -29,6 +31,7 @@ impl std::fmt::Display for Error {
             Error::Client(e) => f.write_fmt(format_args!("Client error: {}", e)),
             Error::Config(e) => f.write_fmt(format_args!("Config error: {}", e)),
             Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
+            Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
             Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
             Error::IO(e) => f.write_fmt(format_args!("IO erro: {}", e)),
             #[cfg(feature = "tls")]

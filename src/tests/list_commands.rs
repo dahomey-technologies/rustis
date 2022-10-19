@@ -1,7 +1,7 @@
 use crate::{
     resp::{BulkString, Value},
-    spawn,
-    tests::{get_test_client, sleep},
+    sleep, spawn,
+    tests::get_test_client,
     FlushingMode, GenericCommands, LInsertWhere,
     LMoveWhere::Left,
     LMoveWhere::Right,

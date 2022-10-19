@@ -3,7 +3,6 @@ use crate::IntoConfig;
 use crate::{Client, Result};
 #[cfg(feature = "tls")]
 use native_tls::Certificate;
-use std::time::Duration;
 
 /// copy-paste of the root certificate located at crt/certs/ca.crt
 #[cfg(feature = "tls")]
@@ -93,19 +92,7 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
     Client::connect(config).await
 }
 
-#[allow(dead_code)]
-#[cfg(feature = "tokio-runtime")]
-pub(crate) async fn sleep(duration: Duration) {
-    tokio::time::sleep(duration).await;
-}
-
-#[allow(dead_code)]
-#[cfg(feature = "async-std-runtime")]
-pub(crate) async fn sleep(duration: Duration) {
-    async_std::task::sleep(duration).await;
-}
-
-fn log_try_init() {
+pub fn log_try_init() {
     let _ = env_logger::builder()
         .format_target(false)
         .format_timestamp(None)

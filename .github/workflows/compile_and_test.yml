@@ -4,6 +4,7 @@ on:
   push:    
     paths:
       - 'src/**'
+      - 'redis/**'
       - '.github/workflows/**'
       - 'Cargo.toml'
     branches:

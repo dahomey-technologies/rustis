@@ -21,7 +21,9 @@ jobs:
         override: true
         
     - name: Update version
-      run: sed -i -e 's/^version = .*/version = "${GITHUB_REF##*/}"/' Cargo.toml
+      run: |
+        VERSION=${{github.ref_name}}
+        sed -i -e 's/^version = .*/version = "'$VERSION'"/' Cargo.toml
     
     - name: Publish crate
-      run: cargo publish --token ${{ secrets.CRATES_IO_API_TOKEN }}
+      run: cargo publish --token ${{secrets.CRATES_IO_API_TOKEN}}

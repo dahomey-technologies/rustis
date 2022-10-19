@@ -81,8 +81,9 @@ jobs:
           
       - name: Create Redis Sentinel containers
         run: |
-          HOST_IP=`ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
-          echo HOST_IP=$HOST_IP
+          IP=`ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
+          echo IP=$IP
+          echo "HOST_IP=$IP" > /home/runner/work/redis-driver-rs/redis-driver-rs/redis/.env
           docker compose -f /home/runner/work/redis-driver-rs/redis-driver-rs/redis/sentinel-compose.yml up -d
 
       - name: Install stable toolchain

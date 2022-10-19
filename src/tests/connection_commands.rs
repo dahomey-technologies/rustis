@@ -1,10 +1,9 @@
 use crate::{
-    network::spawn,
-    tests::{get_test_client, sleep},
-    ClientCachingMode, ClientCommandResult, ClientKillOptions, ClientListOptions, ClientPauseMode,
-    ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode,
-    ConnectionCommands, Error, FlushingMode, GenericCommands, HelloOptions, PingOptions,
-    PubSubCommands, Result, ServerCommands, StringCommands,
+    network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientCommandResult,
+    ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
+    ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error, FlushingMode,
+    GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result, ServerCommands,
+    StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;

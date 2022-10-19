@@ -120,10 +120,47 @@ fn into_config() -> Result<()> {
             .into_config()?
             .to_string()
     );
+
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1",
+        "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
+        "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+sentinel://username:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
+        "redis+sentinel://username:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+sentinel://:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
+        "redis+sentinel://:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379/myservice",
+        "redis+sentinel://127.0.0.1:6379/myservice"
+            .into_config()?
+            .to_string()
+    );
+
     assert!("127.0.0.1:xyz".into_config().is_err());
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());
     assert!("http://username@127.0.0.1".into_config().is_err());
+    assert!("redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381".into_config().is_err());
 
     Ok(())
 }

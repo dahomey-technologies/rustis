@@ -5,8 +5,9 @@ use crate::{
     GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig,
     ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
     PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
-    TransactionCommands, TransactionResult0, ValueReceiver, ValueSender,
+    SentinelCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
+    StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
+    ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::sync::Arc;
@@ -105,6 +106,7 @@ impl HyperLogLogCommands<ClientResult> for Client {}
 impl InternalPubSubCommands<ClientResult> for Client {}
 impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
+impl SentinelCommands<ClientResult> for Client {}
 impl ServerCommands<ClientResult> for Client {
     fn monitor(&self) -> Future<crate::MonitorStream> {
         Box::pin(async move {

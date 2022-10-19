@@ -13,13 +13,14 @@ mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
 mod scripting_commands;
+mod sentinel;
 mod server_commands;
 mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
-mod transaction;
 mod tls;
+mod transaction;
 mod util;
 mod value;
 

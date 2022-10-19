@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  redis-master:
+    image: redis:alpine
+    ports:
+      - "6381:6381"
+    command: redis-server --port 6381
+
+  redis-replica:
+    image: redis:alpine
+    ports:
+      - "6382:6382"
+    command: redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
+    depends_on:
+      - redis-master
+
+  # redis-sentinel1:
+  #   image: redis:alpine
+  #   ports:
+  #     - "26379:26379"
+  #   volumes:
+  #     - .:/redis
+  #   command: redis-server /redis/sentinel.conf --sentinel
+  #   depends_on:
+  #     - redis-master
+
+  redis-sentinel1:
+    build:
+      context: .
+      dockerfile: ./sentinel.dockerfile
+    ports:
+      - "26379:26379"
+    depends_on:
+      - redis-master
+
+  redis-sentinel2:
+    build:
+      context: .
+      dockerfile: ./sentinel.dockerfile
+    ports:
+      - "26380:26379"
+    depends_on:
+      - redis-master
+
+  redis-sentinel3:
+    build:
+      context: .
+      dockerfile: ./sentinel.dockerfile
+    ports:
+      - "26381:26379"
+    depends_on:
+      - redis-master
+    environment:
+      - HOST_IP="${HOST_IP}"

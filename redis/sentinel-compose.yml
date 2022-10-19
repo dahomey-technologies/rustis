@@ -15,16 +15,6 @@ services:
     depends_on:
       - redis-master
 
-  # redis-sentinel1:
-  #   image: redis:alpine
-  #   ports:
-  #     - "26379:26379"
-  #   volumes:
-  #     - .:/redis
-  #   command: redis-server /redis/sentinel.conf --sentinel
-  #   depends_on:
-  #     - redis-master
-
   redis-sentinel1:
     build:
       context: .

@@ -8,6 +8,6 @@ COPY sentinel.conf .
 
 EXPOSE 26379
 
-COPY sentinel-entrypoint.sh .
+COPY --chmod=755 sentinel-entrypoint.sh .
 
 ENTRYPOINT ["/redis/sentinel-entrypoint.sh"]

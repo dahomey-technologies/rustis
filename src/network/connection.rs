@@ -81,6 +81,17 @@ impl Connection {
         // TODO improve reconnection strategy with multiple retries
     }
 
+    async fn connect(config: &Config) -> Result<Streams> {
+        match &config.server {
+            ServerConfig::Single { host, port } => {
+                Self::connect_single_server(host, *port, config).await
+            }
+            ServerConfig::Sentinel(sentinel_config) => {
+                Self::connect_with_sentinel(sentinel_config, config).await
+            }
+        }
+    }
+
     async fn connect_with_addr(host: &str, port: u16) -> Result<Streams> {
         let (reader, writer) = tcp_connect(host, port).await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
@@ -88,34 +99,19 @@ impl Connection {
         Ok(Streams::Tcp(framed_read, framed_write))
     }
 
-    async fn connect(config: &Config) -> Result<Streams> {
+    async fn connect_single_server(host: &str, port: u16, _config: &Config) -> Result<Streams> {
         #[cfg(feature = "tls")]
-        match &config.server {
-            ServerConfig::Single { host, port } => {
-                if let Some(tls_config) = &config.tls_config {
-                    let (reader, writer) = tcp_tls_connect(host, *port, tls_config).await?;
-                    let framed_read = FramedRead::new(reader, ValueDecoder);
-                    let framed_write = FramedWrite::new(writer, CommandEncoder);
-                    Ok(Streams::TcpTls(framed_read, framed_write))
-                } else {
-                    Self::connect_with_addr(host, *port).await
-                }
-            }
-            ServerConfig::Sentinel {
-                instances: _,
-                service_name: _,
-            } => todo!(),
+        if let Some(tls_config) = &_config.tls_config {
+            let (reader, writer) = tcp_tls_connect(host, port, tls_config).await?;
+            let framed_read = FramedRead::new(reader, ValueDecoder);
+            let framed_write = FramedWrite::new(writer, CommandEncoder);
+            Ok(Streams::TcpTls(framed_read, framed_write))
+        } else {
+            Self::connect_with_addr(host, port).await
         }
 
         #[cfg(not(feature = "tls"))]
-        {
-            match &config.server {
-                ServerConfig::Single { host, port } => Self::connect_with_addr(host, *port).await,
-                ServerConfig::Sentinel(sentinel_config) => {
-                    Self::connect_with_sentinel(sentinel_config).await
-                }
-            }
-        }
+        Self::connect_with_addr(host, port).await
     }
 
     /// Follow `Redis service discovery via Sentinel` documentation
@@ -124,7 +120,10 @@ impl Connection {
     /// # Remark
     /// this function must be desugared because of async recursion:
     /// <https://doc.rust-lang.org/error-index.html#E0733>
-    fn connect_with_sentinel(sentinel_config: &SentinelConfig) -> Future<Streams> {
+    fn connect_with_sentinel<'a>(
+        sentinel_config: &'a SentinelConfig,
+        _config: &'a Config,
+    ) -> Future<'a, Streams> {
         Box::pin(async move {
             let mut restart = false;
             let mut unreachable_sentinel = true;
@@ -133,9 +132,9 @@ impl Connection {
                 for sentinel_instance in &sentinel_config.instances {
                     // Step 1: connecting to Sentinel
                     let (host, port) = sentinel_instance;
-                    let config = sentinel_instance.clone().into_config()?;
+                    let config_for_sentinel = sentinel_instance.clone().into_config()?;
 
-                    match Connection::initialize(config).await {
+                    match Connection::initialize(config_for_sentinel).await {
                         Ok(mut sentinel_connection) => {
                             // Step 2: ask for master address
                             let result: Result<Option<(String, u16)>> = sentinel_connection
@@ -147,9 +146,33 @@ impl Connection {
                             match result {
                                 Ok(result) => {
                                     match result {
-                                        Some(master_addr) => {
+                                        Some((master_host, master_port)) => {
                                             // Step 3: call the ROLE command in the target instance
-                                            let master_config = master_addr.into_config()?;
+                                            let master_config: Config;
+
+                                            #[cfg(feature = "tls")]
+                                            {
+                                                master_config = Config {
+                                                    server: ServerConfig::Single {
+                                                        host: master_host,
+                                                        port: master_port,
+                                                    },
+                                                    tls_config: _config.tls_config.clone(),
+                                                    ..Default::default()
+                                                };
+                                            }
+
+                                            #[cfg(not(feature = "tls"))]
+                                            {
+                                                master_config = Config {
+                                                    server: ServerConfig::Single {
+                                                        host: master_host,
+                                                        port: master_port,
+                                                    },
+                                                    ..Default::default()
+                                                };
+                                            }
+
                                             let mut master_connection =
                                                 Self::initialize(master_config).await?;
 

@@ -228,29 +228,23 @@ impl Config {
 impl ToString for Config {
     fn to_string(&self) -> String {
         #[cfg(feature = "tls")]
-        let mut s = String::from(if self.tls_config.is_some() {
+        let mut s = if self.tls_config.is_some() {
             match &self.server {
-                ServerConfig::Single { host: _, port: _ } => String::from("rediss://"),
-                ServerConfig::Sentinel {
-                    instances: _,
-                    service_name: _,
-                } => String::from("rediss+sentinel://"),
+                ServerConfig::Single { host: _, port: _ } => "rediss://",
+                ServerConfig::Sentinel(_) => "rediss+sentinel://",
             }
         } else {
             match &self.server {
-                ServerConfig::Single { host: _, port: _ } => String::from("redis://"),
-                ServerConfig::Sentinel {
-                    instances: _,
-                    service_name: _,
-                } => String::from("redis+sentinel://"),
+                ServerConfig::Single { host: _, port: _ } => "redis://",
+                ServerConfig::Sentinel(_) => "redis+sentinel://",
             }
-        });
+        }.to_owned();
 
         #[cfg(not(feature = "tls"))]
         let mut s = match &self.server {
-            ServerConfig::Single { host: _, port: _ } => String::from("redis://"),
-            ServerConfig::Sentinel(_) => String::from("redis+sentinel://"),
-        };
+            ServerConfig::Single { host: _, port: _ } => "redis://",
+            ServerConfig::Sentinel(_) => "redis+sentinel://",
+        }.to_owned();
 
         if let Some(username) = &self.username {
             s.push_str(username);

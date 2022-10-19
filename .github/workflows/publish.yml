@@ -26,4 +26,4 @@ jobs:
         sed -i -e 's/^version = .*/version = "'$VERSION'"/' Cargo.toml
     
     - name: Publish crate
-      run: cargo publish --token ${{secrets.CRATES_IO_API_TOKEN}}
+      run: cargo publish --allow-dirty --token ${{secrets.CRATES_IO_API_TOKEN}}

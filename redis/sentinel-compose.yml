@@ -33,6 +33,8 @@ services:
       - "26379:26379"
     depends_on:
       - redis-master
+    environment:
+      - HOST_IP="${HOST_IP}"
 
   redis-sentinel2:
     build:
@@ -42,6 +44,8 @@ services:
       - "26380:26379"
     depends_on:
       - redis-master
+    environment:
+      - HOST_IP="${HOST_IP}"
 
   redis-sentinel3:
     build:

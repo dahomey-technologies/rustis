@@ -8,4 +8,6 @@ COPY sentinel.conf .
 
 EXPOSE 26379
 
-ENTRYPOINT ["redis-server", "/redis/sentinel.conf", "--sentinel"]
+COPY sentinel-entrypoint.sh .
+
+ENTRYPOINT ["/redis/sentinel-entrypoint.sh"]

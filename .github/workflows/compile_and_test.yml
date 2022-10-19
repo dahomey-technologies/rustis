@@ -77,6 +77,11 @@ jobs:
             -e REDIS_TLS_AUTH_CLIENTS=no \
             -d docker.io/bitnami/redis
           docker port redis-tls
+          
+      - name: Create Redis Sentinel containers
+        run: |
+          IP=`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`
+          docker compose -f /redis/sentinel-compose.yml up -d
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1

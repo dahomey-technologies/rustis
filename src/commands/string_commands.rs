@@ -89,7 +89,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     // return value can be an Option<String>...
@@ -160,7 +160,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     client.set("key", "value").await?;

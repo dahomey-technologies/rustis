@@ -5,7 +5,7 @@ use crate::{
         cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    CommandResult, Error, Future, MonitorStream, PrepareCommand, Result,
+    CommandResult, Error, PrepareCommand, Result,
 };
 
 /// A group of Redis commands related to Server Management
@@ -641,13 +641,6 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     {
         self.prepare_command(cmd("MODULE").arg("UNLOAD").arg(name))
     }
-
-    /// Debugging command that streams back every command processed by the Redis server.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
-    #[must_use]
-    fn monitor(&mut self) -> Future<MonitorStream>;
 
     /// This command can change the replication settings of a replica on the fly.
     ///

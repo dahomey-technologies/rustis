@@ -1,12 +1,14 @@
 use crate::{
-    resp::{cmd, Array, BulkString, Command, CommandEncoder, ResultValueExt, Value, ValueDecoder},
-    sleep, tcp_connect, Config, Error, Future, IntoConfig, Result, RoleResult, SentinelConfig,
+    resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
+    sleep, tcp_connect, CommandResult, Config, ConnectionCommands, Error, Future, IntoConfig,
+    PrepareCommand, Result, RoleResult, SentinelCommands, SentinelConfig, ServerCommands,
     ServerConfig, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use futures::{SinkExt, StreamExt};
-use log::{debug, error, log_enabled, Level};
+use log::{debug, log_enabled, Level};
+use std::future::{ready, IntoFuture};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 enum Streams {
@@ -30,7 +32,10 @@ impl Connection {
     pub async fn initialize(config: Config) -> Result<Self> {
         let streams = Self::connect(&config).await?;
 
-        Ok(Self { config, streams })
+        let mut connection = Self { config, streams };
+        connection.post_connect().await?;
+
+        Ok(connection)
     }
 
     pub async fn write(&mut self, command: Command) -> Result<()> {
@@ -66,17 +71,11 @@ impl Connection {
         }
     }
 
-    pub(crate) async fn reconnect(&mut self) -> bool {
-        match Self::connect(&self.config).await {
-            Ok(streams) => {
-                self.streams = streams;
-                true
-            }
-            Err(e) => {
-                error!("Failed to reconnect: {:?}", e);
-                false
-            }
-        }
+    pub(crate) async fn reconnect(&mut self) -> Result<()> {
+        self.streams = Self::connect(&self.config).await?;
+        self.post_connect().await?;
+
+        Ok(())
 
         // TODO improve reconnection strategy with multiple retries
     }
@@ -90,6 +89,21 @@ impl Connection {
                 Self::connect_with_sentinel(sentinel_config, config).await
             }
         }
+    }
+
+    async fn post_connect(&mut self) -> Result<()> {
+        // authentication
+        if let Some(ref password) = self.config.password {
+            self.auth(self.config.username.clone(), password.clone())
+                .await?;
+        }
+
+        // select database
+        if self.config.database != 0 {
+            self.select(self.config.database).await?;
+        }
+
+        Ok(())
     }
 
     async fn connect_with_addr(host: &str, port: u16) -> Result<Streams> {
@@ -242,21 +256,37 @@ impl Connection {
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
             .into_result()
     }
+}
 
-    async fn role(&mut self) -> Result<RoleResult> {
-        self.send(cmd("ROLE")).await?.into()
-    }
+pub struct ConnectionResult;
 
-    async fn sentinel_get_master_addr_by_name<N: Into<BulkString>>(
+impl PrepareCommand<ConnectionResult> for Connection {
+    fn prepare_command<R: FromValue>(
         &mut self,
-        master_name: N,
-    ) -> Result<Option<(String, u16)>> {
-        self.send(
-            cmd("SENTINEL")
-                .arg("GET-MASTER-ADDR-BY-NAME")
-                .arg(master_name),
-        )
-        .await?
-        .into()
+        command: Command,
+    ) -> CommandResult<ConnectionResult, R> {
+        CommandResult::from_connection(command, self)
     }
 }
+
+impl<'a, R> IntoFuture for CommandResult<'a, ConnectionResult, R>
+where
+    R: FromValue + Send + 'a,
+{
+    type Output = Result<R>;
+    type IntoFuture = Future<'a, R>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        if let CommandResult::Connection(_, command, connection) = self {
+            Box::pin(async move { connection.send(command).await?.into() })
+        } else {
+            Box::pin(ready(Err(Error::Client(
+                "send method must be called with a valid connection".to_owned(),
+            ))))
+        }
+    }
+}
+
+impl ServerCommands<ConnectionResult> for Connection {}
+impl SentinelCommands<ConnectionResult> for Connection {}
+impl ConnectionCommands<ConnectionResult> for Connection {}

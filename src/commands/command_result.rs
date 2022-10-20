@@ -1,6 +1,6 @@
 use crate::{
     resp::{Command, FromValue},
-    Client, Error, Future, Result, Transaction,
+    Client, Connection, Error, Future, Result, Transaction,
 };
 use futures::future::ready;
 use std::{future::IntoFuture, marker::PhantomData};
@@ -10,6 +10,7 @@ where
     R: FromValue,
 {
     Client(PhantomData<(R, T)>, Command, &'a mut Client),
+    Connection(PhantomData<(R, T)>, Command, &'a mut Connection),
     Transaction(PhantomData<R>, Command, &'a mut Transaction<T>),
 }
 
@@ -21,6 +22,11 @@ where
     #[must_use]
     pub fn from_client(command: Command, client: &'a mut Client) -> Self {
         CommandResult::Client(PhantomData, command, client)
+    }
+
+    #[must_use]
+    pub fn from_connection(command: Command, connection: &'a mut Connection) -> Self {
+        CommandResult::Connection(PhantomData, command, connection)
     }
 
     #[must_use]
@@ -60,7 +66,7 @@ pub struct ClientResult;
 #[allow(clippy::module_name_repetitions)]
 pub trait ClientCommandResult<'a, R>
 where
-    R: FromValue, 
+    R: FromValue,
 {
     /// Send command and forget its response
     ///
@@ -97,8 +103,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         if let CommandResult::Client(_, command, client) = self {
-            let fut = client.send(command);
-            Box::pin(async move { fut.await?.into() })
+            Box::pin(async move { client.send(command).await?.into() })
         } else {
             Box::pin(ready(Err(Error::Client(
                 "send method must be called with a valid client".to_owned(),
@@ -292,7 +297,8 @@ where
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5> IntoFuture for CommandResult<'a, TransactionResult4<T1, T2, T3, T4>, T5>
+impl<'a, T1, T2, T3, T4, T5> IntoFuture
+    for CommandResult<'a, TransactionResult4<T1, T2, T3, T4>, T5>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -308,7 +314,8 @@ where
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5, T6> IntoFuture for CommandResult<'a, TransactionResult5<T1, T2, T3, T4, T5>, T6>
+impl<'a, T1, T2, T3, T4, T5, T6> IntoFuture
+    for CommandResult<'a, TransactionResult5<T1, T2, T3, T4, T5>, T6>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -325,7 +332,8 @@ where
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5, T6, T7> IntoFuture for CommandResult<'a, TransactionResult6<T1, T2, T3, T4, T5, T6>, T7>
+impl<'a, T1, T2, T3, T4, T5, T6, T7> IntoFuture
+    for CommandResult<'a, TransactionResult6<T1, T2, T3, T4, T5, T6>, T7>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -343,7 +351,8 @@ where
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5, T6, T7, T8> IntoFuture for CommandResult<'a, TransactionResult7<T1, T2, T3, T4, T5, T6, T7>, T8>
+impl<'a, T1, T2, T3, T4, T5, T6, T7, T8> IntoFuture
+    for CommandResult<'a, TransactionResult7<T1, T2, T3, T4, T5, T6, T7>, T8>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -362,7 +371,8 @@ where
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9> IntoFuture for CommandResult<'a, TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>, T9>
+impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9> IntoFuture
+    for CommandResult<'a, TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>, T9>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -375,14 +385,16 @@ where
     T9: FromValue + Send + Sync + 'a,
 {
     type Output = Result<Transaction<TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>>>;
-    type IntoFuture = Future<'a, Transaction<TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>>>;
+    type IntoFuture =
+        Future<'a, Transaction<TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.queue())
     }
 }
 
-impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> IntoFuture for CommandResult<'a, TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>, T10>
+impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> IntoFuture
+    for CommandResult<'a, TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>, T10>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -396,7 +408,8 @@ where
     T10: FromValue + Send + Sync + 'a,
 {
     type Output = Result<Transaction<TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>>;
-    type IntoFuture = Future<'a, Transaction<TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>>;
+    type IntoFuture =
+        Future<'a, Transaction<TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.queue())
@@ -508,9 +521,7 @@ where
     T6: FromValue + Send + Sync + 'a,
     T7: FromValue + Send + Sync + 'a,
 {
-    fn forget(
-        self,
-    ) -> Future<'a, Transaction<TransactionResult6<T1, T2, T3, T4, T5, T6>>> {
+    fn forget(self) -> Future<'a, Transaction<TransactionResult6<T1, T2, T3, T4, T5, T6>>> {
         Box::pin(self.queue_and_forget())
     }
 }
@@ -531,9 +542,7 @@ where
     T7: FromValue + Send + Sync + 'a,
     T8: FromValue + Send + Sync + 'a,
 {
-    fn forget(
-        self,
-    ) -> Future<'a, Transaction<TransactionResult7<T1, T2, T3, T4, T5, T6, T7>>> {
+    fn forget(self) -> Future<'a, Transaction<TransactionResult7<T1, T2, T3, T4, T5, T6, T7>>> {
         Box::pin(self.queue_and_forget())
     }
 }
@@ -555,9 +564,7 @@ where
     T8: FromValue + Send + Sync + 'a,
     T9: FromValue + Send + Sync + 'a,
 {
-    fn forget(
-        self,
-    ) -> Future<'a, Transaction<TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>>> {
+    fn forget(self) -> Future<'a, Transaction<TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>>> {
         Box::pin(self.queue_and_forget())
     }
 }

@@ -1,9 +1,9 @@
 use crate::{
     network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    BitmapCommands, ClientResult, CommandResult, ConnectionCommands, Future, GenericCommands,
-    GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig,
-    ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
+    BitmapCommands, BlockingCommands, ClientResult, CommandResult, ConnectionCommands, Future,
+    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands,
+    IntoConfig, ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
     PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands,
     SentinelCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
     StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
@@ -48,9 +48,9 @@ impl Client {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///
-    ///    let values: Vec<String> = client
+    ///     let values: Vec<String> = client
     ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
     ///         .await?
     ///         .into()?;
@@ -92,7 +92,10 @@ impl Client {
 }
 
 impl PrepareCommand<ClientResult> for Client {
-    fn prepare_command<R: FromValue>(&mut self, command: Command) -> CommandResult<ClientResult, R> {
+    fn prepare_command<R: FromValue>(
+        &mut self,
+        command: Command,
+    ) -> CommandResult<ClientResult, R> {
         CommandResult::from_client(command, self)
     }
 }
@@ -107,7 +110,14 @@ impl InternalPubSubCommands<ClientResult> for Client {}
 impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
 impl SentinelCommands<ClientResult> for Client {}
-impl ServerCommands<ClientResult> for Client {
+impl ServerCommands<ClientResult> for Client {}
+impl SetCommands<ClientResult> for Client {}
+impl SortedSetCommands<ClientResult> for Client {}
+impl StreamCommands<ClientResult> for Client {}
+impl StringCommands<ClientResult> for Client {}
+impl TransactionCommands<ClientResult> for Client {}
+
+impl BlockingCommands<ClientResult> for Client {
     fn monitor(&mut self) -> Future<crate::MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
@@ -125,11 +135,6 @@ impl ServerCommands<ClientResult> for Client {
         })
     }
 }
-impl SetCommands<ClientResult> for Client {}
-impl SortedSetCommands<ClientResult> for Client {}
-impl StreamCommands<ClientResult> for Client {}
-impl StringCommands<ClientResult> for Client {}
-impl TransactionCommands<ClientResult> for Client {}
 
 impl PubSubCommands<ClientResult> for Client {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>

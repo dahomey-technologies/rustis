@@ -1,5 +1,5 @@
 use crate::{
-    resp::{cmd, Array, BulkString, CommandArgs, ResultValueExt, Value},
+    resp::{Array, BulkString, CommandArgs, Value},
     spawn, Config, Connection, Error, Message, Result,
 };
 use futures::{
@@ -29,7 +29,6 @@ enum Status {
 }
 
 pub(crate) struct NetworkHandler {
-    config: Config,
     status: Status,
     connection: Connection,
     msg_receiver: MsgReceiver,
@@ -49,7 +48,6 @@ impl NetworkHandler {
         let value_senders = VecDeque::new();
 
         let mut network_handler = NetworkHandler {
-            config,
             status: Status::Connected,
             connection,
             msg_receiver,
@@ -63,60 +61,14 @@ impl NetworkHandler {
 
         spawn(async move {
             if let Err(e) = network_handler.network_loop().await {
-                error!( "network loop ended in error: {e}");
+                error!("network loop ended in error: {e}");
             }
         });
 
         Ok(msg_sender)
     }
 
-    async fn post_connect(&mut self) -> Result<()> {
-        self.authenticate().await?;
-        self.select().await?;
-
-        Ok(())
-    }
-
-    async fn authenticate(&mut self) -> Result<()> {
-        if let Some(password) = &self.config.password {
-            let mut command = cmd("AUTH");
-
-            if let Some(username) = &self.config.username {
-                command = command.arg(username.clone());
-            }
-
-            command = command.arg(password.clone());
-
-            self.connection.write(command).await?;
-            self.connection
-                .read()
-                .await
-                .ok_or_else(|| Error::Client("Disconnected".to_owned()))?
-                .into_result()?;
-        }
-
-        Ok(())
-    }
-
-    /// Select default database
-    async fn select(&mut self) -> Result<()> {
-        if self.config.database != 0 {
-            let command = cmd("SELECT").arg(self.config.database);
-
-            self.connection.write(command).await?;
-            self.connection
-                .read()
-                .await
-                .ok_or_else(|| Error::Client("Disconnected".to_owned()))?
-                .into_result()?;
-        }
-
-        Ok(())
-    }
-
     async fn network_loop(&mut self) -> Result<()> {
-        self.post_connect().await?;
-
         loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => if !self.handle_message(msg).await { break; },
@@ -267,10 +219,15 @@ impl NetworkHandler {
             None => {
                 self.status = Status::Disconnected;
                 // reconnect
-                debug!( "reconnecting");
-                if self.reconnect().await {
-                    self.status = Status::Connected;
-                    info!( "reconnected!");
+                debug!("reconnecting");
+                match self.reconnect().await {
+                    Ok(()) => {
+                        self.status = Status::Connected;
+                        info!("reconnected!");
+                    }
+                    Err(e) => {
+                        error!("Failed to reconnect: {:?}", e);
+                    }
                 }
             }
         }
@@ -284,7 +241,7 @@ impl NetworkHandler {
                 let _result = value_sender.send(value);
             }
             Some(None) => {
-                debug!( "forget value {value:?}"); // fire & forget
+                debug!("forget value {value:?}"); // fire & forget
             }
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance
@@ -411,7 +368,7 @@ impl NetworkHandler {
         panic!("Should not reach this point");
     }
 
-    pub(crate) async fn reconnect(&mut self) -> bool {
+    pub(crate) async fn reconnect(&mut self) -> Result<()> {
         while let Some(value_sender) = self.value_senders.pop_front() {
             if let Some(value_sender) = value_sender {
                 let _result =
@@ -419,10 +376,6 @@ impl NetworkHandler {
             }
         }
 
-        if self.connection.reconnect().await {
-            self.post_connect().await.is_ok()
-        } else {
-            false
-        }
+        self.connection.reconnect().await
     }
 }

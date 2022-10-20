@@ -1,4 +1,5 @@
 mod bitmap_commands;
+mod blocking_commands;
 mod command_result;
 mod connection_commands;
 mod generic_commands;
@@ -18,6 +19,7 @@ mod string_commands;
 mod transaction_commands;
 
 pub use bitmap_commands::*;
+pub use blocking_commands::*;
 pub use command_result::*;
 pub use connection_commands::*;
 pub use generic_commands::*;

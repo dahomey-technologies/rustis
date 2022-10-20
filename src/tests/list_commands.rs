@@ -2,7 +2,7 @@ use crate::{
     resp::{BulkString, Value},
     sleep, spawn,
     tests::get_test_client,
-    FlushingMode, GenericCommands, LInsertWhere,
+    BlockingCommands, FlushingMode, GenericCommands, LInsertWhere,
     LMoveWhere::Left,
     LMoveWhere::Right,
     ListCommands, Result, ServerCommands,

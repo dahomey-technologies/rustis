@@ -19,8 +19,8 @@ use std::{
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
-///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
-///     let regular_client = Client::connect("127.0.0.1:6379").await?;
+///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
+///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
 ///
 ///     regular_client.flushdb(FlushingMode::Sync).await?;
 ///

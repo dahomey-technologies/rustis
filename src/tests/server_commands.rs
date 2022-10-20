@@ -2,12 +2,13 @@ use crate::{
     resp::{cmd, BulkString, Value},
     spawn,
     tests::get_test_client,
-    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, Client, ClientInfo,
-    CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error, FailOverOptions,
-    FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
-    ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions, RoleResult, SlowLogOptions,
+    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands, Client,
+    ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error,
+    FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
+    ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, Result, RoleResult, ServerCommands,
+    SlowLogOptions, StringCommands,
 };
-use futures::{StreamExt};
+use futures::StreamExt;
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 
@@ -922,7 +923,9 @@ async fn monitor() -> Result<()> {
 async fn replicaof() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
+    client
+        .replicaof(ReplicaOfOptions::master("127.0.0.1", 6379))
+        .await?;
     client.replicaof(ReplicaOfOptions::no_one()).await?;
 
     Ok(())
@@ -935,12 +938,28 @@ async fn role() -> Result<()> {
     let mut client = get_test_client().await?;
 
     let role_result = client.role().await?;
-    assert!(matches!(role_result, RoleResult::Master{ master_replication_offset: _, replica_infos: _ }));
+    assert!(matches!(
+        role_result,
+        RoleResult::Master {
+            master_replication_offset: _,
+            replica_infos: _
+        }
+    ));
 
-    client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
+    client
+        .replicaof(ReplicaOfOptions::master("127.0.0.1", 6379))
+        .await?;
 
     let role_result = client.role().await?;
-    assert!(matches!(role_result, RoleResult::Replica { master_ip: _, master_port: _, state: _, amount_data_received: _ }));
+    assert!(matches!(
+        role_result,
+        RoleResult::Replica {
+            master_ip: _,
+            master_port: _,
+            state: _,
+            amount_data_received: _
+        }
+    ));
 
     client.replicaof(ReplicaOfOptions::no_one()).await?;
 

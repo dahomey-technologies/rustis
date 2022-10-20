@@ -1,6 +1,7 @@
 use crate::{
-    sleep, spawn, tests::get_test_client, FlushingMode, GenericCommands, Result, ServerCommands,
-    SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZWhere,
+    sleep, spawn, tests::get_test_client, BlockingCommands, FlushingMode, GenericCommands, Result,
+    ServerCommands, SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions,
+    ZWhere,
 };
 use serial_test::serial;
 use std::time::Duration;

@@ -21,7 +21,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/blmove/>](https://redis.io/commands/blmove/)
     #[must_use]
     fn blmove<S, D, E>(
-        &self,
+        &mut self,
         source: S,
         destination: D,
         where_from: LMoveWhere,
@@ -53,7 +53,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
     fn blmpop<K, E, C>(
-        &self,
+        &mut self,
         timeout: f64,
         keys: C,
         where_: LMoveWhere,
@@ -91,7 +91,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<K, KK, K1, V>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
+    fn blpop<K, KK, K1, V>(&mut self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -117,7 +117,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<K, KK, K1, V>(&self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
+    fn brpop<K, KK, K1, V>(&mut self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -135,7 +135,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lindex/>](https://redis.io/commands/lindex/)
     #[must_use]
-    fn lindex<K, E>(&self, key: K, index: isize) -> CommandResult<T, E>
+    fn lindex<K, E>(&mut self, key: K, index: isize) -> CommandResult<T, E>
     where
         K: Into<BulkString>,
         E: FromValue,
@@ -152,7 +152,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/linsert/>](https://redis.io/commands/linsert/)
     #[must_use]
     fn linsert<K, E>(
-        &self,
+        &mut self,
         key: K,
         where_: LInsertWhere,
         pivot: E,
@@ -173,7 +173,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
-    fn llen<K>(&self, key: K) -> CommandResult<T, usize>
+    fn llen<K>(&mut self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -191,7 +191,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/lmove/>](https://redis.io/commands/lmove/)
     #[must_use]
     fn lmove<S, D, E>(
-        &self,
+        &mut self,
         source: S,
         destination: D,
         where_from: LMoveWhere,
@@ -220,7 +220,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/lmpop/>](https://redis.io/commands/lmpop/)
     #[must_use]
     fn lmpop<K, E, C>(
-        &self,
+        &mut self,
         keys: C,
         where_: LMoveWhere,
         count: usize,
@@ -248,7 +248,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
-    fn lpop<K, E, A>(&self, key: K, count: usize) -> CommandResult<T, A>
+    fn lpop<K, E, A>(&mut self, key: K, count: usize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
@@ -266,7 +266,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos<K, E>(
-        &self,
+        &mut self,
         key: K,
         element: E,
         rank: Option<usize>,
@@ -295,7 +295,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos_with_count<K, E, A>(
-        &self,
+        &mut self,
         key: K,
         element: E,
         num_matches: usize,
@@ -326,7 +326,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lpush/>](https://redis.io/commands/lpush/)
     #[must_use]
-    fn lpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
+    fn lpush<K, E, C>(&mut self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -344,7 +344,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lpushx/>](https://redis.io/commands/lpushx/)
     #[must_use]
-    fn lpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
+    fn lpushx<K, E, C>(&mut self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -361,7 +361,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lrange/>](https://redis.io/commands/lrange/)
     #[must_use]
-    fn lrange<K, E, A>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, A>
+    fn lrange<K, E, A>(&mut self, key: K, start: isize, stop: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         E: FromValue,
@@ -378,7 +378,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lrem/>](https://redis.io/commands/lrem/)
     #[must_use]
-    fn lrem<K, E>(&self, key: K, count: isize, element: E) -> CommandResult<T, usize>
+    fn lrem<K, E>(&mut self, key: K, count: isize, element: E) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -391,7 +391,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lset/>](https://redis.io/commands/lset/)
     #[must_use]
-    fn lset<K, E>(&self, key: K, index: isize, element: E) -> CommandResult<T, ()>
+    fn lset<K, E>(&mut self, key: K, index: isize, element: E) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -404,7 +404,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/ltrim/>](https://redis.io/commands/ltrim/)
     #[must_use]
-    fn ltrim<K>(&self, key: K, start: isize, stop: isize) -> CommandResult<T, ()>
+    fn ltrim<K>(&mut self, key: K, start: isize, stop: isize) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
     {
@@ -419,7 +419,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
-    fn rpop<K, E, C>(&self, key: K, count: usize) -> CommandResult<T, C>
+    fn rpop<K, E, C>(&mut self, key: K, count: usize) -> CommandResult<T, C>
     where
         K: Into<BulkString>,
         E: FromValue,
@@ -436,7 +436,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/rpush/>](https://redis.io/commands/rpush/)
     #[must_use]
-    fn rpush<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
+    fn rpush<K, E, C>(&mut self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -454,7 +454,7 @@ pub trait ListCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/rpushx/>](https://redis.io/commands/rpushx/)
     #[must_use]
-    fn rpushx<K, E, C>(&self, key: K, elements: C) -> CommandResult<T, usize>
+    fn rpushx<K, E, C>(&mut self, key: K, elements: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,

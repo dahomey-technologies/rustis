@@ -19,7 +19,7 @@ pub trait SentinelCommands<T>: PrepareCommand<T> {
     ///     * The port of the master
     #[must_use]
     fn sentinel_get_master_addr_by_name<N>(
-        &self,
+        &mut self,
         master_name: N,
     ) -> CommandResult<T, Option<(String, u16)>>
     where
@@ -37,7 +37,7 @@ pub trait SentinelCommands<T>: PrepareCommand<T> {
     /// (however a new version of the configuration will be published 
     /// so that the other Sentinels will update their configurations).
     #[must_use]
-    fn sentinel_failover<N>(&self, master_name: N) -> CommandResult<T, ()>
+    fn sentinel_failover<N>(&mut self, master_name: N) -> CommandResult<T, ()>
     where
         N: Into<BulkString>,
     {

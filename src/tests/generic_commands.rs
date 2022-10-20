@@ -11,8 +11,8 @@ use std::{collections::HashSet, time::SystemTime};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn copy() -> Result<()> {
-    let client0 = get_test_client().await?;
-    let client1 = get_test_client().await?;
+    let mut client0 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
     client1.select(1).await?;
 
     // cleanup
@@ -49,7 +49,7 @@ async fn copy() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn del() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key1", "value1").await?;
     client.set("key2", "value2").await?;
@@ -71,7 +71,7 @@ async fn del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn dump() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -85,7 +85,7 @@ async fn dump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn exists() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2"]).await?;
@@ -108,7 +108,7 @@ async fn exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expire() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // no option
     client.set("key", "value").await?;
@@ -150,7 +150,7 @@ async fn expire() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expireat() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -204,7 +204,7 @@ async fn expireat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn expiretime() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key", "value").await?;
     assert!(
@@ -222,7 +222,7 @@ async fn expiretime() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn keys() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
     client
@@ -255,8 +255,8 @@ async fn keys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn move_() -> Result<()> {
-    let client0 = get_test_client().await?;
-    let client1 = get_test_client().await?;
+    let mut client0 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
     client1.select(1).await?;
 
     // cleanup
@@ -275,7 +275,7 @@ async fn move_() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_encoding() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.del(["key1", "key2", "unknown"]).await?;
     client.set("key1", "value").await?;
@@ -297,7 +297,7 @@ async fn object_encoding() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_freq() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.del("key").await?;
     client.set("key", "value").await?;
@@ -313,7 +313,7 @@ async fn object_freq() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_idle_time() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.del("key").await?;
     client.set("key", "value").await?;
@@ -328,7 +328,7 @@ async fn object_idle_time() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn object_refcount() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.del("key").await?;
     client.set("key", "value").await?;
@@ -343,7 +343,7 @@ async fn object_refcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn persist() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key", "value").await?;
     assert!(client.expire("key", 10, ExpireOption::None).await?);
@@ -358,7 +358,7 @@ async fn persist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpire() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // no option
     client.set("key", "value").await?;
@@ -402,7 +402,7 @@ async fn pexpire() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpireat() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -464,7 +464,7 @@ async fn pexpireat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pexpiretime() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key", "value").await?;
     assert!(
@@ -482,7 +482,7 @@ async fn pexpiretime() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn randomkey() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
     client.set("key1", "value1").await?;
@@ -499,7 +499,7 @@ async fn randomkey() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn rename() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
     client.set("key1", "value1").await?;
@@ -520,7 +520,7 @@ async fn rename() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn renamenx() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
     client.set("key1", "value1").await?;
@@ -539,7 +539,7 @@ async fn renamenx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn restore() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -558,7 +558,7 @@ async fn restore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn scan() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
 
@@ -579,7 +579,7 @@ async fn scan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sort() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
 
@@ -611,7 +611,7 @@ async fn sort() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn touch() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key1", "Hello").await?;
     client.set("key2", "World").await?;
@@ -626,7 +626,7 @@ async fn touch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn type_() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3"]).await?;
@@ -651,7 +651,7 @@ async fn type_() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unlink() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.set("key1", "value1").await?;
     client.set("key2", "value2").await?;

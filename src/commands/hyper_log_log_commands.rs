@@ -16,7 +16,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfadd/>](https://redis.io/commands/pfadd/)
-    fn pfadd<K, E, EE>(&self, key: K, elements: EE) -> CommandResult<T, bool>
+    fn pfadd<K, E, EE>(&mut self, key: K, elements: EE) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -33,7 +33,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
-    fn pfcount<K, KK>(&self, keys: KK) -> CommandResult<T, usize>
+    fn pfcount<K, KK>(&mut self, keys: KK) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -45,7 +45,7 @@ pub trait HyperLogLogCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfmerge/>](https://redis.io/commands/pfmerge/)
-    fn pfmerge<D, S, SS>(&self, dest_key: D, source_keys: SS) -> CommandResult<T, ()>
+    fn pfmerge<D, S, SS>(&mut self, dest_key: D, source_keys: SS) -> CommandResult<T, ()>
     where
         D: Into<BulkString>,
         S: Into<BulkString>,

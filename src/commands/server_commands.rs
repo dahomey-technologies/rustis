@@ -24,7 +24,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-cat/>](https://redis.io/commands/acl-cat/)
-    fn acl_cat<C, CC>(&self, options: AclCatOptions) -> CommandResult<T, CC>
+    fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> CommandResult<T, CC>
     where
         C: FromValue,
         CC: FromSingleValueArray<C>,
@@ -41,7 +41,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-deluser/>](https://redis.io/commands/acl-deluser/)
-    fn acl_deluser<U, UU>(&self, usernames: UU) -> CommandResult<T, usize>
+    fn acl_deluser<U, UU>(&mut self, usernames: UU) -> CommandResult<T, usize>
     where
         U: Into<BulkString>,
         UU: SingleArgOrCollection<U>,
@@ -58,7 +58,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
     fn acl_dryrun<U, C, R>(
-        &self,
+        &mut self,
         username: U,
         command: C,
         options: AclDryRunOptions,
@@ -88,7 +88,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: FromValue>(&self, options: AclGenPassOptions) -> CommandResult<T, R> {
+    fn acl_genpass<R: FromValue>(&mut self, options: AclGenPassOptions) -> CommandResult<T, R> {
         self.prepare_command(cmd("ACL").arg("GENPASS").arg(options))
     }
 
@@ -99,7 +99,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-getuser/>](https://redis.io/commands/acl-getuser/)
-    fn acl_getuser<U, RR>(&self, username: U) -> CommandResult<T, RR>
+    fn acl_getuser<U, RR>(&mut self, username: U) -> CommandResult<T, RR>
     where
         U: Into<BulkString>,
         RR: FromKeyValueValueArray<String, Value>,
@@ -116,7 +116,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-list/>](https://redis.io/commands/acl-list/)
-    fn acl_list(&self) -> CommandResult<T, Vec<String>> {
+    fn acl_list(&mut self) -> CommandResult<T, Vec<String>> {
         self.prepare_command(cmd("ACL").arg("LIST"))
     }
 
@@ -137,7 +137,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-load/>](https://redis.io/commands/acl-load/)
-    fn acl_load(&self) -> CommandResult<T, ()> {
+    fn acl_load(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("ACL").arg("LOAD"))
     }
 
@@ -149,7 +149,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
-    fn acl_log<EE>(&self, options: AclLogOptions) -> CommandResult<T, Vec<EE>>
+    fn acl_log<EE>(&mut self, options: AclLogOptions) -> CommandResult<T, Vec<EE>>
     where
         EE: FromKeyValueValueArray<String, Value>,
     {
@@ -166,7 +166,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-save/>](https://redis.io/commands/acl-save/)
-    fn acl_save(&self) -> CommandResult<T, ()> {
+    fn acl_save(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("ACL").arg("SAVE"))
     }
 
@@ -177,7 +177,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-setuser/>](https://redis.io/commands/acl-setuser/)
-    fn acl_setuser<U, R, RR>(&self, username: U, rules: RR) -> CommandResult<T, ()>
+    fn acl_setuser<U, R, RR>(&mut self, username: U, rules: RR) -> CommandResult<T, ()>
     where
         U: Into<BulkString>,
         R: Into<BulkString>,
@@ -193,7 +193,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-users/>](https://redis.io/commands/acl-users/)
-    fn acl_users<U, UU>(&self) -> CommandResult<T, UU>
+    fn acl_users<U, UU>(&mut self) -> CommandResult<T, UU>
     where
         U: FromValue,
         UU: FromSingleValueArray<U>,
@@ -208,7 +208,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: FromValue>(&self) -> CommandResult<T, U> {
+    fn acl_whoami<U: FromValue>(&mut self) -> CommandResult<T, U> {
         self.prepare_command(cmd("ACL").arg("WHOAMI"))
     }
 
@@ -220,7 +220,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command/>](https://redis.io/commands/command/)
-    fn command(&self) -> CommandResult<T, Vec<CommandInfo>> {
+    fn command(&mut self) -> CommandResult<T, Vec<CommandInfo>> {
         self.prepare_command(cmd("COMMAND"))
     }
 
@@ -231,7 +231,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
-    fn command_count(&self) -> CommandResult<T, usize> {
+    fn command_count(&mut self) -> CommandResult<T, usize> {
         self.prepare_command(cmd("COMMAND").arg("COUNT"))
     }
 
@@ -242,7 +242,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
-    fn command_docs<N, NN, DD>(&self, command_names: NN) -> CommandResult<T, DD>
+    fn command_docs<N, NN, DD>(&mut self, command_names: NN) -> CommandResult<T, DD>
     where
         N: Into<BulkString>,
         NN: SingleArgOrCollection<N>,
@@ -258,7 +258,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
-    fn command_getkeys<A, AA, KK>(&self, args: AA) -> CommandResult<T, KK>
+    fn command_getkeys<A, AA, KK>(&mut self, args: AA) -> CommandResult<T, KK>
     where
         A: Into<BulkString>,
         AA: SingleArgOrCollection<A>,
@@ -274,7 +274,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<A, AA, KK>(&self, args: AA) -> CommandResult<T, KK>
+    fn command_getkeysandflags<A, AA, KK>(&mut self, args: AA) -> CommandResult<T, KK>
     where
         A: Into<BulkString>,
         AA: SingleArgOrCollection<A>,
@@ -290,7 +290,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
-    fn command_info<N, NN>(&self, command_names: NN) -> CommandResult<T, Vec<CommandInfo>>
+    fn command_info<N, NN>(&mut self, command_names: NN) -> CommandResult<T, Vec<CommandInfo>>
     where
         N: Into<BulkString>,
         NN: SingleArgOrCollection<N>,
@@ -305,7 +305,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-list/>](https://redis.io/commands/command-list/)
-    fn command_list<CC>(&self, options: CommandListOptions) -> CommandResult<T, CC>
+    fn command_list<CC>(&mut self, options: CommandListOptions) -> CommandResult<T, CC>
     where
         CC: FromSingleValueArray<String>,
     {
@@ -323,7 +323,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
-    fn config_get<P, PP, V, VV>(&self, params: PP) -> CommandResult<T, VV>
+    fn config_get<P, PP, V, VV>(&mut self, params: PP) -> CommandResult<T, VV>
     where
         P: Into<BulkString>,
         PP: SingleArgOrCollection<P>,
@@ -338,7 +338,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/config-resetstat/>](https://redis.io/commands/config-resetstat/)
     #[must_use]
-    fn config_resetstat(&self) -> CommandResult<T, ()> {
+    fn config_resetstat(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("CONFIG").arg("RESETSTAT"))
     }
 
@@ -350,7 +350,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/config-rewrite/>](https://redis.io/commands/config-rewrite/)
     #[must_use]
-    fn config_rewrite(&self) -> CommandResult<T, ()> {
+    fn config_rewrite(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("CONFIG").arg("REWRITE"))
     }
 
@@ -359,7 +359,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/config-set/>](https://redis.io/commands/config-set/)
     #[must_use]
-    fn config_set<P, V, C>(&self, configs: C) -> CommandResult<T, ()>
+    fn config_set<P, V, C>(&mut self, configs: C) -> CommandResult<T, ()>
     where
         P: Into<BulkString>,
         V: Into<BulkString>,
@@ -373,7 +373,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/dbsize/>](https://redis.io/commands/dbsize/)
     #[must_use]
-    fn dbsize(&self) -> CommandResult<T, usize> {
+    fn dbsize(&mut self) -> CommandResult<T, usize> {
         self.prepare_command(cmd("DBSIZE"))
     }
 
@@ -383,7 +383,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/failover/>](https://redis.io/commands/failover/)
     #[must_use]
-    fn failover(&self, options: FailOverOptions) -> CommandResult<T, ()> {
+    fn failover(&mut self, options: FailOverOptions) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FAILOVER").arg(options))
     }
 
@@ -392,7 +392,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/flushdb/>](https://redis.io/commands/flushdb/)
     #[must_use]
-    fn flushdb(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+    fn flushdb(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FLUSHDB").arg(flushing_mode))
     }
 
@@ -401,7 +401,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/flushall/>](https://redis.io/commands/flushall/)
     #[must_use]
-    fn flushall(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+    fn flushall(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FLUSHALL").arg(flushing_mode))
     }
 
@@ -411,7 +411,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<SS>(&self, sections: SS) -> CommandResult<T, String>
+    fn info<SS>(&mut self, sections: SS) -> CommandResult<T, String>
     where
         SS: SingleArgOrCollection<InfoSection>,
     {
@@ -423,7 +423,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lastsave/>](https://redis.io/commands/lastsave/)
     #[must_use]
-    fn lastsave(&self) -> CommandResult<T, u64> {
+    fn lastsave(&mut self) -> CommandResult<T, u64> {
         self.prepare_command(cmd("LASTSAVE"))
     }
 
@@ -435,7 +435,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-doctor/>](https://redis.io/commands/latency-doctor/)
     #[must_use]
-    fn latency_doctor(&self) -> CommandResult<T, String> {
+    fn latency_doctor(&mut self) -> CommandResult<T, String> {
         self.prepare_command(cmd("LATENCY").arg("DOCTOR"))
     }
 
@@ -447,7 +447,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-graph/>](https://redis.io/commands/latency-graph/)
     #[must_use]
-    fn latency_graph(&self, event: LatencyHistoryEvent) -> CommandResult<T, String> {
+    fn latency_graph(&mut self, event: LatencyHistoryEvent) -> CommandResult<T, String> {
         self.prepare_command(cmd("LATENCY").arg("GRAPH").arg(event))
     }
 
@@ -460,7 +460,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<C, CC, RR>(&self, commands: CC) -> CommandResult<T, RR>
+    fn latency_histogram<C, CC, RR>(&mut self, commands: CC) -> CommandResult<T, RR>
     where
         C: Into<BulkString>,
         CC: SingleArgOrCollection<C>,
@@ -479,7 +479,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-history/>](https://redis.io/commands/latency-history/)
     #[must_use]
-    fn latency_history<RR>(&self, event: LatencyHistoryEvent) -> CommandResult<T, RR>
+    fn latency_history<RR>(&mut self, event: LatencyHistoryEvent) -> CommandResult<T, RR>
     where
         RR: FromSingleValueArray<(u32, u32)>,
     {
@@ -502,7 +502,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_latest<RR>(&self) -> CommandResult<T, RR>
+    fn latency_latest<RR>(&mut self) -> CommandResult<T, RR>
     where
         RR: FromSingleValueArray<(String, u32, u32, u32)>,
     {
@@ -517,7 +517,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_reset<EE>(&self, events: EE) -> CommandResult<T, usize>
+    fn latency_reset<EE>(&mut self, events: EE) -> CommandResult<T, usize>
     where
         EE: SingleArgOrCollection<LatencyHistoryEvent>,
     {
@@ -533,7 +533,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lolwut/>](https://redis.io/commands/lolwut/)
     #[must_use]
-    fn lolwut(&self, options: LolWutOptions) -> CommandResult<T, String> {
+    fn lolwut(&mut self, options: LolWutOptions) -> CommandResult<T, String> {
         self.prepare_command(cmd("LOLWUT").arg(options))
     }
 
@@ -546,7 +546,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/memory-doctor/>](https://redis.io/commands/memory-doctor/)
     #[must_use]
-    fn memory_doctor(&self) -> CommandResult<T, String> {
+    fn memory_doctor(&mut self) -> CommandResult<T, String> {
         self.prepare_command(cmd("MEMORY").arg("DOCTOR"))
     }
 
@@ -558,7 +558,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/memory-malloc-stats/>](https://redis.io/commands/memory-malloc-stats/)
     #[must_use]
-    fn memory_malloc_stats(&self) -> CommandResult<T, String> {
+    fn memory_malloc_stats(&mut self) -> CommandResult<T, String> {
         self.prepare_command(cmd("MEMORY").arg("MALLOC-STATS"))
     }
 
@@ -567,7 +567,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/memory-purge/>](https://redis.io/commands/memory-purge/)
     #[must_use]
-    fn memory_purge(&self) -> CommandResult<T, ()> {
+    fn memory_purge(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("MEMORY").arg("PURGE"))
     }
 
@@ -579,7 +579,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/memory-stats/>](https://redis.io/commands/memory-stats/)
     #[must_use]
-    fn memory_stats(&self) -> CommandResult<T, MemoryStats> {
+    fn memory_stats(&mut self) -> CommandResult<T, MemoryStats> {
         self.prepare_command(cmd("MEMORY").arg("STATS"))
     }
 
@@ -592,7 +592,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/memory-usage/>](https://redis.io/commands/memory-usage/)
     #[must_use]
     fn memory_usage<K>(
-        &self,
+        &mut self,
         key: K,
         options: MemoryUsageOptions,
     ) -> CommandResult<T, Option<usize>>
@@ -611,7 +611,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
     #[must_use]
-    fn module_list<MM>(&self) -> CommandResult<T, MM>
+    fn module_list<MM>(&mut self) -> CommandResult<T, MM>
     where
         MM: FromSingleValueArray<ModuleInfo>,
     {
@@ -623,7 +623,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/module-load/>](https://redis.io/commands/module-load/)
     #[must_use]
-    fn module_load<P>(&self, path: P, options: ModuleLoadOptions) -> CommandResult<T, ()>
+    fn module_load<P>(&mut self, path: P, options: ModuleLoadOptions) -> CommandResult<T, ()>
     where
         P: Into<BulkString>,
     {
@@ -635,7 +635,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
     #[must_use]
-    fn module_unload<N>(&self, name: N) -> CommandResult<T, ()>
+    fn module_unload<N>(&mut self, name: N) -> CommandResult<T, ()>
     where
         N: Into<BulkString>,
     {
@@ -647,14 +647,14 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
     #[must_use]
-    fn monitor(&self) -> Future<MonitorStream>;
+    fn monitor(&mut self) -> Future<MonitorStream>;
 
     /// This command can change the replication settings of a replica on the fly.
     ///
     /// # See Also
     /// [<https://redis.io/commands/replicaof/>](https://redis.io/commands/replicaof/)
     #[must_use]
-    fn replicaof(&self, options: ReplicaOfOptions) -> CommandResult<T, ()> {
+    fn replicaof(&mut self, options: ReplicaOfOptions) -> CommandResult<T, ()> {
         self.prepare_command(cmd("REPLICAOF").arg(options))
     }
 
@@ -664,7 +664,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/role/>](https://redis.io/commands/role/)
     #[must_use]
-    fn role(&self) -> CommandResult<T, RoleResult> {
+    fn role(&mut self) -> CommandResult<T, RoleResult> {
         self.prepare_command(cmd("ROLE"))
     }
 
@@ -674,7 +674,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/save/>](https://redis.io/commands/save/)
     #[must_use]
-    fn save(&self) -> CommandResult<T, ()> {
+    fn save(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SAVE"))
     }
 
@@ -683,7 +683,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/shutdown/>](https://redis.io/commands/shutdown/)
     #[must_use]
-    fn shutdown(&self, options: ShutdownOptions) -> CommandResult<T, ()> {
+    fn shutdown(&mut self, options: ShutdownOptions) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SHUTDOWN").arg(options))
     }
 
@@ -692,7 +692,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-get/>](https://redis.io/commands/slowlog-get/)
     #[must_use]
-    fn slowlog_get(&self, options: SlowLogOptions) -> CommandResult<T, Vec<SlowLogEntry>> {
+    fn slowlog_get(&mut self, options: SlowLogOptions) -> CommandResult<T, Vec<SlowLogEntry>> {
         self.prepare_command(cmd("SLOWLOG").arg("GET").arg(options))
     }
 
@@ -701,7 +701,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-len/>](https://redis.io/commands/slowlog-len/)
     #[must_use]
-    fn slowlog_len(&self) -> CommandResult<T, usize> {
+    fn slowlog_len(&mut self) -> CommandResult<T, usize> {
         self.prepare_command(cmd("SLOWLOG").arg("LEN"))
     }
 
@@ -710,7 +710,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-reset/>](https://redis.io/commands/slowlog-reset/)
     #[must_use]
-    fn slowlog_reset(&self) -> CommandResult<T, ()> {
+    fn slowlog_reset(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SLOWLOG").arg("RESET"))
     }
 
@@ -721,7 +721,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/swapdb/>](https://redis.io/commands/swapdb/)
     #[must_use]
-    fn swapdb(&self, index1: usize, index2: usize) -> CommandResult<T, ()> {
+    fn swapdb(&mut self, index1: usize, index2: usize) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SWAPDB").arg(index1).arg(index2))
     }
 
@@ -731,7 +731,7 @@ pub trait ServerCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/time/>](https://redis.io/commands/time/)
     #[must_use]
-    fn time(&self) -> CommandResult<T, (u32, u32)> {
+    fn time(&mut self) -> CommandResult<T, (u32, u32)> {
         self.prepare_command(cmd("TIME"))
     }
 }

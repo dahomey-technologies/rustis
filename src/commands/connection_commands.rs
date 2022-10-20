@@ -19,7 +19,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/auth/>](https://redis.io/commands/auth/)
     #[must_use]
-    fn auth<U, P>(&self, username: Option<U>, password: P) -> CommandResult<T, ()>
+    fn auth<U, P>(&mut self, username: Option<U>, password: P) -> CommandResult<T, ()>
     where
         U: Into<BulkString>,
         P: Into<BulkString>,
@@ -33,7 +33,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-caching/>](https://redis.io/commands/client-caching/)
     #[must_use]
-    fn client_caching(&self, mode: ClientCachingMode) -> CommandResult<T, Option<()>> {
+    fn client_caching(&mut self, mode: ClientCachingMode) -> CommandResult<T, Option<()>> {
         self.prepare_command(cmd("CLIENT").arg("CACHING").arg(mode))
     }
 
@@ -45,7 +45,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
     #[must_use]
-    fn client_getname<CN>(&self) -> CommandResult<T, Option<CN>>
+    fn client_getname<CN>(&mut self) -> CommandResult<T, Option<CN>>
     where
         CN: FromValue,
     {
@@ -62,7 +62,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-getredir/>](https://redis.io/commands/client-getredir/)
     #[must_use]
-    fn client_getredir(&self) -> CommandResult<T, i64> {
+    fn client_getredir(&mut self) -> CommandResult<T, i64> {
         self.prepare_command(cmd("CLIENT").arg("GETREDIR"))
     }
 
@@ -74,7 +74,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-id/>](https://redis.io/commands/client-id/)
     #[must_use]
-    fn client_id(&self) -> CommandResult<T, i64> {
+    fn client_id(&mut self) -> CommandResult<T, i64> {
         self.prepare_command(cmd("CLIENT").arg("ID"))
     }
 
@@ -87,7 +87,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-info/>](https://redis.io/commands/client-info/)
     #[must_use]
-    fn client_info(&self) -> CommandResult<T, ClientInfo> {
+    fn client_info(&mut self) -> CommandResult<T, ClientInfo> {
         self.prepare_command(cmd("CLIENT").arg("INFO"))
     }
 
@@ -99,7 +99,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-kill/>](https://redis.io/commands/client-kill/)
     #[must_use]
-    fn client_kill(&self, options: ClientKillOptions) -> CommandResult<T, usize> {
+    fn client_kill(&mut self, options: ClientKillOptions) -> CommandResult<T, usize> {
         self.prepare_command(cmd("CLIENT").arg("KILL").arg(options))
     }
 
@@ -111,7 +111,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-list/>](https://redis.io/commands/client-list/)
     #[must_use]
-    fn client_list(&self, options: ClientListOptions) -> CommandResult<T, ClientListResult> {
+    fn client_list(&mut self, options: ClientListOptions) -> CommandResult<T, ClientListResult> {
         self.prepare_command(cmd("CLIENT").arg("LIST").arg(options))
     }
 
@@ -120,7 +120,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-no-evict/>](https://redis.io/commands/client-no-evict/)
     #[must_use]
-    fn client_no_evict(&self, no_evict: bool) -> CommandResult<T, ()> {
+    fn client_no_evict(&mut self, no_evict: bool) -> CommandResult<T, ()> {
         self.prepare_command(
             cmd("CLIENT")
                 .arg("NO-EVICT")
@@ -134,7 +134,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-pause/>](https://redis.io/commands/client-pause/)
     #[must_use]
-    fn client_pause(&self, timeout: u64, mode: ClientPauseMode) -> CommandResult<T, ()> {
+    fn client_pause(&mut self, timeout: u64, mode: ClientPauseMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("CLIENT").arg("PAUSE").arg(timeout).arg(mode))
     }
 
@@ -143,7 +143,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-reply/>](https://redis.io/commands/client-reply/)
     #[must_use]
-    fn client_reply(&self, mode: ClientReplyMode) -> CommandResult<T, ()> {
+    fn client_reply(&mut self, mode: ClientReplyMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("CLIENT").arg("REPLY").arg(mode))
     }
 
@@ -152,7 +152,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
-    fn client_setname<CN>(&self, connection_name: CN) -> CommandResult<T, ()>
+    fn client_setname<CN>(&mut self, connection_name: CN) -> CommandResult<T, ()>
     where
         CN: Into<BulkString>,
     {
@@ -166,7 +166,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
     fn client_tracking(
-        &self,
+        &mut self,
         status: ClientTrackingStatus,
         options: ClientTrackingOptions,
     ) -> CommandResult<T, ()> {
@@ -184,7 +184,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
-    fn client_trackinginfo(&self) -> CommandResult<T, ClientTrackingInfo> {
+    fn client_trackinginfo(&mut self) -> CommandResult<T, ClientTrackingInfo> {
         self.prepare_command(cmd("CLIENT").arg("TRACKINGINFO"))
     }
 
@@ -199,7 +199,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-unblock/>](https://redis.io/commands/client-unblock/)
     #[must_use]
-    fn client_unblock(&self, client_id: i64, mode: ClientUnblockMode) -> CommandResult<T, bool> {
+    fn client_unblock(&mut self, client_id: i64, mode: ClientUnblockMode) -> CommandResult<T, bool> {
         self.prepare_command(cmd("CLIENT").arg("UNBLOCK").arg(client_id).arg(mode))
     }
 
@@ -209,7 +209,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
     #[must_use]
-    fn client_unpause(&self) -> CommandResult<T, bool> {
+    fn client_unpause(&mut self) -> CommandResult<T, bool> {
         self.prepare_command(cmd("CLIENT").arg("UNPAUSE"))
     }   
 
@@ -218,7 +218,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<M, R>(&self, message: M) -> CommandResult<T, R>
+    fn echo<M, R>(&mut self, message: M) -> CommandResult<T, R>
     where
         M: Into<BulkString>,
         R: FromValue,
@@ -233,7 +233,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
     #[must_use]
-    fn hello(&self, options: HelloOptions) -> CommandResult<T, HelloResult> {
+    fn hello(&mut self, options: HelloOptions) -> CommandResult<T, HelloResult> {
         self.prepare_command(cmd("HELLO").arg(options))
     }
 
@@ -242,7 +242,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R>(&self, options: PingOptions) -> CommandResult<T, R>
+    fn ping<R>(&mut self, options: PingOptions) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -254,7 +254,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
     #[must_use]
-    fn quit(&self) -> CommandResult<T, ()> {
+    fn quit(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("QUIT"))
     }
 
@@ -264,7 +264,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn reset(&self) -> CommandResult<T, ()> {
+    fn reset(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("RESET"))
     }
 
@@ -273,7 +273,7 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn select(&self, index: usize) -> CommandResult<T, ()> {
+    fn select(&mut self, index: usize) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SELECT").arg(index))
     }
 }

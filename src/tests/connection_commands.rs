@@ -12,7 +12,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn auth() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let result = client.auth(Some("username"), "password").await;
     assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("WRONGPASS")));
@@ -27,8 +27,8 @@ async fn auth() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_getredir() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
 
     let client1_id = client1.client_id().await?;
 
@@ -53,7 +53,7 @@ async fn client_getredir() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_id() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let id = client.client_id().await?;
     assert!(id > 0);
@@ -65,7 +65,7 @@ async fn client_id() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_info() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _client_info = client.client_info().await?;
 
@@ -76,8 +76,8 @@ async fn client_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_kill() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
 
     let client_id = client1.client_id().await?;
     client2
@@ -91,7 +91,7 @@ async fn client_kill() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_list() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let current_client_id = client.client_id().await?;
 
@@ -106,7 +106,7 @@ async fn client_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_no_evict() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.client_no_evict(true).await?;
     client.client_no_evict(false).await?;
@@ -118,7 +118,7 @@ async fn client_no_evict() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_pause() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.client_pause(1000, ClientPauseMode::Write).await?;
     client.client_unpause().await?;
@@ -130,7 +130,7 @@ async fn client_pause() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_reply() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.client_reply(ClientReplyMode::Off).forget()?;
@@ -146,7 +146,7 @@ async fn client_reply() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_setname_getname() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.client_setname("Mike").await?;
     let client_name: Option<String> = client.client_getname().await?;
@@ -159,9 +159,9 @@ async fn client_setname_getname() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_tracking() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client1_invalidations = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
+    let mut client1_invalidations = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
 
     // prepare invalidations
     let invalidation_id = client1_invalidations.client_id().await?;
@@ -255,8 +255,8 @@ async fn client_tracking() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_tracking_info() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
 
     let tracking_info = client1.client_trackinginfo().await?;
     assert_eq!(1, tracking_info.flags.len());
@@ -286,8 +286,8 @@ async fn client_tracking_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_unblock() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
 
     let client_id = client1.client_id().await?;
 
@@ -308,7 +308,7 @@ async fn client_unblock() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn echo() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let result: String = client.echo("hello").await?;
     assert_eq!("hello", result);
@@ -320,7 +320,7 @@ async fn echo() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hello_v2() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let result = client.hello(HelloOptions::new(2)).await?;
     assert_eq!("redis", result.server);
@@ -338,7 +338,7 @@ async fn hello_v2() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hello_v3() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let result = client.hello(HelloOptions::new(3)).await?;
     assert_eq!("redis", result.server);
@@ -356,7 +356,7 @@ async fn hello_v3() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ping() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.ping(PingOptions::default()).await?;
     let result: String = client.ping(PingOptions::default().message("value")).await?;
@@ -383,7 +383,7 @@ async fn ping() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn reset() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.reset().await?;
 
@@ -394,7 +394,7 @@ async fn reset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn select() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(crate::FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;

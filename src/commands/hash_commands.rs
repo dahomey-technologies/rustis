@@ -19,7 +19,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hdel/>](https://redis.io/commands/hdel/)
     #[must_use]
-    fn hdel<K, F, C>(&self, key: K, fields: C) -> CommandResult<T, usize>
+    fn hdel<K, F, C>(&mut self, key: K, fields: C) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -37,7 +37,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hexists/>](https://redis.io/commands/hexists/)
     #[must_use]
-    fn hexists<K, F>(&self, key: K, field: F) -> CommandResult<T, bool>
+    fn hexists<K, F>(&mut self, key: K, field: F) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -53,7 +53,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hget/>](https://redis.io/commands/hget/)
     #[must_use]
-    fn hget<K, F, V>(&self, key: K, field: F) -> CommandResult<T, V>
+    fn hget<K, F, V>(&mut self, key: K, field: F) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -70,7 +70,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hgetall/>](https://redis.io/commands/hgetall/)
     #[must_use]
-    fn hgetall<K, F, V, A>(&self, key: K) -> CommandResult<T, A>
+    fn hgetall<K, F, V, A>(&mut self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -88,7 +88,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hincrby/>](https://redis.io/commands/hincrby/)
     #[must_use]
-    fn hincrby<K, F>(&self, key: K, field: F, increment: i64) -> CommandResult<T, i64>
+    fn hincrby<K, F>(&mut self, key: K, field: F, increment: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -105,7 +105,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hincrbyfloat/>](https://redis.io/commands/hincrbyfloat/)
     #[must_use]
-    fn hincrbyfloat<K, F>(&self, key: K, field: F, increment: f64) -> CommandResult<T, f64>
+    fn hincrbyfloat<K, F>(&mut self, key: K, field: F, increment: f64) -> CommandResult<T, f64>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -121,7 +121,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hkeys/>](https://redis.io/commands/hkeys/)
     #[must_use]
-    fn hkeys<K, F, A>(&self, key: K) -> CommandResult<T, A>
+    fn hkeys<K, F, A>(&mut self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -138,7 +138,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hlen/)
     #[must_use]
-    fn hlen<K>(&self, key: K) -> CommandResult<T, usize>
+    fn hlen<K>(&mut self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -153,7 +153,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hmget/>](https://redis.io/commands/hmget/)
     #[must_use]
-    fn hmget<K, F, V, C, A>(&self, key: K, fields: C) -> CommandResult<T, A>
+    fn hmget<K, F, V, C, A>(&mut self, key: K, fields: C) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -172,7 +172,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfield<K, F>(&self, key: K) -> CommandResult<T, F>
+    fn hrandfield<K, F>(&mut self, key: K) -> CommandResult<T, F>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -191,7 +191,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields<K, F, A>(&self, key: K, count: isize) -> CommandResult<T, A>
+    fn hrandfields<K, F, A>(&mut self, key: K, count: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -212,7 +212,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields_with_values<K, F, V, A>(&self, key: K, count: isize) -> CommandResult<T, A>
+    fn hrandfields_with_values<K, F, V, A>(&mut self, key: K, count: isize) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         F: FromValue,
@@ -232,7 +232,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hscan/)
     #[must_use]
     fn hscan<K, F, V>(
-        &self,
+        &mut self,
         key: K,
         cursor: u64,
         options: HScanOptions,
@@ -253,7 +253,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hset/>](https://redis.io/commands/hset/)
     #[must_use]
-    fn hset<K, F, V, I>(&self, key: K, items: I) -> CommandResult<T, usize>
+    fn hset<K, F, V, I>(&mut self, key: K, items: I) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -272,7 +272,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hsetnx/>](https://redis.io/commands/hsetnx/)
     #[must_use]
-    fn hsetnx<K, F, V>(&self, key: K, field: F, value: V) -> CommandResult<T, bool>
+    fn hsetnx<K, F, V>(&mut self, key: K, field: F, value: V) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -290,7 +290,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hstrlen/>](https://redis.io/commands/hstrlen/)
     #[must_use]
-    fn hstrlen<K, F>(&self, key: K, field: F) -> CommandResult<T, usize>
+    fn hstrlen<K, F>(&mut self, key: K, field: F) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         F: Into<BulkString>,
@@ -306,7 +306,7 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hvals/>](https://redis.io/commands/hvals/)
     #[must_use]
-    fn hvals<K, V, A>(&self, key: K) -> CommandResult<T, A>
+    fn hvals<K, V, A>(&mut self, key: K) -> CommandResult<T, A>
     where
         K: Into<BulkString>,
         V: FromValue,

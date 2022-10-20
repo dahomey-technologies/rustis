@@ -21,7 +21,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append<K, V>(&self, key: K, value: V) -> CommandResult<T, usize>
+    fn append<K, V>(&mut self, key: K, value: V) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -42,7 +42,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
-    fn decr<K>(&self, key: K) -> CommandResult<T, i64>
+    fn decr<K>(&mut self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
@@ -62,7 +62,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
-    fn decrby<K>(&self, key: K, decrement: i64) -> CommandResult<T, i64>
+    fn decrby<K>(&mut self, key: K, decrement: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
@@ -112,7 +112,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<K, V>(&self, key: K) -> CommandResult<T, V>
+    fn get<K, V>(&mut self, key: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -132,7 +132,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<K, V>(&self, key: K) -> CommandResult<T, V>
+    fn getdel<K, V>(&mut self, key: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -177,7 +177,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
-    fn getex<K, V>(&self, key: K, options: GetExOptions) -> CommandResult<T, V>
+    fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -195,7 +195,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<K, V>(&self, key: K, start: usize, end: isize) -> CommandResult<T, V>
+    fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -213,7 +213,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<K, V, R>(&self, key: K, value: V) -> CommandResult<T, R>
+    fn getset<K, V, R>(&mut self, key: K, value: V) -> CommandResult<T, R>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -241,7 +241,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
-    fn incr<K>(&self, key: K) -> CommandResult<T, i64>
+    fn incr<K>(&mut self, key: K) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
@@ -263,7 +263,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
-    fn incrby<K>(&self, key: K, increment: i64) -> CommandResult<T, i64>
+    fn incrby<K>(&mut self, key: K, increment: i64) -> CommandResult<T, i64>
     where
         K: Into<BulkString>,
     {
@@ -296,7 +296,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
-    fn incrbyfloat<K>(&self, key: K, increment: f64) -> CommandResult<T, f64>
+    fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> CommandResult<T, f64>
     where
         K: Into<BulkString>,
     {
@@ -311,7 +311,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<K, V>(&self, key1: K, key2: K) -> CommandResult<T, V>
+    fn lcs<K, V>(&mut self, key1: K, key2: K) -> CommandResult<T, V>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -327,7 +327,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len<K>(&self, key1: K, key2: K) -> CommandResult<T, usize>
+    fn lcs_len<K>(&mut self, key1: K, key2: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -345,7 +345,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
     fn lcs_idx<K>(
-        &self,
+        &mut self,
         key1: K,
         key2: K,
         min_match_len: Option<usize>,
@@ -375,7 +375,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<K, V, C>(&self, keys: C) -> CommandResult<T, Vec<Option<V>>>
+    fn mget<K, V, C>(&mut self, keys: C) -> CommandResult<T, Vec<Option<V>>>
     where
         K: Into<BulkString>,
         V: FromValue,
@@ -392,7 +392,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
-    fn mset<K, V, C>(&self, items: C) -> CommandResult<T, ()>
+    fn mset<K, V, C>(&mut self, items: C) -> CommandResult<T, ()>
     where
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
@@ -419,7 +419,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
-    fn msetnx<K, V, C>(&self, items: C) -> CommandResult<T, bool>
+    fn msetnx<K, V, C>(&mut self, items: C) -> CommandResult<T, bool>
     where
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
@@ -437,7 +437,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
     #[must_use]
-    fn psetex<K, V>(&self, key: K, milliseconds: u64, value: V) -> CommandResult<T, ()>
+    fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -453,7 +453,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set<K, V>(&self, key: K, value: V) -> CommandResult<T, ()>
+    fn set<K, V>(&mut self, key: K, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -473,7 +473,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_with_options<K, V>(
-        &self,
+        &mut self,
         key: K,
         value: V,
         condition: SetCondition,
@@ -500,7 +500,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_get_with_options<K, V1, V2>(
-        &self,
+        &mut self,
         key: K,
         value: V1,
         condition: SetCondition,
@@ -528,7 +528,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
     #[must_use]
-    fn setex<K, V>(&self, key: K, seconds: u64, value: V) -> CommandResult<T, ()>
+    fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -550,7 +550,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
-    fn setnx<K, V>(&self, key: K, value: V) -> CommandResult<T, bool>
+    fn setnx<K, V>(&mut self, key: K, value: V) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -568,7 +568,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setrange/>](https://redis.io/commands/setrange/)
     #[must_use]
-    fn setrange<K, V>(&self, key: K, offset: usize, value: V) -> CommandResult<T, usize>
+    fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         V: Into<BulkString>,
@@ -586,7 +586,7 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
-    fn strlen<K>(&self, key: K) -> CommandResult<T, usize>
+    fn strlen<K>(&mut self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {

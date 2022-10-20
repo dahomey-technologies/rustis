@@ -11,7 +11,7 @@ pub(crate) trait InternalPubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/punsubscribe/>](https://redis.io/commands/punsubscribe/)            
-    fn punsubscribe<P, PP>(&self, patterns: PP) -> CommandResult<T, ()>
+    fn punsubscribe<P, PP>(&mut self, patterns: PP) -> CommandResult<T, ()>
     where
         P: Into<BulkString> + Send,
         PP: SingleArgOrCollection<P>,
@@ -23,7 +23,7 @@ pub(crate) trait InternalPubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/unsubscribe/>](https://redis.io/commands/unsubscribe/)            
-    fn unsubscribe<C, CC>(&self, channels: CC) -> CommandResult<T, ()>
+    fn unsubscribe<C, CC>(&mut self, channels: CC) -> CommandResult<T, ()>
     where
         C: Into<BulkString>,
         CC: SingleArgOrCollection<C>,

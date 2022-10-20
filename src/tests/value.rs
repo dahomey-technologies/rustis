@@ -10,27 +10,27 @@ use std::collections::{BTreeSet, HashSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn from_single_value_array() -> Result<()> {
-    let connection = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
-    connection.del("key").await?;
+    client.del("key").await?;
 
-    connection
+    client
         .sadd("key", ["member1", "member2", "member3"])
         .await?;
 
-    let members: Vec<String> = connection.smembers("key").await?;
+    let members: Vec<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));
     assert!(members.contains(&"member3".to_owned()));
 
-    let members: HashSet<String> = connection.smembers("key").await?;
+    let members: HashSet<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));
     assert!(members.contains(&"member3".to_owned()));
 
-    let members: BTreeSet<String> = connection.smembers("key").await?;
+    let members: BTreeSet<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
     assert!(members.contains(&"member1".to_owned()));
     assert!(members.contains(&"member2".to_owned()));

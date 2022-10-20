@@ -5,7 +5,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unknown_command() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let result = client.send(cmd("UNKNOWN").arg("arg")).await;
 
@@ -20,7 +20,7 @@ async fn unknown_command() -> Result<()> {
 // #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 // #[serial]
 // async fn network_error() -> Result<()> {
-//     let client = get_test_client().await?;
+//     let mut client = get_test_client().await?;
 
 //     for i in 1..1000 {
 //         let key = format!("key{}", i);
@@ -42,7 +42,7 @@ async fn unknown_command() -> Result<()> {
 // #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 // #[serial]
 // async fn network_error_stress_test() -> Result<()> {
-//     let client = get_test_client().await?;
+//     let mut client = get_test_client().await?;
 
 //     for i in 1..1000 {
 //         let key = format!("key{}", i);

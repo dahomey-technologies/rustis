@@ -21,7 +21,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn eval<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn eval<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -37,7 +37,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval_ro/>](https://redis.io/commands/eval_ro/)
     #[must_use]
-    fn eval_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn eval_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -52,7 +52,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn evalsha<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn evalsha<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -68,7 +68,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/evalsha_ro/>](https://redis.io/commands/evalsha_ro/)
     #[must_use]
-    fn evalsha_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn evalsha_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -83,7 +83,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn fcall<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -98,7 +98,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R>(&self, builder: CallBuilder) -> CommandResult<T, R>
+    fn fcall_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
     where
         R: FromValue,
     {
@@ -110,7 +110,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-delete/>](https://redis.io/commands/function-delete/)
     #[must_use]
-    fn function_delete<L>(&self, library_name: L) -> CommandResult<T, ()>
+    fn function_delete<L>(&mut self, library_name: L) -> CommandResult<T, ()>
     where
         L: Into<BulkString>,
     {
@@ -127,7 +127,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
-    fn function_dump<P>(&self) -> CommandResult<T, P>
+    fn function_dump<P>(&mut self) -> CommandResult<T, P>
     where
         P: FromValue,
     {
@@ -139,7 +139,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-flush/>](https://redis.io/commands/function-flush/)
     #[must_use]
-    fn function_flush(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+    fn function_flush(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
 
@@ -148,7 +148,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-kill/>](https://redis.io/commands/function-kill/)
     #[must_use]
-    fn function_kill(&self) -> CommandResult<T, ()> {
+    fn function_kill(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("FUNCTION").arg("KILL"))
     }
 
@@ -157,7 +157,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-list/>](https://redis.io/commands/function-list/)
     #[must_use]
-    fn function_list(&self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>> {
+    fn function_list(&mut self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>> {
         self.prepare_command(cmd("FUNCTION").arg("LIST").arg(options))
     }
 
@@ -169,7 +169,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-load/>](https://redis.io/commands/function-load/)
     #[must_use]
-    fn function_load<F, L>(&self, replace: bool, function_code: F) -> CommandResult<T, L>
+    fn function_load<F, L>(&mut self, replace: bool, function_code: F) -> CommandResult<T, L>
     where
         F: Into<BulkString>,
         L: FromValue,
@@ -188,7 +188,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/function-restore/>](https://redis.io/commands/function-restore/)
     #[must_use]
     fn function_restore<P>(
-        &self,
+        &mut self,
         serialized_payload: P,
         policy: FunctionRestorePolicy,
     ) -> CommandResult<T, ()>
@@ -208,7 +208,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-stats/>](https://redis.io/commands/function-stats/)
     #[must_use]
-    fn function_stats(&self) -> CommandResult<T, FunctionStats> {
+    fn function_stats(&mut self) -> CommandResult<T, FunctionStats> {
         self.prepare_command(cmd("FUNCTION").arg("STATS"))
     }
 
@@ -217,7 +217,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-debug/>](https://redis.io/commands/script-debug/)
     #[must_use]
-    fn script_debug(&self, debug_mode: ScriptDebugMode) -> CommandResult<T, ()> {
+    fn script_debug(&mut self, debug_mode: ScriptDebugMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
     }
 
@@ -229,7 +229,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-exists/>](https://redis.io/commands/script-exists/)
     #[must_use]
-    fn script_exists<S, C>(&self, sha1s: C) -> CommandResult<T, Vec<bool>>
+    fn script_exists<S, C>(&mut self, sha1s: C) -> CommandResult<T, Vec<bool>>
     where
         S: Into<BulkString>,
         C: SingleArgOrCollection<S>,
@@ -242,7 +242,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-flush/>](https://redis.io/commands/script-flush/)
     #[must_use]
-    fn script_flush(&self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
+    fn script_flush(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
     }
 
@@ -252,7 +252,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-kill/>](https://redis.io/commands/script-kill/)
     #[must_use]
-    fn script_kill(&self) -> CommandResult<T, ()> {
+    fn script_kill(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("SCRIPT").arg("KILL"))
     }
 
@@ -264,7 +264,7 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
-    fn script_load<S, V>(&self, script: S) -> CommandResult<T, V>
+    fn script_load<S, V>(&mut self, script: S) -> CommandResult<T, V>
     where
         S: Into<BulkString>,
         V: FromValue,

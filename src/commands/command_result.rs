@@ -9,8 +9,8 @@ pub enum CommandResult<'a, T, R>
 where
     R: FromValue,
 {
-    Client(PhantomData<(R, T)>, Command, &'a Client),
-    Transaction(PhantomData<R>, Command, &'a Transaction<T>),
+    Client(PhantomData<(R, T)>, Command, &'a mut Client),
+    Transaction(PhantomData<R>, Command, &'a mut Transaction<T>),
 }
 
 impl<'a, T, R> CommandResult<'a, T, R>
@@ -19,12 +19,12 @@ where
     T: Send + Sync,
 {
     #[must_use]
-    pub fn from_client(command: Command, client: &'a Client) -> Self {
+    pub fn from_client(command: Command, client: &'a mut Client) -> Self {
         CommandResult::Client(PhantomData, command, client)
     }
 
     #[must_use]
-    pub fn from_transaction(command: Command, transaction: &'a Transaction<T>) -> Self {
+    pub fn from_transaction(command: Command, transaction: &'a mut Transaction<T>) -> Self {
         CommandResult::Transaction(PhantomData, command, transaction)
     }
 
@@ -52,7 +52,7 @@ where
 }
 
 pub trait PrepareCommand<T> {
-    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<T, R>;
+    fn prepare_command<R: FromValue>(&mut self, command: Command) -> CommandResult<T, R>;
 }
 
 pub struct ClientResult;
@@ -60,7 +60,7 @@ pub struct ClientResult;
 #[allow(clippy::module_name_repetitions)]
 pub trait ClientCommandResult<'a, R>
 where
-    R: FromValue,
+    R: FromValue, 
 {
     /// Send command and forget its response
     ///

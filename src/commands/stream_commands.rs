@@ -23,7 +23,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xack/>](https://redis.io/commands/xack/)
-    fn xack<K, G, I, II>(&self, key: K, group: G, ids: II) -> CommandResult<T, usize>
+    fn xack<K, G, I, II>(&mut self, key: K, group: G, ids: II) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         G: Into<BulkString>,
@@ -46,7 +46,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xadd/>](https://redis.io/commands/xadd/)
     fn xadd<K, I, F, V, FFVV, R>(
-        &self,
+        &mut self,
         key: K,
         stream_id: I,
         items: FFVV,
@@ -71,7 +71,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xautoclaim/>](https://redis.io/commands/xautoclaim/)
     fn xautoclaim<K, G, C, I, V>(
-        &self,
+        &mut self,
         key: K,
         group: G,
         consumer: C,
@@ -111,7 +111,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xclaim/>](https://redis.io/commands/xclaim/)
     fn xclaim<K, G, C, I, II, V>(
-        &self,
+        &mut self,
         key: K,
         group: G,
         consumer: C,
@@ -145,7 +145,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xdel/>](https://redis.io/commands/xdel/)
-    fn xdel<K, I, II>(&self, key: K, ids: II) -> CommandResult<T, usize>
+    fn xdel<K, I, II>(&mut self, key: K, ids: II) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
         I: Into<BulkString>,
@@ -163,7 +163,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xgroup-create/>](https://redis.io/commands/xgroup-create/)
     fn xgroup_create<K, G, I>(
-        &self,
+        &mut self,
         key: K,
         groupname: G,
         id: I,
@@ -194,7 +194,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xgroup-createconsumer/>](https://redis.io/commands/xgroup-createconsumer/)
     fn xgroup_createconsumer<K, G, C>(
-        &self,
+        &mut self,
         key: K,
         groupname: G,
         consumername: C,
@@ -221,7 +221,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xgroup-delconsumer/>](https://redis.io/commands/xgroup-delconsumer/)
     fn xgroup_delconsumer<K, G, C>(
-        &self,
+        &mut self,
         key: K,
         groupname: G,
         consumername: C,
@@ -248,7 +248,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xgroup-destroy/>](https://redis.io/commands/xgroup-destroy/)
-    fn xgroup_destroy<K, G>(&self, key: K, groupname: G) -> CommandResult<T, bool>
+    fn xgroup_destroy<K, G>(&mut self, key: K, groupname: G) -> CommandResult<T, bool>
     where
         K: Into<BulkString>,
         G: Into<BulkString>,
@@ -261,7 +261,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xgroup-setid/>](https://redis.io/commands/xgroup-setid/)
     fn xgroup_setid<K, G, I>(
-        &self,
+        &mut self,
         key: K,
         groupname: G,
         id: I,
@@ -289,7 +289,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-consumers/>](https://redis.io/commands/xinfo-consumers/)
-    fn xinfo_consumers<K, G>(&self, key: K, groupname: G) -> CommandResult<T, Vec<XConsumerInfo>>
+    fn xinfo_consumers<K, G>(&mut self, key: K, groupname: G) -> CommandResult<T, Vec<XConsumerInfo>>
     where
         K: Into<BulkString>,
         G: Into<BulkString>,
@@ -305,7 +305,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-groups/>](https://redis.io/commands/xinfo-groups/)
-    fn xinfo_groups<K>(&self, key: K) -> CommandResult<T, Vec<XGroupInfo>>
+    fn xinfo_groups<K>(&mut self, key: K) -> CommandResult<T, Vec<XGroupInfo>>
     where
         K: Into<BulkString>,
     {
@@ -319,7 +319,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-stream/>](https://redis.io/commands/xinfo-stream/)
-    fn xinfo_stream<K>(&self, key: K, options: XInfoStreamOptions) -> CommandResult<T, XStreamInfo>
+    fn xinfo_stream<K>(&mut self, key: K, options: XInfoStreamOptions) -> CommandResult<T, XStreamInfo>
     where
         K: Into<BulkString>,
     {
@@ -333,7 +333,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
-    fn xlen<K>(&self, key: K) -> CommandResult<T, usize>
+    fn xlen<K>(&mut self, key: K) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -344,7 +344,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
-    fn xpending<K, G>(&self, key: K, group: G) -> CommandResult<T, XPendingResult>
+    fn xpending<K, G>(&mut self, key: K, group: G) -> CommandResult<T, XPendingResult>
     where
         K: Into<BulkString>,
         G: Into<BulkString>,
@@ -357,7 +357,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
     fn xpending_with_options<K, G>(
-        &self,
+        &mut self,
         key: K,
         group: G,
         options: XPendingOptions,
@@ -381,7 +381,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
     fn xrange<K, S, E, V>(
-        &self,
+        &mut self,
         key: K,
         start: S,
         end: E,
@@ -411,7 +411,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xread/>](https://redis.io/commands/xread/)
     fn xread<K, KK, I, II, V>(
-        &self,
+        &mut self,
         options: XReadOptions,
         keys: KK,
         ids: II,
@@ -435,7 +435,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xreadgroup/>](https://redis.io/commands/xreadgroup/)
     fn xreadgroup<G, C, K, KK, I, II, V>(
-        &self,
+        &mut self,
         group: G,
         consumer: C,
         options: XReadGroupOptions,
@@ -473,7 +473,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/xrevrange/>](https://redis.io/commands/xrevrange/)
     fn xrevrange<K, E, S, V>(
-        &self,
+        &mut self,
         key: K,
         end: E,
         start: S,
@@ -501,7 +501,7 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xtrim/>](https://redis.io/commands/xtrim/)
-    fn xtrim<K>(&self, key: K, options: XTrimOptions) -> CommandResult<T, usize>
+    fn xtrim<K>(&mut self, key: K, options: XTrimOptions) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {

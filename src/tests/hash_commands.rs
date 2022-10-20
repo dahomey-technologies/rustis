@@ -5,7 +5,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hdel() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -27,7 +27,7 @@ async fn hdel() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hexists() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -49,7 +49,7 @@ async fn hexists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hget() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -65,7 +65,7 @@ async fn hget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hget_all() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -85,7 +85,7 @@ async fn hget_all() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hincrby() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -105,7 +105,7 @@ async fn hincrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hincrbyfloat() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -126,7 +126,7 @@ async fn hincrbyfloat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hkeys() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -146,7 +146,7 @@ async fn hkeys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hlen() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -164,7 +164,7 @@ async fn hlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hmget() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -185,7 +185,7 @@ async fn hmget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hrandfield() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("coin").await?;
@@ -223,7 +223,7 @@ async fn hrandfield() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hscan() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -252,7 +252,7 @@ async fn hscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hsetnx() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -273,7 +273,7 @@ async fn hsetnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hstrlen() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -290,7 +290,7 @@ async fn hstrlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn hvals() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;

@@ -28,7 +28,7 @@ async fn unknown_service() -> Result<()> {
 #[serial]
 async fn connection() -> Result<()> {
     log_try_init();
-    let client = Client::connect("redis+sentinel://127.0.0.1:26379/myservice").await?;
+    let mut client = Client::connect("redis+sentinel://127.0.0.1:26379/myservice").await?;
     client.hello(Default::default()).await?;
 
     Ok(())
@@ -39,7 +39,7 @@ async fn connection() -> Result<()> {
 #[serial]
 async fn connection_with_failures() -> Result<()> {
     log_try_init();
-    let client =
+    let mut client =
         Client::connect("redis+sentinel://127.0.0.1:1234,127.0.0.1:26379/myservice").await?;
     client.hello(Default::default()).await?;
 

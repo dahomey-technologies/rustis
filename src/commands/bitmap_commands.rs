@@ -17,7 +17,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
-    fn bitcount<K>(&self, key: K, range: BitRange) -> CommandResult<T, usize>
+    fn bitcount<K>(&mut self, key: K, range: BitRange) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -35,7 +35,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/bitfield/>](https://redis.io/commands/bitfield/)
     #[must_use]
-    fn bitfield<K, C, E, O>(&self, key: K, sub_commands: C) -> CommandResult<T, Vec<u64>>
+    fn bitfield<K, C, E, O>(&mut self, key: K, sub_commands: C) -> CommandResult<T, Vec<u64>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -56,7 +56,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/bitfield_ro/>](https://redis.io/commands/bitfield_ro/)
     #[must_use]
-    fn bitfield_readonly<K, C, E, O>(&self, key: K, get_commands: C) -> CommandResult<T, Vec<u64>>
+    fn bitfield_readonly<K, C, E, O>(&mut self, key: K, get_commands: C) -> CommandResult<T, Vec<u64>>
     where
         K: Into<BulkString>,
         E: Into<BulkString>,
@@ -77,7 +77,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/bitop/>](https://redis.io/commands/bitop/)
     #[must_use]
     fn bitop<D, K, KK>(
-        &self,
+        &mut self,
         operation: BitOperation,
         dest_key: D,
         keys: KK,
@@ -99,7 +99,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/bitpos/>](https://redis.io/commands/bitpos/)
     #[must_use]
-    fn bitpos<K>(&self, key: K, bit: u64, range: BitRange) -> CommandResult<T, usize>
+    fn bitpos<K>(&mut self, key: K, bit: u64, range: BitRange) -> CommandResult<T, usize>
     where
         K: Into<BulkString>,
     {
@@ -114,7 +114,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getbit/>](https://redis.io/commands/getbit/)
     #[must_use]
-    fn getbit<K>(&self, key: K, offset: u64) -> CommandResult<T, u64>
+    fn getbit<K>(&mut self, key: K, offset: u64) -> CommandResult<T, u64>
     where
         K: Into<BulkString>,
     {
@@ -129,7 +129,7 @@ pub trait BitmapCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setbit/>](https://redis.io/commands/setbit/)
     #[must_use]
-    fn setbit<K>(&self, key: K, offset: u64, value: u64) -> CommandResult<T, u64>
+    fn setbit<K>(&mut self, key: K, offset: u64, value: u64) -> CommandResult<T, u64>
     where
         K: Into<BulkString>,
     {

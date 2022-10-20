@@ -10,9 +10,9 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_exec() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     let value: String = transaction
         .set("key1", "value1")
@@ -35,9 +35,9 @@ async fn transaction_exec() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_error() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     let result = transaction.prepare_command::<Value>(cmd("UNKNOWN")).await;
     assert!(
@@ -46,7 +46,7 @@ async fn transaction_error() -> Result<()> {
 
     transaction.discard().await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     let result = transaction
         .set("key1", "abc")
@@ -66,7 +66,7 @@ async fn transaction_error() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn watch() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;
@@ -75,7 +75,7 @@ async fn watch() -> Result<()> {
     let mut value: i32 = client.get("key").await?;
     value += 1;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     transaction.set("key", value).await?.execute().await?;
 
@@ -85,10 +85,10 @@ async fn watch() -> Result<()> {
     let value = 3;
     client.watch("key").await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     // set key on another client during the transaction
-    let client2 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
     client2.set("key", value).await?;
 
     let result = transaction.set("key", value).await?.exec().await;
@@ -101,7 +101,7 @@ async fn watch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unwatch() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;
@@ -113,10 +113,10 @@ async fn unwatch() -> Result<()> {
     client.watch("key").await?;
     client.unwatch().await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     // set key on another client during the transaction
-    let client2 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
     client2.set("key", 3).await?;
 
     transaction.set("key", value).await?.execute().await?;
@@ -131,9 +131,9 @@ async fn unwatch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_discard() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
-    let transaction = client.create_transaction().await?;
+    let mut transaction = client.create_transaction().await?;
 
     transaction
         .set("key1", "value1")

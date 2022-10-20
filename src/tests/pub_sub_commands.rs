@@ -11,8 +11,8 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pubsub() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -54,7 +54,7 @@ async fn pubsub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn forbidden_command() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     // cleanup
     client.flushdb(FlushingMode::Sync).await?;
@@ -84,8 +84,8 @@ async fn forbidden_command() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn subscribe_to_multiple_channels() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -123,8 +123,8 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn subscribe_to_multiple_patterns() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -183,8 +183,8 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_channels() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     let mut stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2", "mychannel3", "otherchannel"])
@@ -217,8 +217,8 @@ async fn pub_sub_channels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_numpat() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(0, num_patterns);
@@ -237,8 +237,8 @@ async fn pub_sub_numpat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_numsub() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
-    let regular_client = get_test_client().await?;
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
 
     let num_sub: Vec<(String, usize)> = regular_client
         .pub_sub_numsub(["mychannel1", "mychannel2"])

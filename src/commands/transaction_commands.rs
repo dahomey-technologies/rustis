@@ -12,7 +12,7 @@ pub trait TransactionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
-    fn watch<K, KK>(&self, keys: KK) -> CommandResult<T, ()>
+    fn watch<K, KK>(&mut self, keys: KK) -> CommandResult<T, ()>
     where
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
@@ -28,7 +28,7 @@ pub trait TransactionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/unwatch/>](https://redis.io/commands/unwatch/)
     #[must_use]
-    fn unwatch(&self) -> CommandResult<T, ()> {
+    fn unwatch(&mut self) -> CommandResult<T, ()> {
         self.prepare_command(cmd("UNWATCH"))
     }
 }

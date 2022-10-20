@@ -18,7 +18,7 @@ pub struct Transaction<T> {
 }
 
 impl<T: Send + Sync> Transaction<T> {
-    pub(crate) async fn initialize(connection: Client) -> Result<Self> {
+    pub(crate) async fn initialize(mut connection: Client) -> Result<Self> {
         connection.send(cmd("MULTI")).await?.into::<()>()?;
         Ok(Self {
             phantom: PhantomData,
@@ -35,17 +35,17 @@ impl<T: Send + Sync> Transaction<T> {
         }
     }
 
-    pub(crate) async fn queue(&self, command: Command) -> Result<()> {
+    pub(crate) async fn queue(&mut self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(false);
         self.connection.send(command).await?.into()
     }
 
-    pub(crate) async fn queue_and_forget(&self, command: Command) -> Result<()> {
+    pub(crate) async fn queue_and_forget(&mut self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(true);
         self.connection.send(command).await?.into()
     }
 
-    pub(crate) fn execute<R: FromValue>(self) -> Future<'static, R> {
+    pub(crate) fn execute<R: FromValue>(mut self) -> Future<'static, R> {
         Box::pin(async move {
             let result = self.connection.send(cmd("EXEC")).await?;
 
@@ -76,13 +76,13 @@ impl<T: Send + Sync> Transaction<T> {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
-    pub async fn discard(self) -> Result<()> {
+    pub async fn discard(mut self) -> Result<()> {
         self.connection.send(cmd("DISCARD")).await?.into()
     }
 }
 
 impl<T: Send + Sync> PrepareCommand<T> for Transaction<T> {
-    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<T, R> {
+    fn prepare_command<R: FromValue>(&mut self, command: Command) -> CommandResult<T, R> {
         CommandResult::from_transaction(command, self)
     }
 }
@@ -97,7 +97,7 @@ impl<T: Send + Sync> SetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ScriptingCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> SortedSetCommands<T> for Transaction<T> {}
 impl<T: Send + Sync> ServerCommands<T> for Transaction<T> {
-    fn monitor(&self) -> Future<crate::MonitorStream> {
+    fn monitor(&mut self) -> Future<crate::MonitorStream> {
         unimplemented!("MONITOR command cannot be sent within a transaction")
     }
 }

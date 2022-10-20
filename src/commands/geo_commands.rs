@@ -21,7 +21,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/geoadd/>](https://redis.io/commands/geoadd/)
     #[must_use]
     fn geoadd<K, M, I>(
-        &self,
+        &mut self,
         key: K,
         condition: GeoAddCondition,
         change: bool,
@@ -51,7 +51,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/geodist/>](https://redis.io/commands/geodist/)
     #[must_use]
     fn geodist<K, M>(
-        &self,
+        &mut self,
         key: K,
         member1: M,
         member2: M,
@@ -73,7 +73,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
-    fn geohash<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<String>>
+    fn geohash<K, M, C>(&mut self, key: K, members: C) -> CommandResult<T, Vec<String>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -93,7 +93,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/geopos/>](https://redis.io/commands/geopos/)
     #[must_use]
-    fn geopos<K, M, C>(&self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
+    fn geopos<K, M, C>(&mut self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
     where
         K: Into<BulkString>,
         M: Into<BulkString>,
@@ -113,7 +113,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
     fn geosearch<K, M1, M2, A>(
-        &self,
+        &mut self,
         key: K,
         from: GeoSearchFrom<M1>,
         by: GeoSearchBy,
@@ -137,7 +137,7 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// [<https://redis.io/commands/geosearchstore/>](https://redis.io/commands/geosearchstore/)
     #[must_use]
     fn geosearchstore<D, S, M>(
-        &self,
+        &mut self,
         destination: D,
         source: S,
         from: GeoSearchFrom<M>,

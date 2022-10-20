@@ -7,7 +7,7 @@ use crate::{
     FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo,
     ModuleLoadOptions, Result, ServerCommands, StringCommands, ReplicaOfOptions, RoleResult, SlowLogOptions,
 };
-use futures::{join, StreamExt};
+use futures::{StreamExt};
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 
@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_cat() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let categories: Vec<String> = client.acl_cat(AclCatOptions::default()).await?;
@@ -33,7 +33,7 @@ async fn acl_cat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_deluser() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.acl_setuser("foo", Vec::<String>::new()).await?;
@@ -48,7 +48,7 @@ async fn acl_deluser() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_dryrun() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
@@ -76,7 +76,7 @@ async fn acl_dryrun() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_genpass() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let password: String = client.acl_genpass(AclGenPassOptions::default()).await?;
@@ -99,7 +99,7 @@ async fn acl_genpass() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_getuser() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.acl_setuser("foo", Vec::<String>::new()).await?;
@@ -118,7 +118,7 @@ async fn acl_getuser() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_list() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let users: Vec<String> = client.acl_list().await?;
@@ -132,7 +132,7 @@ async fn acl_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_load() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.acl_load().await;
@@ -147,7 +147,7 @@ async fn acl_load() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_log() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.auth(Some("someuser"), "wrongpassword").await;
@@ -170,7 +170,7 @@ async fn acl_log() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_save() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.acl_save().await;
@@ -185,7 +185,7 @@ async fn acl_save() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_setuser() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     // activate user + password + remove all key patterns + allow all commands
@@ -211,7 +211,7 @@ async fn acl_setuser() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_users() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.acl_setuser("foo", Vec::<String>::new()).await?;
@@ -233,7 +233,7 @@ async fn acl_users() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn acl_whoami() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let current_user: String = client.acl_whoami().await?;
@@ -259,7 +259,7 @@ async fn acl_whoami() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _command_infos = client.command().await?;
 
@@ -270,7 +270,7 @@ async fn command() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_info() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _command_infos = client.command_info("MGET").await?;
 
@@ -281,7 +281,7 @@ async fn command_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_count() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let command_infos = client.command().await?;
     let num_commands = client.command_count().await?;
@@ -294,7 +294,7 @@ async fn command_count() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_docs() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _command_docs: HashMap<String, CommandDoc> =
         client.command_docs(["XADD", "GET", "SET"]).await?;
@@ -306,7 +306,7 @@ async fn command_docs() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_getkeys() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let keys: Vec<String> = client
         .command_getkeys(["MSET", "a", "b", "c", "d", "e", "f"])
@@ -335,7 +335,7 @@ async fn command_getkeys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_getkeysandflags() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let keys_and_flags: HashMap<String, Vec<String>> = client
         .command_getkeysandflags(["MSET", "a", "b", "c", "d", "e", "f"])
@@ -369,7 +369,7 @@ async fn command_getkeysandflags() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn command_list() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let all_commands: Vec<String> = client.command_list(CommandListOptions::default()).await?;
     assert!(!all_commands.is_empty());
@@ -395,7 +395,7 @@ async fn command_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn config_get() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let configs: HashMap<String, String> = client
         .config_get(["hash-max-listpack-entries", "zset-max-listpack-entries"])
@@ -417,7 +417,7 @@ async fn config_get() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn config_resetstat() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.config_resetstat().await?;
 
@@ -428,7 +428,7 @@ async fn config_resetstat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn config_rewrite() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _result = client.config_rewrite().await;
 
@@ -439,7 +439,7 @@ async fn config_rewrite() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn config_set() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client
         .config_set([
@@ -475,7 +475,7 @@ async fn config_set() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn dbsize() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -492,7 +492,7 @@ async fn dbsize() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn failover() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client.failover(FailOverOptions::default()).await;
@@ -507,8 +507,8 @@ async fn failover() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn flushdb() -> Result<()> {
-    let client0 = get_test_client().await?;
-    let client1 = get_test_client().await?;
+    let mut client0 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
     client1.select(1).await?;
 
     client0.set("key1", "value1").await?;
@@ -538,8 +538,8 @@ async fn flushdb() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn flushall() -> Result<()> {
-    let client0 = get_test_client().await?;
-    let client1 = get_test_client().await?;
+    let mut client0 = get_test_client().await?;
+    let mut client1 = get_test_client().await?;
     client1.select(1).await?;
 
     client0.set("key1", "value1").await?;
@@ -569,7 +569,7 @@ async fn flushall() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn info() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let info = client.info([]).await?;
@@ -588,7 +588,7 @@ async fn info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lastsave() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let lastsave = client.lastsave().await?;
@@ -601,7 +601,7 @@ async fn lastsave() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_doctor() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.latency_doctor().await?;
@@ -614,7 +614,7 @@ async fn latency_doctor() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_graph() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -623,13 +623,9 @@ async fn latency_graph() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
-    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
-    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.3));
-    let fut5 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.5));
-    let fut4 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.4));
-
-    let _result = join!(fut1, fut2, fut3, fut4, fut5);
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
 
     let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -641,7 +637,7 @@ async fn latency_graph() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_histogram() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
@@ -668,7 +664,7 @@ async fn latency_histogram() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_history() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -677,11 +673,9 @@ async fn latency_history() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
-    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
-    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
-
-    let _result = join!(fut1, fut2, fut3);
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -693,7 +687,7 @@ async fn latency_history() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_latest() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -702,11 +696,9 @@ async fn latency_latest() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    let fut1 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.1));
-    let fut2 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
-    let fut3 = client.send(cmd("DEBUG").arg("SLEEP").arg(0.2));
-
-    let _result = join!(fut1, fut2, fut3);
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
     assert!(!report.is_empty());
@@ -718,7 +710,7 @@ async fn latency_latest() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn latency_reset() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -737,7 +729,7 @@ async fn latency_reset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lolwut() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.lolwut(Default::default()).await?;
@@ -750,7 +742,7 @@ async fn lolwut() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn memory_doctor() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.memory_doctor().await?;
@@ -763,7 +755,7 @@ async fn memory_doctor() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn memory_malloc_stats() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let report = client.memory_malloc_stats().await?;
@@ -776,7 +768,7 @@ async fn memory_malloc_stats() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn memory_purge() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.memory_purge().await?;
@@ -788,7 +780,7 @@ async fn memory_purge() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn memory_stats() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let _memory_stats = client.memory_stats().await?;
@@ -800,7 +792,7 @@ async fn memory_stats() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn memory_usage() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
@@ -827,7 +819,7 @@ async fn memory_usage() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn module_list() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let modules: Vec<ModuleInfo> = client.module_list().await?;
@@ -840,7 +832,7 @@ async fn module_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn module_load() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client
@@ -864,7 +856,7 @@ async fn module_load() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn module_unload() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client.module_unload("mymodule").await;
@@ -879,16 +871,16 @@ async fn module_unload() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn monitor() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
-    let client2 = get_test_client().await?;
+    let mut client2 = get_test_client().await?;
     client2.select(2).await?;
 
     let mut monitor_stream = client.monitor().await?;
 
     spawn(async move {
-        async fn calls(client: &Client) -> Result<()> {
+        async fn calls(client: &mut Client) -> Result<()> {
             client.set("key", "value1").await?;
             client.set("key", "value2").await?;
             client.set("key", "value3").await?;
@@ -896,7 +888,7 @@ async fn monitor() -> Result<()> {
             Ok(())
         }
 
-        let _result = calls(&client2).await;
+        let _result = calls(&mut client2).await;
     });
 
     for _ in 0..3 {
@@ -928,7 +920,7 @@ async fn monitor() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn replicaof() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.replicaof(ReplicaOfOptions::master("127.0.0.1", 6379)).await?;
     client.replicaof(ReplicaOfOptions::no_one()).await?;
@@ -940,7 +932,7 @@ async fn replicaof() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn role() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let role_result = client.role().await?;
     assert!(matches!(role_result, RoleResult::Master{ master_replication_offset: _, replica_infos: _ }));
@@ -959,7 +951,7 @@ async fn role() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn save() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.save().await?;
 
@@ -970,7 +962,7 @@ async fn save() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn slowlog_get() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _entries = client.slowlog_get(SlowLogOptions::default()).await?;
 
@@ -981,7 +973,7 @@ async fn slowlog_get() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn slowlog_len() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let _len = client.slowlog_len().await?;
 
@@ -992,7 +984,7 @@ async fn slowlog_len() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn slowlog_reset() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     client.slowlog_reset().await?;
     let len = client.slowlog_len().await?;
@@ -1005,7 +997,7 @@ async fn slowlog_reset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn swapdb() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.select(1).await?;
@@ -1024,7 +1016,7 @@ async fn swapdb() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn time() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut client = get_test_client().await?;
 
     let (_unix_timestamp, _microseconds) = client.time().await?;
 

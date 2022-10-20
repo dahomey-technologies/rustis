@@ -59,7 +59,7 @@ impl Client {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn send(&self, command: Command) -> Result<Value> {
+    pub async fn send(&mut self, command: Command) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let message = Message::new(command).value_sender(value_sender);
         self.send_message(message)?;
@@ -71,7 +71,7 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
-    pub fn send_and_forget(&self, command: Command) -> Result<()> {
+    pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
         let message = Message::new(command);
         self.send_message(message)?;
         Ok(())
@@ -81,18 +81,18 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
-    pub async fn create_transaction(&self) -> Result<Transaction<TransactionResult0>> {
+    pub async fn create_transaction(&mut self) -> Result<Transaction<TransactionResult0>> {
         Transaction::initialize(self.clone()).await
     }
 
-    fn send_message(&self, message: Message) -> Result<()> {
+    fn send_message(&mut self, message: Message) -> Result<()> {
         self.msg_sender.unbounded_send(message)?;
         Ok(())
     }
 }
 
 impl PrepareCommand<ClientResult> for Client {
-    fn prepare_command<R: FromValue>(&self, command: Command) -> CommandResult<ClientResult, R> {
+    fn prepare_command<R: FromValue>(&mut self, command: Command) -> CommandResult<ClientResult, R> {
         CommandResult::from_client(command, self)
     }
 }
@@ -108,7 +108,7 @@ impl ListCommands<ClientResult> for Client {}
 impl ScriptingCommands<ClientResult> for Client {}
 impl SentinelCommands<ClientResult> for Client {}
 impl ServerCommands<ClientResult> for Client {
-    fn monitor(&self) -> Future<crate::MonitorStream> {
+    fn monitor(&mut self) -> Future<crate::MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
@@ -132,7 +132,7 @@ impl StringCommands<ClientResult> for Client {}
 impl TransactionCommands<ClientResult> for Client {}
 
 impl PubSubCommands<ClientResult> for Client {
-    fn subscribe<'a, C, CC>(&'a self, channels: CC) -> Future<'a, PubSubStream>
+    fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,
         CC: SingleArgOrCollection<C>,
@@ -162,7 +162,7 @@ impl PubSubCommands<ClientResult> for Client {
         })
     }
 
-    fn psubscribe<'a, P, PP>(&'a self, patterns: PP) -> Future<'a, PubSubStream>
+    fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: Into<BulkString> + Send + 'a,
         PP: SingleArgOrCollection<P>,

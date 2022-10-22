@@ -16,7 +16,6 @@ use std::{
 };
 
 /// Client with a unique connection to a Redis server.
-#[derive(Clone)]
 pub struct Client {
     msg_sender: Arc<MsgSender>,
 }
@@ -32,6 +31,15 @@ impl Client {
         Ok(Self {
             msg_sender: Arc::new(msg_sender),
         })
+    }
+
+    /// We don't want the Client struct to be publicly cloneable
+    /// If one wants to consume a multiplexed client, 
+    /// the [MultiplexedClient](crate::MultiplexedClient) must be used instead
+    pub(crate) fn clone(&self) -> Client {
+        Client {
+            msg_sender: self.msg_sender.clone()
+        }
     }
 
     /// Send an arbitrary command to the server.

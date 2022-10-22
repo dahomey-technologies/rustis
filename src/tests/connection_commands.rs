@@ -2,7 +2,7 @@ use crate::{
     network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientCommandResult,
     ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
     ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error, FlushingMode,
-    GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result, ServerCommands,
+    GenericCommands, HelloOptions, PingOptions, Result, ServerCommands,
     StringCommands,
 };
 use futures::StreamExt;

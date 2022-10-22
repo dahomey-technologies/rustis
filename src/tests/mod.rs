@@ -8,6 +8,7 @@ mod geo_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
 mod list_commands;
+mod multiplexed_client;
 #[cfg(feature = "pool")]
 mod pooled_client_manager;
 mod pub_sub_commands;

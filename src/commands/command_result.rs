@@ -1,8 +1,7 @@
 use crate::{
     resp::{Command, FromValue},
-    Client, Connection, Error, Future, Result, Transaction,
+    Client, Connection, Error, Future, MultiplexedClient, Result, Transaction,
 };
-use futures::future::ready;
 use std::{future::IntoFuture, marker::PhantomData};
 
 pub enum CommandResult<'a, T, R>
@@ -10,6 +9,7 @@ where
     R: FromValue,
 {
     Client(PhantomData<(R, T)>, Command, &'a mut Client),
+    MultiplexedClient(PhantomData<(R, T)>, Command, &'a mut MultiplexedClient),
     Connection(PhantomData<(R, T)>, Command, &'a mut Connection),
     Transaction(PhantomData<R>, Command, &'a mut Transaction<T>),
 }
@@ -22,6 +22,11 @@ where
     #[must_use]
     pub fn from_client(command: Command, client: &'a mut Client) -> Self {
         CommandResult::Client(PhantomData, command, client)
+    }
+
+    #[must_use]
+    pub fn from_multiplexed_client(command: Command, client: &'a mut MultiplexedClient) -> Self {
+        CommandResult::MultiplexedClient(PhantomData, command, client)
     }
 
     #[must_use]
@@ -59,57 +64,6 @@ where
 
 pub trait PrepareCommand<T> {
     fn prepare_command<R: FromValue>(&mut self, command: Command) -> CommandResult<T, R>;
-}
-
-pub struct ClientResult;
-
-#[allow(clippy::module_name_repetitions)]
-pub trait ClientCommandResult<'a, R>
-where
-    R: FromValue,
-{
-    /// Send command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
-    fn forget(self) -> Result<()>;
-}
-
-impl<'a, R> ClientCommandResult<'a, R> for CommandResult<'a, ClientResult, R>
-where
-    R: FromValue + Send + 'a,
-{
-    /// Send command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
-    fn forget(self) -> Result<()> {
-        if let CommandResult::Client(_, command, client) = self {
-            client.send_and_forget(command)
-        } else {
-            Err(Error::Client(
-                "send_and_forget method must be called with a valid client".to_owned(),
-            ))
-        }
-    }
-}
-
-impl<'a, R> IntoFuture for CommandResult<'a, ClientResult, R>
-where
-    R: FromValue + Send + 'a,
-{
-    type Output = Result<R>;
-    type IntoFuture = Future<'a, R>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        if let CommandResult::Client(_, command, client) = self {
-            Box::pin(async move { client.send(command).await?.into() })
-        } else {
-            Box::pin(ready(Err(Error::Client(
-                "send method must be called with a valid client".to_owned(),
-            ))))
-        }
-    }
 }
 
 #[derive(Debug)]

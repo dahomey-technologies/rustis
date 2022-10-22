@@ -8,7 +8,7 @@ async fn unreachable() -> Result<()> {
     log_try_init();
     let result = Client::connect("redis+sentinel://127.0.0.1:1234,127.0.0.1:5678/myservice").await;
     assert!(result.is_err());
-
+    
     Ok(())
 }
 

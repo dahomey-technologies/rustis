@@ -1,9 +1,15 @@
-use crate::Result;
+use crate::{Result};
+#[cfg(feature = "tokio-runtime")]
+use crate::Error;
 #[cfg(feature = "tls")]
 use crate::TlsConfig;
-use futures::Future;
+use futures::{Future, FutureExt};
 use log::{debug, info};
-use std::time::Duration;
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
@@ -114,22 +120,49 @@ pub(crate) async fn tcp_tls_connect(
     Ok((reader, writer))
 }
 
+pub enum JoinHandle<T> {
+    #[cfg(feature = "tokio-runtime")]
+    Tokio(tokio::task::JoinHandle<T>),
+    #[cfg(feature = "async-std-runtime")]
+    AsyncStd(async_std::task::JoinHandle<T>),
+}
+
+impl<T> Future for JoinHandle<T> {
+    type Output = Result<T>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.get_mut() {
+            #[cfg(feature = "tokio-runtime")]
+            JoinHandle::Tokio(join_handle) => match join_handle.poll_unpin(cx) {
+                Poll::Ready(Ok(result)) => Poll::Ready(Ok(result)),
+                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Redis(format!("JoinError: {e}")))),
+                Poll::Pending => Poll::Pending,
+            },
+            #[cfg(feature = "async-std-runtime")]
+            JoinHandle::AsyncStd(join_handle) => match join_handle.poll_unpin(cx) {
+                Poll::Ready(result) => Poll::Ready(Ok(result)),
+                Poll::Pending => Poll::Pending,
+            },
+        }
+    }
+}
+
 #[cfg(feature = "tokio-runtime")]
-pub(crate) fn spawn<F, T>(future: F)
+pub(crate) fn spawn<F, T>(future: F) -> JoinHandle<T>
 where
     F: Future<Output = T> + Send + 'static,
     T: Send + 'static,
 {
-    tokio::spawn(future);
+    JoinHandle::Tokio(tokio::spawn(future))
 }
 
 #[cfg(feature = "async-std-runtime")]
-pub(crate) fn spawn<F, T>(future: F)
+pub(crate) fn spawn<F, T>(future: F) -> JoinHandle<T>
 where
     F: Future<Output = T> + Send + 'static,
     T: Send + 'static,
 {
-    async_std::task::spawn(future);
+    JoinHandle::AsyncStd(async_std::task::spawn(future))
 }
 
 #[allow(dead_code)]

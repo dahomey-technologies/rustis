@@ -1,13 +1,10 @@
 use crate::{
-    network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    BitmapCommands, BlockingCommands, CommandResult, ConnectionCommands, Error, Future,
-    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands,
-    IntoConfig, ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
-    PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands,
-    SentinelCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
-    StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
-    ValueSender,
+    BitmapCommands, CommandResult, ConnectionCommands, Error, Future, GenericCommands, GeoCommands,
+    HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig, ListCommands, Message,
+    MsgSender, MultiplexedPubSubStream, NetworkHandler, PrepareCommand, PubSubCommands,
+    PubSubReceiver, PubSubSender, Result, ScriptingCommands, SentinelCommands, ServerCommands,
+    SetCommands, SortedSetCommands, StreamCommands, StringCommands, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::{
@@ -15,15 +12,25 @@ use std::{
     sync::Arc,
 };
 
-/// Client with a unique connection to a Redis server.
+/// A multiplexed client that can be cloned, allowing requests
+/// to be be sent concurrently on the same underlying connection.
+/// 
+/// Compared to a [single client](crate::Client), a multiplexed client cannot offers access
+/// to all existing Redis commands.
+/// Transactions and [blocking commands](crate::BlockingCommands) are not compatible with a multiplexed client
+/// because they monopolize the whole connection which cannot be shared anymore. It means other consumers of the same
+/// multiplexed client will be blocked each time a transaction or a blocking command is in progress, losing the advantage
+/// of a shared connection.
+/// 
+/// #See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 #[derive(Clone)]
-pub struct Client {
+pub struct MultiplexedClient {
     msg_sender: Arc<MsgSender>,
 }
 
-impl Client {
+impl MultiplexedClient {
     /// Connects asynchronously to the Redis server.
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
@@ -81,14 +88,6 @@ impl Client {
         Ok(())
     }
 
-    /// Create a new transaction
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error)
-    pub async fn create_transaction(&mut self) -> Result<Transaction<TransactionResult0>> {
-        Transaction::initialize(self.clone()).await
-    }
-
     fn send_message(&mut self, message: Message) -> Result<()> {
         self.msg_sender.unbounded_send(message)?;
         Ok(())
@@ -99,15 +98,15 @@ impl Client {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, Client, ClientCommandResult, FlushingMode,
+    ///     resp::cmd, MultiplexedClient, MultiplexedClientCommandResult, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
-    ///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut pub_sub_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
+    ///     let mut regular_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
     ///
     ///     regular_client.flushdb(FlushingMode::Sync).await?;
     ///
@@ -132,7 +131,7 @@ impl Client {
     ///
     /// # See Also
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
-    pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
+    pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, MultiplexedPubSubStream>
     where
         C: Into<BulkString> + Send + 'a,
         CC: SingleArgOrCollection<C>,
@@ -157,7 +156,7 @@ impl Client {
 
             let value = value_receiver.await?;
             value.map_into_result(|_| {
-                PubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
+                MultiplexedPubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
             })
         })
     }
@@ -167,15 +166,15 @@ impl Client {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, Client, ClientCommandResult, FlushingMode,
+    ///     resp::cmd, MultiplexedClient, MultiplexedClientCommandResult, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
-    ///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut pub_sub_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
+    ///     let mut regular_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
     ///
     ///     regular_client.flushdb(FlushingMode::Sync).await?;
     ///
@@ -201,7 +200,7 @@ impl Client {
     ///
     /// # See Also
     /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
-    pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
+    pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, MultiplexedPubSubStream>
     where
         P: Into<BulkString> + Send + 'a,
         PP: SingleArgOrCollection<P>,
@@ -226,25 +225,25 @@ impl Client {
 
             let value = value_receiver.await?;
             value.map_into_result(|_| {
-                PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
+                MultiplexedPubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
             })
         })
     }
 }
 
-impl PrepareCommand<ClientResult> for Client {
+impl PrepareCommand<MultiplexedClientResult> for MultiplexedClient {
     fn prepare_command<R: FromValue>(
         &mut self,
         command: Command,
-    ) -> CommandResult<ClientResult, R> {
-        CommandResult::from_client(command, self)
+    ) -> CommandResult<MultiplexedClientResult, R> {
+        CommandResult::from_multiplexed_client(command, self)
     }
 }
 
-pub struct ClientResult;
+pub struct MultiplexedClientResult;
 
 #[allow(clippy::module_name_repetitions)]
-pub trait ClientCommandResult<'a, R>
+pub trait MultiplexedClientCommandResult<'a, R>
 where
     R: FromValue,
 {
@@ -255,7 +254,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> ClientCommandResult<'a, R> for CommandResult<'a, ClientResult, R>
+impl<'a, R> MultiplexedClientCommandResult<'a, R> for CommandResult<'a, MultiplexedClientResult, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -264,17 +263,17 @@ where
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn forget(self) -> Result<()> {
-        if let CommandResult::Client(_, command, client) = self {
+        if let CommandResult::MultiplexedClient(_, command, client) = self {
             client.send_and_forget(command)
         } else {
             Err(Error::Client(
-                "send_and_forget method must be called with a valid client".to_owned(),
+                "send_and_forget method must be called with a valid multiplexed client".to_owned(),
             ))
         }
     }
 }
 
-impl<'a, R> IntoFuture for CommandResult<'a, ClientResult, R>
+impl<'a, R> IntoFuture for CommandResult<'a, MultiplexedClientResult, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -282,7 +281,7 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        if let CommandResult::Client(_, command, client) = self {
+        if let CommandResult::MultiplexedClient(_, command, client) = self {
             Box::pin(async move { client.send(command).await?.into() })
         } else {
             Box::pin(ready(Err(Error::Client(
@@ -292,39 +291,19 @@ where
     }
 }
 
-impl BitmapCommands<ClientResult> for Client {}
-impl ConnectionCommands<ClientResult> for Client {}
-impl GenericCommands<ClientResult> for Client {}
-impl GeoCommands<ClientResult> for Client {}
-impl HashCommands<ClientResult> for Client {}
-impl HyperLogLogCommands<ClientResult> for Client {}
-impl InternalPubSubCommands<ClientResult> for Client {}
-impl ListCommands<ClientResult> for Client {}
-impl PubSubCommands<ClientResult> for Client {}
-impl ScriptingCommands<ClientResult> for Client {}
-impl SentinelCommands<ClientResult> for Client {}
-impl ServerCommands<ClientResult> for Client {}
-impl SetCommands<ClientResult> for Client {}
-impl SortedSetCommands<ClientResult> for Client {}
-impl StreamCommands<ClientResult> for Client {}
-impl StringCommands<ClientResult> for Client {}
-impl TransactionCommands<ClientResult> for Client {}
-
-impl BlockingCommands<ClientResult> for Client {
-    fn monitor(&mut self) -> Future<crate::MonitorStream> {
-        Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-            let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
-                mpsc::unbounded();
-
-            let message = Message::new(cmd("MONITOR"))
-                .value_sender(value_sender)
-                .monitor_sender(monitor_sender);
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
-        })
-    }
-}
+impl BitmapCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl ConnectionCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl GenericCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl GeoCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl HashCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl HyperLogLogCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl InternalPubSubCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl ListCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl ScriptingCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl SentinelCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl ServerCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl SetCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl SortedSetCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl StreamCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl StringCommands<MultiplexedClientResult> for MultiplexedClient {}
+impl PubSubCommands<MultiplexedClientResult> for MultiplexedClient {}

@@ -1,6 +1,6 @@
 use crate::{
     resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
-    sleep, tcp_connect, Config, ConnectionCommands, Error, Future, IntoConfig, PreparedCommand,
+    sleep, tcp_connect, Config, ConnectionCommands, Error, Future, PreparedCommand,
     Result, RoleResult, SentinelCommands, SentinelConfig, ServerCommands, ServerConfig,
     TcpStreamReader, TcpStreamWriter,
 };
@@ -100,6 +100,30 @@ impl Streams {
     }
 }
 
+impl<'a, R> IntoFuture for PreparedCommand<'a, Streams, R>
+where
+    R: FromValue + Send + 'a,
+{
+    type Output = Result<R>;
+    type IntoFuture = Future<'a, R>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move { 
+            self.executor.write(self.command).await?;
+
+            self.executor.read()
+                .await
+                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+                .into_result()?
+                .into()
+         })
+    }
+}
+
+impl ServerCommands for Streams {}
+impl SentinelCommands for Streams {}
+impl ConnectionCommands for Streams {}
+
 pub struct Connection {
     config: Config,
     streams: Streams,
@@ -117,10 +141,6 @@ impl Connection {
 
     pub async fn write_raw(&mut self, buffer: &mut BytesMut) -> Result<()> {
         self.streams.write_raw(buffer).await
-    }
-
-    pub async fn write(&mut self, command: Command) -> Result<()> {
-        self.streams.write(command).await
     }
 
     pub async fn read(&mut self) -> Option<Result<Value>> {
@@ -152,13 +172,13 @@ impl Connection {
     async fn post_connect(&mut self) -> Result<()> {
         // authentication
         if let Some(ref password) = self.config.password {
-            self.auth(self.config.username.clone(), password.clone())
+            self.streams.auth(self.config.username.clone(), password.clone())
                 .await?;
         }
 
         // select database
         if self.config.database != 0 {
-            self.select(self.config.database).await?;
+            self.streams.select(self.config.database).await?;
         }
 
         Ok(())
@@ -182,9 +202,8 @@ impl Connection {
                 for sentinel_instance in &sentinel_config.instances {
                     // Step 1: connecting to Sentinel
                     let (host, port) = sentinel_instance;
-                    let config_for_sentinel = sentinel_instance.clone().into_config()?;
 
-                    match Connection::initialize(config_for_sentinel).await {
+                    match Streams::connect_non_secure(host, *port).await {
                         Ok(mut sentinel_connection) => {
                             // Step 2: ask for master address
                             let result: Result<Option<(String, u16)>> = sentinel_connection
@@ -198,42 +217,17 @@ impl Connection {
                                     match result {
                                         Some((master_host, master_port)) => {
                                             // Step 3: call the ROLE command in the target instance
-                                            let master_config: Config;
+                                            let mut master_streams =
+                                                Streams::connect(&master_host, master_port, _config).await?;
 
-                                            #[cfg(feature = "tls")]
-                                            {
-                                                master_config = Config {
-                                                    server: ServerConfig::Single {
-                                                        host: master_host,
-                                                        port: master_port,
-                                                    },
-                                                    tls_config: _config.tls_config.clone(),
-                                                    ..Default::default()
-                                                };
-                                            }
-
-                                            #[cfg(not(feature = "tls"))]
-                                            {
-                                                master_config = Config {
-                                                    server: ServerConfig::Single {
-                                                        host: master_host,
-                                                        port: master_port,
-                                                    },
-                                                    ..Default::default()
-                                                };
-                                            }
-
-                                            let mut master_connection =
-                                                Self::initialize(master_config).await?;
-
-                                            let role: RoleResult = master_connection.role().await?;
+                                            let role: RoleResult = master_streams.role().await?;
 
                                             if let RoleResult::Master {
                                                 master_replication_offset: _,
                                                 replica_infos: _,
                                             } = role
                                             {
-                                                return Ok(master_connection.streams);
+                                                return Ok(master_streams);
                                             } else {
                                                 sleep(sentinel_config.wait_beetween_failures).await;
                                                 // restart from the beginning
@@ -283,29 +277,5 @@ impl Connection {
             }
         })
     }
-
-    async fn send(&mut self, command: Command) -> Result<Value> {
-        self.write(command).await?;
-
-        self.read()
-            .await
-            .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
-            .into_result()
-    }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
-where
-    R: FromValue + Send + 'a,
-{
-    type Output = Result<R>;
-    type IntoFuture = Future<'a, R>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { self.executor.send(self.command).await?.into() })
-    }
-}
-
-impl ServerCommands for Connection {}
-impl SentinelCommands for Connection {}
-impl ConnectionCommands for Connection {}

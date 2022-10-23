@@ -2,12 +2,14 @@ use crate::{
     resp::{Array, BulkString, CommandArgs, Value},
     spawn, Config, Connection, Error, Message, Result,
 };
+use bytes::BytesMut;
 use futures::{
     channel::{mpsc, oneshot},
     select, FutureExt, SinkExt, StreamExt,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, log_enabled, Level};
 use std::collections::{HashMap, VecDeque};
+use tokio_util::codec::Encoder;
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
@@ -33,6 +35,8 @@ pub(crate) struct NetworkHandler {
     connection: Connection,
     msg_receiver: MsgReceiver,
     value_senders: VecDeque<Option<ValueSender>>,
+    messages: VecDeque<Message>,
+    buffer: BytesMut,
     pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
     /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
     pending_unsubscriptions: VecDeque<usize>,
@@ -52,6 +56,8 @@ impl NetworkHandler {
             connection,
             msg_receiver,
             value_senders,
+            messages: VecDeque::new(),
+            buffer: BytesMut::new(),
             pending_subscriptions: HashMap::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
@@ -81,83 +87,133 @@ impl NetworkHandler {
     }
 
     async fn handle_message(&mut self, msg: Option<Message>) -> bool {
-        if let Some(mut msg) = msg {
-            let pub_sub_senders = msg.pub_sub_senders.take();
-            if let Some(pub_sub_senders) = pub_sub_senders {
-                self.pending_subscriptions.extend(pub_sub_senders);
-            }
+        let is_channel_closed: bool;
+        let mut msg = msg;
 
-            match &self.status {
-                Status::Connected => {
-                    match msg.command.name {
-                        "SUBSCRIBE" | "PSUBSCRIBE" => {
-                            self.status = Status::Subscribing;
-                        }
-                        "CLIENT" => match &msg.command.args {
-                            CommandArgs::Array2(args)
-                                if args[0].as_bytes() == b"REPLY"
-                                    && (args[1].as_bytes() == b"OFF"
-                                        || args[1].as_bytes() == b"SKIP") =>
-                            {
-                                self.is_reply_on = false
+        loop {
+            if let Some(mut msg) = msg {
+                let pub_sub_senders = msg.pub_sub_senders.take();
+                if let Some(pub_sub_senders) = pub_sub_senders {
+                    self.pending_subscriptions.extend(pub_sub_senders);
+                }
+
+                match &self.status {
+                    Status::Connected => {
+                        match msg.command.name {
+                            "SUBSCRIBE" | "PSUBSCRIBE" => {
+                                self.status = Status::Subscribing;
                             }
-                            CommandArgs::Array2(args)
-                                if args[0].as_bytes() == b"REPLY"
-                                    && args[1].as_bytes() == b"ON" =>
-                            {
-                                self.is_reply_on = true
+                            "MONITOR" => {
+                                self.monitor_sender = msg.monitor_sender.take();
+                                self.status = Status::EnteringMonitor;
                             }
                             _ => (),
-                        },
-                        "MONITOR" => {
-                            self.monitor_sender = msg.monitor_sender.take();
-                            self.status = Status::EnteringMonitor;
                         }
-                        _ => (),
+                        self.messages.push_back(msg);
                     }
-                    self.send_message(msg).await;
-                }
-                Status::Subscribing => {
-                    self.send_message(msg).await;
-                }
-                Status::Subscribed => {
-                    if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = msg.command.name {
-                        self.pending_unsubscriptions
-                            .push_back(msg.command.args.len());
+                    Status::Subscribing => {
+                        self.messages.push_back(msg);
                     }
-                    self.send_message(msg).await;
-                }
-                Status::Disconnected => {
-                    let value_sender = msg.value_sender;
-                    if let Some(value_sender) = value_sender {
-                        let _result = value_sender
-                            .send(Err(Error::Client("Disconnected from server".to_string())));
+                    Status::Subscribed => {
+                        if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = msg.command.name {
+                            self.pending_unsubscriptions
+                                .push_back(msg.command.args.len());
+                        }
+                        self.messages.push_back(msg);
+                    }
+                    Status::Disconnected => {
+                        let value_sender = msg.value_sender;
+                        if let Some(value_sender) = value_sender {
+                            let _result = value_sender
+                                .send(Err(Error::Client("Disconnected from server".to_string())));
+                        }
+                    }
+                    Status::EnteringMonitor => self.messages.push_back(msg),
+                    Status::Monitor => {
+                        if msg.command.name == "RESET" {
+                            self.status = Status::LeavingMonitor;
+                        }
+                        self.messages.push_back(msg);
+                    }
+                    Status::LeavingMonitor => {
+                        self.messages.push_back(msg);
                     }
                 }
-                Status::EnteringMonitor => self.send_message(msg).await,
-                Status::Monitor => {
-                    if msg.command.name == "RESET" {
-                        self.status = Status::LeavingMonitor;
-                    }
-                    self.send_message(msg).await;
-                }
-                Status::LeavingMonitor => {
-                    self.send_message(msg).await;
+            } else {
+                is_channel_closed = true;
+                break;
+            }
+
+            match self.msg_receiver.try_next() {
+                Ok(m) => msg = m,
+                Err(_) => {
+                    // there are no messages available, but channel is not yet closed
+                    is_channel_closed = false;
+                    break;
                 }
             }
-            true
-        } else {
-            false
         }
+
+        self.send_messages().await;
+        self.messages.clear();
+
+        !is_channel_closed
     }
 
-    async fn send_message(&mut self, msg: Message) {
-        let command = msg.command;
-        let value_sender = msg.value_sender;
-        match (self.is_reply_on, self.connection.write(command).await) {
-            (true, _) => self.value_senders.push_back(value_sender),
-            (false, _) => (),
+    async fn send_messages(&mut self) {
+        if log_enabled!(Level::Debug) && self.messages.len() > 1 {
+            debug!("sending batch of {} messages", self.messages.len());
         }
+
+        let mut num_value_senders = 0;
+
+        while let Some(msg) = self.messages.pop_front() {
+            let command = msg.command;
+            let value_sender = msg.value_sender;
+
+            debug!("Sending {command:?}");
+
+            if command.name == "CLIENT" {
+                match &command.args {
+                    CommandArgs::Array2(args)
+                        if args[0].as_bytes() == b"REPLY"
+                            && (args[1].as_bytes() == b"OFF" || args[1].as_bytes() == b"SKIP") =>
+                    {
+                        self.is_reply_on = false
+                    }
+                    CommandArgs::Array2(args)
+                        if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
+                    {
+                        self.is_reply_on = true
+                    }
+                    _ => (),
+                }
+            }
+
+            let command_encoder = self.connection.get_encoder_mut();
+            if let Err(e) = command_encoder.encode(command, &mut self.buffer) {
+                if self.is_reply_on {
+                    if let Some(value_sender) = value_sender {
+                        let _result = value_sender.send(Err(Error::Client(e.to_string())));
+                        continue;
+                    }
+                }
+            }
+
+            if self.is_reply_on {
+                self.value_senders.push_back(value_sender);
+                num_value_senders += 1;
+            }
+        }
+
+        if let Err(e) =  self.connection.write_raw(&mut self.buffer).await {
+            for _ in 0..num_value_senders {
+                if let Some(Some(value_sender)) = self.value_senders.pop_front() {
+                    let _result = value_sender.send(Err(Error::Client(e.to_string())));
+                }
+            }
+        }
+        self.buffer.clear();
     }
 
     async fn handle_result(&mut self, result: Option<Result<Value>>) -> Result<()> {

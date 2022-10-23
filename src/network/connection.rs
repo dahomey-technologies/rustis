@@ -6,9 +6,11 @@ use crate::{
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
+use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
 use std::future::{ready, IntoFuture};
+use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 enum Streams {
@@ -23,24 +25,50 @@ enum Streams {
     ),
 }
 
-pub struct Connection {
-    config: Config,
-    streams: Streams,
-}
+impl Streams {
+    pub async fn connect(host: &str, port: u16, _config: &Config) -> Result<Self> {
+        #[cfg(feature = "tls")]
+        if let Some(tls_config) = &_config.tls_config {
+            let (reader, writer) = tcp_tls_connect(host, port, tls_config).await?;
+            let framed_read = FramedRead::new(reader, ValueDecoder);
+            let framed_write = FramedWrite::new(writer, CommandEncoder);
+            Ok(Streams::TcpTls(framed_read, framed_write))
+        } else {
+            Self::connect_non_secure(host, port).await
+        }
 
-impl Connection {
-    pub async fn initialize(config: Config) -> Result<Self> {
-        let streams = Self::connect(&config).await?;
+        #[cfg(not(feature = "tls"))]
+        Self::connect_non_secure(host, port).await
+    }
 
-        let mut connection = Self { config, streams };
-        connection.post_connect().await?;
+    pub async fn connect_non_secure(host: &str, port: u16) -> Result<Self> {
+        let (reader, writer) = tcp_connect(host, port).await?;
+        let framed_read = FramedRead::new(reader, ValueDecoder);
+        let framed_write = FramedWrite::new(writer, CommandEncoder);
+        Ok(Streams::Tcp(framed_read, framed_write))
+    }
 
-        Ok(connection)
+    pub fn get_encoder_mut(&mut self) -> &mut CommandEncoder {
+        match self {
+            Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
+            #[cfg(feature = "tls")]
+            Streams::TcpTls(_, framed_write) => framed_write.encoder_mut(),
+        }
+    }
+
+    pub async fn write_raw(&mut self, bytes: &mut BytesMut) -> Result<()> {
+        match self {
+            Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(bytes).await?,
+            #[cfg(feature = "tls")]
+            Streams::TcpTls(_, framed_write) => framed_write.get_mut().write_all(bytes).await?,
+        }
+
+        Ok(())
     }
 
     pub async fn write(&mut self, command: Command) -> Result<()> {
         debug!("Sending {command:?}");
-        match &mut self.streams {
+        match self {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(feature = "tls")]
             Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
@@ -48,7 +76,7 @@ impl Connection {
     }
 
     pub async fn read(&mut self) -> Option<Result<Value>> {
-        if let Some(value) = match &mut self.streams {
+        if let Some(value) = match self {
             Streams::Tcp(framed_read, _) => framed_read.next().await,
             #[cfg(feature = "tls")]
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
@@ -70,8 +98,36 @@ impl Connection {
             None
         }
     }
+}
 
-    pub(crate) async fn reconnect(&mut self) -> Result<()> {
+pub struct Connection {
+    config: Config,
+    streams: Streams,
+}
+
+impl Connection {
+    pub async fn initialize(config: Config) -> Result<Self> {
+        let streams = Self::connect(&config).await?;
+
+        let mut connection = Self { config, streams };
+        connection.post_connect().await?;
+
+        Ok(connection)
+    }
+
+    pub async fn write_raw(&mut self, buffer: &mut BytesMut) -> Result<()> {
+        self.streams.write_raw(buffer).await
+    }
+
+    pub async fn write(&mut self, command: Command) -> Result<()> {
+        self.streams.write(command).await
+    }
+
+    pub async fn read(&mut self) -> Option<Result<Value>> {
+        self.streams.read().await
+    }
+
+    pub async fn reconnect(&mut self) -> Result<()> {
         self.streams = Self::connect(&self.config).await?;
         self.post_connect().await?;
 
@@ -80,10 +136,14 @@ impl Connection {
         // TODO improve reconnection strategy with multiple retries
     }
 
+    pub(crate) fn get_encoder_mut(&mut self) -> &mut CommandEncoder {
+        self.streams.get_encoder_mut()
+    }
+
     async fn connect(config: &Config) -> Result<Streams> {
         match &config.server {
             ServerConfig::Single { host, port } => {
-                Self::connect_single_server(host, *port, config).await
+                Streams::connect(host, *port, config).await
             }
             ServerConfig::Sentinel(sentinel_config) => {
                 Self::connect_with_sentinel(sentinel_config, config).await
@@ -104,28 +164,6 @@ impl Connection {
         }
 
         Ok(())
-    }
-
-    async fn connect_with_addr(host: &str, port: u16) -> Result<Streams> {
-        let (reader, writer) = tcp_connect(host, port).await?;
-        let framed_read = FramedRead::new(reader, ValueDecoder);
-        let framed_write = FramedWrite::new(writer, CommandEncoder);
-        Ok(Streams::Tcp(framed_read, framed_write))
-    }
-
-    async fn connect_single_server(host: &str, port: u16, _config: &Config) -> Result<Streams> {
-        #[cfg(feature = "tls")]
-        if let Some(tls_config) = &_config.tls_config {
-            let (reader, writer) = tcp_tls_connect(host, port, tls_config).await?;
-            let framed_read = FramedRead::new(reader, ValueDecoder);
-            let framed_write = FramedWrite::new(writer, CommandEncoder);
-            Ok(Streams::TcpTls(framed_read, framed_write))
-        } else {
-            Self::connect_with_addr(host, port).await
-        }
-
-        #[cfg(not(feature = "tls"))]
-        Self::connect_with_addr(host, port).await
     }
 
     /// Follow `Redis service discovery via Sentinel` documentation

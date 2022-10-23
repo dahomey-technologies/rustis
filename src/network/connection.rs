@@ -1,19 +1,19 @@
 use crate::{
     resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
-    sleep, tcp_connect, CommandResult, Config, ConnectionCommands, Error, Future, IntoConfig,
-    PrepareCommand, Result, RoleResult, SentinelCommands, SentinelConfig, ServerCommands,
-    ServerConfig, TcpStreamReader, TcpStreamWriter,
+    sleep, tcp_connect, Config, ConnectionCommands, Error, Future, IntoConfig, PreparedCommand,
+    Result, RoleResult, SentinelCommands, SentinelConfig, ServerCommands, ServerConfig,
+    TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
-use std::future::{ready, IntoFuture};
+use std::future::IntoFuture;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-enum Streams {
+pub(crate) enum Streams {
     Tcp(
         FramedRead<TcpStreamReader, ValueDecoder>,
         FramedWrite<TcpStreamWriter, CommandEncoder>,
@@ -142,9 +142,7 @@ impl Connection {
 
     async fn connect(config: &Config) -> Result<Streams> {
         match &config.server {
-            ServerConfig::Single { host, port } => {
-                Streams::connect(host, *port, config).await
-            }
+            ServerConfig::Single { host, port } => Streams::connect(host, *port, config).await,
             ServerConfig::Sentinel(sentinel_config) => {
                 Self::connect_with_sentinel(sentinel_config, config).await
             }
@@ -296,18 +294,7 @@ impl Connection {
     }
 }
 
-pub struct ConnectionResult;
-
-impl PrepareCommand<ConnectionResult> for Connection {
-    fn prepare_command<R: FromValue>(
-        &mut self,
-        command: Command,
-    ) -> CommandResult<ConnectionResult, R> {
-        CommandResult::from_connection(command, self)
-    }
-}
-
-impl<'a, R> IntoFuture for CommandResult<'a, ConnectionResult, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -315,16 +302,10 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        if let CommandResult::Connection(_, command, connection) = self {
-            Box::pin(async move { connection.send(command).await?.into() })
-        } else {
-            Box::pin(ready(Err(Error::Client(
-                "send method must be called with a valid connection".to_owned(),
-            ))))
-        }
+        Box::pin(async move { self.executor.send(self.command).await?.into() })
     }
 }
 
-impl ServerCommands<ConnectionResult> for Connection {}
-impl SentinelCommands<ConnectionResult> for Connection {}
-impl ConnectionCommands<ConnectionResult> for Connection {}
+impl ServerCommands for Connection {}
+impl SentinelCommands for Connection {}
+impl ConnectionCommands for Connection {}

@@ -1,7 +1,8 @@
 use crate::{
+    prepare_command,
     resp::{cmd, Value},
     tests::get_test_client,
-    Error, FlushingMode, ListCommands, PrepareCommand, Result, ServerCommands, StringCommands,
+    Error, FlushingMode, ListCommands, Result, ServerCommands, StringCommands,
     TransactionCommandResult, TransactionCommands, TransactionExt,
 };
 use serial_test::serial;
@@ -39,7 +40,7 @@ async fn transaction_error() -> Result<()> {
 
     let mut transaction = client.create_transaction().await?;
 
-    let result = transaction.prepare_command::<Value>(cmd("UNKNOWN")).await;
+    let result = prepare_command::<_, Value>(&mut transaction, cmd("UNKNOWN")).await;
     assert!(
         matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR unknown command 'UNKNOWN'"))
     );

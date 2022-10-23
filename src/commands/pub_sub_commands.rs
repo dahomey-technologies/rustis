@@ -1,12 +1,16 @@
 use crate::{
-    resp::{cmd, BulkString, SingleArgOrCollection, CommandArgs, IntoArgs, FromValue, FromSingleValueArray, FromKeyValueValueArray},
-    CommandResult, PrepareCommand,
+    prepare_command,
+    resp::{
+        cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
+        IntoArgs, SingleArgOrCollection,
+    },
+    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
 /// [Redis Pub/Sub Commands](https://redis.io/commands/?group=pubsub)
-pub trait PubSubCommands<T>: PrepareCommand<T> {
+pub trait PubSubCommands {
     /// Posts a message to the given channel.
     ///
     /// # Return
@@ -17,12 +21,13 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/publish/>](https://redis.io/commands/publish/)
-    fn publish<C, M>(&mut self, channel: C, message: M) -> CommandResult<T, usize>
+    fn publish<C, M>(&mut self, channel: C, message: M) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         C: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.prepare_command(cmd("PUBLISH").arg(channel).arg(message))
+        prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
     }
 
     /// Lists the currently active channels.
@@ -32,15 +37,19 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-channels/>](https://redis.io/commands/pubsub-channels/)
-    fn pub_sub_channels<C, CC>(&mut self, options: PubSubChannelsOptions) -> CommandResult<T, CC>
+    fn pub_sub_channels<C, CC>(
+        &mut self,
+        options: PubSubChannelsOptions,
+    ) -> PreparedCommand<Self, CC>
     where
+        Self: Sized,
         C: FromValue,
-        CC: FromSingleValueArray<C>
+        CC: FromSingleValueArray<C>,
     {
-        self.prepare_command(cmd("PUBSUB").arg("CHANNELS").arg(options))
+        prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
 
-    /// Returns the number of unique patterns that are subscribed to by clients 
+    /// Returns the number of unique patterns that are subscribed to by clients
     /// (that are performed using the PSUBSCRIBE command).
     ///
     /// # Return
@@ -48,9 +57,11 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-numpat/>](https://redis.io/commands/pubsub-numpat/)
-    fn pub_sub_numpat(&mut self) -> CommandResult<T, usize>
+    fn pub_sub_numpat(&mut self) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
     {
-        self.prepare_command(cmd("PUBSUB").arg("NUMPAT"))
+        prepare_command(self, cmd("PUBSUB").arg("NUMPAT"))
     }
 
     /// Returns the number of subscribers (exclusive of clients subscribed to patterns)
@@ -61,14 +72,15 @@ pub trait PubSubCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-numsub/>](https://redis.io/commands/pubsub-numsub/)
-    fn pub_sub_numsub<C, CC, R, RR>(&mut self, channels: CC) -> CommandResult<T, RR>
+    fn pub_sub_numsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
     where
+        Self: Sized,
         C: Into<BulkString>,
         CC: SingleArgOrCollection<C>,
         R: FromValue,
-        RR: FromKeyValueValueArray<R, usize>
+        RR: FromKeyValueValueArray<R, usize>,
     {
-        self.prepare_command(cmd("PUBSUB").arg("NUMSUB").arg(channels))
+        prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
 }
 

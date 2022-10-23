@@ -1,12 +1,13 @@
 use crate::{
+    prepare_command,
     resp::{cmd, BulkString, FromValue, SingleArgOrCollection},
-    CommandResult, Future, LMoveWhere, MonitorStream, PrepareCommand, ZMPopResult, ZWhere,
+    Future, LMoveWhere, MonitorStream, PreparedCommand, ZMPopResult, ZWhere,
 };
 
 pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 
 /// A group of blocking commands
-pub trait BlockingCommands<T>: PrepareCommand<T> {
+pub trait BlockingCommands {
     /// This command is the blocking variant of [`lmove`](crate::ListCommands::lmove).
     ///
     /// # Return
@@ -23,13 +24,15 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
         where_from: LMoveWhere,
         where_to: LMoveWhere,
         timeout: f64,
-    ) -> CommandResult<T, E>
+    ) -> PreparedCommand<Self, E>
     where
+        Self: Sized,
         S: Into<BulkString>,
         D: Into<BulkString>,
         E: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("BLMOVE")
                 .arg(source)
                 .arg(destination)
@@ -54,13 +57,15 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
         keys: C,
         where_: LMoveWhere,
         count: usize,
-    ) -> CommandResult<T, Option<(String, Vec<E>)>>
+    ) -> PreparedCommand<Self, Option<(String, Vec<E>)>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         E: FromValue,
         C: SingleArgOrCollection<K>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("BLMPOP")
                 .arg(timeout)
                 .arg(keys.num_args())
@@ -87,14 +92,19 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<K, KK, K1, V>(&mut self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
+    fn blpop<K, KK, K1, V>(
+        &mut self,
+        keys: KK,
+        timeout: f64,
+    ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
     {
-        self.prepare_command(cmd("BLPOP").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
 
     /// This command is a blocking list pop primitive.
@@ -113,14 +123,19 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<K, KK, K1, V>(&mut self, keys: KK, timeout: f64) -> CommandResult<T, Option<(K1, V)>>
+    fn brpop<K, KK, K1, V>(
+        &mut self,
+        keys: KK,
+        timeout: f64,
+    ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
     {
-        self.prepare_command(cmd("BRPOP").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
 
     /// This command is the blocking variant of [`zmpop`](crate::SortedSetCommands::zmpop).
@@ -140,13 +155,15 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
         keys: C,
         where_: ZWhere,
         count: usize,
-    ) -> CommandResult<T, Option<ZMPopResult<E>>>
+    ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         C: SingleArgOrCollection<K>,
         E: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("BZMPOP")
                 .arg(timeout)
                 .arg(keys.num_args())
@@ -173,14 +190,15 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
         &mut self,
         keys: KK,
         timeout: f64,
-    ) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
+    ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,
     {
-        self.prepare_command(cmd("BZPOPMAX").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
 
     /// This command is the blocking variant of [`zpopmin`](crate::SortedSetCommands::zpopmin).
@@ -199,14 +217,15 @@ pub trait BlockingCommands<T>: PrepareCommand<T> {
         &mut self,
         keys: KK,
         timeout: f64,
-    ) -> CommandResult<T, BZpopMinMaxResult<K1, E>>
+    ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,
     {
-        self.prepare_command(cmd("BZPOPMIN").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }
 
     /// Debugging command that streams back every command processed by the Redis server.

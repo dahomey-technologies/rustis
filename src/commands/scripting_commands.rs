@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
+    prepare_command,
     resp::{
         cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
     },
-    CommandResult, Error, FlushingMode, PrepareCommand, Result,
+    Error, FlushingMode, PreparedCommand, Result,
 };
 
 /// A group of Redis commands related to Scripting and Functions
@@ -12,7 +13,7 @@ use crate::{
 /// [Redis Scripting and Functions Commands](https://redis.io/commands/?group=scripting)
 /// [Scripting with LUA](https://redis.io/docs/manual/programmability/eval-intro/)
 /// [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
-pub trait ScriptingCommands<T>: PrepareCommand<T> {
+pub trait ScriptingCommands {
     /// Invoke the execution of a server-side Lua script.
     ///
     /// # Return
@@ -21,11 +22,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn eval<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn eval<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("EVAL").arg(builder))
+        prepare_command(self, cmd("EVAL").arg(builder))
     }
 
     /// This is a read-only variant of the [eval](crate::ScriptingCommands::eval)]
@@ -37,11 +39,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval_ro/>](https://redis.io/commands/eval_ro/)
     #[must_use]
-    fn eval_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn eval_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("EVAL_RO").arg(builder))
+        prepare_command(self, cmd("EVAL_RO").arg(builder))
     }
 
     /// Evaluate a script from the server's cache by its SHA1 digest.
@@ -52,11 +55,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn evalsha<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn evalsha<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("EVALSHA").arg(builder))
+        prepare_command(self, cmd("EVALSHA").arg(builder))
     }
 
     /// This is a read-only variant of the [evalsha](crate::ScriptingCommands::evalsha)
@@ -68,11 +72,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/evalsha_ro/>](https://redis.io/commands/evalsha_ro/)
     #[must_use]
-    fn evalsha_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn evalsha_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("EVALSHA_RO").arg(builder))
+        prepare_command(self, cmd("EVALSHA_RO").arg(builder))
     }
 
     /// Invoke a function.
@@ -83,11 +88,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn fcall<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("FCALL").arg(builder))
+        prepare_command(self, cmd("FCALL").arg(builder))
     }
 
     /// Invoke a function.
@@ -98,11 +104,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R>(&mut self, builder: CallBuilder) -> CommandResult<T, R>
+    fn fcall_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("FCALL_RO").arg(builder))
+        prepare_command(self, cmd("FCALL_RO").arg(builder))
     }
 
     /// Delete a library and all its functions.
@@ -110,11 +117,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-delete/>](https://redis.io/commands/function-delete/)
     #[must_use]
-    fn function_delete<L>(&mut self, library_name: L) -> CommandResult<T, ()>
+    fn function_delete<L>(&mut self, library_name: L) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         L: Into<BulkString>,
     {
-        self.prepare_command(cmd("FUNCTION").arg("DELETE").arg(library_name))
+        prepare_command(self, cmd("FUNCTION").arg("DELETE").arg(library_name))
     }
 
     /// Return the serialized payload of loaded libraries.
@@ -127,11 +135,12 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
-    fn function_dump<P>(&mut self) -> CommandResult<T, P>
+    fn function_dump<P>(&mut self) -> PreparedCommand<Self, P>
     where
+        Self: Sized,
         P: FromValue,
     {
-        self.prepare_command(cmd("FUNCTION").arg("DUMP"))
+        prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
 
     /// Deletes all the libraries.
@@ -139,8 +148,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-flush/>](https://redis.io/commands/function-flush/)
     #[must_use]
-    fn function_flush(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
+    fn function_flush(&mut self, flushing_mode: FlushingMode) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
 
     /// Kill a function that is currently executing.
@@ -148,8 +160,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-kill/>](https://redis.io/commands/function-kill/)
     #[must_use]
-    fn function_kill(&mut self) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("FUNCTION").arg("KILL"))
+    fn function_kill(&mut self) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FUNCTION").arg("KILL"))
     }
 
     /// Return information about the functions and libraries.
@@ -157,8 +172,14 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-list/>](https://redis.io/commands/function-list/)
     #[must_use]
-    fn function_list(&mut self, options: FunctionListOptions) -> CommandResult<T, Vec<LibraryInfo>> {
-        self.prepare_command(cmd("FUNCTION").arg("LIST").arg(options))
+    fn function_list(
+        &mut self,
+        options: FunctionListOptions,
+    ) -> PreparedCommand<Self, Vec<LibraryInfo>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FUNCTION").arg("LIST").arg(options))
     }
 
     /// Load a library to Redis.
@@ -169,12 +190,14 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-load/>](https://redis.io/commands/function-load/)
     #[must_use]
-    fn function_load<F, L>(&mut self, replace: bool, function_code: F) -> CommandResult<T, L>
+    fn function_load<F, L>(&mut self, replace: bool, function_code: F) -> PreparedCommand<Self, L>
     where
+        Self: Sized,
         F: Into<BulkString>,
         L: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("FUNCTION")
                 .arg("LOAD")
                 .arg_if(replace, "REPLACE")
@@ -191,11 +214,13 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
         &mut self,
         serialized_payload: P,
         policy: FunctionRestorePolicy,
-    ) -> CommandResult<T, ()>
+    ) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         P: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("FUNCTION")
                 .arg("RESTORE")
                 .arg(serialized_payload)
@@ -208,8 +233,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/function-stats/>](https://redis.io/commands/function-stats/)
     #[must_use]
-    fn function_stats(&mut self) -> CommandResult<T, FunctionStats> {
-        self.prepare_command(cmd("FUNCTION").arg("STATS"))
+    fn function_stats(&mut self) -> PreparedCommand<Self, FunctionStats>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FUNCTION").arg("STATS"))
     }
 
     /// Set the debug mode for subsequent scripts executed with EVAL.
@@ -217,8 +245,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-debug/>](https://redis.io/commands/script-debug/)
     #[must_use]
-    fn script_debug(&mut self, debug_mode: ScriptDebugMode) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
+    fn script_debug(&mut self, debug_mode: ScriptDebugMode) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
     }
 
     /// Returns information about the existence of the scripts in the script cache.
@@ -229,12 +260,13 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-exists/>](https://redis.io/commands/script-exists/)
     #[must_use]
-    fn script_exists<S, C>(&mut self, sha1s: C) -> CommandResult<T, Vec<bool>>
+    fn script_exists<S, C>(&mut self, sha1s: C) -> PreparedCommand<Self, Vec<bool>>
     where
+        Self: Sized,
         S: Into<BulkString>,
         C: SingleArgOrCollection<S>,
     {
-        self.prepare_command(cmd("SCRIPT").arg("EXISTS").arg(sha1s))
+        prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
     }
 
     /// Flush the Lua scripts cache.
@@ -242,8 +274,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-flush/>](https://redis.io/commands/script-flush/)
     #[must_use]
-    fn script_flush(&mut self, flushing_mode: FlushingMode) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
+    fn script_flush(&mut self, flushing_mode: FlushingMode) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
     }
 
     /// Kills the currently executing EVAL script,
@@ -252,8 +287,11 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-kill/>](https://redis.io/commands/script-kill/)
     #[must_use]
-    fn script_kill(&mut self) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("SCRIPT").arg("KILL"))
+    fn script_kill(&mut self) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SCRIPT").arg("KILL"))
     }
 
     /// Load a script into the scripts cache, without executing it.
@@ -264,12 +302,13 @@ pub trait ScriptingCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
-    fn script_load<S, V>(&mut self, script: S) -> CommandResult<T, V>
+    fn script_load<S, V>(&mut self, script: S) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         S: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("SCRIPT").arg("LOAD").arg(script))
+        prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
     }
 }
 

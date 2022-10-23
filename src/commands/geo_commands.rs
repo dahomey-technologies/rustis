@@ -1,16 +1,17 @@
 use crate::{
+    prepare_command,
     resp::{
         cmd, ArgsOrCollection, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    CommandResult, Error, PrepareCommand, Result,
+    Error, PreparedCommand, Result,
 };
 
 /// A group of Redis commands related to [`Geospatial`](https://redis.io/docs/data-types/geospatial/) indices
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)
-pub trait GeoCommands<T>: PrepareCommand<T> {
+pub trait GeoCommands {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
@@ -26,13 +27,15 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
         condition: GeoAddCondition,
         change: bool,
         items: I,
-    ) -> CommandResult<T, usize>
+    ) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         M: Into<BulkString>,
         I: ArgsOrCollection<(f64, f64, M)>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("GEOADD")
                 .arg(key)
                 .arg(condition)
@@ -56,12 +59,16 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
         member1: M,
         member2: M,
         unit: GeoUnit,
-    ) -> CommandResult<T, Option<f64>>
+    ) -> PreparedCommand<Self, Option<f64>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.prepare_command(cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit))
+        prepare_command(
+            self,
+            cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit),
+        )
     }
 
     /// Return valid [Geohash](https://en.wikipedia.org/wiki/Geohash) strings representing the position of one or more elements
@@ -73,13 +80,14 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
-    fn geohash<K, M, C>(&mut self, key: K, members: C) -> CommandResult<T, Vec<String>>
+    fn geohash<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<String>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.prepare_command(cmd("GEOHASH").arg(key).arg(members))
+        prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
     }
 
     /// Return the positions (longitude,latitude) of all the specified members
@@ -93,13 +101,18 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/geopos/>](https://redis.io/commands/geopos/)
     #[must_use]
-    fn geopos<K, M, C>(&mut self, key: K, members: C) -> CommandResult<T, Vec<Option<(f64, f64)>>>
+    fn geopos<K, M, C>(
+        &mut self,
+        key: K,
+        members: C,
+    ) -> PreparedCommand<Self, Vec<Option<(f64, f64)>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         M: Into<BulkString>,
         C: SingleArgOrCollection<M>,
     {
-        self.prepare_command(cmd("GEOPOS").arg(key).arg(members))
+        prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
@@ -118,14 +131,18 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
         from: GeoSearchFrom<M1>,
         by: GeoSearchBy,
         options: GeoSearchOptions,
-    ) -> CommandResult<T, A>
+    ) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         M1: Into<BulkString>,
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
-        self.prepare_command(cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(options))
+        prepare_command(
+            self,
+            cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(options),
+        )
     }
 
     /// This command is like [geosearch](crate::GeoCommands::geosearch), but stores the result in destination key.
@@ -143,13 +160,15 @@ pub trait GeoCommands<T>: PrepareCommand<T> {
         from: GeoSearchFrom<M>,
         by: GeoSearchBy,
         options: GeoSearchStoreOptions,
-    ) -> CommandResult<T, usize>
+    ) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         D: Into<BulkString>,
         S: Into<BulkString>,
         M: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("GEOSEARCHSTORE")
                 .arg(destination)
                 .arg(source)
@@ -373,9 +392,7 @@ where
                         Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
-                        _ => {
-                            return Err(Error::Client("Unexpected geo search result".to_owned()))
-                        }
+                        _ => return Err(Error::Client("Unexpected geo search result".to_owned())),
                     }
                 }
 

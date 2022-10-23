@@ -1,19 +1,15 @@
 use crate::{
     network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    BitmapCommands, BlockingCommands, CommandResult, ConnectionCommands, Error, Future,
-    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands,
-    IntoConfig, ListCommands, Message, MonitorStream, MsgSender, NetworkHandler, PrepareCommand,
-    PubSubCommands, PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands,
-    SentinelCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
-    StringCommands, Transaction, TransactionCommands, TransactionResult0, ValueReceiver,
-    ValueSender,
+    BitmapCommands, BlockingCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
+    HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig, ListCommands, Message,
+    MonitorStream, MsgSender, NetworkHandler, PreparedCommand, PubSubCommands, PubSubReceiver,
+    PubSubSender, PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands,
+    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    TransactionCommands, TransactionResult0, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
-use std::{
-    future::{ready, IntoFuture},
-    sync::Arc,
-};
+use std::{future::IntoFuture, sync::Arc};
 
 /// Client with a unique connection to a Redis server.
 pub struct Client {
@@ -22,7 +18,7 @@ pub struct Client {
 
 impl Client {
     /// Connects asynchronously to the Redis server.
-    /// 
+    ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
@@ -34,11 +30,11 @@ impl Client {
     }
 
     /// We don't want the Client struct to be publicly cloneable
-    /// If one wants to consume a multiplexed client, 
+    /// If one wants to consume a multiplexed client,
     /// the [MultiplexedClient](crate::MultiplexedClient) must be used instead
     pub(crate) fn clone(&self) -> Client {
         Client {
-            msg_sender: self.msg_sender.clone()
+            msg_sender: self.msg_sender.clone(),
         }
     }
 
@@ -240,17 +236,6 @@ impl Client {
     }
 }
 
-impl PrepareCommand<ClientResult> for Client {
-    fn prepare_command<R: FromValue>(
-        &mut self,
-        command: Command,
-    ) -> CommandResult<ClientResult, R> {
-        CommandResult::from_client(command, self)
-    }
-}
-
-pub struct ClientResult;
-
 #[allow(clippy::module_name_repetitions)]
 pub trait ClientCommandResult<'a, R>
 where
@@ -263,7 +248,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> ClientCommandResult<'a, R> for CommandResult<'a, ClientResult, R>
+impl<'a, R> ClientCommandResult<'a, R> for PreparedCommand<'a, Client, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -272,17 +257,11 @@ where
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn forget(self) -> Result<()> {
-        if let CommandResult::Client(_, command, client) = self {
-            client.send_and_forget(command)
-        } else {
-            Err(Error::Client(
-                "send_and_forget method must be called with a valid client".to_owned(),
-            ))
-        }
+        self.executor.send_and_forget(self.command)
     }
 }
 
-impl<'a, R> IntoFuture for CommandResult<'a, ClientResult, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, Client, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -290,35 +269,29 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        if let CommandResult::Client(_, command, client) = self {
-            Box::pin(async move { client.send(command).await?.into() })
-        } else {
-            Box::pin(ready(Err(Error::Client(
-                "send method must be called with a valid client".to_owned(),
-            ))))
-        }
+        Box::pin(async move { self.executor.send(self.command).await?.into() })
     }
 }
 
-impl BitmapCommands<ClientResult> for Client {}
-impl ConnectionCommands<ClientResult> for Client {}
-impl GenericCommands<ClientResult> for Client {}
-impl GeoCommands<ClientResult> for Client {}
-impl HashCommands<ClientResult> for Client {}
-impl HyperLogLogCommands<ClientResult> for Client {}
-impl InternalPubSubCommands<ClientResult> for Client {}
-impl ListCommands<ClientResult> for Client {}
-impl PubSubCommands<ClientResult> for Client {}
-impl ScriptingCommands<ClientResult> for Client {}
-impl SentinelCommands<ClientResult> for Client {}
-impl ServerCommands<ClientResult> for Client {}
-impl SetCommands<ClientResult> for Client {}
-impl SortedSetCommands<ClientResult> for Client {}
-impl StreamCommands<ClientResult> for Client {}
-impl StringCommands<ClientResult> for Client {}
-impl TransactionCommands<ClientResult> for Client {}
+impl BitmapCommands for Client {}
+impl ConnectionCommands for Client {}
+impl GenericCommands for Client {}
+impl GeoCommands for Client {}
+impl HashCommands for Client {}
+impl HyperLogLogCommands for Client {}
+impl InternalPubSubCommands for Client {}
+impl ListCommands for Client {}
+impl PubSubCommands for Client {}
+impl ScriptingCommands for Client {}
+impl SentinelCommands for Client {}
+impl ServerCommands for Client {}
+impl SetCommands for Client {}
+impl SortedSetCommands for Client {}
+impl StreamCommands for Client {}
+impl StringCommands for Client {}
+impl TransactionCommands for Client {}
 
-impl BlockingCommands<ClientResult> for Client {
+impl BlockingCommands for Client {
     fn monitor(&mut self) -> Future<crate::MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();

@@ -1,16 +1,17 @@
 use crate::{
+    prepare_command,
     resp::{
         cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection,
     },
-    CommandResult, PrepareCommand,
+    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`Hashes`](https://redis.io/docs/data-types/hashes/)
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hash)
-pub trait HashCommands<T>: PrepareCommand<T> {
+pub trait HashCommands {
     /// Removes the specified fields from the hash stored at key.
     ///
     /// # Return
@@ -19,13 +20,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hdel/>](https://redis.io/commands/hdel/)
     #[must_use]
-    fn hdel<K, F, C>(&mut self, key: K, fields: C) -> CommandResult<T, usize>
+    fn hdel<K, F, C>(&mut self, key: K, fields: C) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
         C: SingleArgOrCollection<F>,
     {
-        self.prepare_command(cmd("HDEL").arg(key).arg(fields))
+        prepare_command(self, cmd("HDEL").arg(key).arg(fields))
     }
 
     /// Returns if field is an existing field in the hash stored at key.
@@ -37,12 +39,13 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hexists/>](https://redis.io/commands/hexists/)
     #[must_use]
-    fn hexists<K, F>(&mut self, key: K, field: F) -> CommandResult<T, bool>
+    fn hexists<K, F>(&mut self, key: K, field: F) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.prepare_command(cmd("HEXISTS").arg(key).arg(field))
+        prepare_command(self, cmd("HEXISTS").arg(key).arg(field))
     }
 
     /// Returns the value associated with field in the hash stored at key.
@@ -53,13 +56,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hget/>](https://redis.io/commands/hget/)
     #[must_use]
-    fn hget<K, F, V>(&mut self, key: K, field: F) -> CommandResult<T, V>
+    fn hget<K, F, V>(&mut self, key: K, field: F) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("HGET").arg(key).arg(field))
+        prepare_command(self, cmd("HGET").arg(key).arg(field))
     }
 
     /// Returns all fields and values of the hash stored at key.
@@ -70,14 +74,15 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hgetall/>](https://redis.io/commands/hgetall/)
     #[must_use]
-    fn hgetall<K, F, V, A>(&mut self, key: K) -> CommandResult<T, A>
+    fn hgetall<K, F, V, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
         V: FromValue,
         A: FromKeyValueValueArray<F, V>,
     {
-        self.prepare_command(cmd("HGETALL").arg(key))
+        prepare_command(self, cmd("HGETALL").arg(key))
     }
 
     /// Increments the number stored at field in the hash stored at key by increment.
@@ -88,12 +93,13 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hincrby/>](https://redis.io/commands/hincrby/)
     #[must_use]
-    fn hincrby<K, F>(&mut self, key: K, field: F, increment: i64) -> CommandResult<T, i64>
+    fn hincrby<K, F>(&mut self, key: K, field: F, increment: i64) -> PreparedCommand<Self, i64>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.prepare_command(cmd("HINCRBY").arg(key).arg(field).arg(increment))
+        prepare_command(self, cmd("HINCRBY").arg(key).arg(field).arg(increment))
     }
 
     /// Increment the specified field of a hash stored at key,
@@ -105,12 +111,13 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hincrbyfloat/>](https://redis.io/commands/hincrbyfloat/)
     #[must_use]
-    fn hincrbyfloat<K, F>(&mut self, key: K, field: F, increment: f64) -> CommandResult<T, f64>
+    fn hincrbyfloat<K, F>(&mut self, key: K, field: F, increment: f64) -> PreparedCommand<Self, f64>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.prepare_command(cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
+        prepare_command(self, cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
     }
 
     /// Returns all field names in the hash stored at key.
@@ -121,13 +128,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hkeys/>](https://redis.io/commands/hkeys/)
     #[must_use]
-    fn hkeys<K, F, A>(&mut self, key: K) -> CommandResult<T, A>
+    fn hkeys<K, F, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
-        self.prepare_command(cmd("HKEYS").arg(key))
+        prepare_command(self, cmd("HKEYS").arg(key))
     }
 
     /// Returns the number of fields contained in the hash stored at key.
@@ -138,11 +146,12 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hlen/)
     #[must_use]
-    fn hlen<K>(&mut self, key: K) -> CommandResult<T, usize>
+    fn hlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("HLEN").arg(key))
+        prepare_command(self, cmd("HLEN").arg(key))
     }
 
     /// Returns the values associated with the specified fields in the hash stored at key.
@@ -153,15 +162,16 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hmget/>](https://redis.io/commands/hmget/)
     #[must_use]
-    fn hmget<K, F, V, C, A>(&mut self, key: K, fields: C) -> CommandResult<T, A>
+    fn hmget<K, F, V, C, A>(&mut self, key: K, fields: C) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
         C: SingleArgOrCollection<F>,
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
-        self.prepare_command(cmd("HMGET").arg(key).arg(fields))
+        prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
 
     /// return random fields from the hash value stored at key.
@@ -172,12 +182,13 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfield<K, F>(&mut self, key: K) -> CommandResult<T, F>
+    fn hrandfield<K, F>(&mut self, key: K) -> PreparedCommand<Self, F>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
     {
-        self.prepare_command(cmd("HRANDFIELD").arg(key))
+        prepare_command(self, cmd("HRANDFIELD").arg(key))
     }
 
     /// return random fields from the hash value stored at key.
@@ -191,13 +202,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields<K, F, A>(&mut self, key: K, count: isize) -> CommandResult<T, A>
+    fn hrandfields<K, F, A>(&mut self, key: K, count: isize) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
-        self.prepare_command(cmd("HRANDFIELD").arg(key).arg(count))
+        prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
     }
 
     /// return random fields from the hash value stored at key.
@@ -212,14 +224,22 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields_with_values<K, F, V, A>(&mut self, key: K, count: isize) -> CommandResult<T, A>
+    fn hrandfields_with_values<K, F, V, A>(
+        &mut self,
+        key: K,
+        count: isize,
+    ) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
         V: FromValue,
         A: FromKeyValueValueArray<F, V>,
     {
-        self.prepare_command(cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"))
+        prepare_command(
+            self,
+            cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"),
+        )
     }
 
     /// Iterates fields of Hash types and their associated values.
@@ -236,13 +256,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
         key: K,
         cursor: u64,
         options: HScanOptions,
-    ) -> CommandResult<T, (u64, Vec<(F, V)>)>
+    ) -> PreparedCommand<Self, (u64, Vec<(F, V)>)>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: FromValue,
         V: FromValue,
     {
-        self.prepare_command(cmd("HSCAN").arg(key).arg(cursor).arg(options))
+        prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
 
     /// Sets field in the hash stored at key to value.
@@ -253,14 +274,15 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hset/>](https://redis.io/commands/hset/)
     #[must_use]
-    fn hset<K, F, V, I>(&mut self, key: K, items: I) -> CommandResult<T, usize>
+    fn hset<K, F, V, I>(&mut self, key: K, items: I) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: Into<BulkString>,
         I: KeyValueArgOrCollection<F, V>,
     {
-        self.prepare_command(cmd("HSET").arg(key).arg(items))
+        prepare_command(self, cmd("HSET").arg(key).arg(items))
     }
 
     /// Sets field in the hash stored at key to value, only if field does not yet exist.
@@ -272,13 +294,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hsetnx/>](https://redis.io/commands/hsetnx/)
     #[must_use]
-    fn hsetnx<K, F, V>(&mut self, key: K, field: F, value: V) -> CommandResult<T, bool>
+    fn hsetnx<K, F, V>(&mut self, key: K, field: F, value: V) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("HSETNX").arg(key).arg(field).arg(value))
+        prepare_command(self, cmd("HSETNX").arg(key).arg(field).arg(value))
     }
 
     /// Returns the string length of the value associated with field in the hash stored at key.
@@ -290,12 +313,13 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hstrlen/>](https://redis.io/commands/hstrlen/)
     #[must_use]
-    fn hstrlen<K, F>(&mut self, key: K, field: F) -> CommandResult<T, usize>
+    fn hstrlen<K, F>(&mut self, key: K, field: F) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         F: Into<BulkString>,
     {
-        self.prepare_command(cmd("HSTRLEN").arg(key).arg(field))
+        prepare_command(self, cmd("HSTRLEN").arg(key).arg(field))
     }
 
     /// list of values in the hash, or an empty list when key does not exist.
@@ -306,13 +330,14 @@ pub trait HashCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hvals/>](https://redis.io/commands/hvals/)
     #[must_use]
-    fn hvals<K, V, A>(&mut self, key: K) -> CommandResult<T, A>
+    fn hvals<K, V, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
-        self.prepare_command(cmd("HVALS").arg(key))
+        prepare_command(self, cmd("HVALS").arg(key))
     }
 }
 

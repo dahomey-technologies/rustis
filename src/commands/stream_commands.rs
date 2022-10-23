@@ -1,18 +1,19 @@
 use std::collections::HashMap;
 
 use crate::{
+    prepare_command,
     resp::{
         cmd, BulkString, CommandArgs, FromValue, HashMapExt, IntoArgs, KeyValueArgOrCollection,
         SingleArgOrCollection, Value,
     },
-    CommandResult, PrepareCommand, Result,
+    PreparedCommand, Result,
 };
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=stream)
 /// [Streams tutorial](https://redis.io/docs/data-types/streams-tutorial/)
-pub trait StreamCommands<T>: PrepareCommand<T> {
+pub trait StreamCommands {
     /// The XACK command removes one or multiple messages
     /// from the Pending Entries List (PEL) of a stream consumer group
     ///
@@ -23,14 +24,15 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xack/>](https://redis.io/commands/xack/)
-    fn xack<K, G, I, II>(&mut self, key: K, group: G, ids: II) -> CommandResult<T, usize>
+    fn xack<K, G, I, II>(&mut self, key: K, group: G, ids: II) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
     {
-        self.prepare_command(cmd("XACK").arg(key).arg(group).arg(ids))
+        prepare_command(self, cmd("XACK").arg(key).arg(group).arg(ids))
     }
 
     /// Appends the specified stream entry to the stream at the specified key.
@@ -51,8 +53,9 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         stream_id: I,
         items: FFVV,
         options: XAddOptions,
-    ) -> CommandResult<T, R>
+    ) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         K: Into<BulkString>,
         I: Into<BulkString>,
         F: Into<BulkString>,
@@ -60,7 +63,10 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         FFVV: KeyValueArgOrCollection<F, V>,
         R: FromValue,
     {
-        self.prepare_command(cmd("XADD").arg(key).arg(options).arg(stream_id).arg(items))
+        prepare_command(
+            self,
+            cmd("XADD").arg(key).arg(options).arg(stream_id).arg(items),
+        )
     }
 
     /// This command transfers ownership of pending stream entries that match the specified criteria.
@@ -78,15 +84,17 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         min_idle_time: u64,
         start: I,
         options: XAutoClaimOptions,
-    ) -> CommandResult<T, XAutoClaimResult<V>>
+    ) -> PreparedCommand<Self, XAutoClaimResult<V>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         C: Into<BulkString>,
         I: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XAUTOCLAIM")
                 .arg(key)
                 .arg(group)
@@ -118,8 +126,9 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         min_idle_time: u64,
         ids: II,
         options: XClaimOptions,
-    ) -> CommandResult<T, Vec<StreamEntry<V>>>
+    ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         C: Into<BulkString>,
@@ -127,7 +136,8 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         II: SingleArgOrCollection<I>,
         V: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XCLAIM")
                 .arg(key)
                 .arg(group)
@@ -145,13 +155,14 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xdel/>](https://redis.io/commands/xdel/)
-    fn xdel<K, I, II>(&mut self, key: K, ids: II) -> CommandResult<T, usize>
+    fn xdel<K, I, II>(&mut self, key: K, ids: II) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
     {
-        self.prepare_command(cmd("XDEL").arg(key).arg(ids))
+        prepare_command(self, cmd("XDEL").arg(key).arg(ids))
     }
 
     /// This command creates a new consumer group uniquely identified by <groupname> for the stream stored at <key>.
@@ -168,13 +179,15 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         groupname: G,
         id: I,
         options: XGroupCreateOptions,
-    ) -> CommandResult<T, bool>
+    ) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         I: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XGROUP")
                 .arg("CREATE")
                 .arg(key)
@@ -198,13 +211,15 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         key: K,
         groupname: G,
         consumername: C,
-    ) -> CommandResult<T, bool>
+    ) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         C: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XGROUP")
                 .arg("CREATECONSUMER")
                 .arg(key)
@@ -225,13 +240,15 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         key: K,
         groupname: G,
         consumername: C,
-    ) -> CommandResult<T, usize>
+    ) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         C: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XGROUP")
                 .arg("DELCONSUMER")
                 .arg(key)
@@ -248,12 +265,13 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xgroup-destroy/>](https://redis.io/commands/xgroup-destroy/)
-    fn xgroup_destroy<K, G>(&mut self, key: K, groupname: G) -> CommandResult<T, bool>
+    fn xgroup_destroy<K, G>(&mut self, key: K, groupname: G) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
     {
-        self.prepare_command(cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
+        prepare_command(self, cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
     }
 
     /// Set the last delivered ID for a consumer group.
@@ -266,13 +284,15 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         groupname: G,
         id: I,
         entries_read: Option<usize>,
-    ) -> CommandResult<T, ()>
+    ) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
         I: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XGROUP")
                 .arg("SETID")
                 .arg(key)
@@ -289,12 +309,17 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-consumers/>](https://redis.io/commands/xinfo-consumers/)
-    fn xinfo_consumers<K, G>(&mut self, key: K, groupname: G) -> CommandResult<T, Vec<XConsumerInfo>>
+    fn xinfo_consumers<K, G>(
+        &mut self,
+        key: K,
+        groupname: G,
+    ) -> PreparedCommand<Self, Vec<XConsumerInfo>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
     {
-        self.prepare_command(cmd("XINFO").arg("CONSUMERS").arg(key).arg(groupname))
+        prepare_command(self, cmd("XINFO").arg("CONSUMERS").arg(key).arg(groupname))
     }
 
     /// This command returns the list of consumers that belong
@@ -305,11 +330,12 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-groups/>](https://redis.io/commands/xinfo-groups/)
-    fn xinfo_groups<K>(&mut self, key: K) -> CommandResult<T, Vec<XGroupInfo>>
+    fn xinfo_groups<K>(&mut self, key: K) -> PreparedCommand<Self, Vec<XGroupInfo>>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("XINFO").arg("GROUPS").arg(key))
+        prepare_command(self, cmd("XINFO").arg("GROUPS").arg(key))
     }
 
     /// This command returns information about the stream stored at `key`.
@@ -319,11 +345,16 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-stream/>](https://redis.io/commands/xinfo-stream/)
-    fn xinfo_stream<K>(&mut self, key: K, options: XInfoStreamOptions) -> CommandResult<T, XStreamInfo>
+    fn xinfo_stream<K>(
+        &mut self,
+        key: K,
+        options: XInfoStreamOptions,
+    ) -> PreparedCommand<Self, XStreamInfo>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("XINFO").arg("STREAM").arg(key).arg(options))
+        prepare_command(self, cmd("XINFO").arg("STREAM").arg(key).arg(options))
     }
 
     /// Returns the number of entries inside a stream.
@@ -333,23 +364,25 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
-    fn xlen<K>(&mut self, key: K) -> CommandResult<T, usize>
+    fn xlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("XLEN").arg(key))
+        prepare_command(self, cmd("XLEN").arg(key))
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
     ///
     /// # See Also
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
-    fn xpending<K, G>(&mut self, key: K, group: G) -> CommandResult<T, XPendingResult>
+    fn xpending<K, G>(&mut self, key: K, group: G) -> PreparedCommand<Self, XPendingResult>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
     {
-        self.prepare_command(cmd("XPENDING").arg(key).arg(group))
+        prepare_command(self, cmd("XPENDING").arg(key).arg(group))
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
@@ -361,12 +394,13 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         key: K,
         group: G,
         options: XPendingOptions,
-    ) -> CommandResult<T, Vec<XPendingMessageResult>>
+    ) -> PreparedCommand<Self, Vec<XPendingMessageResult>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         G: Into<BulkString>,
     {
-        self.prepare_command(cmd("XPENDING").arg(key).arg(group).arg(options))
+        prepare_command(self, cmd("XPENDING").arg(key).arg(group).arg(options))
     }
 
     /// The command returns the stream entries matching a given range of IDs.
@@ -386,14 +420,16 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         start: S,
         end: E,
         count: Option<usize>,
-    ) -> CommandResult<T, Vec<StreamEntry<V>>>
+    ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         S: Into<BulkString>,
         E: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XRANGE")
                 .arg(key)
                 .arg(start)
@@ -415,15 +451,19 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         options: XReadOptions,
         keys: KK,
         ids: II,
-    ) -> CommandResult<T, Vec<XReadStreamResult<V>>>
+    ) -> PreparedCommand<Self, Vec<XReadStreamResult<V>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
         V: FromValue,
     {
-        self.prepare_command(cmd("XREAD").arg(options).arg("STREAMS").arg(keys).arg(ids))
+        prepare_command(
+            self,
+            cmd("XREAD").arg(options).arg("STREAMS").arg(keys).arg(ids),
+        )
     }
 
     /// The XREADGROUP command is a special version of the [`xread`](crate::StreamCommands::xread)
@@ -441,8 +481,9 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         options: XReadGroupOptions,
         keys: KK,
         ids: II,
-    ) -> CommandResult<T, Vec<XReadStreamResult<V>>>
+    ) -> PreparedCommand<Self, Vec<XReadStreamResult<V>>>
     where
+        Self: Sized,
         G: Into<BulkString>,
         C: Into<BulkString>,
         K: Into<BulkString>,
@@ -451,7 +492,8 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         II: SingleArgOrCollection<I>,
         V: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XREADGROUP")
                 .arg("GROUP")
                 .arg(group)
@@ -478,14 +520,16 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
         end: E,
         start: S,
         count: Option<usize>,
-    ) -> CommandResult<T, Vec<StreamEntry<V>>>
+    ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         E: Into<BulkString>,
         S: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("XREVRANGE")
                 .arg(key)
                 .arg(end)
@@ -501,11 +545,12 @@ pub trait StreamCommands<T>: PrepareCommand<T> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xtrim/>](https://redis.io/commands/xtrim/)
-    fn xtrim<K>(&mut self, key: K, options: XTrimOptions) -> CommandResult<T, usize>
+    fn xtrim<K>(&mut self, key: K, options: XTrimOptions) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("XTRIM").arg(key).arg(options))
+        prepare_command(self, cmd("XTRIM").arg(key).arg(options))
     }
 }
 

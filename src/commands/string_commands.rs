@@ -1,15 +1,16 @@
 use crate::{
+    prepare_command,
     resp::{
         cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, KeyValueArgOrCollection,
         SingleArgOrCollection, Value,
     },
-    CommandResult, Error, PrepareCommand, Result,
+    Error, PreparedCommand, Result,
 };
 
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
-pub trait StringCommands<T>: PrepareCommand<T> {
+pub trait StringCommands {
     /// If key already exists and is a string,
     /// this command appends the value at the end of the string.
     /// If key does not exist it is created and set as an empty string,
@@ -21,12 +22,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append<K, V>(&mut self, key: K, value: V) -> CommandResult<T, usize>
+    fn append<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("APPEND").arg(key).arg(value))
+        prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
 
     /// Decrements the number stored at key by one.
@@ -42,11 +44,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
-    fn decr<K>(&mut self, key: K) -> CommandResult<T, i64>
+    fn decr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("DECR").arg(key))
+        prepare_command(self, cmd("DECR").arg(key))
     }
 
     /// Decrements the number stored at key by one.
@@ -62,11 +65,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
-    fn decrby<K>(&mut self, key: K, decrement: i64) -> CommandResult<T, i64>
+    fn decrby<K>(&mut self, key: K, decrement: i64) -> PreparedCommand<Self, i64>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("DECRBY").arg(key).arg(decrement))
+        prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
     }
 
     /// Get the value of key.
@@ -112,13 +116,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<K, V>(&mut self, key: K) -> CommandResult<T, V>
+    fn get<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
         Self: Sized,
     {
-        self.prepare_command(cmd("GET").arg(key))
+        prepare_command(self, cmd("GET").arg(key))
     }
 
     /// Get the value of key and delete the key.
@@ -132,12 +137,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<K, V>(&mut self, key: K) -> CommandResult<T, V>
+    fn getdel<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("GETDEL").arg(key))
+        prepare_command(self, cmd("GETDEL").arg(key))
     }
 
     /// Get the value of key and optionally set its expiration. GETEX is similar to GET, but is a write command with additional options.
@@ -177,12 +183,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
-    fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> CommandResult<T, V>
+    fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("GETEX").arg(key).arg(options))
+        prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -195,12 +202,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> CommandResult<T, V>
+    fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("GETRANGE").arg(key).arg(start).arg(end))
+        prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
 
     /// Atomically sets key to value and returns the old value stored at key.
@@ -213,13 +221,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<K, V, R>(&mut self, key: K, value: V) -> CommandResult<T, R>
+    fn getset<K, V, R>(&mut self, key: K, value: V) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
         R: FromValue,
     {
-        self.prepare_command(cmd("GETSET").arg(key).arg(value))
+        prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
 
     /// Increments the number stored at key by one.
@@ -241,11 +250,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
-    fn incr<K>(&mut self, key: K) -> CommandResult<T, i64>
+    fn incr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("INCR").arg(key))
+        prepare_command(self, cmd("INCR").arg(key))
     }
 
     /// Increments the number stored at key by increment.
@@ -263,11 +273,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
-    fn incrby<K>(&mut self, key: K, increment: i64) -> CommandResult<T, i64>
+    fn incrby<K>(&mut self, key: K, increment: i64) -> PreparedCommand<Self, i64>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("INCRBY").arg(key).arg(increment))
+        prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
     }
 
     ///Increment the string representing a floating point number stored at key by the specified increment.
@@ -296,11 +307,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
-    fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> CommandResult<T, f64>
+    fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> PreparedCommand<Self, f64>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("INCRBYFLOAT").arg(key).arg(increment))
+        prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -311,12 +323,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<K, V>(&mut self, key1: K, key2: K) -> CommandResult<T, V>
+    fn lcs<K, V>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, V>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
     {
-        self.prepare_command(cmd("LCS").arg(key1).arg(key2))
+        prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -327,11 +340,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len<K>(&mut self, key1: K, key2: K) -> CommandResult<T, usize>
+    fn lcs_len<K>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("LCS").arg(key1).arg(key2).arg("LEN"))
+        prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -350,11 +364,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
         key2: K,
         min_match_len: Option<usize>,
         with_match_len: bool,
-    ) -> CommandResult<T, LcsResult>
+    ) -> PreparedCommand<Self, LcsResult>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("LCS")
                 .arg(key1)
                 .arg(key2)
@@ -375,13 +391,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<K, V, C>(&mut self, keys: C) -> CommandResult<T, Vec<Option<V>>>
+    fn mget<K, V, C>(&mut self, keys: C) -> PreparedCommand<Self, Vec<Option<V>>>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: FromValue,
         C: SingleArgOrCollection<K>,
     {
-        self.prepare_command(cmd("MGET").arg(keys))
+        prepare_command(self, cmd("MGET").arg(keys))
     }
 
     /// Sets the given keys to their respective values.
@@ -392,13 +409,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
-    fn mset<K, V, C>(&mut self, items: C) -> CommandResult<T, ()>
+    fn mset<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("MSET").arg(items))
+        prepare_command(self, cmd("MSET").arg(items))
     }
 
     /// Sets the given keys to their respective values.
@@ -419,13 +437,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
-    fn msetnx<K, V, C>(&mut self, items: C) -> CommandResult<T, bool>
+    fn msetnx<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         C: KeyValueArgOrCollection<K, V>,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("MSETNX").arg(items))
+        prepare_command(self, cmd("MSETNX").arg(items))
     }
 
     /// Works exactly like [setex](crate::StringCommands::setex) with the sole
@@ -437,12 +456,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
     #[must_use]
-    fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> CommandResult<T, ()>
+    fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
+        prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
 
     ///Set key to hold the string value.
@@ -453,13 +473,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set<K, V>(&mut self, key: K, value: V) -> CommandResult<T, ()>
+    fn set<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
         Self: Sized,
     {
-        self.prepare_command(cmd("SET").arg(key).arg(value))
+        prepare_command(self, cmd("SET").arg(key).arg(value))
     }
 
     ///Set key to hold the string value.
@@ -479,12 +500,14 @@ pub trait StringCommands<T>: PrepareCommand<T> {
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> CommandResult<T, bool>
+    ) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("SET")
                 .arg(key)
                 .arg(value)
@@ -506,13 +529,15 @@ pub trait StringCommands<T>: PrepareCommand<T> {
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> CommandResult<T, V2>
+    ) -> PreparedCommand<Self, V2>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V1: Into<BulkString>,
         V2: FromValue,
     {
-        self.prepare_command(
+        prepare_command(
+            self,
             cmd("SET")
                 .arg(key)
                 .arg(value)
@@ -528,12 +553,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
     #[must_use]
-    fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> CommandResult<T, ()>
+    fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("SETEX").arg(key).arg(seconds).arg(value))
+        prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
 
     /// Set key to hold string value if key does not exist.
@@ -550,12 +576,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
-    fn setnx<K, V>(&mut self, key: K, value: V) -> CommandResult<T, bool>
+    fn setnx<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, bool>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("SETNX").arg(key).arg(value))
+        prepare_command(self, cmd("SETNX").arg(key).arg(value))
     }
 
     /// Overwrites part of the string stored at key,
@@ -568,12 +595,13 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/setrange/>](https://redis.io/commands/setrange/)
     #[must_use]
-    fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> CommandResult<T, usize>
+    fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
         V: Into<BulkString>,
     {
-        self.prepare_command(cmd("SETRANGE").arg(key).arg(offset).arg(value))
+        prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
 
     /// Returns the length of the string value stored at key.
@@ -586,11 +614,12 @@ pub trait StringCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
-    fn strlen<K>(&mut self, key: K) -> CommandResult<T, usize>
+    fn strlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
+        Self: Sized,
         K: Into<BulkString>,
     {
-        self.prepare_command(cmd("STRLEN").arg(key))
+        prepare_command(self, cmd("STRLEN").arg(key))
     }
 }
 
@@ -664,9 +693,9 @@ impl FromValue for LcsResult {
                                                 )),
                                             }
                                         }
-                                        _ => Err(Error::Client(
-                                            "Cannot parse LCS result".to_owned(),
-                                        )),
+                                        _ => {
+                                            Err(Error::Client("Cannot parse LCS result".to_owned()))
+                                        }
                                     }
                                 }
                                 (Some(pos2), Some(pos1), None, None) => {
@@ -686,9 +715,9 @@ impl FromValue for LcsResult {
                                                 )),
                                             }
                                         }
-                                        _ => Err(Error::Client(
-                                            "Cannot parse LCS result".to_owned(),
-                                        )),
+                                        _ => {
+                                            Err(Error::Client("Cannot parse LCS result".to_owned()))
+                                        }
                                     }
                                 }
                                 _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
@@ -704,7 +733,9 @@ impl FromValue for LcsResult {
             }
         }
 
-        Err(Error::Client("Cannot parse result to LcsResult".to_string()))
+        Err(Error::Client(
+            "Cannot parse result to LcsResult".to_string(),
+        ))
     }
 }
 

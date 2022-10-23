@@ -1,8 +1,9 @@
 use crate::{
+    prepare_command,
     resp::{
         cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
     },
-    CommandResult, Error, PrepareCommand, Result,
+    Error, PreparedCommand, Result,
 };
 use std::collections::HashMap;
 
@@ -10,7 +11,7 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [Redis Connection Management Commands](https://redis.io/commands/?group=connection)
-pub trait ConnectionCommands<T>: PrepareCommand<T> {
+pub trait ConnectionCommands {
     /// Authenticates the current connection.
     ///
     /// # Errors
@@ -19,12 +20,13 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/auth/>](https://redis.io/commands/auth/)
     #[must_use]
-    fn auth<U, P>(&mut self, username: Option<U>, password: P) -> CommandResult<T, ()>
+    fn auth<U, P>(&mut self, username: Option<U>, password: P) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         U: Into<BulkString>,
         P: Into<BulkString>,
     {
-        self.prepare_command(cmd("AUTH").arg(username).arg(password))
+        prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
 
     /// This command controls the tracking of the keys in the next command executed by the connection,
@@ -33,8 +35,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-caching/>](https://redis.io/commands/client-caching/)
     #[must_use]
-    fn client_caching(&mut self, mode: ClientCachingMode) -> CommandResult<T, Option<()>> {
-        self.prepare_command(cmd("CLIENT").arg("CACHING").arg(mode))
+    fn client_caching(&mut self, mode: ClientCachingMode) -> PreparedCommand<Self, Option<()>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("CACHING").arg(mode))
     }
 
     /// Returns the name of the current connection as set by [CLIENT SETNAME].
@@ -45,11 +50,12 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
     #[must_use]
-    fn client_getname<CN>(&mut self) -> CommandResult<T, Option<CN>>
+    fn client_getname<CN>(&mut self) -> PreparedCommand<Self, Option<CN>>
     where
+        Self: Sized,
         CN: FromValue,
     {
-        self.prepare_command(cmd("CLIENT").arg("GETNAME"))
+        prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
 
     /// This command returns the client ID we are redirecting our tracking notifications to.
@@ -62,8 +68,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-getredir/>](https://redis.io/commands/client-getredir/)
     #[must_use]
-    fn client_getredir(&mut self) -> CommandResult<T, i64> {
-        self.prepare_command(cmd("CLIENT").arg("GETREDIR"))
+    fn client_getredir(&mut self) -> PreparedCommand<Self, i64>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("GETREDIR"))
     }
 
     /// The command just returns the ID of the current connection.
@@ -74,8 +83,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-id/>](https://redis.io/commands/client-id/)
     #[must_use]
-    fn client_id(&mut self) -> CommandResult<T, i64> {
-        self.prepare_command(cmd("CLIENT").arg("ID"))
+    fn client_id(&mut self) -> PreparedCommand<Self, i64>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("ID"))
     }
 
     /// The command returns information and statistics about the current client connection
@@ -87,8 +99,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-info/>](https://redis.io/commands/client-info/)
     #[must_use]
-    fn client_info(&mut self) -> CommandResult<T, ClientInfo> {
-        self.prepare_command(cmd("CLIENT").arg("INFO"))
+    fn client_info(&mut self) -> PreparedCommand<Self, ClientInfo>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("INFO"))
     }
 
     /// Closes a given clients connection based on a filter list
@@ -99,8 +114,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-kill/>](https://redis.io/commands/client-kill/)
     #[must_use]
-    fn client_kill(&mut self, options: ClientKillOptions) -> CommandResult<T, usize> {
-        self.prepare_command(cmd("CLIENT").arg("KILL").arg(options))
+    fn client_kill(&mut self, options: ClientKillOptions) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("KILL").arg(options))
     }
 
     /// Returns information and statistics about the client connections server in a mostly human readable format.
@@ -111,8 +129,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-list/>](https://redis.io/commands/client-list/)
     #[must_use]
-    fn client_list(&mut self, options: ClientListOptions) -> CommandResult<T, ClientListResult> {
-        self.prepare_command(cmd("CLIENT").arg("LIST").arg(options))
+    fn client_list(&mut self, options: ClientListOptions) -> PreparedCommand<Self, ClientListResult>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("LIST").arg(options))
     }
 
     ///  sets the [`client eviction`](https://redis.io/docs/reference/clients/#client-eviction) mode for the current connection.
@@ -120,8 +141,12 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-no-evict/>](https://redis.io/commands/client-no-evict/)
     #[must_use]
-    fn client_no_evict(&mut self, no_evict: bool) -> CommandResult<T, ()> {
-        self.prepare_command(
+    fn client_no_evict(&mut self, no_evict: bool) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(
+            self,
             cmd("CLIENT")
                 .arg("NO-EVICT")
                 .arg(if no_evict { "ON" } else { "OFF" }),
@@ -134,8 +159,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-pause/>](https://redis.io/commands/client-pause/)
     #[must_use]
-    fn client_pause(&mut self, timeout: u64, mode: ClientPauseMode) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("CLIENT").arg("PAUSE").arg(timeout).arg(mode))
+    fn client_pause(&mut self, timeout: u64, mode: ClientPauseMode) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("PAUSE").arg(timeout).arg(mode))
     }
 
     /// Sometimes it can be useful for clients to completely disable replies from the Redis server.
@@ -143,8 +171,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-reply/>](https://redis.io/commands/client-reply/)
     #[must_use]
-    fn client_reply(&mut self, mode: ClientReplyMode) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("CLIENT").arg("REPLY").arg(mode))
+    fn client_reply(&mut self, mode: ClientReplyMode) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("REPLY").arg(mode))
     }
 
     /// Assigns a name to the current connection.
@@ -152,11 +183,12 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
-    fn client_setname<CN>(&mut self, connection_name: CN) -> CommandResult<T, ()>
+    fn client_setname<CN>(&mut self, connection_name: CN) -> PreparedCommand<Self, ()>
     where
+        Self: Sized,
         CN: Into<BulkString>,
     {
-        self.prepare_command(cmd("CLIENT").arg("SETNAME").arg(connection_name))
+        prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
 
     /// This command enables the tracking feature of the Redis server,
@@ -169,13 +201,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
         &mut self,
         status: ClientTrackingStatus,
         options: ClientTrackingOptions,
-    ) -> CommandResult<T, ()> {
-        self.prepare_command(
-            cmd("CLIENT")
-                .arg("TRACKING")
-                .arg(status)
-                .arg(options),
-        )
+    ) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("TRACKING").arg(status).arg(options))
     }
 
     /// This command enables the tracking feature of the Redis server,
@@ -184,14 +214,17 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
-    fn client_trackinginfo(&mut self) -> CommandResult<T, ClientTrackingInfo> {
-        self.prepare_command(cmd("CLIENT").arg("TRACKINGINFO"))
+    fn client_trackinginfo(&mut self) -> PreparedCommand<Self, ClientTrackingInfo>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("TRACKINGINFO"))
     }
 
-    /// This command can unblock, from a different connection, 
-    /// a client blocked in a blocking operation, 
+    /// This command can unblock, from a different connection,
+    /// a client blocked in a blocking operation,
     /// such as for instance `BRPOP` or `XREAD` or `WAIT`.
-    /// 
+    ///
     /// # Return
     /// * `true` - This command can unblock, from a different connection, a client blocked in a blocking operation, such as for instance BRPOP or XREAD or WAIT.
     /// * `false` - if the client wasn't unblocked.
@@ -199,31 +232,42 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/client-unblock/>](https://redis.io/commands/client-unblock/)
     #[must_use]
-    fn client_unblock(&mut self, client_id: i64, mode: ClientUnblockMode) -> CommandResult<T, bool> {
-        self.prepare_command(cmd("CLIENT").arg("UNBLOCK").arg(client_id).arg(mode))
+    fn client_unblock(
+        &mut self,
+        client_id: i64,
+        mode: ClientUnblockMode,
+    ) -> PreparedCommand<Self, bool>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("UNBLOCK").arg(client_id).arg(mode))
     }
 
-    /// Used to resume command processing for all clients that were 
+    /// Used to resume command processing for all clients that were
     /// paused by [`client_pause`](crate::ConnectionCommands::client_pause).
     ///
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
     #[must_use]
-    fn client_unpause(&mut self) -> CommandResult<T, bool> {
-        self.prepare_command(cmd("CLIENT").arg("UNPAUSE"))
-    }   
+    fn client_unpause(&mut self) -> PreparedCommand<Self, bool>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("UNPAUSE"))
+    }
 
     /// Returns `message`.
     ///
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<M, R>(&mut self, message: M) -> CommandResult<T, R>
+    fn echo<M, R>(&mut self, message: M) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         M: Into<BulkString>,
         R: FromValue,
     {
-        self.prepare_command(cmd("ECHO").arg(message))
+        prepare_command(self, cmd("ECHO").arg(message))
     }
 
     /// Switch to a different protocol,
@@ -233,8 +277,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
     #[must_use]
-    fn hello(&mut self, options: HelloOptions) -> CommandResult<T, HelloResult> {
-        self.prepare_command(cmd("HELLO").arg(options))
+    fn hello(&mut self, options: HelloOptions) -> PreparedCommand<Self, HelloResult>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("HELLO").arg(options))
     }
 
     /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk.
@@ -242,11 +289,12 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R>(&mut self, options: PingOptions) -> CommandResult<T, R>
+    fn ping<R>(&mut self, options: PingOptions) -> PreparedCommand<Self, R>
     where
+        Self: Sized,
         R: FromValue,
     {
-        self.prepare_command(cmd("PING").arg(options))
+        prepare_command(self, cmd("PING").arg(options))
     }
 
     /// Ask the server to close the connection.
@@ -254,8 +302,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
     #[must_use]
-    fn quit(&mut self) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("QUIT"))
+    fn quit(&mut self) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("QUIT"))
     }
 
     /// This command performs a full reset of the connection's server-side context,
@@ -264,8 +315,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn reset(&mut self) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("RESET"))
+    fn reset(&mut self) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("RESET"))
     }
 
     /// Select the Redis logical database having the specified zero-based numeric index.
@@ -273,8 +327,11 @@ pub trait ConnectionCommands<T>: PrepareCommand<T> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn select(&mut self, index: usize) -> CommandResult<T, ()> {
-        self.prepare_command(cmd("SELECT").arg(index))
+    fn select(&mut self, index: usize) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SELECT").arg(index))
     }
 }
 
@@ -549,10 +606,8 @@ impl FromValue for ClientListResult {
     fn from_value(value: Value) -> Result<Self> {
         let lines: String = value.into()?;
 
-        let client_infos: Result<Vec<ClientInfo>> = lines
-            .split('\n')
-            .map(ClientInfo::from_line)
-            .collect();
+        let client_infos: Result<Vec<ClientInfo>> =
+            lines.split('\n').map(ClientInfo::from_line).collect();
 
         Ok(Self {
             client_infos: client_infos?,
@@ -669,7 +724,7 @@ impl IntoArgs for ClientReplyMode {
 /// Status options for the [`client_tracking`](crate::ConnectionCommands::client_tracking) command.
 pub enum ClientTrackingStatus {
     On,
-    Off
+    Off,
 }
 
 impl IntoArgs for ClientTrackingStatus {
@@ -743,17 +798,16 @@ impl IntoArgs for ClientTrackingOptions {
     }
 }
 
-
 /// Result for the [`client_trackinginfo`](crate::ConnectionCommands::client_trackinginfo) command.
 pub struct ClientTrackingInfo {
-    /// A list of tracking flags used by the connection. 
+    /// A list of tracking flags used by the connection.
     pub flags: Vec<String>,
 
     /// The client ID used for notifications redirection, or -1 when none.
     pub redirect: i64,
 
     /// A list of key prefixes for which notifications are sent to the client.
-    pub prefixes: Vec<String>
+    pub prefixes: Vec<String>,
 }
 
 impl FromValue for ClientTrackingInfo {
@@ -766,9 +820,13 @@ impl FromValue for ClientTrackingInfo {
             })
         }
 
-        into_result(&mut value.into()?)
-            .ok_or_else(|| Error::Client("Cannot parse 
-            ".to_owned()))
+        into_result(&mut value.into()?).ok_or_else(|| {
+            Error::Client(
+                "Cannot parse 
+            "
+                .to_owned(),
+            )
+        })
     }
 }
 

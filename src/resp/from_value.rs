@@ -459,7 +459,7 @@ where
 {
 }
 
-pub trait HashMapExt<K, V, S> {
+pub(crate) trait HashMapExt<K, V, S> {
     fn remove_with_result<Q: ?Sized>(&mut self, k: &Q) -> Result<V>
     where
         K: Borrow<Q> + Hash + Eq,

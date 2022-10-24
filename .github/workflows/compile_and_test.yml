@@ -48,38 +48,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
         
-      - name: Create Redis container
-        run: |
-          docker run --name redis \
-            -p 6379:6379 \
-            -v /home/runner/work/redis-driver-rs/redis-driver-rs/redis:/redis \
-            --health-cmd "redis-cli ping" \
-            --health-interval 10s \
-            --health-timeout 5s \
-            --health-retries 5 \
-            -e GITHUB_ACTIONS=true \
-            -e CI=true \
-            -d redis:alpine \
-            redis-server /redis/redis.conf
-          docker port redis
-        
-      - name: Create Redis TLS container
-        run: |
-          docker run --name redis-tls \
-            -p 6380:6379 \
-            -v /home/runner/work/redis-driver-rs/redis-driver-rs/certs:/certs \
-            -e ALLOW_EMPTY_PASSWORD=false \
-            -e REDIS_PASSWORD=pwd \
-            -e REDIS_TLS_CERT_FILE=/certs/redis.crt \
-            -e REDIS_TLS_KEY_FILE=/certs/redis.key \
-            -e REDIS_TLS_CA_FILE=/certs/ca.crt \
-            -e REDIS_TLS_ENABLED=yes \
-            -e REDIS_TLS_PORT=6379 \
-            -e REDIS_TLS_AUTH_CLIENTS=no \
-            -d docker.io/bitnami/redis
-          docker port redis-tls
-          
-      - name: Create Redis Sentinel containers
+      - name: Create Redis containers
         run: |
           IP=`ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
           echo IP=$IP

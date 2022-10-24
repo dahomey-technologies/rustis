@@ -1,14 +1,42 @@
 version: "3.8"
 
 services:
+  redis-standalone:
+    image: redis:alpine
+    container_name: redis-standalone
+    ports:
+      - "6379:6379"
+    volumes:
+      - .:/config
+    command: redis-server /config/standalone.conf
+
+  redis-tls:
+    image: docker.io/bitnami/redis
+    container_name: redis-tls
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./certs:/certs
+    environment:
+      - ALLOW_EMPTY_PASSWORD=false
+      - REDIS_PASSWORD=pwd
+      - REDIS_TLS_CERT_FILE=/certs/redis.crt
+      - REDIS_TLS_KEY_FILE=/certs/redis.key
+      - REDIS_TLS_CA_FILE=/certs/ca.crt
+      - REDIS_TLS_ENABLED=yes
+      - REDIS_TLS_PORT=6379
+      - REDIS_TLS_AUTH_CLIENTS=no
+
   redis-master:
     image: redis:alpine
+    container_name: redis-master
     ports:
       - "6381:6381"
     command: redis-server --port 6381
 
   redis-replica:
     image: redis:alpine
+    container_name: redis-replica
     ports:
       - "6382:6382"
     command: redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
@@ -19,6 +47,8 @@ services:
     build:
       context: .
       dockerfile: ./sentinel.dockerfile
+    image: redis-sentinel1
+    container_name: redis-sentinel1
     ports:
       - "26379:26379"
     depends_on:
@@ -30,6 +60,8 @@ services:
     build:
       context: .
       dockerfile: ./sentinel.dockerfile
+    image: redis-sentinel2
+    container_name: redis-sentinel2
     ports:
       - "26380:26379"
     depends_on:
@@ -41,6 +73,8 @@ services:
     build:
       context: .
       dockerfile: ./sentinel.dockerfile
+    image: redis-sentinel3
+    container_name: redis-sentinel3
     ports:
       - "26381:26379"
     depends_on:

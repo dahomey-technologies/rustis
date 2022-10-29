@@ -2,7 +2,7 @@ An asynchronous Redis client for Rust.
 
 
 [![Crate](https://img.shields.io/crates/v/redis-driver.svg)](https://crates.io/crates/redis-driver)
-![](https://github.com/dahomey-technologies/redis-driver-rs/actions/workflows/compile_and_test.yml/badge.svg)
+[![Build](https://github.com/dahomey-technologies/redis-driver-rs/actions/workflows/compile_and_test.yml/badge.svg)](https://github.com/dahomey-technologies/redis-driver-rs/actions/workflows/compile_and_test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
 ## Documentation

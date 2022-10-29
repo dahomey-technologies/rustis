@@ -1,5 +1,6 @@
 An asynchronous Redis client for Rust.
 
+![](https://img.shields.io/github/v/release/dahomey-technologies/redis-driver-rs?label=redis-driver&sort=semver)
 ![](https://github.com/dahomey-technologies/redis-driver-rs/actions/workflows/compile_and_test.yml/badge.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 

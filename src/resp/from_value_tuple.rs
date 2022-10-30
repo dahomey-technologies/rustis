@@ -17,6 +17,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -56,6 +57,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -102,6 +104,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -157,6 +160,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -222,6 +226,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -306,6 +311,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -396,6 +402,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -492,6 +499,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value
@@ -595,6 +603,7 @@ where
                     _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",
                 value

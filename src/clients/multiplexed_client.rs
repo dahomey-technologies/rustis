@@ -1,13 +1,11 @@
 use crate::{
-    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
     BitmapCommands, ConnectionCommands, Future, GenericCommands, GeoCommands, HashCommands,
-    HyperLogLogCommands, InternalPubSubCommands, IntoConfig, ListCommands, Message, MsgSender,
-    MultiplexedPubSubStream, NetworkHandler, PreparedCommand, PubSubCommands, PubSubReceiver,
-    PubSubSender, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-    SortedSetCommands, StreamCommands, StringCommands, ValueReceiver, ValueSender,
+    HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig, ListCommands, Pipeline,
+    PreparedCommand, PubSubCommands, PubSubStream, Result, ScriptingCommands, SentinelCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
-use futures::channel::{mpsc, oneshot};
-use std::{future::IntoFuture, sync::Arc};
+use std::future::IntoFuture;
 
 /// A multiplexed client that can be cloned, allowing requests
 /// to be be sent concurrently on the same underlying connection.
@@ -22,7 +20,7 @@ use std::{future::IntoFuture, sync::Arc};
 /// #See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 #[derive(Clone)]
 pub struct MultiplexedClient {
-    msg_sender: Arc<MsgSender>,
+    inner_client: InnerClient,
 }
 
 impl MultiplexedClient {
@@ -31,14 +29,11 @@ impl MultiplexedClient {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
-        let msg_sender = NetworkHandler::connect(config.into_config()?).await?;
-
-        Ok(Self {
-            msg_sender: Arc::new(msg_sender),
-        })
+        let inner_client = InnerClient::connect(config).await?;
+        Ok(Self { inner_client })
     }
 
-    /// Send an arbitrary command to the server.
+    /// Send an arbitrary command to the Redis server.
     ///
     /// This is used primarily intended for implementing high level commands API
     /// but may also be used to provide access to new features that lack a direct API.
@@ -68,167 +63,28 @@ impl MultiplexedClient {
     /// }
     /// ```
     pub async fn send(&mut self, command: Command) -> Result<Value> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::single(command, value_sender);
-        self.send_message(message)?;
-        let value = value_receiver.await?;
-        value.into_result()
+        self.inner_client.send(command).await
     }
 
-    /// Send command and forget its response
+    /// Send command to the Redis server and forget its response.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        let message = Message::single_forget(command);
-        self.send_message(message)?;
-        Ok(())
+        self.inner_client.send_and_forget(command)
     }
 
-    fn send_message(&mut self, message: Message) -> Result<()> {
-        self.msg_sender.unbounded_send(message)?;
-        Ok(())
+    /// Send a command batch to the Redis server.
+    ///
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
+        self.inner_client.send_batch(commands).await
     }
 
-    /// Subscribes the client to the specified channels.
-    ///
-    /// # Example
-    /// ```
-    /// use redis_driver::{
-    ///     resp::cmd, MultiplexedClient, MultiplexedPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
-    /// };
-    /// use futures::StreamExt;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<()> {
-    ///     let mut pub_sub_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
-    ///     let mut regular_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
-    ///
-    ///     regular_client.flushdb(FlushingMode::Sync).await?;
-    ///
-    ///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
-    ///
-    ///     regular_client.publish("mychannel", "mymessage").await?;
-    ///
-    ///     let (channel, message): (String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
-    ///
-    ///     assert_eq!("mychannel", channel);
-    ///     assert_eq!("mymessage", message);
-    ///
-    ///     pub_sub_stream.close().await?;
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
-    pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, MultiplexedPubSubStream>
-    where
-        C: Into<BulkString> + Send + 'a,
-        CC: SingleArgOrCollection<C>,
-    {
-        let channels: Vec<String> = channels.into_iter().map(|c| c.into().to_string()).collect();
-
-        Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
-                mpsc::unbounded();
-
-            let pub_sub_senders = channels
-                .iter()
-                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
-                .collect::<Vec<_>>();
-
-            let message = Message::pub_sub(
-                cmd("SUBSCRIBE").arg(channels.clone()),
-                value_sender,
-                pub_sub_senders,
-            );
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                MultiplexedPubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
-            })
-        })
-    }
-
-    /// Subscribes the client to the given patterns.
-    ///
-    /// # Example
-    /// ```
-    /// use redis_driver::{
-    ///     resp::cmd, MultiplexedClient, MultiplexedPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
-    /// };
-    /// use futures::StreamExt;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<()> {
-    ///     let mut pub_sub_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
-    ///     let mut regular_client = MultiplexedClient::connect("127.0.0.1:6379").await?;
-    ///
-    ///     regular_client.flushdb(FlushingMode::Sync).await?;
-    ///
-    ///     let mut pub_sub_stream = pub_sub_client.psubscribe("mychannel*").await?;
-    ///
-    ///     regular_client.publish("mychannel1", "mymessage").await?;
-    ///
-    ///     let (pattern, channel, message): (String, String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
-    ///
-    ///     assert_eq!("mychannel*", pattern);
-    ///     assert_eq!("mychannel1", channel);
-    ///     assert_eq!("mymessage", message);
-    ///
-    ///     pub_sub_stream.close().await?;
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
-    pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, MultiplexedPubSubStream>
-    where
-        P: Into<BulkString> + Send + 'a,
-        PP: SingleArgOrCollection<P>,
-    {
-        let patterns: Vec<String> = patterns.into_iter().map(|p| p.into().to_string()).collect();
-
-        Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
-                mpsc::unbounded();
-
-            let pub_sub_senders = patterns
-                .iter()
-                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
-                .collect::<Vec<_>>();
-
-            let message = Message::pub_sub(
-                cmd("PSUBSCRIBE").arg(patterns.clone()),
-                value_sender,
-                pub_sub_senders,
-            );
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                MultiplexedPubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
-            })
-        })
+    /// Create a new pipeline
+    pub fn create_pipeline(&mut self) -> Pipeline {
+        Pipeline::new(self.inner_client.clone())
     }
 }
 
@@ -283,4 +139,22 @@ impl SetCommands for MultiplexedClient {}
 impl SortedSetCommands for MultiplexedClient {}
 impl StreamCommands for MultiplexedClient {}
 impl StringCommands for MultiplexedClient {}
-impl PubSubCommands for MultiplexedClient {}
+
+impl PubSubCommands for MultiplexedClient {
+    fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
+    where
+        C: Into<BulkString> + Send + 'a,
+        CC: SingleArgOrCollection<C>,
+    {
+        self.inner_client.subscribe(channels)
+    }
+
+
+    fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
+    where
+        P: Into<BulkString> + Send + 'a,
+        PP: SingleArgOrCollection<P>,
+    {
+        self.inner_client.psubscribe(patterns)
+    }
+}

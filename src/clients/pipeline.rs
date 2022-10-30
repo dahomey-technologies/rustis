@@ -2,19 +2,19 @@ use std::iter::zip;
 
 use crate::{
     resp::{Array, Command, FromValue, Value, ResultValueExt},
-    BitmapCommands, Client, ConnectionCommands, GenericCommands, GeoCommands, HashCommands,
+    BitmapCommands, ConnectionCommands, GenericCommands, GeoCommands, HashCommands,
     HyperLogLogCommands, ListCommands, PreparedCommand, Result, ScriptingCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Error,
+    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Error, InnerClient,
 };
 
 pub struct Pipeline {
-    client: Client,
+    client: InnerClient,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
 }
 
 impl Pipeline {
-    pub fn new(client: Client) -> Pipeline {
+    pub(crate) fn new(client: InnerClient) -> Pipeline {
         Pipeline {
             client,
             commands: Vec::new(),

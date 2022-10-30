@@ -69,7 +69,7 @@ impl MultiplexedClient {
     /// ```
     pub async fn send(&mut self, command: Command) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::new(command).value_sender(value_sender);
+        let message = Message::single(command, value_sender);
         self.send_message(message)?;
         let value = value_receiver.await?;
         value.into_result()
@@ -80,7 +80,7 @@ impl MultiplexedClient {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        let message = Message::new(command);
+        let message = Message::single_forget(command);
         self.send_message(message)?;
         Ok(())
     }
@@ -145,9 +145,11 @@ impl MultiplexedClient {
                 .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
                 .collect::<Vec<_>>();
 
-            let message = Message::new(cmd("SUBSCRIBE").arg(channels.clone()))
-                .value_sender(value_sender)
-                .pub_sub_senders(pub_sub_senders);
+            let message = Message::pub_sub(
+                cmd("SUBSCRIBE").arg(channels.clone()),
+                value_sender,
+                pub_sub_senders,
+            );
 
             self.send_message(message)?;
 
@@ -214,9 +216,11 @@ impl MultiplexedClient {
                 .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
                 .collect::<Vec<_>>();
 
-            let message = Message::new(cmd("PSUBSCRIBE").arg(patterns.clone()))
-                .value_sender(value_sender)
-                .pub_sub_senders(pub_sub_senders);
+            let message = Message::pub_sub(
+                cmd("PSUBSCRIBE").arg(patterns.clone()),
+                value_sender,
+                pub_sub_senders,
+            );
 
             self.send_message(message)?;
 
@@ -228,7 +232,6 @@ impl MultiplexedClient {
     }
 }
 
-#[allow(clippy::module_name_repetitions)]
 pub trait MultiplexedPreparedCommand<'a, R>
 where
     R: FromValue,

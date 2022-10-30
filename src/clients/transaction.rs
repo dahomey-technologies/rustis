@@ -421,7 +421,6 @@ where
     }
 }
 
-#[allow(clippy::module_name_repetitions)]
 pub trait TransactionPreparedCommand<'a, T, U> {
     fn forget(self) -> Future<'a, Transaction<U>>;
 }
@@ -789,7 +788,7 @@ impl<T> HyperLogLogCommands for Transaction<T> {}
 impl<T> ListCommands for Transaction<T> {}
 impl<T> SetCommands for Transaction<T> {}
 impl<T> ScriptingCommands for Transaction<T> {}
-impl<T> SortedSetCommands for Transaction<T> {}
 impl<T> ServerCommands for Transaction<T> {}
+impl<T> SortedSetCommands for Transaction<T> {}
 impl<T> StreamCommands for Transaction<T> {}
 impl<T> StringCommands for Transaction<T> {}

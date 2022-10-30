@@ -3,9 +3,9 @@ use crate::{
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, BlockingCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
     HashCommands, HyperLogLogCommands, InternalPubSubCommands, IntoConfig, ListCommands, Message,
-    MonitorStream, MsgSender, NetworkHandler, PreparedCommand, PubSubCommands, PubSubReceiver,
-    PubSubSender, PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    MonitorStream, MsgSender, NetworkHandler, Pipeline, PreparedCommand, PubSubCommands,
+    PubSubReceiver, PubSubSender, PubSubStream, Result, ScriptingCommands, SentinelCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
     TransactionCommands, TransactionResult0, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -69,7 +69,7 @@ impl Client {
     /// ```
     pub async fn send(&mut self, command: Command) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::new(command).value_sender(value_sender);
+        let message = Message::single(command, value_sender);
         self.send_message(message)?;
         let value = value_receiver.await?;
         value.into_result()
@@ -80,9 +80,17 @@ impl Client {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        let message = Message::new(command);
+        let message = Message::single_forget(command);
         self.send_message(message)?;
         Ok(())
+    }
+
+    pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let message = Message::batch(commands, value_sender);
+        self.send_message(message)?;
+        let value = value_receiver.await?;
+        value.into_result()
     }
 
     /// Create a new transaction
@@ -91,6 +99,11 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error)
     pub async fn create_transaction(&mut self) -> Result<Transaction<TransactionResult0>> {
         Transaction::initialize(self.clone()).await
+    }
+
+    /// Create a new pipeline
+    pub fn create_pipeline(&mut self) -> Pipeline {
+        Pipeline::new(self.clone())
     }
 
     fn send_message(&mut self, message: Message) -> Result<()> {
@@ -153,9 +166,11 @@ impl Client {
                 .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
                 .collect::<Vec<_>>();
 
-            let message = Message::new(cmd("SUBSCRIBE").arg(channels.clone()))
-                .value_sender(value_sender)
-                .pub_sub_senders(pub_sub_senders);
+            let message = Message::pub_sub(
+                cmd("SUBSCRIBE").arg(channels.clone()),
+                value_sender,
+                pub_sub_senders,
+            );
 
             self.send_message(message)?;
 
@@ -222,9 +237,11 @@ impl Client {
                 .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
                 .collect::<Vec<_>>();
 
-            let message = Message::new(cmd("PSUBSCRIBE").arg(patterns.clone()))
-                .value_sender(value_sender)
-                .pub_sub_senders(pub_sub_senders);
+            let message = Message::pub_sub(
+                cmd("PSUBSCRIBE").arg(patterns.clone()),
+                value_sender,
+                pub_sub_senders,
+            );
 
             self.send_message(message)?;
 
@@ -236,7 +253,6 @@ impl Client {
     }
 }
 
-#[allow(clippy::module_name_repetitions)]
 pub trait ClientPreparedCommand<'a, R>
 where
     R: FromValue,
@@ -298,9 +314,7 @@ impl BlockingCommands for Client {
             let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
                 mpsc::unbounded();
 
-            let message = Message::new(cmd("MONITOR"))
-                .value_sender(value_sender)
-                .monitor_sender(monitor_sender);
+            let message = Message::monitor(cmd("MONITOR"), value_sender, monitor_sender);
 
             self.send_message(message)?;
 

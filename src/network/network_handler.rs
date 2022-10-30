@@ -34,7 +34,7 @@ pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
     msg_receiver: MsgReceiver,
-    value_senders: VecDeque<Option<ValueSender>>,
+    value_senders: VecDeque<Option<(ValueSender, usize)>>,
     messages: VecDeque<Message>,
     buffer: BytesMut,
     pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
@@ -43,6 +43,7 @@ pub(crate) struct NetworkHandler {
     subscriptions: HashMap<Vec<u8>, PubSubSender>,
     is_reply_on: bool,
     monitor_sender: Option<MonitorSender>,
+    pending_replies: Option<Vec<Value>>,
 }
 
 impl NetworkHandler {
@@ -63,6 +64,7 @@ impl NetworkHandler {
             subscriptions: HashMap::new(),
             is_reply_on: true,
             monitor_sender: None,
+            pending_replies: None,
         };
 
         spawn(async move {
@@ -99,15 +101,17 @@ impl NetworkHandler {
 
                 match &self.status {
                     Status::Connected => {
-                        match msg.command.name {
-                            "SUBSCRIBE" | "PSUBSCRIBE" => {
-                                self.status = Status::Subscribing;
+                        for command in &msg.commands {
+                            match command.name {
+                                "SUBSCRIBE" | "PSUBSCRIBE" => {
+                                    self.status = Status::Subscribing;
+                                }
+                                "MONITOR" => {
+                                    self.monitor_sender = msg.monitor_sender.take();
+                                    self.status = Status::EnteringMonitor;
+                                }
+                                _ => (),
                             }
-                            "MONITOR" => {
-                                self.monitor_sender = msg.monitor_sender.take();
-                                self.status = Status::EnteringMonitor;
-                            }
-                            _ => (),
                         }
                         self.messages.push_back(msg);
                     }
@@ -115,9 +119,10 @@ impl NetworkHandler {
                         self.messages.push_back(msg);
                     }
                     Status::Subscribed => {
-                        if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = msg.command.name {
-                            self.pending_unsubscriptions
-                                .push_back(msg.command.args.len());
+                        for command in &msg.commands {
+                            if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = command.name {
+                                self.pending_unsubscriptions.push_back(command.args.len());
+                            }
                         }
                         self.messages.push_back(msg);
                     }
@@ -130,8 +135,10 @@ impl NetworkHandler {
                     }
                     Status::EnteringMonitor => self.messages.push_back(msg),
                     Status::Monitor => {
-                        if msg.command.name == "RESET" {
-                            self.status = Status::LeavingMonitor;
+                        for command in &msg.commands {
+                            if command.name == "RESET" {
+                                self.status = Status::LeavingMonitor;
+                            }
                         }
                         self.messages.push_back(msg);
                     }
@@ -161,54 +168,69 @@ impl NetworkHandler {
     }
 
     async fn send_messages(&mut self) {
-        if log_enabled!(Level::Debug) && self.messages.len() > 1 {
-            debug!("sending batch of {} messages", self.messages.len());
+        if log_enabled!(Level::Debug) {
+            let num_commands = self
+                .messages
+                .iter()
+                .fold(0, |sum, msg| sum + msg.commands.len());
+            if num_commands > 1 {
+                debug!("sending batch of {} commands", num_commands);
+            }
         }
 
         let mut num_value_senders = 0;
 
         while let Some(msg) = self.messages.pop_front() {
-            let command = msg.command;
-            let value_sender = msg.value_sender;
+            let commands = msg.commands;
+            let mut value_sender = Some(msg.value_sender);
 
-            debug!("Sending {command:?}");
+            let num_commands = commands.len();
 
-            if command.name == "CLIENT" {
-                match &command.args {
-                    CommandArgs::Array2(args)
-                        if args[0].as_bytes() == b"REPLY"
-                            && (args[1].as_bytes() == b"OFF" || args[1].as_bytes() == b"SKIP") =>
-                    {
-                        self.is_reply_on = false
+            for command in commands.into_iter() {
+                debug!("Sending {command:?}");
+
+                if command.name == "CLIENT" {
+                    match &command.args {
+                        CommandArgs::Array2(args)
+                            if args[0].as_bytes() == b"REPLY"
+                                && (args[1].as_bytes() == b"OFF"
+                                    || args[1].as_bytes() == b"SKIP") =>
+                        {
+                            self.is_reply_on = false
+                        }
+                        CommandArgs::Array2(args)
+                            if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
+                        {
+                            self.is_reply_on = true
+                        }
+                        _ => (),
                     }
-                    CommandArgs::Array2(args)
-                        if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
-                    {
-                        self.is_reply_on = true
-                    }
-                    _ => (),
                 }
-            }
 
-            let command_encoder = self.connection.get_encoder_mut();
-            if let Err(e) = command_encoder.encode(command, &mut self.buffer) {
-                if self.is_reply_on {
-                    if let Some(value_sender) = value_sender {
-                        let _result = value_sender.send(Err(Error::Client(e.to_string())));
-                        continue;
+                let command_encoder = self.connection.get_encoder_mut();
+                if let Err(e) = command_encoder.encode(command, &mut self.buffer) {
+                    if self.is_reply_on {
+                        let value_sender = value_sender.take();
+                        if let Some(Some(value_sender)) = value_sender {
+                            let _result = value_sender.send(Err(Error::Client(e.to_string())));
+                            break;
+                        }
                     }
                 }
             }
 
             if self.is_reply_on {
-                self.value_senders.push_back(value_sender);
-                num_value_senders += 1;
+                if let Some(value_sender) = value_sender {
+                    self.value_senders
+                        .push_back(value_sender.map(|vs| (vs, num_commands)));
+                    num_value_senders += 1;
+                }
             }
         }
 
-        if let Err(e) =  self.connection.write_raw(&mut self.buffer).await {
+        if let Err(e) = self.connection.write_raw(&mut self.buffer).await {
             for _ in 0..num_value_senders {
-                if let Some(Some(value_sender)) = self.value_senders.pop_front() {
+                if let Some(Some((value_sender, _num_commands))) = self.value_senders.pop_front() {
                     let _result = value_sender.send(Err(Error::Client(e.to_string())));
                 }
             }
@@ -292,14 +314,46 @@ impl NetworkHandler {
     }
 
     fn receive_result(&mut self, value: Result<Value>) {
-        match self.value_senders.pop_front() {
-            Some(Some(value_sender)) => {
-                let _result = value_sender.send(value);
+        match self.value_senders.front_mut() {
+            Some(Some((_, num_commands))) => {
+                if *num_commands == 1 || value.is_err() {
+                    if let Some(Some((value_sender, _))) = self.value_senders.pop_front() {
+                        match value {
+                            Ok(value) => {
+                                let pending_replies = self.pending_replies.take();
+
+                                if let Some(mut pending_replies) = pending_replies {
+                                    pending_replies.push(value);
+                                    let _result = value_sender
+                                        .send(Ok(Value::Array(Array::Vec(pending_replies))));
+                                } else {
+                                    let _result = value_sender.send(Ok(value));
+                                }
+                            }
+                            Err(_) => {
+                                let _result = value_sender.send(value);
+                            }
+                        }
+                    }
+                } else {
+                    if self.pending_replies.is_none() {
+                        self.pending_replies = Some(Vec::new());
+                    }
+
+                    if let Some(pending_replies) = &mut self.pending_replies {
+                        if let Ok(value) = value {
+                            pending_replies.push(value);
+                            *num_commands -= 1;
+                        }
+                    }
+                }
             }
             Some(None) => {
+                self.value_senders.pop_front();
                 debug!("forget value {value:?}"); // fire & forget
             }
             None => {
+                self.value_senders.pop_front();
                 // disconnection errors could end here but ok values should match a value_sender instance
                 assert!(value.is_err(), "Received unexpected message: {value:?}",);
             }
@@ -426,7 +480,7 @@ impl NetworkHandler {
 
     pub(crate) async fn reconnect(&mut self) -> Result<()> {
         while let Some(value_sender) = self.value_senders.pop_front() {
-            if let Some(value_sender) = value_sender {
+            if let Some((value_sender, _num_commands)) = value_sender {
                 let _result =
                     value_sender.send(Err(Error::Client("Disconnected from server".to_string())));
             }

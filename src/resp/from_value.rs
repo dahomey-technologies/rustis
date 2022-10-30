@@ -28,10 +28,7 @@ pub trait FromValue: Sized {
 
 impl FromValue for Value {
     fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::Error(e) => Err(Error::Redis(e)),
-            _ => Ok(value),
-        }
+        Ok(value)
     }
 }
 
@@ -55,6 +52,7 @@ where
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(Vec::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
     }
@@ -68,6 +66,7 @@ where
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(HashSet::default()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
     }
@@ -81,6 +80,7 @@ where
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(BTreeSet::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
     }
@@ -95,6 +95,7 @@ where
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(HashMap::default()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
     }
@@ -109,6 +110,7 @@ where
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(BTreeMap::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
     }
@@ -121,6 +123,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(None),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => T::from_value(value).map(|v| Some(v)),
         }
     }
@@ -132,6 +135,7 @@ impl FromValue for bool {
             Value::Integer(i) => Ok(i != 0),
             Value::SimpleString(s) if s == "OK" => Ok(true),
             Value::BulkString(BulkString::Nil) => Ok(false),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to bool",
                 value
@@ -154,6 +158,7 @@ impl FromValue for i64 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i64",
                 value
@@ -176,6 +181,7 @@ impl FromValue for u64 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u64",
                 value
@@ -198,6 +204,7 @@ impl FromValue for i32 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i32",
                 value
@@ -220,6 +227,7 @@ impl FromValue for u32 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u32",
                 value
@@ -242,6 +250,7 @@ impl FromValue for i16 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i16",
                 value
@@ -264,6 +273,7 @@ impl FromValue for u16 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u16",
                 value
@@ -286,6 +296,7 @@ impl FromValue for i8 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i8",
                 value
@@ -308,6 +319,7 @@ impl FromValue for u8 {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u8",
                 value
@@ -330,6 +342,7 @@ impl FromValue for isize {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to isize",
                 value
@@ -352,6 +365,7 @@ impl FromValue for usize {
                     Err(e) => Err(e),
                 }
             }
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to usize",
                 value
@@ -365,8 +379,9 @@ impl FromValue for f32 {
         match value {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f32>().unwrap())
-            },
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f32),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to f32",
                 value
@@ -380,9 +395,10 @@ impl FromValue for f64 {
         match value {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f64>()?)
-            },
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f64),
             Value::Double(d) => Ok(d),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to f64",
                 value
@@ -396,6 +412,7 @@ impl FromValue for String {
         match value {
             Value::BulkString(s) => Result::<String>::from(s),
             Value::SimpleString(s) => Ok(s),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to String",
                 value
@@ -408,6 +425,7 @@ impl FromValue for BulkString {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(s) => Ok(s),
+            Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to BulkString",
                 value

@@ -1,5 +1,5 @@
 use crate::{
-    resp::Value, Client, ClientPreparedCommand, InternalPubSubCommands, PubSubReceiver, Result,
+    resp::Value, ClientPreparedCommand, InternalPubSubCommands, PubSubReceiver, Result, InnerClient,
 };
 use futures::{Stream, StreamExt};
 use std::{
@@ -47,14 +47,14 @@ pub struct PubSubStream {
     channels: Vec<String>,
     patterns: Vec<String>,
     receiver: PubSubReceiver,
-    client: Client,
+    client: InnerClient,
 }
 
 impl PubSubStream {
     pub(crate) fn from_channels(
         channels: Vec<String>,
         receiver: PubSubReceiver,
-        client: Client,
+        client: InnerClient,
     ) -> Self {
         Self {
             closed: false,
@@ -68,7 +68,7 @@ impl PubSubStream {
     pub(crate) fn from_patterns(
         patterns: Vec<String>,
         receiver: PubSubReceiver,
-        client: Client,
+        client: InnerClient,
     ) -> Self {
         Self {
             closed: false,

@@ -14,16 +14,16 @@ use std::{
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction<T> {
     phantom: PhantomData<T>,
-    connection: Client,
+    client: Client,
     forget_flags: Arc<Mutex<Vec<bool>>>,
 }
 
 impl<T: Send + Sync> Transaction<T> {
-    pub(crate) async fn initialize(mut connection: Client) -> Result<Self> {
-        connection.send(cmd("MULTI")).await?.into::<()>()?;
+    pub(crate) async fn initialize(mut client: Client) -> Result<Self> {
+        client.send(cmd("MULTI")).await?.into::<()>()?;
         Ok(Self {
             phantom: PhantomData,
-            connection,
+            client,
             forget_flags: Arc::new(Mutex::new(Vec::new())),
         })
     }
@@ -31,24 +31,24 @@ impl<T: Send + Sync> Transaction<T> {
     pub(crate) fn from_transaction<U: Send + Sync>(transaction: &Transaction<U>) -> Self {
         Self {
             phantom: PhantomData,
-            connection: transaction.connection.clone(),
+            client: transaction.client.clone(),
             forget_flags: transaction.forget_flags.clone(),
         }
     }
 
     pub(crate) async fn queue(&mut self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(false);
-        self.connection.send(command).await?.into()
+        self.client.send(command).await?.into()
     }
 
     pub(crate) async fn queue_and_forget(&mut self, command: Command) -> Result<()> {
         self.forget_flags.lock().unwrap().push(true);
-        self.connection.send(command).await?.into()
+        self.client.send(command).await?.into()
     }
 
     pub(crate) fn execute<R: FromValue>(mut self) -> Future<'static, R> {
         Box::pin(async move {
-            let result = self.connection.send(cmd("EXEC")).await?;
+            let result = self.client.send(cmd("EXEC")).await?;
 
             match result {
                 Value::Array(Array::Vec(results)) => {
@@ -78,7 +78,7 @@ impl<T: Send + Sync> Transaction<T> {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error)
     pub async fn discard(mut self) -> Result<()> {
-        self.connection.send(cmd("DISCARD")).await?.into()
+        self.client.send(cmd("DISCARD")).await?.into()
     }
 }
 
@@ -422,11 +422,11 @@ where
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub trait TransactionCommandResult<'a, T, U> {
+pub trait TransactionPreparedCommand<'a, T, U> {
     fn forget(self) -> Future<'a, Transaction<U>>;
 }
 
-impl<'a, T1> TransactionCommandResult<'a, TransactionResult1<T1>, TransactionResult0>
+impl<'a, T1> TransactionPreparedCommand<'a, TransactionResult1<T1>, TransactionResult0>
     for PreparedCommand<'a, Transaction<TransactionResult0>, T1>
 where
     T1: FromValue + Send + Sync + 'a,
@@ -439,7 +439,7 @@ where
     }
 }
 
-impl<'a, T1, T2> TransactionCommandResult<'a, TransactionResult2<T1, T2>, TransactionResult1<T1>>
+impl<'a, T1, T2> TransactionPreparedCommand<'a, TransactionResult2<T1, T2>, TransactionResult1<T1>>
     for PreparedCommand<'a, Transaction<TransactionResult1<T1>>, T2>
 where
     T1: FromValue + Send + Sync + 'a,
@@ -454,7 +454,7 @@ where
 }
 
 impl<'a, T1, T2, T3>
-    TransactionCommandResult<'a, TransactionResult3<T1, T2, T3>, TransactionResult2<T1, T2>>
+    TransactionPreparedCommand<'a, TransactionResult3<T1, T2, T3>, TransactionResult2<T1, T2>>
     for PreparedCommand<'a, Transaction<TransactionResult2<T1, T2>>, T3>
 where
     T1: FromValue + Send + Sync + 'a,
@@ -470,8 +470,11 @@ where
 }
 
 impl<'a, T1, T2, T3, T4>
-    TransactionCommandResult<'a, TransactionResult4<T1, T2, T3, T4>, TransactionResult3<T1, T2, T3>>
-    for PreparedCommand<'a, Transaction<TransactionResult3<T1, T2, T3>>, T4>
+    TransactionPreparedCommand<
+        'a,
+        TransactionResult4<T1, T2, T3, T4>,
+        TransactionResult3<T1, T2, T3>,
+    > for PreparedCommand<'a, Transaction<TransactionResult3<T1, T2, T3>>, T4>
 where
     T1: FromValue + Send + Sync + 'a,
     T2: FromValue + Send + Sync + 'a,
@@ -487,7 +490,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult5<T1, T2, T3, T4, T5>,
         TransactionResult4<T1, T2, T3, T4>,
@@ -508,7 +511,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5, T6>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult6<T1, T2, T3, T4, T5, T6>,
         TransactionResult5<T1, T2, T3, T4, T5>,
@@ -530,7 +533,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5, T6, T7>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult7<T1, T2, T3, T4, T5, T6, T7>,
         TransactionResult6<T1, T2, T3, T4, T5, T6>,
@@ -553,7 +556,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5, T6, T7, T8>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>,
         TransactionResult7<T1, T2, T3, T4, T5, T6, T7>,
@@ -577,7 +580,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>,
         TransactionResult8<T1, T2, T3, T4, T5, T6, T7, T8>,
@@ -602,7 +605,7 @@ where
 }
 
 impl<'a, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
-    TransactionCommandResult<
+    TransactionPreparedCommand<
         'a,
         TransactionResult10<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>,
         TransactionResult9<T1, T2, T3, T4, T5, T6, T7, T8, T9>,

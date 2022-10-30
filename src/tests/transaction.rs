@@ -3,7 +3,7 @@ use crate::{
     resp::{cmd, Value},
     tests::get_test_client,
     Error, FlushingMode, ListCommands, Result, ServerCommands, StringCommands,
-    TransactionCommandResult, TransactionCommands, TransactionExt,
+    TransactionPreparedCommand, TransactionCommands, TransactionExt,
 };
 use serial_test::serial;
 

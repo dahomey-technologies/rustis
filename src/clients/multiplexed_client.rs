@@ -52,11 +52,11 @@ impl MultiplexedClient {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{resp::cmd, Client, Result};
+    /// use redis_driver::{resp::cmd, MultiplexedClient, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    ///     let mut client = MultiplexedClient::connect("127.0.0.1:6379").await?;
     ///
     ///     let values: Vec<String> = client
     ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
@@ -95,7 +95,7 @@ impl MultiplexedClient {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, MultiplexedClient, MultiplexedClientCommandResult, FlushingMode,
+    ///     resp::cmd, MultiplexedClient, MultiplexedPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
@@ -163,7 +163,7 @@ impl MultiplexedClient {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, MultiplexedClient, MultiplexedClientCommandResult, FlushingMode,
+    ///     resp::cmd, MultiplexedClient, MultiplexedPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
@@ -229,7 +229,7 @@ impl MultiplexedClient {
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub trait MultiplexedClientCommandResult<'a, R>
+pub trait MultiplexedPreparedCommand<'a, R>
 where
     R: FromValue,
 {
@@ -240,7 +240,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> MultiplexedClientCommandResult<'a, R> for PreparedCommand<'a, MultiplexedClient, R>
+impl<'a, R> MultiplexedPreparedCommand<'a, R> for PreparedCommand<'a, MultiplexedClient, R>
 where
     R: FromValue + Send + 'a,
 {

@@ -103,7 +103,7 @@ impl Client {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, Client, ClientCommandResult, FlushingMode,
+    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
@@ -171,7 +171,7 @@ impl Client {
     /// # Example
     /// ```
     /// use redis_driver::{
-    ///     resp::cmd, Client, ClientCommandResult, FlushingMode,
+    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
     /// use futures::StreamExt;
@@ -237,7 +237,7 @@ impl Client {
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub trait ClientCommandResult<'a, R>
+pub trait ClientPreparedCommand<'a, R>
 where
     R: FromValue,
 {
@@ -248,7 +248,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> ClientCommandResult<'a, R> for PreparedCommand<'a, Client, R>
+impl<'a, R> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
 where
     R: FromValue + Send + 'a,
 {

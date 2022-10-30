@@ -1,5 +1,6 @@
 use crate::{
-    resp::Value, MultiplexedClient, MultiplexedClientCommandResult, InternalPubSubCommands, PubSubReceiver, Result,
+    resp::Value, InternalPubSubCommands, MultiplexedClient, MultiplexedPreparedCommand,
+    PubSubReceiver, Result,
 };
 use futures::{Stream, StreamExt};
 use std::{
@@ -12,7 +13,7 @@ use std::{
 /// # Example
 /// ```
 /// use redis_driver::{
-///     resp::cmd, Client, ClientCommandResult, FlushingMode,
+///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
 ///     PubSubCommands, ServerCommands, Result
 /// };
 /// use futures::StreamExt;

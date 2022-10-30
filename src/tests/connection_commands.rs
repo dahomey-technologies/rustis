@@ -1,5 +1,5 @@
 use crate::{
-    network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientCommandResult,
+    network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientPreparedCommand,
     ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode, ClientTrackingOptions,
     ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error, FlushingMode,
     GenericCommands, HelloOptions, PingOptions, Result, ServerCommands,

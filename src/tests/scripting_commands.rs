@@ -1,5 +1,5 @@
 use crate::{
-    resp::BulkString, sleep, spawn, tests::get_test_client, CallBuilder, ClientCommandResult,
+    resp::BulkString, sleep, spawn, tests::get_test_client, CallBuilder, ClientPreparedCommand,
     FlushingMode, FunctionListOptions, LibraryInfo, Result, ScriptingCommands, ServerCommands,
     StringCommands,
 };

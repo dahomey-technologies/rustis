@@ -3,7 +3,7 @@ use crate::{
     BitmapCommands, ConnectionCommands, Future, GenericCommands, GeoCommands, HashCommands,
     HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig, ListCommands, Pipeline,
     PreparedCommand, PubSubCommands, PubSubStream, Result, ScriptingCommands, SentinelCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
 };
 use std::future::IntoFuture;
 
@@ -86,6 +86,19 @@ impl MultiplexedClient {
     pub fn create_pipeline(&mut self) -> Pipeline {
         Pipeline::new(self.inner_client.clone())
     }
+
+    /// Create a new transaction
+    /// 
+    /// Because of the multiplexed nature of the client,
+    /// [`watch`](crate::TransactionCommands::watch) & 
+    /// [`unwatch`](crate::TransactionCommands::unwatch)
+    /// commands cannot be supported.
+    /// To be able to use these commands with a transaction, 
+    /// [`Client`](crate::Client) or [`PooledClientManager`](crate::PooledClientManager)
+    /// should be used instead
+    pub fn create_transaction(&mut self) -> Transaction {
+        Transaction::new(self.inner_client.clone())
+    }
 }
 
 pub trait MultiplexedPreparedCommand<'a, R>
@@ -148,7 +161,6 @@ impl PubSubCommands for MultiplexedClient {
     {
         self.inner_client.subscribe(channels)
     }
-
 
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where

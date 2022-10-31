@@ -1,10 +1,10 @@
 use std::iter::zip;
 
 use crate::{
-    resp::{Array, Command, FromValue, Value, ResultValueExt},
-    BitmapCommands, ConnectionCommands, GenericCommands, GeoCommands, HashCommands,
-    HyperLogLogCommands, ListCommands, PreparedCommand, Result, ScriptingCommands, ServerCommands,
-    SetCommands, SortedSetCommands, StreamCommands, StringCommands, Error, InnerClient,
+    resp::{Array, Command, FromValue, ResultValueExt, Value},
+    BitmapCommands, ConnectionCommands, Error, GenericCommands, GeoCommands, HashCommands,
+    HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result, ScriptingCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
 
 pub struct Pipeline {
@@ -23,18 +23,12 @@ impl Pipeline {
     }
 
     /// Queue a command
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     pub fn queue(&mut self, command: Command) {
         self.commands.push(command);
         self.forget_flags.push(false);
     }
 
     /// Queue a command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     pub fn forget(&mut self, command: Command) {
         self.commands.push(command);
         self.forget_flags.push(true);
@@ -67,16 +61,10 @@ pub trait PipelinePreparedCommand<'a, R>
 where
     R: FromValue,
 {
-    /// Queue a command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    /// Queue a command.
     fn queue(self);
 
-    /// Queue a command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    /// Queue a command and forget its response.
     fn forget(self);
 }
 
@@ -84,18 +72,12 @@ impl<'a, R> PipelinePreparedCommand<'a, R> for PreparedCommand<'a, Pipeline, R>
 where
     R: FromValue + Send + 'a,
 {
-    /// Queue a command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    /// Queue a command.
     fn queue(self) {
         self.executor.queue(self.command)
     }
 
-    /// Queue a command and forget its response
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    /// Queue a command and forget its response.
     fn forget(self) {
         self.executor.forget(self.command)
     }

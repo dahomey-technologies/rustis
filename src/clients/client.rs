@@ -5,8 +5,7 @@ use crate::{
     HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig,
     ListCommands, Message, MonitorStream, Pipeline, PreparedCommand, PubSubCommands, PubSubStream,
     Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StreamCommands, StringCommands, Transaction, TransactionCommands, TransactionResult0,
-    ValueReceiver, ValueSender,
+    StreamCommands, StringCommands, Transaction, TransactionCommands, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
@@ -85,11 +84,8 @@ impl Client {
     }
 
     /// Create a new transaction
-    ///
-    /// # Errors
-    /// Any Redis driver [`Error`](crate::Error)
-    pub async fn create_transaction(&mut self) -> Result<Transaction<TransactionResult0>> {
-        Transaction::initialize(self.clone()).await
+    pub fn create_transaction(&mut self) -> Transaction {
+        Transaction::new(self.inner_client.clone())
     }
 
     /// Create a new pipeline
@@ -159,7 +155,6 @@ impl PubSubCommands for Client {
     {
         self.inner_client.subscribe(channels)
     }
-
 
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where

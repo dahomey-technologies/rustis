@@ -1,15 +1,14 @@
 use crate::{
-    resp::{Array, BulkString, CommandArgs, Value},
+    resp::{Array, BulkString, Command, CommandArgs, Value},
     spawn, Config, Connection, Error, Message, Result,
 };
-use bytes::BytesMut;
 use futures::{
     channel::{mpsc, oneshot},
     select, FutureExt, SinkExt, StreamExt,
 };
 use log::{debug, error, info, log_enabled, Level};
+use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
-use tokio_util::codec::Encoder;
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
@@ -36,7 +35,6 @@ pub(crate) struct NetworkHandler {
     msg_receiver: MsgReceiver,
     value_senders: VecDeque<Option<(ValueSender, usize)>>,
     messages: VecDeque<Message>,
-    buffer: BytesMut,
     pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
     /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
     pending_unsubscriptions: VecDeque<usize>,
@@ -58,7 +56,6 @@ impl NetworkHandler {
             msg_receiver,
             value_senders,
             messages: VecDeque::new(),
-            buffer: BytesMut::new(),
             pending_subscriptions: HashMap::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
@@ -180,9 +177,11 @@ impl NetworkHandler {
 
         let mut num_value_senders = 0;
 
+        let mut commands_to_write = SmallVec::<[Command; 10]>::new();
+
         while let Some(msg) = self.messages.pop_front() {
             let commands = msg.commands;
-            let mut value_sender = Some(msg.value_sender);
+            let value_sender = Some(msg.value_sender);
 
             let num_commands = commands.len();
 
@@ -207,16 +206,7 @@ impl NetworkHandler {
                     }
                 }
 
-                let command_encoder = self.connection.get_encoder_mut();
-                if let Err(e) = command_encoder.encode(command, &mut self.buffer) {
-                    if self.is_reply_on {
-                        let value_sender = value_sender.take();
-                        if let Some(Some(value_sender)) = value_sender {
-                            let _result = value_sender.send(Err(Error::Client(e.to_string())));
-                            break;
-                        }
-                    }
-                }
+                commands_to_write.push(command);
             }
 
             if self.is_reply_on {
@@ -228,14 +218,17 @@ impl NetworkHandler {
             }
         }
 
-        if let Err(e) = self.connection.write_raw(&mut self.buffer).await {
+        if let Err(e) = self
+            .connection
+            .write_batch(commands_to_write.into_iter())
+            .await
+        {
             for _ in 0..num_value_senders {
                 if let Some(Some((value_sender, _num_commands))) = self.value_senders.pop_front() {
                     let _result = value_sender.send(Err(Error::Client(e.to_string())));
                 }
             }
         }
-        self.buffer.clear();
     }
 
     async fn handle_result(&mut self, result: Option<Result<Value>>) -> Result<()> {

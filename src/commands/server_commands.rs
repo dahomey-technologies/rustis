@@ -1253,11 +1253,11 @@ pub enum FindKeys {
     Range {
         last_key: isize,
         key_step: usize,
-        limit: isize,
+        limit: usize,
     },
     KeyEnum {
-        key_num_idx: isize,
-        first_key: isize,
+        key_num_idx: usize,
+        first_key: usize,
         key_step: usize,
     },
     Unknown,

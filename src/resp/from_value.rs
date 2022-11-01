@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 use crate::{
     resp::{Array, BulkString, IntoValueIterator, Value},
     Error, Result,
@@ -51,6 +53,21 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(Vec::new()),
+            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::Error(e) => Err(Error::Redis(e)),
+            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+        }
+    }
+}
+
+impl<T, A> FromValue for SmallVec<A>
+where
+    A: smallvec::Array<Item = T>,
+    T: FromValue,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(SmallVec::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
@@ -442,6 +459,12 @@ where
 }
 
 impl<T> FromSingleValueArray<T> for Vec<T> where T: FromValue {}
+impl<T, A> FromSingleValueArray<T> for SmallVec<A>
+where
+    A: smallvec::Array<Item = T>,
+    T: FromValue,
+{
+}
 impl<T, S: BuildHasher + Default> FromSingleValueArray<T> for HashSet<T, S> where
     T: FromValue + Eq + Hash
 {

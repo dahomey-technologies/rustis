@@ -1,5 +1,6 @@
 mod bitmap_commands;
 mod command_args;
+mod command_info_manager;
 mod config;
 mod connection_commands;
 mod error;

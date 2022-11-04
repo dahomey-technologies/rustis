@@ -1,9 +1,10 @@
 use crate::{
     resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
-    BitmapCommands, ConnectionCommands, Future, GenericCommands, GeoCommands, HashCommands,
-    HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig, ListCommands, Pipeline,
-    PreparedCommand, PubSubCommands, PubSubStream, Result, ScriptingCommands, SentinelCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    BitmapCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
+    HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig,
+    ListCommands, Pipeline, PreparedCommand, PubSubCommands, PubSubStream, Result,
+    ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
+    StreamCommands, StringCommands, Transaction,
 };
 use std::future::IntoFuture;
 
@@ -88,12 +89,12 @@ impl MultiplexedClient {
     }
 
     /// Create a new transaction
-    /// 
+    ///
     /// Because of the multiplexed nature of the client,
-    /// [`watch`](crate::TransactionCommands::watch) & 
+    /// [`watch`](crate::TransactionCommands::watch) &
     /// [`unwatch`](crate::TransactionCommands::unwatch)
     /// commands cannot be supported.
-    /// To be able to use these commands with a transaction, 
+    /// To be able to use these commands with a transaction,
     /// [`Client`](crate::Client) or [`PooledClientManager`](crate::PooledClientManager)
     /// should be used instead
     pub fn create_transaction(&mut self) -> Transaction {
@@ -138,6 +139,7 @@ where
 }
 
 impl BitmapCommands for MultiplexedClient {}
+impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}
 impl GeoCommands for MultiplexedClient {}

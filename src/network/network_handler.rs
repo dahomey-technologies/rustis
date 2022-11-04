@@ -186,8 +186,6 @@ impl NetworkHandler {
             let num_commands = commands.len();
 
             for command in commands.into_iter() {
-                debug!("Sending {command:?}");
-
                 if command.name == "CLIENT" {
                     match &command.args {
                         CommandArgs::Array2(args)

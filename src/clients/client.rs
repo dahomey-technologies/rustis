@@ -1,11 +1,12 @@
 use crate::{
     network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    BitmapCommands, BlockingCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
-    HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig,
-    ListCommands, Message, MonitorStream, Pipeline, PreparedCommand, PubSubCommands, PubSubStream,
-    Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StreamCommands, StringCommands, Transaction, TransactionCommands, ValueReceiver, ValueSender,
+    BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands,
+    GeoCommands, HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands,
+    IntoConfig, ListCommands, Message, MonitorStream, Pipeline, PreparedCommand, PubSubCommands,
+    PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
+    SortedSetCommands, StreamCommands, StringCommands, Transaction, TransactionCommands,
+    ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
@@ -131,6 +132,7 @@ where
 }
 
 impl BitmapCommands for Client {}
+impl ClusterCommands for Client {}
 impl ConnectionCommands for Client {}
 impl GenericCommands for Client {}
 impl GeoCommands for Client {}

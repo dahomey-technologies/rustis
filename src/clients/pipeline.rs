@@ -2,9 +2,10 @@ use std::iter::zip;
 
 use crate::{
     resp::{Array, Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, ConnectionCommands, Error, GenericCommands, GeoCommands, HashCommands,
-    HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+    BitmapCommands, ClusterCommands, ConnectionCommands, Error, GenericCommands, GeoCommands,
+    HashCommands, HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result,
+    ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
+    StringCommands,
 };
 
 pub struct Pipeline {
@@ -84,6 +85,7 @@ where
 }
 
 impl BitmapCommands for Pipeline {}
+impl ClusterCommands for Pipeline {}
 impl ConnectionCommands for Pipeline {}
 impl GenericCommands for Pipeline {}
 impl GeoCommands for Pipeline {}

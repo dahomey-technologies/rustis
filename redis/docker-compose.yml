@@ -109,6 +109,8 @@ services:
       - "17000:17000"
     environment:
       - PORT=7000
+      - BUS_PORT=17000
+      - HOST_IP="${HOST_IP}"
 
   redis-node2:
     build:
@@ -121,6 +123,8 @@ services:
       - "17001:17001"
     environment:
       - PORT=7001
+      - BUS_PORT=17001
+      - HOST_IP="${HOST_IP}"
 
   redis-node3:
     build:
@@ -133,6 +137,8 @@ services:
       - "17002:17002"
     environment:
       - PORT=7002
+      - BUS_PORT=17002
+      - HOST_IP="${HOST_IP}"
 
   redis-node4:
     build:
@@ -145,6 +151,8 @@ services:
       - "17003:17003"
     environment:
       - PORT=7003
+      - BUS_PORT=17003
+      - HOST_IP="${HOST_IP}"
 
   redis-node5:
     build:
@@ -157,6 +165,8 @@ services:
       - "17004:17004"
     environment:
       - PORT=7004
+      - BUS_PORT=17004
+      - HOST_IP="${HOST_IP}"
 
   redis-node6:
     build:
@@ -169,4 +179,6 @@ services:
       - "17005:17005"
     environment:
       - PORT=7005
+      - BUS_PORT=17005
+      - HOST_IP="${HOST_IP}"
 

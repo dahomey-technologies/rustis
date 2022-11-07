@@ -51,7 +51,7 @@ impl Streams {
     pub async fn write(&mut self, command: Command) -> Result<()> {
         debug!("Sending {command:?}");
         match self {
-            Streams::Tcp(_, framed_write) => framed_write.send(command).await,
+            Streams::Tcp(_, framed_write) => framed_write.send(&command).await,
             #[cfg(feature = "tls")]
             Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
         }
@@ -70,7 +70,7 @@ impl Streams {
 
         for command in commands {
             debug!("Sending {command:?}");
-            command_encoder.encode(command, buffer)?;
+            command_encoder.encode(&command, buffer)?;
         }
 
         match self {

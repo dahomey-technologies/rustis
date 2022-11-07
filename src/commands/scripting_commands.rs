@@ -385,7 +385,12 @@ impl CallBuilder {
 
 impl IntoArgs for CallBuilder {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+        // no keys, no args
+        if self.command_args.len() == 1 {
+            args.arg(self.command_args).arg(0)
+        } else {
+            args.arg(self.command_args)
+        }
     }
 }
 

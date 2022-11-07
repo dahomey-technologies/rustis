@@ -845,8 +845,9 @@ impl IntoArgs for ClusterSetSlotSubCommand {
 }
 
 /// Result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+#[derive(Debug)]
 pub struct ClusterShardResult {
-    pub slots: Vec<(u16, u16)>,
+    pub slots: (u16, u16),
     pub nodes: Vec<ClusterNodeResult>,
 }
 
@@ -862,6 +863,7 @@ impl FromValue for ClusterShardResult {
 }
 
 /// Cluster node result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+#[derive(Debug)]
 pub struct ClusterNodeResult {
     /// The unique node id for this particular node.
     pub id: String,
@@ -914,6 +916,7 @@ impl FromValue for ClusterNodeResult {
 }
 
 /// Cluster health status for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+#[derive(Debug)]
 pub enum ClusterHealthStatus {
     Online,
     Failed,

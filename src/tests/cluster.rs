@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    tests::get_cluster_test_client, Error, FlushingMode, GenericCommands, Result,
+    tests::get_cluster_test_client, CallBuilder, Error, FlushingMode, GenericCommands, Result,
     ScriptingCommands, ServerCommands, StringCommands,
 };
 use serial_test::serial;
@@ -9,7 +9,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn no_request_nor_response_policy() -> Result<()> {
+async fn no_request_policy_no_response_policy() -> Result<()> {
     let mut client = get_cluster_test_client().await?;
 
     client.set("key2", "value2").await?;
@@ -126,6 +126,22 @@ async fn all_shards_no_response_policy() -> Result<()> {
     assert!(keys.contains("key1"));
     assert!(keys.contains("key2"));
     assert!(keys.contains("key3"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn all_nodes_all_succeeded() -> Result<()> {
+    let mut client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let sha1: String = client.script_load("return 12").await?;
+    assert!(!sha1.is_empty());
+
+    let value: i64 = client.evalsha(CallBuilder::sha1(sha1)).await?;
+    assert_eq!(12, value);
 
     Ok(())
 }

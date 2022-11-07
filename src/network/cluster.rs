@@ -173,13 +173,9 @@ impl Cluster {
 
                         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
-                        for shard_index in 0..self.shards.len() {
-                            let shard = &mut self.shards[shard_index];
-                            for node_index in 0..shard.nodes.len() {
-                                shard.nodes[node_index]
-                                    .connection
-                                    .write(command.clone())
-                                    .await?;
+                        for (shard_index, shard) in &mut self.shards.iter_mut().enumerate() {
+                            for (node_index, node) in &mut shard.nodes.iter_mut().enumerate() {
+                                node.connection.write(command.clone()).await?;
                                 sub_requests.push(SubRequest {
                                     shard_index,
                                     node_index,
@@ -412,17 +408,17 @@ impl Cluster {
                     ResponsePolicy::Special => todo!("Command not yet supported in cluster mode"),
                 }
             } else if request_info.sub_requests.len() == 1 {
-            // when there is a single sub request, we just read the response
-            // on the right connection. For example, GET's reply
+                // when there is a single sub request, we just read the response
+                // on the right connection. For example, GET's reply
                 self.shards[request_info.sub_requests[0].shard_index].nodes[0]
                     .connection
                     .read()
-                    .await  
+                    .await
             } else if request_info.keys.is_empty() {
-            // The command doesn't accept key name arguments:
-            // the client can aggregate all replies within a single nested data structure.
-            // For example, the array replies we get from calling KEYS against all shards.
-            // These should be packed in a single in no particular order.
+                // The command doesn't accept key name arguments:
+                // the client can aggregate all replies within a single nested data structure.
+                // For example, the array replies we get from calling KEYS against all shards.
+                // These should be packed in a single in no particular order.
                 let mut values = Vec::<Value>::new();
                 for sub_request in request_info.sub_requests {
                     let node =
@@ -444,9 +440,9 @@ impl Cluster {
 
                 Some(Ok(Value::Array(Array::Vec(values))))
             } else {
-            // For commands that accept one or more key name arguments:
-            // the client needs to retain the same order of replies as the input key names.
-            // For example, MGET's aggregated reply.
+                // For commands that accept one or more key name arguments:
+                // the client needs to retain the same order of replies as the input key names.
+                // For example, MGET's aggregated reply.
                 let mut results = Vec::<(&String, Value)>::new();
 
                 for sub_request in &request_info.sub_requests {

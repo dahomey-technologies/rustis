@@ -38,7 +38,7 @@ async fn extract_keys() -> Result<()> {
     let keys = command_info_manager
         .extract_keys(
             client
-                .xread::<_, _, _, _, String>(
+                .xread::<_, _, _, _, String, Vec<(_, _)>>(
                     XReadOptions::default().count(2),
                     ["mystream", "writers"],
                     ["1526999352406-0", "1526985685298-0"],

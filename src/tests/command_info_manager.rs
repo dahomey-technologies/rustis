@@ -1,7 +1,8 @@
 use crate::{
-    tests::{get_default_host, get_default_port, get_test_client},
-    CommandInfoManager, Config, GenericCommands, MigrateOptions, Result, StreamCommands, Streams,
-    StringCommands, XReadOptions, SortedSetCommands, ZAggregate, SortOptions, SortOrder,
+    network::Connection,
+    tests::{get_default_addr, get_test_client},
+    CommandInfoManager, GenericCommands, IntoConfig, MigrateOptions, Result, SortOptions,
+    SortOrder, SortedSetCommands, StreamCommands, StringCommands, XReadOptions, ZAggregate,
 };
 use serial_test::serial;
 
@@ -10,13 +11,12 @@ use serial_test::serial;
 #[serial]
 async fn extract_keys() -> Result<()> {
     let mut client = get_test_client().await?;
-    let mut streams =
-        Streams::connect(&get_default_host(), get_default_port(), &Config::default()).await?;
-    let command_info_manager = CommandInfoManager::initialize(&mut streams).await?;
+    let mut connection = Connection::initialize(get_default_addr().into_config()?).await?;
+    let command_info_manager = CommandInfoManager::initialize(&mut connection).await?;
 
     // SET
     let keys = command_info_manager
-        .extract_keys(client.set("key", "value").command(), &mut streams)
+        .extract_keys(client.set("key", "value").command(), &mut connection)
         .await?;
     assert_eq!(1, keys.len());
     assert_eq!("key", keys[0]);
@@ -27,7 +27,7 @@ async fn extract_keys() -> Result<()> {
             client
                 .mset([("key1", "value1"), ("key2", "value2")])
                 .command(),
-            &mut streams,
+            &mut connection,
         )
         .await?;
     assert_eq!(2, keys.len());
@@ -44,7 +44,7 @@ async fn extract_keys() -> Result<()> {
                     ["1526999352406-0", "1526985685298-0"],
                 )
                 .command(),
-            &mut streams,
+            &mut connection,
         )
         .await?;
     assert_eq!(2, keys.len());
@@ -64,7 +64,7 @@ async fn extract_keys() -> Result<()> {
                     MigrateOptions::default().keys(["key1", "key2", "key3"]),
                 )
                 .command(),
-            &mut streams,
+            &mut connection,
         )
         .await?;
     assert_eq!(3, keys.len());
@@ -78,7 +78,7 @@ async fn extract_keys() -> Result<()> {
             client
                 .zunion::<_, _, _, String>(["zset1", "zset2"], Some([1.5, 2.5]), ZAggregate::Max)
                 .command(),
-            &mut streams,
+            &mut connection,
         )
         .await?;
     assert_eq!(2, keys.len());
@@ -89,9 +89,16 @@ async fn extract_keys() -> Result<()> {
     let keys = command_info_manager
         .extract_keys(
             client
-                .sort_and_store("src", "dst", SortOptions::default().limit(0, 5).alpha().order(SortOrder::Desc))
+                .sort_and_store(
+                    "src",
+                    "dst",
+                    SortOptions::default()
+                        .limit(0, 5)
+                        .alpha()
+                        .order(SortOrder::Desc),
+                )
                 .command(),
-            &mut streams,
+            &mut connection,
         )
         .await?;
     assert_eq!(2, keys.len());

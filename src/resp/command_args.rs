@@ -7,7 +7,7 @@ use std::{
     ops::Deref,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CommandArgs {
     Empty,
     Single(BulkString),

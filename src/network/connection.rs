@@ -1,8 +1,8 @@
 use crate::{
     resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
-    sleep, tcp_connect, Config, ConnectionCommands, Error, Future, PreparedCommand, Result,
-    RoleResult, SentinelCommands, SentinelConfig, ServerCommands, ServerConfig, TcpStreamReader,
-    TcpStreamWriter,
+    sleep, tcp_connect, Cluster, ClusterCommands, Config, ConnectionCommands, Error, Future,
+    PreparedCommand, Result, RoleResult, SentinelCommands, SentinelConfig, ServerCommands,
+    ServerConfig, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
@@ -11,7 +11,7 @@ use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
 use std::future::IntoFuture;
 use tokio::io::AsyncWriteExt;
-use tokio_util::codec::{FramedRead, FramedWrite, Encoder};
+use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
 pub(crate) enum Streams {
     Tcp(
@@ -57,7 +57,11 @@ impl Streams {
         }
     }
 
-    pub async fn write_batch(&mut self, buffer: &mut BytesMut, commands: impl Iterator<Item = Command>) -> Result<()> {
+    pub async fn write_batch(
+        &mut self,
+        buffer: &mut BytesMut,
+        commands: impl Iterator<Item = Command>,
+    ) -> Result<()> {
         let command_encoder = match self {
             Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
             #[cfg(feature = "tls")]
@@ -128,20 +132,23 @@ impl ServerCommands for Streams {}
 impl SentinelCommands for Streams {}
 impl ConnectionCommands for Streams {}
 
+enum InnerConnection {
+    Streams { streams: Streams, buffer: BytesMut },
+    Cluster(Cluster),
+}
+
 pub struct Connection {
     config: Config,
-    streams: Streams,
-    buffer: BytesMut,
+    inner_connection: InnerConnection,
 }
 
 impl Connection {
     pub async fn initialize(config: Config) -> Result<Self> {
-        let streams = Self::connect(&config).await?;
+        let inner_connection = Self::connect(&config).await?;
 
         let mut connection = Self {
             config,
-            streams,
-            buffer: BytesMut::new(),
+            inner_connection,
         };
 
         connection.post_connect().await?;
@@ -149,19 +156,39 @@ impl Connection {
         Ok(connection)
     }
 
+    pub async fn write(&mut self, command: Command) -> Result<()> {
+        match &mut self.inner_connection {
+            InnerConnection::Streams { streams, buffer: _ } => {
+                streams.write(command).await?
+            }
+            InnerConnection::Cluster(_) => unimplemented!(),
+        }
+
+        Ok(())
+    }
+
     pub async fn write_batch(&mut self, commands: impl Iterator<Item = Command>) -> Result<()> {
-        self.buffer.clear();
-        self.streams.write_batch(&mut self.buffer, commands).await?;
-        self.buffer.clear();
+        match &mut self.inner_connection {
+            InnerConnection::Streams { streams, buffer } => {
+                buffer.clear();
+                streams.write_batch(buffer, commands).await?;
+                buffer.clear();
+            }
+            InnerConnection::Cluster(cluster) => cluster.write_batch(commands).await?,
+        }
+
         Ok(())
     }
 
     pub async fn read(&mut self) -> Option<Result<Value>> {
-        self.streams.read().await
+        match &mut self.inner_connection {
+            InnerConnection::Streams { streams, buffer: _ } => streams.read().await,
+            InnerConnection::Cluster(cluster) => cluster.read().await,
+        }
     }
 
     pub async fn reconnect(&mut self) -> Result<()> {
-        self.streams = Self::connect(&self.config).await?;
+        self.inner_connection = Self::connect(&self.config).await?;
         self.post_connect().await?;
 
         Ok(())
@@ -169,26 +196,38 @@ impl Connection {
         // TODO improve reconnection strategy with multiple retries
     }
 
-    async fn connect(config: &Config) -> Result<Streams> {
+    async fn connect(config: &Config) -> Result<InnerConnection> {
         match &config.server {
-            ServerConfig::Single { host, port } => Streams::connect(host, *port, config).await,
-            ServerConfig::Sentinel(sentinel_config) => {
-                Self::connect_with_sentinel(sentinel_config, config).await
-            }
+            ServerConfig::Standalone { host, port } => Ok(InnerConnection::Streams {
+                streams: Streams::connect(host, *port, config).await?,
+                buffer: BytesMut::new(),
+            }),
+            ServerConfig::Sentinel(sentinel_config) => Ok(InnerConnection::Streams {
+                streams: Self::connect_with_sentinel(sentinel_config, config).await?,
+                buffer: BytesMut::new(),
+            }),
+            ServerConfig::Cluster(cluster_config) => Ok(InnerConnection::Cluster(
+                Cluster::connect(cluster_config).await?,
+            )),
         }
     }
 
     async fn post_connect(&mut self) -> Result<()> {
-        // authentication
-        if let Some(ref password) = self.config.password {
-            self.streams
-                .auth(self.config.username.clone(), password.clone())
-                .await?;
-        }
+        match &mut self.inner_connection {
+            InnerConnection::Streams { streams, buffer: _ } => {
+                // authentication
+                if let Some(ref password) = self.config.password {
+                    streams
+                        .auth(self.config.username.clone(), password.clone())
+                        .await?;
+                }
 
-        // select database
-        if self.config.database != 0 {
-            self.streams.select(self.config.database).await?;
+                // select database
+                if self.config.database != 0 {
+                    streams.select(self.config.database).await?;
+                }
+            }
+            InnerConnection::Cluster(_) => (),
         }
 
         Ok(())
@@ -292,3 +331,27 @@ impl Connection {
         })
     }
 }
+
+impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
+where
+    R: FromValue + Send + 'a,
+{
+    type Output = Result<R>;
+    type IntoFuture = Future<'a, R>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            self.executor.write(self.command).await?;
+
+            self.executor
+                .read()
+                .await
+                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+                .into_result()?
+                .into()
+        })
+    }
+}
+
+impl ServerCommands for Connection {}
+impl ClusterCommands for Connection {}

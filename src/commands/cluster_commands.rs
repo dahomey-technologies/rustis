@@ -40,7 +40,7 @@ pub trait ClusterCommands {
     fn cluster_addslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<usize>,
+        S: SingleArgOrCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTS").arg(slots))
     }
@@ -58,7 +58,7 @@ pub trait ClusterCommands {
     fn cluster_addslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<usize, usize>,
+        S: KeyValueArgOrCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTSRANGE").arg(slots))
     }
@@ -87,7 +87,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-count-failure-reports/>](https://redis.io/commands/cluster-count-failure-reports/)
     #[must_use]
-    fn cluster_count_failure_reportd<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
+    fn cluster_count_failure_reports<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
         I: Into<BulkString>,
@@ -123,7 +123,7 @@ pub trait ClusterCommands {
     fn cluster_delslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<usize>,
+        S: SingleArgOrCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTS").arg(slots))
     }
@@ -140,7 +140,7 @@ pub trait ClusterCommands {
     fn cluster_delslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<usize, usize>,
+        S: KeyValueArgOrCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTSRANGE").arg(slots))
     }
@@ -198,7 +198,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-getkeysinslot/>](https://redis.io/commands/cluster-getkeysinslot/)
     #[must_use]
-    fn cluster_getkeysinslot(&mut self, slot: usize, count: usize) -> PreparedCommand<Self, ()>
+    fn cluster_getkeysinslot(&mut self, slot: u16, count: usize) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
     {
@@ -216,7 +216,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-info/>](https://redis.io/commands/cluster-info/)
     #[must_use]
-    fn cluster_info(&mut self, slot: usize, count: usize) -> PreparedCommand<Self, ClusterInfo>
+    fn cluster_info(&mut self, slot: u16, count: usize) -> PreparedCommand<Self, ClusterInfo>
     where
         Self: Sized,
     {
@@ -231,7 +231,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-keyslot/>](https://redis.io/commands/cluster-keyslot/)
     #[must_use]
-    fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
+    fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, u16>
     where
         Self: Sized,
         K: Into<BulkString>,
@@ -405,7 +405,7 @@ pub trait ClusterCommands {
     #[must_use]
     fn cluster_setslot(
         &mut self,
-        slot: usize,
+        slot: u16,
         subcommand: ClusterSetSlotSubCommand,
     ) -> PreparedCommand<Self, ()>
     where
@@ -420,14 +420,15 @@ pub trait ClusterCommands {
     /// This command returns details about the shards of the cluster.
     ///
     /// # Return
-    /// A nested list of a map of hash ranges and shard nodes.
+    /// A list of shard information for each shard (slot ranges & shard nodes)
     ///
     /// # See Also
     /// [<https://redis.io/commands/cluster-shards/>](https://redis.io/commands/cluster-shards/)
     #[must_use]
-    fn cluster_shards(&mut self) -> PreparedCommand<Self, ()>
+    fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
     where
         Self: Sized,
+        S: FromSingleValueArray<ClusterShardResult>
     {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
@@ -552,7 +553,7 @@ pub struct ClusterInfo {
     /// unless cluster-require-full-coverage is set to no in the configuration.
     pub cluster_slots_fail: usize,
 
-    /// he total number of known nodes in the cluster,
+    /// The total number of known nodes in the cluster,
     /// including nodes in HANDSHAKE state that may not currently be proper members of the cluster.
     pub cluster_known_nodes: usize,
 
@@ -565,7 +566,7 @@ pub struct ClusterInfo {
 
     /// The Config Epoch of the node we are talking with.
     /// This is the current configuration version assigned to this node.
-    pub cluster_my_epoch: usize,
+    pub cluster_my_epoch: u64,
 
     /// Number of messages sent via the cluster node-to-node binary bus.
     pub cluster_stats_messages_sent: usize,
@@ -845,7 +846,7 @@ impl IntoArgs for ClusterSetSlotSubCommand {
 
 /// Result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
 pub struct ClusterShardResult {
-    pub slots: Vec<(usize, usize)>,
+    pub slots: Vec<(u16, u16)>,
     pub nodes: Vec<ClusterNodeResult>,
 }
 
@@ -905,7 +906,7 @@ impl FromValue for ClusterNodeResult {
             port: values.remove_or_default("port").into()?,
             hostname: values.remove_or_default("hostname").into()?,
             tls_port: values.remove_or_default("tls-port").into()?,
-            role: values.remove_with_result("slots")?.into()?,
+            role: values.remove_with_result("role")?.into()?,
             replication_offset: values.remove_with_result("replication-offset")?.into()?,
             health: values.remove_with_result("health")?.into()?,
         })

@@ -2,7 +2,7 @@ use crate::{
     prepare_command,
     resp::{
         cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, KeyValueArgOrCollection,
-        SingleArgOrCollection, Value,
+        SingleArgOrCollection, Value, FromSingleValueArray,
     },
     Error, PreparedCommand, Result,
 };
@@ -391,12 +391,13 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<K, V, C>(&mut self, keys: C) -> PreparedCommand<Self, Vec<Option<V>>>
+    fn mget<K, KK, V, VV>(&mut self, keys: KK) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
         K: Into<BulkString>,
+        KK: SingleArgOrCollection<K>,
         V: FromValue,
-        C: SingleArgOrCollection<K>,
+        VV: FromSingleValueArray<V>
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }

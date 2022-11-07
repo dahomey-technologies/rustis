@@ -1,7 +1,7 @@
 use crate::{
     tests::get_test_client, FlushingMode, Result, ServerCommands, StreamCommands, StreamEntry,
     XAddOptions, XAutoClaimOptions, XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions,
-    XPendingOptions, XReadGroupOptions, XReadOptions, XReadStreamResult, XTrimOptions, XTrimOperator,
+    XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
 };
 use serial_test::serial;
 
@@ -243,51 +243,52 @@ async fn xread() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<XReadStreamResult<String>> =
-        client.xread(Default::default(), "mystream", 0).await?;
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
+        .xread(Default::default(), "mystream", 0)
+        .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(2, results[0].entries.len());
-    assert_eq!(id1, results[0].entries[0].stream_id);
-    assert_eq!(2, results[0].entries[0].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(2, results[0].1.len());
+    assert_eq!(id1, results[0].1[0].stream_id);
+    assert_eq!(2, results[0].1[0].items.len());
     assert_eq!(
         Some(&"John".to_string()),
-        results[0].entries[0].items.get("name")
+        results[0].1[0].items.get("name")
     );
     assert_eq!(
         Some(&"Doe".to_string()),
-        results[0].entries[0].items.get("surname")
+        results[0].1[0].items.get("surname")
     );
-    assert_eq!(id2, results[0].entries[1].stream_id);
-    assert_eq!(3, results[0].entries[1].items.len());
+    assert_eq!(id2, results[0].1[1].stream_id);
+    assert_eq!(3, results[0].1[1].items.len());
     assert_eq!(
         Some(&"value1".to_string()),
-        results[0].entries[1].items.get("field1")
+        results[0].1[1].items.get("field1")
     );
     assert_eq!(
         Some(&"value2".to_string()),
-        results[0].entries[1].items.get("field2")
+        results[0].1[1].items.get("field2")
     );
     assert_eq!(
         Some(&"value3".to_string()),
-        results[0].entries[1].items.get("field3")
+        results[0].1[1].items.get("field3")
     );
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xread(XReadOptions::default().block(1000).count(1), "mystream", 0)
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(1, results[0].entries.len());
-    assert_eq!(id1, results[0].entries[0].stream_id);
-    assert_eq!(2, results[0].entries[0].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(1, results[0].1.len());
+    assert_eq!(id1, results[0].1[0].stream_id);
+    assert_eq!(2, results[0].1[0].items.len());
     assert_eq!(
         Some(&"John".to_string()),
-        results[0].entries[0].items.get("name")
+        results[0].1[0].items.get("name")
     );
     assert_eq!(
         Some(&"Doe".to_string()),
-        results[0].entries[0].items.get("surname")
+        results[0].1[0].items.get("surname")
     );
 
     Ok(())
@@ -365,7 +366,7 @@ async fn xreadgroup() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -375,16 +376,16 @@ async fn xreadgroup() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(3, results[0].entries.len());
-    assert_eq!(id1, results[0].entries[0].stream_id);
-    assert_eq!(1, results[0].entries[0].items.len());
-    assert_eq!(id2, results[0].entries[1].stream_id);
-    assert_eq!(1, results[0].entries[1].items.len());
-    assert_eq!(id3, results[0].entries[2].stream_id);
-    assert_eq!(1, results[0].entries[2].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(3, results[0].1.len());
+    assert_eq!(id1, results[0].1[0].stream_id);
+    assert_eq!(1, results[0].1[0].items.len());
+    assert_eq!(id2, results[0].1[1].stream_id);
+    assert_eq!(1, results[0].1[1].items.len());
+    assert_eq!(id3, results[0].1[2].stream_id);
+    assert_eq!(1, results[0].1[2].items.len());
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Alice",
@@ -394,12 +395,12 @@ async fn xreadgroup() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(2, results[0].entries.len());
-    assert_eq!(id4, results[0].entries[0].stream_id);
-    assert_eq!(1, results[0].entries[0].items.len());
-    assert_eq!(id5, results[0].entries[1].stream_id);
-    assert_eq!(1, results[0].entries[1].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(2, results[0].1.len());
+    assert_eq!(id4, results[0].1[0].stream_id);
+    assert_eq!(1, results[0].1[0].items.len());
+    assert_eq!(id5, results[0].1[1].stream_id);
+    assert_eq!(1, results[0].1[1].items.len());
 
     let result = client.xpending("mystream", "mygroup").await?;
     assert_eq!(5, result.num_pending_messages);
@@ -445,7 +446,7 @@ async fn xreadgroup() -> Result<()> {
         .await?;
     assert_eq!(5, num);
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -455,10 +456,10 @@ async fn xreadgroup() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(0, results[0].entries.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(0, results[0].1.len());
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Alice",
@@ -468,8 +469,8 @@ async fn xreadgroup() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(0, results[0].entries.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(0, results[0].1.len());
 
     Ok(())
 }
@@ -546,7 +547,7 @@ async fn xclaim() -> Result<()> {
         )
         .await?;
 
-    let _results: Vec<XReadStreamResult<String>> = client
+    let _results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -556,7 +557,7 @@ async fn xclaim() -> Result<()> {
         )
         .await?;
 
-    let _results: Vec<XReadStreamResult<String>> = client
+    let _results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Alice",
@@ -583,7 +584,7 @@ async fn xclaim() -> Result<()> {
     assert_eq!(id4, results[0].stream_id);
     assert_eq!(id5, results[1].stream_id);
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -593,12 +594,12 @@ async fn xclaim() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(2, results[0].entries.len());
-    assert_eq!(id4, results[0].entries[0].stream_id);
-    assert_eq!(1, results[0].entries[0].items.len());
-    assert_eq!(id5, results[0].entries[1].stream_id);
-    assert_eq!(1, results[0].entries[1].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(2, results[0].1.len());
+    assert_eq!(id4, results[0].1[0].stream_id);
+    assert_eq!(1, results[0].1[0].items.len());
+    assert_eq!(id5, results[0].1[1].stream_id);
+    assert_eq!(1, results[0].1[1].items.len());
 
     Ok(())
 }
@@ -675,7 +676,7 @@ async fn xautoclaim() -> Result<()> {
         )
         .await?;
 
-    let _results: Vec<XReadStreamResult<String>> = client
+    let _results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -685,7 +686,7 @@ async fn xautoclaim() -> Result<()> {
         )
         .await?;
 
-    let _results: Vec<XReadStreamResult<String>> = client
+    let _results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Alice",
@@ -726,7 +727,7 @@ async fn xautoclaim() -> Result<()> {
     assert_eq!(1, result.entries.len());
     assert_eq!(id5, result.entries[0].stream_id);
 
-    let results: Vec<XReadStreamResult<String>> = client
+    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
         .xreadgroup(
             "mygroup",
             "Bob",
@@ -736,12 +737,12 @@ async fn xautoclaim() -> Result<()> {
         )
         .await?;
     assert_eq!(1, results.len());
-    assert_eq!("mystream", results[0].key);
-    assert_eq!(2, results[0].entries.len());
-    assert_eq!(id4, results[0].entries[0].stream_id);
-    assert_eq!(1, results[0].entries[0].items.len());
-    assert_eq!(id5, results[0].entries[1].stream_id);
-    assert_eq!(1, results[0].entries[1].items.len());
+    assert_eq!("mystream", results[0].0);
+    assert_eq!(2, results[0].1.len());
+    assert_eq!(id4, results[0].1[0].stream_id);
+    assert_eq!(1, results[0].1[0].items.len());
+    assert_eq!(id5, results[0].1[1].stream_id);
+    assert_eq!(1, results[0].1[1].items.len());
 
     Ok(())
 }
@@ -819,7 +820,9 @@ async fn xtrim() -> Result<()> {
         )
         .await?;
 
-    let deleted = client.xtrim("mystream", XTrimOptions::max_len(XTrimOperator::None, 1)).await?;
+    let deleted = client
+        .xtrim("mystream", XTrimOptions::max_len(XTrimOperator::None, 1))
+        .await?;
     assert_eq!(1, deleted);
 
     let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;

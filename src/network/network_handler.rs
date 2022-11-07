@@ -357,7 +357,7 @@ impl NetworkHandler {
     ) -> Result<Option<Result<Value>>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(Value::Array(Array::Vec(ref items))) => match &items[..] {
+            Ok(Value::Array(Array::Vec(ref items))) | Ok(Value::Push(Array::Vec(ref items))) => match &items[..] {
                 [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
                 {
                     match command.as_slice() {
@@ -404,7 +404,7 @@ impl NetworkHandler {
         }
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(Array::Vec(items))) = value {
+        if let Ok(Value::Array(Array::Vec(items))) | Ok(Value::Push(Array::Vec(items))) = value {
             let mut iter = items.into_iter();
             match (
                 iter.next(),

@@ -10,6 +10,7 @@ pub enum Value {
     Double(f64),
     BulkString(BulkString),
     Array(Array),
+    Push(Array),
     Error(String),
 }
 
@@ -47,6 +48,14 @@ impl ToString for Value {
                     .join(", ")
             ),
             Value::Array(Array::Nil) => "[]".to_string(),
+            Value::Push(Array::Vec(v)) => format!(
+                "Push[{}]",
+                v.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Value::Push(Array::Nil) => "Push[]".to_string(),
             Value::Error(e) => e.clone(),
         }
     }

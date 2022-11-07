@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromValue, HashMapExt, IntoArgs, KeyValueArgOrCollection,
-        SingleArgOrCollection, Value,
+        cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
     PreparedCommand, Result,
 };
@@ -446,12 +446,12 @@ pub trait StreamCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xread/>](https://redis.io/commands/xread/)
-    fn xread<K, KK, I, II, V>(
+    fn xread<K, KK, I, II, V, R>(
         &mut self,
         options: XReadOptions,
         keys: KK,
         ids: II,
-    ) -> PreparedCommand<Self, Vec<XReadStreamResult<V>>>
+    ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
         K: Into<BulkString>,
@@ -459,6 +459,7 @@ pub trait StreamCommands {
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
         V: FromValue,
+        R: FromKeyValueValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -474,14 +475,14 @@ pub trait StreamCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xreadgroup/>](https://redis.io/commands/xreadgroup/)
-    fn xreadgroup<G, C, K, KK, I, II, V>(
+    fn xreadgroup<G, C, K, KK, I, II, V, R>(
         &mut self,
         group: G,
         consumer: C,
         options: XReadGroupOptions,
         keys: KK,
         ids: II,
-    ) -> PreparedCommand<Self, Vec<XReadStreamResult<V>>>
+    ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
         G: Into<BulkString>,
@@ -491,6 +492,7 @@ pub trait StreamCommands {
         I: Into<BulkString>,
         II: SingleArgOrCollection<I>,
         V: FromValue,
+        R: FromKeyValueValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -986,26 +988,6 @@ impl XReadOptions {
 impl IntoArgs for XReadOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
-    }
-}
-
-/// Result for the [`xread`](crate::StreamCommands::xread) command.
-pub struct XReadStreamResult<V>
-where
-    V: FromValue,
-{
-    pub key: String,
-    pub entries: Vec<StreamEntry<V>>,
-}
-
-impl<V> FromValue for XReadStreamResult<V>
-where
-    V: FromValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let (key, entries): (String, Vec<StreamEntry<V>>) = value.into()?;
-
-        Ok(Self { key, entries })
     }
 }
 

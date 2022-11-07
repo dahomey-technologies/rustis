@@ -3,6 +3,7 @@ use crate::{
     Error, Result,
 };
 use bytes::{Buf, BytesMut};
+use log::trace;
 use tokio_util::codec::Decoder;
 
 pub(crate) struct ValueDecoder;
@@ -13,6 +14,7 @@ impl Decoder for ValueDecoder {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Value>> {
         Ok(decode(src, 0)?.map(|(item, pos)| {
+            trace!("decode: {}", std::str::from_utf8(&src.as_ref()[..pos]).unwrap().replace("\r\n", "\\r\\n"));
             src.advance(pos);
             item
         }))
@@ -40,6 +42,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
+        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
         _ => Err(Error::Client(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte

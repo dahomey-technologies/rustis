@@ -1,7 +1,7 @@
 use std::iter::zip;
 
 use crate::{
-    resp::{cmd, Array, Command, FromValue, ResultValueExt, Value},
+    resp::{cmd, Array, BulkString, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
     InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
@@ -70,7 +70,7 @@ impl Transaction {
                         Value::Array(Array::Vec(filtered_results)).into()
                     }
                 }
-                Value::Array(Array::Nil) => Err(Error::Aborted),
+                Value::Array(Array::Nil) | Value::BulkString(BulkString::Nil) => Err(Error::Aborted),
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
             }
         } else {

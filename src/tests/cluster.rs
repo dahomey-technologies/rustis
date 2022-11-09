@@ -1,10 +1,9 @@
-use std::collections::HashSet;
-
 use crate::{
-    tests::get_cluster_test_client, CallBuilder, Error, FlushingMode, GenericCommands, Result,
-    ScriptingCommands, ServerCommands, StringCommands,
+    sleep, spawn, tests::get_cluster_test_client, CallBuilder, Error, FlushingMode, GenericCommands,
+    Result, ScriptingCommands, ServerCommands, StringCommands,
 };
 use serial_test::serial;
+use std::collections::HashSet;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -77,6 +76,28 @@ async fn all_shards_one_succeeded() -> Result<()> {
     assert!(
         matches!(result, Err(Error::Redis(e)) if e.starts_with("NOTBUSY No scripts in execution right now."))
     );
+
+    let sha1: String = client
+        .script_load("while (true) do end return ARGV[1]")
+        .await?;
+
+    spawn(async move {
+        async fn blocking_script(sha1: String) -> Result<()> {
+            let mut client = get_cluster_test_client().await?;
+
+            let _ = client
+                .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
+                .await?;
+
+            Ok(())
+        }
+
+        let _ = blocking_script(sha1).await;
+    });
+
+    sleep(std::time::Duration::from_millis(100)).await;
+
+    client.script_kill().await?;
 
     Ok(())
 }

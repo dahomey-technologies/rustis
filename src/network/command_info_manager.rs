@@ -1,6 +1,6 @@
 use crate::{
     resp::{cmd, BulkString, Command},
-    BeginSearch, CommandInfo, Connection, Error, FindKeys, Result, ServerCommands,
+    BeginSearch, CommandInfo, StandaloneConnection, Error, FindKeys, Result, ServerCommands,
 };
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ pub(crate) struct CommandInfoManager {
 }
 
 impl CommandInfoManager {
-    pub async fn initialize(connection: &mut Connection) -> Result<CommandInfoManager> {
+    pub async fn initialize(connection: &mut StandaloneConnection) -> Result<CommandInfoManager> {
         let mut command_info_result = connection.command().await?;
         let sub_commands = command_info_result
             .iter()
@@ -56,7 +56,7 @@ impl CommandInfoManager {
     pub async fn extract_keys(
         &self,
         command: &Command,
-        connection: &mut Connection,
+        connection: &mut StandaloneConnection,
     ) -> Result<SmallVec<[String; 10]>> {
         let command_info = if let Some(command_info) = self.command_info_map.get(command.name) {
             command_info

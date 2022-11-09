@@ -1,8 +1,8 @@
 use crate::{
-    network::Connection,
-    tests::{get_default_addr, get_test_client},
+    tests::{get_default_addr, get_default_host, get_default_port, get_test_client},
     CommandInfoManager, GenericCommands, IntoConfig, MigrateOptions, Result, SortOptions,
-    SortOrder, SortedSetCommands, StreamCommands, StringCommands, XReadOptions, ZAggregate,
+    SortOrder, SortedSetCommands, StandaloneConnection, StreamCommands, StringCommands,
+    XReadOptions, ZAggregate,
 };
 use serial_test::serial;
 
@@ -11,7 +11,12 @@ use serial_test::serial;
 #[serial]
 async fn extract_keys() -> Result<()> {
     let mut client = get_test_client().await?;
-    let mut connection = Connection::initialize(get_default_addr().into_config()?).await?;
+    let mut connection = StandaloneConnection::connect(
+        &get_default_host(),
+        get_default_port(),
+        &get_default_addr().into_config()?,
+    )
+    .await?;
     let command_info_manager = CommandInfoManager::initialize(&mut connection).await?;
 
     // SET

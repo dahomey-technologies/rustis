@@ -46,7 +46,7 @@ pub(crate) struct NetworkHandler {
 
 impl NetworkHandler {
     pub async fn connect(config: Config) -> Result<MsgSender> {
-        let connection = Connection::initialize(config.clone()).await?;
+        let connection = Connection::connect(config.clone()).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let value_senders = VecDeque::new();
 

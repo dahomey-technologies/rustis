@@ -847,7 +847,7 @@ impl IntoArgs for ClusterSetSlotSubCommand {
 /// Result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
 #[derive(Debug)]
 pub struct ClusterShardResult {
-    pub slots: (u16, u16),
+    pub slots: Vec<(u16, u16)>,
     pub nodes: Vec<ClusterNodeResult>,
 }
 

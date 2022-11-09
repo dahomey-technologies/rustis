@@ -424,6 +424,29 @@ impl ClusterConnection {
         Box::pin(async move {
             let request_info = self.request_stream.next().await?;
 
+            let mut sub_results = Vec::<Result<Value>>::with_capacity(request_info.sub_requests.len());
+            let mut is_none = false;
+
+            // make sure to read all response for each sub_request with no early return
+            for sub_request in &request_info.sub_requests {
+                let shard = &mut self.shards[sub_request.shard_index];
+                let result = shard.nodes[sub_request.node_index]
+                    .connection
+                    .read()
+                    .await;
+
+                if let Some(result) = result {
+                    sub_results.push(result);
+                } else {
+                    is_none = true;
+                }
+            }
+
+            // from here we can early return
+            if is_none {
+                return None;
+            }
+
             let command_name = &request_info.command_name;
             let command_info = self
                 .command_info_manager
@@ -451,91 +474,79 @@ impl ClusterConnection {
             if let Some(response_policy) = response_policy {
                 match response_policy {
                     ResponsePolicy::OneSucceeded => {
-                        self.response_policy_one_succeeded(&request_info).await
+                        self.response_policy_one_succeeded(sub_results).await
                     }
                     ResponsePolicy::AllSucceeded => {
-                        self.response_policy_all_succeeded(&request_info).await
+                        self.response_policy_all_succeeded(sub_results).await
                     }
                     ResponsePolicy::AggLogicalAnd => {
                         self.response_policy_agg(
-                            request_info,
+                            sub_results,
                             |a, b| if a == 1 && b == 1 { 1 } else { 0 },
                         )
                         .await
                     }
                     ResponsePolicy::AggLogicalOr => {
                         self.response_policy_agg(
-                            request_info,
+                            sub_results,
                             |a, b| if a == 0 && b == 0 { 0 } else { 1 },
                         )
                         .await
                     }
                     ResponsePolicy::AggMin => {
-                        self.response_policy_agg(request_info, i64::min).await
+                        self.response_policy_agg(sub_results, i64::min).await
                     }
                     ResponsePolicy::AggMax => {
-                        self.response_policy_agg(request_info, i64::max).await
+                        self.response_policy_agg(sub_results, i64::max).await
                     }
                     ResponsePolicy::AggSum => {
-                        self.response_policy_agg(request_info, |a, b| a + b).await
+                        self.response_policy_agg(sub_results, |a, b| a + b).await
                     }
-                    ResponsePolicy::Special => self.response_policy_special(&request_info).await,
+                    ResponsePolicy::Special => self.response_policy_special(sub_results).await,
                 }
             } else {
-                self.no_response_policy(&request_info).await
+                self.no_response_policy(sub_results, &request_info).await
             }
         })
     }
 
     async fn response_policy_one_succeeded(
         &mut self,
-        request_info: &RequestInfo,
+        sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut is_success = false;
-        let mut value: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
+        let mut result: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
 
-        for sub_request in &request_info.sub_requests {
-            let node = &mut self.shards[sub_request.shard_index].nodes[sub_request.node_index];
-            let local_value = node.connection.read().await?;
-
-            if let Err(_) | Ok(Value::Error(_)) = local_value {
-                if !is_success {
-                    value = local_value;
-                }
+        for sub_result in sub_results {
+            if let Err(_) | Ok(Value::Error(_)) = sub_result {
+                result = sub_result;
             } else {
-                is_success = true;
-                value = local_value;
+                return Some(sub_result);
             }
         }
 
-        Some(value)
+        Some(result)
     }
 
     async fn response_policy_all_succeeded(
         &mut self,
-        request_info: &RequestInfo,
+        sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut is_error = false;
-        let mut value: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
+        let mut result: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
 
-        for sub_request in &request_info.sub_requests {
-            let node = &mut self.shards[sub_request.shard_index].nodes[sub_request.node_index];
-            let local_value = node.connection.read().await?;
-
-            if let Err(_) | Ok(Value::Error(_)) = local_value {
-                is_error = true;
-                value = local_value;
-            } else if !is_error {
-                value = local_value;
+        for sub_result in sub_results {
+            if let Err(_) | Ok(Value::Error(_)) = sub_result {
+                return Some(sub_result);
+            } else {
+                result = sub_result;
             }
         }
 
-        Some(value)
+        Some(result)
     }
 
     async fn response_policy_agg<F>(
         &mut self,
-        request_info: RequestInfo,
+        sub_results: Vec<Result<Value>>,
         f: F,
     ) -> Option<Result<Value>>
     where
@@ -543,15 +554,10 @@ impl ClusterConnection {
     {
         let mut result = Value::BulkString(BulkString::Nil);
 
-        for sub_request in request_info.sub_requests {
-            let shard = &mut self.shards[sub_request.shard_index];
-            let value = shard.nodes[sub_request.node_index]
-                .connection
-                .read()
-                .await?;
-            result = match value {
+        for sub_result in sub_results {
+            result = match sub_result {
                 Ok(Value::Error(_)) => {
-                    return Some(value);
+                    return Some(sub_result);
                 }
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
@@ -579,7 +585,7 @@ impl ClusterConnection {
                     }
                 },
                 Err(_) => {
-                    return Some(value);
+                    return Some(sub_result);
                 }
             };
         }
@@ -589,38 +595,32 @@ impl ClusterConnection {
 
     async fn response_policy_special(
         &mut self,
-        _request_info: &RequestInfo,
+        _sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
         todo!("Command not yet supported in cluster mode");
     }
 
-    async fn no_response_policy(&mut self, request_info: &RequestInfo) -> Option<Result<Value>> {
-        if request_info.sub_requests.len() == 1 {
+    async fn no_response_policy(&mut self, sub_results: Vec<Result<Value>>, request_info: &RequestInfo) -> Option<Result<Value>> {
+        if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
-            self.shards[request_info.sub_requests[0].shard_index].nodes[0]
-                .connection
-                .read()
-                .await
+            Some(sub_results.into_iter().next()?)
         } else if request_info.keys.is_empty() {
             // The command doesn't accept key name arguments:
             // the client can aggregate all replies within a single nested data structure.
             // For example, the array replies we get from calling KEYS against all shards.
             // These should be packed in a single in no particular order.
             let mut values = Vec::<Value>::new();
-            for sub_request in &request_info.sub_requests {
-                let node = &mut self.shards[sub_request.shard_index].nodes[sub_request.node_index];
-                let value = node.connection.read().await?;
-
-                match value {
+            for sub_result in sub_results {
+                match sub_result {
                     Ok(Value::Array(Array::Vec(v))) => {
                         values.extend(v);
                     }
                     Err(_) | Ok(Value::Error(_)) => {
-                        return Some(value);
+                        return Some(sub_result);
                     }
                     _ => {
-                        return Some(Err(Error::Client(format!("Unexpected value {value:?}"))));
+                        return Some(Err(Error::Client(format!("Unexpected result {sub_result:?}"))));
                     }
                 }
             }
@@ -630,22 +630,17 @@ impl ClusterConnection {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
             // For example, MGET's aggregated reply.
-            let mut results = Vec::<(&String, Value)>::new();
+            let mut results = SmallVec::<[(&String, Value); 10]>::new();
 
-            for sub_request in &request_info.sub_requests {
-                let value = self.shards[sub_request.shard_index].nodes[0]
-                    .connection
-                    .read()
-                    .await?;
-
-                match value {
+            for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
+                match sub_result {
                     Ok(Value::Array(Array::Vec(values)))
                         if sub_request.keys.len() == values.len() =>
                     {
                         results.extend(zip(&sub_request.keys, values))
                     }
-                    Err(_) | Ok(Value::Error(_)) => return Some(value),
-                    _ => return Some(Err(Error::Client(format!("Unexpected result {:?}", value)))),
+                    Err(_) | Ok(Value::Error(_)) => return Some(sub_result),
+                    _ => return Some(Err(Error::Client(format!("Unexpected result {:?}", sub_result)))),
                 }
             }
 

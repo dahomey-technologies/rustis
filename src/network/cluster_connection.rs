@@ -4,7 +4,7 @@ use crate::{
     Error, RequestPolicy, ResponsePolicy, Result, StandaloneConnection,
 };
 use futures::{channel::mpsc, SinkExt, Stream, StreamExt};
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use rand::Rng;
 use smallvec::{smallvec, SmallVec};
 use std::{
@@ -16,6 +16,7 @@ use std::{
 };
 
 struct Node {
+    pub id: String,
     pub address: (String, u16),
     pub connection: StandaloneConnection,
 }
@@ -30,9 +31,14 @@ impl Debug for Node {
 
 #[derive(Debug)]
 struct Shard {
-    pub slot_range: (u16, u16),
     /// Master & replica nodes. Master is always the first node
     pub nodes: Vec<Node>,
+}
+
+#[derive(Debug)]
+struct SlotRange {
+    pub slot_range: (u16, u16),
+    pub shard_index: usize,
 }
 
 #[derive(Debug)]
@@ -67,6 +73,7 @@ impl Stream for RequestStream {
 pub struct ClusterConnection {
     config: Config,
     shards: Vec<Shard>,
+    slot_ranges: Vec<SlotRange>,
     command_info_manager: CommandInfoManager,
     request_sender: RequestSender,
     request_stream: RequestStream,
@@ -77,40 +84,70 @@ impl ClusterConnection {
         cluster_config: &ClusterConfig,
         config: &Config,
     ) -> Result<ClusterConnection> {
-        let mut shards = Vec::<Shard>::with_capacity(cluster_config.nodes.len());
+        let mut shard_info_list: Option<Vec<ClusterShardResult>> = None;
 
         for node_config in &cluster_config.nodes {
-            let connection =
-                StandaloneConnection::connect(&node_config.0, node_config.1, config).await?;
-            shards.push(Shard {
-                slot_range: (0, 0),
-                nodes: vec![Node {
-                    address: node_config.clone(),
-                    connection,
-                }],
-            });
-        }
-
-        let shard_infos: Vec<ClusterShardResult> =
-            shards[0].nodes[0].connection.cluster_shards().await?;
-
-        for shard in shards.iter_mut() {
-            let shard_info = shard_infos.iter().find(|s| {
-                if let Some(port) = s.nodes[0].port {
-                    shard.nodes[0].address.0 == s.nodes[0].ip && shard.nodes[0].address.1 == port
-                } else {
-                    false
-                }
-            });
-
-            if let Some(shard_info) = shard_info {
-                shard.slot_range = shard_info.slots[0]
-            } else {
-                return Err(Error::Client("Cluster misconfiguration".to_owned()));
+            match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
+                Ok(mut connection) => match connection.cluster_shards().await {
+                    Ok(si) => {
+                        shard_info_list = Some(si);
+                        break;
+                    }
+                    Err(e) => warn!(
+                        "Cannot execute `cluster_shards` on node ({}:{}): {}",
+                        node_config.0, node_config.1, e
+                    ),
+                },
+                Err(e) => warn!(
+                    "Cannot connect to node ({}:{}): {}",
+                    node_config.0, node_config.1, e
+                ),
             }
         }
 
-        shards.sort_by_key(|m| m.slot_range.0);
+        debug!("Discovering cluser nodes...");
+
+        let shard_info_list = if let Some(shard_info_list) = shard_info_list {
+            shard_info_list
+        } else {
+            return Err(Error::Client("Cluster misconfiguration".to_owned()));
+        };
+
+        let mut shards = Vec::<Shard>::new();
+        let mut slot_ranges = Vec::<SlotRange>::new();
+
+        for (shard_index, shard_info) in shard_info_list.into_iter().enumerate() {
+            let master_info = if let Some(master_info) = shard_info.nodes.into_iter().next() {
+                master_info
+            } else {
+                return Err(Error::Client("Cluster misconfiguration".to_owned()));
+            };
+
+            let port = match (master_info.port, master_info.tls_port) {
+                (None, Some(port)) => port,
+                (Some(port), None) => port,
+                _ => {
+                    return Err(Error::Client("Cluster misconfiguration".to_owned()));
+                }
+            };
+
+            let connection = StandaloneConnection::connect(&master_info.ip, port, config).await?;
+
+            shards.push(Shard {
+                nodes: vec![Node {
+                    id: master_info.id,
+                    address: (master_info.ip, port),
+                    connection,
+                }],
+            });
+
+            slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
+                slot_range: *s,
+                shard_index,
+            }));
+        }
+
+        slot_ranges.sort_by_key(|s| s.slot_range.0);
 
         let command_info_manager =
             CommandInfoManager::initialize(&mut shards[0].nodes[0].connection).await?;
@@ -122,11 +159,12 @@ impl ClusterConnection {
             receiver: request_receiver,
         };
 
-        debug!("Cluster connected: {:?}", shards);
+        debug!("Cluster connected: shards={shards:?}, slot_ranges={slot_ranges:?}");
 
         Ok(ClusterConnection {
             config: config.clone(),
             shards,
+            slot_ranges,
             command_info_manager,
             request_sender,
             request_stream,
@@ -498,7 +536,7 @@ impl ClusterConnection {
             let shard = if let Some(shard) = self
                 .shards
                 .iter_mut()
-                .find(|s| s.slot_range == shard_info.slots[0])
+                .find(|s| s.nodes[0].id == shard_info.nodes[0].id)
             {
                 shard
             } else {
@@ -508,16 +546,23 @@ impl ClusterConnection {
                 )));
             };
 
-            for node in shard_info.nodes.iter().filter(|n| n.role == "replica") {
-                if let Some(port) = node.port {
-                    let connection =
-                        StandaloneConnection::connect(&node.ip, port, &self.config).await?;
+            for node in shard_info.nodes.into_iter().filter(|n| n.role == "replica") {
+                let port = match (node.port, node.tls_port) {
+                    (None, Some(port)) => port,
+                    (Some(port), None) => port,
+                    _ => {
+                        return Err(Error::Client("Cluster misconfiguration".to_owned()));
+                    }
+                };
 
-                    shard.nodes.push(Node {
-                        address: (node.ip.clone(), port),
-                        connection,
-                    });
-                }
+                let connection =
+                    StandaloneConnection::connect(&node.ip, port, &self.config).await?;
+
+                shard.nodes.push(Node {
+                    id: node.id,
+                    address: (node.ip.clone(), port),
+                    connection,
+                });
             }
         }
 
@@ -525,17 +570,19 @@ impl ClusterConnection {
     }
 
     fn get_shard_index_by_slot(&mut self, slot: u16) -> usize {
-        self.shards
-            .binary_search_by(|m| {
-                if m.slot_range.0 > slot {
+        self.slot_ranges[self
+            .slot_ranges
+            .binary_search_by(|s| {
+                if s.slot_range.0 > slot {
                     Ordering::Greater
-                } else if m.slot_range.1 < slot {
+                } else if s.slot_range.1 < slot {
                     Ordering::Less
                 } else {
                     Ordering::Equal
                 }
             })
-            .unwrap()
+            .unwrap()]
+        .shard_index
     }
 
     fn hash_slots(keys: &[String]) -> SmallVec<[u16; 10]> {

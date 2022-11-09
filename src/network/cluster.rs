@@ -130,11 +130,11 @@ impl Cluster {
         })
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = Command>) -> Result<()> {
+    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>) -> Result<()> {
         for command in commands {
             debug!("Analyzing command {command:?}");
 
-            let command_info = self.command_info_manager.get_command_info(&command);
+            let command_info = self.command_info_manager.get_command_info(command);
 
             let command_info = if let Some(command_info) = command_info {
                 command_info
@@ -154,7 +154,7 @@ impl Cluster {
 
             let keys = self
                 .command_info_manager
-                .extract_keys(&command, &mut self.shards[0].nodes[0].connection)
+                .extract_keys(command, &mut self.shards[0].nodes[0].connection)
                 .await?;
             let slots = Self::hash_slots(&keys);
 
@@ -175,7 +175,7 @@ impl Cluster {
 
                         for (shard_index, shard) in &mut self.shards.iter_mut().enumerate() {
                             for (node_index, node) in &mut shard.nodes.iter_mut().enumerate() {
-                                node.connection.write(command.clone()).await?;
+                                node.connection.write(command).await?;
                                 sub_requests.push(SubRequest {
                                     shard_index,
                                     node_index,
@@ -197,7 +197,7 @@ impl Cluster {
                     // The command operates atomically per shard.
                     RequestPolicy::AllShards => {
                         for shard in &mut self.shards {
-                            shard.nodes[0].connection.write(command.clone()).await?;
+                            shard.nodes[0].connection.write(command).await?;
                         }
 
                         let request_info = RequestInfo {
@@ -245,10 +245,10 @@ impl Cluster {
                                 if !current_slot_keys.is_empty() {
                                     let shard_command =
                                         self.command_info_manager.prepare_command_for_shard(
-                                            &command,
+                                            command,
                                             current_slot_keys.iter(),
                                         )?;
-                                    connection.write(shard_command).await?;
+                                    connection.write(&shard_command).await?;
                                     sub_requests.push(SubRequest {
                                         shard_index: last_shard_index,
                                         node_index: 0,
@@ -271,8 +271,8 @@ impl Cluster {
 
                         let shard_command = self
                             .command_info_manager
-                            .prepare_command_for_shard(&command, current_slot_keys.iter())?;
-                        connection.write(shard_command).await?;
+                            .prepare_command_for_shard(command, current_slot_keys.iter())?;
+                        connection.write(&shard_command).await?;
                         sub_requests.push(SubRequest {
                             shard_index: last_shard_index,
                             node_index: 0,

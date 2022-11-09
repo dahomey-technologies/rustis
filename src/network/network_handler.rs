@@ -218,7 +218,7 @@ impl NetworkHandler {
 
         if let Err(e) = self
             .connection
-            .write_batch(commands_to_write.into_iter())
+            .write_batch(commands_to_write.iter())
             .await
         {
             for _ in 0..num_value_senders {

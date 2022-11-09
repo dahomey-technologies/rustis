@@ -48,10 +48,10 @@ impl Streams {
         Ok(Streams::Tcp(framed_read, framed_write))
     }
 
-    pub async fn write(&mut self, command: Command) -> Result<()> {
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
         debug!("Sending {command:?}");
         match self {
-            Streams::Tcp(_, framed_write) => framed_write.send(&command).await,
+            Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(feature = "tls")]
             Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
         }
@@ -60,7 +60,7 @@ impl Streams {
     pub async fn write_batch(
         &mut self,
         buffer: &mut BytesMut,
-        commands: impl Iterator<Item = Command>,
+        commands: impl Iterator<Item = &Command>,
     ) -> Result<()> {
         let command_encoder = match self {
             Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
@@ -70,7 +70,7 @@ impl Streams {
 
         for command in commands {
             debug!("Sending {command:?}");
-            command_encoder.encode(&command, buffer)?;
+            command_encoder.encode(command, buffer)?;
         }
 
         match self {
@@ -116,7 +116,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            self.executor.write(self.command).await?;
+            self.executor.write(&self.command).await?;
 
             self.executor
                 .read()
@@ -156,7 +156,7 @@ impl Connection {
         Ok(connection)
     }
 
-    pub async fn write(&mut self, command: Command) -> Result<()> {
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
         match &mut self.inner_connection {
             InnerConnection::Streams { streams, buffer: _ } => {
                 streams.write(command).await?
@@ -167,7 +167,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = Command>) -> Result<()> {
+    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>) -> Result<()> {
         match &mut self.inner_connection {
             InnerConnection::Streams { streams, buffer } => {
                 buffer.clear();
@@ -341,7 +341,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            self.executor.write(self.command).await?;
+            self.executor.write(&self.command).await?;
 
             self.executor
                 .read()

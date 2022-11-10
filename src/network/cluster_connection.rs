@@ -70,6 +70,9 @@ impl Stream for RequestStream {
     }
 }
 
+/// Cluster connection
+/// read & write_batch functions are implemented following Redis Command Tips
+/// See <https://redis.io/docs/reference/command-tips/>
 pub struct ClusterConnection {
     config: Config,
     shards: Vec<Shard>,

@@ -2,8 +2,8 @@ use crate::{
     network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientKillOptions,
     ClientListOptions, ClientPauseMode, ClientPreparedCommand, ClientReplyMode,
     ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error,
-    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result,
-    ServerCommands, StringCommands,
+    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, RedisError,
+    RedisErrorKind, Result, ServerCommands, StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -15,10 +15,22 @@ async fn auth() -> Result<()> {
     let mut client = get_test_client().await?;
 
     let result = client.auth(Some("username"), "password").await;
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("WRONGPASS")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::WrongPass,
+            description: _
+        }))
+    ));
 
     let result = client.auth::<&str, &str>(None, "password").await;
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR AUTH")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -293,7 +305,13 @@ async fn client_unblock() -> Result<()> {
 
     spawn(async move {
         let result = client1.wait(2, 10000).await;
-        assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("UNBLOCKED")));
+        matches!(
+            result,
+            Err(Error::Redis(RedisError {
+                kind: RedisErrorKind::Unblocked,
+                description: _
+            }))
+        )
     });
 
     sleep(std::time::Duration::from_millis(100)).await;

@@ -1,4 +1,4 @@
-use crate::{resp::cmd, tests::get_test_client, Error, Result};
+use crate::{resp::cmd, tests::get_test_client, Error, RedisError, RedisErrorKind, Result};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -9,9 +9,13 @@ async fn unknown_command() -> Result<()> {
 
     let result = client.send(cmd("UNKNOWN").arg("arg")).await;
 
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR unknown command 'UNKNOWN'"))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description.starts_with("unknown command 'UNKNOWN'")
+    ));
 
     Ok(())
 }

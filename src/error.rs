@@ -3,7 +3,7 @@ use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
 };
-use std::{num::ParseFloatError, str::Utf8Error};
+use std::{num::ParseFloatError, str::Utf8Error, fmt::{Display, Formatter}};
 
 /// All error kinds
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub enum Error {
     /// Raised if an error occurs when contacting Sentinel instances
     Sentinel(String),
     /// Error returned by the Redis sercer
-    Redis(String),
+    Redis(RedisError),
     /// IO error when connecting the Redis server
     IO(std::io::Error),
     #[cfg(feature = "tls")]
@@ -80,5 +80,126 @@ impl From<ParseFloatError> for Error {
 impl From<native_tls::Error> for Error {
     fn from(e: native_tls::Error) -> Self {
         Error::Tls(e.to_string())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RedisErrorKind {
+    Ask,
+    BusyGroup,
+    ClusterDown,
+    CrossSlot,
+    Err,
+    InProg,
+    IoErr,
+    MasterDown,
+    MisConf,
+    Moved,
+    NoAuth,
+    NoGoodSlave,
+    NoMasterLink,
+    NoPerm,
+    NoProto,
+    NoQuorum,
+    NotBusy,
+    OutOfMemory,
+    Readonly,
+    TryAgain,
+    UnKillable,
+    Unblocked,
+    WrongPass,
+    WrongType,
+    Other(String)
+}
+
+impl From<&str> for RedisErrorKind {
+    fn from(kind: &str) -> Self {
+        match kind {
+            "ASK" => Self::Ask,
+            "BUSYGROUP" => Self::BusyGroup,
+            "CLUSTERDOWN" => Self::ClusterDown,
+            "CROSSSLOT" => Self::CrossSlot,
+            "ERR" => Self::Err,
+            "INPROG" => Self::InProg,
+            "IOERR" => Self::IoErr,
+            "MASTERDOWN" => Self::MasterDown,
+            "MISCONF" => Self::MisConf,
+            "MOVED" => Self::Moved,
+            "NOAUTH" => Self::NoAuth,
+            "NOGOODSLAVE" => Self::NoGoodSlave,
+            "NOMASTERLINK" => Self::NoMasterLink,
+            "NOPERM" => Self::NoPerm,
+            "NOPROTO" => Self::NoProto,
+            "NOQUORUM" => Self::NoQuorum,
+            "NOTBUSY" => Self::NotBusy,
+            "OOM" => Self::OutOfMemory,
+            "READONLY" => Self::Readonly,
+            "TRYAGAIN" => Self::TryAgain,
+            "UNKILLABLE" => Self::UnKillable,
+            "UNBLOCKED" => Self::Unblocked,
+            "WRONGPASS" => Self::WrongPass,
+            "WRONGTYPE" => Self::WrongType,
+            _ => Self::Other(kind.to_owned())
+        }
+    }
+}
+
+impl Display for RedisErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RedisErrorKind::Ask => f.write_str("ASK"),
+            RedisErrorKind::BusyGroup => f.write_str("BUSYGROUP"),
+            RedisErrorKind::ClusterDown => f.write_str("CLUSTERDOWN"),
+            RedisErrorKind::CrossSlot => f.write_str("CROSSSLOT"),
+            RedisErrorKind::Err => f.write_str("ERR"),
+            RedisErrorKind::InProg => f.write_str("INPROG"),
+            RedisErrorKind::IoErr => f.write_str("IOERR"),
+            RedisErrorKind::MasterDown => f.write_str("MASTERDOWN"),
+            RedisErrorKind::MisConf => f.write_str("MISCONF"),
+            RedisErrorKind::Moved => f.write_str("MOVED"),
+            RedisErrorKind::NoAuth => f.write_str("NOAUTH"),
+            RedisErrorKind::NoGoodSlave => f.write_str("NOGOODSLAVE"),
+            RedisErrorKind::NoMasterLink => f.write_str("NOMASTERLINK"),
+            RedisErrorKind::NoPerm => f.write_str("NOPERM"),
+            RedisErrorKind::NoProto => f.write_str("NOPROTO"),
+            RedisErrorKind::NoQuorum => f.write_str("NOQUORUM"),
+            RedisErrorKind::NotBusy => f.write_str("NOTBUSY"),
+            RedisErrorKind::OutOfMemory => f.write_str("OOM"),
+            RedisErrorKind::Readonly => f.write_str("READONLY"),
+            RedisErrorKind::TryAgain => f.write_str("TRYAGAIN"),
+            RedisErrorKind::UnKillable => f.write_str("UNKILLABLE"),
+            RedisErrorKind::Unblocked => f.write_str("UNBLOCKED"),
+            RedisErrorKind::WrongPass => f.write_str("WRONGPASS"),
+            RedisErrorKind::WrongType => f.write_str("WRONGTYPE"),
+            RedisErrorKind::Other(e) => f.write_str(e),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RedisError {
+    pub kind: RedisErrorKind,
+    pub description: String
+}
+
+impl From<&str> for RedisError {
+    fn from(error: &str) -> Self {
+        if let Some((kind, description)) = error.split_once(' ') {
+            Self {
+                kind: kind.into(),
+                description: description.to_owned(),
+            }
+        } else {
+            Self {
+                kind: error.into(),
+                description: "".to_owned()
+            }
+        }
+    }
+}
+
+impl Display for RedisError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{} {}", self.kind, self.description))
     }
 }

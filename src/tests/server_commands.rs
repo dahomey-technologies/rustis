@@ -5,8 +5,8 @@ use crate::{
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands, Client,
     ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error,
     FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
-    ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, Result, RoleResult, ServerCommands,
-    SlowLogOptions, StringCommands,
+    ModuleInfo, ModuleLoadOptions, RedisError, RedisErrorKind, ReplicaOfOptions, Result,
+    RoleResult, ServerCommands, SlowLogOptions, StringCommands,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -137,9 +137,13 @@ async fn acl_load() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.acl_load().await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR This Redis instance is not configured to use an ACL file."))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -175,9 +179,13 @@ async fn acl_save() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.acl_save().await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR This Redis instance is not configured to use an ACL file."))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -197,7 +205,13 @@ async fn acl_setuser() -> Result<()> {
     client.auth(Some("foo"), "pwd").await?;
 
     let result = client.set("key", "value").await;
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("NOPERM")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::NoPerm,
+            description: _
+        }))
+    ));
 
     client.acl_setuser("foo", ["~key"]).await?;
     let _rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
@@ -497,9 +511,13 @@ async fn failover() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client.failover(FailOverOptions::default()).await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR FAILOVER requires connected replicas.")
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description == "FAILOVER requires connected replicas."
+    ));
 
     Ok(())
 }
@@ -846,9 +864,13 @@ async fn module_load() -> Result<()> {
                 .arg(23),
         )
         .await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR MODULE command not allowed."))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description.starts_with("MODULE command not allowed.")
+    ));
 
     Ok(())
 }
@@ -861,9 +883,13 @@ async fn module_unload() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client.module_unload("mymodule").await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR MODULE command not allowed."))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description.starts_with("MODULE command not allowed.")
+    ));
 
     Ok(())
 }

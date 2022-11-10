@@ -1,6 +1,6 @@
 use crate::{
     resp::{Array, BulkString, FromValue},
-    Error, Result,
+    Error, Result, RedisError,
 };
 
 #[derive(Debug)]
@@ -11,7 +11,7 @@ pub enum Value {
     BulkString(BulkString),
     Array(Array),
     Push(Array),
-    Error(String),
+    Error(RedisError),
 }
 
 impl Value {
@@ -56,7 +56,7 @@ impl ToString for Value {
                     .join(", ")
             ),
             Value::Push(Array::Nil) => "Push[]".to_string(),
-            Value::Error(e) => e.clone(),
+            Value::Error(e) => e.to_string(),
         }
     }
 }

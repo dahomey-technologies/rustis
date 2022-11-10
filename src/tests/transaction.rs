@@ -1,6 +1,6 @@
 use crate::{
     resp::cmd, tests::get_test_client, Error, FlushingMode, ListCommands, PipelinePreparedCommand,
-    Result, ServerCommands, StringCommands, TransactionCommands,
+    Result, ServerCommands, StringCommands, TransactionCommands, RedisError, RedisErrorKind,
 };
 use serial_test::serial;
 
@@ -34,9 +34,13 @@ async fn transaction_error() -> Result<()> {
     transaction.queue(cmd("UNKNOWN"));
     let result: Result<String> = transaction.execute().await;
 
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR unknown command 'UNKNOWN'"))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     let mut transaction = client.create_transaction();
 
@@ -44,7 +48,13 @@ async fn transaction_error() -> Result<()> {
     transaction.lpop::<_, String, Vec<_>>("key1", 1).queue();
     let result: Result<String> = transaction.execute().await;
 
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("WRONGTYPE")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::WrongType,
+            description: _
+        }))
+    ));
 
     Ok(())
 }

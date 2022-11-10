@@ -1,6 +1,7 @@
 use crate::{
-    sleep, spawn, tests::get_cluster_test_client, CallBuilder, Error, FlushingMode, GenericCommands,
-    Result, ScriptingCommands, ServerCommands, StringCommands,
+    sleep, spawn, tests::get_cluster_test_client, CallBuilder, Error, FlushingMode,
+    GenericCommands, RedisError, RedisErrorKind, Result, ScriptingCommands, ServerCommands,
+    StringCommands,
 };
 use serial_test::serial;
 use std::collections::HashSet;
@@ -73,9 +74,13 @@ async fn all_shards_one_succeeded() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.script_kill().await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e.starts_with("NOTBUSY No scripts in execution right now."))
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::NotBusy,
+            description: _
+        }))
+    ));
 
     let sha1: String = client
         .script_load("while (true) do end return ARGV[1]")

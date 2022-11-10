@@ -41,7 +41,7 @@ async fn blmove() -> Result<()> {
     assert_eq!("element1".to_string(), elements[1]);
 
     let element: Option<String> = client
-        .blmove("uknown", "myotherlist", Right, Left, 0.01)
+        .blmove("unknown", "myotherlist", Right, Left, 0.01)
         .await?;
     assert_eq!(None, element);
 

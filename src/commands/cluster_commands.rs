@@ -657,7 +657,7 @@ impl FromValue for ClusterInfo {
                         key.to_owned(),
                         Value::BulkString(BulkString::Binary(value.as_bytes().to_vec())),
                     )),
-                    _ => Err(Error::Redis(
+                    _ => Err(Error::Client(
                         "Unexpected result for cluster_info".to_owned(),
                     )),
                 }

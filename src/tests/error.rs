@@ -20,6 +20,32 @@ async fn unknown_command() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn moved_error() {
+    let raw_error = "MOVED 3999 127.0.0.1:6381";
+    let error: RedisError = raw_error.into();
+    assert!(matches!(
+        error,
+        RedisError {
+            kind: RedisErrorKind::Moved { hash_slot: 3999, address: (host, 6381) },
+            description
+        } if description.is_empty() && host == "127.0.0.1"
+    ));
+}
+
+#[test]
+fn ask_error() {
+    let raw_error = "ASK 3999 127.0.0.1:6381";
+    let error: RedisError = raw_error.into();
+    assert!(matches!(
+        error,
+        RedisError {
+            kind: RedisErrorKind::Ask { hash_slot: 3999, address: (host, 6381) },
+            description
+        } if description.is_empty() && host == "127.0.0.1"
+    ));
+}
+
 // #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 // #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 // #[serial]

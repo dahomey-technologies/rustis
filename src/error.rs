@@ -3,7 +3,11 @@ use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
 };
-use std::{num::ParseFloatError, str::Utf8Error, fmt::{Display, Formatter}};
+use std::{
+    fmt::{Display, Formatter},
+    num::ParseFloatError,
+    str::Utf8Error,
+};
 
 /// All error kinds
 #[derive(Debug)]
@@ -85,7 +89,10 @@ impl From<native_tls::Error> for Error {
 
 #[derive(Debug, Clone)]
 pub enum RedisErrorKind {
-    Ask,
+    Ask {
+        hash_slot: u16,
+        address: (String, u16),
+    },
     BusyGroup,
     ClusterDown,
     CrossSlot,
@@ -94,7 +101,10 @@ pub enum RedisErrorKind {
     IoErr,
     MasterDown,
     MisConf,
-    Moved,
+    Moved {
+        hash_slot: u16,
+        address: (String, u16),
+    },
     NoAuth,
     NoGoodSlave,
     NoMasterLink,
@@ -109,13 +119,12 @@ pub enum RedisErrorKind {
     Unblocked,
     WrongPass,
     WrongType,
-    Other(String)
+    Other(String),
 }
 
 impl From<&str> for RedisErrorKind {
-    fn from(kind: &str) -> Self {
-        match kind {
-            "ASK" => Self::Ask,
+    fn from(str: &str) -> Self {
+        match str {
             "BUSYGROUP" => Self::BusyGroup,
             "CLUSTERDOWN" => Self::ClusterDown,
             "CROSSSLOT" => Self::CrossSlot,
@@ -124,7 +133,6 @@ impl From<&str> for RedisErrorKind {
             "IOERR" => Self::IoErr,
             "MASTERDOWN" => Self::MasterDown,
             "MISCONF" => Self::MisConf,
-            "MOVED" => Self::Moved,
             "NOAUTH" => Self::NoAuth,
             "NOGOODSLAVE" => Self::NoGoodSlave,
             "NOMASTERLINK" => Self::NoMasterLink,
@@ -139,7 +147,30 @@ impl From<&str> for RedisErrorKind {
             "UNBLOCKED" => Self::Unblocked,
             "WRONGPASS" => Self::WrongPass,
             "WRONGTYPE" => Self::WrongType,
-            _ => Self::Other(kind.to_owned())
+            _ => {
+                let mut iter = str.split_whitespace();
+                match (iter.next(), iter.next(), iter.next(), iter.next()) {
+                    (Some("ASK"), Some(hash_slot), Some(address), None) => {
+                        let hash_slot = hash_slot.parse::<u16>().unwrap();
+                        let (host, port) = address.split_once(':').unwrap();
+                        let port = port.parse::<u16>().unwrap();
+                        Self::Ask {
+                            hash_slot,
+                            address: (host.to_owned(), port),
+                        }
+                    }
+                    (Some("MOVED"), Some(hash_slot), Some(address), None) => {
+                        let hash_slot = hash_slot.parse::<u16>().unwrap();
+                        let (host, port) = address.split_once(':').unwrap();
+                        let port = port.parse::<u16>().unwrap();
+                        Self::Moved {
+                            hash_slot,
+                            address: (host.to_owned(), port),
+                        }
+                    }
+                    _ => Self::Other(str.to_owned()),
+                }
+            }
         }
     }
 }
@@ -147,7 +178,13 @@ impl From<&str> for RedisErrorKind {
 impl Display for RedisErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RedisErrorKind::Ask => f.write_str("ASK"),
+            RedisErrorKind::Ask {
+                hash_slot,
+                address: (host, port),
+            } => f.write_fmt(format_args!(
+                "ASK {} {}:{}",
+                *hash_slot, *host, *port
+            )),
             RedisErrorKind::BusyGroup => f.write_str("BUSYGROUP"),
             RedisErrorKind::ClusterDown => f.write_str("CLUSTERDOWN"),
             RedisErrorKind::CrossSlot => f.write_str("CROSSSLOT"),
@@ -156,7 +193,13 @@ impl Display for RedisErrorKind {
             RedisErrorKind::IoErr => f.write_str("IOERR"),
             RedisErrorKind::MasterDown => f.write_str("MASTERDOWN"),
             RedisErrorKind::MisConf => f.write_str("MISCONF"),
-            RedisErrorKind::Moved => f.write_str("MOVED"),
+            RedisErrorKind::Moved {
+                hash_slot,
+                address: (host, port),
+            } => f.write_fmt(format_args!(
+                "MOVED {} {}:{}",
+                *hash_slot, *host, *port
+            )),
             RedisErrorKind::NoAuth => f.write_str("NOAUTH"),
             RedisErrorKind::NoGoodSlave => f.write_str("NOGOODSLAVE"),
             RedisErrorKind::NoMasterLink => f.write_str("NOMASTERLINK"),
@@ -179,21 +222,36 @@ impl Display for RedisErrorKind {
 #[derive(Debug, Clone)]
 pub struct RedisError {
     pub kind: RedisErrorKind,
-    pub description: String
+    pub description: String,
 }
 
 impl From<&str> for RedisError {
     fn from(error: &str) -> Self {
-        if let Some((kind, description)) = error.split_once(' ') {
-            Self {
-                kind: kind.into(),
-                description: description.to_owned(),
+        match error.split_once(' ') {
+            Some(("ASK", _)) => {
+                Self {
+                    kind: error.into(),
+                    description: "".to_owned(),
+                }
+            },
+            Some(("MOVED", _)) => {
+                Self {
+                    kind: error.into(),
+                    description: "".to_owned(),
+                }
+            },
+            Some((kind, description)) => {
+                Self {
+                    kind: kind.into(),
+                    description: description.to_owned(),
+                }
             }
-        } else {
-            Self {
-                kind: error.into(),
-                description: "".to_owned()
-            }
+            None => {
+                    Self {
+                        kind: error.into(),
+                        description: "".to_owned(),
+                    }
+                }
         }
     }
 }

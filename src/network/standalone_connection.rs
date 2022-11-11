@@ -1,7 +1,7 @@
 use crate::{
     resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
     tcp_connect, ClusterCommands, Config, ConnectionCommands, Error, Future, PreparedCommand,
-    Result, SentinelCommands, ServerCommands, TcpStreamReader, TcpStreamWriter,
+    Result, SentinelCommands, ServerCommands, TcpStreamReader, TcpStreamWriter, RetryReason,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
@@ -82,7 +82,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>) -> Result<()> {
+    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, _retry_reasons: &[RetryReason]) -> Result<()> {
         self.buffer.clear();
 
         let command_encoder = match &mut self.streams {

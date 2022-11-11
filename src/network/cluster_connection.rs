@@ -175,7 +175,7 @@ impl ClusterConnection {
         })
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>) -> Result<()> {
+    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, _retry_reasons: &[RetryReason]) -> Result<()> {
         for command in commands {
             debug!("Analyzing command {command:?}");
 

@@ -1,6 +1,6 @@
 use crate::{
     resp::{Array, BulkString, Command, CommandArgs, Value},
-    spawn, Config, Connection, Error, Message, Result,
+    spawn, Config, Connection, Error, Message, Result, RetryReason,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -32,6 +32,8 @@ enum Status {
 pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
+    /// for retries
+    msg_sender: MsgSender,
     msg_receiver: MsgReceiver,
     messages_to_send: VecDeque<Message>,
     messages_to_receive: VecDeque<(Message, usize)>,
@@ -52,6 +54,7 @@ impl NetworkHandler {
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
             connection,
+            msg_sender: msg_sender.clone(),
             msg_receiver,
             messages_to_send: VecDeque::new(),
             messages_to_receive: VecDeque::new(),
@@ -174,10 +177,11 @@ impl NetworkHandler {
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&Command; 10]>::new(); 
-        let mut commands_to_receive = SmallVec::<[usize; 10]>::new(); 
+        let mut commands_to_write = SmallVec::<[&Command; 10]>::new();
+        let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
+        let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
-        for msg in self.messages_to_send.iter() {
+        for msg in self.messages_to_send.iter_mut() {
             let commands = &msg.commands;
             let mut num_commands_to_receive: usize = 0;
 
@@ -208,11 +212,16 @@ impl NetworkHandler {
             }
 
             commands_to_receive.push(num_commands_to_receive);
+
+            let reasons = msg.retry_reasons.take();
+            if let Some(reasons) = reasons {
+                retry_reasons.extend(reasons);
+            }
         }
 
         if let Err(e) = self
             .connection
-            .write_batch(commands_to_write.into_iter())
+            .write_batch(commands_to_write.into_iter(), &retry_reasons)
             .await
         {
             let mut idx: usize = 0;
@@ -228,7 +237,8 @@ impl NetworkHandler {
             let mut idx: usize = 0;
             while let Some(msg) = self.messages_to_send.pop_front() {
                 if commands_to_receive[idx] > 0 {
-                    self.messages_to_receive.push_back((msg, commands_to_receive[idx]));
+                    self.messages_to_receive
+                        .push_back((msg, commands_to_receive[idx]));
                 }
                 idx += 1;
             }
@@ -312,10 +322,33 @@ impl NetworkHandler {
 
     fn receive_result(&mut self, value: Result<Value>) {
         match self.messages_to_receive.front_mut() {
-            Some((_, num_commands)) => {
+            Some((msg, num_commands)) => {
                 if *num_commands == 1 || value.is_err() {
-                    if let Some((msg, _)) = self.messages_to_receive.pop_front() {
-                        if let Some(value_sender) = msg.value_sender {
+                    if let Some((mut msg, _)) = self.messages_to_receive.pop_front() {
+                        let mut should_retry = false;
+
+                        if let Err(Error::Retry(_)) = &value {
+                            should_retry = true;
+                        } else if msg.retry_reasons.is_some() {
+                            should_retry = true;
+                        }
+
+                        if should_retry {
+                            if let Err(Error::Retry(reasons)) = value {
+                                if let Some(retry_reasons) = &mut msg.retry_reasons {
+                                    retry_reasons.extend(reasons);
+                                } else {
+                                    msg.retry_reasons = Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                }
+                            }
+
+                            // retry
+                            let result = self.msg_sender.unbounded_send(msg);
+                            if let Err(e) = result {
+                                error!("Cannot retry message: {e}");
+                            }
+
+                        } else if let Some(value_sender) = msg.value_sender {
                             match value {
                                 Ok(value) => {
                                     let pending_replies = self.pending_replies.take();
@@ -342,9 +375,19 @@ impl NetworkHandler {
                     }
 
                     if let Some(pending_replies) = &mut self.pending_replies {
-                        if let Ok(value) = value {
-                            pending_replies.push(value);
-                            *num_commands -= 1;
+                        match value {
+                            Ok(value) => {
+                                pending_replies.push(value);
+                                *num_commands -= 1;
+                            }
+                            Err(Error::Retry(reasons)) => {
+                                if let Some(retry_reasons) = &mut msg.retry_reasons {
+                                    retry_reasons.extend(reasons);
+                                } else {
+                                    msg.retry_reasons = Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                }
+                            }
+                            _ => ()
                         }
                     }
                 }
@@ -362,43 +405,46 @@ impl NetworkHandler {
     ) -> Result<Option<Result<Value>>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(Value::Array(Array::Vec(ref items))) | Ok(Value::Push(Array::Vec(ref items))) => match &items[..] {
-                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
-                {
-                    match command.as_slice() {
-                        b"message" => true,
-                        b"subscribe" | b"psubscribe" => {
-                            if let Some(pub_sub_sender) = self.pending_subscriptions.remove(channel)
-                            {
-                                self.subscriptions.insert(channel.clone(), pub_sub_sender);
-                            }
-                            if !self.pending_subscriptions.is_empty() {
-                                return Ok(None);
-                            }
-                            false
-                        }
-                        b"unsubscribe" | b"punsubscribe" => {
-                            self.subscriptions.remove(channel);
-                            if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
-                                if *remaining > 1 {
-                                    *remaining -= 1;
-                                    return Ok(None);
-                                } else {
-                                    // last unsubscription notification received
-                                    self.pending_unsubscriptions.pop_front();
-                                    return Ok(Some(Ok(Value::SimpleString("OK".to_owned()))));
+            Ok(Value::Array(Array::Vec(ref items))) | Ok(Value::Push(Array::Vec(ref items))) => {
+                match &items[..] {
+                    [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
+                    {
+                        match command.as_slice() {
+                            b"message" => true,
+                            b"subscribe" | b"psubscribe" => {
+                                if let Some(pub_sub_sender) =
+                                    self.pending_subscriptions.remove(channel)
+                                {
+                                    self.subscriptions.insert(channel.clone(), pub_sub_sender);
                                 }
+                                if !self.pending_subscriptions.is_empty() {
+                                    return Ok(None);
+                                }
+                                false
                             }
-                            false
+                            b"unsubscribe" | b"punsubscribe" => {
+                                self.subscriptions.remove(channel);
+                                if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
+                                    if *remaining > 1 {
+                                        *remaining -= 1;
+                                        return Ok(None);
+                                    } else {
+                                        // last unsubscription notification received
+                                        self.pending_unsubscriptions.pop_front();
+                                        return Ok(Some(Ok(Value::SimpleString("OK".to_owned()))));
+                                    }
+                                }
+                                false
+                            }
+                            _ => false,
                         }
-                        _ => false,
                     }
+                    [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_pattern)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] => {
+                        command.as_slice() == b"pmessage"
+                    }
+                    _ => false,
                 }
-                [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_pattern)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] => {
-                    command.as_slice() == b"pmessage"
-                }
-                _ => false,
-            },
+            }
             _ => false,
         };
 

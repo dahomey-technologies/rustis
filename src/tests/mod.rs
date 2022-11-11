@@ -1,4 +1,5 @@
 mod bitmap_commands;
+mod client;
 mod cluster;
 mod cluster_commands;
 mod command_args;

@@ -3,11 +3,24 @@ use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
 };
+use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
     num::ParseFloatError,
     str::Utf8Error,
 };
+
+#[derive(Debug)]
+pub enum RetryReason {
+    Ask {
+        hash_slot: u16,
+        address: (String, u16),
+    },
+    Moved {
+        hash_slot: u16,
+        address: (String, u16),
+    },
+}
 
 /// All error kinds
 #[derive(Debug)]
@@ -27,6 +40,8 @@ pub enum Error {
     #[cfg(feature = "tls")]
     /// Raised by the TLS library
     Tls(String),
+    /// Internal error to trigger retry sending the command
+    Retry(SmallVec<[RetryReason;5]>)
 }
 
 impl std::fmt::Display for Error {
@@ -40,6 +55,7 @@ impl std::fmt::Display for Error {
             Error::IO(e) => f.write_fmt(format_args!("IO erro: {}", e)),
             #[cfg(feature = "tls")]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
+            Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
         }
     }
 }
@@ -87,6 +103,7 @@ impl From<native_tls::Error> for Error {
     }
 }
 
+/// Redis server error kind
 #[derive(Debug, Clone)]
 pub enum RedisErrorKind {
     Ask {
@@ -219,6 +236,7 @@ impl Display for RedisErrorKind {
     }
 }
 
+/// Error issued by the Redis server
 #[derive(Debug, Clone)]
 pub struct RedisError {
     pub kind: RedisErrorKind,

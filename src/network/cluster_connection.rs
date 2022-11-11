@@ -1,7 +1,8 @@
 use crate::{
     resp::{Array, BulkString, Command, Value},
     ClusterCommands, ClusterConfig, ClusterShardResult, CommandInfoManager, CommandTip, Config,
-    Error, RequestPolicy, ResponsePolicy, Result, StandaloneConnection,
+    Error, RedisError, RedisErrorKind, RequestPolicy, ResponsePolicy, Result, RetryReason,
+    StandaloneConnection,
 };
 use futures::{channel::mpsc, SinkExt, Stream, StreamExt};
 use log::{debug, trace, warn};
@@ -427,19 +428,34 @@ impl ClusterConnection {
         Box::pin(async move {
             let request_info = self.request_stream.next().await?;
 
-            let mut sub_results = Vec::<Result<Value>>::with_capacity(request_info.sub_requests.len());
+            let mut sub_results =
+                Vec::<Result<Value>>::with_capacity(request_info.sub_requests.len());
             let mut is_none = false;
+            let mut retry_reasons = SmallVec::<[RetryReason; 5]>::new();
 
             // make sure to read all response for each sub_request with no early return
             for sub_request in &request_info.sub_requests {
                 let shard = &mut self.shards[sub_request.shard_index];
-                let result = shard.nodes[sub_request.node_index]
-                    .connection
-                    .read()
-                    .await;
+                let result = shard.nodes[sub_request.node_index].connection.read().await;
 
                 if let Some(result) = result {
-                    sub_results.push(result);
+                    match &result {
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Ask { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Ask {
+                            hash_slot: *hash_slot,
+                            address: address.clone(),
+                        }),
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Moved { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Moved {
+                            hash_slot: *hash_slot,
+                            address: address.clone(),
+                        }),
+                        _ => sub_results.push(result),
+                    }
                 } else {
                     is_none = true;
                 }
@@ -448,6 +464,10 @@ impl ClusterConnection {
             // from here we can early return
             if is_none {
                 return None;
+            }
+
+            if !retry_reasons.is_empty() {
+                return Some(Err(Error::Retry(retry_reasons)));
             }
 
             let command_name = &request_info.command_name;
@@ -496,12 +516,8 @@ impl ClusterConnection {
                         )
                         .await
                     }
-                    ResponsePolicy::AggMin => {
-                        self.response_policy_agg(sub_results, i64::min).await
-                    }
-                    ResponsePolicy::AggMax => {
-                        self.response_policy_agg(sub_results, i64::max).await
-                    }
+                    ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min).await,
+                    ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max).await,
                     ResponsePolicy::AggSum => {
                         self.response_policy_agg(sub_results, |a, b| a + b).await
                     }
@@ -603,7 +619,11 @@ impl ClusterConnection {
         todo!("Command not yet supported in cluster mode");
     }
 
-    async fn no_response_policy(&mut self, sub_results: Vec<Result<Value>>, request_info: &RequestInfo) -> Option<Result<Value>> {
+    async fn no_response_policy(
+        &mut self,
+        sub_results: Vec<Result<Value>>,
+        request_info: &RequestInfo,
+    ) -> Option<Result<Value>> {
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
@@ -623,7 +643,9 @@ impl ClusterConnection {
                         return Some(sub_result);
                     }
                     _ => {
-                        return Some(Err(Error::Client(format!("Unexpected result {sub_result:?}"))));
+                        return Some(Err(Error::Client(format!(
+                            "Unexpected result {sub_result:?}"
+                        ))));
                     }
                 }
             }
@@ -643,7 +665,12 @@ impl ClusterConnection {
                         results.extend(zip(&sub_request.keys, values))
                     }
                     Err(_) | Ok(Value::Error(_)) => return Some(sub_result),
-                    _ => return Some(Err(Error::Client(format!("Unexpected result {:?}", sub_result)))),
+                    _ => {
+                        return Some(Err(Error::Client(format!(
+                            "Unexpected result {:?}",
+                            sub_result
+                        ))))
+                    }
                 }
             }
 

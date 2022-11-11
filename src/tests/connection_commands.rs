@@ -3,7 +3,7 @@ use crate::{
     ClientListOptions, ClientPauseMode, ClientPreparedCommand, ClientReplyMode,
     ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error,
     FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, RedisError,
-    RedisErrorKind, Result, ServerCommands, StringCommands,
+    RedisErrorKind, Result, ServerCommands, StringCommands, PipelinePreparedCommand,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -145,11 +145,27 @@ async fn client_reply() -> Result<()> {
     let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
+    // single command
     client.client_reply(ClientReplyMode::Off).forget()?;
     client.set("key", "value").forget()?;
     client.client_reply(ClientReplyMode::On).await?;
-    let value: String = client.get::<&str, String>("key").await?;
+    let value: String = client.get("key").await?;
     assert_eq!("value", value);
+
+    // pipeline
+    let mut pipeline = client.create_pipeline();
+    pipeline.client_reply(ClientReplyMode::Off).forget();
+    pipeline.set("key1", "value1").forget();
+    pipeline.set("key2", "value2").forget();
+    pipeline.set("key3", "value3").forget();
+    pipeline.client_reply(ClientReplyMode::On).queue();
+    pipeline.execute::<()>().await?;
+
+    let values: Vec<String> = client.mget(["key1", "key2", "key3"]).await?;
+    assert_eq!(3, values.len());
+    assert_eq!("value1", values[0]);
+    assert_eq!("value2", values[1]);
+    assert_eq!("value3", values[2]);
 
     Ok(())
 }

@@ -2,7 +2,7 @@ use std::iter::zip;
 
 use crate::{
     resp::{Array, Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, ClusterCommands, ConnectionCommands, Error, GenericCommands, GeoCommands,
+    BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
     HashCommands, HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result,
     ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
     StringCommands,
@@ -53,7 +53,7 @@ impl Pipeline {
                     Value::Array(Array::Vec(filtered_results)).into()
                 }
             }
-            _ => Err(Error::Client("Unexpected pipeline reply".to_owned())),
+            _ => Ok(result).into_result()?.into(),
         }
     }
 }

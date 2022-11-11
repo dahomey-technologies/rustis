@@ -33,8 +33,8 @@ pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
     msg_receiver: MsgReceiver,
-    value_senders: VecDeque<Option<(ValueSender, usize)>>,
-    messages: VecDeque<Message>,
+    messages_to_send: VecDeque<Message>,
+    messages_to_receive: VecDeque<(Message, usize)>,
     pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
     /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
     pending_unsubscriptions: VecDeque<usize>,
@@ -48,14 +48,13 @@ impl NetworkHandler {
     pub async fn connect(config: Config) -> Result<MsgSender> {
         let connection = Connection::connect(config.clone()).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
-        let value_senders = VecDeque::new();
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
             connection,
             msg_receiver,
-            value_senders,
-            messages: VecDeque::new(),
+            messages_to_send: VecDeque::new(),
+            messages_to_receive: VecDeque::new(),
             pending_subscriptions: HashMap::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
@@ -110,10 +109,10 @@ impl NetworkHandler {
                                 _ => (),
                             }
                         }
-                        self.messages.push_back(msg);
+                        self.messages_to_send.push_back(msg);
                     }
                     Status::Subscribing => {
-                        self.messages.push_back(msg);
+                        self.messages_to_send.push_back(msg);
                     }
                     Status::Subscribed => {
                         for command in &msg.commands {
@@ -121,7 +120,7 @@ impl NetworkHandler {
                                 self.pending_unsubscriptions.push_back(command.args.len());
                             }
                         }
-                        self.messages.push_back(msg);
+                        self.messages_to_send.push_back(msg);
                     }
                     Status::Disconnected => {
                         let value_sender = msg.value_sender;
@@ -130,17 +129,17 @@ impl NetworkHandler {
                                 .send(Err(Error::Client("Disconnected from server".to_string())));
                         }
                     }
-                    Status::EnteringMonitor => self.messages.push_back(msg),
+                    Status::EnteringMonitor => self.messages_to_send.push_back(msg),
                     Status::Monitor => {
                         for command in &msg.commands {
                             if command.name == "RESET" {
                                 self.status = Status::LeavingMonitor;
                             }
                         }
-                        self.messages.push_back(msg);
+                        self.messages_to_send.push_back(msg);
                     }
                     Status::LeavingMonitor => {
-                        self.messages.push_back(msg);
+                        self.messages_to_send.push_back(msg);
                     }
                 }
             } else {
@@ -159,7 +158,7 @@ impl NetworkHandler {
         }
 
         self.send_messages().await;
-        self.messages.clear();
+        self.messages_to_send.clear();
 
         !is_channel_closed
     }
@@ -167,7 +166,7 @@ impl NetworkHandler {
     async fn send_messages(&mut self) {
         if log_enabled!(Level::Debug) {
             let num_commands = self
-                .messages
+                .messages_to_send
                 .iter()
                 .fold(0, |sum, msg| sum + msg.commands.len());
             if num_commands > 1 {
@@ -175,15 +174,12 @@ impl NetworkHandler {
             }
         }
 
-        let mut num_value_senders = 0;
+        let mut commands_to_write = SmallVec::<[&Command; 10]>::new(); 
+        let mut commands_to_receive = SmallVec::<[usize; 10]>::new(); 
 
-        let mut commands_to_write = SmallVec::<[Command; 10]>::new();
-
-        while let Some(msg) = self.messages.pop_front() {
-            let commands = msg.commands;
-            let value_sender = Some(msg.value_sender);
-
-            let num_commands = commands.len();
+        for msg in self.messages_to_send.iter() {
+            let commands = &msg.commands;
+            let mut num_commands_to_receive: usize = 0;
 
             for command in commands.into_iter() {
                 if command.name == "CLIENT" {
@@ -204,27 +200,37 @@ impl NetworkHandler {
                     }
                 }
 
+                if self.is_reply_on {
+                    num_commands_to_receive += 1;
+                }
+
                 commands_to_write.push(command);
             }
 
-            if self.is_reply_on {
-                if let Some(value_sender) = value_sender {
-                    self.value_senders
-                        .push_back(value_sender.map(|vs| (vs, num_commands)));
-                    num_value_senders += 1;
-                }
-            }
+            commands_to_receive.push(num_commands_to_receive);
         }
 
         if let Err(e) = self
             .connection
-            .write_batch(commands_to_write.iter())
+            .write_batch(commands_to_write.into_iter())
             .await
         {
-            for _ in 0..num_value_senders {
-                if let Some(Some((value_sender, _num_commands))) = self.value_senders.pop_front() {
-                    let _result = value_sender.send(Err(Error::Client(e.to_string())));
+            let mut idx: usize = 0;
+            while let Some(msg) = self.messages_to_send.pop_front() {
+                if let Some(value_sender) = msg.value_sender {
+                    if commands_to_receive[idx] > 0 {
+                        let _result = value_sender.send(Err(Error::Client(e.to_string())));
+                    }
                 }
+                idx += 1;
+            }
+        } else {
+            let mut idx: usize = 0;
+            while let Some(msg) = self.messages_to_send.pop_front() {
+                if commands_to_receive[idx] > 0 {
+                    self.messages_to_receive.push_back((msg, commands_to_receive[idx]));
+                }
+                idx += 1;
             }
         }
     }
@@ -305,25 +311,29 @@ impl NetworkHandler {
     }
 
     fn receive_result(&mut self, value: Result<Value>) {
-        match self.value_senders.front_mut() {
-            Some(Some((_, num_commands))) => {
+        match self.messages_to_receive.front_mut() {
+            Some((_, num_commands)) => {
                 if *num_commands == 1 || value.is_err() {
-                    if let Some(Some((value_sender, _))) = self.value_senders.pop_front() {
-                        match value {
-                            Ok(value) => {
-                                let pending_replies = self.pending_replies.take();
+                    if let Some((msg, _)) = self.messages_to_receive.pop_front() {
+                        if let Some(value_sender) = msg.value_sender {
+                            match value {
+                                Ok(value) => {
+                                    let pending_replies = self.pending_replies.take();
 
-                                if let Some(mut pending_replies) = pending_replies {
-                                    pending_replies.push(value);
-                                    let _result = value_sender
-                                        .send(Ok(Value::Array(Array::Vec(pending_replies))));
-                                } else {
-                                    let _result = value_sender.send(Ok(value));
+                                    if let Some(mut pending_replies) = pending_replies {
+                                        pending_replies.push(value);
+                                        let _result = value_sender
+                                            .send(Ok(Value::Array(Array::Vec(pending_replies))));
+                                    } else {
+                                        let _result = value_sender.send(Ok(value));
+                                    }
+                                }
+                                Err(_) => {
+                                    let _result = value_sender.send(value);
                                 }
                             }
-                            Err(_) => {
-                                let _result = value_sender.send(value);
-                            }
+                        } else {
+                            debug!("forget value {value:?}"); // fire & forget
                         }
                     }
                 } else {
@@ -339,12 +349,7 @@ impl NetworkHandler {
                     }
                 }
             }
-            Some(None) => {
-                self.value_senders.pop_front();
-                debug!("forget value {value:?}"); // fire & forget
-            }
             None => {
-                self.value_senders.pop_front();
                 // disconnection errors could end here but ok values should match a value_sender instance
                 assert!(value.is_err(), "Received unexpected message: {value:?}",);
             }
@@ -470,8 +475,8 @@ impl NetworkHandler {
     }
 
     pub(crate) async fn reconnect(&mut self) -> Result<()> {
-        while let Some(value_sender) = self.value_senders.pop_front() {
-            if let Some((value_sender, _num_commands)) = value_sender {
+        while let Some((msg, _)) = self.messages_to_receive.pop_front() {
+            if let Some(value_sender) = msg.value_sender {
                 let _result =
                     value_sender.send(Err(Error::Client("Disconnected from server".to_string())));
             }

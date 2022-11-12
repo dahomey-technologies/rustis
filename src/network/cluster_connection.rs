@@ -5,7 +5,7 @@ use crate::{
     StandaloneConnection,
 };
 use futures::{channel::mpsc, SinkExt, Stream, StreamExt};
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use rand::Rng;
 use smallvec::{smallvec, SmallVec};
 use std::{
@@ -75,6 +75,7 @@ impl Stream for RequestStream {
 /// read & write_batch functions are implemented following Redis Command Tips
 /// See <https://redis.io/docs/reference/command-tips/>
 pub struct ClusterConnection {
+    cluster_config: ClusterConfig,
     config: Config,
     shards: Vec<Shard>,
     slot_ranges: Vec<SlotRange>,
@@ -88,70 +89,7 @@ impl ClusterConnection {
         cluster_config: &ClusterConfig,
         config: &Config,
     ) -> Result<ClusterConnection> {
-        let mut shard_info_list: Option<Vec<ClusterShardResult>> = None;
-
-        for node_config in &cluster_config.nodes {
-            match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
-                Ok(mut connection) => match connection.cluster_shards().await {
-                    Ok(si) => {
-                        shard_info_list = Some(si);
-                        break;
-                    }
-                    Err(e) => warn!(
-                        "Cannot execute `cluster_shards` on node ({}:{}): {}",
-                        node_config.0, node_config.1, e
-                    ),
-                },
-                Err(e) => warn!(
-                    "Cannot connect to node ({}:{}): {}",
-                    node_config.0, node_config.1, e
-                ),
-            }
-        }
-
-        debug!("Discovering cluser nodes...");
-
-        let shard_info_list = if let Some(shard_info_list) = shard_info_list {
-            shard_info_list
-        } else {
-            return Err(Error::Client("Cluster misconfiguration".to_owned()));
-        };
-
-        let mut shards = Vec::<Shard>::new();
-        let mut slot_ranges = Vec::<SlotRange>::new();
-
-        for (shard_index, shard_info) in shard_info_list.into_iter().enumerate() {
-            let master_info = if let Some(master_info) = shard_info.nodes.into_iter().next() {
-                master_info
-            } else {
-                return Err(Error::Client("Cluster misconfiguration".to_owned()));
-            };
-
-            let port = match (master_info.port, master_info.tls_port) {
-                (None, Some(port)) => port,
-                (Some(port), None) => port,
-                _ => {
-                    return Err(Error::Client("Cluster misconfiguration".to_owned()));
-                }
-            };
-
-            let connection = StandaloneConnection::connect(&master_info.ip, port, config).await?;
-
-            shards.push(Shard {
-                nodes: vec![Node {
-                    id: master_info.id,
-                    address: (master_info.ip, port),
-                    connection,
-                }],
-            });
-
-            slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
-                slot_range: *s,
-                shard_index,
-            }));
-        }
-
-        slot_ranges.sort_by_key(|s| s.slot_range.0);
+        let (mut shards, slot_ranges) = connect_to_cluster(cluster_config, config).await?;
 
         let command_info_manager =
             CommandInfoManager::initialize(&mut shards[0].nodes[0].connection).await?;
@@ -166,6 +104,7 @@ impl ClusterConnection {
         debug!("Cluster connected: shards={shards:?}, slot_ranges={slot_ranges:?}");
 
         Ok(ClusterConnection {
+            cluster_config: cluster_config.clone(),
             config: config.clone(),
             shards,
             slot_ranges,
@@ -175,7 +114,23 @@ impl ClusterConnection {
         })
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, _retry_reasons: &[RetryReason]) -> Result<()> {
+    pub async fn write_batch(
+        &mut self,
+        commands: impl Iterator<Item = &Command>,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
+        if retry_reasons.iter().any(|r| {
+            matches!(
+                r,
+                RetryReason::Moved {
+                    hash_slot: _,
+                    address: _
+                }
+            )
+        }) {
+            self.reconnect().await?;
+        }
+
         for command in commands {
             debug!("Analyzing command {command:?}");
 
@@ -440,14 +395,14 @@ impl ClusterConnection {
 
                 if let Some(result) = result {
                     match &result {
-                        Err(Error::Redis(RedisError {
+                        Ok(Value::Error(RedisError {
                             kind: RedisErrorKind::Ask { hash_slot, address },
                             description: _,
                         })) => retry_reasons.push(RetryReason::Ask {
                             hash_slot: *hash_slot,
                             address: address.clone(),
                         }),
-                        Err(Error::Redis(RedisError {
+                        Ok(Value::Error(RedisError {
                             kind: RedisErrorKind::Moved { hash_slot, address },
                             description: _,
                         })) => retry_reasons.push(RetryReason::Moved {
@@ -467,6 +422,7 @@ impl ClusterConnection {
             }
 
             if !retry_reasons.is_empty() {
+                debug!("read failed and will be retried. reasons: {:?}", retry_reasons);
                 return Some(Err(Error::Retry(retry_reasons)));
             }
 
@@ -688,7 +644,14 @@ impl ClusterConnection {
     }
 
     pub async fn reconnect(&mut self) -> Result<()> {
-        todo!()
+        info!("Reconnecting to cluster...");
+        let (shards, slot_ranges) = connect_to_cluster(&self.cluster_config, &self.config).await?;
+        info!("Reconnected to cluster!");
+
+        self.shards = shards;
+        self.slot_ranges = slot_ranges;
+
+        Ok(())
 
         // TODO improve reconnection strategy with multiple retries
     }
@@ -776,4 +739,76 @@ impl ClusterConnection {
     fn crc16(str: &str) -> u16 {
         crc16::State::<crc16::XMODEM>::calculate(str.as_bytes())
     }
+}
+
+async fn connect_to_cluster(
+    cluster_config: &ClusterConfig,
+    config: &Config,
+) -> Result<(Vec<Shard>, Vec<SlotRange>)> {
+    debug!("Discovering cluster shard and slots...");
+
+    let mut shard_info_list: Option<Vec<ClusterShardResult>> = None;
+
+    for node_config in &cluster_config.nodes {
+        match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
+            Ok(mut connection) => match connection.cluster_shards().await {
+                Ok(si) => {
+                    shard_info_list = Some(si);
+                    break;
+                }
+                Err(e) => warn!(
+                    "Cannot execute `cluster_shards` on node ({}:{}): {}",
+                    node_config.0, node_config.1, e
+                ),
+            },
+            Err(e) => warn!(
+                "Cannot connect to node ({}:{}): {}",
+                node_config.0, node_config.1, e
+            ),
+        }
+    }
+
+    let shard_info_list = if let Some(shard_info_list) = shard_info_list {
+        shard_info_list
+    } else {
+        return Err(Error::Client("Cluster misconfiguration".to_owned()));
+    };
+
+    let mut shards = Vec::<Shard>::new();
+    let mut slot_ranges = Vec::<SlotRange>::new();
+
+    for (shard_index, shard_info) in shard_info_list.into_iter().enumerate() {
+        let master_info = if let Some(master_info) = shard_info.nodes.into_iter().next() {
+            master_info
+        } else {
+            return Err(Error::Client("Cluster misconfiguration".to_owned()));
+        };
+
+        let port = match (master_info.port, master_info.tls_port) {
+            (None, Some(port)) => port,
+            (Some(port), None) => port,
+            _ => {
+                return Err(Error::Client("Cluster misconfiguration".to_owned()));
+            }
+        };
+
+        let connection = StandaloneConnection::connect(&master_info.ip, port, config).await?;
+
+        shards.push(Shard {
+            nodes: vec![Node {
+                id: master_info.id,
+                address: (master_info.ip, port),
+                connection,
+            }],
+        });
+
+        slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
+            slot_range: *s,
+            shard_index,
+        }));
+    }
+
+    slot_ranges.sort_by_key(|s| s.slot_range.0);
+
+    Ok((shards, slot_ranges))
 }

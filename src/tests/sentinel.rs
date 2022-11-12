@@ -239,7 +239,7 @@ async fn sentinel_sentinels() -> Result<()> {
 
     let result = client.sentinel_sentinels("myservice").await?;
     assert!(!result.is_empty());
-    assert_eq!("sentinel", result[0].flags);
+    assert!(result[0].flags.contains("sentinel"));
     assert_eq!(26379, result[0].port);
 
     Ok(())

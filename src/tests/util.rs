@@ -95,13 +95,25 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
 pub(crate) async fn get_sentinel_test_client() -> Result<Client> {
     log_try_init();
     let host = get_default_host();
-    Client::connect(format!("redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice")).await
+    Client::connect(format!("redis://{host}:26379")).await
+}
+
+pub(crate) async fn get_sentinel_master_test_client() -> Result<Client> {
+    log_try_init();
+    let host = get_default_host();
+    Client::connect(format!(
+        "redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice"
+    ))
+    .await
 }
 
 pub(crate) async fn get_cluster_test_client() -> Result<Client> {
     log_try_init();
     let host = get_default_host();
-    Client::connect(format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002")).await
+    Client::connect(format!(
+        "redis+cluster://{host}:7000,{host}:7001,{host}:7002"
+    ))
+    .await
 }
 
 pub fn log_try_init() {

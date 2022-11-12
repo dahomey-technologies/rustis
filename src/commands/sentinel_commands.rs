@@ -1,13 +1,46 @@
 use crate::{
     prepare_command,
-    resp::{cmd, BulkString},
+    resp::{cmd, BulkString, FromValue, FromKeyValueValueArray},
     PreparedCommand,
 };
 
 /// A group of Redis commands related to Sentinel
 /// # See Also
-/// [Sentinel Commands](https://redis.io/docs/manual/sentinel/#sentinel-commands)
+/// [Sentinel Commands](https://redis.io/docs/management/sentinel/#sentinel-commands)
 pub trait SentinelCommands {
+    /// Get the current value of a global Sentinel configuration parameter.
+    /// The specified name may be a wildcard.
+    /// Similar to the Redis [`config_get`](crate::ServerCommands::config_get) command.
+    #[must_use]
+    fn sentinel_config_get<N, RN, RV, R>(&mut self, name: N) -> PreparedCommand<Self, R>
+    where
+        Self: Sized,
+        N: Into<BulkString>,
+        RN: FromValue,
+        RV: FromValue,
+        R: FromKeyValueValueArray<RN, RV>
+    {
+        prepare_command(self, cmd("SENTINEL").arg("CONFIG").arg("GET").arg(name))
+    }
+
+    /// Set the value of a global Sentinel configuration parameter.
+    #[must_use]
+    fn sentinel_config_set<N, V>(&mut self, name: N, value: V) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+        N: Into<BulkString>,
+        V: Into<BulkString>,
+    {
+        prepare_command(
+            self,
+            cmd("SENTINEL")
+                .arg("CONFIG")
+                .arg("SET")
+                .arg(name)
+                .arg(value),
+        )
+    }
+
     /// Return the ip and port number of the master with that name.
     ///
     /// If a failover is in progress or terminated successfully for this master,

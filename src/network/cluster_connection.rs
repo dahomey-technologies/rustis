@@ -131,6 +131,14 @@ impl ClusterConnection {
             self.reconnect().await?;
         }
 
+        let ask_reasons = retry_reasons.iter().filter_map(|r| {
+            if let RetryReason::Ask { hash_slot, address } = r {
+                Some((*hash_slot, address.clone()))
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+
         for command in commands {
             debug!("Analyzing command {command:?}");
 
@@ -171,7 +179,7 @@ impl ClusterConnection {
                             .await?;
                     }
                     RequestPolicy::MultiShard => {
-                        self.request_policy_multi_shard(command, &command_name, keys, slots)
+                        self.request_policy_multi_shard(command, &command_name, keys, slots, &ask_reasons)
                             .await?;
                     }
                     RequestPolicy::Special => {
@@ -179,7 +187,7 @@ impl ClusterConnection {
                     }
                 }
             } else {
-                self.no_request_policy(command, command_name, keys, slots)
+                self.no_request_policy(command, command_name, keys, slots, &ask_reasons)
                     .await?;
             }
         }
@@ -257,31 +265,39 @@ impl ClusterConnection {
         command_name: &str,
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
+        ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        let mut shard_slot_keys = (0..keys.len())
+        let mut shard_slot_keys_ask = (0..keys.len())
             .map(|i| {
+                let (shard_index, should_ask) = self.get_shard_index_by_slot(slots[i], ask_reasons);
                 (
-                    self.get_shard_index_by_slot(slots[i]),
+                    shard_index,
                     slots[i],
                     keys[i].clone(),
+                    should_ask,
                 )
             })
             .collect::<Vec<_>>();
 
-        shard_slot_keys.sort();
-        trace!("shard_slot_keys: {shard_slot_keys:?}");
+        shard_slot_keys_ask.sort();
+        trace!("shard_slot_keys_ask: {shard_slot_keys_ask:?}");
 
         let mut last_slot = u16::MAX;
         let mut current_slot_keys = SmallVec::<[String; 10]>::new();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
         let mut last_shard_index = 0;
+        let mut last_should_ask = false;
 
         let mut connection: &mut StandaloneConnection =
             &mut self.shards[last_shard_index].nodes[0].connection;
 
-        for (shard_index, slot, key) in &shard_slot_keys {
+        for (shard_index, slot, key, should_ask) in &shard_slot_keys_ask {
             if *slot != last_slot {
                 if !current_slot_keys.is_empty() {
+                    if last_should_ask {
+                        connection.asking().await?;
+                    }
+
                     let shard_command = self
                         .command_info_manager
                         .prepare_command_for_shard(command, current_slot_keys.iter())?;
@@ -296,6 +312,7 @@ impl ClusterConnection {
                 }
 
                 last_slot = *slot;
+                last_should_ask = *should_ask;
             }
 
             current_slot_keys.push(key.clone());
@@ -305,6 +322,11 @@ impl ClusterConnection {
                 last_shard_index = *shard_index;
             }
         }
+
+        if last_should_ask {
+            connection.asking().await?;
+        }
+
         let shard_command = self
             .command_info_manager
             .prepare_command_for_shard(command, current_slot_keys.iter())?;
@@ -336,17 +358,21 @@ impl ClusterConnection {
         command_name: String,
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
+        ask_reasons: &[(u16, (String, u16))]
     ) -> Result<()> {
         // test if all slots are equal
         if slots.windows(2).all(|s| s[0] == s[1]) {
-            let shard_index = if slots.is_empty() {
-                rand::thread_rng().gen_range(0..self.shards.len())
+            let (shard_index, should_ask) = if slots.is_empty() {
+                (rand::thread_rng().gen_range(0..self.shards.len()), false)
             } else {
-                self.get_shard_index_by_slot(slots[0])
+                self.get_shard_index_by_slot(slots[0], ask_reasons)
             };
 
             let connection = &mut self.shards[shard_index].nodes[0].connection;
 
+            if should_ask {
+                connection.asking().await?;
+            }
             connection.write(command).await?;
 
             let request_info = RequestInfo {
@@ -386,7 +412,7 @@ impl ClusterConnection {
             let mut sub_results =
                 Vec::<Result<Value>>::with_capacity(request_info.sub_requests.len());
             let mut is_none = false;
-            let mut retry_reasons = SmallVec::<[RetryReason; 5]>::new();
+            let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
             // make sure to read all response for each sub_request with no early return
             for sub_request in &request_info.sub_requests {
@@ -422,7 +448,10 @@ impl ClusterConnection {
             }
 
             if !retry_reasons.is_empty() {
-                debug!("read failed and will be retried. reasons: {:?}", retry_reasons);
+                debug!(
+                    "read failed and will be retried. reasons: {:?}",
+                    retry_reasons
+                );
                 return Some(Err(Error::Retry(retry_reasons)));
             }
 
@@ -461,7 +490,7 @@ impl ClusterConnection {
                     ResponsePolicy::AggLogicalAnd => {
                         self.response_policy_agg(
                             sub_results,
-                            |a, b| if a == 1 && b == 1 { 1 } else { 0 },
+                            |a, b| i64::from(a == 1 && b == 1),
                         )
                         .await
                     }
@@ -697,20 +726,28 @@ impl ClusterConnection {
         Ok(())
     }
 
-    fn get_shard_index_by_slot(&mut self, slot: u16) -> usize {
-        self.slot_ranges[self
-            .slot_ranges
-            .binary_search_by(|s| {
-                if s.slot_range.0 > slot {
-                    Ordering::Greater
-                } else if s.slot_range.1 < slot {
-                    Ordering::Less
-                } else {
-                    Ordering::Equal
-                }
-            })
-            .unwrap()]
-        .shard_index
+    fn get_shard_index_by_slot(&mut self, slot: u16, ask_reasons: &[(u16, (String, u16))]) -> (usize, bool) {
+        let ask_reason = ask_reasons.iter().find(|(hash_slot, (_ip, _port))| *hash_slot == slot);
+
+        if let Some((_hash_slot, address)) = ask_reason {
+            let shard_index = self.shards.iter().position(|s| s.nodes.iter().any(|n| n.address == *address)).unwrap();
+            (shard_index, true)
+        } else {
+            let shard_index = self.slot_ranges[self
+                .slot_ranges
+                .binary_search_by(|s| {
+                    if s.slot_range.0 > slot {
+                        Ordering::Greater
+                    } else if s.slot_range.1 < slot {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .unwrap()]
+            .shard_index;
+            (shard_index, false)
+        }
     }
 
     fn hash_slots(keys: &[String]) -> SmallVec<[u16; 10]> {

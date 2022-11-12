@@ -41,7 +41,7 @@ pub enum Error {
     /// Raised by the TLS library
     Tls(String),
     /// Internal error to trigger retry sending the command
-    Retry(SmallVec<[RetryReason;5]>)
+    Retry(SmallVec<[RetryReason;1]>)
 }
 
 impl std::fmt::Display for Error {

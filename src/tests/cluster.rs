@@ -1,10 +1,10 @@
 use crate::{
     sleep, spawn,
     tests::get_cluster_test_client,
-    CallBuilder, Client, ClusterCommands,
+    CallBuilder, Client, ClusterCommands, ClusterNodeResult,
     ClusterSetSlotSubCommand::{Importing, Migrating, Node},
-    ClusterShardResult, Error, FlushingMode, GenericCommands, RedisError, RedisErrorKind, Result,
-    ScriptingCommands, ServerCommands, StringCommands,
+    ClusterShardResult, Error, FlushingMode, GenericCommands, MigrateOptions, RedisError,
+    RedisErrorKind, Result, ScriptingCommands, ServerCommands, StringCommands,
 };
 use serial_test::serial;
 use std::collections::HashSet;
@@ -186,8 +186,16 @@ async fn moved() -> Result<()> {
 
     let slot = client.cluster_keyslot("key").await?;
 
-    let src_node = &shard_info_list.iter().find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1)).unwrap().nodes[0];
-    let dst_node = &shard_info_list.iter().find(|s| s.slots.iter().any(|s| s.0 == 0)).unwrap().nodes[0];
+    let src_node = &shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .unwrap()
+        .nodes[0];
+    let dst_node = &shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 == 0))
+        .unwrap()
+        .nodes[0];
     let src_id = &src_node.id;
     let dst_id = &dst_node.id;
     let mut src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
@@ -272,6 +280,140 @@ async fn moved() -> Result<()> {
             },
         )
         .await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ask() -> Result<()> {
+    let mut client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let shard_info_list: Vec<ClusterShardResult> = client.cluster_shards().await?;
+
+    let slot = client.cluster_keyslot("key").await?;
+
+    let src_node: &ClusterNodeResult = &shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .unwrap()
+        .nodes[0];
+    let dst_node: &ClusterNodeResult = &shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 == 0))
+        .unwrap()
+        .nodes[0];
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let mut src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let mut dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+
+    // set key
+    client.set("key", "value").await?;
+
+    // migrate
+    dst_client
+        .cluster_setslot(
+            slot,
+            Importing {
+                node_id: src_id.clone(),
+            },
+        )
+        .await?;
+
+    src_client
+        .cluster_setslot(
+            slot,
+            Migrating {
+                node_id: dst_id.clone(),
+            },
+        )
+        .await?;
+
+    // migrate key
+    src_client
+        .migrate(
+            dst_node.ip.clone(),
+            dst_node.port.unwrap(),
+            "key",
+            0,
+            1000,
+            MigrateOptions::default(),
+        )
+        .await?;
+
+    // issue command on migrating slot
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+    client.del("key").await?;
+
+    // finish migration
+    dst_client
+        .cluster_setslot(
+            slot,
+            Node {
+                node_id: dst_id.clone(),
+            },
+        )
+        .await?;
+
+    src_client
+        .cluster_setslot(
+            slot,
+            Node {
+                node_id: dst_id.clone(),
+            },
+        )
+        .await?;
+
+    client.set("key", "value").await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+    client.del("key").await?;
+
+    // migrate back
+    src_client
+        .cluster_setslot(
+            slot,
+            Importing {
+                node_id: dst_id.clone(),
+            },
+        )
+        .await?;
+
+    dst_client
+        .cluster_setslot(
+            slot,
+            Migrating {
+                node_id: src_id.clone(),
+            },
+        )
+        .await?;
+
+    src_client
+        .cluster_setslot(
+            slot,
+            Node {
+                node_id: src_id.clone(),
+            },
+        )
+        .await?;
+
+    dst_client
+        .cluster_setslot(
+            slot,
+            Node {
+                node_id: src_id.clone(),
+            },
+        )
+        .await?;
+
+    client.set("key", "value").await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+    client.del("key").await?;
 
     Ok(())
 }

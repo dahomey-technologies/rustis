@@ -211,7 +211,7 @@ impl Deref for BulkString {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            BulkString::Str(s) => *s,
+            BulkString::Str(s) => s,
             BulkString::String(s) => s,
             BulkString::Binary(s) => unsafe { core::str::from_utf8_unchecked(s) },
             BulkString::Integer(_) => unimplemented!(),

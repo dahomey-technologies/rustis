@@ -74,7 +74,7 @@ impl StandaloneConnection {
     }
 
     pub async fn write(&mut self, command: &Command) -> Result<()> {
-        debug!("Sending {command:?}");
+        debug!("[{}:{}] Sending {command:?}", self.host, self.port);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(feature = "tls")]
@@ -92,7 +92,7 @@ impl StandaloneConnection {
         };
 
         for command in commands {
-            debug!("Sending {command:?}");
+            debug!("[{}:{}] Sending {command:?}", self.host, self.port);
             command_encoder.encode(command, &mut self.buffer)?;
         }
 
@@ -115,12 +115,12 @@ impl StandaloneConnection {
                 match &value {
                     Ok(Value::Array(Array::Vec(array))) => {
                         if array.len() > 100 {
-                            debug!("Received result Array(Vec([...]))");
+                            debug!("[{}:{}] Received result Array(Vec([...]))", self.host, self.port);
                         } else {
-                            debug!("Received result {value:?}");
+                            debug!("[{}:{}] Received result {value:?}", self.host, self.port);
                         }
                     }
-                    _ => debug!("Received result {value:?}"),
+                    _ => debug!("[{}:{}] Received result {value:?}", self.host, self.port),
                 }
             }
             Some(value)

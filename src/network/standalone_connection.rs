@@ -99,7 +99,7 @@ impl StandaloneConnection {
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
             #[cfg(feature = "tls")]
-            Streams::TcpTls(_, framed_write) => framed_write.get_mut().write_all(buffer).await?,
+            Streams::TcpTls(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
         }
 
         Ok(())

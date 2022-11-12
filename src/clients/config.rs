@@ -68,51 +68,73 @@ impl Config {
         let mut hosts = hosts;
         let mut path_segments = path_segments.into_iter();
 
+        enum ServerType {
+            Standalone,
+            Sentinel,
+            Cluster,
+        }
+
         #[cfg(feature = "tls")]
-        let (tls_config, is_sentinel) = match scheme {
-            "redis" => (None, false),
-            "rediss" => (Some(TlsConfig::default()), false),
-            "redis+sentinel" => (None, true),
-            "rediss+sentinel" => (Some(TlsConfig::default()), true),
+        let (tls_config, server_type) = match scheme {
+            "redis" => (None, ServerType::Standalone),
+            "rediss" => (Some(TlsConfig::default()), ServerType::Standalone),
+            "redis+sentinel" => (None, ServerType::Sentinel),
+            "rediss+sentinel" => (Some(TlsConfig::default()), ServerType::Sentinel),
+            "redis+cluster" => (None, ServerType::Cluster),
+            "rediss+cluster" => (Some(TlsConfig::default()), ServerType::Cluster),
             _ => {
                 return None;
             }
         };
 
         #[cfg(not(feature = "tls"))]
-        let is_sentinel = match scheme {
-            "redis" => false,
-            "redis+sentinel" => true,
+        let server_type = match scheme {
+            "redis" => ServerType::Standalone,
+            "redis+sentinel" => ServerType::Sentinel,
+            "redis+cluster" => ServerType::Cluster,
             _ => {
                 return None;
             }
         };
 
-        let server = if is_sentinel {
-            let instances = hosts
-                .iter()
-                .map(|(host, port)| ((*host).to_owned(), *port))
-                .collect::<Vec<_>>();
-
-            let service_name = match path_segments.next() {
-                Some(service_name) => service_name.to_owned(),
-                None => {
+        let server = match server_type {
+            ServerType::Standalone => {
+                if hosts.len() > 1 {
                     return None;
+                } else {
+                    let (host, port) = hosts.pop()?;
+                    ServerConfig::Standalone {
+                        host: host.to_owned(),
+                        port,
+                    }
                 }
-            };
+            }
+            ServerType::Sentinel => {
+                let instances = hosts
+                    .iter()
+                    .map(|(host, port)| ((*host).to_owned(), *port))
+                    .collect::<Vec<_>>();
 
-            ServerConfig::Sentinel(SentinelConfig {
-                instances,
-                service_name,
-                ..Default::default()
-            })
-        } else if hosts.len() > 1 {
-            return None;
-        } else {
-            let (host, port) = hosts.pop()?;
-            ServerConfig::Single {
-                host: host.to_owned(),
-                port,
+                let service_name = match path_segments.next() {
+                    Some(service_name) => service_name.to_owned(),
+                    None => {
+                        return None;
+                    }
+                };
+
+                ServerConfig::Sentinel(SentinelConfig {
+                    instances,
+                    service_name,
+                    ..Default::default()
+                })
+            }
+            ServerType::Cluster => {
+                let nodes = hosts
+                    .iter()
+                    .map(|(host, port)| ((*host).to_owned(), *port))
+                    .collect::<Vec<_>>();
+
+                ServerConfig::Cluster(ClusterConfig { nodes })
             }
         };
 
@@ -230,21 +252,26 @@ impl ToString for Config {
         #[cfg(feature = "tls")]
         let mut s = if self.tls_config.is_some() {
             match &self.server {
-                ServerConfig::Single { host: _, port: _ } => "rediss://",
+                ServerConfig::Standalone { host: _, port: _ } => "rediss://",
                 ServerConfig::Sentinel(_) => "rediss+sentinel://",
+                ServerConfig::Cluster(_) => "rediss+cluster://",
             }
         } else {
             match &self.server {
-                ServerConfig::Single { host: _, port: _ } => "redis://",
+                ServerConfig::Standalone { host: _, port: _ } => "redis://",
                 ServerConfig::Sentinel(_) => "redis+sentinel://",
+                ServerConfig::Cluster(_) => "redis+cluster://",
             }
-        }.to_owned();
+        }
+        .to_owned();
 
         #[cfg(not(feature = "tls"))]
         let mut s = match &self.server {
-            ServerConfig::Single { host: _, port: _ } => "redis://",
+            ServerConfig::Standalone { host: _, port: _ } => "redis://",
             ServerConfig::Sentinel(_) => "redis+sentinel://",
-        }.to_owned();
+            ServerConfig::Cluster(_) => "redis+cluster://",
+        }
+        .to_owned();
 
         if let Some(username) = &self.username {
             s.push_str(username);
@@ -257,7 +284,7 @@ impl ToString for Config {
         }
 
         match &self.server {
-            ServerConfig::Single { host, port } => {
+            ServerConfig::Standalone { host, port } => {
                 s.push_str(host);
                 s.push(':');
                 s.push_str(&port.to_string());
@@ -277,6 +304,15 @@ impl ToString for Config {
                 s.push('/');
                 s.push_str(service_name);
             }
+            ServerConfig::Cluster(ClusterConfig { nodes }) => {
+                s.push_str(
+                    &nodes
+                        .iter()
+                        .map(|(host, port)| format!("{host}:{port}"))
+                        .collect::<Vec<String>>()
+                        .join(","),
+                );
+            }
         }
 
         if self.database > 0 {
@@ -292,16 +328,17 @@ impl ToString for Config {
 #[derive(Clone)]
 pub enum ServerConfig {
     /// Connection to a simple server (no master-replica, no cluster)
-    Single {
+    Standalone {
         host: String,
         port: u16,
     },
     Sentinel(SentinelConfig),
+    Cluster(ClusterConfig),
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        ServerConfig::Single {
+        ServerConfig::Standalone {
             host: "127.0.0.1".to_owned(),
             port: 6379,
         }
@@ -329,6 +366,13 @@ impl Default for SentinelConfig {
             wait_beetween_failures: Duration::from_millis(250),
         }
     }
+}
+
+/// Configuration for connecting to a Redis Cluster
+#[derive(Clone, Default)]
+pub struct ClusterConfig {
+    /// An array of `(host, port)` tuples for each known cluster node.
+    pub nodes: Vec<(String, u16)>,
 }
 
 /// Config for TLS.
@@ -441,7 +485,7 @@ impl IntoConfig for Config {
 impl<T: Into<String>> IntoConfig for (T, u16) {
     fn into_config(self) -> Result<Config> {
         Ok(Config {
-            server: ServerConfig::Single {
+            server: ServerConfig::Standalone {
                 host: self.0.into(),
                 port: self.1,
             },

@@ -22,6 +22,10 @@ where
             command,
         }
     }
+
+    pub fn command(&self) -> &Command {
+        &self.command
+    }
 }
 
 pub fn prepare_command<T, R: FromValue>(

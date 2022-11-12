@@ -7,22 +7,19 @@ use tokio_util::codec::Encoder;
 
 pub(crate) struct CommandEncoder;
 
-impl Encoder<Command> for CommandEncoder {
+impl Encoder<&Command> for CommandEncoder {
     type Error = Error;
 
-    fn encode(&mut self, item: Command, dst: &mut BytesMut) -> Result<()> {
-        encode_command(&item, dst);
+    fn encode(&mut self, command: &Command, buf: &mut BytesMut) -> Result<()> {
+        buf.put_u8(b'*');
+        encode_integer(command.args.len() as i64 + 1, buf);
+        encode_crlf(buf);
+    
+        encode_bulkstring(&BulkString::from(command.name), buf);
+        encode_command_args(&command.args, buf);
+
         Ok(())
     }
-}
-
-fn encode_command(command: &Command, buf: &mut BytesMut) {
-    buf.put_u8(b'*');
-    encode_integer(command.args.len() as i64 + 1, buf);
-    encode_crlf(buf);
-
-    encode_bulkstring(&BulkString::from(command.name), buf);
-    encode_command_args(&command.args, buf);
 }
 
 fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {

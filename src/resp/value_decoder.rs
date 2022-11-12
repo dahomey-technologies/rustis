@@ -37,8 +37,8 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
         b':' => Ok(decode_integer(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b',' => Ok(decode_double(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
-        b'+' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s), pos))),
-        b'-' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::Error(s), pos))),
+        b'+' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s.to_owned()), pos))),
+        b'-' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::Error(s.into()), pos))),
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
@@ -117,7 +117,7 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> 
     }
 }
 
-fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(String, usize)>> {
+fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(&str, usize)>> {
     let len = buf.len();
     let mut pos = idx;
     let mut cr = false;
@@ -129,7 +129,7 @@ fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(String, usize
             (false, b'\r') => cr = true,
             (true, b'\n') => {
                 return Ok(Some((
-                    String::from_utf8_lossy(&buf[idx..pos - 1]).into_owned(),
+                    std::str::from_utf8(&buf[idx..pos - 1])?,
                     pos + 1,
                 )))
             }

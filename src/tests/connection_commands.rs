@@ -2,8 +2,8 @@ use crate::{
     network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientKillOptions,
     ClientListOptions, ClientPauseMode, ClientPreparedCommand, ClientReplyMode,
     ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error,
-    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, Result,
-    ServerCommands, StringCommands,
+    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, RedisError,
+    RedisErrorKind, Result, ServerCommands, StringCommands, PipelinePreparedCommand,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -15,10 +15,22 @@ async fn auth() -> Result<()> {
     let mut client = get_test_client().await?;
 
     let result = client.auth(Some("username"), "password").await;
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("WRONGPASS")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::WrongPass,
+            description: _
+        }))
+    ));
 
     let result = client.auth::<&str, &str>(None, "password").await;
-    assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("ERR AUTH")));
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -133,11 +145,27 @@ async fn client_reply() -> Result<()> {
     let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
+    // single command
     client.client_reply(ClientReplyMode::Off).forget()?;
     client.set("key", "value").forget()?;
     client.client_reply(ClientReplyMode::On).await?;
-    let value: String = client.get::<&str, String>("key").await?;
+    let value: String = client.get("key").await?;
     assert_eq!("value", value);
+
+    // pipeline
+    let mut pipeline = client.create_pipeline();
+    pipeline.client_reply(ClientReplyMode::Off).forget();
+    pipeline.set("key1", "value1").forget();
+    pipeline.set("key2", "value2").forget();
+    pipeline.set("key3", "value3").forget();
+    pipeline.client_reply(ClientReplyMode::On).queue();
+    pipeline.execute::<()>().await?;
+
+    let values: Vec<String> = client.mget(["key1", "key2", "key3"]).await?;
+    assert_eq!(3, values.len());
+    assert_eq!("value1", values[0]);
+    assert_eq!("value2", values[1]);
+    assert_eq!("value3", values[2]);
 
     Ok(())
 }
@@ -293,7 +321,13 @@ async fn client_unblock() -> Result<()> {
 
     spawn(async move {
         let result = client1.wait(2, 10000).await;
-        assert!(matches!(result, Err(Error::Redis(e)) if e.starts_with("UNBLOCKED")));
+        matches!(
+            result,
+            Err(Error::Redis(RedisError {
+                kind: RedisErrorKind::Unblocked,
+                description: _
+            }))
+        )
     });
 
     sleep(std::time::Duration::from_millis(100)).await;

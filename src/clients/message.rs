@@ -1,4 +1,6 @@
-use crate::{resp::Command, MonitorSender, PubSubSender, ValueSender};
+use smallvec::SmallVec;
+
+use crate::{resp::Command, MonitorSender, PubSubSender, ValueSender, RetryReason};
 
 #[allow(clippy::large_enum_variant)] 
 #[derive(Debug)]
@@ -79,6 +81,7 @@ pub(crate) struct Message {
     pub value_sender: Option<ValueSender>,
     pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
     pub monitor_sender: Option<MonitorSender>,
+    pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
 }
 
 impl Message {
@@ -88,6 +91,7 @@ impl Message {
             value_sender: Some(value_sender),
             pub_sub_senders: None,
             monitor_sender: None,
+            retry_reasons: None,
         }
     }
 
@@ -97,6 +101,7 @@ impl Message {
             value_sender: None,
             pub_sub_senders: None,
             monitor_sender: None,
+            retry_reasons: None,
         }
     }
 
@@ -106,6 +111,7 @@ impl Message {
             value_sender: Some(value_sender),
             pub_sub_senders: None,
             monitor_sender: None,
+            retry_reasons: None,
         }
     }
 
@@ -119,6 +125,7 @@ impl Message {
             value_sender: Some(value_sender),
             pub_sub_senders: Some(pub_sub_senders),
             monitor_sender: None,
+            retry_reasons: None,
         }
     }
 
@@ -132,6 +139,7 @@ impl Message {
             value_sender: Some(value_sender),
             pub_sub_senders: None,
             monitor_sender: Some(monitor_sender),
+            retry_reasons: None,
         }
     }
 }

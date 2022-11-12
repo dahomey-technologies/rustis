@@ -973,7 +973,7 @@ impl IntoArgs for AclLogOptions {
 }
 
 /// Command info result for the [`command`](crate::ServerCommands::command) command.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandInfo {
     /// This is the command's name in lowercase.
     pub name: String,
@@ -1099,7 +1099,7 @@ impl FromValue for CommandInfo {
 
 /// Get additional information about a command
 /// See <https://redis.io/docs/reference/command-tips/>
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CommandTip {
     NonDeterministricOutput,
     NonDeterministricOutputOrder,
@@ -1131,7 +1131,7 @@ impl FromValue for CommandTip {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RequestPolicy {
     AllNodes,
     AllShards,
@@ -1155,7 +1155,7 @@ impl FromStr for RequestPolicy {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ResponsePolicy {
     OneSucceeded,
     AllSucceeded,
@@ -1188,7 +1188,7 @@ impl FromStr for ResponsePolicy {
 }
 
 /// Key specifications of a command for the [`command`](crate::ServerCommands::command) command.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeySpecification {
     pub begin_search: BeginSearch,
     pub find_keys: FindKeys,
@@ -1214,7 +1214,7 @@ impl FromValue for KeySpecification {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BeginSearch {
     Index(usize),
     Keyword { keyword: String, start_from: isize },
@@ -1248,16 +1248,16 @@ impl FromValue for BeginSearch {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FindKeys {
     Range {
         last_key: isize,
         key_step: usize,
-        limit: isize,
+        limit: usize,
     },
     KeyEnum {
-        key_num_idx: isize,
-        first_key: isize,
+        key_num_idx: usize,
+        first_key: usize,
         key_step: usize,
     },
     Unknown,

@@ -1,5 +1,6 @@
 mod bitmap_commands;
 mod blocking_commands;
+mod cluster_commands;
 mod connection_commands;
 mod generic_commands;
 mod geo_commands;
@@ -20,6 +21,7 @@ mod transaction_commands;
 
 pub use bitmap_commands::*;
 pub use blocking_commands::*;
+pub use cluster_commands::*;
 pub use connection_commands::*;
 pub use generic_commands::*;
 pub use geo_commands::*;

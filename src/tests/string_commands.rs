@@ -1,7 +1,8 @@
 use crate::{
     resp::{BulkString, Value},
     tests::get_test_client,
-    Error, GenericCommands, GetExOptions, Result, SetCondition, SetExpiration, StringCommands,
+    Error, GenericCommands, GetExOptions, RedisError, RedisErrorKind, Result, SetCondition,
+    SetExpiration, StringCommands,
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};
@@ -43,9 +44,13 @@ async fn decr() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.decr("key").await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR value is not an integer or out of range")
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -70,9 +75,13 @@ async fn decrby() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.decrby("key", 2).await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR value is not an integer or out of range")
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -248,9 +257,13 @@ async fn incr() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.incr("key").await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR value is not an integer or out of range")
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }
@@ -275,9 +288,13 @@ async fn incrby() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.incrby("key", 2).await;
-    assert!(
-        matches!(result, Err(Error::Redis(e)) if e == "ERR value is not an integer or out of range")
-    );
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
 
     Ok(())
 }

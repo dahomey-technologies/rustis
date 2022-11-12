@@ -92,6 +92,13 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
     Client::connect(config).await
 }
 
+
+pub(crate) async fn get_cluster_test_client() -> Result<Client> {
+    log_try_init();
+    let host = get_default_host();
+    Client::connect(format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002")).await
+}
+
 pub fn log_try_init() {
     let _ = env_logger::builder()
         .format_target(false)

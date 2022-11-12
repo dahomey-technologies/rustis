@@ -1,12 +1,13 @@
 use crate::resp::BulkString;
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
     iter::{once, Once},
+    ops::Deref,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CommandArgs {
     Empty,
     Single(BulkString),
@@ -64,6 +65,58 @@ impl CommandArgs {
 impl Default for CommandArgs {
     fn default() -> Self {
         CommandArgs::Empty
+    }
+}
+
+impl<'a> IntoIterator for &'a CommandArgs {
+    type Item = &'a BulkString;
+    type IntoIter = CommandArgsIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            CommandArgs::Empty => CommandArgsIterator::Empty,
+            CommandArgs::Single(s) => CommandArgsIterator::Single(Some(s)),
+            CommandArgs::Array2(a) => CommandArgsIterator::Iter(a.iter()),
+            CommandArgs::Array3(a) => CommandArgsIterator::Iter(a.iter()),
+            CommandArgs::Array4(a) => CommandArgsIterator::Iter(a.iter()),
+            CommandArgs::Array5(a) => CommandArgsIterator::Iter(a.iter()),
+            CommandArgs::Vec(a) => CommandArgsIterator::Iter(a.iter()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum CommandArgsIterator<'a> {
+    Empty,
+    Single(Option<&'a BulkString>),
+    Iter(std::slice::Iter<'a, BulkString>),
+}
+
+impl<'a> Iterator for CommandArgsIterator<'a> {
+    type Item = &'a BulkString;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            CommandArgsIterator::Empty => None,
+            CommandArgsIterator::Single(s) => s.take(),
+            CommandArgsIterator::Iter(i) => i.next(),
+        }
+    }
+}
+
+impl Deref for CommandArgs {
+    type Target = [BulkString];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            CommandArgs::Empty => &[],
+            CommandArgs::Single(s) => std::slice::from_ref(s),
+            CommandArgs::Array2(a) => a,
+            CommandArgs::Array3(a) => a,
+            CommandArgs::Array4(a) => a,
+            CommandArgs::Array5(a) => a,
+            CommandArgs::Vec(v) => v,
+        }
     }
 }
 
@@ -171,8 +224,9 @@ where
     }
 }
 
-impl<T> IntoArgs for SmallVec<[T; 10]>
+impl<T, A> IntoArgs for SmallVec<A>
 where
+    A: smallvec::Array<Item = T>,
     T: IntoArgs,
 {
     #[inline]
@@ -359,6 +413,18 @@ where
     T: Into<BulkString>,
 {
     type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
+}
+
+impl<A, T> SingleArgOrCollection<T> for SmallVec<A>
+where
+    A: smallvec::Array<Item = T>,
+    T: Into<BulkString>,
+{
+    type IntoIter = smallvec::IntoIter<A>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)

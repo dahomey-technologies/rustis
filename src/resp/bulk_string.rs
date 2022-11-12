@@ -1,6 +1,7 @@
 use crate::{Error, Result};
-use std::fmt;
+use std::{fmt, ops::Deref, str::from_utf8_unchecked};
 
+#[derive(Clone)]
 pub enum BulkString {
     Str(&'static str),
     String(String),
@@ -41,6 +42,29 @@ impl BulkString {
             BulkString::Integer(_) | BulkString::F32(_) | BulkString::F64(_) | BulkString::Nil => {
                 unimplemented!()
             }
+        }
+    }
+
+    pub fn to_usize(&self) -> Result<usize> {
+        match self {
+            BulkString::Str(s) => match s.parse::<usize>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
+            BulkString::String(s) => match s.parse::<usize>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
+            BulkString::Binary(b) => unsafe {
+                match from_utf8_unchecked(b).parse::<usize>() {
+                    Ok(u) => Ok(u),
+                    Err(e) => Err(Error::Client(e.to_string())),
+                }
+            },
+            BulkString::Integer(i) => Ok(*i as usize),
+            BulkString::F32(f) => Ok(*f as usize),
+            BulkString::F64(f) => Ok(*f as usize),
+            BulkString::Nil => Ok(0),
         }
     }
 }
@@ -179,5 +203,35 @@ impl fmt::Debug for BulkString {
 impl Default for BulkString {
     fn default() -> Self {
         BulkString::Nil
+    }
+}
+
+impl Deref for BulkString {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            BulkString::Str(s) => s,
+            BulkString::String(s) => s,
+            BulkString::Binary(s) => unsafe { core::str::from_utf8_unchecked(s) },
+            BulkString::Integer(_) => unimplemented!(),
+            BulkString::F32(_) => unimplemented!(),
+            BulkString::F64(_) => unimplemented!(),
+            BulkString::Nil => "",
+        }
+    }
+}
+
+impl PartialEq<String> for BulkString {
+    fn eq(&self, other: &String) -> bool {
+        match self {
+            BulkString::Str(s) => other == *s,
+            BulkString::String(s) => other == s,
+            BulkString::Binary(s) => unsafe { other == core::str::from_utf8_unchecked(s) },
+            BulkString::Integer(i) => other == &i.to_string(),
+            BulkString::F32(f) => other == &f.to_string(),
+            BulkString::F64(f) => other == &f.to_string(),
+            BulkString::Nil => other.is_empty(),
+        }
     }
 }

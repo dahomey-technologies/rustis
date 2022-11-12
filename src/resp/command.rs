@@ -6,7 +6,7 @@ pub fn cmd(name: &'static str) -> Command {
     Command::new(name)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
     pub name: &'static str,
     pub args: CommandArgs,

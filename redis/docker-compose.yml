@@ -1,6 +1,7 @@
 version: "3.8"
 
 services:
+# Standalone
   redis-standalone:
     image: redis:alpine
     container_name: redis-standalone
@@ -10,6 +11,7 @@ services:
       - .:/config
     command: redis-server /config/standalone.conf
 
+# TLS
   redis-tls:
     image: docker.io/bitnami/redis
     container_name: redis-tls
@@ -27,6 +29,7 @@ services:
       - REDIS_TLS_PORT=6379
       - REDIS_TLS_AUTH_CLIENTS=no
 
+# Sentinel
   redis-master:
     image: redis:alpine
     container_name: redis-master
@@ -81,3 +84,101 @@ services:
       - redis-master
     environment:
       - HOST_IP="${HOST_IP}"
+
+# Cluster
+  redis-cluster:
+      image: 'redis:alpine'
+      command: redis-cli --cluster create "${HOST_IP}":7000 "${HOST_IP}":7001 "${HOST_IP}":7002 "${HOST_IP}":7003 "${HOST_IP}":7004 "${HOST_IP}":7005 --cluster-replicas 1 --cluster-yes
+      container_name: redis-cluster
+      depends_on:
+        - redis-node1
+        - redis-node2
+        - redis-node3
+        - redis-node4
+        - redis-node5
+        - redis-node6
+
+  redis-node1:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node1
+    container_name: redis-node1
+    ports:
+      - "7000:7000"
+      - "17000:17000"
+    environment:
+      - PORT=7000
+      - BUS_PORT=17000
+      - HOST_IP="${HOST_IP}"
+
+  redis-node2:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node2
+    container_name: redis-node2
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    environment:
+      - PORT=7001
+      - BUS_PORT=17001
+      - HOST_IP="${HOST_IP}"
+
+  redis-node3:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node3
+    container_name: redis-node3
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    environment:
+      - PORT=7002
+      - BUS_PORT=17002
+      - HOST_IP="${HOST_IP}"
+
+  redis-node4:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node4
+    container_name: redis-node4
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    environment:
+      - PORT=7003
+      - BUS_PORT=17003
+      - HOST_IP="${HOST_IP}"
+
+  redis-node5:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node5
+    container_name: redis-node5
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    environment:
+      - PORT=7004
+      - BUS_PORT=17004
+      - HOST_IP="${HOST_IP}"
+
+  redis-node6:
+    build:
+      context: .
+      dockerfile: ./cluster.dockerfile
+    image: redis-node6
+    container_name: redis-node6
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    environment:
+      - PORT=7005
+      - BUS_PORT=17005
+      - HOST_IP="${HOST_IP}"
+

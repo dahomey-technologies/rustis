@@ -135,7 +135,7 @@ impl<T> Future for JoinHandle<T> {
             #[cfg(feature = "tokio-runtime")]
             JoinHandle::Tokio(join_handle) => match join_handle.poll_unpin(cx) {
                 Poll::Ready(Ok(result)) => Poll::Ready(Ok(result)),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Redis(format!("JoinError: {e}")))),
+                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Client(format!("JoinError: {e}")))),
                 Poll::Pending => Poll::Pending,
             },
             #[cfg(feature = "async-std-runtime")]

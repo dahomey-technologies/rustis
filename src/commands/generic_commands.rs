@@ -4,7 +4,7 @@ use crate::{
         cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand,
+    Error, PreparedCommand, Result,
 };
 
 /// A group of generic Redis commands
@@ -196,7 +196,7 @@ pub trait GenericCommands {
         destination_db: usize,
         timeout: u64,
         options: MigrateOptions,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<Self, MigrateResult>
     where
         Self: Sized,
         H: Into<BulkString>,
@@ -887,5 +887,26 @@ impl ScanOptions {
 impl IntoArgs for ScanOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
+    }
+}
+
+/// Result for the [`migrate`](crate::GenericCommands::migrate) command
+pub enum MigrateResult {
+    /// key(s) successfully migrated
+    Ok,
+    /// no keys were found in the source instance.
+    NoKey,
+}
+
+impl FromValue for MigrateResult {
+    fn from_value(value: Value) -> Result<Self> {
+        let result: String = value.into()?;
+        match result.as_str() {
+            "OK" => Ok(Self::Ok),
+            "NOKEY" => Ok(Self::NoKey),
+            _ => Err(Error::Client(
+                "Unexpected result for command 'MIGRATE'".to_owned(),
+            )),
+        }
     }
 }

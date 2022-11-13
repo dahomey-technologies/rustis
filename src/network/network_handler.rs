@@ -102,7 +102,7 @@ impl NetworkHandler {
                     Status::Connected => {
                         for command in &msg.commands {
                             match command.name {
-                                "SUBSCRIBE" | "PSUBSCRIBE" => {
+                                "SUBSCRIBE" | "PSUBSCRIBE" | "SSUBSCRIBE" => {
                                     self.status = Status::Subscribing;
                                 }
                                 "MONITOR" => {
@@ -119,7 +119,7 @@ impl NetworkHandler {
                     }
                     Status::Subscribed => {
                         for command in &msg.commands {
-                            if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" = command.name {
+                            if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" | "SUNSUBSCRIBE" = command.name {
                                 self.pending_unsubscriptions.push_back(command.args.len());
                             }
                         }
@@ -338,7 +338,8 @@ impl NetworkHandler {
                                 if let Some(retry_reasons) = &mut msg.retry_reasons {
                                     retry_reasons.extend(reasons);
                                 } else {
-                                    msg.retry_reasons = Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                    msg.retry_reasons =
+                                        Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
                                 }
                             }
 
@@ -347,7 +348,6 @@ impl NetworkHandler {
                             if let Err(e) = result {
                                 error!("Cannot retry message: {e}");
                             }
-
                         } else if let Some(value_sender) = msg.value_sender {
                             match value {
                                 Ok(value) => {
@@ -384,10 +384,11 @@ impl NetworkHandler {
                                 if let Some(retry_reasons) = &mut msg.retry_reasons {
                                     retry_reasons.extend(reasons);
                                 } else {
-                                    msg.retry_reasons = Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                    msg.retry_reasons =
+                                        Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
                                 }
                             }
-                            _ => ()
+                            _ => (),
                         }
                     }
                 }
@@ -410,8 +411,8 @@ impl NetworkHandler {
                     [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
                     {
                         match command.as_slice() {
-                            b"message" => true,
-                            b"subscribe" | b"psubscribe" => {
+                            b"message" | b"smessage" => true,
+                            b"subscribe" | b"psubscribe" | b"ssubscribe" => {
                                 if let Some(pub_sub_sender) =
                                     self.pending_subscriptions.remove(channel)
                                 {
@@ -422,7 +423,7 @@ impl NetworkHandler {
                                 }
                                 false
                             }
-                            b"unsubscribe" | b"punsubscribe" => {
+                            b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
                                 self.subscriptions.remove(channel);
                                 if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
                                     if *remaining > 1 {
@@ -464,7 +465,7 @@ impl NetworkHandler {
                 iter.next(),
                 iter.next(),
             ) {
-                // message
+                // message or smessage
                 (
                     Some(Value::BulkString(BulkString::Binary(_command))),
                     Some(Value::BulkString(BulkString::Binary(channel))),

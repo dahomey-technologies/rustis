@@ -46,6 +46,7 @@ pub struct PubSubStream {
     closed: bool,
     channels: Vec<String>,
     patterns: Vec<String>,
+    shardchannels: Vec<String>,
     receiver: PubSubReceiver,
     client: InnerClient,
 }
@@ -60,6 +61,7 @@ impl PubSubStream {
             closed: false,
             channels,
             patterns: Vec::new(),
+            shardchannels: Vec::new(),
             receiver,
             client,
         }
@@ -74,6 +76,22 @@ impl PubSubStream {
             closed: false,
             channels: Vec::new(),
             patterns,
+            shardchannels: Vec::new(),
+            receiver,
+            client,
+        }
+    }
+
+    pub(crate) fn from_shardchannels(
+        shardchannels: Vec<String>,
+        receiver: PubSubReceiver,
+        client: InnerClient,
+    ) -> Self {
+        Self {
+            closed: false,
+            channels: Vec::new(),
+            patterns: Vec::new(),
+            shardchannels,
             receiver,
             client,
         }
@@ -90,6 +108,12 @@ impl PubSubStream {
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
             self.client.punsubscribe(patterns).await?;
+        }
+
+        let mut shardchannels = Vec::<String>::new();
+        std::mem::swap(&mut shardchannels, &mut self.shardchannels);
+        if !shardchannels.is_empty() {
+            self.client.sunsubscribe(shardchannels).await?;
         }
 
         self.closed = true;
@@ -126,6 +150,12 @@ impl Drop for PubSubStream {
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
             let _result = self.client.punsubscribe(patterns).forget();
+        }
+
+        let mut shardchannels = Vec::<String>::new();
+        std::mem::swap(&mut shardchannels, &mut self.shardchannels);
+        if !shardchannels.is_empty() {
+            let _result = self.client.sunsubscribe(shardchannels).forget();
         }
     }
 }

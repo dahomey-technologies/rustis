@@ -115,6 +115,37 @@ impl InnerClient {
             })
         })
     }
+
+    pub fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
+    where
+        C: Into<BulkString> + Send + 'a,
+        CC: SingleArgOrCollection<C> {
+            let shardchannels: Vec<String> = shardchannels.into_iter().map(|c| c.into().to_string()).collect();
+
+            Box::pin(async move {
+                let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+                let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+                    mpsc::unbounded();
+    
+                let pub_sub_senders = shardchannels
+                    .iter()
+                    .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+                    .collect::<Vec<_>>();
+    
+                let message = Message::pub_sub(
+                    cmd("SSUBSCRIBE").arg(shardchannels.clone()),
+                    value_sender,
+                    pub_sub_senders,
+                );
+    
+                self.send_message(message)?;
+    
+                let value = value_receiver.await?;
+                value.map_into_result(|_| {
+                    PubSubStream::from_shardchannels(shardchannels, pub_sub_receiver, self.clone())
+                })
+            })
+    }
 }
 
 impl<'a, R> ClientPreparedCommand<'a, R> for PreparedCommand<'a, InnerClient, R>

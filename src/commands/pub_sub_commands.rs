@@ -127,6 +127,68 @@ pub trait PubSubCommands {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
 
+    /// Lists the currently active shard channels.
+    ///
+    /// # Return
+    /// A collection of active channels, optionally matching the specified pattern.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/pubsub-shardchannels/>](https://redis.io/commands/pubsub-shardchannels/)
+    fn pub_sub_shardchannels<C, CC>(
+        &mut self,
+        options: PubSubChannelsOptions,
+    ) -> PreparedCommand<Self, CC>
+    where
+        Self: Sized,
+        C: FromValue,
+        CC: FromSingleValueArray<C>,
+    {
+        prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
+    }
+
+    /// Returns the number of subscribers for the specified shard channels.
+    ///
+    /// # Return
+    /// A collection of channels and number of subscribers for every channel.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/pubsub-shardnumsub/>](https://redis.io/commands/pubsub-shardnumsub/)
+    fn pub_sub_shardnumsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
+    where
+        Self: Sized,
+        C: Into<BulkString>,
+        CC: SingleArgOrCollection<C>,
+        R: FromValue,
+        RR: FromKeyValueValueArray<R, usize>,
+    {
+        prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
+    }
+
+    /// Posts a message to the given shard channel.
+    ///
+    /// # Return
+    /// The number of clients that received the message.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/spublish/>](https://redis.io/commands/spublish/)
+    fn spublish<C, M>(&mut self, shardchannel: C, message: M) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+        C: Into<BulkString>,
+        M: Into<BulkString>,
+    {
+        prepare_command(self, cmd("SPUBLISH").arg(shardchannel).arg(message))
+    }
+
+    /// Subscribes the client to the specified channels.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
+    fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
+    where
+        C: Into<BulkString> + Send + 'a,
+        CC: SingleArgOrCollection<C>;    
+
     /// Subscribes the client to the specified channels.
     ///
     /// # Example

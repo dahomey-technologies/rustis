@@ -165,6 +165,13 @@ impl PubSubCommands for Client {
     {
         self.inner_client.psubscribe(patterns)
     }
+
+    fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
+    where
+        C: Into<BulkString> + Send + 'a,
+        CC: SingleArgOrCollection<C> {
+            self.inner_client.ssubscribe(shardchannels)
+    }
 }
 
 impl BlockingCommands for Client {

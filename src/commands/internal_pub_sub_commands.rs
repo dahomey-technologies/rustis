@@ -20,6 +20,19 @@ pub(crate) trait InternalPubSubCommands {
         prepare_command(self, cmd("PUNSUBSCRIBE").arg(patterns))
     }
 
+    /// Unsubscribes the client from the given shard channels, or from all of them if none is given.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/sunsubscribe//>](https://redis.io/commands/sunsubscribe//)            
+    fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> PreparedCommand<Self, ()>
+    where
+        Self: Sized,
+        C: Into<BulkString>,
+        CC: SingleArgOrCollection<C>,
+    {
+        prepare_command(self, cmd("SUNSUBSCRIBE").arg(shardchannels))
+    }
+
     /// Unsubscribes the client from the given channels, or from all of them if none is given.
     ///
     /// # See Also

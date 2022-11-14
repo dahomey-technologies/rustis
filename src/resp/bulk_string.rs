@@ -93,7 +93,7 @@ impl From<i64> for BulkString {
 impl From<u64> for BulkString {
     #[inline]
     fn from(u: u64) -> Self {
-        Self::Integer(i64::try_from(u).unwrap())
+        Self::Integer(u as i64)
     }
 }
 
@@ -128,7 +128,7 @@ impl From<u16> for BulkString {
 impl From<isize> for BulkString {
     #[inline]
     fn from(i: isize) -> Self {
-        Self::Integer(i64::try_from(i).unwrap())
+        Self::Integer(i as i64)
     }
 }
 

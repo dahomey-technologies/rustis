@@ -485,7 +485,7 @@ impl NetworkHandler {
                     None => {
                         return Err(Error::Client(format!(
                             "Unexpected message on channel: {:?}",
-                            String::from_utf8(channel).unwrap()
+                            String::from_utf8_lossy(&channel)
                         )));
                     }
                 },
@@ -510,7 +510,7 @@ impl NetworkHandler {
                     None => {
                         return Err(Error::Client(format!(
                             "Unexpected pmessage on channel: {:?}",
-                            String::from_utf8(pattern).unwrap()
+                            String::from_utf8_lossy(&pattern)
                         )));
                     }
                 },

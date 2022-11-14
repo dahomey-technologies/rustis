@@ -441,7 +441,7 @@ impl ClusterConnection {
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
         for sub_request in request_info.sub_requests.iter_mut() {
-            let result = sub_request.result.take().unwrap();
+            let result = sub_request.result.take()?;
 
             if let Some(result) = result {
                 match &result {

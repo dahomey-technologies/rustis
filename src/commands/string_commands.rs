@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use crate::{
     prepare_command,
     resp::{
-        cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, KeyValueArgOrCollection,
-        SingleArgOrCollection, Value, FromSingleValueArray,
+        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
 };
@@ -397,7 +399,7 @@ pub trait StringCommands {
         K: Into<BulkString>,
         KK: SingleArgOrCollection<K>,
         V: FromValue,
-        VV: FromSingleValueArray<V>
+        VV: FromSingleValueArray<V>,
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }
@@ -661,82 +663,60 @@ pub struct LcsResult {
 
 impl FromValue for LcsResult {
     fn from_value(value: Value) -> Result<Self> {
-        if let Value::Array(Array::Vec(mut result)) = value {
-            if let (
-                Some(Value::Integer(len)),
-                Some(Value::BulkString(BulkString::Binary(len_label))),
-                Some(Value::Array(Array::Vec(matches))),
-                Some(Value::BulkString(BulkString::Binary(matches_label))),
-            ) = (result.pop(), result.pop(), result.pop(), result.pop())
-            {
-                if matches_label.as_slice() == b"matches" && len_label.as_slice() == b"len" {
-                    let matches: Result<Vec<LcsMatch>> = matches
-                        .into_iter()
-                        .map(|m| {
-                            let mut match_: Vec<Value> = m.into()?;
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                            match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
-                                (Some(len), Some(pos2), Some(pos1), None) => {
-                                    let mut pos1: Vec<usize> = pos1.into()?;
-                                    let mut pos2: Vec<usize> = pos2.into()?;
-                                    let len: usize = len.into()?;
+        let matches: Result<Vec<LcsMatch>> = values
+            .remove_with_result("matches")?
+            .into::<Vec<Value>>()?
+            .into_iter()
+            .map(|m| {
+                let mut match_: Vec<Value> = m.into()?;
 
-                                    match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                        (Some(pos1_right), Some(pos1_left), None) => {
-                                            match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                (Some(pos2_right), Some(pos2_left), None) => Ok((
-                                                    (pos1_left, pos1_right),
-                                                    (pos2_left, pos2_right),
-                                                    Some(len),
-                                                )),
-                                                _ => Err(Error::Client(
-                                                    "Cannot parse LCS result".to_owned(),
-                                                )),
-                                            }
-                                        }
-                                        _ => {
-                                            Err(Error::Client("Cannot parse LCS result".to_owned()))
-                                        }
-                                    }
+                match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
+                    (Some(len), Some(pos2), Some(pos1), None) => {
+                        let mut pos1: Vec<usize> = pos1.into()?;
+                        let mut pos2: Vec<usize> = pos2.into()?;
+                        let len: usize = len.into()?;
+
+                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                            (Some(pos1_right), Some(pos1_left), None) => {
+                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                    (Some(pos2_right), Some(pos2_left), None) => Ok((
+                                        (pos1_left, pos1_right),
+                                        (pos2_left, pos2_right),
+                                        Some(len),
+                                    )),
+                                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
                                 }
-                                (Some(pos2), Some(pos1), None, None) => {
-                                    let mut pos1: Vec<usize> = pos1.into()?;
-                                    let mut pos2: Vec<usize> = pos2.into()?;
-
-                                    match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                                        (Some(pos1_right), Some(pos1_left), None) => {
-                                            match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                                (Some(pos2_right), Some(pos2_left), None) => Ok((
-                                                    (pos1_left, pos1_right),
-                                                    (pos2_left, pos2_right),
-                                                    None,
-                                                )),
-                                                _ => Err(Error::Client(
-                                                    "Cannot parse LCS result".to_owned(),
-                                                )),
-                                            }
-                                        }
-                                        _ => {
-                                            Err(Error::Client("Cannot parse LCS result".to_owned()))
-                                        }
-                                    }
-                                }
-                                _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
                             }
-                        })
-                        .collect();
+                            _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
+                        }
+                    }
+                    (Some(pos2), Some(pos1), None, None) => {
+                        let mut pos1: Vec<usize> = pos1.into()?;
+                        let mut pos2: Vec<usize> = pos2.into()?;
 
-                    return Ok(LcsResult {
-                        matches: matches?,
-                        len: usize::try_from(len).unwrap(),
-                    });
+                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
+                            (Some(pos1_right), Some(pos1_left), None) => {
+                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
+                                    (Some(pos2_right), Some(pos2_left), None) => {
+                                        Ok(((pos1_left, pos1_right), (pos2_left, pos2_right), None))
+                                    }
+                                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
+                                }
+                            }
+                            _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
+                        }
+                    }
+                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
                 }
-            }
-        }
+            })
+            .collect();
 
-        Err(Error::Client(
-            "Cannot parse result to LcsResult".to_string(),
-        ))
+        Ok(Self {
+            matches: matches?,
+            len: values.remove_with_result("len")?.into()?,
+        })
     }
 }
 

@@ -1,9 +1,10 @@
 use crate::{
     resp::{Array, BulkString, Value},
-    Error, Result,
+    Error, RedisError, Result,
 };
 use bytes::{Buf, BytesMut};
 use log::trace;
+use std::str::FromStr;
 use tokio_util::codec::Decoder;
 
 pub(crate) struct ValueDecoder;
@@ -14,7 +15,10 @@ impl Decoder for ValueDecoder {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Value>> {
         Ok(decode(src, 0)?.map(|(item, pos)| {
-            trace!("decode: {}", std::str::from_utf8(&src.as_ref()[..pos]).unwrap().replace("\r\n", "\\r\\n"));
+            trace!(
+                "decode: {}",
+                String::from_utf8_lossy(&src.as_ref()[..pos]).replace("\r\n", "\\r\\n")
+            );
             src.advance(pos);
             item
         }))
@@ -37,8 +41,12 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
         b':' => Ok(decode_integer(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b',' => Ok(decode_double(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
-        b'+' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s.to_owned()), pos))),
-        b'-' => Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::Error(s.into()), pos))),
+        b'+' => {
+            Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s.to_owned()), pos)))
+        }
+        b'-' => decode_string(buf, idx)?
+            .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
+            .transpose(),
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
@@ -55,7 +63,8 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((BulkString::Nil, pos))),
         Some((len, pos)) => {
-            let len = usize::try_from(len).unwrap();
+            let len = usize::try_from(len)
+                .map_err(|_| Error::Client("Malformed bulk string len".to_owned()))?;
             if buf.len() - pos < len + 2 {
                 Ok(None) // EOF
             } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
@@ -79,7 +88,10 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
-            let mut values = Vec::with_capacity(usize::try_from(len).unwrap());
+            let mut values = Vec::with_capacity(
+                usize::try_from(len)
+                    .map_err(|_| Error::Client("Malformed array len".to_owned()))?,
+            );
             let mut pos = pos;
             for _ in 0..len {
                 match decode(buf, pos)? {
@@ -101,7 +113,9 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> 
         Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
         Some((len, pos)) => {
             let len = len * 2;
-            let mut values = Vec::with_capacity(usize::try_from(len).unwrap());
+            let mut values = Vec::with_capacity(
+                usize::try_from(len).map_err(|_| Error::Client("Malformed map len".to_owned()))?,
+            );
             let mut pos = pos;
             for _ in 0..len {
                 match decode(buf, pos)? {
@@ -127,12 +141,7 @@ fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(&str, usize)>
 
         match (cr, byte) {
             (false, b'\r') => cr = true,
-            (true, b'\n') => {
-                return Ok(Some((
-                    std::str::from_utf8(&buf[idx..pos - 1])?,
-                    pos + 1,
-                )))
-            }
+            (true, b'\n') => return Ok(Some((std::str::from_utf8(&buf[idx..pos - 1])?, pos + 1))),
             (false, _) => (),
             _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
         }

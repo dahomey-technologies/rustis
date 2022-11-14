@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{resp::cmd, tests::get_test_client, Error, RedisError, RedisErrorKind, Result};
 use serial_test::serial;
 
@@ -23,26 +25,27 @@ async fn unknown_command() -> Result<()> {
 #[test]
 fn moved_error() {
     let raw_error = "MOVED 3999 127.0.0.1:6381";
-    let error: RedisError = raw_error.into();
+    let error = RedisError::from_str(raw_error);
+    println!("error: {error:?}");
     assert!(matches!(
         error,
-        RedisError {
+        Ok(RedisError {
             kind: RedisErrorKind::Moved { hash_slot: 3999, address: (host, 6381) },
             description
-        } if description.is_empty() && host == "127.0.0.1"
+        }) if description.is_empty() && host == "127.0.0.1"
     ));
 }
 
 #[test]
 fn ask_error() {
     let raw_error = "ASK 3999 127.0.0.1:6381";
-    let error: RedisError = raw_error.into();
+    let error = RedisError::from_str(raw_error);
     assert!(matches!(
         error,
-        RedisError {
+        Ok(RedisError {
             kind: RedisErrorKind::Ask { hash_slot: 3999, address: (host, 6381) },
             description
-        } if description.is_empty() && host == "127.0.0.1"
+        }) if description.is_empty() && host == "127.0.0.1"
     ));
 }
 

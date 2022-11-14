@@ -193,7 +193,7 @@ async fn moved() -> Result<()> {
         .nodes[0];
     let dst_node = &shard_info_list
         .iter()
-        .find(|s| s.slots.iter().any(|s| s.0 == 0))
+        .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
         .unwrap()
         .nodes[0];
     let src_id = &src_node.id;

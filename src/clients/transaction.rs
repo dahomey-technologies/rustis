@@ -1,11 +1,12 @@
-use std::iter::zip;
-
+#[cfg(feature = "redis-json")]
+use crate::JsonCommands;
 use crate::{
     resp::{cmd, Array, BulkString, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
     InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
+use std::iter::zip;
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
@@ -70,7 +71,9 @@ impl Transaction {
                         Value::Array(Array::Vec(filtered_results)).into()
                     }
                 }
-                Value::Array(Array::Nil) | Value::BulkString(BulkString::Nil) => Err(Error::Aborted),
+                Value::Array(Array::Nil) | Value::BulkString(BulkString::Nil) => {
+                    Err(Error::Aborted)
+                }
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
             }
         } else {
@@ -101,6 +104,8 @@ impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
 impl HashCommands for Transaction {}
 impl HyperLogLogCommands for Transaction {}
+#[cfg(feature = "redis-json")]
+impl JsonCommands for Transaction {}
 impl ListCommands for Transaction {}
 impl SetCommands for Transaction {}
 impl ScriptingCommands for Transaction {}

@@ -7,6 +7,8 @@ mod geo_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
 mod internal_pub_sub_commands;
+#[cfg(feature = "redis-json")]
+mod json_commands;
 mod list_commands;
 mod prepared_command;
 mod pub_sub_commands;
@@ -28,6 +30,8 @@ pub use geo_commands::*;
 pub use hash_commands::*;
 pub use hyper_log_log_commands::*;
 pub(crate) use internal_pub_sub_commands::*;
+#[cfg(feature = "redis-json")]
+pub use json_commands::*;
 pub use list_commands::*;
 pub use prepared_command::*;
 pub use pub_sub_commands::*;

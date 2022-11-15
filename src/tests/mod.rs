@@ -11,6 +11,8 @@ mod generic_commands;
 mod geo_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
+#[cfg(feature = "redis-json")]
+mod json_commands;
 mod list_commands;
 mod multiplexed_client;
 mod pipeline;

@@ -1,5 +1,5 @@
-use std::iter::zip;
-
+#[cfg(feature = "redis-json")]
+use crate::JsonCommands;
 use crate::{
     resp::{Array, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
@@ -7,6 +7,7 @@ use crate::{
     ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
     StringCommands,
 };
+use std::iter::zip;
 
 pub struct Pipeline {
     client: InnerClient,
@@ -91,6 +92,8 @@ impl GenericCommands for Pipeline {}
 impl GeoCommands for Pipeline {}
 impl HashCommands for Pipeline {}
 impl HyperLogLogCommands for Pipeline {}
+#[cfg(feature = "redis-json")]
+impl JsonCommands for Pipeline {}
 impl ListCommands for Pipeline {}
 impl SetCommands for Pipeline {}
 impl ScriptingCommands for Pipeline {}

@@ -1,9 +1,8 @@
-use smallvec::SmallVec;
-
 use crate::{
     resp::{Array, BulkString, IntoValueIterator, Value},
     Error, Result,
 };
+use smallvec::{smallvec, SmallVec};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -55,7 +54,7 @@ where
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(Vec::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => Ok(vec![value.into()?]),
         }
     }
 }
@@ -70,7 +69,7 @@ where
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(SmallVec::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => Ok(smallvec![value.into()?]),
         }
     }
 }
@@ -84,7 +83,11 @@ where
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(HashSet::default()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => {
+                let mut hash_set = HashSet::default();
+                hash_set.insert(value.into()?);
+                Ok(hash_set)
+            }
         }
     }
 }
@@ -98,7 +101,7 @@ where
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(BTreeSet::new()),
             Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => Ok(BTreeSet::from([value.into()?])),
         }
     }
 }
@@ -187,7 +190,9 @@ impl FromValue for i64 {
 impl FromValue for u64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => u64::try_from(i).map_err(|_| Error::Client("Cannot parse result to u64".to_owned())),
+            Value::Integer(i) => {
+                u64::try_from(i).map_err(|_| Error::Client("Cannot parse result to u64".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -210,7 +215,9 @@ impl FromValue for u64 {
 impl FromValue for i32 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => i32::try_from(i).map_err(|_| Error::Client("Cannot parse result to i32".to_owned())),
+            Value::Integer(i) => {
+                i32::try_from(i).map_err(|_| Error::Client("Cannot parse result to i32".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -233,7 +240,9 @@ impl FromValue for i32 {
 impl FromValue for u32 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => u32::try_from(i).map_err(|_| Error::Client("Cannot parse result to u32".to_owned())),
+            Value::Integer(i) => {
+                u32::try_from(i).map_err(|_| Error::Client("Cannot parse result to u32".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -256,7 +265,9 @@ impl FromValue for u32 {
 impl FromValue for i16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => i16::try_from(i).map_err(|_| Error::Client("Cannot parse result to i16".to_owned())),
+            Value::Integer(i) => {
+                i16::try_from(i).map_err(|_| Error::Client("Cannot parse result to i16".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -279,7 +290,9 @@ impl FromValue for i16 {
 impl FromValue for u16 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => u16::try_from(i).map_err(|_| Error::Client("Cannot parse result to u16".to_owned())),
+            Value::Integer(i) => {
+                u16::try_from(i).map_err(|_| Error::Client("Cannot parse result to u16".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -302,7 +315,9 @@ impl FromValue for u16 {
 impl FromValue for i8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => i8::try_from(i).map_err(|_| Error::Client("Cannot parse result i8 u64".to_owned())),
+            Value::Integer(i) => {
+                i8::try_from(i).map_err(|_| Error::Client("Cannot parse result i8 u64".to_owned()))
+            }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -325,7 +340,8 @@ impl FromValue for i8 {
 impl FromValue for u8 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => u8::try_from(i).map_err(|_| Error::Client("Cannot parse result tu8o u64".to_owned())),
+            Value::Integer(i) => u8::try_from(i)
+                .map_err(|_| Error::Client("Cannot parse result tu8o u64".to_owned())),
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -348,7 +364,8 @@ impl FromValue for u8 {
 impl FromValue for isize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => isize::try_from(i).map_err(|_| Error::Client("Cannot parse result to isize".to_owned())),
+            Value::Integer(i) => isize::try_from(i)
+                .map_err(|_| Error::Client("Cannot parse result to isize".to_owned())),
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -371,7 +388,8 @@ impl FromValue for isize {
 impl FromValue for usize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => usize::try_from(i).map_err(|_| Error::Client("Cannot parse result to usize".to_owned())),
+            Value::Integer(i) => usize::try_from(i)
+                .map_err(|_| Error::Client("Cannot parse result to usize".to_owned())),
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {

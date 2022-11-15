@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-json")]
+use crate::JsonCommands;
 use crate::{
     resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
     BitmapCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
@@ -146,6 +148,8 @@ impl GeoCommands for MultiplexedClient {}
 impl HashCommands for MultiplexedClient {}
 impl HyperLogLogCommands for MultiplexedClient {}
 impl InternalPubSubCommands for MultiplexedClient {}
+#[cfg(feature = "redis-json")]
+impl JsonCommands for MultiplexedClient {}
 impl ListCommands for MultiplexedClient {}
 impl ScriptingCommands for MultiplexedClient {}
 impl SentinelCommands for MultiplexedClient {}
@@ -175,7 +179,8 @@ impl PubSubCommands for MultiplexedClient {
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<BulkString> + Send + 'a,
-        CC: SingleArgOrCollection<C> {
-            self.inner_client.ssubscribe(shardchannels)
+        CC: SingleArgOrCollection<C>,
+    {
+        self.inner_client.ssubscribe(shardchannels)
     }
 }

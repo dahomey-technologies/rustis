@@ -35,6 +35,10 @@ async-std-tls = [
 ]
 pool = ["bb8"]
 tls = ["native-tls"]
+redis-json = []
+redis-stack = [
+    "redis-json"
+]
 
 [dependencies]
 async-std = { version = "1", features = ["attributes"], optional = true }

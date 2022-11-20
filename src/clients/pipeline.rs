@@ -97,6 +97,7 @@ impl HyperLogLogCommands for Pipeline {}
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Pipeline {}
 impl ListCommands for Pipeline {}
+#[cfg(feature = "redis-search")]
 impl SearchCommands for Pipeline {}
 impl SetCommands for Pipeline {}
 impl ScriptingCommands for Pipeline {}

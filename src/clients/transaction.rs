@@ -109,6 +109,7 @@ impl HyperLogLogCommands for Transaction {}
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Transaction {}
 impl ListCommands for Transaction {}
+#[cfg(feature = "redis-search")]
 impl SearchCommands for Transaction {}
 impl SetCommands for Transaction {}
 impl ScriptingCommands for Transaction {}

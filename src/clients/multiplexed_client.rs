@@ -154,6 +154,7 @@ impl InternalPubSubCommands for MultiplexedClient {}
 impl JsonCommands for MultiplexedClient {}
 impl ListCommands for MultiplexedClient {}
 impl ScriptingCommands for MultiplexedClient {}
+#[cfg(feature = "redis-search")]
 impl SearchCommands for MultiplexedClient {}
 impl SentinelCommands for MultiplexedClient {}
 impl ServerCommands for MultiplexedClient {}

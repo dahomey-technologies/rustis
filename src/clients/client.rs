@@ -147,6 +147,7 @@ impl InternalPubSubCommands for Client {}
 impl JsonCommands for Client {}
 impl ListCommands for Client {}
 impl ScriptingCommands for Client {}
+#[cfg(feature = "redis-search")]
 impl SearchCommands for Client {}
 impl SentinelCommands for Client {}
 impl ServerCommands for Client {}

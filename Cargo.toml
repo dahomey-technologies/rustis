@@ -12,7 +12,7 @@ license-file = "LICENSE"
 edition = "2021"
 
 [features]
-default = ["tokio-runtime"]
+default = ["tokio-runtime", "redis-stack"]
 tokio-runtime = [
     "tokio/macros",
     "tokio/net",
@@ -36,8 +36,10 @@ async-std-tls = [
 pool = ["bb8"]
 tls = ["native-tls"]
 redis-json = []
+redis-search = []
 redis-stack = [
-    "redis-json"
+    "redis-json",
+    "redis-search"
 ]
 
 [dependencies]
@@ -56,7 +58,7 @@ tokio-native-tls = { version = "0", optional = true }
 async-native-tls = { version = "0", optional = true }
 log = "0"
 crc16 = "0"
-rand = "0.8.4"
+rand = "0"
 
 [dev-dependencies]
 serial_test = "0"

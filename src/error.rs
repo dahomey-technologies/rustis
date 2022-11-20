@@ -136,7 +136,7 @@ pub enum RedisErrorKind {
     Unblocked,
     WrongPass,
     WrongType,
-    Other(String),
+    Other,
 }
 
 impl RedisErrorKind {
@@ -192,7 +192,7 @@ impl FromStr for RedisErrorKind {
                         Self::parse_hash_slot_and_address(hash_slot, address)
                             .map(|(hash_slot, address)| Self::Moved { hash_slot, address })
                     }
-                    _ => Ok(Self::Other(str.to_owned())),
+                    _ => Ok(Self::Other),
                 }
             }
         }
@@ -232,7 +232,7 @@ impl Display for RedisErrorKind {
             RedisErrorKind::Unblocked => f.write_str("UNBLOCKED"),
             RedisErrorKind::WrongPass => f.write_str("WRONGPASS"),
             RedisErrorKind::WrongType => f.write_str("WRONGTYPE"),
-            RedisErrorKind::Other(e) => f.write_str(e),
+            RedisErrorKind::Other => f.write_str(""),
         }
     }
 }
@@ -257,13 +257,20 @@ impl FromStr for RedisError {
                 kind: RedisErrorKind::from_str(error)?,
                 description: "".to_owned(),
             }),
-            Some((kind, description)) => Ok(Self {
-                kind: RedisErrorKind::from_str(kind)?,
-                description: description.to_owned(),
-            }),
+            Some((kind, description)) => {
+                let kind = RedisErrorKind::from_str(kind)?;
+                
+                let description = if let RedisErrorKind::Other = kind {
+                    error.to_owned()
+                } else {
+                    description.to_owned()
+                };
+
+                Ok(Self { kind, description })
+            }
             None => Ok(Self {
-                kind: RedisErrorKind::from_str(error)?,
-                description: "".to_owned(),
+                kind: RedisErrorKind::Other,
+                description: error.to_owned(),
             }),
         }
     }

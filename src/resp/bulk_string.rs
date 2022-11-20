@@ -69,6 +69,13 @@ impl BulkString {
     }
 }
 
+impl From<char> for BulkString {
+    #[inline]
+    fn from(ch: char) -> Self {
+        Self::String(ch.to_string())
+    }
+}
+
 impl From<&'static str> for BulkString {
     #[inline]
     fn from(str: &'static str) -> Self {

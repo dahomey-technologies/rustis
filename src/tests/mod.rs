@@ -21,6 +21,8 @@ mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
 mod scripting_commands;
+#[cfg(feature = "redis-search")]
+mod search_commands;
 mod sentinel;
 mod server_commands;
 mod set_commands;

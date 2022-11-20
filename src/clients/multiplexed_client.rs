@@ -1,5 +1,7 @@
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
+#[cfg(feature = "redis-search")]
+use crate::SearchCommands;
 use crate::{
     resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
     BitmapCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
@@ -152,6 +154,7 @@ impl InternalPubSubCommands for MultiplexedClient {}
 impl JsonCommands for MultiplexedClient {}
 impl ListCommands for MultiplexedClient {}
 impl ScriptingCommands for MultiplexedClient {}
+impl SearchCommands for MultiplexedClient {}
 impl SentinelCommands for MultiplexedClient {}
 impl ServerCommands for MultiplexedClient {}
 impl SetCommands for MultiplexedClient {}

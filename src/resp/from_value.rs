@@ -178,6 +178,10 @@ impl FromValue for i64 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<i64>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i64",
@@ -203,6 +207,10 @@ impl FromValue for u64 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<u64>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u64",
@@ -228,6 +236,10 @@ impl FromValue for i32 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<i32>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i32",
@@ -253,6 +265,10 @@ impl FromValue for u32 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<u32>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u32",
@@ -278,6 +294,10 @@ impl FromValue for i16 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<i16>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i16",
@@ -303,6 +323,10 @@ impl FromValue for u16 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<u16>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u16",
@@ -328,6 +352,10 @@ impl FromValue for i8 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<i8>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to i8",
@@ -352,6 +380,10 @@ impl FromValue for u8 {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<u8>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to u8",
@@ -376,6 +408,10 @@ impl FromValue for isize {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<isize>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to isize",
@@ -400,6 +436,10 @@ impl FromValue for usize {
                     Err(e) => Err(e),
                 }
             }
+            Value::SimpleString(s) => match s.parse::<usize>() {
+                Ok(u) => Ok(u),
+                Err(e) => Err(Error::Client(e.to_string())),
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to usize",
@@ -416,6 +456,7 @@ impl FromValue for f32 {
                 Ok(String::from_utf8_lossy(&b).parse::<f32>()?)
             }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f32),
+            Value::SimpleString(s) => Ok(s.parse::<f32>()?),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to f32",
@@ -432,6 +473,7 @@ impl FromValue for f64 {
                 Ok(String::from_utf8_lossy(&b).parse::<f64>()?)
             }
             Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f64),
+            Value::SimpleString(s) => Ok(s.parse::<f64>()?),
             Value::Double(d) => Ok(d),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
@@ -499,6 +541,14 @@ where
 
 impl<K, V> FromKeyValueValueArray<K, V> for Vec<(K, V)>
 where
+    K: FromValue,
+    V: FromValue,
+{
+}
+
+impl<K, V, A> FromKeyValueValueArray<K, V> for SmallVec<A>
+where
+    A: smallvec::Array<Item = (K, V)>,
     K: FromValue,
     V: FromValue,
 {

@@ -180,7 +180,7 @@ where
     #[inline]
     fn num_args(&self) -> usize {
         match self {
-            Some(_) => 1,
+            Some(t) => t.num_args(),
             None => 0,
         }
     }
@@ -201,7 +201,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        N
+        self.iter().fold(0, |acc, t| acc + t.num_args())
     }
 }
 
@@ -220,7 +220,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, t| acc + t.num_args())
     }
 }
 
@@ -240,7 +240,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, t| acc + t.num_args())
     }
 }
 
@@ -259,7 +259,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, t| acc + t.num_args())
     }
 }
 
@@ -278,7 +278,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, t| acc + t.num_args())
     }
 }
 
@@ -299,7 +299,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, (k, v)| acc + k.num_args() + v.num_args())
     }
 }
 
@@ -320,7 +320,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        self.len()
+        self.iter().fold(0, |acc, (k, v)| acc + k.num_args() + v.num_args())
     }
 }
 
@@ -337,7 +337,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        2
+        self.0.num_args() + self.1.num_args()
     }
 }
 
@@ -356,7 +356,7 @@ where
 
     #[inline]
     fn num_args(&self) -> usize {
-        3
+        self.0.num_args() + self.1.num_args() + self.2.num_args()
     }
 }
 

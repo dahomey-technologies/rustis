@@ -13,6 +13,8 @@ mod list_commands;
 mod prepared_command;
 mod pub_sub_commands;
 mod scripting_commands;
+#[cfg(feature = "redis-search")]
+mod search_commands;
 mod sentinel_commands;
 mod server_commands;
 mod set_commands;
@@ -36,6 +38,8 @@ pub use list_commands::*;
 pub use prepared_command::*;
 pub use pub_sub_commands::*;
 pub use scripting_commands::*;
+#[cfg(feature = "redis-search")]
+pub use search_commands::*;
 pub use sentinel_commands::*;
 pub use server_commands::*;
 pub use set_commands::*;

@@ -1,5 +1,7 @@
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
+#[cfg(feature = "redis-search")]
+use crate::SearchCommands;
 use crate::{
     resp::{cmd, Array, BulkString, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
@@ -107,6 +109,7 @@ impl HyperLogLogCommands for Transaction {}
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Transaction {}
 impl ListCommands for Transaction {}
+impl SearchCommands for Transaction {}
 impl SetCommands for Transaction {}
 impl ScriptingCommands for Transaction {}
 impl ServerCommands for Transaction {}

@@ -13,7 +13,9 @@ use network::*;
 #[cfg(feature = "pool")]
 pub use bb8;
 
+/// Library general result type.
 pub type Result<T> = std::result::Result<T, Error>;
+/// Library general future type.
 pub type Future<'a, T> = futures::future::BoxFuture<'a, Result<T>>;
 
 #[cfg(all(feature = "tokio-runtime", feature = "async-std-runtime"))]

@@ -28,7 +28,7 @@ where
     }
 }
 
-pub fn prepare_command<T, R: FromValue>(
+pub(crate) fn prepare_command<T, R: FromValue>(
     executor: &mut T,
     command: Command,
 ) -> PreparedCommand<T, R> {

@@ -1,11 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, time::Duration};
 
 use crate::{
     tests::get_redis_stack_test_client, ClientReplyMode, ConnectionCommands, FlushingMode,
     FtAggregateOptions, FtCreateOptions, FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage,
     FtLoadAttribute, FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
     FtSpellCheckOptions, FtTermType, FtWithCursorOptions, HashCommands, JsonCommands,
-    PipelinePreparedCommand, Result, SearchCommands, ServerCommands, SetCondition, SortOrder,
+    PipelinePreparedCommand, Result, SearchCommands, ServerCommands, SetCondition, SortOrder, network::sleep,
 };
 use rand::{seq::SliceRandom, Rng};
 use serial_test::serial;
@@ -628,8 +628,11 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
+    sleep(Duration::from_millis(100));
 
     client.ft_dropindex("index", true).await?;
+    sleep(Duration::from_millis(100));
+    
     let exists = client.hexists("log:1", "url").await?;
     assert!(!exists);
 

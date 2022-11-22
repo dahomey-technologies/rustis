@@ -1,6 +1,6 @@
 use crate::{
-    resp::{Array, BulkString, FromValue},
-    Error, Result, RedisError,
+    resp::{Array, BulkString, Command, FromValue},
+    Error, RedisError, Result,
 };
 
 #[derive(Debug)]
@@ -16,7 +16,7 @@ pub enum Value {
 
 impl Value {
     /// A [`Value`](crate::resp::Value) to user type conversion that consumes the input value.
-    /// 
+    ///
     /// # Errors
     /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
     pub fn into<T>(self) -> Result<T>
@@ -24,6 +24,13 @@ impl Value {
         T: FromValue,
     {
         T::from_value(self)
+    }
+
+    pub fn into_with_command<T>(self, command: &Command) -> Result<T>
+    where
+        T: FromValue,
+    {
+        T::from_value_with_command(self, command)
     }
 }
 

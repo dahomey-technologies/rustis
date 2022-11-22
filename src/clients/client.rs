@@ -131,7 +131,14 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { self.executor.send(self.command).await?.into() })
+        Box::pin(async move { 
+            if self.keep_command_for_result {
+                let command_for_result = self.command.clone();
+                self.executor.send(self.command).await?.into_with_command(&command_for_result) 
+            } else {
+                self.executor.send(self.command).await?.into() 
+            }
+        })
     }
 }
 

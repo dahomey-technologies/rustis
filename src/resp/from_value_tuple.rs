@@ -14,7 +14,7 @@ where
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
-                    _ => Err(Error::Client("Cannot parse result to Tuple".to_owned())),
+                    v => Err(Error::Client(format!("Cannot parse result {v:?} to Tuple"))),
                 }
             }
             Value::Error(e) => Err(Error::Redis(e)),

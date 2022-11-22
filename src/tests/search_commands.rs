@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    tests::get_redis_stack_test_client, FlushingMode, FtAggregateOptions, FtCreateOptions,
-    FtFieldSchema, FtFieldType, FtIndexDataType, FtLoadAttribute, FtReducer, FtSortBy,
-    FtWithCursorOptions, HashCommands, JsonCommands, Result, SearchCommands, ServerCommands,
-    SetCondition, SortOrder,
+    tests::get_redis_stack_test_client, ClientReplyMode, ConnectionCommands, FlushingMode,
+    FtAggregateOptions, FtCreateOptions, FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage,
+    FtLoadAttribute, FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
+    FtSpellCheckOptions, FtTermType, FtWithCursorOptions, HashCommands, JsonCommands,
+    PipelinePreparedCommand, Result, SearchCommands, ServerCommands, SetCondition, SortOrder,
 };
 use rand::{seq::SliceRandom, Rng};
 use serial_test::serial;
@@ -181,7 +182,7 @@ async fn ft_aggregate() -> Result<()> {
 
     client
         .ft_create(
-            "myIndex",
+            "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("log"),
@@ -205,7 +206,7 @@ async fn ft_aggregate() -> Result<()> {
 
     let result = client
         .ft_aggregate(
-            "myIndex",
+            "index",
             "*",
             FtAggregateOptions::default()
                 .apply("@timestamp - (@timestamp % 3600)", "hour")
@@ -221,23 +222,23 @@ async fn ft_aggregate() -> Result<()> {
     assert_eq!(None, result.cursor_id);
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
-    assert_eq!(2, result.results[0].len());
-    assert_eq!(2, result.results[1].len());
+    assert_eq!(2, result.results[0].values.len());
+    assert_eq!(2, result.results[1].values.len());
     assert_eq!(
         ("hour".to_owned(), "2022-11-16T22:00:00Z".to_owned()),
-        result.results[0][0]
+        result.results[0].values[0]
     );
     assert_eq!(
         ("num_users".to_owned(), "2".to_owned()),
-        result.results[0][1]
+        result.results[0].values[1]
     );
     assert_eq!(
         ("hour".to_owned(), "2022-11-17T03:00:00Z".to_owned()),
-        result.results[1][0]
+        result.results[1].values[0]
     );
     assert_eq!(
         ("num_users".to_owned(), "2".to_owned()),
-        result.results[1][1]
+        result.results[1].values[1]
     );
 
     Ok(())
@@ -438,8 +439,12 @@ async fn ft_cursor() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    for i in 0..100 {
-        client
+    let mut pipeline = client.create_pipeline();
+
+    pipeline.client_reply(ClientReplyMode::Off).forget();
+
+    for i in 1..1001 {
+        pipeline
             .hset(
                 format!("log:{i}"),
                 [
@@ -458,12 +463,16 @@ async fn ft_cursor() -> Result<()> {
                     ),
                 ],
             )
-            .await?;
+            .forget();
     }
+
+    pipeline.client_reply(ClientReplyMode::On).forget();
+
+    pipeline.execute().await?;
 
     client
         .ft_create(
-            "myIndex",
+            "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("log"),
@@ -487,7 +496,7 @@ async fn ft_cursor() -> Result<()> {
 
     let result = client
         .ft_aggregate(
-            "myIndex",
+            "index",
             "*",
             FtAggregateOptions::default()
                 .groupby(
@@ -505,14 +514,14 @@ async fn ft_cursor() -> Result<()> {
     assert_eq!(10, result.results.len());
 
     let result = client
-        .ft_cursor_read("myIndex", result.cursor_id.unwrap())
+        .ft_cursor_read("index", result.cursor_id.unwrap())
         .await?;
 
     assert!(result.cursor_id.is_some());
     assert_eq!(10, result.results.len());
 
     client
-        .ft_cursor_del("myIndex", result.cursor_id.unwrap())
+        .ft_cursor_del("index", result.cursor_id.unwrap())
         .await?;
 
     Ok(())
@@ -553,7 +562,7 @@ async fn ft_dropindex() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let result = client.ft_dropindex("myIndex", false).await;
+    let result = client.ft_dropindex("index", false).await;
     assert!(result.is_err());
 
     client
@@ -570,7 +579,7 @@ async fn ft_dropindex() -> Result<()> {
 
     client
         .ft_create(
-            "myIndex",
+            "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("log"),
@@ -591,6 +600,148 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
+
+    client.ft_dropindex("index", false).await?;
+    let exists = client.hexists("log:1", "url").await?;
+    assert!(exists);
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("log"),
+            [
+                FtFieldSchema::identifier("url")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("timestamp")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+                FtFieldSchema::identifier("country")
+                    .field_type(FtFieldType::Tag)
+                    .sortable(),
+                FtFieldSchema::identifier("user_id")
+                    .field_type(FtFieldType::Text)
+                    .noindex()
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    client.ft_dropindex("index", true).await?;
+    let exists = client.hexists("log:1", "url").await?;
+    assert!(!exists);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_explain() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default(),
+            [
+                FtFieldSchema::identifier("text")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("date")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    let execution_plan: String = client
+        .ft_explain(
+            "index",
+            "(foo bar)|(hello world) @date:[100 200]|@date:[500 +inf]",
+            None,
+        )
+        .await?;
+    assert!(!execution_plan.is_empty());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_explaincli() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default(),
+            [
+                FtFieldSchema::identifier("text")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("date")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    let execution_plan: Vec<String> = client
+        .ft_explaincli(
+            "index",
+            "(foo bar)|(hello world) @date:[100 200]|@date:[500 +inf]",
+            None,
+        )
+        .await?;
+    assert!(!execution_plan.is_empty());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_info() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .filter(r#"@indexName=="myindexname""#)
+                .language(FtLanguage::French)
+                .language_field("language")
+                .score(0.5)
+                .score_field("score")
+                .payload_field("payload")
+                .max_text_fields()
+                .temporary(500)
+                .nohl()
+                .nofields()
+                .nofreqs()
+                .prefix(["log", "doc"])
+                .skip_initial_scan()
+                .stop_words(["hello", "world"]),
+            [
+                FtFieldSchema::identifier("text")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("date")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    let info = client.ft_info("index").await?;
+    log::debug!("info: {info:?}");
 
     Ok(())
 }
@@ -631,6 +782,328 @@ async fn ft_list() -> Result<()> {
     assert!(index_names.contains(&"idx1".to_owned()));
     assert!(index_names.contains(&"idx2".to_owned()));
     assert!(index_names.contains(&"idx3".to_owned()));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_profile() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let mut pipeline = client.create_pipeline();
+
+    pipeline.client_reply(ClientReplyMode::Off).forget();
+
+    for i in 1..1001 {
+        pipeline
+            .hset(
+                format!("log:{i}"),
+                [
+                    (
+                        "url",
+                        format!("page{}.html", rand::thread_rng().gen_range(1..21)).to_owned(),
+                    ),
+                    ("timestamp", (1668637156 + i).to_string()),
+                    (
+                        "country",
+                        (*["fr", "ca"].choose(&mut rand::thread_rng()).unwrap()).to_owned(),
+                    ),
+                    (
+                        "user_id",
+                        format!("user{}", rand::thread_rng().gen_range(1..11)),
+                    ),
+                ],
+            )
+            .forget();
+    }
+
+    pipeline.client_reply(ClientReplyMode::On).forget();
+
+    pipeline.execute().await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("log"),
+            [
+                FtFieldSchema::identifier("url")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("timestamp")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+                FtFieldSchema::identifier("country")
+                    .field_type(FtFieldType::Tag)
+                    .sortable(),
+                FtFieldSchema::identifier("user_id")
+                    .field_type(FtFieldType::Text)
+                    .noindex()
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    let result = client
+        .ft_profile(
+            "index",
+            FtProfileQueryType::Aggregate,
+            false,
+            [
+                "*",
+                "groupby",
+                "1",
+                "@url",
+                "reduce",
+                "count_distinct",
+                "1",
+                "@user_id",
+                "as",
+                "num_users",
+                "sortby",
+                "2",
+                "@num_users",
+                "desc",
+                "limit",
+                "0",
+                "100",
+            ],
+        )
+        .await?;
+
+    log::debug!("result: {result:?}");
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .hset(
+            "doc:1",
+            [
+                ("title", "dogs"),
+                ("data", "foo wizard bar"),
+                ("published_at", "2019"),
+                ("payload", "tag1"),
+            ],
+        )
+        .await?;
+    client
+        .hset(
+            "doc:2",
+            [
+                ("title", "cats"),
+                ("data", "hello world wizard"),
+                ("published_at", "2020"),
+                ("payload", "tag2"),
+            ],
+        )
+        .await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc")
+                .payload_field("payload"),
+            [
+                FtFieldSchema::identifier("title")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("data")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("published_at")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+            ],
+        )
+        .await?;
+
+    let result = client
+        .ft_search("index", "wizard", FtSearchOptions::default())
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(2, result.total_results);
+
+    let result = client
+        .ft_search("index", "@title:dogs", FtSearchOptions::default())
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "@published_at:[2020 2021]",
+            FtSearchOptions::default(),
+        )
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search("index", "*", FtSearchOptions::default().nocontent())
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(2, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default()
+                .withscores()
+                .withsortkeys()
+                .withpayloads()
+                .sortby("title", SortOrder::Asc),
+        )
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(2, result.total_results);
+
+    // with pipeline
+    let mut pipeline = client.create_pipeline();
+    pipeline
+        .ft_search("index", "wizard", FtSearchOptions::default())
+        .queue();
+    let result: FtQueryResult = pipeline.execute().await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(2, result.total_results);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_spellcheck() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.hset("doc", ("text", "hello help")).await?;
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default(),
+            FtFieldSchema::identifier("text").field_type(FtFieldType::Text),
+        )
+        .await?;
+
+    let result = client
+        .ft_spellcheck("index", "held", FtSpellCheckOptions::default().distance(2))
+        .await?;
+
+    assert_eq!(1, result.misspelled_terms.len());
+    assert_eq!("held", result.misspelled_terms[0].misspelled_term);
+    assert_eq!(2, result.misspelled_terms[0].suggestions.len());
+    assert_eq!("hello", result.misspelled_terms[0].suggestions[0].1);
+    assert_eq!("help", result.misspelled_terms[0].suggestions[1].1);
+
+    client.ft_dictadd("dict", "store").await?;
+
+    let result = client
+        .ft_spellcheck(
+            "index",
+            "held|stor",
+            FtSpellCheckOptions::default().terms(FtTermType::Include, "dict"),
+        )
+        .await?;
+
+    assert_eq!(2, result.misspelled_terms.len());
+    assert_eq!("held", result.misspelled_terms[0].misspelled_term);
+    assert_eq!(1, result.misspelled_terms[0].suggestions.len());
+    assert_eq!("help", result.misspelled_terms[0].suggestions[0].1);
+    assert_eq!("stor", result.misspelled_terms[1].misspelled_term);
+    assert_eq!(1, result.misspelled_terms[1].suggestions.len());
+    assert_eq!("store", result.misspelled_terms[1].suggestions[0].1);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_syn() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // Create an index
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default(),
+            FtFieldSchema::identifier("t").field_type(FtFieldType::Text),
+        )
+        .await?;
+
+    // insert documents
+    client.hset("foo", ("t", "hello")).await?;
+    client.hset("bar", ("t", "world")).await?; 
+
+    // search => only foo is matched
+    let result = client.ft_search("index", "hello", FtSearchOptions::default()).await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("foo", result.results[0].document_id);
+    assert_eq!(("t".to_owned(), "hello".to_owned()), result.results[0].values[0]);
+
+    // Create a synonym group 
+    client.ft_synupdate("index", "group1", false, ["hello", "world"]).await?;
+    let result: HashMap<String, Vec<String>> = client.ft_syndump("index").await?;
+    assert_eq!(2, result.len());
+    let hello_result = result.get("hello").unwrap();
+    assert_eq!(1, hello_result.len());
+    assert_eq!("group1", hello_result[0]);
+    let world_result = result.get("world").unwrap();
+    assert_eq!(1, world_result.len());
+    assert_eq!("group1", world_result[0]);
+
+    // search => foo and bar are matched!
+    let result = client.ft_search("index", "hello", FtSearchOptions::default()).await?;
+    assert_eq!(2, result.total_results);
+    assert_eq!("foo", result.results[0].document_id);
+    assert_eq!(("t".to_owned(), "hello".to_owned()), result.results[0].values[0]);
+    assert_eq!("bar", result.results[1].document_id);
+    assert_eq!(("t".to_owned(), "world".to_owned()), result.results[1].values[0]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_tagvals() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // Create an index
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default(),
+            FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag),
+        )
+        .await?;
+
+    // Insert documents
+    client.hset("foo", ("tag", "hello")).await?;
+    client.hset("bar", ("tag", "world")).await?;
+
+    // Get Tags
+    let tags: HashSet<String> = client.ft_tagvals("index", "tag").await?;
+    assert!(tags.contains("hello"));
+    assert!(tags.contains("world"));
 
     Ok(())
 }

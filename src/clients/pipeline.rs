@@ -39,10 +39,11 @@ impl Pipeline {
     }
 
     pub async fn execute<T: FromValue>(mut self) -> Result<T> {
+        let num_commands = self.commands.len();
         let result = self.client.send_batch(self.commands).await?;
 
         match result {
-            Value::Array(Array::Vec(results)) => {
+            Value::Array(Array::Vec(results)) if num_commands > 1 => {
                 let mut filtered_results = zip(results, self.forget_flags.iter())
                     .filter_map(
                         |(value, forget_flag)| if *forget_flag { None } else { Some(value) },

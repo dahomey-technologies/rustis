@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, IntoValueIterator, Value},
+    resp::{Array, BulkString, Command, IntoValueIterator, Value},
     Error, Result,
 };
 use smallvec::{smallvec, SmallVec};
@@ -17,6 +17,11 @@ pub trait FromValue: Sized {
     ///
     /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
     fn from_value(value: Value) -> Result<Self>;
+
+    fn from_value_with_command(value: Value, _command: &Command) -> Result<Self> {
+        Self::from_value(value)
+    }
+
     #[must_use]
     #[allow(clippy::complexity)]
     fn next_functor<I: Iterator<Item = Value>>() -> Box<dyn FnMut(&mut I) -> Option<Result<Self>>> {
@@ -591,7 +596,7 @@ impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
         S: BuildHasher,
     {
         self.remove(k)
-            .ok_or_else(|| Error::Client(format!("Cannot parse field {}", k)))
+            .ok_or_else(|| Error::Client(format!("Cannot parse field '{}'", k)))
     }
 
     fn remove_or_default<Q: ?Sized>(&mut self, k: &Q) -> V

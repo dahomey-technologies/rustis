@@ -1,5 +1,6 @@
 use crate::resp::{CommandArgs, IntoArgs};
 
+/// Shortcut function to creating a command with a single argument.
 #[must_use]
 #[inline(always)]
 pub fn cmd(name: &'static str) -> Command {

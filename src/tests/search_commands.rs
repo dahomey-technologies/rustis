@@ -1,15 +1,34 @@
-use std::{collections::{HashMap, HashSet}, time::Duration};
-
 use crate::{
-    tests::get_redis_stack_test_client, ClientReplyMode, ConnectionCommands, FlushingMode,
-    FtAggregateOptions, FtCreateOptions, FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage,
-    FtLoadAttribute, FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
-    FtSpellCheckOptions, FtTermType, FtWithCursorOptions, HashCommands, JsonCommands,
-    PipelinePreparedCommand, Result, SearchCommands, ServerCommands, SetCondition, SortOrder, network::sleep,
+    network::sleep, resp::BulkString, tests::get_redis_stack_test_client, Client, ClientReplyMode,
+    ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions, FtFieldSchema,
+    FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtProfileQueryType, FtQueryResult,
+    FtReducer, FtSearchOptions, FtSortBy, FtSpellCheckOptions, FtTermType, FtWithCursorOptions,
+    HashCommands, JsonCommands, PipelinePreparedCommand, Result, SearchCommands, ServerCommands,
+    SetCondition, SortOrder,
 };
 use rand::{seq::SliceRandom, Rng};
 use serial_test::serial;
 use smallvec::SmallVec;
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
+
+async fn wait_for_index_scanned(client: &mut Client, index: impl Into<BulkString>) -> Result<()> {
+    let index: BulkString = index.into();
+
+    loop {
+        let result = client.ft_info(index.clone()).await?;
+
+        if !result.indexing {
+            break;
+        }
+
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    Ok(())
+}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -43,6 +62,7 @@ async fn ft_aggregate() -> Result<()> {
             ],
         )
         .await?;
+    wait_for_index_scanned(&mut client, "idx").await?;
 
     let _result = client
         .ft_aggregate(
@@ -204,6 +224,8 @@ async fn ft_aggregate() -> Result<()> {
         )
         .await?;
 
+    wait_for_index_scanned(&mut client, "index").await?;
+
     let result = client
         .ft_aggregate(
             "index",
@@ -258,6 +280,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
+    wait_for_index_scanned(&mut client, "idx1").await?; 
 
     client
         .ft_create(
@@ -266,6 +289,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
+    wait_for_index_scanned(&mut client, "idx2").await?; 
 
     client.ft_aliasadd("alias", "idx1").await?;
     client.ft_aliasupdate("alias", "idx2").await?;
@@ -493,6 +517,7 @@ async fn ft_cursor() -> Result<()> {
             ],
         )
         .await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     let result = client
         .ft_aggregate(
@@ -600,6 +625,7 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     client.ft_dropindex("index", false).await?;
     let exists = client.hexists("log:1", "url").await?;
@@ -628,10 +654,9 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
-    sleep(Duration::from_millis(100)).await;
+    wait_for_index_scanned(&mut client, "index").await?;
 
     client.ft_dropindex("index", true).await?;
-    sleep(Duration::from_millis(100)).await;
 
     let exists = client.hexists("log:1", "url").await?;
     assert!(!exists);
@@ -850,6 +875,7 @@ async fn ft_profile() -> Result<()> {
             ],
         )
         .await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     let result = client
         .ft_profile(
@@ -933,6 +959,7 @@ async fn ft_search() -> Result<()> {
             ],
         )
         .await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     let result = client
         .ft_search("index", "wizard", FtSearchOptions::default())
@@ -1003,6 +1030,7 @@ async fn ft_spellcheck() -> Result<()> {
             FtFieldSchema::identifier("text").field_type(FtFieldType::Text),
         )
         .await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     let result = client
         .ft_spellcheck("index", "held", FtSpellCheckOptions::default().distance(2))
@@ -1042,6 +1070,10 @@ async fn ft_syn() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
+    // Insert documents
+    client.hset("foo", ("t", "hello")).await?;
+    client.hset("bar", ("t", "world")).await?;
+
     // Create an index
     client
         .ft_create(
@@ -1050,19 +1082,23 @@ async fn ft_syn() -> Result<()> {
             FtFieldSchema::identifier("t").field_type(FtFieldType::Text),
         )
         .await?;
-
-    // insert documents
-    client.hset("foo", ("t", "hello")).await?;
-    client.hset("bar", ("t", "world")).await?; 
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     // search => only foo is matched
-    let result = client.ft_search("index", "hello", FtSearchOptions::default()).await?;
+    let result = client
+        .ft_search("index", "hello", FtSearchOptions::default())
+        .await?;
     assert_eq!(1, result.total_results);
     assert_eq!("foo", result.results[0].document_id);
-    assert_eq!(("t".to_owned(), "hello".to_owned()), result.results[0].values[0]);
+    assert_eq!(
+        ("t".to_owned(), "hello".to_owned()),
+        result.results[0].values[0]
+    );
 
-    // Create a synonym group 
-    client.ft_synupdate("index", "group1", false, ["hello", "world"]).await?;
+    // Create a synonym group
+    client
+        .ft_synupdate("index", "group1", false, ["hello", "world"])
+        .await?;
     let result: HashMap<String, Vec<String>> = client.ft_syndump("index").await?;
     assert_eq!(2, result.len());
     let hello_result = result.get("hello").unwrap();
@@ -1073,12 +1109,20 @@ async fn ft_syn() -> Result<()> {
     assert_eq!("group1", world_result[0]);
 
     // search => foo and bar are matched!
-    let result = client.ft_search("index", "hello", FtSearchOptions::default()).await?;
+    let result = client
+        .ft_search("index", "hello", FtSearchOptions::default())
+        .await?;
     assert_eq!(2, result.total_results);
     assert_eq!("foo", result.results[0].document_id);
-    assert_eq!(("t".to_owned(), "hello".to_owned()), result.results[0].values[0]);
+    assert_eq!(
+        ("t".to_owned(), "hello".to_owned()),
+        result.results[0].values[0]
+    );
     assert_eq!("bar", result.results[1].document_id);
-    assert_eq!(("t".to_owned(), "world".to_owned()), result.results[1].values[0]);
+    assert_eq!(
+        ("t".to_owned(), "world".to_owned()),
+        result.results[1].values[0]
+    );
 
     Ok(())
 }
@@ -1090,6 +1134,10 @@ async fn ft_tagvals() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
+    // Insert documents
+    client.hset("foo", ("tag", "hello")).await?;
+    client.hset("bar", ("tag", "world")).await?;
+
     // Create an index
     client
         .ft_create(
@@ -1098,10 +1146,7 @@ async fn ft_tagvals() -> Result<()> {
             FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag),
         )
         .await?;
-
-    // Insert documents
-    client.hset("foo", ("tag", "hello")).await?;
-    client.hset("bar", ("tag", "world")).await?;
+    wait_for_index_scanned(&mut client, "index").await?; 
 
     // Get Tags
     let tags: HashSet<String> = client.ft_tagvals("index", "tag").await?;

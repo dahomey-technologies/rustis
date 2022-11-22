@@ -628,11 +628,11 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
-    sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(100)).await;
 
     client.ft_dropindex("index", true).await?;
-    sleep(Duration::from_millis(100));
-    
+    sleep(Duration::from_millis(100)).await;
+
     let exists = client.hexists("log:1", "url").await?;
     assert!(!exists);
 

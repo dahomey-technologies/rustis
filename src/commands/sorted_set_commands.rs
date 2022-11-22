@@ -839,7 +839,7 @@ pub trait SortedSetCommands {
     }
 }
 
-/// Condition option for the [zadd](crate::SortedSetCommands::zadd) command
+/// Condition option for the [`zadd`](crate::SortedSetCommands::zadd) command
 pub enum ZAddCondition {
     /// No condition
     None,
@@ -865,7 +865,7 @@ impl IntoArgs for ZAddCondition {
     }
 }
 
-/// Comparison option for the [zadd](crate::SortedSetCommands::zadd) command
+/// Comparison option for the [`zadd`](crate::SortedSetCommands::zadd) command
 pub enum ZAddComparison {
     /// No comparison
     None,
@@ -895,7 +895,7 @@ impl IntoArgs for ZAddComparison {
     }
 }
 
-/// sort by option of the [zrange](crate::SortedSetCommands::zrange) command
+/// sort by option of the [`zrange`](crate::SortedSetCommands::zrange) command
 pub enum ZRangeSortBy {
     /// No sort by
     None,
@@ -958,7 +958,7 @@ impl IntoArgs for ZAggregate {
     }
 }
 
-/// Where option of the [zmpop](crate::SortedSetCommands::zmpop) command
+/// Where option of the [`zmpop`](crate::SortedSetCommands::zmpop) command
 pub enum ZWhere {
     /// When the MIN modifier is used, the elements popped are those
     /// with the lowest scores from the first non-empty sorted set.
@@ -976,7 +976,7 @@ impl IntoArgs for ZWhere {
     }
 }
 
-/// Options for the command [zadd](crate::SortedSetCommands::zadd)
+/// Options for the [`zadd`](crate::SortedSetCommands::zadd) command.
 #[derive(Default)]
 pub struct ZAddOptions {
     command_args: CommandArgs,

@@ -505,7 +505,7 @@ impl IntoArgs for ClusterFailoverOption {
     }
 }
 
-/// Cluster state used in the `cluster_state`field of [crate::ClusterInfo]
+/// Cluster state used in the `cluster_state` field of [`ClusterInfo`](crate::ClusterInfo)
 pub enum ClusterState {
     /// State is `ok` if the node is able to receive queries.
     Ok,

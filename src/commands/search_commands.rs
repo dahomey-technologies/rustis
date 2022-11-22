@@ -24,11 +24,11 @@ pub trait SearchCommands {
     /// * `query`- is base filtering query that retrieves the documents.\
     ///  It follows the exact same syntax as the search query,\
     ///  including filters, unions, not, optional, and so on.
-    /// * `options` - See [`FtAggregateOptions`](crate::SearchCommands::FtAggregateOptions)
+    /// * `options` - See [`FtAggregateOptions`](crate::FtAggregateOptions)
     ///
     /// # See Also
-    /// [<https://redis.io/commands/ft.aggregate/>](https://redis.io/commands/ft.aggregate/)
-    /// [`RedisSeach Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
+    /// * [<https://redis.io/commands/ft.aggregate/>](https://redis.io/commands/ft.aggregate/)
+    /// * [`RedisSeach Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
     #[must_use]
     fn ft_aggregate<I, Q>(
         &mut self,
@@ -48,7 +48,7 @@ pub trait SearchCommands {
     ///
     /// # Arguments
     /// * `index` - The index.
-    /// * `alias`- alias to be added to an index
+    /// * `alias` - alias to be added to an index
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasadd/>](https://redis.io/commands/ft.aliasadd/)
@@ -65,7 +65,7 @@ pub trait SearchCommands {
     /// Remove an alias from an index
     ///
     /// # Arguments
-    /// * `alias`- alias to be removed
+    /// * `alias` - alias to be removed
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasdel/>](https://redis.io/commands/ft.aliasdel/)
@@ -85,7 +85,7 @@ pub trait SearchCommands {
     ///
     /// # Arguments
     /// * `index` - The index.
-    /// * `alias`- alias to be added to an index
+    /// * `alias` - alias to be added to an index
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasupdate/>](https://redis.io/commands/ft.aliasupdate/)
@@ -106,8 +106,8 @@ pub trait SearchCommands {
     ///
     /// # Arguments
     /// * `index` - index name to create.
-    /// * `skip_initial_scan`- if set, does not scan and index.
-    /// * `attribute`- attribute to add.
+    /// * `skip_initial_scan` - if set, does not scan and index.
+    /// * `attribute` - attribute to add.
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.alter/>](https://redis.io/commands/ft.alter/)
@@ -179,8 +179,8 @@ pub trait SearchCommands {
     /// * `index` - Name of the index to create. If it exists, the old specification is overwritten.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/ft.create/>](https://redis.io/commands/ft.create/)
-    /// [`Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
+    /// * [<https://redis.io/commands/ft.create/>](https://redis.io/commands/ft.create/)
+    /// * [`Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
     #[must_use]
     fn ft_create<I, S>(
         &mut self,
@@ -288,6 +288,9 @@ pub trait SearchCommands {
     }
 
     /// Dump all terms in the given dictionary
+    /// 
+    /// # Arguments
+    /// * `dict` - dictionary name.
     ///
     /// # Return
     /// A collection, where each element is a term (bulkstring).
@@ -446,8 +449,8 @@ pub trait SearchCommands {
         prepare_command(self, cmd("FT._LIST"))
     }
 
-    /// Perform a [`FT.SEARCH`](crate::SearchCommands::ft_search)
-    /// or [`FT.AGGREGATE`](crate::SearchCommands::ft_aggregate) command and collects performance information
+    /// Perform a [`ft_search`](crate::SearchCommands::ft_search)
+    /// or [`ft_aggregate`](crate::SearchCommands::ft_aggregate) command and collects performance information
     ///
     /// # Arguments
     /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
@@ -456,7 +459,7 @@ pub trait SearchCommands {
     /// * `query` - collection of query parameters (non including the index name)
     /// 
     /// # Note
-    /// To reduce the size of the output, use `NOCONTENT` or `LIMIT 0 0` to reduce results reply 
+    /// To reduce the size of the output, use [`nocontent`](FtSearchOptions::nocontent) or [`limit(0,0)`](FtSearchOptions::limit) to reduce results reply 
     /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
     ///
     /// # Return
@@ -494,7 +497,7 @@ pub trait SearchCommands {
     /// # Arguments
     /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
     /// * `query` - text query to search. Refer to [`Query syntax`](https://redis.io/docs/stack/search/reference/query_syntax) for more details.
-    /// * `options` - See [`FtSearchOptions`](crate::SearchCommands::FtSearchOptions)
+    /// * `options` - See [`FtSearchOptions`](crate::FtSearchOptions)
     ///
     /// # Return
     /// An instance of [`FtQueryResult`](crate::FtQueryResult)
@@ -528,7 +531,7 @@ pub trait SearchCommands {
     /// # Arguments
     /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
     /// * `query` - search query. See [`Spellchecking`](https://redis.io/docs/stack/search/reference/spellcheck) for more details.
-    /// * `options` - See [`FtSpellCheckOptions`](crate::SearchCommands::FtSpellCheckOptions)
+    /// * `options` - See [`FtSpellCheckOptions`](crate::FtSpellCheckOptions)
     ///
     /// # Return
     /// An instance of [`FtSpellCheckResult`](crate::FtSpellCheckResult)
@@ -565,8 +568,8 @@ pub trait SearchCommands {
     /// This command returns a list of synonym terms and their synonym group ids.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/ft.syndump/>](https://redis.io/commands/ft.syndump/)
-    /// [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
+    /// * [<https://redis.io/commands/ft.syndump/>](https://redis.io/commands/ft.syndump/)
+    /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
     fn ft_syndump<I, R>(
         &mut self,
@@ -596,8 +599,8 @@ pub trait SearchCommands {
     /// This command returns a list of synonym terms and their synonym group ids.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/ft.synupdate/>](https://redis.io/commands/ft.synupdate/)
-    /// [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
+    /// * [<https://redis.io/commands/ft.synupdate/>](https://redis.io/commands/ft.synupdate/)
+    /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
     fn ft_synupdate<T: Into<BulkString>>(
         &mut self,
@@ -698,7 +701,7 @@ impl FromValue for FtFieldType {
     }
 }
 
-/// Phonetic algorithm and language used for the [FtFieldSchema::phonetic](crate::FtFieldSchema) method
+/// Phonetic algorithm and language used for the [`FtFieldSchema::phonetic`](crate::FtFieldSchema::phonetic) method
 ///
 /// For more information, see [`Phonetic Matching`](https://redis.io/docs/stack/search/reference/phonetic_matching).
 pub enum FtPhoneticMatcher {
@@ -1150,7 +1153,7 @@ impl FtAggregateOptions {
     /// Each group should have at least one reducer,
     /// a function that handles the group entries,
     /// either counting them,
-    /// or performing multiple aggregate operations (see [`reduce`](crate::SearchCommands::reduce)).
+    /// or performing multiple aggregate operations (see [`FtReducer`](crate::FtReducer)).
     #[must_use]
     pub fn groupby<P, PP, R>(self, properties: PP, reducers: R) -> Self
     where
@@ -1170,13 +1173,8 @@ impl FtAggregateOptions {
 
     /// Sort the pipeline up until the point of SORTBY, using a list of properties.
     ///
-    /// Each group should have at least one reducer,
-    /// a function that handles the group entries,
-    /// either counting them,
-    /// or performing multiple aggregate operations (see [`reduce`](crate::SearchCommands::reduce)).
-    ///
-    /// `MAX` is used to optimized sorting, by sorting only for the n-largest elements.
-    /// Although it is not connected to `LIMIT`, you usually need just `SORTBY … MAX` for common queries.
+    /// `max` is used to optimized sorting, by sorting only for the n-largest elements.
+    /// Although it is not connected to [`limit`](FtAggregateOptions::limit), you usually need just `SORTBY … MAX` for common queries.
     #[must_use]
     pub fn sortby<P>(self, properties: P, max: Option<usize>) -> Self
     where
@@ -2024,9 +2022,9 @@ impl FromValue for FtIndexDefinition {
 
 /// Type of query for the [`ft_profile`](crate::SearchCommands::ft_profile) command
 pub enum FtProfileQueryType {
-    /// [`FT.SEARCH`](crate::SearchCommands::ft_search) query type
+    /// [`ft_search`](crate::SearchCommands::ft_search) query type
     Search,
-    /// [`FT.AGGREGATE`](crate::SearchCommands::ft_aggregate) query type
+    /// [`ft_aggregate`](crate::SearchCommands::ft_aggregate) query type
     Aggregate,
 }
 

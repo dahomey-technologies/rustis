@@ -149,7 +149,7 @@ pub trait BitmapCommands {
     }
 }
 
-/// Interval options for the [bitcount](crate::BitmapCommands::bitcount) command
+/// Interval options for the [`bitcount`](crate::BitmapCommands::bitcount) command
 #[derive(Default)]
 pub struct BitRange {
     command_args: CommandArgs,
@@ -191,7 +191,7 @@ impl IntoArgs for BitUnit {
     }
 }
 
-/// Sub-command for the [bitfield](crate::BitmapCommands::bitfield) command
+/// Sub-command for the [`bitfield`](crate::BitmapCommands::bitfield) command
 pub enum BitFieldSubCommand<E = &'static str, O = &'static str>
 where
     E: Into<BulkString>,
@@ -294,7 +294,7 @@ impl IntoArgs for BitFieldOverflow {
     }
 }
 
-/// Bit operation for the [bitop](crate::BitmapCommands::bitop) command.
+/// Bit operation for the [`bitop`](crate::BitmapCommands::bitop) command.
 pub enum BitOperation {
     And,
     Or,

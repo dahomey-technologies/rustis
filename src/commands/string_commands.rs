@@ -626,7 +626,7 @@ pub trait StringCommands {
     }
 }
 
-/// Options for the [getex](crate::StringCommands::getex) command
+/// Options for the [`getex`](crate::StringCommands::getex) command
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -654,7 +654,7 @@ impl IntoArgs for GetExOptions {
 
 pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
 
-/// Result for the [lcs](crate::StringCommands::lcs) command
+/// Result for the [`lcs`](crate::StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,

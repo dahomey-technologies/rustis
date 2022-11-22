@@ -653,7 +653,7 @@ pub trait GenericCommands {
     }
 }
 
-/// Options for the [expire](crate::GenericCommands::expire) command
+/// Options for the [`expire`](crate::GenericCommands::expire) command
 pub enum ExpireOption {
     /// No option
     None,
@@ -775,7 +775,7 @@ impl IntoArgs for RestoreOptions {
     }
 }
 
-/// Order option of the [sort](crate::GenericCommands::sort) command
+/// Order option of the [`sort`](crate::GenericCommands::sort) command
 pub enum SortOrder {
     Asc,
     Desc,
@@ -839,7 +839,7 @@ impl IntoArgs for SortOptions {
     }
 }
 
-/// Result for the [dump](crate::GenericCommands::dump) command.
+/// Result for the [`dump`](crate::GenericCommands::dump) command.
 pub struct DumpResult {
     pub serialized_value: Vec<u8>,
 }

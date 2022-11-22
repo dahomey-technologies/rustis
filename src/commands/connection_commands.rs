@@ -547,7 +547,7 @@ impl FromValue for ClientInfo {
     }
 }
 
-/// Client type options for the [client_list](crate::ConnectionCommands::client_list) command.
+/// Client type options for the [`client_list`](crate::ConnectionCommands::client_list) command.
 pub enum ClientType {
     Normal,
     Master,

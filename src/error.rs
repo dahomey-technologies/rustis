@@ -10,12 +10,17 @@ use std::{
     str::{FromStr, Utf8Error},
 };
 
+/// `Internal Use`
+/// 
+/// Gives a reason to retry sending a command to the Redis Server
 #[derive(Debug)]
 pub enum RetryReason {
+    /// Received an ASK error from the Redis Server
     Ask {
         hash_slot: u16,
         address: (String, u16),
     },
+    /// Received a MOVED error from the Redis Server
     Moved {
         hash_slot: u16,
         address: (String, u16),

@@ -179,7 +179,7 @@ pub trait GeoCommands {
     }
 }
 
-/// Condition for the [geoadd](crate::GeoCommands::geoadd) command
+/// Condition for the [`geoadd`](crate::GeoCommands::geoadd) command
 pub enum GeoAddCondition {
     /// No option
     None,

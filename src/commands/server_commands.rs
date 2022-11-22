@@ -1098,6 +1098,7 @@ impl FromValue for CommandInfo {
 }
 
 /// Get additional information about a command
+/// 
 /// See <https://redis.io/docs/reference/command-tips/>
 #[derive(Debug, Clone)]
 pub enum CommandTip {
@@ -1131,11 +1132,32 @@ impl FromValue for CommandTip {
     }
 }
 
+/// This tip can help clients determine the shards to send the command in clustering mode. 
+/// 
+/// The default behavior a client should implement for commands without the request_policy tip is as follows:
+/// 1. The command doesn't accept key name arguments: the client can execute the command on an arbitrary shard.
+/// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard, 
+/// as determined by the hash slot of the input keys.
 #[derive(Debug, Clone)]
 pub enum RequestPolicy {
+    /// the client should execute the command on all nodes - masters and replicas alike. 
+    /// 
+    /// An example is the [`config_set`](crate::ServerCommands::config_set) command. 
+    /// This tip is in-use by commands that don't accept key name arguments. The command operates atomically per shard.
     AllNodes,
+    /// the client should execute the command on all master shards (e.g., the [`dbsize`](crate::ServerCommands::dbsize) command). 
+    /// 
+    /// This tip is in-use by commands that don't accept key name arguments. The command operates atomically per shard.
     AllShards,
+    /// the client should execute the command on several shards. 
+    /// 
+    /// The shards that execute the command are determined by the hash slots of its input key name arguments. 
+    /// Examples for such commands include [`mset`](crate::StringCommands::mset), [`mget`](crate::StringCommands::mget) 
+    /// and [`del`](crate::GenericCommands::del). 
+    /// However, note that [`sunionstore`](crate::SetCommands::sunionstore) isn't considered 
+    /// as multi_shard because all of its keys must belong to the same hash slot.
     MultiShard,
+    /// indicates a non-trivial form of the client's request policy, such as the [`scan`](crate::GenericCommands::scan) command.
     Special,
 }
 
@@ -1155,15 +1177,58 @@ impl FromStr for RequestPolicy {
     }
 }
 
+/// This tip can help clients determine the aggregate they need to compute from the replies of multiple shards in a cluster. 
+/// 
+/// The default behavior for commands without a request_policy tip only applies to replies with of nested types 
+/// (i.e., an array, a set, or a map). 
+/// The client's implementation for the default behavior should be as follows:
+/// 1. The command doesn't accept key name arguments: the client can aggregate all replies within a single nested data structure. 
+/// For example, the array replies we get from calling [`keys`](crate::GenericCommands::keys) against all shards. 
+/// These should be packed in a single in no particular order.
+/// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names. 
+/// For example, [`mget`](crate::StringCommands::mget)'s aggregated reply.
 #[derive(Debug, Clone)]
 pub enum ResponsePolicy {
+    /// the clients should return success if at least one shard didn't reply with an error. 
+    /// 
+    /// The client should reply with the first non-error reply it obtains. 
+    /// If all shards return an error, the client can reply with any one of these. 
+    /// For example, consider a [`script_kill`](crate::ScriptingCommands::script_kill) command that's sent to all shards. 
+    /// Although the script should be loaded in all of the cluster's shards, 
+    /// the [`script_kill`](crate::ScriptingCommands::script_kill) will typically run only on one at a given time.
     OneSucceeded,
+    /// the client should return successfully only if there are no error replies. 
+    /// 
+    /// Even a single error reply should disqualify the aggregate and be returned. 
+    /// Otherwise, the client should return one of the non-error replies. 
+    /// As an example, consider the [`config_set`](crate::ServerCommands::config_set), 
+    /// [`script_flush`](crate::ScriptingCommands::script_flush) and 
+    /// [`script_load`](crate::ScriptingCommands::script_load) commands.
     AllSucceeded,
+    /// the client should return the result of a logical `AND` operation on all replies 
+    /// (only applies to integer replies, usually from commands that return either 0 or 1). 
+    /// 
+    /// Consider the [`script_exists`](crate::ScriptingCommands::script_exists) command as an example. 
+    /// It returns an array of 0's and 1's that denote the existence of its given SHA1 sums in the script cache. 
+    /// The aggregated response should be 1 only when all shards had reported that a given script SHA1 sum is in their respective cache.
     AggLogicalAnd,
+    /// the client should return the result of a logical `OR` operation on all replies 
+    /// (only applies to integer replies, usually from commands that return either 0 or 1).
     AggLogicalOr,
+    /// the client should return the minimal value from the replies (only applies to numerical replies). 
+    /// 
+    /// The aggregate reply from a cluster-wide [`wait`](crate::GenericCommands::wait) command, for example, 
+    /// should be the minimal value (number of synchronized replicas) from all shards
     AggMin,
+    /// the client should return the maximal value from the replies (only applies to numerical replies).
     AggMax,
+    /// the client should return the sum of replies (only applies to numerical replies). 
+    /// 
+    /// Example: [`dbsize`](crate::ServerCommands::dbsize).
     AggSum,
+    /// this type of tip indicates a non-trivial form of reply policy. 
+    /// 
+    /// [`info`](crate::ServerCommands::info) is an excellent example of that.
     Special,
 }
 
@@ -2115,6 +2180,9 @@ impl FromValue for RoleResult {
     }
 }
 
+/// Represents a connected replicas to a master
+/// 
+/// returned by the [`role`](crate::ServerCommands::role) command.
 pub struct ReplicaInfo {
     /// the replica IP
     pub ip: String,
@@ -2135,10 +2203,17 @@ impl FromValue for ReplicaInfo {
     }
 }
 
+/// The state of the replication from the point of view of the master, 
+/// 
+/// returned by the [`role`](crate::ServerCommands::role) command.
 pub enum ReplicationState {
+    /// the instance needs to connect to its master
     Connect,
+    /// the master-replica connection is in progress
     Connecting,
+    /// the master and replica are trying to perform the synchronization
     Sync,
+    /// the replica is online
     Connected,
 }
 

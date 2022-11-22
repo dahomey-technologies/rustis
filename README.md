@@ -29,7 +29,13 @@ An asynchronous Redis client for Rust.
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support
+* [Redis Stack](https://redis.io/docs/stack/) support:
+  * [RedisJSON v2.2](https://redis.io/docs/stack/json/) support
+  * [RedisSearch v2.4](https://redis.io/docs/stack/search/) support
 
 ## Roadmap
-* [RedisJSON](https://redis.io/docs/stack/json/) support
+* Complete [Redis Stack](https://redis.io/docs/stack/) support: 
+  * RedisGraph
+  * RedisTimeSeries
+  * RedisBloom
 * Advanced reconnection strategy

@@ -160,8 +160,8 @@ impl FromValue for bool {
             Value::Integer(i) => Ok(i != 0),
             Value::SimpleString(s) if s == "OK" => Ok(true),
             Value::BulkString(BulkString::Nil) => Ok(false),
-            Value::BulkString(BulkString::Binary(s)) if s == b"0" => Ok(false),
-            Value::BulkString(BulkString::Binary(s)) if s == b"1" => Ok(true),
+            Value::BulkString(BulkString::Binary(s)) if s == b"0" || s == b"false" => Ok(false),
+            Value::BulkString(BulkString::Binary(s)) if s == b"1" || s == b"true" => Ok(true),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to bool",

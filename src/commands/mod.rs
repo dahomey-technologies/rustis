@@ -4,6 +4,12 @@ mod cluster_commands;
 mod connection_commands;
 mod generic_commands;
 mod geo_commands;
+#[cfg(feature = "redis-graph")]
+mod graph_cache;
+#[cfg(feature = "redis-graph")]
+mod graph_commands;
+#[cfg(feature = "redis-graph")]
+mod graph_value;
 mod hash_commands;
 mod hyper_log_log_commands;
 mod internal_pub_sub_commands;
@@ -29,6 +35,12 @@ pub use cluster_commands::*;
 pub use connection_commands::*;
 pub use generic_commands::*;
 pub use geo_commands::*;
+#[cfg(feature = "redis-graph")]
+pub(crate) use graph_cache::*;
+#[cfg(feature = "redis-graph")]
+pub use graph_commands::*;
+#[cfg(feature = "redis-graph")]
+pub use graph_value::*;
 pub use hash_commands::*;
 pub use hyper_log_log_commands::*;
 pub(crate) use internal_pub_sub_commands::*;

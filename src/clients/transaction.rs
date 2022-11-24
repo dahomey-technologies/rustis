@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-graph")]
+use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
@@ -104,6 +106,8 @@ where
 impl BitmapCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
+#[cfg(feature = "redis-graph")]
+impl GraphCommands for Transaction {}
 impl HashCommands for Transaction {}
 impl HyperLogLogCommands for Transaction {}
 #[cfg(feature = "redis-json")]

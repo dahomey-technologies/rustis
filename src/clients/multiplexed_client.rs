@@ -1,14 +1,16 @@
+#[cfg(feature = "redis-graph")]
+use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
     resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
-    BitmapCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands, GeoCommands,
-    HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands, IntoConfig,
-    ListCommands, Pipeline, PreparedCommand, PubSubCommands, PubSubStream, Result,
-    ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
-    StreamCommands, StringCommands, Transaction,
+    BitmapCommands, Cache, ClientTrait, ClusterCommands, ConnectionCommands, Future,
+    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
+    InternalPubSubCommands, IntoConfig, ListCommands, Pipeline, PreparedCommand, PubSubCommands,
+    PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
+    SortedSetCommands, StreamCommands, StringCommands, Transaction,
 };
 use std::future::IntoFuture;
 
@@ -89,7 +91,7 @@ impl MultiplexedClient {
 
     /// Create a new pipeline
     pub fn create_pipeline(&mut self) -> Pipeline {
-        Pipeline::new(self.inner_client.clone())
+        self.inner_client.create_pipeline()
     }
 
     /// Create a new transaction
@@ -103,6 +105,16 @@ impl MultiplexedClient {
     /// should be used instead
     pub fn create_transaction(&mut self) -> Transaction {
         Transaction::new(self.inner_client.clone())
+    }
+}
+
+impl ClientTrait for MultiplexedClient {
+    fn create_pipeline(&mut self) -> Pipeline {
+        self.create_pipeline()
+    }
+
+    fn get_cache(&mut self) -> &mut Cache {
+        self.inner_client.get_cache()
     }
 }
 
@@ -138,12 +150,19 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { 
+        Box::pin(async move {
             if self.keep_command_for_result {
                 let command_for_result = self.command.clone();
-                self.executor.send(self.command).await?.into_with_command(&command_for_result) 
+                self.executor
+                    .send(self.command)
+                    .await?
+                    .into_with_command(&command_for_result)
+            } else if let Some(post_process) = self.post_process {
+                let command_for_result = self.command.clone();
+                let result = self.executor.send(self.command).await?;
+                post_process(result, command_for_result, self.executor).await
             } else {
-                self.executor.send(self.command).await?.into() 
+                self.executor.send(self.command).await?.into()
             }
         })
     }
@@ -154,6 +173,8 @@ impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}
 impl GeoCommands for MultiplexedClient {}
+#[cfg(feature = "redis-graph")]
+impl GraphCommands for MultiplexedClient {}
 impl HashCommands for MultiplexedClient {}
 impl HyperLogLogCommands for MultiplexedClient {}
 impl InternalPubSubCommands for MultiplexedClient {}

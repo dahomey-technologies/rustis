@@ -516,14 +516,13 @@ pub trait SearchCommands {
         I: Into<BulkString>,
         Q: Into<BulkString>,
     {
-        PreparedCommand::new(
+        prepare_command(
             self,
             cmd("FT.SEARCH")
                 .arg(index)
                 .arg(query)
                 .arg(options),
-            true
-        )
+        ).keep_command_for_result()
     }
 
     /// Perform spelling correction on a query, returning suggestions for misspelled terms

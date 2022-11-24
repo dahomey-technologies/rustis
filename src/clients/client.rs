@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-graph")]
+use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
@@ -10,7 +12,7 @@ use crate::{
     IntoConfig, ListCommands, Message, MonitorStream, Pipeline, PreparedCommand, PubSubCommands,
     PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
     SortedSetCommands, StreamCommands, StringCommands, Transaction, TransactionCommands,
-    ValueReceiver, ValueSender,
+    ValueReceiver, ValueSender, ClientTrait,
 };
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
@@ -95,7 +97,17 @@ impl Client {
 
     /// Create a new pipeline
     pub fn create_pipeline(&mut self) -> Pipeline {
-        Pipeline::new(self.inner_client.clone())
+        self.inner_client.create_pipeline()
+    }
+}
+
+impl ClientTrait for Client {
+    fn create_pipeline(&mut self) -> Pipeline {
+        self.create_pipeline()
+    }
+
+    fn get_cache(&mut self) -> &mut crate::Cache {
+        self.inner_client.get_cache()
     }
 }
 
@@ -131,12 +143,19 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { 
+        Box::pin(async move {
             if self.keep_command_for_result {
                 let command_for_result = self.command.clone();
-                self.executor.send(self.command).await?.into_with_command(&command_for_result) 
+                self.executor
+                    .send(self.command)
+                    .await?
+                    .into_with_command(&command_for_result)
+            } else if let Some(post_process) = self.post_process {
+                let command_for_result = self.command.clone();
+                let result = self.executor.send(self.command).await?;                
+                post_process(result, command_for_result, self.executor).await
             } else {
-                self.executor.send(self.command).await?.into() 
+                self.executor.send(self.command).await?.into()
             }
         })
     }
@@ -147,6 +166,8 @@ impl ClusterCommands for Client {}
 impl ConnectionCommands for Client {}
 impl GenericCommands for Client {}
 impl GeoCommands for Client {}
+#[cfg(feature = "redis-graph")]
+impl GraphCommands for Client {}
 impl HashCommands for Client {}
 impl HyperLogLogCommands for Client {}
 impl InternalPubSubCommands for Client {}

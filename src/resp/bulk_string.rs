@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use std::{fmt, ops::Deref, str::from_utf8_unchecked};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum BulkString {
     Str(&'static str),
     String(String),

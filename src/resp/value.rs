@@ -3,7 +3,7 @@ use crate::{
     Error, RedisError, Result,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Value {
     SimpleString(String),
     Integer(i64),

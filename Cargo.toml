@@ -37,9 +37,11 @@ pool = ["bb8"]
 tls = ["native-tls"]
 redis-json = []
 redis-search = []
+redis-graph = []
 redis-stack = [
     "redis-json",
-    "redis-search"
+    "redis-search",
+    "redis-graph"
 ]
 
 [dependencies]

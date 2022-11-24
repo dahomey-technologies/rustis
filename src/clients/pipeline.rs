@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-graph")]
+use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
@@ -93,6 +95,8 @@ impl ClusterCommands for Pipeline {}
 impl ConnectionCommands for Pipeline {}
 impl GenericCommands for Pipeline {}
 impl GeoCommands for Pipeline {}
+#[cfg(feature = "redis-graph")]
+impl GraphCommands for Pipeline {}
 impl HashCommands for Pipeline {}
 impl HyperLogLogCommands for Pipeline {}
 #[cfg(feature = "redis-json")]

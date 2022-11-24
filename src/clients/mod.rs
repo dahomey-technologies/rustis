@@ -1,4 +1,6 @@
+mod cache;
 mod client;
+mod client_trait;
 mod config;
 mod inner_client;
 mod message;
@@ -10,7 +12,9 @@ mod pipeline;
 mod pub_sub_stream;
 mod transaction;
 
+pub use cache::*;
 pub use client::*;
+pub use client_trait::*;
 pub use config::*;
 pub(crate) use inner_client::*;
 pub(crate) use message::*;

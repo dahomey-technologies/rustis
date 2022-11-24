@@ -30,12 +30,12 @@ An asynchronous Redis client for Rust.
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support
 * [Redis Stack](https://redis.io/docs/stack/) support:
-  * [RedisJSON v2.2](https://redis.io/docs/stack/json/) support
-  * [RedisSearch v2.4](https://redis.io/docs/stack/search/) support
+  * [RedisJSON v2.4](https://redis.io/docs/stack/json/) support
+  * [RedisSearch v2.6](https://redis.io/docs/stack/search/) support
+  * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 ## Roadmap
 * Complete [Redis Stack](https://redis.io/docs/stack/) support: 
-  * RedisGraph
   * RedisTimeSeries
   * RedisBloom
 * Advanced reconnection strategy

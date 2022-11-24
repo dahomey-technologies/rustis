@@ -109,7 +109,7 @@ impl From<native_tls::Error> for Error {
 }
 
 /// Redis server error kind
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RedisErrorKind {
     Ask {
         hash_slot: u16,
@@ -243,7 +243,7 @@ impl Display for RedisErrorKind {
 }
 
 /// Error issued by the Redis server
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RedisError {
     pub kind: RedisErrorKind,
     pub description: String,

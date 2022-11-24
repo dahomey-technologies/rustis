@@ -1039,8 +1039,8 @@ async fn ft_spellcheck() -> Result<()> {
     assert_eq!(1, result.misspelled_terms.len());
     assert_eq!("held", result.misspelled_terms[0].misspelled_term);
     assert_eq!(2, result.misspelled_terms[0].suggestions.len());
-    assert_eq!("hello", result.misspelled_terms[0].suggestions[0].1);
-    assert_eq!("help", result.misspelled_terms[0].suggestions[1].1);
+    assert!(result.misspelled_terms[0].suggestions.iter().any(|(_score, suggestion)| suggestion == "hello"));
+    assert!(result.misspelled_terms[0].suggestions.iter().any(|(_score, suggestion)| suggestion == "help"));
 
     client.ft_dictadd("dict", "store").await?;
 

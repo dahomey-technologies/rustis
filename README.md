@@ -33,6 +33,7 @@ An asynchronous Redis client for Rust.
   * [RedisJSON v2.4](https://redis.io/docs/stack/json/) support
   * [RedisSearch v2.6](https://redis.io/docs/stack/search/) support
   * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
+  * [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support
 
 ## Roadmap
 * Complete [Redis Stack](https://redis.io/docs/stack/) support: 

@@ -1,4 +1,6 @@
 mod bitmap_commands;
+#[cfg(feature = "redis-bloom")]
+mod bloom_commands;
 mod client;
 mod cluster;
 mod cluster_commands;

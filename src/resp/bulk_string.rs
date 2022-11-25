@@ -67,6 +67,10 @@ impl BulkString {
             BulkString::Nil => Ok(0),
         }
     }
+
+    pub fn from_bytes(b: Vec<u8>) -> Self {
+        Self::Binary(b)
+    }  
 }
 
 impl From<char> for BulkString {

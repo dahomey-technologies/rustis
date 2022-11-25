@@ -1,5 +1,7 @@
 mod bitmap_commands;
 mod blocking_commands;
+#[cfg(feature = "redis-bloom")]
+mod bloom_commands;
 mod cluster_commands;
 mod connection_commands;
 mod generic_commands;
@@ -31,6 +33,8 @@ mod transaction_commands;
 
 pub use bitmap_commands::*;
 pub use blocking_commands::*;
+#[cfg(feature = "redis-bloom")]
+pub use bloom_commands::*;
 pub use cluster_commands::*;
 pub use connection_commands::*;
 pub use generic_commands::*;

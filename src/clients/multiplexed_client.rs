@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-bloom")]
+use crate::BloomCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -169,6 +171,8 @@ where
 }
 
 impl BitmapCommands for MultiplexedClient {}
+#[cfg(feature = "redis-bloom")]
+impl BloomCommands for MultiplexedClient {}
 impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}

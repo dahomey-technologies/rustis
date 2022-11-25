@@ -38,10 +38,12 @@ tls = ["native-tls"]
 redis-json = []
 redis-search = []
 redis-graph = []
+redis-bloom = []
 redis-stack = [
     "redis-json",
     "redis-search",
-    "redis-graph"
+    "redis-graph",
+    "redis-bloom"
 ]
 
 [dependencies]

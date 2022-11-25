@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-bloom")]
+use crate::BloomCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -7,12 +9,12 @@ use crate::SearchCommands;
 use crate::{
     network::{MonitorReceiver, MonitorSender},
     resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, Future, GenericCommands,
-    GeoCommands, HashCommands, HyperLogLogCommands, InnerClient, InternalPubSubCommands,
-    IntoConfig, ListCommands, Message, MonitorStream, Pipeline, PreparedCommand, PubSubCommands,
-    PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-    SortedSetCommands, StreamCommands, StringCommands, Transaction, TransactionCommands,
-    ValueReceiver, ValueSender, ClientTrait,
+    BitmapCommands, BlockingCommands, ClientTrait, ClusterCommands, ConnectionCommands, Future,
+    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
+    InternalPubSubCommands, IntoConfig, ListCommands, Message, MonitorStream, Pipeline,
+    PreparedCommand, PubSubCommands, PubSubStream, Result, ScriptingCommands, SentinelCommands,
+    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    TransactionCommands, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
@@ -152,7 +154,7 @@ where
                     .into_with_command(&command_for_result)
             } else if let Some(post_process) = self.post_process {
                 let command_for_result = self.command.clone();
-                let result = self.executor.send(self.command).await?;                
+                let result = self.executor.send(self.command).await?;
                 post_process(result, command_for_result, self.executor).await
             } else {
                 self.executor.send(self.command).await?.into()
@@ -162,6 +164,8 @@ where
 }
 
 impl BitmapCommands for Client {}
+#[cfg(feature = "redis-bloom")]
+impl BloomCommands for Client {}
 impl ClusterCommands for Client {}
 impl ConnectionCommands for Client {}
 impl GenericCommands for Client {}

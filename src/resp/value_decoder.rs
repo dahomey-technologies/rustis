@@ -144,7 +144,7 @@ fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(&str, usize)>
             (true, b'\n') => return Ok(Some((std::str::from_utf8(&buf[idx..pos - 1])?, pos + 1))),
             (false, _) => (),
             _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
-        }
+        } 
 
         pos += 1;
     }

@@ -1,3 +1,5 @@
+#[cfg(feature = "redis-bloom")]
+use crate::BloomCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -104,6 +106,8 @@ where
 }
 
 impl BitmapCommands for Transaction {}
+#[cfg(feature = "redis-bloom")]
+impl BloomCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
 #[cfg(feature = "redis-graph")]

@@ -50,6 +50,25 @@ impl FromValue for () {
     }
 }
 
+impl<T, const N: usize> FromValue for [T; N]
+where
+    T: FromValue,
+{
+    fn from_value(value: Value) -> Result<Self> {
+        match value {
+            Value::Array(Array::Vec(v)) if v.len() == N => v
+                .into_value_iter()
+                .collect::<Result<Vec<T>>>()?
+                .try_into()
+                .map_err(|_| Error::Client("Cannot convert vec to array".to_owned())),
+            Value::Error(e) => Err(Error::Redis(e)),
+            _ => Err(Error::Client(
+                "Cannot convert Nil into static array".to_owned(),
+            )),
+        }
+    }
+}
+
 impl<T> FromValue for Vec<T>
 where
     T: FromValue,
@@ -525,6 +544,7 @@ where
 {
 }
 
+impl<T, const N: usize> FromSingleValueArray<T> for [T; N] where T: FromValue {}
 impl<T> FromSingleValueArray<T> for Vec<T> where T: FromValue {}
 impl<T, A> FromSingleValueArray<T> for SmallVec<A>
 where

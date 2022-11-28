@@ -1,5 +1,6 @@
 //! Defines types related to the [`RESP`](https://redis.io/docs/reference/protocol-spec/) protocol and their encoding/decoding
 
+mod buffer_decoder;
 mod command;
 mod command_arg;
 mod command_args;
@@ -11,6 +12,7 @@ mod value;
 mod value_decoder;
 mod value_deserialize;
 
+pub(crate) use buffer_decoder::*;
 pub use command::*;
 pub use command_arg::*;
 pub use command_args::*;

@@ -7,8 +7,8 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    network::{MonitorReceiver, MonitorSender, ValueOrBuffer},
+    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, BlockingCommands, ClientTrait, ClusterCommands, ConnectionCommands, Future,
     GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
     InternalPubSubCommands, IntoConfig, ListCommands, Message, MonitorStream, Pipeline,
@@ -226,8 +226,12 @@ impl BlockingCommands for Client {
 
             self.inner_client.send_message(message)?;
 
-            let value = value_receiver.await?;
-            value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
+            match value_receiver.await?? {
+                ValueOrBuffer::Value(v) => {
+                    Ok(v).map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
+                }
+                ValueOrBuffer::Buffer(_) => unimplemented!(),
+            }
         })
     }
 }

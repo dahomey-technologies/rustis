@@ -10,10 +10,16 @@ use log::{debug, error, info, log_enabled, Level};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
 
+#[derive(Debug)]
+pub(crate) enum  ValueOrBuffer{
+    Value(Value),
+    Buffer(Vec<u8>)
+}
+
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
-pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
-pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
+pub(crate) type ValueSender = oneshot::Sender<Result<ValueOrBuffer>>;
+pub(crate) type ValueReceiver = oneshot::Receiver<Result<ValueOrBuffer>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 pub(crate) type MonitorSender = mpsc::UnboundedSender<Result<Value>>;
@@ -356,13 +362,13 @@ impl NetworkHandler {
                                     if let Some(mut pending_replies) = pending_replies {
                                         pending_replies.push(value);
                                         let _result = value_sender
-                                            .send(Ok(Value::Array(Some(pending_replies))));
+                                            .send(Ok(ValueOrBuffer::Value(Value::Array(Some(pending_replies)))));
                                     } else {
-                                        let _result = value_sender.send(Ok(value));
+                                        let _result = value_sender.send(Ok(ValueOrBuffer::Value(value)));
                                     }
                                 }
                                 Err(_) => {
-                                    let _result = value_sender.send(value);
+                                    let _result = value_sender.send(value.map(ValueOrBuffer::Value));
                                 }
                             }
                         } else {

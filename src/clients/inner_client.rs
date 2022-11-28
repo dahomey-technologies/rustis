@@ -1,14 +1,11 @@
 use crate::{
-    network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    ClientPreparedCommand, Future, InternalPubSubCommands, IntoConfig, Message, MsgSender,
-    NetworkHandler, PreparedCommand, PubSubStream, Result, ValueReceiver, ValueSender, Pipeline, Cache,
+    network::{PubSubReceiver, PubSubSender, ValueOrBuffer},
+    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    Cache, ClientPreparedCommand, Future, InternalPubSubCommands, IntoConfig, Message, MsgSender,
+    NetworkHandler, Pipeline, PreparedCommand, PubSubStream, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
-use std::{
-    future::IntoFuture,
-    sync::Arc,
-};
+use std::{future::IntoFuture, sync::Arc};
 
 pub(crate) struct InnerClient {
     msg_sender: Arc<MsgSender>,
@@ -46,8 +43,10 @@ impl InnerClient {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let message = Message::single(command, value_sender);
         self.send_message(message)?;
-        let value = value_receiver.await?;
-        value.into_result()
+        match value_receiver.await?? {
+            ValueOrBuffer::Value(v) => Ok(v).into_result(),
+            ValueOrBuffer::Buffer(_) => unimplemented!(),
+        }
     }
 
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
@@ -60,8 +59,10 @@ impl InnerClient {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let message = Message::batch(commands, value_sender);
         self.send_message(message)?;
-        let value = value_receiver.await?;
-        value.into_result()
+        match value_receiver.await?? {
+            ValueOrBuffer::Value(v) => Ok(v).into_result(),
+            ValueOrBuffer::Buffer(_) => unimplemented!(),
+        }
     }
 
     pub fn send_message(&mut self, message: Message) -> Result<()> {
@@ -98,10 +99,12 @@ impl InnerClient {
 
             self.send_message(message)?;
 
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
-            })
+            match value_receiver.await?? {
+                ValueOrBuffer::Value(v) => Ok(v).map_into_result(|_| {
+                    PubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
+                }),
+                ValueOrBuffer::Buffer(_) => unimplemented!(),
+            }
         })
     }
 
@@ -130,10 +133,12 @@ impl InnerClient {
 
             self.send_message(message)?;
 
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
-            })
+            match value_receiver.await?? {
+                ValueOrBuffer::Value(v) => Ok(v).map_into_result(|_| {
+                    PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
+                }),
+                ValueOrBuffer::Buffer(_) => unimplemented!(),
+            }
         })
     }
 
@@ -165,10 +170,12 @@ impl InnerClient {
 
             self.send_message(message)?;
 
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_shardchannels(shardchannels, pub_sub_receiver, self.clone())
-            })
+            match value_receiver.await?? {
+                ValueOrBuffer::Value(v) => Ok(v).map_into_result(|_| {
+                    PubSubStream::from_shardchannels(shardchannels, pub_sub_receiver, self.clone())
+                }),
+                ValueOrBuffer::Buffer(_) => unimplemented!(),
+            }
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Command, IntoValueIterator, Value},
+    resp::{BulkString, Command, IntoValueIterator, Value},
     Error, Result,
 };
 use smallvec::{smallvec, SmallVec};
@@ -56,7 +56,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Array::Vec(v)) if v.len() == N => v
+            Value::Array(Some(v)) if v.len() == N => v
                 .into_value_iter()
                 .collect::<Result<Vec<T>>>()?
                 .try_into()
@@ -75,8 +75,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(Vec::new()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(Vec::new()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(vec![value.into()?]),
         }
@@ -90,8 +90,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(SmallVec::new()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(SmallVec::new()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(smallvec![value.into()?]),
         }
@@ -104,8 +104,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(HashSet::default()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(HashSet::default()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => {
                 let mut hash_set = HashSet::default();
@@ -122,8 +122,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(BTreeSet::new()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(BTreeSet::new()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(BTreeSet::from([value.into()?])),
         }
@@ -137,8 +137,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(HashMap::default()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(HashMap::default()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
@@ -152,8 +152,8 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(BTreeMap::new()),
-            Value::Array(Array::Vec(v)) => v.into_value_iter().collect(),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(BTreeMap::new()),
+            Value::Array(Some(v)) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Unexpected result value type".to_owned())),
         }
@@ -166,7 +166,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(None),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(None),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => T::from_value(value).map(|v| Some(v)),
         }
@@ -194,7 +194,7 @@ impl FromValue for i64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i),
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<i64>() {
@@ -223,7 +223,7 @@ impl FromValue for u64 {
             Value::Integer(i) => {
                 u64::try_from(i).map_err(|_| Error::Client("Cannot parse result to u64".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<u64>() {
@@ -252,7 +252,7 @@ impl FromValue for i32 {
             Value::Integer(i) => {
                 i32::try_from(i).map_err(|_| Error::Client("Cannot parse result to i32".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<i32>() {
@@ -281,7 +281,7 @@ impl FromValue for u32 {
             Value::Integer(i) => {
                 u32::try_from(i).map_err(|_| Error::Client("Cannot parse result to u32".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<u32>() {
@@ -310,7 +310,7 @@ impl FromValue for i16 {
             Value::Integer(i) => {
                 i16::try_from(i).map_err(|_| Error::Client("Cannot parse result to i16".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<i16>() {
@@ -339,7 +339,7 @@ impl FromValue for u16 {
             Value::Integer(i) => {
                 u16::try_from(i).map_err(|_| Error::Client("Cannot parse result to u16".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<u16>() {
@@ -368,7 +368,7 @@ impl FromValue for i8 {
             Value::Integer(i) => {
                 i8::try_from(i).map_err(|_| Error::Client("Cannot parse result i8 u64".to_owned()))
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<i8>() {
@@ -396,7 +396,7 @@ impl FromValue for u8 {
         match value {
             Value::Integer(i) => u8::try_from(i)
                 .map_err(|_| Error::Client("Cannot parse result tu8o u64".to_owned())),
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<u8>() {
@@ -424,7 +424,7 @@ impl FromValue for isize {
         match value {
             Value::Integer(i) => isize::try_from(i)
                 .map_err(|_| Error::Client("Cannot parse result to isize".to_owned())),
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<isize>() {
@@ -452,7 +452,7 @@ impl FromValue for usize {
         match value {
             Value::Integer(i) => usize::try_from(i)
                 .map_err(|_| Error::Client("Cannot parse result to usize".to_owned())),
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0),
             Value::BulkString(BulkString::Binary(s)) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
                     Ok(s) => match s.parse::<usize>() {
@@ -481,7 +481,7 @@ impl FromValue for f32 {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f32>()?)
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f32),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0f32),
             Value::SimpleString(s) => Ok(s.parse::<f32>()?),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
@@ -498,7 +498,7 @@ impl FromValue for f64 {
             Value::BulkString(BulkString::Binary(b)) => {
                 Ok(String::from_utf8_lossy(&b).parse::<f64>()?)
             }
-            Value::BulkString(BulkString::Nil) | Value::Array(Array::Nil) => Ok(0f64),
+            Value::BulkString(BulkString::Nil) | Value::Array(None) => Ok(0f64),
             Value::SimpleString(s) => Ok(s.parse::<f64>()?),
             Value::Double(d) => Ok(d),
             Value::Error(e) => Err(Error::Redis(e)),

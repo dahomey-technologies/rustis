@@ -7,7 +7,7 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    resp::{Array, Command, FromValue, ResultValueExt, Value},
+    resp::{Command, FromValue, ResultValueExt, Value},
     BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
     HashCommands, HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result,
     ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
@@ -47,7 +47,7 @@ impl Pipeline {
         let result = self.client.send_batch(self.commands).await?;
 
         match result {
-            Value::Array(Array::Vec(results)) if num_commands > 1 => {
+            Value::Array(Some(results)) if num_commands > 1 => {
                 let mut filtered_results = zip(results, self.forget_flags.iter())
                     .filter_map(
                         |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
@@ -58,7 +58,7 @@ impl Pipeline {
                     let value = filtered_results.pop().unwrap();
                     Ok(value).into_result()?.into()
                 } else {
-                    Value::Array(Array::Vec(filtered_results)).into()
+                    Value::Array(Some(filtered_results)).into()
                 }
             }
             _ => Ok(result).into_result()?.into(),

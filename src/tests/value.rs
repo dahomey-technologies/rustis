@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, Value},
+    resp::{Value},
     tests::get_test_client,
     GenericCommands, Result, SetCommands,
 };
@@ -41,7 +41,7 @@ async fn from_single_value_array() -> Result<()> {
 
 #[test]
 fn tuple() -> Result<()> {
-    let value = Value::Array(Array::Vec(vec![
+    let value = Value::Array(Some(vec![
         Value::BulkString("first".into()),
         Value::BulkString("second".into()),
     ]));
@@ -50,14 +50,14 @@ fn tuple() -> Result<()> {
     assert_eq!("first".to_owned(), result[0]);
     assert_eq!("second".to_owned(), result[1]);
 
-    let values = Value::Array(Array::Vec(vec![
+    let values = Value::Array(Some(vec![
         Value::BulkString("first".into()),
         Value::BulkString("second".into()),
     ]));
     let result: (String, String) = values.into()?;
     assert_eq!(("first".to_owned(), "second".to_owned()), result);
 
-    let value = Value::Array(Array::Vec(vec![
+    let value = Value::Array(Some(vec![
         Value::BulkString("first".into()),
         Value::BulkString("second".into()),
         Value::BulkString("third".into()),
@@ -68,12 +68,12 @@ fn tuple() -> Result<()> {
     assert_eq!(("first".to_owned(), "second".to_owned()), result[0]);
     assert_eq!(("third".to_owned(), "fourth".to_owned()), result[1]);
 
-    let value = Value::Array(Array::Vec(vec![
-        Value::Array(Array::Vec(vec![
+    let value = Value::Array(Some(vec![
+        Value::Array(Some(vec![
             Value::BulkString("first".into()),
             Value::BulkString("second".into()),
         ])),
-        Value::Array(Array::Vec(vec![
+        Value::Array(Some(vec![
             Value::BulkString("third".into()),
             Value::BulkString("fourth".into()),
         ])),

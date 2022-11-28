@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Command, FromValue},
+    resp::{BulkString, Command, FromValue},
     Error, RedisError, Result,
 };
 
@@ -9,8 +9,8 @@ pub enum Value {
     Integer(i64),
     Double(f64),
     BulkString(BulkString),
-    Array(Array),
-    Push(Array),
+    Array(Option<Vec<Value>>),
+    Push(Option<Vec<Value>>),
     Error(RedisError),
 }
 
@@ -47,22 +47,22 @@ impl ToString for Value {
             Value::Integer(i) => i.to_string(),
             Value::Double(f) => f.to_string(),
             Value::BulkString(s) => s.to_string(),
-            Value::Array(Array::Vec(v)) => format!(
+            Value::Array(Some(v)) => format!(
                 "[{}]",
                 v.iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Value::Array(Array::Nil) => "[]".to_string(),
-            Value::Push(Array::Vec(v)) => format!(
+            Value::Array(None) => "[]".to_string(),
+            Value::Push(Some(v)) => format!(
                 "Push[{}]",
                 v.iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Value::Push(Array::Nil) => "Push[]".to_string(),
+            Value::Push(None) => "Push[]".to_string(),
             Value::Error(e) => e.to_string(),
         }
     }

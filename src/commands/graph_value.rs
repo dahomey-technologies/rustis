@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, FromValue, Value},
+    resp::{BulkString, FromValue, Value},
     Error, GraphCache, Result,
 };
 use std::collections::HashMap;
@@ -88,7 +88,7 @@ impl GraphValue {
             GraphValueType::Boolean => GraphValue::Boolean(value.into()?),
             GraphValueType::Double => GraphValue::Double(value.into()?),
             GraphValueType::Array => {
-                let Value::Array(Array::Vec(values)) = value else {
+                let Value::Array(Some(values)) = value else {
                     return Err(Error::Client("Cannot parse GraphValue".to_owned()));
                 };
 
@@ -103,7 +103,7 @@ impl GraphValue {
             GraphValueType::Node => GraphValue::Node(GraphNode::from_value(value, cache)?),
             GraphValueType::Path => GraphValue::Path(GraphPath::from_value(value, cache)?),
             GraphValueType::Map => {
-                let Value::Array(Array::Vec(values)) = value else {
+                let Value::Array(Some(values)) = value else {
                     return Err(Error::Client("Cannot parse GraphValue".to_owned()));
                 };
 

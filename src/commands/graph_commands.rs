@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, Array, BulkString, Command, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
+        cmd, BulkString, Command, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
         FromValue, IntoArgs, Value,
     },
     ClientTrait, Error, Future, GraphCache, GraphValue, PipelinePreparedCommand, PreparedCommand,
@@ -318,7 +318,7 @@ impl GraphResultSet {
                     rows: Default::default(),
                     statistics: statistics.into()?,
                 }),
-                (Some(header), Some(Value::Array(Array::Vec(rows))), Some(statistics), None) => {
+                (Some(header), Some(Value::Array(Some(rows))), Some(statistics), None) => {
                     let rows = rows
                         .into_iter()
                         .map(|v| GraphResultRow::from_value(v, cache))
@@ -382,7 +382,7 @@ impl GraphResultSet {
 
         let result: Value = pipeline.execute().await?;
 
-        let Value::Array(Array::Vec(results)) = result else {
+        let Value::Array(Some(results)) = result else {
             return Err(Error::Client("Cannot parse GraphResultSet from result".to_owned()));
         };
 
@@ -452,7 +452,7 @@ pub struct GraphResultRow {
 
 impl GraphResultRow {
     pub(crate) fn from_value(value: Value, cache: &GraphCache) -> Result<Self> {
-        let Value::Array(Array::Vec(values)) = value else {
+        let Value::Array(Some(values)) = value else {
             return Err(Error::Client("Cannot parse GraphResultRow".to_owned()));
         };
 

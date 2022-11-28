@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, ArgsOrCollection, BulkString, CommandArgs, FromKeyValueValueArray,
+        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray,
         FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
         SingleArgOrCollection, Value, Command,
     },
@@ -38,8 +38,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.AGGREGATE").arg(index).arg(query).arg(options))
     }
@@ -56,8 +56,8 @@ pub trait SearchCommands {
     fn ft_aliasadd<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<BulkString>,
-        I: Into<BulkString>,
+        A: Into<CommandArg>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.ALIASADD").arg(alias).arg(index))
     }
@@ -73,7 +73,7 @@ pub trait SearchCommands {
     fn ft_aliasdel<A>(&mut self, alias: A) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<BulkString>,
+        A: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.ALIASDEL").arg(alias))
     }
@@ -93,8 +93,8 @@ pub trait SearchCommands {
     fn ft_aliasupdate<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<BulkString>,
-        I: Into<BulkString>,
+        A: Into<CommandArg>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.ALIASUPDATE").arg(alias).arg(index))
     }
@@ -120,7 +120,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -147,7 +147,7 @@ pub trait SearchCommands {
     fn ft_config_get<O, N, V, R>(&mut self, option: O) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        O: Into<BulkString>,
+        O: Into<CommandArg>,
         N: FromValue,
         V: FromValue,
         R: FromKeyValueValueArray<N, V>,
@@ -167,8 +167,8 @@ pub trait SearchCommands {
     fn ft_config_set<O, V>(&mut self, option: O, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        O: Into<BulkString>,
-        V: Into<BulkString>,
+        O: Into<CommandArg>,
+        V: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.CONFIG").arg("SET").arg(option).arg(value))
     }
@@ -190,7 +190,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
         S: ArgsOrCollection<FtFieldSchema>,
     {
         prepare_command(
@@ -215,7 +215,7 @@ pub trait SearchCommands {
     fn ft_cursor_del<I>(&mut self, index: I, cursor_id: u64) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.CURSOR").arg("DEL").arg(index).arg(cursor_id))
     }
@@ -238,7 +238,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.CURSOR").arg("READ").arg(index).arg(cursor_id))
     }
@@ -258,8 +258,8 @@ pub trait SearchCommands {
     fn ft_dictadd<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        T: Into<BulkString>,
+        D: Into<CommandArg>,
+        T: Into<CommandArg>,
         TT: SingleArgOrCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTADD").arg(dict).arg(terms))
@@ -280,8 +280,8 @@ pub trait SearchCommands {
     fn ft_dictdel<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        T: Into<BulkString>,
+        D: Into<CommandArg>,
+        T: Into<CommandArg>,
         TT: SingleArgOrCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTDEL").arg(dict).arg(terms))
@@ -301,7 +301,7 @@ pub trait SearchCommands {
     fn ft_dictdump<D, T, TT>(&mut self, dict: D) -> PreparedCommand<Self, TT>
     where
         Self: Sized,
-        D: Into<BulkString>,
+        D: Into<CommandArg>,
         T: FromValue,
         TT: FromSingleValueArray<T>,
     {
@@ -332,7 +332,7 @@ pub trait SearchCommands {
     fn ft_dropindex<I>(&mut self, index: I, dd: bool) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("FT.DROPINDEX").arg(index).arg_if(dd, "DD"))
     }
@@ -364,8 +364,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(
@@ -400,8 +400,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
         R: FromValue,
         RR: FromSingleValueArray<R>,
     {
@@ -425,7 +425,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.info/>](https://redis.io/commands/ft.info/)
     #[must_use]
-    fn ft_info(&mut self, index: impl Into<BulkString>) -> PreparedCommand<Self, FtInfoResult>
+    fn ft_info(&mut self, index: impl Into<CommandArg>) -> PreparedCommand<Self, FtInfoResult>
     where
         Self: Sized,
     {
@@ -477,8 +477,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtProfileResult>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
         QQ: SingleArgOrCollection<Q>
     {
         prepare_command(
@@ -513,8 +513,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -546,8 +546,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtSpellCheckResult>
     where
         Self: Sized,
-        I: Into<BulkString>,
-        Q: Into<BulkString>,
+        I: Into<CommandArg>,
+        Q: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -576,7 +576,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
         R: FromKeyValueValueArray<String, Vec<String>> 
     {
         prepare_command(self, cmd("FT.SYNDUMP").arg(index)
@@ -601,10 +601,10 @@ pub trait SearchCommands {
     /// * [<https://redis.io/commands/ft.synupdate/>](https://redis.io/commands/ft.synupdate/)
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
-    fn ft_synupdate<T: Into<BulkString>>(
+    fn ft_synupdate<T: Into<CommandArg>>(
         &mut self,
-        index: impl Into<BulkString>,
-        synonym_group_id: impl Into<BulkString>,
+        index: impl Into<CommandArg>,
+        synonym_group_id: impl Into<CommandArg>,
         skip_initial_scan: bool,
         terms: impl SingleArgOrCollection<T>
     ) -> PreparedCommand<Self, ()>
@@ -635,8 +635,8 @@ pub trait SearchCommands {
     #[must_use]
     fn ft_tagvals<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        index: impl Into<BulkString>,
-        field_name: impl Into<BulkString>,
+        index: impl Into<CommandArg>,
+        field_name: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -735,7 +735,7 @@ impl FtFieldSchema {
     /// * For hashes, is a field name within the hash.
     /// * For JSON, the identifier is a JSON Path expression.
     #[must_use]
-    pub fn identifier<N: Into<BulkString>>(identifier: N) -> Self {
+    pub fn identifier<N: Into<CommandArg>>(identifier: N) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -746,7 +746,7 @@ impl FtFieldSchema {
     ///  For example, you can use this feature to alias a complex JSONPath
     ///  expression with more memorable (and easier to type) name.
     #[must_use]
-    pub fn as_attribute<A: Into<BulkString>>(self, as_attribute: A) -> Self {
+    pub fn as_attribute<A: Into<CommandArg>>(self, as_attribute: A) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(as_attribute),
         }
@@ -915,7 +915,7 @@ impl FtCreateOptions {
     /// You can add several prefixes to index.
     /// Because the argument is optional, the default is * (all keys).
     #[must_use]
-    pub fn prefix<P: Into<BulkString>, PP: SingleArgOrCollection<P>>(self, prefixes: PP) -> Self {
+    pub fn prefix<P: Into<CommandArg>, PP: SingleArgOrCollection<P>>(self, prefixes: PP) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -930,7 +930,7 @@ impl FtCreateOptions {
     /// It is possible to use `@__key` to access the key that was just added/changed.
     /// A field can be used to set field name by passing `FILTER @indexName=="myindexname"`.
     #[must_use]
-    pub fn filter<F: Into<BulkString>>(self, filter: F) -> Self {
+    pub fn filter<F: Into<CommandArg>>(self, filter: F) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER").arg(filter),
         }
@@ -963,7 +963,7 @@ impl FtCreateOptions {
 
     /// document attribute set as the document language.
     #[must_use]
-    pub fn language_field<L: Into<BulkString>>(self, default_lang: L) -> Self {
+    pub fn language_field<L: Into<CommandArg>>(self, default_lang: L) -> Self {
         Self {
             command_args: self.command_args.arg("LANGUAGE_FIELD").arg(default_lang),
         }
@@ -983,7 +983,7 @@ impl FtCreateOptions {
     ///
     /// Ranking must be between 0.0 and 1.0. If not set, the default score is 1.
     #[must_use]
-    pub fn score_field<S: Into<BulkString>>(self, score_attribute: S) -> Self {
+    pub fn score_field<S: Into<CommandArg>>(self, score_attribute: S) -> Self {
         Self {
             command_args: self.command_args.arg("SCORE_FIELD").arg(score_attribute),
         }
@@ -992,7 +992,7 @@ impl FtCreateOptions {
     /// document attribute that you use as a binary safe payload string to the document
     /// that can be evaluated at query time by a custom scoring function or retrieved to the client.
     #[must_use]
-    pub fn payload_field<P: Into<BulkString>>(self, payload_attribute: P) -> Self {
+    pub fn payload_field<P: Into<CommandArg>>(self, payload_attribute: P) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1087,7 +1087,7 @@ impl FtCreateOptions {
     #[must_use]
     pub fn stop_words<W, WW>(self, stop_words: WW) -> Self
     where
-        W: Into<BulkString>,
+        W: Into<CommandArg>,
         WW: SingleArgOrCollection<W>,
     {
         Self {
@@ -1156,7 +1156,7 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn groupby<P, PP, R>(self, properties: PP, reducers: R) -> Self
     where
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
         PP: SingleArgOrCollection<P>,
         R: ArgsOrCollection<FtReducer>,
     {
@@ -1200,8 +1200,8 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn apply<E, N>(self, expr: E, name: N) -> Self
     where
-        E: Into<BulkString>,
-        N: Into<BulkString>,
+        E: Into<CommandArg>,
+        N: Into<CommandArg>,
     {
         Self {
             command_args: self.command_args.arg("APPLY").arg(expr).arg("AS").arg(name),
@@ -1230,7 +1230,7 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn filter<E, N>(self, expr: E) -> Self
     where
-        E: Into<BulkString>,
+        E: Into<CommandArg>,
     {
         Self {
             command_args: self.command_args.arg("FILTER").arg(expr),
@@ -1267,8 +1267,8 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn params<N, V, P>(self, params: P) -> Self
     where
-        N: Into<BulkString>,
-        V: Into<BulkString>,
+        N: Into<CommandArg>,
+        V: Into<CommandArg>,
         P: ArgsOrCollection<(N, V)>,
     {
         Self {
@@ -1306,7 +1306,7 @@ pub struct FtLoadAttribute {
 impl FtLoadAttribute {
     #[must_use]
     /// `identifier` is either an attribute name for hashes and JSON or a JSON Path expression for JSON.
-    pub fn new<I: Into<BulkString>>(identifier: I) -> Self {
+    pub fn new<I: Into<CommandArg>>(identifier: I) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -1317,7 +1317,7 @@ impl FtLoadAttribute {
     /// If it is not provided, the identifier is used.
     /// This should be avoided.
     #[must_use]
-    pub fn property<P: Into<BulkString>>(property: P) -> Self {
+    pub fn property<P: Into<CommandArg>>(property: P) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg("AS").arg(property),
         }
@@ -1353,7 +1353,7 @@ impl FtReducer {
     /// # Note
     /// The reducer creates a hash-set per group, and hashes each record.
     /// This can be memory heavy if the groups are big.
-    pub fn count_distinct<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn count_distinct<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1373,7 +1373,7 @@ impl FtReducer {
     /// In the former case, it can be an order of magnitude faster and consume much less memory
     /// than [`count_distinct`](crate::FtReducer::count_distinct),
     /// but again, it does not fit every user case.
-    pub fn count_distinctish<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn count_distinctish<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1386,7 +1386,7 @@ impl FtReducer {
     /// Return the sum of all numeric values of a given property in a group.
     ///
     /// Non numeric values if the group are counted as 0.
-    pub fn sum<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn sum<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1397,7 +1397,7 @@ impl FtReducer {
     }
 
     /// Return the minimal value of a property, whether it is a string, number or NULL.
-    pub fn min<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn min<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1408,7 +1408,7 @@ impl FtReducer {
     }
 
     /// Return the maximal value of a property, whether it is a string, number or NULL.
-    pub fn max<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn max<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1422,7 +1422,7 @@ impl FtReducer {
     ///
     /// This is equivalent to reducing by sum and count,
     /// and later on applying the ratio of them as an APPLY step.
-    pub fn avg<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn avg<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1434,7 +1434,7 @@ impl FtReducer {
 
     /// Return the [`standard deviation`](https://en.wikipedia.org/wiki/Standard_deviation)
     /// of a numeric property in the group.
-    pub fn stddev<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn stddev<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1450,7 +1450,7 @@ impl FtReducer {
     /// For example, the median can be expressed as the quantile at 0.5, e.g. REDUCE QUANTILE 2 @foo 0.5 AS median .
     /// If multiple quantiles are required, just repeat the QUANTILE reducer for each quantile.
     /// e.g. REDUCE QUANTILE 2 @foo 0.5 AS median REDUCE QUANTILE 2 @foo 0.99 AS p99
-    pub fn quantile<P: Into<BulkString>>(property: P, quantile: f64) -> FtReducer {
+    pub fn quantile<P: Into<CommandArg>>(property: P, quantile: f64) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1462,7 +1462,7 @@ impl FtReducer {
     }
 
     /// Merge all `distinct` values of a given property into a single array.
-    pub fn tolist<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn tolist<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1478,7 +1478,7 @@ impl FtReducer {
     /// If you with to get the top or bottom value in the group sorted by the same value,
     /// you are better off using the MIN/MAX reducers,
     /// but the same effect will be achieved by doing REDUCE FIRST_VALUE 4 @foo BY @foo DESC.
-    pub fn first_value<P: Into<BulkString>>(property: P) -> FtReducer {
+    pub fn first_value<P: Into<CommandArg>>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1489,7 +1489,7 @@ impl FtReducer {
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
-    pub fn first_value_by<P: Into<BulkString>, BP: Into<BulkString>>(
+    pub fn first_value_by<P: Into<CommandArg>, BP: Into<CommandArg>>(
         property: P,
         by_property: BP,
     ) -> FtReducer {
@@ -1504,7 +1504,7 @@ impl FtReducer {
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
-    pub fn first_value_by_order<P: Into<BulkString>, BP: Into<BulkString>>(
+    pub fn first_value_by_order<P: Into<CommandArg>, BP: Into<CommandArg>>(
         property: P,
         by_property: BP,
         order: SortOrder,
@@ -1522,7 +1522,7 @@ impl FtReducer {
 
     /// Perform a reservoir sampling of the group elements with a given size,
     ///  and return an array of the sampled items with an even distribution.
-    pub fn random_sample<P: Into<BulkString>, BP: Into<BulkString>>(
+    pub fn random_sample<P: Into<CommandArg>, BP: Into<CommandArg>>(
         property: P,
         sample_size: usize,
     ) -> FtReducer {
@@ -1542,7 +1542,7 @@ impl FtReducer {
     /// the name of the reduce function and the group properties.
     /// For example, if a name is not given to COUNT_DISTINCT by property @foo,
     /// the resulting name will be count_distinct(@foo).
-    pub fn as_name<N: Into<BulkString>>(self, name: N) -> Self {
+    pub fn as_name<N: Into<CommandArg>>(self, name: N) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(name),
         }
@@ -1562,7 +1562,7 @@ pub struct FtSortBy {
 
 impl FtSortBy {
     /// sort by property
-    pub fn property<P: Into<BulkString>>(property: P) -> FtSortBy {
+    pub fn property<P: Into<CommandArg>>(property: P) -> FtSortBy {
         Self {
             command_args: CommandArgs::Empty.arg(property),
         }
@@ -1686,7 +1686,7 @@ impl FtQueryResult {
                         };
 
                         let payload = if withpayloads {
-                            if let Some(Value::BulkString(BulkString::Binary(payload))) = iter.next() {
+                            if let Some(Value::BulkString(Some(payload))) = iter.next() {
                                 payload
                             } else {
                                 return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
@@ -1785,7 +1785,7 @@ impl FromValue for FtQueryResult {
         log::debug!("value: {:?}", value);
         let is_search = if let Value::Array(Some(ref values)) = &value {
             log::debug!("&values[0..2]: {:?}", &values[0..2]);
-            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(BulkString::Binary(_doc_id))])
+            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(Some(_doc_id))])
         } else {
             false
         };
@@ -1802,10 +1802,10 @@ impl FromValue for FtQueryResult {
 
         for arg in command.args.into_iter() {
             match arg {
-                BulkString::Str("NOCONTENT") => nocontent = true,
-                BulkString::Str("WITHSCORES") => withscores = true,
-                BulkString::Str("WITHPAYLOADS") => withpayloads = true,
-                BulkString::Str("WITHSORTKEYS") => withsortkeys = true,
+                CommandArg::Str("NOCONTENT") => nocontent = true,
+                CommandArg::Str("WITHSCORES") => withscores = true,
+                CommandArg::Str("WITHPAYLOADS") => withpayloads = true,
+                CommandArg::Str("WITHSORTKEYS") => withsortkeys = true,
                 _ => ()
             }
         }
@@ -2190,7 +2190,7 @@ impl FtSearchOptions {
     /// `min` and `max` follow [`zrange`](crate::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`, 
     /// and use `(` for exclusive ranges. Multiple numeric filters for different attributes are supported in one query.
     #[must_use]
-    pub fn filter(self, numeric_field: impl Into<BulkString>, min: impl Into<BulkString>, max: impl Into<BulkString>) -> Self {
+    pub fn filter(self, numeric_field: impl Into<CommandArg>, min: impl Into<CommandArg>, max: impl Into<CommandArg>) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER").arg(numeric_field).arg(min).arg(max),
         }
@@ -2201,7 +2201,7 @@ impl FtSearchOptions {
     /// `radius` is given as a number and units. 
     /// See [`geosearch`](crate::GeoCommands::geosearch) for more details.
     #[must_use]
-    pub fn geo_filter(self, geo_field: impl Into<BulkString>, lon: f64, lat: f64, radius: f64, unit: GeoUnit) -> Self {
+    pub fn geo_filter(self, geo_field: impl Into<CommandArg>, lon: f64, lat: f64, radius: f64, unit: GeoUnit) -> Self {
         Self {
             command_args: self.command_args.arg("GEOFILTER").arg(geo_field).arg(lon).arg(lat).arg(radius).arg(unit),
         }
@@ -2213,7 +2213,7 @@ impl FtSearchOptions {
     #[must_use]
     pub fn inkeys<A>(self, keys: impl SingleArgOrCollection<A>) -> Self
     where 
-        A: Into<BulkString>
+        A: Into<CommandArg>
     {
         Self {
             command_args: self.command_args.arg("INKEYS").arg(keys.num_args()).arg(keys),
@@ -2224,7 +2224,7 @@ impl FtSearchOptions {
     #[must_use]
     pub fn infields<A>(self, attributes: impl SingleArgOrCollection<A>) -> Self
     where 
-        A: Into<BulkString>
+        A: Into<CommandArg>
     {
         Self {
             command_args: self.command_args.arg("INFIELDS").arg(attributes.num_args()).arg(attributes),
@@ -2305,7 +2305,7 @@ impl FtSearchOptions {
     /// 
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn expander(self, expander: impl Into<BulkString>) -> Self
+    pub fn expander(self, expander: impl Into<CommandArg>) -> Self
     {
         Self {
             command_args: self.command_args.arg("EXPANDER").arg(expander),
@@ -2316,7 +2316,7 @@ impl FtSearchOptions {
     /// 
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn scorer(self, scorer: impl Into<BulkString>) -> Self
+    pub fn scorer(self, scorer: impl Into<CommandArg>) -> Self
     {
         Self {
             command_args: self.command_args.arg("SCORER").arg(scorer),
@@ -2338,7 +2338,7 @@ impl FtSearchOptions {
     /// 
      /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn payload(self, payload: impl Into<BulkString>) -> Self
+    pub fn payload(self, payload: impl Into<CommandArg>) -> Self
     {
         Self {
             command_args: self.command_args.arg("PAYLOAD").arg(payload),
@@ -2351,7 +2351,7 @@ impl FtSearchOptions {
     /// Attributes needed for `sortby` should be declared as [`SORTABLE`](crate::FtFieldSchema::sortable) in the index, 
     /// in order to be available with very low latency. Note that this adds memory overhead.
     #[must_use]
-    pub fn sortby(self, attribute: impl Into<BulkString>, order: SortOrder) -> Self
+    pub fn sortby(self, attribute: impl Into<CommandArg>, order: SortOrder) -> Self
     {
         Self {
             command_args: self.command_args.arg("SORTBY").arg(attribute).arg(order),
@@ -2392,8 +2392,8 @@ impl FtSearchOptions {
     #[must_use]
     pub fn params<N, V, P>(self, params: P) -> Self
     where
-        N: Into<BulkString>,
-        V: Into<BulkString>,
+        N: Into<CommandArg>,
+        V: Into<CommandArg>,
         P: ArgsOrCollection<(N, V)>,
     {
         Self {
@@ -2427,7 +2427,7 @@ pub struct FtSearchReturnAttribute {
 impl FtSearchReturnAttribute {
     /// `identifier`is either an attribute name (for hashes and JSON) or a JSON Path expression (for JSON).
     #[must_use]
-    pub fn identifier(identifier: impl Into<BulkString>) -> Self {
+    pub fn identifier(identifier: impl Into<CommandArg>) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -2437,7 +2437,7 @@ impl FtSearchReturnAttribute {
     /// 
     /// If not provided, the `identifier` is used in the result.
     #[must_use]
-    pub fn as_property(self, property: impl Into<BulkString>) -> Self {
+    pub fn as_property(self, property: impl Into<CommandArg>) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(property),
         }
@@ -2461,7 +2461,7 @@ impl FtSearchSummarizeOptions {
     /// Each field present is summarized. 
     /// If no `FIELDS` directive is passed, then all fields returned are summarized.
     #[must_use]
-    pub fn fields<F: Into<BulkString>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: Into<CommandArg>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }
@@ -2494,7 +2494,7 @@ impl FtSearchSummarizeOptions {
     /// You may use a newline sequence, as newlines are stripped from the result body anyway 
     /// (thus, it will not be conflated with an embedded newline in the text)
     #[must_use]
-    pub fn separator(self, separator: impl Into<BulkString>) -> Self {
+    pub fn separator(self, separator: impl Into<CommandArg>) -> Self {
         Self {
             command_args: self.command_args.arg("SEPARATOR").arg(separator),
         }
@@ -2518,7 +2518,7 @@ impl FtSearchHighlightOptions {
     /// Each field present is highlighted. 
     /// If no `FIELDS` directive is passed, then all fields returned are highlighted.
     #[must_use]
-    pub fn fields<F: Into<BulkString>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: Into<CommandArg>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }
@@ -2528,7 +2528,7 @@ impl FtSearchHighlightOptions {
     /// * `close_tag` - appended to each term match
     /// If no `TAGS` are specified, a built-in tag value is appended and prepended.
     #[must_use]
-    pub fn tags(self, open_tag: impl Into<BulkString>, close_tag: impl Into<BulkString>) -> Self {
+    pub fn tags(self, open_tag: impl Into<CommandArg>, close_tag: impl Into<CommandArg>) -> Self {
         Self {
             command_args: self.command_args.arg("TAGS").arg(open_tag).arg(close_tag),
         }
@@ -2637,7 +2637,7 @@ impl FtSpellCheckOptions {
     /// Refer to [`ft_dictadd`](crate::SearchCommands::ft_dictadd), [`ft_dictdel`](crate::SearchCommands::ft_dictdel)
     /// and [`ft_dictdump`](crate::SearchCommands::ft_dictdump) about managing custom dictionaries.
     #[must_use]
-    pub fn terms(self, term_type: FtTermType, dictionary: impl Into<BulkString>) -> Self {
+    pub fn terms(self, term_type: FtTermType, dictionary: impl Into<CommandArg>) -> Self {
         Self {
             command_args: self.command_args.arg("TERMS").arg(term_type).arg(dictionary),
         }
@@ -2708,7 +2708,7 @@ impl FromValue for FtMisspelledTerm {
         let mut iter = values.into_iter();
 
         match (iter.next(), iter.next(), iter.next(), iter.next()) {
-            (Some(Value::BulkString(BulkString::Binary(term))), Some(misspelled_term), Some(suggestions), None) 
+            (Some(Value::BulkString(Some(term))), Some(misspelled_term), Some(suggestions), None) 
             if term == b"TERM" => {
                 Ok(Self {
                     misspelled_term: misspelled_term.into()?,

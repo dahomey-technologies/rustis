@@ -1,5 +1,5 @@
 use crate::{
-    resp::{cmd, BulkString, Command},
+    resp::{cmd, CommandArg, Command},
     BeginSearch, CommandInfo, StandaloneConnection, Error, FindKeys, Result, ServerCommands,
 };
 use smallvec::SmallVec;
@@ -67,7 +67,7 @@ impl CommandInfoManager {
         let mut keys = SmallVec::<[String; 10]>::new();
 
         for key_spec in &command_info.key_specifications {
-            let mut slice: &[BulkString] = &command.args;
+            let mut slice: &[CommandArg] = &command.args;
 
             // begin_search
             match &key_spec.begin_search {
@@ -172,7 +172,7 @@ impl CommandInfoManager {
         };
 
         if let Some(key_spec) = command_info.key_specifications.first() {
-            let slice: &[BulkString] = &command.args;
+            let slice: &[CommandArg] = &command.args;
             let mut shard_command = cmd(command.name);
 
             // begin_search
@@ -241,7 +241,7 @@ impl CommandInfoManager {
         unreachable!();
     }
 
-    fn prepare_command_getkeys_args(command: &Command) -> SmallVec<[BulkString; 10]> {
+    fn prepare_command_getkeys_args(command: &Command) -> SmallVec<[CommandArg; 10]> {
         let mut args = SmallVec::new();
         args.push(command.name.into());
         args.extend(command.args.into_iter().cloned());

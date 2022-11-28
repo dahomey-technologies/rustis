@@ -1,4 +1,4 @@
-use crate::resp::BulkString;
+use crate::resp::CommandArg;
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -10,12 +10,12 @@ use std::{
 #[derive(Debug, Clone)]
 pub enum CommandArgs {
     Empty,
-    Single(BulkString),
-    Array2([BulkString; 2]),
-    Array3([BulkString; 3]),
-    Array4([BulkString; 4]),
-    Array5([BulkString; 5]),
-    Vec(SmallVec<[BulkString; 10]>),
+    Single(CommandArg),
+    Array2([CommandArg; 2]),
+    Array3([CommandArg; 3]),
+    Array4([CommandArg; 4]),
+    Array5([CommandArg; 5]),
+    Vec(SmallVec<[CommandArg; 10]>),
 }
 
 impl CommandArgs {
@@ -69,7 +69,7 @@ impl Default for CommandArgs {
 }
 
 impl<'a> IntoIterator for &'a CommandArgs {
-    type Item = &'a BulkString;
+    type Item = &'a CommandArg;
     type IntoIter = CommandArgsIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -88,12 +88,12 @@ impl<'a> IntoIterator for &'a CommandArgs {
 #[derive(Clone)]
 pub enum CommandArgsIterator<'a> {
     Empty,
-    Single(Option<&'a BulkString>),
-    Iter(std::slice::Iter<'a, BulkString>),
+    Single(Option<&'a CommandArg>),
+    Iter(std::slice::Iter<'a, CommandArg>),
 }
 
 impl<'a> Iterator for CommandArgsIterator<'a> {
-    type Item = &'a BulkString;
+    type Item = &'a CommandArg;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -105,7 +105,7 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
 }
 
 impl Deref for CommandArgs {
-    type Target = [BulkString];
+    type Target = [CommandArg];
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -130,7 +130,7 @@ pub trait IntoArgs {
 
 impl<T> IntoArgs for T
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -284,8 +284,8 @@ where
 
 impl<K, V, S: BuildHasher> IntoArgs for HashMap<K, V, S>
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -305,8 +305,8 @@ where
 
 impl<K, V> IntoArgs for BTreeMap<K, V>
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -390,7 +390,7 @@ impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
 /// Marker for collections of single items (directly convertible to `BulkStrings`) of `IntoArgs`
 pub trait SingleArgOrCollection<T>: IntoArgs
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter: Iterator<Item = T>;
 
@@ -399,7 +399,7 @@ where
 
 impl<T, const N: usize> SingleArgOrCollection<T> for [T; N]
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = std::array::IntoIter<T, N>;
 
@@ -410,7 +410,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for Vec<T>
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = std::vec::IntoIter<T>;
 
@@ -422,7 +422,7 @@ where
 impl<A, T> SingleArgOrCollection<T> for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = smallvec::IntoIter<A>;
 
@@ -433,7 +433,7 @@ where
 
 impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S>
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = std::collections::hash_set::IntoIter<T>;
 
@@ -444,7 +444,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for BTreeSet<T>
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = std::collections::btree_set::IntoIter<T>;
 
@@ -455,7 +455,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for T
 where
-    T: Into<BulkString>,
+    T: Into<CommandArg>,
 {
     type IntoIter = Once<T>;
 
@@ -467,42 +467,42 @@ where
 /// Marker for key/value collections of Args
 pub trait KeyValueArgOrCollection<K, V>: IntoArgs
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for Vec<(K, V)>
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }
 
 impl<K, V, const N: usize> KeyValueArgOrCollection<K, V> for [(K, V); N]
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for (K, V)
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }
 
 impl<K, V, S: BuildHasher> KeyValueArgOrCollection<K, V> for HashMap<K, V, S>
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for BTreeMap<K, V>
 where
-    K: Into<BulkString>,
-    V: Into<BulkString>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
 {
 }

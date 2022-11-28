@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, ArgsOrCollection, BulkString, CommandArgs, FromKeyValueValueArray, FromValue,
+        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, Value,
     },
     PreparedCommand, Result,
@@ -21,7 +21,7 @@ pub trait SentinelCommands {
     fn sentinel_config_get<N, RN, RV, R>(&mut self, name: N) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
         RN: FromValue,
         RV: FromValue,
         R: FromKeyValueValueArray<RN, RV>,
@@ -34,8 +34,8 @@ pub trait SentinelCommands {
     fn sentinel_config_set<N, V>(&mut self, name: N, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
-        V: Into<BulkString>,
+        N: Into<CommandArg>,
+        V: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -55,7 +55,7 @@ pub trait SentinelCommands {
     fn sentinel_ckquorum<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("CKQUORUM").arg(master_name))
     }
@@ -68,7 +68,7 @@ pub trait SentinelCommands {
     fn sentinel_failover<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("FAILOVER").arg(master_name))
     }
@@ -106,7 +106,7 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, Option<(String, u16)>>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -121,7 +121,7 @@ pub trait SentinelCommands {
     fn sentinel_info_cache<N, NN, R>(&mut self, master_names: NN) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
         NN: ArgsOrCollection<N>,
         R: FromKeyValueValueArray<String, Vec<(u64, String)>>,
     {
@@ -133,7 +133,7 @@ pub trait SentinelCommands {
     fn sentinel_master<N>(&mut self, master_name: N) -> PreparedCommand<Self, SentinelMasterInfo>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("MASTER").arg(master_name))
     }
@@ -163,8 +163,8 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
-        I: Into<BulkString>,
+        N: Into<CommandArg>,
+        I: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -186,7 +186,7 @@ pub trait SentinelCommands {
     fn sentinel_remove<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("REMOVE").arg(name))
     }
@@ -201,9 +201,9 @@ pub trait SentinelCommands {
     fn sentinel_set<N, O, V, C>(&mut self, name: N, configs: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
-        O: Into<BulkString>,
-        V: Into<BulkString>,
+        N: Into<CommandArg>,
+        O: Into<CommandArg>,
+        V: Into<CommandArg>,
         C: KeyValueArgOrCollection<O, V>,
     {
         prepare_command(self, cmd("SENTINEL").arg("SET").arg(name).arg(configs))
@@ -235,7 +235,7 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, Vec<SentinelReplicaInfo>>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("REPLICAS").arg(master_name))
     }
@@ -252,7 +252,7 @@ pub trait SentinelCommands {
     fn sentinel_reset<P>(&mut self, pattern: P) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("RESET").arg(pattern))
     }
@@ -262,7 +262,7 @@ pub trait SentinelCommands {
     fn sentinel_sentinels<N>(&mut self, master_name: N) -> PreparedCommand<Self, Vec<SentinelInfo>>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("SENTINEL").arg("SENTINELS").arg(master_name))
     }

@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{Value},
     tests::get_test_client,
     ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands, RestoreOptions,
     Result, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
@@ -506,7 +506,7 @@ async fn rename() -> Result<()> {
 
     client.rename("key1", "key2").await?;
     let value: Value = client.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
     let value: String = client.get("key2").await?;
     assert_eq!("value1", value);
 

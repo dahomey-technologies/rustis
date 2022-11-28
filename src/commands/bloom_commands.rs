@@ -1,10 +1,10 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArg, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    PreparedCommand, Result,
 };
 use std::{collections::HashMap, future};
 
@@ -28,8 +28,8 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_add(
         &mut self,
-        key: impl Into<BulkString>,
-        item: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
+        item: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
@@ -52,8 +52,8 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_exists(
         &mut self,
-        key: impl Into<BulkString>,
-        item: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
+        item: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
@@ -72,7 +72,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info_all(&mut self, key: impl Into<BulkString>) -> PreparedCommand<Self, BfInfoResult>
+    fn bf_info_all(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, BfInfoResult>
     where
         Self: Sized,
     {
@@ -93,7 +93,7 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_info(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         param: BfInfoParameter,
     ) -> PreparedCommand<Self, usize>
     where
@@ -124,9 +124,9 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
-    fn bf_insert<I: Into<BulkString>, R: FromSingleValueArray<bool>>(
+    fn bf_insert<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         items: impl SingleArgOrCollection<I>,
         options: BfInsertOptions,
     ) -> PreparedCommand<Self, R>
@@ -160,9 +160,9 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_loadchunk(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         iterator: i64,
-        data: impl Into<BulkString>,
+        data: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -185,9 +185,9 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
-    fn bf_madd<I: Into<BulkString>, R: FromSingleValueArray<bool>>(
+    fn bf_madd<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         items: impl SingleArgOrCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
@@ -209,9 +209,9 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
-    fn bf_mexists<I: Into<BulkString>, R: FromSingleValueArray<bool>>(
+    fn bf_mexists<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         items: impl SingleArgOrCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
@@ -253,7 +253,7 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_reserve(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         error_rate: f64,
         capacity: usize,
         options: BfReserveOptions,
@@ -288,7 +288,7 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_scandump(
         &mut self,
-        key: impl Into<BulkString>,
+        key: impl Into<CommandArg>,
         iterator: i64,
     ) -> PreparedCommand<Self, (i64, Vec<u8>)>
     where
@@ -297,9 +297,8 @@ pub trait BloomCommands {
         prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator)).post_process(Box::new(
             |value, _command, _client| {
                 let result = match value.into::<(i64, BulkString)>() {
-                    Ok((iterator, BulkString::Binary(data))) => Ok((iterator, data)),
+                    Ok((iterator, BulkString(data))) => Ok((iterator, data)),
                     Err(e) => Err(e),
-                    _ => Err(Error::Client("Cannot parse bf_scandump result".to_owned())),
                 };
 
                 Box::pin(future::ready(result))

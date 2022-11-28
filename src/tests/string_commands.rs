@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{Value},
     tests::get_test_client,
     Error, GenericCommands, GetExOptions, RedisError, RedisErrorKind, Result, SetCondition,
     SetExpiration, StringCommands,
@@ -232,7 +232,7 @@ async fn getset() -> Result<()> {
     client.del("key").await?;
 
     let value: Value = client.getset("key", "newvalue").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     Ok(())
 }

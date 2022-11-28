@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Command, CommandArgs, Value},
+    resp::{Command, CommandArgs, Value},
     spawn, Config, Connection, Error, Message, Result, RetryReason,
 };
 use futures::{
@@ -408,7 +408,7 @@ impl NetworkHandler {
         let is_pub_sub_message = match value {
             Ok(Value::Array(Some(ref items))) | Ok(Value::Push(Some(ref items))) => {
                 match &items[..] {
-                    [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
+                    [Value::BulkString(Some(command)), Value::BulkString(Some(channel)), _] =>
                     {
                         match command.as_slice() {
                             b"message" | b"smessage" => true,
@@ -440,7 +440,7 @@ impl NetworkHandler {
                             _ => false,
                         }
                     }
-                    [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_pattern)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] => {
+                    [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
                         command.as_slice() == b"pmessage"
                     }
                     _ => false,
@@ -467,8 +467,8 @@ impl NetworkHandler {
             ) {
                 // message or smessage
                 (
-                    Some(Value::BulkString(BulkString::Binary(_command))),
-                    Some(Value::BulkString(BulkString::Binary(channel))),
+                    Some(Value::BulkString(Some(_command))),
+                    Some(Value::BulkString(Some(channel))),
                     Some(payload),
                     None,
                     None,
@@ -476,7 +476,7 @@ impl NetworkHandler {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
                             .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(BulkString::Binary(channel)),
+                                Value::BulkString(Some(channel)),
                                 payload,
                             ]))))
                             .await?;
@@ -491,8 +491,8 @@ impl NetworkHandler {
                 },
                 // pmessage
                 (
-                    Some(Value::BulkString(BulkString::Binary(_command))),
-                    Some(Value::BulkString(BulkString::Binary(pattern))),
+                    Some(Value::BulkString(Some(_command))),
+                    Some(Value::BulkString(Some(pattern))),
                     Some(channel),
                     Some(payload),
                     None,
@@ -500,7 +500,7 @@ impl NetworkHandler {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
                             .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(BulkString::Binary(pattern)),
+                                Value::BulkString(Some(pattern)),
                                 channel,
                                 payload,
                             ]))))

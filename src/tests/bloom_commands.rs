@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     tests::get_redis_stack_test_client,
-    FlushingMode, Result, ServerCommands, BloomCommands, BfInfoParameter, BfInsertOptions, BfReserveOptions, resp::BulkString,
+    FlushingMode, Result, ServerCommands, BloomCommands, BfInfoParameter, BfInsertOptions, BfReserveOptions, resp::CommandArg,
 };
 use serial_test::serial;
 
@@ -142,7 +142,7 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     while let Some((iterator, chunk)) = chunks.pop_front() {
-        client.bf_loadchunk("bf", iterator, BulkString::from_bytes(chunk)).await?;
+        client.bf_loadchunk("bf", iterator, CommandArg::Binary(chunk)).await?;
     }
 
     let result = client.bf_exists("bf", "item1").await?;

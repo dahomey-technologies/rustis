@@ -7,7 +7,7 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, Value},
+    resp::{cmd, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
     InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
@@ -77,7 +77,7 @@ impl Transaction {
                         Value::Array(Some(filtered_results)).into()
                     }
                 }
-                Value::Array(None) | Value::BulkString(BulkString::Nil) => {
+                Value::Array(None) | Value::BulkString(None) => {
                     Err(Error::Aborted)
                 }
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
@@ -90,7 +90,7 @@ pub trait ClusterCommands {
     fn cluster_count_failure_reports<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -184,7 +184,7 @@ pub trait ClusterCommands {
     fn cluster_forget<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("CLUSTER").arg("FORGET").arg(node_id))
     }
@@ -234,7 +234,7 @@ pub trait ClusterCommands {
     fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, u16>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").arg(key))
     }
@@ -276,7 +276,7 @@ pub trait ClusterCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        IP: Into<BulkString>,
+        IP: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -338,7 +338,7 @@ pub trait ClusterCommands {
     fn cluster_replicas<I, R>(&mut self, node_id: I) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
@@ -353,7 +353,7 @@ pub trait ClusterCommands {
     fn cluster_replicate<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<BulkString>,
+        I: Into<CommandArg>,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICATE").arg(node_id))
     }
@@ -655,7 +655,7 @@ impl FromValue for ClusterInfo {
                 match (parts.next(), parts.next(), parts.next()) {
                     (Some(key), Some(value), None) => Ok((
                         key.to_owned(),
-                        Value::BulkString(BulkString::Binary(value.as_bytes().to_vec())),
+                        Value::BulkString(Some(value.as_bytes().to_vec())),
                     )),
                     _ => Err(Error::Client(
                         "Unexpected result for cluster_info".to_owned(),

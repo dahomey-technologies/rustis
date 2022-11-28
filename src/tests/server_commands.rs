@@ -1,5 +1,5 @@
 use crate::{
-    resp::{cmd, BulkString, Value},
+    resp::{cmd, Value},
     spawn,
     tests::get_test_client,
     AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands, Client,
@@ -107,7 +107,7 @@ async fn acl_getuser() -> Result<()> {
     let rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
     // default `commands` rule
     assert!(
-        matches!(rules.get("commands"), Some(Value::BulkString(BulkString::Binary(rule))) if rule == b"-@all")
+        matches!(rules.get("commands"), Some(Value::BulkString(Some(rule))) if rule == b"-@all")
     );
 
     client.acl_deluser("foo").await?;
@@ -162,7 +162,7 @@ async fn acl_log() -> Result<()> {
         client.acl_log(AclLogOptions::default().count(1)).await?;
     assert_eq!(1, logs.len());
     assert!(
-        matches!(logs[0].get("reason"), Some(Value::BulkString(BulkString::Binary(reason))) if reason == b"auth")
+        matches!(logs[0].get("reason"), Some(Value::BulkString(Some(reason))) if reason == b"auth")
     );
     let client_info: String = logs[0].get("client-info").unwrap().to_string();
     let client_info = ClientInfo::from_line(&client_info)?;
@@ -539,10 +539,10 @@ async fn flushdb() -> Result<()> {
     client0.flushdb(FlushingMode::Default).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     let value: String = client1.get("key1").await?;
     assert_eq!("value1", value);
@@ -570,16 +570,16 @@ async fn flushall() -> Result<()> {
     client0.flushall(FlushingMode::Default).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     let value: Value = client1.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     let value: Value = client1.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(value, Value::BulkString(None)));
 
     Ok(())
 }

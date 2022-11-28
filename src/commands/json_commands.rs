@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
     PreparedCommand, SetCondition,
@@ -34,9 +34,9 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         VV: SingleArgOrCollection<V>,
         R: FromSingleValueArray<Option<usize>>,
     {
@@ -68,9 +68,9 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         R: FromSingleValueArray<Option<isize>>,
     {
         prepare_command(
@@ -111,9 +111,9 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         VV: SingleArgOrCollection<V>,
         R: FromSingleValueArray<Option<usize>>,
     {
@@ -143,8 +143,8 @@ pub trait JsonCommands {
     fn json_arrlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.ARRLEN").arg(key).arg(path))
@@ -175,8 +175,8 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromValue,
         RR: FromSingleValueArray<R>,
     {
@@ -208,8 +208,8 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(
@@ -233,8 +233,8 @@ pub trait JsonCommands {
     fn json_clear<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("JSON.CLEAR").arg(key).arg(path))
     }
@@ -254,8 +254,8 @@ pub trait JsonCommands {
     fn json_debug_memory<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<usize>,
     {
         prepare_command(self, cmd("JSON.DEBUG").arg("MEMORY").arg(key).arg(path))
@@ -276,8 +276,8 @@ pub trait JsonCommands {
     fn json_del<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("JSON.DEL").arg(key).arg(path))
     }
@@ -297,8 +297,8 @@ pub trait JsonCommands {
     fn json_forget<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("JSON.FORGET").arg(key).arg(path))
     }
@@ -318,7 +318,7 @@ pub trait JsonCommands {
     fn json_get<K, V>(&mut self, key: K, options: JsonGetOptions) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         V: FromValue,
     {
         prepare_command(self, cmd("JSON.GET").arg(key).arg(options))
@@ -339,9 +339,9 @@ pub trait JsonCommands {
     fn json_mget<K, KK, P, V, VV>(&mut self, keys: KK, path: P) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
         V: FromValue,
         VV: FromSingleValueArray<V>,
     {
@@ -365,9 +365,9 @@ pub trait JsonCommands {
     fn json_numincrby<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(self, cmd("JSON.NUMINCRBY").arg(key).arg(path).arg(value))
@@ -390,9 +390,9 @@ pub trait JsonCommands {
     fn json_nummultby<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(self, cmd("JSON.NUMMULTBY").arg(key).arg(path).arg(value))
@@ -415,8 +415,8 @@ pub trait JsonCommands {
     fn json_objkeys<K, P, R, RR>(&mut self, key: K, path: P) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromValue,
         RR: FromSingleValueArray<Vec<R>>,
     {
@@ -439,8 +439,8 @@ pub trait JsonCommands {
     fn json_objlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.OBJLEN").arg(key).arg(path))
@@ -471,8 +471,8 @@ pub trait JsonCommands {
     fn json_resp<K, P, VV>(&mut self, key: K, path: P) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         VV: FromSingleValueArray<Value>
     {
         prepare_command(self, cmd("JSON.RESP").arg(key).arg(path))
@@ -501,9 +501,9 @@ pub trait JsonCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -527,9 +527,9 @@ pub trait JsonCommands {
     fn json_strappend<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.STRAPPEND").arg(key).arg(path).arg(value))
@@ -551,8 +551,8 @@ pub trait JsonCommands {
     fn json_strlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.STRLEN").arg(key).arg(path))
@@ -574,8 +574,8 @@ pub trait JsonCommands {
     fn json_toggle<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.TOGGLE").arg(key).arg(path))
@@ -596,8 +596,8 @@ pub trait JsonCommands {
     fn json_type<K, P, R, RR>(&mut self, key: K, path: P) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        P: Into<BulkString>,
+        K: Into<CommandArg>,
+        P: Into<CommandArg>,
         R: FromValue,
         RR: FromSingleValueArray<R>,
     {
@@ -614,7 +614,7 @@ pub struct JsonGetOptions {
 impl JsonGetOptions {
     /// Sets the indentation string for nested levels.
     #[must_use]
-    pub fn indent<I: Into<BulkString>>(self, indent: I) -> Self {
+    pub fn indent<I: Into<CommandArg>>(self, indent: I) -> Self {
         Self {
             command_args: self.command_args.arg("INDENT").arg(indent),
         }
@@ -622,7 +622,7 @@ impl JsonGetOptions {
 
     /// Sets the string that's printed at the end of each line.
     #[must_use]
-    pub fn newline<NL: Into<BulkString>>(self, newline: NL) -> Self {
+    pub fn newline<NL: Into<CommandArg>>(self, newline: NL) -> Self {
         Self {
             command_args: self.command_args.arg("NEWLINE").arg(newline),
         }
@@ -630,7 +630,7 @@ impl JsonGetOptions {
 
     /// Sets the string that's put between a key and a value.
     #[must_use]
-    pub fn space<S: Into<BulkString>>(self, space: S) -> Self {
+    pub fn space<S: Into<CommandArg>>(self, space: S) -> Self {
         Self {
             command_args: self.command_args.arg("SPACE").arg(space),
         }
@@ -638,7 +638,7 @@ impl JsonGetOptions {
 
     /// JSONPath to specify
     #[must_use]
-    pub fn path<P: Into<BulkString>, PP: SingleArgOrCollection<P>>(self, paths: PP) -> Self {
+    pub fn path<P: Into<CommandArg>, PP: SingleArgOrCollection<P>>(self, paths: PP) -> Self {
         Self {
             command_args: self.command_args.arg(paths),
         }

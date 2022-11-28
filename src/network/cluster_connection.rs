@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Command, Value},
+    resp::{Command, Value},
     ClusterCommands, ClusterConfig, ClusterNodeResult, ClusterShardResult, CommandInfoManager,
     CommandTip, Config, Error, RedisError, RedisErrorKind, RequestPolicy, ResponsePolicy, Result,
     RetryReason, StandaloneConnection,
@@ -531,7 +531,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
+        let mut result: Result<Value> = Ok(Value::BulkString(None));
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -548,7 +548,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(BulkString::Nil));
+        let mut result: Result<Value> = Ok(Value::BulkString(None));
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -569,7 +569,7 @@ impl ClusterConnection {
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut result = Value::BulkString(BulkString::Nil);
+        let mut result = Value::BulkString(None);
 
         for sub_result in sub_results {
             result = match sub_result {
@@ -578,7 +578,7 @@ impl ClusterConnection {
                 }
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
-                    (Value::Integer(v), Value::BulkString(BulkString::Nil)) => Value::Integer(v),
+                    (Value::Integer(v), Value::BulkString(None)) => Value::Integer(v),
                     (Value::Array(Some(v)), Value::Array(Some(mut r)))
                         if v.len() == r.len() =>
                     {
@@ -594,7 +594,7 @@ impl ClusterConnection {
                         }
                         Value::Array(Some(r))
                     }
-                    (Value::Array(Some(v)), Value::BulkString(BulkString::Nil)) => {
+                    (Value::Array(Some(v)), Value::BulkString(None)) => {
                         Value::Array(Some(v))
                     }
                     _ => {
@@ -978,11 +978,11 @@ fn is_push_message(value: &Result<Value>) -> bool {
     match value {
         // RESP2 pub/sub messages
         Ok(Value::Array(Some(ref items))) => match &items[..] {
-            [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] =>
+            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] =>
             {
                 matches!(command.as_slice(), b"message" | b"smessage")
             }
-            [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_channel)), Value::Integer(_)] =>
+            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::Integer(_)] =>
             {
                 matches!(
                     command.as_slice(),
@@ -994,7 +994,7 @@ fn is_push_message(value: &Result<Value>) -> bool {
                         | b"sunsubscribe"
                 )
             }
-            [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_pattern)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] => {
+            [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
                 command.as_slice() == b"pmessage"
             }
             _ => false,

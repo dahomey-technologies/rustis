@@ -42,8 +42,8 @@ async fn from_single_value_array() -> Result<()> {
 #[test]
 fn tuple() -> Result<()> {
     let value = Value::Array(Some(vec![
-        Value::BulkString("first".into()),
-        Value::BulkString("second".into()),
+        Value::BulkString(Some("first".as_bytes().to_vec())),
+        Value::BulkString(Some("second".as_bytes().to_vec())),
     ]));
     let result: Vec<String> = value.into()?;
     assert_eq!(2, result.len());
@@ -51,17 +51,17 @@ fn tuple() -> Result<()> {
     assert_eq!("second".to_owned(), result[1]);
 
     let values = Value::Array(Some(vec![
-        Value::BulkString("first".into()),
-        Value::BulkString("second".into()),
+        Value::BulkString(Some("first".as_bytes().to_vec())),
+        Value::BulkString(Some("second".as_bytes().to_vec())),
     ]));
     let result: (String, String) = values.into()?;
     assert_eq!(("first".to_owned(), "second".to_owned()), result);
 
     let value = Value::Array(Some(vec![
-        Value::BulkString("first".into()),
-        Value::BulkString("second".into()),
-        Value::BulkString("third".into()),
-        Value::BulkString("fourth".into()),
+        Value::BulkString(Some("first".as_bytes().to_vec())),
+        Value::BulkString(Some("second".as_bytes().to_vec())),
+        Value::BulkString(Some("third".as_bytes().to_vec())),
+        Value::BulkString(Some("fourth".as_bytes().to_vec())),
     ]));
     let result: Vec<(String, String)> = value.into()?;
     assert_eq!(2, result.len());
@@ -70,12 +70,12 @@ fn tuple() -> Result<()> {
 
     let value = Value::Array(Some(vec![
         Value::Array(Some(vec![
-            Value::BulkString("first".into()),
-            Value::BulkString("second".into()),
+            Value::BulkString(Some("first".as_bytes().to_vec())),
+            Value::BulkString(Some("second".as_bytes().to_vec())),
         ])),
         Value::Array(Some(vec![
-            Value::BulkString("third".into()),
-            Value::BulkString("fourth".into()),
+            Value::BulkString(Some("third".as_bytes().to_vec())),
+            Value::BulkString(Some("fourth".as_bytes().to_vec())),
         ])),
     ]));
     let result: Vec<(String, String)> = value.into()?;

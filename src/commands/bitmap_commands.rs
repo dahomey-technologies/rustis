@@ -1,6 +1,6 @@
 use crate::{
     prepare_command,
-    resp::{cmd, ArgsOrCollection, BulkString, CommandArgs, IntoArgs, SingleArgOrCollection},
+    resp::{cmd, ArgsOrCollection, CommandArg, CommandArgs, IntoArgs, SingleArgOrCollection},
     PreparedCommand,
 };
 
@@ -21,7 +21,7 @@ pub trait BitmapCommands {
     fn bitcount<K>(&mut self, key: K, range: BitRange) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("BITCOUNT").arg(key).arg(range))
     }
@@ -40,9 +40,9 @@ pub trait BitmapCommands {
     fn bitfield<K, C, E, O>(&mut self, key: K, sub_commands: C) -> PreparedCommand<Self, Vec<u64>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        E: Into<BulkString>,
-        O: Into<BulkString>,
+        K: Into<CommandArg>,
+        E: Into<CommandArg>,
+        O: Into<CommandArg>,
         C: ArgsOrCollection<BitFieldSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD").arg(key).arg(sub_commands))
@@ -66,9 +66,9 @@ pub trait BitmapCommands {
     ) -> PreparedCommand<Self, Vec<u64>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        E: Into<BulkString>,
-        O: Into<BulkString>,
+        K: Into<CommandArg>,
+        E: Into<CommandArg>,
+        O: Into<CommandArg>,
         C: ArgsOrCollection<BitFieldGetSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD_RO").arg(key).arg(get_commands))
@@ -92,8 +92,8 @@ pub trait BitmapCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        K: Into<BulkString>,
+        D: Into<CommandArg>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
@@ -111,7 +111,7 @@ pub trait BitmapCommands {
     fn bitpos<K>(&mut self, key: K, bit: u64, range: BitRange) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("BITPOS").arg(key).arg(bit).arg(range))
     }
@@ -127,7 +127,7 @@ pub trait BitmapCommands {
     fn getbit<K>(&mut self, key: K, offset: u64) -> PreparedCommand<Self, u64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("GETBIT").arg(key).arg(offset))
     }
@@ -143,7 +143,7 @@ pub trait BitmapCommands {
     fn setbit<K>(&mut self, key: K, offset: u64, value: u64) -> PreparedCommand<Self, u64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("SETBIT").arg(key).arg(offset).arg(value))
     }
@@ -194,8 +194,8 @@ impl IntoArgs for BitUnit {
 /// Sub-command for the [`bitfield`](crate::BitmapCommands::bitfield) command
 pub enum BitFieldSubCommand<E = &'static str, O = &'static str>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     Get(BitFieldGetSubCommand<E, O>),
     Set(E, O, u64),
@@ -205,8 +205,8 @@ where
 
 impl<E, O> BitFieldSubCommand<E, O>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     #[must_use]
     pub fn get(encoding: E, offset: O) -> Self {
@@ -231,8 +231,8 @@ where
 
 impl<E, O> IntoArgs for BitFieldSubCommand<E, O>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
@@ -250,8 +250,8 @@ where
 
 pub struct BitFieldGetSubCommand<E = &'static str, O = &'static str>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     encoding: E,
     offset: O,
@@ -259,8 +259,8 @@ where
 
 impl<E, O> BitFieldGetSubCommand<E, O>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     #[must_use]
     pub fn new(encoding: E, offset: O) -> Self {
@@ -270,8 +270,8 @@ where
 
 impl<E, O> IntoArgs for BitFieldGetSubCommand<E, O>
 where
-    E: Into<BulkString>,
-    O: Into<BulkString>,
+    E: Into<CommandArg>,
+    O: Into<CommandArg>,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg("GET").arg(self.encoding).arg(self.offset)

@@ -1,5 +1,5 @@
 use crate::{
-    resp::BulkString, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
+    resp::CommandArg, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
     BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
     Result, StringCommands,
 };
@@ -138,14 +138,14 @@ async fn bitpos() -> Result<()> {
     let mut client = get_test_client().await?;
 
     client
-        .set("mykey", BulkString::Binary(vec![0xFFu8, 0xF0u8, 0x00u8]))
+        .set("mykey", CommandArg::Binary(vec![0xFFu8, 0xF0u8, 0x00u8]))
         .await?;
 
     let pos = client.bitpos("mykey", 1, BitRange::default()).await?;
     assert_eq!(0, pos);
 
     client
-        .set("mykey", BulkString::Binary(vec![0x00u8, 0xFFu8, 0xF0u8]))
+        .set("mykey", CommandArg::Binary(vec![0x00u8, 0xFFu8, 0xF0u8]))
         .await?;
     let pos = client.bitpos("mykey", 0, BitRange::range(0, -1)).await?;
     assert_eq!(0, pos);

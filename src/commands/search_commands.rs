@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, ArgsOrCollection, Array, BulkString, CommandArgs, FromKeyValueValueArray,
+        cmd, ArgsOrCollection, BulkString, CommandArgs, FromKeyValueValueArray,
         FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
         SingleArgOrCollection, Value, Command,
     },
@@ -1783,7 +1783,7 @@ impl FtQueryResult {
 impl FromValue for FtQueryResult {
     fn from_value(value: Value) -> Result<Self> {
         log::debug!("value: {:?}", value);
-        let is_search = if let Value::Array(Array::Vec(ref values)) = &value {
+        let is_search = if let Value::Array(Some(ref values)) = &value {
             log::debug!("&values[0..2]: {:?}", &values[0..2]);
             matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(BulkString::Binary(_doc_id))])
         } else {
@@ -2096,7 +2096,7 @@ impl FromValue for FtProfileDetails {
             _ => return Err(Error::Client("Cannot parse FtProfileResult".to_owned())),
         }
 
-        let result_processors_profile = Value::Array(Array::Vec(iter.collect()));
+        let result_processors_profile = Value::Array(Some(iter.collect()));
 
         Ok(Self {
             total_profile_time: total_profile_time.into::<HashMap<String, Value>>()?.remove_or_default("Total profile time").into()?,

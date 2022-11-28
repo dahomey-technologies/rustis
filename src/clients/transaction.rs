@@ -7,7 +7,7 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    resp::{cmd, Array, BulkString, Command, FromValue, ResultValueExt, Value},
+    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
     InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
@@ -63,7 +63,7 @@ impl Transaction {
         // EXEC
         if let Some(result) = iter.next() {
             match result {
-                Value::Array(Array::Vec(results)) => {
+                Value::Array(Some(results)) => {
                     let mut filtered_results = zip(results, self.forget_flags.iter().skip(1))
                         .filter_map(
                             |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
@@ -74,10 +74,10 @@ impl Transaction {
                         let value = filtered_results.pop().unwrap();
                         Ok(value).into_result()?.into()
                     } else {
-                        Value::Array(Array::Vec(filtered_results)).into()
+                        Value::Array(Some(filtered_results)).into()
                     }
                 }
-                Value::Array(Array::Nil) | Value::BulkString(BulkString::Nil) => {
+                Value::Array(None) | Value::BulkString(BulkString::Nil) => {
                     Err(Error::Aborted)
                 }
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),

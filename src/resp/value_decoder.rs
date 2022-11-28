@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Value},
+    resp::{BulkString, Value},
     Error, RedisError, Result,
 };
 use bytes::{Buf, BytesMut};
@@ -83,10 +83,10 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
     }
 }
 
-fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> {
+fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
     match decode_integer(buf, idx)? {
         None => Ok(None),
-        Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
+        Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, pos)) => {
             let mut values = Vec::with_capacity(
                 usize::try_from(len)
@@ -102,15 +102,15 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>
                     }
                 }
             }
-            Ok(Some((Array::Vec(values), pos)))
+            Ok(Some((Some(values), pos)))
         }
     }
 }
 
-fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> {
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
     match decode_integer(buf, idx)? {
         None => Ok(None),
-        Some((-1, pos)) => Ok(Some((Array::Nil, pos))),
+        Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, pos)) => {
             let len = len * 2;
             let mut values = Vec::with_capacity(
@@ -126,7 +126,7 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Array, usize)>> 
                     }
                 }
             }
-            Ok(Some((Array::Vec(values), pos)))
+            Ok(Some((Some(values), pos)))
         }
     }
 }

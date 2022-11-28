@@ -1,4 +1,4 @@
-use crate::{resp::{Value, Array}, GraphValueType};
+use crate::{resp::Value, GraphValueType};
 
 #[derive(Debug, Default)]
 pub(crate) struct GraphCache {
@@ -21,7 +21,7 @@ impl GraphCache {
 
     // returns true if we can parse this result without any cache miss
     pub fn check_for_result(&self, result: &Value) -> bool {
-        let Value::Array(Array::Vec(result_set)) = result else {
+        let Value::Array(Some(result_set)) = result else {
             return false;
         };
 
@@ -30,7 +30,7 @@ impl GraphCache {
             return true;
         }
 
-        let Value::Array(Array::Vec(rows)) = &result_set[1] else {
+        let Value::Array(Some(rows)) = &result_set[1] else {
             return false;
         };
 
@@ -41,7 +41,7 @@ impl GraphCache {
 
         let first_row = &rows[0];
 
-        let Value::Array(Array::Vec(values)) = first_row else {
+        let Value::Array(Some(values)) = first_row else {
             return false;
         };
 
@@ -49,7 +49,7 @@ impl GraphCache {
     }
 
     fn check_for_value(&self, value: &Value) -> bool {
-        let Value::Array(Array::Vec(value_parts)) = value else {
+        let Value::Array(Some(value_parts)) = value else {
             return false;
         };
 
@@ -74,7 +74,7 @@ impl GraphCache {
     }
 
     fn check_for_array(&self, value: &Value) -> bool {
-        let Value::Array(Array::Vec(values)) = value else {
+        let Value::Array(Some(values)) = value else {
             return false;
         };
 
@@ -82,7 +82,7 @@ impl GraphCache {
     }
 
     fn check_for_map(&self, value: &Value) -> bool {
-        let Value::Array(Array::Vec(values)) = value else {
+        let Value::Array(Some(values)) = value else {
             return false;
         };
 
@@ -101,11 +101,11 @@ impl GraphCache {
     }
 
     fn check_for_node(&self, node: &Value) -> bool {
-        let Value::Array(Array::Vec(node_parts)) = node else {
+        let Value::Array(Some(node_parts)) = node else {
             return false;
         };
 
-        let Value::Array(Array::Vec(node_labels)) = &node_parts[1] else {
+        let Value::Array(Some(node_labels)) = &node_parts[1] else {
             return false;
         };
 
@@ -123,7 +123,7 @@ impl GraphCache {
     }
 
     fn check_cache_for_edge(&self, edge: &Value) -> bool {
-        let Value::Array(Array::Vec(edge_parts)) = edge else {
+        let Value::Array(Some(edge_parts)) = edge else {
             return false;
         };
 
@@ -139,7 +139,7 @@ impl GraphCache {
     }
 
     fn check_cache_for_path(&self, path: &Value) -> bool {
-        let Value::Array(Array::Vec(path_parts)) = path else {
+        let Value::Array(Some(path_parts)) = path else {
             return false;
         };
 
@@ -149,12 +149,12 @@ impl GraphCache {
     }
 
     fn check_for_properties(&self, properties: &Value) -> bool {
-        let Value::Array(Array::Vec(properties)) = properties else {
+        let Value::Array(Some(properties)) = properties else {
             return false;
         };
 
         for property in properties {
-            let Value::Array(Array::Vec(property)) = property else {
+            let Value::Array(Some(property)) = property else {
                 return false;
             };
 

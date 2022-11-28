@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, Array, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+        cmd, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
     },
     Error, FlushingMode, PreparedCommand, Result,
 };
@@ -437,7 +437,7 @@ pub struct LibraryInfo {
 impl FromValue for LibraryInfo {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Array::Vec(v)) if v.len() == 8 => {
+            Value::Array(Some(v)) if v.len() == 8 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
                     Some(LibraryInfo {
                         library_name: values.remove("library_name")?.into().ok()?,
@@ -477,7 +477,7 @@ pub struct FunctionInfo {
 impl FromValue for FunctionInfo {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Array::Vec(v)) if v.len() == 6 => {
+            Value::Array(Some(v)) if v.len() == 6 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionInfo> {
                     Some(FunctionInfo {
                         name: values.remove("name")?.into().ok()?,
@@ -503,7 +503,7 @@ pub struct FunctionStats {
 impl FromValue for FunctionStats {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Array::Vec(v)) if v.len() == 4 => {
+            Value::Array(Some(v)) if v.len() == 4 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionStats> {
                     Some(FunctionStats {
                         running_script: values.remove("running_script")?.into().ok()?,
@@ -529,7 +529,7 @@ pub struct RunningScript {
 impl FromValue for RunningScript {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Array::Vec(v)) if v.len() == 6 => {
+            Value::Array(Some(v)) if v.len() == 6 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<RunningScript> {
                     Some(RunningScript {
                         name: values.remove("name")?.into().ok()?,
@@ -555,7 +555,7 @@ pub struct EngineStats {
 impl FromValue for EngineStats {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Array::Vec(v)) if v.len() == 4 => {
+            Value::Array(Some(v)) if v.len() == 4 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<EngineStats> {
                     Some(EngineStats {
                         libraries_count: values.remove("libraries_count")?.into().ok()?,

@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Command, Value},
+    resp::{BulkString, Command, Value},
     ClusterCommands, ClusterConfig, ClusterNodeResult, ClusterShardResult, CommandInfoManager,
     CommandTip, Config, Error, RedisError, RedisErrorKind, RequestPolicy, ResponsePolicy, Result,
     RetryReason, StandaloneConnection,
@@ -579,7 +579,7 @@ impl ClusterConnection {
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
                     (Value::Integer(v), Value::BulkString(BulkString::Nil)) => Value::Integer(v),
-                    (Value::Array(Array::Vec(v)), Value::Array(Array::Vec(mut r)))
+                    (Value::Array(Some(v)), Value::Array(Some(mut r)))
                         if v.len() == r.len() =>
                     {
                         for i in 0..v.len() {
@@ -592,10 +592,10 @@ impl ClusterConnection {
                                 }
                             }
                         }
-                        Value::Array(Array::Vec(r))
+                        Value::Array(Some(r))
                     }
-                    (Value::Array(Array::Vec(v)), Value::BulkString(BulkString::Nil)) => {
-                        Value::Array(Array::Vec(v))
+                    (Value::Array(Some(v)), Value::BulkString(BulkString::Nil)) => {
+                        Value::Array(Some(v))
                     }
                     _ => {
                         return Some(Err(Error::Client("Unexpected value".to_owned())));
@@ -634,7 +634,7 @@ impl ClusterConnection {
             let mut values = Vec::<Value>::new();
             for sub_result in sub_results {
                 match sub_result {
-                    Ok(Value::Array(Array::Vec(v))) => {
+                    Ok(Value::Array(Some(v))) => {
                         values.extend(v);
                     }
                     Err(_) | Ok(Value::Error(_)) => {
@@ -648,7 +648,7 @@ impl ClusterConnection {
                 }
             }
 
-            Some(Ok(Value::Array(Array::Vec(values))))
+            Some(Ok(Value::Array(Some(values))))
         } else {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
@@ -657,7 +657,7 @@ impl ClusterConnection {
 
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
                 match sub_result {
-                    Ok(Value::Array(Array::Vec(values)))
+                    Ok(Value::Array(Some(values)))
                         if sub_request.keys.len() == values.len() =>
                     {
                         results.extend(zip(&sub_request.keys, values))
@@ -681,7 +681,7 @@ impl ClusterConnection {
             });
 
             let values = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(Value::Array(Array::Vec(values))))
+            Some(Ok(Value::Array(Some(values))))
         }
     }
 
@@ -977,7 +977,7 @@ impl ClusterConnection {
 fn is_push_message(value: &Result<Value>) -> bool {
     match value {
         // RESP2 pub/sub messages
-        Ok(Value::Array(Array::Vec(ref items))) => match &items[..] {
+        Ok(Value::Array(Some(ref items))) => match &items[..] {
             [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(_channel)), Value::BulkString(BulkString::Binary(_payload))] =>
             {
                 matches!(command.as_slice(), b"message" | b"smessage")

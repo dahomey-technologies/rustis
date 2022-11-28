@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
+    resp::{Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
     tcp_connect, ClusterCommands, Config, ConnectionCommands, Error, Future, PreparedCommand,
     Result, SentinelCommands, ServerCommands, TcpStreamReader, TcpStreamWriter, RetryReason,
 };
@@ -113,7 +113,7 @@ impl StandaloneConnection {
         } {
             if log_enabled!(Level::Debug) {
                 match &value {
-                    Ok(Value::Array(Array::Vec(array))) => {
+                    Ok(Value::Array(Some(array))) => {
                         if array.len() > 100 {
                             debug!("[{}:{}] Received result Array(Vec([...]))", self.host, self.port);
                         } else {

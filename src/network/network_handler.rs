@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Array, BulkString, Command, CommandArgs, Value},
+    resp::{BulkString, Command, CommandArgs, Value},
     spawn, Config, Connection, Error, Message, Result, RetryReason,
 };
 use futures::{
@@ -356,7 +356,7 @@ impl NetworkHandler {
                                     if let Some(mut pending_replies) = pending_replies {
                                         pending_replies.push(value);
                                         let _result = value_sender
-                                            .send(Ok(Value::Array(Array::Vec(pending_replies))));
+                                            .send(Ok(Value::Array(Some(pending_replies))));
                                     } else {
                                         let _result = value_sender.send(Ok(value));
                                     }
@@ -406,7 +406,7 @@ impl NetworkHandler {
     ) -> Result<Option<Result<Value>>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(Value::Array(Array::Vec(ref items))) | Ok(Value::Push(Array::Vec(ref items))) => {
+            Ok(Value::Array(Some(ref items))) | Ok(Value::Push(Some(ref items))) => {
                 match &items[..] {
                     [Value::BulkString(BulkString::Binary(command)), Value::BulkString(BulkString::Binary(channel)), _] =>
                     {
@@ -456,7 +456,7 @@ impl NetworkHandler {
         }
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(Array::Vec(items))) | Ok(Value::Push(Array::Vec(items))) = value {
+        if let Ok(Value::Array(Some(items))) | Ok(Value::Push(Some(items))) = value {
             let mut iter = items.into_iter();
             match (
                 iter.next(),
@@ -475,7 +475,7 @@ impl NetworkHandler {
                 ) => match self.subscriptions.get_mut(&channel) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
-                            .send(Ok(Value::Array(Array::Vec(vec![
+                            .send(Ok(Value::Array(Some(vec![
                                 Value::BulkString(BulkString::Binary(channel)),
                                 payload,
                             ]))))
@@ -499,7 +499,7 @@ impl NetworkHandler {
                 ) => match self.subscriptions.get_mut(&pattern) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
-                            .send(Ok(Value::Array(Array::Vec(vec![
+                            .send(Ok(Value::Array(Some(vec![
                                 Value::BulkString(BulkString::Binary(pattern)),
                                 channel,
                                 payload,

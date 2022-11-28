@@ -1,4 +1,4 @@
-use crate::resp::{Array, Value};
+use crate::resp::{Value};
 use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer,
@@ -63,7 +63,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = seq.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Array(Array::Nil))
+            Ok(Value::Array(None))
         } else {
             let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
             loop {
@@ -72,7 +72,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                     Some(value) => values.push(value),
                 };
             }
-            Ok(Value::Array(Array::Vec(values)))
+            Ok(Value::Array(Some(values)))
         }
     }
 
@@ -83,22 +83,26 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = map.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Array(Array::Nil))
+            Ok(Value::Array(None))
         } else {
             let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
             loop {
                 match map.next_key::<PushOrKey>()? {
                     None => break,
                     Some(PushOrKey::Push) => {
-                        let values = map.next_value()?;
-                        return Ok(Value::Push(Array::Vec(values)));
+                        let values: Vec<Value> = map.next_value()?;
+                        if values.is_empty() {
+                            return Ok(Value::Push(None));
+                        } else {
+                            return Ok(Value::Push(Some(values)));
+                        }
                     },
                     Some(PushOrKey::Key(value)) => values.push(value),
                 };
 
                 values.push(map.next_value()?);
             }
-            Ok(Value::Array(Array::Vec(values)))
+            Ok(Value::Array(Some(values)))
         }
     }
 }

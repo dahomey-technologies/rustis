@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, ArgsOrCollection, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
@@ -30,8 +30,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         I: ArgsOrCollection<(f64, f64, M)>,
     {
         prepare_command(
@@ -62,8 +62,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Option<f64>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -83,8 +83,8 @@ pub trait GeoCommands {
     fn geohash<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<String>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
@@ -108,8 +108,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Vec<Option<(f64, f64)>>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
@@ -134,8 +134,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M1: Into<BulkString>,
+        K: Into<CommandArg>,
+        M1: Into<CommandArg>,
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
@@ -163,9 +163,9 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        S: Into<BulkString>,
-        M: Into<BulkString>,
+        D: Into<CommandArg>,
+        S: Into<CommandArg>,
+        M: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -216,10 +216,10 @@ pub enum GeoUnit {
 impl IntoArgs for GeoUnit {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            GeoUnit::Meters => BulkString::Str("m"),
-            GeoUnit::Kilometers => BulkString::Str("km"),
-            GeoUnit::Miles => BulkString::Str("mi"),
-            GeoUnit::Feet => BulkString::Str("ft"),
+            GeoUnit::Meters => CommandArg::Str("m"),
+            GeoUnit::Kilometers => CommandArg::Str("km"),
+            GeoUnit::Miles => CommandArg::Str("mi"),
+            GeoUnit::Feet => CommandArg::Str("ft"),
         })
     }
 }
@@ -227,7 +227,7 @@ impl IntoArgs for GeoUnit {
 /// The query's center point is provided by one of these mandatory options:
 pub enum GeoSearchFrom<M>
 where
-    M: Into<BulkString>,
+    M: Into<CommandArg>,
 {
     /// Use the position of the given existing `member` in the sorted set.
     FromMember { member: M },
@@ -237,7 +237,7 @@ where
 
 impl<M> IntoArgs for GeoSearchFrom<M>
 where
-    M: Into<BulkString>,
+    M: Into<CommandArg>,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
@@ -389,7 +389,7 @@ where
 
                 for value in it {
                     match value {
-                        Value::BulkString(BulkString::Binary(_)) => distance = Some(value.into()?),
+                        Value::BulkString(Some(_)) => distance = Some(value.into()?),
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
                         _ => return Err(Error::Client("Unexpected geo search result".to_owned())),

@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection,
     },
     PreparedCommand,
@@ -20,8 +20,8 @@ pub trait SetCommands {
     fn sadd<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
@@ -38,7 +38,7 @@ pub trait SetCommands {
     fn scard<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("SCARD").arg(key))
     }
@@ -55,7 +55,7 @@ pub trait SetCommands {
     fn sdiff<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         C: SingleArgOrCollection<K>,
         A: FromSingleValueArray<M>,
@@ -75,8 +75,8 @@ pub trait SetCommands {
     fn sdiffstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        K: Into<BulkString>,
+        D: Into<CommandArg>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
@@ -93,7 +93,7 @@ pub trait SetCommands {
     fn sinter<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         C: SingleArgOrCollection<K>,
         A: FromSingleValueArray<M>,
@@ -116,7 +116,7 @@ pub trait SetCommands {
     fn sintercard<K, C>(&mut self, keys: C, limit: usize) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(
@@ -141,8 +141,8 @@ pub trait SetCommands {
     fn sinterstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        K: Into<BulkString>,
+        D: Into<CommandArg>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
@@ -160,8 +160,8 @@ pub trait SetCommands {
     fn sismember<K, M>(&mut self, key: K, member: M) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
     {
         prepare_command(self, cmd("SISMEMBER").arg(key).arg(member))
     }
@@ -174,7 +174,7 @@ pub trait SetCommands {
     fn smembers<K, M, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         A: FromSingleValueArray<M>,
     {
@@ -192,8 +192,8 @@ pub trait SetCommands {
     fn smismember<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<bool>>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
@@ -216,9 +216,9 @@ pub trait SetCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        S: Into<BulkString>,
-        D: Into<BulkString>,
-        M: Into<BulkString>,
+        S: Into<CommandArg>,
+        D: Into<CommandArg>,
+        M: Into<CommandArg>,
     {
         prepare_command(self, cmd("SMOVE").arg(source).arg(destination).arg(member))
     }
@@ -234,7 +234,7 @@ pub trait SetCommands {
     fn spop<K, M, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         A: FromSingleValueArray<M>,
     {
@@ -252,7 +252,7 @@ pub trait SetCommands {
     fn srandmember<K, M, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         A: FromSingleValueArray<M>,
     {
@@ -270,8 +270,8 @@ pub trait SetCommands {
     fn srem<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        M: Into<BulkString>,
+        K: Into<CommandArg>,
+        M: Into<CommandArg>,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("SREM").arg(key).arg(members))
@@ -293,7 +293,7 @@ pub trait SetCommands {
     ) -> PreparedCommand<Self, (u64, Vec<M>)>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue,
     {
         prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
@@ -310,7 +310,7 @@ pub trait SetCommands {
     fn sunion<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue + Eq + Hash,
         C: SingleArgOrCollection<K>,
         A: FromSingleValueArray<M>,
@@ -330,8 +330,8 @@ pub trait SetCommands {
     fn sunionstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<BulkString>,
-        K: Into<BulkString>,
+        D: Into<CommandArg>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
@@ -346,7 +346,7 @@ pub struct SScanOptions {
 
 impl SScanOptions {
     #[must_use]
-    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: Into<CommandArg>>(self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern),
         }

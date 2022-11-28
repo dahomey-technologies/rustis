@@ -1,5 +1,5 @@
 use crate::{
-    resp::{cmd, BulkString, SingleArgOrCollection},
+    resp::{cmd, CommandArg, SingleArgOrCollection},
     prepare_command, PreparedCommand,
 };
 
@@ -14,7 +14,7 @@ pub(crate) trait InternalPubSubCommands {
     fn punsubscribe<P, PP>(&mut self, patterns: PP) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<BulkString> + Send,
+        P: Into<CommandArg> + Send,
         PP: SingleArgOrCollection<P>,
     {
         prepare_command(self, cmd("PUNSUBSCRIBE").arg(patterns))
@@ -27,7 +27,7 @@ pub(crate) trait InternalPubSubCommands {
     fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        C: Into<BulkString>,
+        C: Into<CommandArg>,
         CC: SingleArgOrCollection<C>,
     {
         prepare_command(self, cmd("SUNSUBSCRIBE").arg(shardchannels))
@@ -40,7 +40,7 @@ pub(crate) trait InternalPubSubCommands {
     fn unsubscribe<C, CC>(&mut self, channels: CC) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        C: Into<BulkString>,
+        C: Into<CommandArg>,
         CC: SingleArgOrCollection<C>,
     {
         prepare_command(self, cmd("UNSUBSCRIBE").arg(channels))

@@ -1,6 +1,6 @@
 use crate::{
     network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     ClientPreparedCommand, Future, InternalPubSubCommands, IntoConfig, Message, MsgSender,
     NetworkHandler, PreparedCommand, PubSubStream, Result, ValueReceiver, ValueSender, Pipeline, Cache,
 };
@@ -75,7 +75,7 @@ impl InnerClient {
 
     pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         let channels: Vec<String> = channels.into_iter().map(|c| c.into().to_string()).collect();
@@ -107,7 +107,7 @@ impl InnerClient {
 
     pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<BulkString> + Send + 'a,
+        P: Into<CommandArg> + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
         let patterns: Vec<String> = patterns.into_iter().map(|p| p.into().to_string()).collect();
@@ -139,7 +139,7 @@ impl InnerClient {
 
     pub fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         let shardchannels: Vec<String> = shardchannels

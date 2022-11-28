@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{Value},
     Error, RedisError, Result,
 };
 use bytes::{Buf, BytesMut};
@@ -47,7 +47,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'-' => decode_string(buf, idx)?
             .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
             .transpose(),
-        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(BulkString::Nil), pos))),
+        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(None), pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
         b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
@@ -58,10 +58,10 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
     }
 }
 
-fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkString, usize)>> {
+fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<u8>>, usize)>> {
     match decode_integer(buf, idx)? {
         None => Ok(None),
-        Some((-1, pos)) => Ok(Some((BulkString::Nil, pos))),
+        Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, pos)) => {
             let len = usize::try_from(len)
                 .map_err(|_| Error::Client("Malformed bulk string len".to_owned()))?;
@@ -75,7 +75,7 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(BulkStri
                 )))
             } else {
                 Ok(Some((
-                    BulkString::Binary(buf[pos..(pos + len)].to_vec()),
+                    Some(buf[pos..(pos + len)].to_vec()),
                     pos + len + 2,
                 )))
             }

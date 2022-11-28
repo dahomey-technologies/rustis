@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
 };
@@ -23,8 +23,8 @@ pub trait ConnectionCommands {
     fn auth<U, P>(&mut self, username: Option<U>, password: P) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<BulkString>,
-        P: Into<BulkString>,
+        U: Into<CommandArg>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
@@ -186,7 +186,7 @@ pub trait ConnectionCommands {
     fn client_setname<CN>(&mut self, connection_name: CN) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        CN: Into<BulkString>,
+        CN: Into<CommandArg>,
     {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
@@ -264,7 +264,7 @@ pub trait ConnectionCommands {
     fn echo<M, R>(&mut self, message: M) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        M: Into<BulkString>,
+        M: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(self, cmd("ECHO").arg(message))
@@ -344,8 +344,8 @@ pub enum ClientCachingMode {
 impl IntoArgs for ClientCachingMode {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientCachingMode::Yes => BulkString::Str("YES"),
-            ClientCachingMode::No => BulkString::Str("NO"),
+            ClientCachingMode::Yes => CommandArg::Str("YES"),
+            ClientCachingMode::No => CommandArg::Str("NO"),
         })
     }
 }
@@ -558,10 +558,10 @@ pub enum ClientType {
 impl IntoArgs for ClientType {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientType::Normal => BulkString::Str("NORMAL"),
-            ClientType::Master => BulkString::Str("MASTER"),
-            ClientType::Replica => BulkString::Str("REPLICA"),
-            ClientType::PubSub => BulkString::Str("PUBSUB"),
+            ClientType::Normal => CommandArg::Str("NORMAL"),
+            ClientType::Master => CommandArg::Str("MASTER"),
+            ClientType::Replica => CommandArg::Str("REPLICA"),
+            ClientType::PubSub => CommandArg::Str("PUBSUB"),
         })
     }
 }
@@ -637,7 +637,7 @@ impl ClientKillOptions {
     }
 
     #[must_use]
-    pub fn user<U: Into<BulkString>>(self, username: U) -> Self {
+    pub fn user<U: Into<CommandArg>>(self, username: U) -> Self {
         Self {
             command_args: self.command_args.arg("USER").arg(username),
         }
@@ -648,7 +648,7 @@ impl ClientKillOptions {
     /// The ip:port should match a line returned by the
     /// [`client_list`](crate::ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr<A: Into<BulkString>>(self, addr: A) -> Self {
+    pub fn addr<A: Into<CommandArg>>(self, addr: A) -> Self {
         Self {
             command_args: self.command_args.arg("ADDR").arg(addr),
         }
@@ -656,7 +656,7 @@ impl ClientKillOptions {
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr<A: Into<BulkString>>(self, laddr: A) -> Self {
+    pub fn laddr<A: Into<CommandArg>>(self, laddr: A) -> Self {
         Self {
             command_args: self.command_args.arg("LADDR").arg(laddr),
         }
@@ -692,8 +692,8 @@ pub enum ClientPauseMode {
 impl IntoArgs for ClientPauseMode {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientPauseMode::Write => BulkString::Str("WRITE"),
-            ClientPauseMode::All => BulkString::Str("ALL"),
+            ClientPauseMode::Write => CommandArg::Str("WRITE"),
+            ClientPauseMode::All => CommandArg::Str("ALL"),
         })
     }
 }
@@ -714,9 +714,9 @@ pub enum ClientReplyMode {
 impl IntoArgs for ClientReplyMode {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientReplyMode::On => BulkString::Str("ON"),
-            ClientReplyMode::Off => BulkString::Str("OFF"),
-            ClientReplyMode::Skip => BulkString::Str("SKIP"),
+            ClientReplyMode::On => CommandArg::Str("ON"),
+            ClientReplyMode::Off => CommandArg::Str("OFF"),
+            ClientReplyMode::Skip => CommandArg::Str("SKIP"),
         })
     }
 }
@@ -730,8 +730,8 @@ pub enum ClientTrackingStatus {
 impl IntoArgs for ClientTrackingStatus {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientTrackingStatus::On => BulkString::Str("ON"),
-            ClientTrackingStatus::Off => BulkString::Str("OFF"),
+            ClientTrackingStatus::On => CommandArg::Str("ON"),
+            ClientTrackingStatus::Off => CommandArg::Str("OFF"),
         })
     }
 }
@@ -762,7 +762,7 @@ impl ClientTrackingOptions {
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix<P: Into<BulkString>>(self, prefix: P) -> Self {
+    pub fn prefix<P: Into<CommandArg>>(self, prefix: P) -> Self {
         Self {
             command_args: self.command_args.arg("PREFIX").arg(prefix),
         }
@@ -841,8 +841,8 @@ pub enum ClientUnblockMode {
 impl IntoArgs for ClientUnblockMode {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(match self {
-            ClientUnblockMode::Timeout => BulkString::Str("TIMEOUT"),
-            ClientUnblockMode::Error => BulkString::Str("ERROR"),
+            ClientUnblockMode::Timeout => CommandArg::Str("TIMEOUT"),
+            ClientUnblockMode::Error => CommandArg::Str("ERROR"),
         })
     }
 }
@@ -870,8 +870,8 @@ impl HelloOptions {
     #[must_use]
     pub fn auth<U, P>(self, username: U, password: P) -> Self
     where
-        U: Into<BulkString>,
-        P: Into<BulkString>,
+        U: Into<CommandArg>,
+        P: Into<CommandArg>,
     {
         Self {
             command_args: self.command_args.arg("AUTH").arg(username).arg(password),
@@ -881,7 +881,7 @@ impl HelloOptions {
     #[must_use]
     pub fn set_name<C>(self, client_name: C) -> Self
     where
-        C: Into<BulkString>,
+        C: Into<CommandArg>,
     {
         Self {
             command_args: self.command_args.arg("SETNAME").arg(client_name),
@@ -937,7 +937,7 @@ pub struct PingOptions {
 
 impl PingOptions {
     #[must_use]
-    pub fn message<M: Into<BulkString>>(self, message: M) -> Self {
+    pub fn message<M: Into<CommandArg>>(self, message: M) -> Self {
         Self {
             command_args: self.command_args.arg(message),
         }

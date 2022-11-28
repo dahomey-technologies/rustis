@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{Value},
     sleep, spawn,
     tests::get_test_client,
     BlockingCommands, FlushingMode, GenericCommands, LInsertWhere,
@@ -207,7 +207,7 @@ async fn lindex() -> Result<()> {
     assert_eq!("element3", element);
 
     let element: Value = client.lindex("mylist", 3).await?;
-    assert!(matches!(element, Value::BulkString(BulkString::Nil)));
+    assert!(matches!(element, Value::BulkString(None)));
 
     Ok(())
 }

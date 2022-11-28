@@ -1,18 +1,21 @@
 use crate::{
-    resp::{BulkString, Command, FromValue},
+    resp::{Command, FromValue},
     Error, RedisError, Result,
 };
+use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Value {
     SimpleString(String),
     Integer(i64),
     Double(f64),
-    BulkString(BulkString),
+    BulkString(Option<Vec<u8>>),
     Array(Option<Vec<Value>>),
     Push(Option<Vec<Value>>),
     Error(RedisError),
 }
+
+pub struct BulkString(pub Vec<u8>);
 
 impl Value {
     /// A [`Value`](crate::resp::Value) to user type conversion that consumes the input value.
@@ -36,7 +39,7 @@ impl Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value::BulkString(BulkString::Nil)
+        Value::BulkString(None)
     }
 }
 
@@ -46,7 +49,10 @@ impl ToString for Value {
             Value::SimpleString(s) => s.clone(),
             Value::Integer(i) => i.to_string(),
             Value::Double(f) => f.to_string(),
-            Value::BulkString(s) => s.to_string(),
+            Value::BulkString(s) => match s {
+                Some(s) => String::from_utf8_lossy(s).into_owned(),
+                None => String::from(""),
+            },
             Value::Array(Some(v)) => format!(
                 "[{}]",
                 v.iter()
@@ -64,6 +70,21 @@ impl ToString for Value {
             ),
             Value::Push(None) => "Push[]".to_string(),
             Value::Error(e) => e.to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SimpleString(arg0) => f.debug_tuple("SimpleString").field(arg0).finish(),
+            Self::Integer(arg0) => f.debug_tuple("Integer").field(arg0).finish(),
+            Self::Double(arg0) => f.debug_tuple("Double").field(arg0).finish(),
+            Self::BulkString(Some(arg0)) => f.debug_tuple("CommandArg").field(&String::from_utf8_lossy(arg0).into_owned()).finish(),
+            Self::BulkString(None) => f.debug_tuple("CommandArg").field(&None::<Vec<u8>>).finish(),
+            Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
+            Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
+            Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Command, CommandArgs},
+    resp::{CommandArg, Command, CommandArgs},
     Error, Result,
 };
 use bytes::{BufMut, BytesMut};
@@ -15,17 +15,17 @@ impl Encoder<&Command> for CommandEncoder {
         encode_integer(command.args.len() as i64 + 1, buf);
         encode_crlf(buf);
     
-        encode_bulkstring(&BulkString::from(command.name), buf);
+        encode_bulkstring(&CommandArg::from(command.name), buf);
         encode_command_args(&command.args, buf);
 
         Ok(())
     }
 }
 
-fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
+fn encode_bulkstring(bulk_string: &CommandArg, buf: &mut BytesMut) {
     match bulk_string {
-        BulkString::Nil => buf.put(&b"$-1\r\n"[..]),
-        BulkString::Integer(i) => {
+        CommandArg::Nil => buf.put(&b"$-1\r\n"[..]),
+        CommandArg::Integer(i) => {
             let mut temp = itoa::Buffer::new();
             let str = temp.format(*i);
 
@@ -35,7 +35,7 @@ fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
             buf.put(str.as_bytes());
             encode_crlf(buf);
         }
-        BulkString::F32(f) => {
+        CommandArg::F32(f) => {
             let mut temp = dtoa::Buffer::new();
             let str = temp.format(*f);
 
@@ -45,7 +45,7 @@ fn encode_bulkstring(bulk_string: &BulkString, buf: &mut BytesMut) {
             buf.put(str.as_bytes());
             encode_crlf(buf);
         }
-        BulkString::F64(f) => {
+        CommandArg::F64(f) => {
             let mut temp = dtoa::Buffer::new();
             let str = temp.format(*f);
 

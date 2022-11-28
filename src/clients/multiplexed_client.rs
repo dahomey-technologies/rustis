@@ -7,7 +7,7 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    resp::{BulkString, Command, FromValue, SingleArgOrCollection, Value},
+    resp::{CommandArg, Command, FromValue, SingleArgOrCollection, Value},
     BitmapCommands, Cache, ClientTrait, ClusterCommands, ConnectionCommands, Future,
     GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
     InternalPubSubCommands, IntoConfig, ListCommands, Pipeline, PreparedCommand, PubSubCommands,
@@ -49,7 +49,7 @@ impl MultiplexedClient {
     ///
     /// # Arguments
     /// * `name` - Command name in uppercase.
-    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`BulkString`](crate::resp::BulkString).
+    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`CommandArg`](crate::resp::CommandArg).
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -198,7 +198,7 @@ impl StringCommands for MultiplexedClient {}
 impl PubSubCommands for MultiplexedClient {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.subscribe(channels)
@@ -206,7 +206,7 @@ impl PubSubCommands for MultiplexedClient {
 
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<BulkString> + Send + 'a,
+        P: Into<CommandArg> + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
@@ -214,7 +214,7 @@ impl PubSubCommands for MultiplexedClient {
 
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)

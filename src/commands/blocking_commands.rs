@@ -1,6 +1,6 @@
 use crate::{
     prepare_command,
-    resp::{cmd, BulkString, FromValue, SingleArgOrCollection},
+    resp::{cmd, CommandArg, FromValue, SingleArgOrCollection},
     Future, LMoveWhere, MonitorStream, PreparedCommand, ZMPopResult, ZWhere,
 };
 
@@ -27,8 +27,8 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        S: Into<BulkString>,
-        D: Into<BulkString>,
+        S: Into<CommandArg>,
+        D: Into<CommandArg>,
         E: FromValue,
     {
         prepare_command(
@@ -60,7 +60,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(String, Vec<E>)>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         E: FromValue,
         C: SingleArgOrCollection<K>,
     {
@@ -99,7 +99,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
@@ -130,7 +130,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
@@ -158,7 +158,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
         E: FromValue,
     {
@@ -193,7 +193,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,
@@ -220,7 +220,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,

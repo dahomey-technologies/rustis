@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
     },
     Error, FlushingMode, PreparedCommand, Result,
 };
@@ -120,7 +120,7 @@ pub trait ScriptingCommands {
     fn function_delete<L>(&mut self, library_name: L) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        L: Into<BulkString>,
+        L: Into<CommandArg>,
     {
         prepare_command(self, cmd("FUNCTION").arg("DELETE").arg(library_name))
     }
@@ -193,7 +193,7 @@ pub trait ScriptingCommands {
     fn function_load<F, L>(&mut self, replace: bool, function_code: F) -> PreparedCommand<Self, L>
     where
         Self: Sized,
-        F: Into<BulkString>,
+        F: Into<CommandArg>,
         L: FromValue,
     {
         prepare_command(
@@ -217,7 +217,7 @@ pub trait ScriptingCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -263,7 +263,7 @@ pub trait ScriptingCommands {
     fn script_exists<S, C>(&mut self, sha1s: C) -> PreparedCommand<Self, Vec<bool>>
     where
         Self: Sized,
-        S: Into<BulkString>,
+        S: Into<CommandArg>,
         C: SingleArgOrCollection<S>,
     {
         prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
@@ -305,7 +305,7 @@ pub trait ScriptingCommands {
     fn script_load<S, V>(&mut self, script: S) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        S: Into<BulkString>,
+        S: Into<CommandArg>,
         V: FromValue,
     {
         prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
@@ -326,7 +326,7 @@ pub struct CallBuilder {
 
 impl CallBuilder {
     #[must_use]
-    pub fn script<S: Into<BulkString>>(script: S) -> Self {
+    pub fn script<S: Into<CommandArg>>(script: S) -> Self {
         Self {
             command_args: CommandArgs::default().arg(script),
             keys_added: false,
@@ -334,7 +334,7 @@ impl CallBuilder {
     }
 
     #[must_use]
-    pub fn sha1<S: Into<BulkString>>(sha1: S) -> Self {
+    pub fn sha1<S: Into<CommandArg>>(sha1: S) -> Self {
         Self {
             command_args: CommandArgs::default().arg(sha1),
             keys_added: false,
@@ -342,7 +342,7 @@ impl CallBuilder {
     }
 
     #[must_use]
-    pub fn function<F: Into<BulkString>>(function: F) -> Self {
+    pub fn function<F: Into<CommandArg>>(function: F) -> Self {
         Self {
             command_args: CommandArgs::default().arg(function),
             keys_added: false,
@@ -353,7 +353,7 @@ impl CallBuilder {
     #[must_use]
     pub fn keys<K, C>(self, keys: C) -> Self
     where
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         Self {
@@ -366,7 +366,7 @@ impl CallBuilder {
     #[must_use]
     pub fn args<A, C>(self, args: C) -> Self
     where
-        A: Into<BulkString>,
+        A: Into<CommandArg>,
         C: SingleArgOrCollection<A>,
     {
         let command_args = if self.keys_added {
@@ -597,7 +597,7 @@ pub struct FunctionListOptions {
 
 impl FunctionListOptions {
     #[must_use]
-    pub fn library_name_pattern<P: Into<BulkString>>(self, library_name_pattern: P) -> Self {
+    pub fn library_name_pattern<P: Into<CommandArg>>(self, library_name_pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args

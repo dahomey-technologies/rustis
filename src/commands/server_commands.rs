@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
+        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
@@ -46,7 +46,7 @@ pub trait ServerCommands {
     fn acl_deluser<U, UU>(&mut self, usernames: UU) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        U: Into<BulkString>,
+        U: Into<CommandArg>,
         UU: SingleArgOrCollection<U>,
     {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
@@ -68,8 +68,8 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        U: Into<BulkString>,
-        C: Into<BulkString>,
+        U: Into<CommandArg>,
+        C: Into<CommandArg>,
         R: FromValue,
     {
         prepare_command(
@@ -110,7 +110,7 @@ pub trait ServerCommands {
     fn acl_getuser<U, RR>(&mut self, username: U) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        U: Into<BulkString>,
+        U: Into<CommandArg>,
         RR: FromKeyValueValueArray<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
@@ -199,8 +199,8 @@ pub trait ServerCommands {
     fn acl_setuser<U, R, RR>(&mut self, username: U, rules: RR) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<BulkString>,
-        R: Into<BulkString>,
+        U: Into<CommandArg>,
+        R: Into<CommandArg>,
         RR: SingleArgOrCollection<R>,
     {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
@@ -275,7 +275,7 @@ pub trait ServerCommands {
     fn command_docs<N, NN, DD>(&mut self, command_names: NN) -> PreparedCommand<Self, DD>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
         NN: SingleArgOrCollection<N>,
         DD: FromKeyValueValueArray<String, CommandDoc>,
     {
@@ -292,7 +292,7 @@ pub trait ServerCommands {
     fn command_getkeys<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<BulkString>,
+        A: Into<CommandArg>,
         AA: SingleArgOrCollection<A>,
         KK: FromSingleValueArray<String>,
     {
@@ -309,7 +309,7 @@ pub trait ServerCommands {
     fn command_getkeysandflags<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<BulkString>,
+        A: Into<CommandArg>,
         AA: SingleArgOrCollection<A>,
         KK: FromKeyValueValueArray<String, Vec<String>>,
     {
@@ -326,7 +326,7 @@ pub trait ServerCommands {
     fn command_info<N, NN>(&mut self, command_names: NN) -> PreparedCommand<Self, Vec<CommandInfo>>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
         NN: SingleArgOrCollection<N>,
     {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
@@ -361,7 +361,7 @@ pub trait ServerCommands {
     fn config_get<P, PP, V, VV>(&mut self, params: PP) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
         PP: SingleArgOrCollection<P>,
         V: FromValue,
         VV: FromKeyValueValueArray<String, V>,
@@ -404,8 +404,8 @@ pub trait ServerCommands {
     fn config_set<P, V, C>(&mut self, configs: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<BulkString>,
-        V: Into<BulkString>,
+        P: Into<CommandArg>,
+        V: Into<CommandArg>,
         C: KeyValueArgOrCollection<P, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
@@ -528,7 +528,7 @@ pub trait ServerCommands {
     fn latency_histogram<C, CC, RR>(&mut self, commands: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<BulkString>,
+        C: Into<CommandArg>,
         CC: SingleArgOrCollection<C>,
         RR: FromKeyValueValueArray<String, CommandHistogram>,
     {
@@ -682,7 +682,7 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, Option<usize>>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
     }
@@ -712,7 +712,7 @@ pub trait ServerCommands {
     fn module_load<P>(&mut self, path: P, options: ModuleLoadOptions) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
     {
         prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
     }
@@ -725,7 +725,7 @@ pub trait ServerCommands {
     fn module_unload<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<BulkString>,
+        N: Into<CommandArg>,
     {
         prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
@@ -877,7 +877,7 @@ pub struct AclCatOptions {
 
 impl AclCatOptions {
     #[must_use]
-    pub fn category_name<C: Into<BulkString>>(self, category_name: C) -> Self {
+    pub fn category_name<C: Into<CommandArg>>(self, category_name: C) -> Self {
         Self {
             command_args: self.command_args.arg(category_name),
         }
@@ -900,7 +900,7 @@ impl AclDryRunOptions {
     #[must_use]
     pub fn arg<A, AA>(self, args: AA) -> Self
     where
-        A: Into<BulkString>,
+        A: Into<CommandArg>,
         AA: SingleArgOrCollection<A>,
     {
         Self {
@@ -1577,7 +1577,7 @@ pub struct CommandListOptions {
 impl CommandListOptions {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name<M: Into<BulkString>>(self, module_name: M) -> Self {
+    pub fn filter_by_module_name<M: Into<CommandArg>>(self, module_name: M) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1589,7 +1589,7 @@ impl CommandListOptions {
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category<C: Into<BulkString>>(self, category: C) -> Self {
+    pub fn filter_by_acl_category<C: Into<CommandArg>>(self, category: C) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1601,7 +1601,7 @@ impl CommandListOptions {
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern<P: Into<BulkString>>(self, pattern: P) -> Self {
+    pub fn filter_by_pattern<P: Into<CommandArg>>(self, pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1627,7 +1627,7 @@ pub struct FailOverOptions {
 impl FailOverOptions {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to<H: Into<BulkString>>(self, host: H, port: u16) -> Self {
+    pub fn to<H: Into<CommandArg>>(self, host: H, port: u16) -> Self {
         Self {
             command_args: self.command_args.arg("TO").arg(host).arg(port),
         }
@@ -1687,25 +1687,25 @@ pub enum InfoSection {
     Everything,
 }
 
-impl From<InfoSection> for BulkString {
+impl From<InfoSection> for CommandArg {
     fn from(s: InfoSection) -> Self {
         match s {
-            InfoSection::Server => BulkString::Str("server"),
-            InfoSection::Clients => BulkString::Str("clients"),
-            InfoSection::Memory => BulkString::Str("memory"),
-            InfoSection::Persistence => BulkString::Str("persistence"),
-            InfoSection::Stats => BulkString::Str("stats"),
-            InfoSection::Replication => BulkString::Str("replication"),
-            InfoSection::Cpu => BulkString::Str("cpu"),
-            InfoSection::Commandstats => BulkString::Str("commandstats"),
-            InfoSection::Latencystats => BulkString::Str("latencystats"),
-            InfoSection::Cluster => BulkString::Str("cluster"),
-            InfoSection::Keyspace => BulkString::Str("keyspace"),
-            InfoSection::Modules => BulkString::Str("modules"),
-            InfoSection::Errorstats => BulkString::Str("errorstats"),
-            InfoSection::All => BulkString::Str("all"),
-            InfoSection::Default => BulkString::Str("default"),
-            InfoSection::Everything => BulkString::Str("everything"),
+            InfoSection::Server => CommandArg::Str("server"),
+            InfoSection::Clients => CommandArg::Str("clients"),
+            InfoSection::Memory => CommandArg::Str("memory"),
+            InfoSection::Persistence => CommandArg::Str("persistence"),
+            InfoSection::Stats => CommandArg::Str("stats"),
+            InfoSection::Replication => CommandArg::Str("replication"),
+            InfoSection::Cpu => CommandArg::Str("cpu"),
+            InfoSection::Commandstats => CommandArg::Str("commandstats"),
+            InfoSection::Latencystats => CommandArg::Str("latencystats"),
+            InfoSection::Cluster => CommandArg::Str("cluster"),
+            InfoSection::Keyspace => CommandArg::Str("keyspace"),
+            InfoSection::Modules => CommandArg::Str("modules"),
+            InfoSection::Errorstats => CommandArg::Str("errorstats"),
+            InfoSection::All => CommandArg::Str("all"),
+            InfoSection::Default => CommandArg::Str("default"),
+            InfoSection::Everything => CommandArg::Str("everything"),
         }
     }
 }
@@ -1731,7 +1731,7 @@ pub enum LatencyHistoryEvent {
     RdbUnlinkTempFile,
 }
 
-impl From<LatencyHistoryEvent> for BulkString {
+impl From<LatencyHistoryEvent> for CommandArg {
     fn from(e: LatencyHistoryEvent) -> Self {
         match e {
             LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle".into(),
@@ -1796,7 +1796,7 @@ impl LolWutOptions {
     }
 
     #[must_use]
-    pub fn optional_arg<A: Into<BulkString>>(self, arg: A) -> Self {
+    pub fn optional_arg<A: Into<CommandArg>>(self, arg: A) -> Self {
         Self {
             command_args: self.command_args.arg(arg),
         }
@@ -2029,8 +2029,8 @@ impl ModuleLoadOptions {
     #[must_use]
     pub fn config<N, V>(self, name: N, value: V) -> Self
     where
-        N: Into<BulkString>,
-        V: Into<BulkString>,
+        N: Into<CommandArg>,
+        V: Into<CommandArg>,
     {
         if self.args_added {
             panic!("method config should be called before method arg");
@@ -2045,7 +2045,7 @@ impl ModuleLoadOptions {
     /// Any additional arguments are passed unmodified to the module.
     /// This method can be called multiple times
     #[must_use]
-    pub fn arg<A: Into<BulkString>>(self, arg: A) -> Self {
+    pub fn arg<A: Into<CommandArg>>(self, arg: A) -> Self {
         if !self.args_added {
             Self {
                 command_args: self.command_args.arg("ARGS").arg(arg),
@@ -2085,7 +2085,7 @@ impl ReplicaOfOptions {
     /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
-    pub fn master<H: Into<BulkString>>(host: H, port: u16) -> Self {
+    pub fn master<H: Into<CommandArg>>(host: H, port: u16) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(host).arg(port),
         }
@@ -2140,7 +2140,7 @@ impl FromValue for RoleResult {
             iter.next(),
         ) {
             (
-                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(Value::BulkString(Some(s))),
                 Some(master_replication_offset),
                 Some(replica_infos),
                 None,
@@ -2151,7 +2151,7 @@ impl FromValue for RoleResult {
                 replica_infos: replica_infos.into()?,
             }),
             (
-                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(Value::BulkString(Some(s))),
                 Some(master_ip),
                 Some(master_port),
                 Some(state),
@@ -2164,7 +2164,7 @@ impl FromValue for RoleResult {
                 amount_data_received: amount_data_received.into()?,
             }),
             (
-                Some(Value::BulkString(BulkString::Binary(s))),
+                Some(Value::BulkString(Some(s))),
                 Some(master_names),
                 None,
                 None,

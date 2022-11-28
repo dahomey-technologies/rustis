@@ -8,7 +8,7 @@ use crate::JsonCommands;
 use crate::SearchCommands;
 use crate::{
     network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, BulkString, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, BlockingCommands, ClientTrait, ClusterCommands, ConnectionCommands, Future,
     GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
     InternalPubSubCommands, IntoConfig, ListCommands, Message, MonitorStream, Pipeline,
@@ -50,7 +50,7 @@ impl Client {
     ///
     /// # Arguments
     /// * `name` - Command name in uppercase.
-    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`BulkString`](crate::resp::BulkString).
+    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`CommandArg`](crate::resp::CommandArg).
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -192,7 +192,7 @@ impl TransactionCommands for Client {}
 impl PubSubCommands for Client {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.subscribe(channels)
@@ -200,7 +200,7 @@ impl PubSubCommands for Client {
 
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<BulkString> + Send + 'a,
+        P: Into<CommandArg> + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
@@ -208,7 +208,7 @@ impl PubSubCommands for Client {
 
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<BulkString> + Send + 'a,
+        C: Into<CommandArg> + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)

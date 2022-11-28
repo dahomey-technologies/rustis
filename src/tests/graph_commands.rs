@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Value},
+    resp::{Value},
     tests::get_redis_stack_test_client,
     Error, FlushingMode, GraphCommands, GraphQueryOptions, GraphValue, Result, ServerCommands, GraphSlowlogResult,
 };
@@ -178,7 +178,7 @@ async fn graph_query() -> Result<()> {
         GraphValue::Map(HashMap::<String, GraphValue>::from([
             (
                 "key1".to_owned(),
-                GraphValue::String(BulkString::Binary("stringval".as_bytes().to_vec()))
+                GraphValue::String("stringval".as_bytes().to_vec())
             ),
             ("key2".to_owned(), GraphValue::Integer(10))
         ])),
@@ -201,7 +201,7 @@ async fn graph_query() -> Result<()> {
     assert_eq!(GraphValue::Null, result.rows[0].values[0]);
     assert_eq!("a.string", result.header.column_names[1]);
     assert_eq!(
-        GraphValue::String(BulkString::Binary("string".as_bytes().to_vec())),
+        GraphValue::String("string".as_bytes().to_vec()),
         result.rows[0].values[1]
     );
     assert_eq!("a.integer", result.header.column_names[2]);
@@ -218,7 +218,7 @@ async fn graph_query() -> Result<()> {
     assert_eq!("a.array", result.header.column_names[6]);
     assert_eq!(
         GraphValue::Array(vec![
-            GraphValue::String(BulkString::Binary("a".as_bytes().to_vec())),
+            GraphValue::String("a".as_bytes().to_vec()),
             GraphValue::Integer(1),
             GraphValue::Double(1.5),
             GraphValue::Boolean(false)

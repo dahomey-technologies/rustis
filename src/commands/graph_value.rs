@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, FromValue, Value},
+    resp::{FromValue, Value, BulkString},
     Error, GraphCache, Result,
 };
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ impl FromValue for GraphValueType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphValue {
     Null,
-    String(BulkString),
+    String(Vec<u8>),
     Integer(i64),
     Boolean(bool),
     Double(f64),
@@ -83,7 +83,7 @@ impl GraphValue {
                 ))
             }
             GraphValueType::Null => GraphValue::Null,
-            GraphValueType::String => GraphValue::String(value.into()?),
+            GraphValueType::String => GraphValue::String(value.into::<BulkString>()?.0),
             GraphValueType::Integer => GraphValue::Integer(value.into()?),
             GraphValueType::Boolean => GraphValue::Boolean(value.into()?),
             GraphValueType::Double => GraphValue::Double(value.into()?),
@@ -280,7 +280,7 @@ where
 impl FromGraphValue for String {
     fn from_graph_value(value: GraphValue) -> Result<Self> {
         match value {
-            GraphValue::String(s) => Result::<String>::from(s),
+            GraphValue::String(s) => String::from_utf8(s).map_err(|e| Error::Client(e.to_string())),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to String",
                 value

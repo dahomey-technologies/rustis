@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
     Error, PreparedCommand, Result,
@@ -29,8 +29,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        S: Into<BulkString>,
-        D: Into<BulkString>,
+        S: Into<CommandArg>,
+        D: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -53,7 +53,7 @@ pub trait GenericCommands {
     fn del<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("DEL").arg(keys))
@@ -70,7 +70,7 @@ pub trait GenericCommands {
     fn dump<K>(&mut self, key: K) -> PreparedCommand<Self, DumpResult>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("DUMP").arg(key))
     }
@@ -86,7 +86,7 @@ pub trait GenericCommands {
     fn exists<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("EXISTS").arg(keys))
@@ -109,7 +109,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("EXPIRE").arg(key).arg(seconds).arg(option))
     }
@@ -135,7 +135,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -156,7 +156,7 @@ pub trait GenericCommands {
     fn expiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("EXPIRETIME").arg(key))
     }
@@ -172,7 +172,7 @@ pub trait GenericCommands {
     fn keys<P, K, A>(&mut self, pattern: P) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        P: Into<BulkString>,
+        P: Into<CommandArg>,
         K: FromValue,
         A: FromSingleValueArray<K>,
     {
@@ -199,8 +199,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, MigrateResult>
     where
         Self: Sized,
-        H: Into<BulkString>,
-        K: Into<BulkString>,
+        H: Into<CommandArg>,
+        K: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -226,7 +226,7 @@ pub trait GenericCommands {
     fn move_<K>(&mut self, key: K, db: usize) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("MOVE").arg(key).arg(db))
     }
@@ -242,7 +242,7 @@ pub trait GenericCommands {
     fn object_encoding<K, E>(&mut self, key: K) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         E: FromValue,
     {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").arg(key))
@@ -259,7 +259,7 @@ pub trait GenericCommands {
     fn object_freq<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("OBJECT").arg("FREQ").arg(key))
     }
@@ -275,7 +275,7 @@ pub trait GenericCommands {
     fn object_idle_time<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("OBJECT").arg("IDLETIME").arg(key))
     }
@@ -291,7 +291,7 @@ pub trait GenericCommands {
     fn object_refcount<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("OBJECT").arg("REFCOUNT").arg(key))
     }
@@ -310,7 +310,7 @@ pub trait GenericCommands {
     fn persist<K>(&mut self, key: K) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("PERSIST").arg(key))
     }
@@ -332,7 +332,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("PEXPIRE").arg(key).arg(milliseconds).arg(option))
     }
@@ -355,7 +355,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -380,7 +380,7 @@ pub trait GenericCommands {
     fn pexpiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("PEXPIRETIME").arg(key))
     }
@@ -398,7 +398,7 @@ pub trait GenericCommands {
     fn pttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("PTTL").arg(key))
     }
@@ -427,8 +427,8 @@ pub trait GenericCommands {
     fn rename<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K1: Into<BulkString>,
-        K2: Into<BulkString>,
+        K1: Into<CommandArg>,
+        K2: Into<CommandArg>,
     {
         prepare_command(self, cmd("RENAME").arg(key).arg(new_key))
     }
@@ -445,8 +445,8 @@ pub trait GenericCommands {
     fn renamenx<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K1: Into<BulkString>,
-        K2: Into<BulkString>,
+        K1: Into<CommandArg>,
+        K2: Into<CommandArg>,
     {
         prepare_command(self, cmd("RENAMENX").arg(key).arg(new_key))
     }
@@ -469,14 +469,14 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(
             self,
             cmd("RESTORE")
                 .arg(key)
                 .arg(ttl)
-                .arg(BulkString::Binary(serialized_value))
+                .arg(CommandArg::Binary(serialized_value))
                 .arg(options),
         )
     }
@@ -509,7 +509,7 @@ pub trait GenericCommands {
     fn sort<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
@@ -532,8 +532,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
-        D: Into<BulkString>,
+        K: Into<CommandArg>,
+        D: Into<CommandArg>,
     {
         prepare_command(
             self,
@@ -559,7 +559,7 @@ pub trait GenericCommands {
     fn sort_readonly<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         M: FromValue,
         A: FromSingleValueArray<M>,
     {
@@ -577,7 +577,7 @@ pub trait GenericCommands {
     fn touch<K, KK>(&mut self, keys: KK) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("TOUCH").arg(keys))
@@ -596,7 +596,7 @@ pub trait GenericCommands {
     fn ttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("TTL").arg(key))
     }
@@ -614,7 +614,7 @@ pub trait GenericCommands {
     fn type_<K>(&mut self, key: K) -> PreparedCommand<Self, String>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
     {
         prepare_command(self, cmd("TYPE").arg(key))
     }
@@ -630,7 +630,7 @@ pub trait GenericCommands {
     fn unlink<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         C: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("UNLINK").arg(keys))
@@ -706,21 +706,21 @@ impl MigrateOptions {
     }
 
     #[must_use]
-    pub fn auth<P: Into<BulkString>>(self, password: P) -> Self {
+    pub fn auth<P: Into<CommandArg>>(self, password: P) -> Self {
         Self {
             command_args: self.command_args.arg("AUTH").arg(password),
         }
     }
 
     #[must_use]
-    pub fn auth2<U: Into<BulkString>, P: Into<BulkString>>(self, username: U, password: P) -> Self {
+    pub fn auth2<U: Into<CommandArg>, P: Into<CommandArg>>(self, username: U, password: P) -> Self {
         Self {
             command_args: self.command_args.arg("AUTH2").arg(username).arg(password),
         }
     }
 
     #[must_use]
-    pub fn keys<K: Into<BulkString>, KK: SingleArgOrCollection<K>>(self, keys: KK) -> Self {
+    pub fn keys<K: Into<CommandArg>, KK: SingleArgOrCollection<K>>(self, keys: KK) -> Self {
         Self {
             command_args: self.command_args.arg("KEYS").arg(keys),
         }
@@ -798,7 +798,7 @@ pub struct SortOptions {
 
 impl SortOptions {
     #[must_use]
-    pub fn by<P: Into<BulkString>>(self, pattern: P) -> Self {
+    pub fn by<P: Into<CommandArg>>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("BY").arg(pattern),
         }
@@ -812,7 +812,7 @@ impl SortOptions {
     }
 
     #[must_use]
-    pub fn get<P: Into<BulkString>>(self, pattern: P) -> Self {
+    pub fn get<P: Into<CommandArg>>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("GET").arg(pattern),
         }
@@ -847,7 +847,7 @@ pub struct DumpResult {
 impl FromValue for DumpResult {
     fn from_value(value: Value) -> crate::Result<Self> {
         match value {
-            Value::BulkString(BulkString::Binary(b)) => Ok(DumpResult {
+            Value::BulkString(Some(b)) => Ok(DumpResult {
                 serialized_value: b,
             }),
             _ => Err(Error::Client("Unexpected dump format".to_owned())),
@@ -863,7 +863,7 @@ pub struct ScanOptions {
 
 impl ScanOptions {
     #[must_use]
-    pub fn match_pattern<P: Into<BulkString>>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: Into<CommandArg>>(self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern),
         }
@@ -877,7 +877,7 @@ impl ScanOptions {
     }
 
     #[must_use]
-    pub fn type_<TY: Into<BulkString>>(self, type_: TY) -> Self {
+    pub fn type_<TY: Into<CommandArg>>(self, type_: TY) -> Self {
         Self {
             command_args: self.command_args.arg("TYPE").arg(type_),
         }

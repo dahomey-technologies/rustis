@@ -1,5 +1,5 @@
 use crate::{
-    network::sleep, resp::BulkString, tests::get_redis_stack_test_client, Client, ClientReplyMode,
+    network::sleep, resp::CommandArg, tests::get_redis_stack_test_client, Client, ClientReplyMode,
     ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions, FtFieldSchema,
     FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtProfileQueryType, FtQueryResult,
     FtReducer, FtSearchOptions, FtSortBy, FtSpellCheckOptions, FtTermType, FtWithCursorOptions,
@@ -14,8 +14,8 @@ use std::{
     time::Duration,
 };
 
-async fn wait_for_index_scanned(client: &mut Client, index: impl Into<BulkString>) -> Result<()> {
-    let index: BulkString = index.into();
+async fn wait_for_index_scanned(client: &mut Client, index: impl Into<CommandArg>) -> Result<()> {
+    let index: CommandArg = index.into();
 
     loop {
         let result = client.ft_info(index.clone()).await?;

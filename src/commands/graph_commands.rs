@@ -1,7 +1,7 @@
 use crate::{
     prepare_command,
     resp::{
-        cmd, BulkString, Command, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
+        cmd, CommandArg, Command, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
         FromValue, IntoArgs, Value,
     },
     ClientTrait, Error, Future, GraphCache, GraphValue, PipelinePreparedCommand, PreparedCommand,
@@ -31,7 +31,7 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<N, V, R>(&mut self, name: impl Into<BulkString>) -> PreparedCommand<Self, R>
+    fn graph_config_get<N, V, R>(&mut self, name: impl Into<CommandArg>) -> PreparedCommand<Self, R>
     where
         Self: Sized,
         N: FromValue,
@@ -56,8 +56,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_config_set(
         &mut self,
-        name: impl Into<BulkString>,
-        value: impl Into<BulkString>,
+        name: impl Into<CommandArg>,
+        value: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -73,7 +73,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(&mut self, graph: impl Into<BulkString>) -> PreparedCommand<Self, String>
+    fn graph_delete(&mut self, graph: impl Into<CommandArg>) -> PreparedCommand<Self, String>
     where
         Self: Sized,
     {
@@ -96,8 +96,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_explain<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        graph: impl Into<BulkString>,
-        query: impl Into<BulkString>,
+        graph: impl Into<CommandArg>,
+        query: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -135,8 +135,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_profile<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        graph: impl Into<BulkString>,
-        query: impl Into<BulkString>,
+        graph: impl Into<CommandArg>,
+        query: impl Into<CommandArg>,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, RR>
     where
@@ -161,8 +161,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_query(
         &mut self,
-        graph: impl Into<BulkString>,
-        query: impl Into<BulkString>,
+        graph: impl Into<CommandArg>,
+        query: impl Into<CommandArg>,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -194,8 +194,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_ro_query(
         &mut self,
-        graph: impl Into<BulkString>,
-        query: impl Into<BulkString>,
+        graph: impl Into<CommandArg>,
+        query: impl Into<CommandArg>,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -225,7 +225,7 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_slowlog<R: FromSingleValueArray<GraphSlowlogResult>>(
         &mut self,
-        graph: impl Into<BulkString>,
+        graph: impl Into<CommandArg>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -270,7 +270,7 @@ impl GraphResultSet {
         command: Command,
         client: &mut dyn ClientTrait,
     ) -> Future<Self> {
-        let Some(BulkString::Str(graph_name)) = command.args.iter().next() else {
+        let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
         };
         Self::from_value_async(value, graph_name, client)
@@ -522,7 +522,7 @@ impl FromValue for GraphQueryStatistics {
         let mut statistics: HashMap<String, String> = values
             .into_iter()
             .map(|v| {
-                let Value::BulkString(BulkString::Binary(s)) = v else {
+                let Value::BulkString(Some(s)) = v else {
                     return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
                 };
 

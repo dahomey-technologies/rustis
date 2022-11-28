@@ -1,5 +1,5 @@
 use crate::{
-    resp::{cmd, BulkString, SingleArgOrCollection},
+    resp::{cmd, CommandArg, SingleArgOrCollection},
     prepare_command, PreparedCommand,
 };
 
@@ -15,7 +15,7 @@ pub trait TransactionCommands {
     fn watch<K, KK>(&mut self, keys: KK) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<BulkString>,
+        K: Into<CommandArg>,
         KK: SingleArgOrCollection<K>,
     {
         prepare_command(self, cmd("WATCH").arg(keys))

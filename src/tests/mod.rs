@@ -24,6 +24,7 @@ mod pipeline;
 mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
+mod resp_deserializer;
 mod scripting_commands;
 #[cfg(feature = "redis-search")]
 mod search_commands;
@@ -37,5 +38,6 @@ mod tls;
 mod transaction;
 mod util;
 mod value;
+mod value_deserialize;
 
 pub(crate) use util::*;

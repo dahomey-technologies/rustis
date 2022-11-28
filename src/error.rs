@@ -11,7 +11,7 @@ use std::{
 };
 
 /// `Internal Use`
-/// 
+///
 /// Gives a reason to retry sending a command to the Redis Server
 #[derive(Debug)]
 pub enum RetryReason {
@@ -64,6 +64,17 @@ impl std::fmt::Display for Error {
         }
     }
 }
+
+impl serde::de::Error for Error {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
+        Error::Client(format!("{msg}"))
+    }
+}
+
+impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
@@ -264,7 +275,7 @@ impl FromStr for RedisError {
             }),
             Some((kind, description)) => {
                 let kind = RedisErrorKind::from_str(kind)?;
-                
+
                 let description = if let RedisErrorKind::Other = kind {
                     error.to_owned()
                 } else {

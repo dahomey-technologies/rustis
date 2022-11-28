@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, RespDeserializer, Value},
+    resp::{RespDeserializer, Value},
     tests::log_try_init,
     Error, RedisError, RedisErrorKind, Result,
 };
@@ -47,12 +47,12 @@ fn bulk_string() -> Result<()> {
 
     let result = deserialize_value("$5\r\nhello\r\n")?; // b"hello"
     assert_eq!(
-        Value::BulkString(BulkString::Binary(b"hello".to_vec())),
+        Value::BulkString(Some(b"hello".to_vec())),
         result
     );
 
     let result = deserialize_value("$-1\r\n")?; // b""
-    assert_eq!(Value::BulkString(BulkString::Nil), result);
+    assert_eq!(Value::BulkString(None), result);
 
     Ok(())
 }
@@ -70,8 +70,8 @@ fn array() -> Result<()> {
     let result = deserialize_value("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello, b"world"]
     assert_eq!(
         Value::Array(Some(vec![
-            Value::BulkString(BulkString::Binary(b"hello".to_vec())),
-            Value::BulkString(BulkString::Binary(b"world".to_vec()))
+            Value::BulkString(Some(b"hello".to_vec())),
+            Value::BulkString(Some(b"world".to_vec()))
         ])),
         result
     );
@@ -89,10 +89,10 @@ fn map() -> Result<()> {
     let result = deserialize_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
         Value::Array(Some(vec![
-            Value::BulkString(BulkString::Binary(b"id".to_vec())),
+            Value::BulkString(Some(b"id".to_vec())),
             Value::Integer(12),
-            Value::BulkString(BulkString::Binary(b"name".to_vec())),
-            Value::BulkString(BulkString::Binary(b"Mike".to_vec()))
+            Value::BulkString(Some(b"name".to_vec())),
+            Value::BulkString(Some(b"Mike".to_vec()))
         ])),
         result
     );
@@ -116,8 +116,8 @@ fn set() -> Result<()> {
     let result = deserialize_value("~2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello, b"world"]
     assert_eq!(
         Value::Array(Some(vec![
-            Value::BulkString(BulkString::Binary(b"hello".to_vec())),
-            Value::BulkString(BulkString::Binary(b"world".to_vec()))
+            Value::BulkString(Some(b"hello".to_vec())),
+            Value::BulkString(Some(b"world".to_vec()))
         ])),
         result
     );
@@ -135,9 +135,9 @@ fn push() -> Result<()> {
     let result = deserialize_value(">3\r\n$7\r\nmessage\r\n$7\r\nchannel\r\n$7\r\npayload\r\n")?; // [b"message, b"channel", b"payload"]
     assert_eq!(
         Value::Push(Some(vec![
-            Value::BulkString(BulkString::Binary(b"message".to_vec())),
-            Value::BulkString(BulkString::Binary(b"channel".to_vec())),
-            Value::BulkString(BulkString::Binary(b"payload".to_vec()))
+            Value::BulkString(Some(b"message".to_vec())),
+            Value::BulkString(Some(b"channel".to_vec())),
+            Value::BulkString(Some(b"payload".to_vec()))
         ])),
         result
     );

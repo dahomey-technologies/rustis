@@ -49,11 +49,11 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
     // null BulkString
     fn visit_none<E>(self) -> std::result::Result<Value, E> {
-        Ok(Value::BulkString(super::BulkString::Nil))
+        Ok(Value::BulkString(None))
     }
 
     fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Value, E> {
-        Ok(Value::BulkString(super::BulkString::Binary(v)))
+        Ok(Value::BulkString(Some(v)))
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Value, A::Error>

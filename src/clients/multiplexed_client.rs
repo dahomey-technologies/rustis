@@ -1,6 +1,8 @@
 #[cfg(feature = "redis-bloom")]
 use crate::BloomCommands;
 #[cfg(feature = "redis-bloom")]
+use crate::CountMinSketchCommands;
+#[cfg(feature = "redis-bloom")]
 use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
@@ -177,6 +179,8 @@ impl BitmapCommands for MultiplexedClient {}
 impl BloomCommands for MultiplexedClient {}
 impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
+#[cfg(feature = "redis-bloom")]
+impl CountMinSketchCommands for MultiplexedClient{}
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}

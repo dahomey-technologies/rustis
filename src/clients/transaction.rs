@@ -1,6 +1,8 @@
 #[cfg(feature = "redis-bloom")]
 use crate::BloomCommands;
 #[cfg(feature = "redis-bloom")]
+use crate::CountMinSketchCommands;
+#[cfg(feature = "redis-bloom")]
 use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
@@ -111,6 +113,8 @@ impl BitmapCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
+#[cfg(feature = "redis-bloom")]
+impl CountMinSketchCommands for Transaction{}
 impl CuckooCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}

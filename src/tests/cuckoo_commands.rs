@@ -1,11 +1,10 @@
-use std::collections::VecDeque;
-
 use crate::{
     resp::BulkString, tests::get_redis_stack_test_client, CfInsertOptions, CfReserveOptions,
     CuckooCommands, Error, FlushingMode, RedisError, RedisErrorKind, Result, ServerCommands,
     StringCommands,
 };
 use serial_test::serial;
+use std::collections::VecDeque;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -232,9 +231,13 @@ async fn cf_mexists() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    client.cf_insert("filter", CfInsertOptions::default(), ["item1", "item2"]).await?;
+    client
+        .cf_insert("filter", CfInsertOptions::default(), ["item1", "item2"])
+        .await?;
 
-    let results: [bool; 3] = client.cf_mexists("filter", ["item1", "item2", "item3"]).await?;
+    let results: [bool; 3] = client
+        .cf_mexists("filter", ["item1", "item2", "item3"])
+        .await?;
     assert_eq!([true, true, false], results);
 
     Ok(())

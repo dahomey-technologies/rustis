@@ -9,6 +9,8 @@ mod command_info_manager;
 mod config;
 mod connection_commands;
 #[cfg(feature = "redis-bloom")]
+mod count_min_sktech_commands;
+#[cfg(feature = "redis-bloom")]
 mod cuckoo_commands;
 mod error;
 mod generic_commands;

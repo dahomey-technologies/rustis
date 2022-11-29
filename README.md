@@ -38,5 +38,6 @@ An asynchronous Redis client for Rust.
 ## Roadmap
 * Complete [Redis Stack](https://redis.io/docs/stack/) support: 
   * RedisTimeSeries
-  * RedisBloom
 * Advanced reconnection strategy
+* Advanced configuration (timeouts, sentinel credentials)
+* Improve documentation 

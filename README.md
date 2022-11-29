@@ -11,6 +11,7 @@ An asynchronous Redis client for Rust.
 ## Philosophy
 * Low allocations
 * Full async library
+* Lock free implementation
 * Rust idiomatic API
 
 ## Features

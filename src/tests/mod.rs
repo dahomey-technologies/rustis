@@ -8,6 +8,8 @@ mod command_args;
 mod command_info_manager;
 mod config;
 mod connection_commands;
+#[cfg(feature = "redis-bloom")]
+mod cuckoo_commands;
 mod error;
 mod generic_commands;
 mod geo_commands;

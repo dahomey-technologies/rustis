@@ -4,6 +4,8 @@ mod blocking_commands;
 mod bloom_commands;
 mod cluster_commands;
 mod connection_commands;
+#[cfg(feature = "redis-bloom")]
+mod cuckoo_commands;
 mod generic_commands;
 mod geo_commands;
 #[cfg(feature = "redis-graph")]
@@ -37,6 +39,8 @@ pub use blocking_commands::*;
 pub use bloom_commands::*;
 pub use cluster_commands::*;
 pub use connection_commands::*;
+#[cfg(feature = "redis-bloom")]
+pub use cuckoo_commands::*;
 pub use generic_commands::*;
 pub use geo_commands::*;
 #[cfg(feature = "redis-graph")]

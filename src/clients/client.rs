@@ -1,5 +1,7 @@
 #[cfg(feature = "redis-bloom")]
 use crate::BloomCommands;
+#[cfg(feature = "redis-bloom")]
+use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -167,6 +169,8 @@ impl BitmapCommands for Client {}
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Client {}
 impl ClusterCommands for Client {}
+#[cfg(feature = "redis-bloom")]
+impl CuckooCommands for Client {}
 impl ConnectionCommands for Client {}
 impl GenericCommands for Client {}
 impl GeoCommands for Client {}

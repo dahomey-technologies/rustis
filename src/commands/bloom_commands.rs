@@ -8,7 +8,7 @@ use crate::{
 };
 use std::{collections::HashMap, future};
 
-/// A group of Redis commands related to [`RedisBloom`](https://redis.io/docs/stack/bloom/)
+/// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
 ///
 /// # See Also
 /// [Bloom Filter Commands](https://redis.io/commands/?group=bf)
@@ -249,7 +249,7 @@ pub trait BloomCommands {
     /// * `options` - See [`BfReserveOptions`](BfReserveOptions)
     ///
     /// # See Also
-    /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
+    /// [<https://redis.io/commands/bf.reserve/>](https://redis.io/commands/bf.reserve/)
     #[must_use]
     fn bf_reserve(
         &mut self,

@@ -89,6 +89,8 @@ async fn cms_merge() -> Result<()> {
     let info = client.cms_info("key3").await?;
     assert_eq!(9, info.total_count);
 
+    client.cms_initbydim("key4", 2000, 5).await?;
+
     client.cms_merge("key4", ["key1", "key2"], Option::<usize>::None).await?;
     let info = client.cms_info("key4").await?;
     assert_eq!(6, info.total_count);

@@ -40,6 +40,8 @@ mod string_commands;
 #[cfg(feature = "redis-bloom")]
 mod t_disgest_commands;
 mod tls;
+#[cfg(feature = "redis-bloom")]
+mod top_k_commands;
 mod transaction;
 mod util;
 mod value;

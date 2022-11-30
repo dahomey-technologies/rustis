@@ -12,7 +12,7 @@ use crate::{
     StringCommands,
 };
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use std::iter::zip;
 
 pub struct Pipeline {
@@ -120,3 +120,5 @@ impl StreamCommands for Pipeline {}
 impl StringCommands for Pipeline {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Pipeline {}
+#[cfg(feature = "redis-bloom")]
+impl TopKCommands for Pipeline {}

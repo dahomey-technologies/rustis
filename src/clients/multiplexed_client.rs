@@ -13,7 +13,7 @@ use crate::{
     SortedSetCommands, StreamCommands, StringCommands, Transaction,
 };
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use std::future::IntoFuture;
 
 /// A multiplexed client that can be cloned, allowing requests
@@ -200,6 +200,8 @@ impl StreamCommands for MultiplexedClient {}
 impl StringCommands for MultiplexedClient {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for MultiplexedClient {}
+#[cfg(feature = "redis-bloom")]
+impl TopKCommands for MultiplexedClient {}
 
 impl PubSubCommands for MultiplexedClient {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>

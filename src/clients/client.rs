@@ -15,7 +15,7 @@ use crate::{
     TransactionCommands, ValueReceiver, ValueSender,
 };
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
 
@@ -194,6 +194,8 @@ impl StringCommands for Client {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Client {}
 impl TransactionCommands for Client {}
+#[cfg(feature = "redis-bloom")]
+impl TopKCommands for Client {}
 
 impl PubSubCommands for Client {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>

@@ -11,7 +11,7 @@ use crate::{
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use std::iter::zip;
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
@@ -129,3 +129,5 @@ impl StreamCommands for Transaction {}
 impl StringCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Transaction {}
+#[cfg(feature = "redis-bloom")]
+impl TopKCommands for Transaction {}

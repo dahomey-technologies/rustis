@@ -107,8 +107,8 @@ impl BitmapCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
-#[cfg(feature = "redis-bloom")]
 impl CountMinSketchCommands for Transaction {}
+#[cfg(feature = "redis-bloom")]
 impl CuckooCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}

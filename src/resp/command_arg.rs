@@ -218,12 +218,26 @@ impl fmt::Debug for CommandArg {
 impl PartialEq<String> for CommandArg {
     fn eq(&self, other: &String) -> bool {
         match self {
-            CommandArg::Str(s) => other == *s,
-            CommandArg::String(s) => other == s,
-            CommandArg::Binary(s) => unsafe { other == core::str::from_utf8_unchecked(s) },
-            CommandArg::Integer(i) => other == &i.to_string(),
-            CommandArg::F32(f) => other == &f.to_string(),
-            CommandArg::F64(f) => other == &f.to_string(),
+            CommandArg::Str(s) => *other == *s,
+            CommandArg::String(s) => *other == *s,
+            CommandArg::Binary(s) => unsafe { *other == core::str::from_utf8_unchecked(s) },
+            CommandArg::Integer(i) => *other == i.to_string(),
+            CommandArg::F32(f) => *other == f.to_string(),
+            CommandArg::F64(f) => *other == f.to_string(),
+            CommandArg::Nil => other.is_empty(),
+        }
+    }
+}
+
+impl PartialEq<&str> for CommandArg {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            CommandArg::Str(s) => *other == *s,
+            CommandArg::String(s) => *other == s,
+            CommandArg::Binary(s) => unsafe { *other == core::str::from_utf8_unchecked(s) },
+            CommandArg::Integer(i) => *other == i.to_string(),
+            CommandArg::F32(f) => *other == f.to_string(),
+            CommandArg::F64(f) => *other == f.to_string(),
             CommandArg::Nil => other.is_empty(),
         }
     }

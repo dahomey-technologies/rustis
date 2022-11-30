@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, future};
 
 use crate::{
     prepare_command,
@@ -13,7 +13,8 @@ use crate::{
 /// A group of Redis commands related to [`RedisSearch`](https://redis.io/docs/stack/search/)
 ///
 /// # See Also
-/// [RedisSearch Commands](https://redis.io/commands/?group=search)
+/// * [RedisSearch Commands](https://redis.io/commands/?group=search)
+/// * [Auto-Suggest Commands](https://redis.io/commands/?group=suggestion)
 pub trait SearchCommands {
     /// Run a search query on an index,
     /// and perform aggregate transformations on the results,
@@ -644,6 +645,160 @@ pub trait SearchCommands {
         prepare_command(self, cmd("FT.TAGVALS")
             .arg(index)
             .arg(field_name)
+        )
+    }
+
+    /// Add a suggestion string to an auto-complete suggestion dictionary
+    /// 
+    /// The auto-complete suggestion dictionary is disconnected from the index definitions 
+    /// and leaves creating and updating suggestions dictionaries to the user.
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `string` - suggestion string to index.
+    /// * `score` - floating point number of the suggestion string's weight.
+    /// * `options` - See [`FtSugAddOptions`](FtSugAddOptions)
+    ///
+    /// # Return
+    /// the current size of the suggestion dictionary.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugadd/>](https://redis.io/commands/ft.sugadd/)
+    #[must_use]
+    fn ft_sugadd(
+        &mut self,
+        key: impl Into<CommandArg>,
+        string: impl Into<CommandArg>,
+        score: f64,
+        options: FtSugAddOptions
+    ) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGADD")
+            .arg(key)
+            .arg(string)
+            .arg(score)
+            .arg(options)
+        )
+    }
+
+    /// Delete a string from a suggestion index
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `string` - suggestion string to delete
+    ///
+    /// # Return
+    /// * `true` - if the string was found and deleted
+    /// * `false` - otherwise
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugdel/>](https://redis.io/commands/ft.sugdel/)
+    #[must_use]
+    fn ft_sugdel(
+        &mut self,
+        key: impl Into<CommandArg>,
+        string: impl Into<CommandArg>,
+    ) -> PreparedCommand<Self, bool>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGDEL")
+            .arg(key)
+            .arg(string)
+        )
+    }
+
+    /// Get completion suggestions for a prefix
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `prefix` - prefix to complete on.
+    /// * `options` - See [`FtSugGetOptions`](FtSugGetOptions)
+    ///
+    /// # Return
+    /// A collection of the top suggestions matching the prefix
+    /// 
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
+    #[must_use]
+    fn ft_sugget(
+        &mut self,
+        key: impl Into<CommandArg>,
+        prefix: impl Into<CommandArg>,
+        options: FtSugGetOptions
+    ) -> PreparedCommand<Self, Vec<FtSuggestion>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGGET")
+            .arg(key)
+            .arg(prefix)
+            .arg(options)
+        ).post_process(Box::new(
+            |value, command, _client| {
+                fn from_value(command: Command, value: Value) -> Result<Vec<FtSuggestion>> {
+                    let with_scores = command.args.iter().any(|a| *a == "WITHSCORES");
+                    let with_payloads = command.args.iter().any(|a| *a == "WITHPAYLOADS");
+
+                    let values: Vec<Value> = value.into()?;
+                    let mut iter = values.into_iter();
+                    let mut suggestions = Vec::<FtSuggestion>::new();
+
+                    while let Some(suggestion) = iter.next() {
+                        let suggestion: String = suggestion.into()?;
+
+                        let score = if with_scores {
+                            let Some(value) = iter.next() else {
+                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
+                            };
+
+                            value.into()?
+                        } else {
+                            0.
+                        };
+
+                        let payload = if with_payloads {
+                            let Some(value) = iter.next() else {
+                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
+                            };
+
+                            value.into()?                        
+                        } else {
+                            String::from("")
+                        };
+
+                        suggestions.push(FtSuggestion { suggestion, score, payload });
+                    }
+
+                    Ok(suggestions)
+                }
+
+                Box::pin(future::ready(from_value(command, value)))
+            },
+        ))
+    }
+
+    /// Get the size of an auto-complete suggestion dictionary
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    ///
+    /// # Return
+    /// The the current size of the suggestion dictionary.
+    /// 
+    /// # See Also
+    /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
+    #[must_use]
+    fn ft_suglen(
+        &mut self,
+        key: impl Into<CommandArg>,
+    ) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGLEN")
+            .arg(key)
         )
     }
 }
@@ -2717,5 +2872,100 @@ impl FromValue for FtMisspelledTerm {
             },
             _ => Err(Error::Client("Cannot parse result to FtMisspelledTerm".to_owned()))
         }
+    }
+}
+
+/// Options for the [`ft_sugadd`](crate::SearchCommands::ft_sugadd) command.
+#[derive(Default)]
+pub struct FtSugAddOptions {
+    command_args: CommandArgs,
+}
+
+impl FtSugAddOptions {
+    /// increments the existing entry of the suggestion by the given score, instead of replacing the score. 
+    /// 
+    /// This is useful for updating the dictionary based on user queries in real time.
+    #[must_use]
+    pub fn incr(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("INCR"),
+        }
+    }
+
+    /// saves an extra payload with the suggestion
+    #[must_use]
+    pub fn payload(self, payload: impl Into<CommandArg>) -> Self {
+        Self {
+            command_args: self.command_args.arg("PAYLOAD").arg(payload),
+        }
+    }
+}
+
+impl IntoArgs for FtSugAddOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Options for the [`ft_sugget`](crate::SearchCommands::ft_sugget) command.
+#[derive(Default)]
+pub struct FtSugGetOptions {
+    command_args: CommandArgs,
+}
+
+impl FtSugGetOptions {
+    /// performs a fuzzy prefix search, including prefixes at Levenshtein distance of 1 from the prefix sent.
+    #[must_use]
+    pub fn fuzzy(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("INCR"),
+        }
+    }
+
+    /// limits the results to a maximum of `num` (default: 5).
+    #[must_use]
+    pub fn max(self, num: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("MAX").arg(num),
+        }
+    }
+
+    /// returns the score of each suggestion. 
+    /// 
+    /// This can be used to merge results from multiple instances.
+    #[must_use]
+    pub fn withscores(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHSCORES"),
+        }
+    }
+
+    /// returns optional payloads saved along with the suggestions. 
+    /// 
+    /// If no payload is present for an entry, it returns a null reply.
+    #[must_use]
+    pub fn withpayload(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHPAYLOADS"),
+        }
+    }
+}
+
+impl IntoArgs for FtSugGetOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Sugestion for the [`ft_sugget`](SearchCommands::ft_sugget) command.
+pub struct FtSuggestion {
+    pub suggestion: String,
+    pub score: f64,
+    pub payload: String,
+}
+
+impl FromValue for FtSuggestion {
+    fn from_value(_: Value) -> Result<Self> {
+        unimplemented!()
     }
 }

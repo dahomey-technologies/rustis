@@ -1,10 +1,9 @@
-use std::collections::VecDeque;
-
 use crate::{
-    tests::get_redis_stack_test_client,
-    FlushingMode, Result, ServerCommands, BloomCommands, BfInfoParameter, BfInsertOptions, BfReserveOptions, resp::CommandArg,
+    resp::CommandArg, tests::get_redis_stack_test_client, BfInfoParameter, BfInsertOptions,
+    BfReserveOptions, BloomCommands, FlushingMode, Result, ServerCommands,
 };
 use serial_test::serial;
+use std::collections::VecDeque;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -30,7 +29,7 @@ async fn bf_exists() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.bf_exists("key", "item").await?;
-    assert!(!result);   
+    assert!(!result);
 
     let result = client.bf_add("key", "item").await?;
     assert!(result);
@@ -52,7 +51,9 @@ async fn bf_info() -> Result<()> {
     client.bf_add("key", "item2").await?;
     client.bf_add("key", "item3").await?;
 
-    let result = client.bf_info("key", BfInfoParameter::NumItemsInserted).await?;
+    let result = client
+        .bf_info("key", BfInfoParameter::NumItemsInserted)
+        .await?;
     assert_eq!(3, result);
 
     let result = client.bf_info_all("key").await?;
@@ -69,13 +70,23 @@ async fn bf_insert() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let results: Vec<bool> = client.bf_insert("filter", ["boo", "bar", "barz"], BfInsertOptions::default()).await?;
+    let results: Vec<bool> = client
+        .bf_insert("filter", ["boo", "bar", "barz"], BfInsertOptions::default())
+        .await?;
     assert_eq!(vec![true, true, true], results);
 
-    let results: Vec<bool> = client.bf_insert("filter", "hello", BfInsertOptions::default().capacity(1000)).await?;
+    let results: Vec<bool> = client
+        .bf_insert("filter", "hello", BfInsertOptions::default().capacity(1000))
+        .await?;
     assert_eq!(vec![true], results);
 
-    let results: Vec<bool> = client.bf_insert("filter", ["boo", "bar"], BfInsertOptions::default().nocreate()).await?;
+    let results: Vec<bool> = client
+        .bf_insert(
+            "filter",
+            ["boo", "bar"],
+            BfInsertOptions::default().nocreate(),
+        )
+        .await?;
     assert_eq!(vec![false, false], results);
 
     Ok(())
@@ -107,7 +118,9 @@ async fn bf_mexists() -> Result<()> {
     let results: [bool; 2] = client.bf_madd("filter", ["item1", "item2"]).await?;
     assert_eq!([true, true], results);
 
-    let results: [bool; 3] = client.bf_mexists("filter", ["item1", "item2", "item3"]).await?;
+    let results: [bool; 3] = client
+        .bf_mexists("filter", ["item1", "item2", "item3"])
+        .await?;
     assert_eq!([true, true, false], results);
 
     Ok(())
@@ -120,7 +133,9 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     let mut client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    client.bf_reserve("bf", 0.1, 10, BfReserveOptions::default()).await?;
+    client
+        .bf_reserve("bf", 0.1, 10, BfReserveOptions::default())
+        .await?;
 
     let result = client.bf_add("bf", "item1").await?;
     assert!(result);
@@ -142,7 +157,9 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     while let Some((iterator, chunk)) = chunks.pop_front() {
-        client.bf_loadchunk("bf", iterator, CommandArg::Binary(chunk)).await?;
+        client
+            .bf_loadchunk("bf", iterator, CommandArg::Binary(chunk))
+            .await?;
     }
 
     let result = client.bf_exists("bf", "item1").await?;

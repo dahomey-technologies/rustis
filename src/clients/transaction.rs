@@ -1,9 +1,3 @@
-#[cfg(feature = "redis-bloom")]
-use crate::BloomCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CountMinSketchCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -16,6 +10,8 @@ use crate::{
     InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
 };
+#[cfg(feature = "redis-bloom")]
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
 use std::iter::zip;
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
@@ -81,9 +77,7 @@ impl Transaction {
                         Value::Array(Some(filtered_results)).into()
                     }
                 }
-                Value::Array(None) | Value::BulkString(None) => {
-                    Err(Error::Aborted)
-                }
+                Value::Array(None) | Value::BulkString(None) => Err(Error::Aborted),
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
             }
         } else {
@@ -114,7 +108,7 @@ impl BitmapCommands for Transaction {}
 impl BloomCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for Transaction{}
+impl CountMinSketchCommands for Transaction {}
 impl CuckooCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
@@ -133,3 +127,5 @@ impl ServerCommands for Transaction {}
 impl SortedSetCommands for Transaction {}
 impl StreamCommands for Transaction {}
 impl StringCommands for Transaction {}
+#[cfg(feature = "redis-bloom")]
+impl TDigestCommands for Transaction {}

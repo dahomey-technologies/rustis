@@ -159,7 +159,7 @@ pub trait CuckooCommands {
     /// Return information about `key`
     ///
     /// # Arguments
-    /// * `key` - Name of the key to restore
+    /// * `key` - Name of the key to get info about
     ///
     /// # Return
     /// An instance of [`CfInfoResult`](CfInfoResult)

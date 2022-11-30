@@ -1,9 +1,3 @@
-#[cfg(feature = "redis-bloom")]
-use crate::BloomCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CountMinSketchCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -12,7 +6,7 @@ use crate::JsonCommands;
 use crate::SearchCommands;
 use crate::{
     network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
     BitmapCommands, BlockingCommands, ClientTrait, ClusterCommands, ConnectionCommands, Future,
     GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
     InternalPubSubCommands, IntoConfig, ListCommands, Message, MonitorStream, Pipeline,
@@ -20,6 +14,8 @@ use crate::{
     ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands, Transaction,
     TransactionCommands, ValueReceiver, ValueSender,
 };
+#[cfg(feature = "redis-bloom")]
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
 
@@ -172,7 +168,7 @@ impl BitmapCommands for Client {}
 impl BloomCommands for Client {}
 impl ClusterCommands for Client {}
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for Client{}
+impl CountMinSketchCommands for Client {}
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for Client {}
 impl ConnectionCommands for Client {}
@@ -195,6 +191,8 @@ impl SetCommands for Client {}
 impl SortedSetCommands for Client {}
 impl StreamCommands for Client {}
 impl StringCommands for Client {}
+#[cfg(feature = "redis-bloom")]
+impl TDigestCommands for Client {}
 impl TransactionCommands for Client {}
 
 impl PubSubCommands for Client {

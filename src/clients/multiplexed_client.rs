@@ -1,9 +1,3 @@
-#[cfg(feature = "redis-bloom")]
-use crate::BloomCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CountMinSketchCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::CuckooCommands;
 #[cfg(feature = "redis-graph")]
 use crate::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -11,13 +5,15 @@ use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
 use crate::{
-    resp::{CommandArg, Command, FromValue, SingleArgOrCollection, Value},
+    resp::{Command, CommandArg, FromValue, SingleArgOrCollection, Value},
     BitmapCommands, Cache, ClientTrait, ClusterCommands, ConnectionCommands, Future,
     GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
     InternalPubSubCommands, IntoConfig, ListCommands, Pipeline, PreparedCommand, PubSubCommands,
     PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
     SortedSetCommands, StreamCommands, StringCommands, Transaction,
 };
+#[cfg(feature = "redis-bloom")]
+use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands};
 use std::future::IntoFuture;
 
 /// A multiplexed client that can be cloned, allowing requests
@@ -180,7 +176,7 @@ impl BloomCommands for MultiplexedClient {}
 impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for MultiplexedClient{}
+impl CountMinSketchCommands for MultiplexedClient {}
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}
@@ -202,6 +198,8 @@ impl SetCommands for MultiplexedClient {}
 impl SortedSetCommands for MultiplexedClient {}
 impl StreamCommands for MultiplexedClient {}
 impl StringCommands for MultiplexedClient {}
+#[cfg(feature = "redis-bloom")]
+impl TDigestCommands for MultiplexedClient {}
 
 impl PubSubCommands for MultiplexedClient {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>

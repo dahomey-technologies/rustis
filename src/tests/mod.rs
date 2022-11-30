@@ -37,6 +37,8 @@ mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
+#[cfg(feature = "redis-bloom")]
+mod t_disgest_commands;
 mod tls;
 mod transaction;
 mod util;

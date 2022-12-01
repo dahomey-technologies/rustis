@@ -1,12 +1,12 @@
 [package]
-name = "redis-driver"
+name = "rustis"
 version = "0.1.0"
 keywords = ["redis", "database"]
 categories = ["database", "asynchronous"]
 description = "Redis async driver for Rust"
-homepage = "https://github.com/dahomey-technologies/redis-driver-rs"
-repository = "https://github.com/dahomey-technologies/redis-driver-rs"
-documentation = "https://docs.rs/redis-driver"
+homepage = "https://github.com/dahomey-technologies/rustis"
+repository = "https://github.com/dahomey-technologies/rustis"
+documentation = "https://docs.rs/rustis"
 readme = "README.md"
 license-file = "LICENSE"
 edition = "2021"

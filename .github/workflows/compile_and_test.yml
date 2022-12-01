@@ -52,8 +52,8 @@ jobs:
         run: |
           IP=`ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
           echo IP=$IP
-          echo "HOST_IP=$IP" > /home/runner/work/redis-driver-rs/redis-driver-rs/redis/.env
-          docker compose -f /home/runner/work/redis-driver-rs/redis-driver-rs/redis/docker-compose.yml up -d
+          echo "HOST_IP=$IP" > /home/runner/work/rustis/rustis/redis/.env
+          docker compose -f /home/runner/work/rustis/rustis/redis/docker-compose.yml up -d
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1

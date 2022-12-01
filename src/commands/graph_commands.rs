@@ -318,7 +318,7 @@ impl GraphResultSet {
                     rows: Default::default(),
                     statistics: statistics.into()?,
                 }),
-                (Some(header), Some(Value::Array(Some(rows))), Some(statistics), None) => {
+                (Some(header), Some(Value::Array(rows)), Some(statistics), None) => {
                     let rows = rows
                         .into_iter()
                         .map(|v| GraphResultRow::from_value(v, cache))
@@ -382,7 +382,7 @@ impl GraphResultSet {
 
         let result: Value = pipeline.execute().await?;
 
-        let Value::Array(Some(results)) = result else {
+        let Value::Array(results) = result else {
             return Err(Error::Client("Cannot parse GraphResultSet from result".to_owned()));
         };
 
@@ -452,7 +452,7 @@ pub struct GraphResultRow {
 
 impl GraphResultRow {
     pub(crate) fn from_value(value: Value, cache: &GraphCache) -> Result<Self> {
-        let Value::Array(Some(values)) = value else {
+        let Value::Array(values) = value else {
             return Err(Error::Client("Cannot parse GraphResultRow".to_owned()));
         };
 
@@ -522,7 +522,7 @@ impl FromValue for GraphQueryStatistics {
         let mut statistics: HashMap<String, String> = values
             .into_iter()
             .map(|v| {
-                let Value::BulkString(Some(s)) = v else {
+                let Value::BulkString(s) = v else {
                     return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
                 };
 

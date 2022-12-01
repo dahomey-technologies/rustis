@@ -1841,7 +1841,7 @@ impl FtQueryResult {
                         };
 
                         let payload = if withpayloads {
-                            if let Some(Value::BulkString(Some(payload))) = iter.next() {
+                            if let Some(Value::BulkString(payload)) = iter.next() {
                                 payload
                             } else {
                                 return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
@@ -1938,9 +1938,9 @@ impl FtQueryResult {
 impl FromValue for FtQueryResult {
     fn from_value(value: Value) -> Result<Self> {
         log::debug!("value: {:?}", value);
-        let is_search = if let Value::Array(Some(ref values)) = &value {
+        let is_search = if let Value::Array(ref values) = &value {
             log::debug!("&values[0..2]: {:?}", &values[0..2]);
-            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(Some(_doc_id))])
+            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(_doc_id)])
         } else {
             false
         };
@@ -2251,7 +2251,7 @@ impl FromValue for FtProfileDetails {
             _ => return Err(Error::Client("Cannot parse FtProfileResult".to_owned())),
         }
 
-        let result_processors_profile = Value::Array(Some(iter.collect()));
+        let result_processors_profile = Value::Array(iter.collect());
 
         Ok(Self {
             total_profile_time: total_profile_time.into::<HashMap<String, Value>>()?.remove_or_default("Total profile time").into()?,
@@ -2863,7 +2863,7 @@ impl FromValue for FtMisspelledTerm {
         let mut iter = values.into_iter();
 
         match (iter.next(), iter.next(), iter.next(), iter.next()) {
-            (Some(Value::BulkString(Some(term))), Some(misspelled_term), Some(suggestions), None) 
+            (Some(Value::BulkString(term)), Some(misspelled_term), Some(suggestions), None) 
             if term == b"TERM" => {
                 Ok(Self {
                     misspelled_term: misspelled_term.into()?,

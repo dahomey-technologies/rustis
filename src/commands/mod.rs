@@ -35,6 +35,8 @@ mod stream_commands;
 mod string_commands;
 #[cfg(feature = "redis-bloom")]
 mod t_disgest_commands;
+#[cfg(feature = "redis-time-series")]
+mod time_series_commands;
 #[cfg(feature = "redis-bloom")]
 mod top_k_commands;
 mod transaction_commands;
@@ -76,6 +78,8 @@ pub use stream_commands::*;
 pub use string_commands::*;
 #[cfg(feature = "redis-bloom")]
 pub use t_disgest_commands::*;
+#[cfg(feature = "redis-time-series")]
+pub use time_series_commands::*;
 #[cfg(feature = "redis-bloom")]
 pub use top_k_commands::*;
 pub use transaction_commands::*;

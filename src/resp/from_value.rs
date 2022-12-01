@@ -167,6 +167,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(None) | Value::Array(None) => Ok(None),
+            Value::Array(Some(a)) if a.is_empty() => Ok(None),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => T::from_value(value).map(|v| Some(v)),
         }

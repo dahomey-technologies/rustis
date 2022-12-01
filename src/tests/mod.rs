@@ -45,5 +45,7 @@ mod top_k_commands;
 mod transaction;
 mod util;
 mod value;
+#[cfg(feature = "redis-time-series")]
+mod time_series_commands;
 
 pub(crate) use util::*;

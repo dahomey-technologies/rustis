@@ -4,6 +4,8 @@ use crate::GraphCommands;
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
+#[cfg(feature = "redis-time-series")]
+use crate::TimeSeriesCommands;
 use crate::{
     resp::{cmd, Command, FromValue, ResultValueExt, Value},
     BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
@@ -129,5 +131,7 @@ impl StreamCommands for Transaction {}
 impl StringCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Transaction {}
+#[cfg(feature = "redis-time-series")]
+impl TimeSeriesCommands for Transaction {}
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Transaction {}

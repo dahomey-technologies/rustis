@@ -4,6 +4,8 @@ use crate::GraphCommands;
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
+#[cfg(feature = "redis-time-series")]
+use crate::TimeSeriesCommands;
 use crate::{
     network::{MonitorReceiver, MonitorSender},
     resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
@@ -193,6 +195,8 @@ impl StreamCommands for Client {}
 impl StringCommands for Client {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Client {}
+#[cfg(feature = "redis-time-series")]
+impl TimeSeriesCommands for Client {}
 impl TransactionCommands for Client {}
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Client {}

@@ -39,11 +39,13 @@ redis-json = []
 redis-search = []
 redis-graph = []
 redis-bloom = []
+redis-time-series = []
 redis-stack = [
     "redis-json",
     "redis-search",
     "redis-graph",
-    "redis-bloom"
+    "redis-bloom",
+    "redis-time-series"
 ]
 
 [dependencies]

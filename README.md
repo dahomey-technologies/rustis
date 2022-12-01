@@ -35,10 +35,9 @@ An asynchronous Redis client for Rust.
   * [RedisSearch v2.6](https://redis.io/docs/stack/search/) support
   * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
   * [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support
+  * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
 
 ## Roadmap
-* Complete [Redis Stack](https://redis.io/docs/stack/) support: 
-  * RedisTimeSeries
 * Advanced reconnection strategy
 * Advanced configuration (timeouts, sentinel credentials)
 * Improve documentation 

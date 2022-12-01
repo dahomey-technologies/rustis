@@ -4,6 +4,8 @@ use crate::GraphCommands;
 use crate::JsonCommands;
 #[cfg(feature = "redis-search")]
 use crate::SearchCommands;
+#[cfg(feature = "redis-time-series")]
+use crate::TimeSeriesCommands;
 use crate::{
     resp::{Command, FromValue, ResultValueExt, Value},
     BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
@@ -120,5 +122,7 @@ impl StreamCommands for Pipeline {}
 impl StringCommands for Pipeline {}
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Pipeline {}
+#[cfg(feature = "redis-time-series")]
+impl TimeSeriesCommands for Pipeline {}
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Pipeline {}

@@ -387,7 +387,7 @@ impl<T, const N: usize> ArgsOrCollection<T> for [T; N] where T: IntoArgs {}
 impl<T> ArgsOrCollection<T> for Vec<T> where T: IntoArgs {}
 impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
 
-/// Marker for collections of single items (directly convertible to `BulkStrings`) of `IntoArgs`
+/// Marker for collections of single items (directly convertible to `CommandArg`) of `IntoArgs`
 pub trait SingleArgOrCollection<T>: IntoArgs
 where
     T: Into<CommandArg>,

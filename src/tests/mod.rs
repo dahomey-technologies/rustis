@@ -39,13 +39,14 @@ mod stream_commands;
 mod string_commands;
 #[cfg(feature = "redis-bloom")]
 mod t_disgest_commands;
+#[cfg(feature = "redis-time-series")]
+mod time_series_commands;
 mod tls;
 #[cfg(feature = "redis-bloom")]
 mod top_k_commands;
 mod transaction;
 mod util;
 mod value;
-#[cfg(feature = "redis-time-series")]
-mod time_series_commands;
+mod value_decoder;
 
 pub(crate) use util::*;

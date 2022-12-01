@@ -389,7 +389,7 @@ where
 
                 for value in it {
                     match value {
-                        Value::BulkString(Some(_)) => distance = Some(value.into()?),
+                        Value::BulkString(_) => distance = Some(value.into()?),
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
                         _ => return Err(Error::Client("Unexpected geo search result".to_owned())),

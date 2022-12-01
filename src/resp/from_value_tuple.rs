@@ -10,7 +10,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
@@ -48,7 +48,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), Some(v3), None) => {
@@ -95,7 +95,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), Some(v3), Some(v4), None) => {
@@ -144,7 +144,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),
@@ -204,7 +204,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),
@@ -278,7 +278,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),
@@ -366,7 +366,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),
@@ -460,7 +460,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),
@@ -561,7 +561,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(Some(values)) => {
+            Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (
                     it.next(),

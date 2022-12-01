@@ -847,7 +847,7 @@ pub struct DumpResult {
 impl FromValue for DumpResult {
     fn from_value(value: Value) -> crate::Result<Self> {
         match value {
-            Value::BulkString(Some(b)) => Ok(DumpResult {
+            Value::BulkString(b) => Ok(DumpResult {
                 serialized_value: b,
             }),
             _ => Err(Error::Client("Unexpected dump format".to_owned())),

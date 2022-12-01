@@ -232,7 +232,7 @@ async fn getset() -> Result<()> {
     client.del("key").await?;
 
     let value: Value = client.getset("key", "newvalue").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     Ok(())
 }

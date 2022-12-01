@@ -908,7 +908,7 @@ pub struct HelloResult {
 impl FromValue for HelloResult {
     fn from_value(value: Value) -> Result<Self> {
         match &value {
-            Value::Array(Some(v)) if v.len() == 14 => {
+            Value::Array(v) if v.len() == 14 => {
                 fn into_result(values: &mut HashMap<String, Value>) -> Option<HelloResult> {
                     Some(HelloResult {
                         server: values.remove("server")?.into().ok()?,

@@ -9,10 +9,11 @@ pub enum Value {
     SimpleString(String),
     Integer(i64),
     Double(f64),
-    BulkString(Option<Vec<u8>>),
-    Array(Option<Vec<Value>>),
-    Push(Option<Vec<Value>>),
+    BulkString(Vec<u8>),
+    Array(Vec<Value>),
+    Push(Vec<Value>),
     Error(RedisError),
+    Nil,
 }
 
 pub struct BulkString(pub Vec<u8>);
@@ -39,7 +40,7 @@ impl Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value::BulkString(None)
+        Value::Nil
     }
 }
 
@@ -49,27 +50,23 @@ impl ToString for Value {
             Value::SimpleString(s) => s.clone(),
             Value::Integer(i) => i.to_string(),
             Value::Double(f) => f.to_string(),
-            Value::BulkString(s) => match s {
-                Some(s) => String::from_utf8_lossy(s).into_owned(),
-                None => String::from(""),
-            },
-            Value::Array(Some(v)) => format!(
+            Value::BulkString(s) => String::from_utf8_lossy(s).into_owned(),
+            Value::Array(v) => format!(
                 "[{}]",
                 v.iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Value::Array(None) => "[]".to_string(),
-            Value::Push(Some(v)) => format!(
+            Value::Push(v) => format!(
                 "Push[{}]",
                 v.iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Value::Push(None) => "Push[]".to_string(),
             Value::Error(e) => e.to_string(),
+            Value::Nil => String::from(""),
         }
     }
 }
@@ -80,11 +77,14 @@ impl fmt::Debug for Value {
             Self::SimpleString(arg0) => f.debug_tuple("SimpleString").field(arg0).finish(),
             Self::Integer(arg0) => f.debug_tuple("Integer").field(arg0).finish(),
             Self::Double(arg0) => f.debug_tuple("Double").field(arg0).finish(),
-            Self::BulkString(Some(arg0)) => f.debug_tuple("CommandArg").field(&String::from_utf8_lossy(arg0).into_owned()).finish(),
-            Self::BulkString(None) => f.debug_tuple("CommandArg").field(&None::<Vec<u8>>).finish(),
+            Self::BulkString(arg0) => f
+                .debug_tuple("BulkString")
+                .field(&String::from_utf8_lossy(arg0).into_owned())
+                .finish(),
             Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
+            Self::Nil => write!(f, "Nil"),
         }
     }
 }

@@ -32,10 +32,22 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
 
     // cf. https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
     match first_byte {
-        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
-        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
-        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
+        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
+            Some(bs) => (Value::BulkString(bs), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Array(v), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Array(v), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Array(v), pos),
+            None => (Value::Nil, pos),
+        })),
         b':' => Ok(decode_number::<i64>(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b',' => Ok(decode_number::<f64>(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
         b'+' => {
@@ -44,10 +56,16 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'-' => decode_string(buf, idx)?
             .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
             .transpose(),
-        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(None), pos))),
+        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::Nil, pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
-        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
+        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
+            Some(bs) => (Value::BulkString(bs), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Push(v), pos),
+            None => (Value::Nil, pos),
+        })),
         _ => Err(Error::Client(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte
@@ -80,12 +98,9 @@ fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<V
             } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
                 Err(Error::Client("Cannot parse bulk string".to_owned()))
             } else {
-                Ok(Some((
-                    Some(buf[pos..(pos + len)].to_vec()),
-                    pos + len + 2,
-                )))
+                Ok(Some((Some(buf[pos..(pos + len)].to_vec()), pos + len + 2)))
             }
-        },
+        }
         _ => Err(Error::Client("Cannot parse bulk string".to_owned())),
     }
 }
@@ -113,6 +128,7 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Val
 fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
     match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
+        Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, mut pos)) => {
             let len = len * 2;
             let mut values = Vec::with_capacity(len as usize);

@@ -65,7 +65,7 @@ impl Transaction {
         // EXEC
         if let Some(result) = iter.next() {
             match result {
-                Value::Array(Some(results)) => {
+                Value::Array(results) => {
                     let mut filtered_results = zip(results, self.forget_flags.iter().skip(1))
                         .filter_map(
                             |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
@@ -76,10 +76,10 @@ impl Transaction {
                         let value = filtered_results.pop().unwrap();
                         Ok(value).into_result()?.into()
                     } else {
-                        Value::Array(Some(filtered_results)).into()
+                        Value::Array(filtered_results).into()
                     }
                 }
-                Value::Array(None) | Value::BulkString(None) => Err(Error::Aborted),
+                Value::Nil => Err(Error::Aborted),
                 _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
             }
         } else {

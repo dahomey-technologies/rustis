@@ -113,7 +113,7 @@ impl StandaloneConnection {
         } {
             if log_enabled!(Level::Debug) {
                 match &value {
-                    Ok(Value::Array(Some(array))) => {
+                    Ok(Value::Array(array)) => {
                         if array.len() > 100 {
                             debug!("[{}:{}] Received result Array(Vec([...]))", self.host, self.port);
                         } else {

@@ -655,7 +655,7 @@ impl FromValue for ClusterInfo {
                 match (parts.next(), parts.next(), parts.next()) {
                     (Some(key), Some(value), None) => Ok((
                         key.to_owned(),
-                        Value::BulkString(Some(value.as_bytes().to_vec())),
+                        Value::BulkString(value.as_bytes().to_vec()),
                     )),
                     _ => Err(Error::Client(
                         "Unexpected result for cluster_info".to_owned(),

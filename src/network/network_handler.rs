@@ -355,8 +355,8 @@ impl NetworkHandler {
 
                                     if let Some(mut pending_replies) = pending_replies {
                                         pending_replies.push(value);
-                                        let _result = value_sender
-                                            .send(Ok(Value::Array(Some(pending_replies))));
+                                        let _result =
+                                            value_sender.send(Ok(Value::Array(pending_replies)));
                                     } else {
                                         let _result = value_sender.send(Ok(value));
                                     }
@@ -406,10 +406,9 @@ impl NetworkHandler {
     ) -> Result<Option<Result<Value>>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(Value::Array(Some(ref items))) | Ok(Value::Push(Some(ref items))) => {
+            Ok(Value::Array(ref items)) | Ok(Value::Push(ref items)) => {
                 match &items[..] {
-                    [Value::BulkString(Some(command)), Value::BulkString(Some(channel)), _] =>
-                    {
+                    [Value::BulkString(command), Value::BulkString(channel), _] => {
                         match command.as_slice() {
                             b"message" | b"smessage" => true,
                             b"subscribe" | b"psubscribe" | b"ssubscribe" => {
@@ -440,7 +439,7 @@ impl NetworkHandler {
                             _ => false,
                         }
                     }
-                    [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
+                    [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
                         command.as_slice() == b"pmessage"
                     }
                     _ => false,
@@ -456,7 +455,7 @@ impl NetworkHandler {
         }
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(Some(items))) | Ok(Value::Push(Some(items))) = value {
+        if let Ok(Value::Array(items)) | Ok(Value::Push(items)) = value {
             let mut iter = items.into_iter();
             match (
                 iter.next(),
@@ -467,18 +466,15 @@ impl NetworkHandler {
             ) {
                 // message or smessage
                 (
-                    Some(Value::BulkString(Some(_command))),
-                    Some(Value::BulkString(Some(channel))),
+                    Some(Value::BulkString(_command)),
+                    Some(Value::BulkString(channel)),
                     Some(payload),
                     None,
                     None,
                 ) => match self.subscriptions.get_mut(&channel) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
-                            .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(Some(channel)),
-                                payload,
-                            ]))))
+                            .send(Ok(Value::Array(vec![Value::BulkString(channel), payload])))
                             .await?;
                         return Ok(None);
                     }
@@ -491,19 +487,19 @@ impl NetworkHandler {
                 },
                 // pmessage
                 (
-                    Some(Value::BulkString(Some(_command))),
-                    Some(Value::BulkString(Some(pattern))),
+                    Some(Value::BulkString(_command)),
+                    Some(Value::BulkString(pattern)),
                     Some(channel),
                     Some(payload),
                     None,
                 ) => match self.subscriptions.get_mut(&pattern) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
-                            .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(Some(pattern)),
+                            .send(Ok(Value::Array(vec![
+                                Value::BulkString(pattern),
                                 channel,
                                 payload,
-                            ]))))
+                            ])))
                             .await?;
                         return Ok(None);
                     }

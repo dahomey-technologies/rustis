@@ -103,7 +103,7 @@ fn null() -> Result<()> {
     log_try_init();
 
     let result = decode_value("_\r\n")?; // null
-    assert_eq!(Some(Value::BulkString(None)), result);
+    assert_eq!(Some(Value::Nil), result);
 
     let result = decode_value("_\r")?;
     assert_eq!(None, result);
@@ -122,10 +122,10 @@ fn bulk_string() -> Result<()> {
     log_try_init();
 
     let result = decode_value("$5\r\nhello\r\n")?; // b"hello"
-    assert_eq!(Some(Value::BulkString(Some(b"hello".to_vec()))), result);
+    assert_eq!(Some(Value::BulkString(b"hello".to_vec())), result);
 
     let result = decode_value("$7\r\nhel\r\nlo\r\n")?; // b"hel\r\nlo"
-    assert_eq!(Some(Value::BulkString(Some(b"hel\r\nlo".to_vec()))), result);
+    assert_eq!(Some(Value::BulkString(b"hel\r\nlo".to_vec())), result);
 
     let result = decode_value("$5\r\nhello\r")?;
     assert_eq!(None, result);
@@ -147,7 +147,7 @@ fn bulk_string() -> Result<()> {
     assert!(result.is_err());
 
     let result = decode_value("$-1\r\n")?; // b""
-    assert_eq!(Some(Value::BulkString(None)), result);
+    assert_eq!(Some(Value::Nil), result);
 
     let result = decode_value("$-1\r")?;
     assert_eq!(None, result);
@@ -164,10 +164,7 @@ fn array() -> Result<()> {
 
     let result = decode_value("*2\r\n:12\r\n:13\r\n")?; // [12, 13]
     assert_eq!(
-        Some(Value::Array(Some(vec![
-            Value::Integer(12),
-            Value::Integer(13)
-        ]))),
+        Some(Value::Array(vec![Value::Integer(12), Value::Integer(13)])),
         result
     );
 
@@ -194,15 +191,15 @@ fn array() -> Result<()> {
 
     let result = decode_value("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello, b"world"]
     assert_eq!(
-        Some(Value::Array(Some(vec![
-            Value::BulkString(Some(b"hello".to_vec())),
-            Value::BulkString(Some(b"world".to_vec()))
-        ]))),
+        Some(Value::Array(vec![
+            Value::BulkString(b"hello".to_vec()),
+            Value::BulkString(b"world".to_vec())
+        ])),
         result
     );
 
     let result = decode_value("*-1\r\n")?; // []
-    assert_eq!(Some(Value::Array(None)), result);
+    assert_eq!(Some(Value::Nil), result);
 
     Ok(())
 }
@@ -213,12 +210,12 @@ fn map() -> Result<()> {
 
     let result = decode_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
-        Some(Value::Array(Some(vec![
-            Value::BulkString(Some(b"id".to_vec())),
+        Some(Value::Array(vec![
+            Value::BulkString(b"id".to_vec()),
             Value::Integer(12),
-            Value::BulkString(Some(b"name".to_vec())),
-            Value::BulkString(Some(b"Mike".to_vec()))
-        ]))),
+            Value::BulkString(b"name".to_vec()),
+            Value::BulkString(b"Mike".to_vec())
+        ])),
         result
     );
 
@@ -249,10 +246,7 @@ fn set() -> Result<()> {
 
     let result = decode_value("~2\r\n:12\r\n:13\r\n")?; // [12, 13]
     assert_eq!(
-        Some(Value::Array(Some(vec![
-            Value::Integer(12),
-            Value::Integer(13)
-        ]))),
+        Some(Value::Array(vec![Value::Integer(12), Value::Integer(13)])),
         result
     );
 
@@ -279,10 +273,10 @@ fn set() -> Result<()> {
 
     let result = decode_value("~2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello, b"world"]
     assert_eq!(
-        Some(Value::Array(Some(vec![
-            Value::BulkString(Some(b"hello".to_vec())),
-            Value::BulkString(Some(b"world".to_vec()))
-        ]))),
+        Some(Value::Array(vec![
+            Value::BulkString(b"hello".to_vec()),
+            Value::BulkString(b"world".to_vec())
+        ])),
         result
     );
 
@@ -295,11 +289,11 @@ fn push() -> Result<()> {
 
     let result = decode_value(">3\r\n$7\r\nmessage\r\n$7\r\nchannel\r\n$7\r\npayload\r\n")?; // [b"message, b"channel", b"payload"]
     assert_eq!(
-        Some(Value::Push(Some(vec![
-            Value::BulkString(Some(b"message".to_vec())),
-            Value::BulkString(Some(b"channel".to_vec())),
-            Value::BulkString(Some(b"payload".to_vec()))
-        ]))),
+        Some(Value::Push(vec![
+            Value::BulkString(b"message".to_vec()),
+            Value::BulkString(b"channel".to_vec()),
+            Value::BulkString(b"payload".to_vec())
+        ])),
         result
     );
 

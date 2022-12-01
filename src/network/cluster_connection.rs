@@ -531,7 +531,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(None));
+        let mut result: Result<Value> = Ok(Value::Nil);
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -548,7 +548,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(None));
+        let mut result: Result<Value> = Ok(Value::Nil);
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -569,7 +569,7 @@ impl ClusterConnection {
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut result = Value::BulkString(None);
+        let mut result = Value::Nil;
 
         for sub_result in sub_results {
             result = match sub_result {
@@ -578,8 +578,8 @@ impl ClusterConnection {
                 }
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
-                    (Value::Integer(v), Value::BulkString(None)) => Value::Integer(v),
-                    (Value::Array(Some(v)), Value::Array(Some(mut r)))
+                    (Value::Integer(v), Value::Nil) => Value::Integer(v),
+                    (Value::Array(v), Value::Array(mut r))
                         if v.len() == r.len() =>
                     {
                         for i in 0..v.len() {
@@ -592,10 +592,10 @@ impl ClusterConnection {
                                 }
                             }
                         }
-                        Value::Array(Some(r))
+                        Value::Array(r)
                     }
-                    (Value::Array(Some(v)), Value::BulkString(None)) => {
-                        Value::Array(Some(v))
+                    (Value::Array(v), Value::Nil) => {
+                        Value::Array(v)
                     }
                     _ => {
                         return Some(Err(Error::Client("Unexpected value".to_owned())));
@@ -634,7 +634,7 @@ impl ClusterConnection {
             let mut values = Vec::<Value>::new();
             for sub_result in sub_results {
                 match sub_result {
-                    Ok(Value::Array(Some(v))) => {
+                    Ok(Value::Array(v)) => {
                         values.extend(v);
                     }
                     Err(_) | Ok(Value::Error(_)) => {
@@ -648,7 +648,7 @@ impl ClusterConnection {
                 }
             }
 
-            Some(Ok(Value::Array(Some(values))))
+            Some(Ok(Value::Array(values)))
         } else {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
@@ -657,7 +657,7 @@ impl ClusterConnection {
 
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
                 match sub_result {
-                    Ok(Value::Array(Some(values)))
+                    Ok(Value::Array(values))
                         if sub_request.keys.len() == values.len() =>
                     {
                         results.extend(zip(&sub_request.keys, values))
@@ -681,7 +681,7 @@ impl ClusterConnection {
             });
 
             let values = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(Value::Array(Some(values))))
+            Some(Ok(Value::Array(values)))
         }
     }
 
@@ -977,12 +977,12 @@ impl ClusterConnection {
 fn is_push_message(value: &Result<Value>) -> bool {
     match value {
         // RESP2 pub/sub messages
-        Ok(Value::Array(Some(ref items))) => match &items[..] {
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] =>
+        Ok(Value::Array(ref items)) => match &items[..] {
+            [Value::BulkString(command), Value::BulkString(_channel), Value::BulkString(_payload)] =>
             {
                 matches!(command.as_slice(), b"message" | b"smessage")
             }
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::Integer(_)] =>
+            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] =>
             {
                 matches!(
                     command.as_slice(),
@@ -994,7 +994,7 @@ fn is_push_message(value: &Result<Value>) -> bool {
                         | b"sunsubscribe"
                 )
             }
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
+            [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
                 command.as_slice() == b"pmessage"
             }
             _ => false,

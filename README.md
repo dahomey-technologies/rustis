@@ -6,7 +6,7 @@ An asynchronous Redis client for Rust.
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Documentation
-[Official Documentation](https://docs.rs/rustis/latest/redis_driver/)
+[Official Documentation](https://docs.rs/rustis/latest/rustis/)
 
 ## Philosophy
 * Low allocations

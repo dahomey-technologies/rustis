@@ -58,7 +58,7 @@ impl MultiplexedClient {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{resp::cmd, MultiplexedClient, Result};
+    /// use rustis::{resp::cmd, MultiplexedClient, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {

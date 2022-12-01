@@ -88,7 +88,7 @@ pub trait StringCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
+    /// use rustis::{
     ///     resp::{cmd}, Client, ClientPreparedCommand, FlushingMode,
     ///     ServerCommands, StringCommands, Result
     /// };
@@ -161,7 +161,7 @@ pub trait StringCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
+    /// use rustis::{
     ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
     ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
     /// };

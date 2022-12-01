@@ -15,7 +15,7 @@ pub trait PubSubCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
+    /// use rustis::{
     ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };
@@ -193,7 +193,7 @@ pub trait PubSubCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
+    /// use rustis::{
     ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
     ///     PubSubCommands, ServerCommands, Result
     /// };

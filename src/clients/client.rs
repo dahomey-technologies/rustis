@@ -59,7 +59,7 @@ impl Client {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{resp::cmd, Client, Result};
+    /// use rustis::{resp::cmd, Client, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {

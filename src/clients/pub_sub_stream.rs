@@ -11,7 +11,7 @@ use std::{
 ///
 /// # Example
 /// ```
-/// use redis_driver::{
+/// use rustis::{
 ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
 ///     PubSubCommands, ServerCommands, Result
 /// };

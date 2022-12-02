@@ -46,6 +46,8 @@ impl SentinelConnection {
             username: sentinel_config.username.clone(),
             password: sentinel_config.password.clone(),
             database: config.database,
+            #[cfg(feature = "tls")]
+            tls_config: config.tls_config.clone(),
         };
 
         loop {

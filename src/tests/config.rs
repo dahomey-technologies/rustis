@@ -156,11 +156,26 @@ fn into_config() -> Result<()> {
             .to_string()
     );
 
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=bar",
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=bar"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_username=foo&sentinel_password=bar",
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250&sentinel_username=foo&sentinel_password=bar"
+            .into_config()?
+            .to_string()
+    );
     assert!("127.0.0.1:xyz".into_config().is_err());
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());
     assert!("http://username@127.0.0.1".into_config().is_err());
     assert!("redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381".into_config().is_err());
+    assert!("redis://127.0.0.1?param".into_config().is_err());
+    assert!("redis://127.0.0.1?param=value".into_config().is_ok());
 
     Ok(())
 }

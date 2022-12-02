@@ -1,11 +1,12 @@
 use crate::{Error, Result};
 #[cfg(feature = "tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
-use std::{str::FromStr, time::Duration};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use url::Url;
 
 const DEFAULT_PORT: u16 = 6379;
 const DEFAULT_DATABASE: usize = 0;
+const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
 
 type Uri<'a> = (
     &'a str,
@@ -13,14 +14,31 @@ type Uri<'a> = (
     Option<&'a str>,
     Vec<(&'a str, u16)>,
     Vec<&'a str>,
+    Option<HashMap<String, String>>,
 );
 
+/// Configuration options for a [`client`](crate::Client) or a [`multiplexed client`](crate::MultiplexedClient)
 #[derive(Clone, Default)]
 pub struct Config {
+    /// Connection server configuration (standalone, sentinel, or cluster)
     pub server: ServerConfig,
+    /// An optional ACL username for authentication.
+    /// 
+    /// See [`ACL`](https://redis.io/docs/management/security/acl/)
     pub username: Option<String>,
+    /// An optional password for authentication.
+    /// 
+    /// The password could be either coupled with an ACL username either used alone.
+    /// # See 
+    /// *[`ACL`](https://redis.io/docs/management/security/acl/)
+    /// * [`Authentication](https://redis.io/docs/management/security/#authentication)
     pub password: Option<String>,
+    /// The default database for this connection.
+    /// 
+    /// If `database` is not set to `0`, a [`SELECT`](https://redis.io/commands/select/) 
+    /// command will be automatically issued at connection or reconnection.
     pub database: usize,
+    /// An optional TLS configuration.
     #[cfg(feature = "tls")]
     pub tls_config: Option<TlsConfig>,
 }
@@ -64,7 +82,8 @@ impl Config {
     }
 
     fn parse_uri(uri: &str) -> Option<Config> {
-        let (scheme, username, password, hosts, path_segments) = Self::break_down_uri(uri)?;
+        let (scheme, username, password, hosts, path_segments, mut query) =
+            Self::break_down_uri(uri)?;
         let mut hosts = hosts;
         let mut path_segments = path_segments.into_iter();
 
@@ -122,11 +141,24 @@ impl Config {
                     }
                 };
 
-                ServerConfig::Sentinel(SentinelConfig {
+                let mut sentinel_config = SentinelConfig {
                     instances,
                     service_name,
                     ..Default::default()
-                })
+                };
+
+                if let Some(ref mut query) = query {
+                    if let Some(millis) = query.remove("wait_between_failures") {
+                        if let Ok(millis) = millis.parse::<u64>() {
+                            sentinel_config.wait_beetween_failures = Duration::from_millis(millis);
+                        }
+                    }
+
+                    sentinel_config.username = query.remove("sentinel_username");
+                    sentinel_config.password = query.remove("sentinel_password");
+                }
+
+                ServerConfig::Sentinel(sentinel_config)
             }
             ServerType::Cluster => {
                 let nodes = hosts
@@ -171,7 +203,7 @@ impl Config {
 
         let after_scheme = &uri[end_of_scheme + 3..];
 
-        let (before_query, _query) = match after_scheme.find('?') {
+        let (before_query, query) = match after_scheme.find('?') {
             Some(index) => match Self::exclusive_split_at(after_scheme, index) {
                 (Some(before_query), after_query) => (before_query, after_query),
                 _ => {
@@ -232,7 +264,18 @@ impl Config {
             None => Vec::new(),
         };
 
-        Some((scheme, username, password, hosts, path_segments))
+        let query = match query.map(|q| {
+            q.split('&').map(|s| {
+                s.split_once('=')
+                    .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            }).collect::<Option<HashMap<String, String>>>()
+        }) {
+            Some(Some(query)) => Some(query),
+            Some(None) => return None,
+            None => None,
+        };
+
+        Some((scheme, username, password, hosts, path_segments, query))
     }
 
     /// Splits a string into a section before a given index and a section exclusively after the index.
@@ -292,7 +335,9 @@ impl ToString for Config {
             ServerConfig::Sentinel(SentinelConfig {
                 instances,
                 service_name,
-                wait_beetween_failures: _,
+                wait_beetween_failures,
+                password,
+                username,
             }) => {
                 s.push_str(
                     &instances
@@ -303,6 +348,31 @@ impl ToString for Config {
                 );
                 s.push('/');
                 s.push_str(service_name);
+                let mut query_separator = false;
+                let wait_between_failures = wait_beetween_failures.as_millis() as u64;
+                if wait_between_failures != DEFAULT_WAIT_BETWEEN_FAILURES {
+                    query_separator = true;
+                    s.push_str(&format!("?wait_between_failures={wait_between_failures}"));
+                }
+                if let Some(username) = username {
+                    if !query_separator {
+                        query_separator = true;
+                        s.push('?');
+                    } else {
+                        s.push('&');
+                    }
+                    s.push_str("sentinel_username=");
+                    s.push_str(username);
+                }
+                if let Some(password) = password {
+                    if !query_separator {
+                        s.push('?');
+                    } else {
+                        s.push('&');
+                    }
+                    s.push_str("sentinel_password=");
+                    s.push_str(password);
+                }
             }
             ServerConfig::Cluster(ClusterConfig { nodes }) => {
                 s.push_str(
@@ -327,12 +397,16 @@ impl ToString for Config {
 /// Configuration for connecting to a Redis server
 #[derive(Clone)]
 pub enum ServerConfig {
-    /// Connection to a simple server (no master-replica, no cluster)
+    /// Configuration for connecting to a standalone server (no master-replica, no cluster)
     Standalone {
+        /// The hostname or IP address of the Redis server.
         host: String,
+        /// The port on which the Redis server is listening.
         port: u16,
     },
+    /// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
     Sentinel(SentinelConfig),
+    /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
     Cluster(ClusterConfig),
 }
 
@@ -345,7 +419,7 @@ impl Default for ServerConfig {
     }
 }
 
-/// Configuration for connecting to a Redis via Sentinel
+/// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
 #[derive(Clone)]
 pub struct SentinelConfig {
     /// An array of `(host, port)` tuples for each known sentinel instance.
@@ -356,6 +430,12 @@ pub struct SentinelConfig {
 
     /// Waiting time after failing before connecting to the next Sentinel instance (default 250ms).
     pub wait_beetween_failures: Duration,
+
+    /// Sentinel username
+    pub username: Option<String>,
+
+    /// Sentinel password
+    pub password: Option<String>,
 }
 
 impl Default for SentinelConfig {
@@ -363,12 +443,14 @@ impl Default for SentinelConfig {
         Self {
             instances: Default::default(),
             service_name: Default::default(),
-            wait_beetween_failures: Duration::from_millis(250),
+            wait_beetween_failures: Duration::from_millis(DEFAULT_WAIT_BETWEEN_FAILURES),
+            password: None,
+            username: None,
         }
     }
 }
 
-/// Configuration for connecting to a Redis Cluster
+/// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
 #[derive(Clone, Default)]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
@@ -472,7 +554,13 @@ impl TlsConfig {
     }
 }
 
+/// A value-to-[`Config`](crate::Config) conversion that consumes the input value. 
+/// 
+/// This allows the `connect` method of the [`client`](crate::Client) 
+/// or [`multiplexed client`](crate::MultiplexedClient)
+/// to accept connection information in a range of different formats.
 pub trait IntoConfig {
+    /// Converts this type into a [`Config`](crate::Config).
     fn into_config(self) -> Result<Config>;
 }
 

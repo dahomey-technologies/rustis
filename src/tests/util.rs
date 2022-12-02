@@ -98,12 +98,16 @@ pub(crate) async fn get_sentinel_test_client() -> Result<Client> {
     Client::connect(format!("redis://{host}:26379")).await
 }
 
+pub fn get_sentinel_master_test_uri() -> String {
+    let host = get_default_host();
+    format!(
+        "redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice"
+    )
+}
+
 pub(crate) async fn get_sentinel_master_test_client() -> Result<Client> {
     log_try_init();
-    let host = get_default_host();
-    Client::connect(format!(
-        "redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice"
-    ))
+    Client::connect(get_sentinel_master_test_uri())
     .await
 }
 

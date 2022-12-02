@@ -165,7 +165,7 @@ pub trait StreamCommands {
         prepare_command(self, cmd("XDEL").arg(key).arg(ids))
     }
 
-    /// This command creates a new consumer group uniquely identified by <groupname> for the stream stored at <key>.
+    /// This command creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
     ///
     /// # Return
     /// * `true` success

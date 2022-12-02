@@ -6,6 +6,7 @@ mod inner_client;
 mod message;
 mod monitor_stream;
 mod multiplexed_client;
+#[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]
 mod pooled_client_manager;
 mod pipeline;
@@ -21,6 +22,7 @@ pub(crate) use message::*;
 pub use monitor_stream::*;
 pub use multiplexed_client::*;
 pub use pipeline::*;
+#[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]
 pub use pooled_client_manager::*;
 pub use pub_sub_stream::*;

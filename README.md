@@ -41,3 +41,24 @@ An asynchronous Redis client for Rust.
 * Advanced reconnection strategy
 * Advanced configuration (timeouts)
 * Improve documentation 
+
+## Basic Usage
+
+ ```rust
+ use rustis::{
+     Client, FlushingMode,
+     Result, ServerCommands, StringCommands
+ };
+
+ #[tokio::main]
+ async fn main() -> Result<()> {
+     let mut client = Client::connect("127.0.0.1:6379").await?;
+     client.flushdb(FlushingMode::Sync).await?;
+
+     client.set("key", "value").await?;
+     let value: String = client.get("key").await?;
+     println!("value: {value:?}");
+
+     Ok(())
+ }
+ ```

@@ -4,15 +4,26 @@ use crate::{
 };
 use std::fmt;
 
+/// Generic Redis Object Model
+/// 
+/// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/reference/protocol-spec/) (RESP)
 #[derive(PartialEq)]
 pub enum Value {
+    /// [RESP Simple String](https://redis.io/docs/reference/protocol-spec/#resp-simple-strings)
     SimpleString(String),
+    /// [RESP Integer](https://redis.io/docs/reference/protocol-spec/#resp-integers)
     Integer(i64),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Double
     Double(f64),
+    /// [RESP Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
     BulkString(Vec<u8>),
+    /// [RESP Array](https://redis.io/docs/reference/protocol-spec/#resp-arrays)
     Array(Vec<Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Push
     Push(Vec<Value>),
+    /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
     Error(RedisError),
+    /// [RESP Null](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
     Nil,
 }
 

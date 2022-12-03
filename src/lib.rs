@@ -42,14 +42,12 @@
 //! * `redis-time-series` - [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support (optional)
 //! * `redis-stack` - activate `redis-json`, `redis-search`, `redis-graph`, `redis-bloom` & `redis-time-series` at the same time (optional)
 //! 
-//! # Basic Usage
-//! 
-//! ## Client
+//! # Client
 //! 
 //! The central object in **rustis** is the client.
 //! There are 3 kinds of clients.
 //! 
-//! ### The single client
+//! ## The single client
 //! The single [`Client`](crate::Client) maintains a unique connection to a Redis Server or cluster and is not thread-safe.
 //! 
 //! ```
@@ -71,7 +69,7 @@
 //! }
 //! ```
 //! 
-//! ### The multiplexed client
+//! ## The multiplexed client
 //! A [multiplexed client](crate::MultiplexedClient) can be cloned, allowing requests
 //! to be be sent concurrently on the same underlying connection.
 //!
@@ -108,7 +106,7 @@
 //! }
 //! ```
 //! 
-//! ### The pooled client manager
+//! ## The pooled client manager
 //! The pooled client manager holds a pool of client, based on [bb8](https://docs.rs/bb8/latest/bb8/).
 //! 
 //! Each time a new command must be sent to the Redis Server, a client will be borrowed temporarily to the manager
@@ -116,7 +114,7 @@
 //! 
 //! The manager can be configured via [bb8](https://docs.rs/bb8/latest/bb8/) with a various of options like maximum size, maximum lifetime, etc.
 //! 
-//! For you convenience, [bb8](https://docs.rs/bb8/latest/bb8/) is reexport from the **rustis** crate.
+//! For you convenience, [bb8](https://docs.rs/bb8/latest/bb8/) is reexported from the **rustis** crate.
 //! 
 //! ```
 //! use rustis::{
@@ -143,7 +141,96 @@
 //!     Ok(())
 //! }
 //! ```
-
+//! 
+//! # Commands
+//! 
+//! In order to send [Commands](https://redis.io/commands/) to the Redis server, 
+//! **rustis** offers two API levels:
+//! * High-level Built-in commands that implement all [Redis 7.0](https://redis.com/blog/redis-7-generally-available/) commands + 
+//!   [Redis Stack](https://redis.io/docs/stack/) commands.
+//! * Low-level Generic command API to express any request that may not exist in **rustis**:
+//!   * new official commands not yet implemented by **rustis**.
+//!   * commands exposed by additional [Redis modules](https://redis.io/resources/modules/) 
+//!     not included in [Redis Stack](https://redis.io/docs/stack/).
+//! 
+//! ## Built-in commands
+//! 
+//! Because Redis offers hundreds of commands, in **rustis** commands have been split in several traits that gather commands by groups, 
+//! most of the time, groups describe in [Redis official documentation](https://redis.io/commands/).
+//! 
+//! Depending on the group of commands, traits will be implemented by [`Client`](crate::Client), [`MultiplexedClient`](crate::MultiplexedClient),
+//! [`Pipeline`](crate::Pipeline), [`Transaction`](crate::Transaction) or some of these structs.
+//! 
+//! These is the list of existing command traits:
+//! * [`BitmapCommands`](crate::BitmapCommands): [Bitmaps](https://redis.io/docs/data-types/bitmaps/) & [Bitfields](https://redis.io/docs/data-types/bitfields/)
+//! * [`BlockingCommands`](crate::BlockingCommands): Commands that block the connection until the Redis server 
+//!   has a new element to send. This trait is implemented only by the [`Client`](crate::Client) struct.
+//! * [`ClusterCommands`](crate::ClusterCommands): [Redis cluster](https://redis.io/docs/reference/cluster-spec/)
+//! * [`ConnectionCommands`](crate::ConnectionCommands): Connection management like authentication or RESP version management
+//! * [`GenericCommands`](crate::GenericCommands): Generic commands like deleting, renaming or expiring keys
+//! * [`GeoCommands`](crate::GeoCommands): [Geospatial](https://redis.io/docs/data-types/geospatial/) indices
+//! * [`HashCommands`](crate::HashCommands): [Hashes](https://redis.io/docs/data-types/hashes/)
+//! * [`HyperLogLogCommands`](crate::HyperLogLogCommands): [HyperLogLog](https://redis.io/docs/data-types/hyperloglogs/)
+//! * [`ListCommands`](crate::ListCommands): [Lists](https://redis.io/docs/data-types/lists/)
+//! * [`PubSubCommands`](crate::PubSubCommands): [Pub/Sub](https://redis.io/docs/manual/pubsub/)
+//! * [`ScriptingCommands`](crate::ScriptingCommands): [Scripts](https://redis.io/docs/manual/programmability/eval-intro/) &
+//!   [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
+//! * [`SentinelCommands`](crate::SentinelCommands): [Sentinel](https://redis.io/docs/management/sentinel/)
+//! * [`ServerCommands`](crate::ServerCommands): Server management like [Access Control Lists](https://redis.io/docs/management/security/acl/) or monitoring
+//! * [`SetCommands`](crate::SetCommands): [Sets](https://redis.io/docs/data-types/sets/)
+//! * [`SortedSetCommands`](crate::SortedSetCommands): [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
+//! * [`StreamCommands`](crate::StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
+//! * [`StringCommands`](crate::StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
+//! * [`TransactionCommands`](crate::TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
+//! 
+//! Redis Stack commands:
+//! * [`BloomCommands`](crate::BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
+//! * [`CuckooCommands`](crate::CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
+//! * [`CountMinSketchCommands`](crate::CountMinSketchCommands): [Count min-sketch](https://redis.io/docs/stack/bloom/)
+//! * [`GraphCommands`](crate::GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
+//! * [`JsonCommands`](crate::JsonCommands): [RedisJson](https://redis.io/docs/stack/json/)
+//! * [`SearchCommands`](crate::SearchCommands): [`RedisSearch`](https://redis.io/docs/stack/search/)
+//! * [`TDigestCommands`](crate::TDigestCommands): [`T-Digest`](https://redis.io/docs/stack/bloom/)
+//! * [`TimeSeriesCommands`](crate::TimeSeriesCommands): [`Time Series`](https://redis.io/docs/stack/timeseries/)
+//! * [`TopKCommands`](crate::TopKCommands): [`Top-K`](https://redis.io/docs/stack/bloom/)
+//! 
+//! To use a command, simple add the related trait to your use declerations 
+//! and call the related method directly to a client, pipeline, transaction instance.
+//! 
+//! Commands can be directly awaited or [forgotten](ClientPreparedCommand::forget).
+//! 
+//! ```
+//! use rustis::{
+//!     Client, ClientPreparedCommand, Result, ListCommands, SortedSetCommands, 
+//!     ZAddOptions
+//! };
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let mut client = Client::connect("127.0.0.1:6379").await?;
+//! 
+//!     // Send & await ListCommands::lpush command
+//!     let _size = client.lpush("mylist", ["element1", "element2"]).await?;
+//! 
+//!     // Send & forget SortedSetCommands::zadd command
+//!     let _size = client.zadd(
+//!         "mySortedSet", 
+//!         [(1.0, "member1"), (2.0, "member2")], 
+//!         ZAddOptions::default()
+//!     ).forget();
+//! 
+//!     Ok(())
+//! }
+//! ```
+//! ## Generic command API
+//! To use the generic command API, you can use the [`cmd`](crate::resp::cmd) function to specify the name of the command, 
+//! followed by one or multiple calls to the [`Commmand::arg`](crate::resp::Command::arg) method to add arguments to the command.
+//! 
+//! This command can then be passed as a parameter to one of the following methods, 
+//! depending on the client, transaction or pipeline struct used:
+//! * [`send`](crate::Client::send)
+//! * [`send_and_forget`](crate::Client::send_and_forget)
+//! * [`send_batch`](crate::Client::send_batch)
 
 mod clients;
 mod commands;

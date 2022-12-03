@@ -9,7 +9,7 @@ use crate::{
     PreparedCommand, Result,
 };
 
-/// A group of Redis commands related to Sentinel
+/// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
 /// # See Also
 /// [Sentinel Commands](https://redis.io/docs/management/sentinel/#sentinel-commands)
 pub trait SentinelCommands {

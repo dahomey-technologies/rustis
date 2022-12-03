@@ -106,21 +106,27 @@ where
 }
 
 impl BitmapCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CountMinSketchCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for Transaction {}
 impl GenericCommands for Transaction {}
 impl GeoCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
 impl GraphCommands for Transaction {}
 impl HashCommands for Transaction {}
 impl HyperLogLogCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Transaction {}
 impl ListCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
 impl SearchCommands for Transaction {}
 impl SetCommands for Transaction {}
@@ -129,9 +135,12 @@ impl ServerCommands for Transaction {}
 impl SortedSetCommands for Transaction {}
 impl StreamCommands for Transaction {}
 impl StringCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
 impl TimeSeriesCommands for Transaction {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Transaction {}

@@ -39,6 +39,7 @@ pub struct Config {
     /// command will be automatically issued at connection or reconnection.
     pub database: usize,
     /// An optional TLS configuration.
+    #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
     #[cfg(feature = "tls")]
     pub tls_config: Option<TlsConfig>,
 }

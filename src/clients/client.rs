@@ -166,25 +166,31 @@ where
 }
 
 impl BitmapCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Client {}
 impl ClusterCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CountMinSketchCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for Client {}
 impl ConnectionCommands for Client {}
 impl GenericCommands for Client {}
 impl GeoCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
 impl GraphCommands for Client {}
 impl HashCommands for Client {}
 impl HyperLogLogCommands for Client {}
 impl InternalPubSubCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Client {}
 impl ListCommands for Client {}
 impl ScriptingCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
 impl SearchCommands for Client {}
 impl SentinelCommands for Client {}
@@ -193,11 +199,14 @@ impl SetCommands for Client {}
 impl SortedSetCommands for Client {}
 impl StreamCommands for Client {}
 impl StringCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
 impl TimeSeriesCommands for Client {}
 impl TransactionCommands for Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Client {}
 

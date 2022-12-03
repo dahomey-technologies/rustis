@@ -95,23 +95,29 @@ where
 }
 
 impl BitmapCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for Pipeline {}
 impl ClusterCommands for Pipeline {}
 impl ConnectionCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CountMinSketchCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for Pipeline {}
 impl GenericCommands for Pipeline {}
 impl GeoCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
 impl GraphCommands for Pipeline {}
 impl HashCommands for Pipeline {}
 impl HyperLogLogCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
 impl JsonCommands for Pipeline {}
 impl ListCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
 impl SearchCommands for Pipeline {}
 impl SetCommands for Pipeline {}
@@ -120,9 +126,12 @@ impl ServerCommands for Pipeline {}
 impl SortedSetCommands for Pipeline {}
 impl StreamCommands for Pipeline {}
 impl StringCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
 impl TimeSeriesCommands for Pipeline {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for Pipeline {}

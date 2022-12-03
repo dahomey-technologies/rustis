@@ -42,6 +42,7 @@ pub enum Error {
     Redis(RedisError),
     /// IO error when connecting the Redis server
     IO(std::io::Error),
+    #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
     #[cfg(feature = "tls")]
     /// Raised by the TLS library
     Tls(String),

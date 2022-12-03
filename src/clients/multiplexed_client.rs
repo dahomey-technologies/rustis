@@ -173,25 +173,31 @@ where
 }
 
 impl BitmapCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl BloomCommands for MultiplexedClient {}
 impl ClusterCommands for MultiplexedClient {}
 impl ConnectionCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CountMinSketchCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl CuckooCommands for MultiplexedClient {}
 impl GenericCommands for MultiplexedClient {}
 impl GeoCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
 impl GraphCommands for MultiplexedClient {}
 impl HashCommands for MultiplexedClient {}
 impl HyperLogLogCommands for MultiplexedClient {}
 impl InternalPubSubCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
 impl JsonCommands for MultiplexedClient {}
 impl ListCommands for MultiplexedClient {}
 impl ScriptingCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
 impl SearchCommands for MultiplexedClient {}
 impl SentinelCommands for MultiplexedClient {}
@@ -200,10 +206,13 @@ impl SetCommands for MultiplexedClient {}
 impl SortedSetCommands for MultiplexedClient {}
 impl StreamCommands for MultiplexedClient {}
 impl StringCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TDigestCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
 impl TimeSeriesCommands for MultiplexedClient {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 impl TopKCommands for MultiplexedClient {}
 

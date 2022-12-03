@@ -51,8 +51,7 @@ impl Client {
     /// but may also be used to provide access to new features that lack a direct API.
     ///
     /// # Arguments
-    /// * `name` - Command name in uppercase.
-    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`CommandArg`](crate::resp::CommandArg).
+    /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -86,7 +85,10 @@ impl Client {
         self.inner_client.send_and_forget(command)
     }
 
-    /// Send a command batch to the Redis server.
+    /// Send a batch of commands to the Redis server.
+    /// 
+    /// # Arguments
+    /// * `commands` - batch of generic [`Command`](crate::resp::Command)s meant to be sent to the Redis server.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -106,8 +108,28 @@ impl Client {
 }
 
 impl ClientTrait for Client {
+    fn send(&mut self, command: Command) -> Future<Value> {
+        Box::pin(async move {
+            self.send(command).await
+        })
+    }
+
+    fn send_and_forget(&mut self, command: Command) -> Result<()> {
+        self.send_and_forget(command)
+    }
+
+    fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
+        Box::pin(async move {
+            self.send_batch(commands).await
+        })
+    }
+
     fn create_pipeline(&mut self) -> Pipeline {
         self.create_pipeline()
+    }
+
+    fn create_transaction(&mut self) -> Transaction {
+        self.create_transaction()
     }
 
     fn get_cache(&mut self) -> &mut crate::Cache {

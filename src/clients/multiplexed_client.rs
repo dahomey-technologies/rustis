@@ -113,8 +113,28 @@ impl MultiplexedClient {
 }
 
 impl ClientTrait for MultiplexedClient {
+    fn send(&mut self, command: Command) -> Future<Value> {
+        Box::pin(async move {
+            self.send(command).await
+        })
+    }
+
+    fn send_and_forget(&mut self, command: Command) -> Result<()> {
+        self.send_and_forget(command)
+    }
+
+    fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
+        Box::pin(async move {
+            self.send_batch(commands).await
+        })
+    }
+
     fn create_pipeline(&mut self) -> Pipeline {
         self.create_pipeline()
+    }
+
+    fn create_transaction(&mut self) -> Transaction {
+        self.create_transaction()
     }
 
     fn get_cache(&mut self) -> &mut Cache {

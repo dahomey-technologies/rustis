@@ -42,8 +42,8 @@ pub trait TimeSeriesCommands {
     ///    in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
     ///
     /// # Complexity
-    /// If a compaction rule exits on a time series, the performance of [`ts_add`] can be reduced.
-    /// The complexity of [`ts_add`] is always `O(M)`, where `M` is the number of compaction rules or `O(1)` with no compaction.
+    /// If a compaction rule exits on a time series, the performance of `ts_add` can be reduced.
+    /// The complexity of `ts_add` is always `O(M)`, where `M` is the number of compaction rules or `O(1)` with no compaction.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.add/>](https://redis.io/commands/ts.add/)
@@ -974,9 +974,9 @@ impl IntoArgs for TsCreateRuleOptions {
 ///
 /// # Notes
 /// * You can use this command to add data to a nonexisting time series in a single command.
-/// This is why [`retention`], [`uncompressed`], [`chunk_size`], and [`labels`] are optional arguments.
+/// This is why `retention`, `uncompressed`, `chunk_size`, and `labels` are optional arguments.
 /// * When specified and the key doesn't exist, a new time series is created.
-/// Setting the [`retention`] and [`labels`] options introduces additional time complexity.
+/// Setting the `retention` and `labels` options introduces additional time complexity.
 #[derive(Default)]
 pub struct TsIncrByDecrByOptions {
     command_args: CommandArgs,

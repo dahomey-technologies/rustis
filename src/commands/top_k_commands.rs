@@ -166,7 +166,7 @@ pub trait TopKCommands {
     ///   * `width` - Number of counters kept in each array. (Default 8)
     ///   * `depth` - Number of arrays. (Default 7)
     ///   * `decay` - The probability of reducing a counter in an occupied bucket. \
-    ///   It is raised to power of it's counter (decay ^ bucket[i].counter). \
+    ///   It is raised to power of it's counter (decay ^ bucket\[i\].counter). \
     ///   Therefore, as the counter gets higher, the chance of a reduction is being reduced. (Default 0.9)
     ///
     /// # See Also
@@ -202,7 +202,7 @@ pub struct TopKInfoResult {
     pub depth: usize,
     /// The probability of reducing a counter in an occupied bucket.
     ///
-    /// It is raised to power of it's counter (decay ^ bucket[i].counter).
+    /// It is raised to power of it's counter (decay ^ bucket\[i\].counter).
     /// Therefore, as the counter gets higher, the chance of a reduction is being reduced.
     pub decay: f64,
 }

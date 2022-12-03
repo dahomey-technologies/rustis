@@ -20,7 +20,7 @@ An asynchronous Redis client for Rust.
 * Different client types:
   * Single client
   * [Multiplexed](https://redis.com/blog/multiplexing-explained/) client
-  * Pooled client manager (with [bb8](https://docs.rs/bb8/latest/bb8/))
+  * Pooled client manager (based on [bb8](https://docs.rs/bb8/latest/bb8/))
 * Automatic command batching
 * [Pipelining](https://redis.io/docs/manual/pipelining/) support
 * Configuration with Redis URL or dedicated builder
@@ -39,5 +39,5 @@ An asynchronous Redis client for Rust.
 
 ## Roadmap
 * Advanced reconnection strategy
-* Advanced configuration (timeouts, sentinel credentials)
+* Advanced configuration (timeouts)
 * Improve documentation 

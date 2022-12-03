@@ -199,7 +199,7 @@ pub trait TDigestCommands {
     /// * `destination` - key name for a t-digest sketch to merge observation values to.
     ///   * If `destination` not exist, a new sketch is created.
     ///   * If `destination` is an existing sketch, its values are merged with the values of the source keys.\
-    ///    To override the destination key contents use [`override`](TDigestMergeOptions::override).
+    ///    To override the destination key contents use [`override`](TDigestMergeOptions::_override).
     /// * `sources` - collection of key names for t-digest sketches to merge observation values from.
     ///
     /// # See Also
@@ -394,7 +394,7 @@ pub trait TDigestCommands {
     }
 }
 
-/// Result for the [`cf_info`](CuckooCommands::cf_info) command.
+/// Result for the [`tdigest_info`](TDigestCommands::tdigest_info) command.
 #[derive(Debug)]
 pub struct TDigestInfoResult {
     /// The compression (controllable trade-off between accuracy and memory consumption) of the sketch
@@ -454,9 +454,9 @@ impl TDigestMergeOptions {
     /// see [`The t-digest: Efficient estimates of distributions`](https://www.sciencedirect.com/science/article/pii/S2665963820300403).
     ///
     /// When COMPRESSION is not specified:
-    /// * If `destination` does not exist or if [`override`](TDigestMergeOptions::override) is specified, \
+    /// * If `destination` does not exist or if [`override`](TDigestMergeOptions::_override) is specified, \
     ///   the compression is set to the maximal value among all source sketches.
-    /// * If `destination` already exists and [`override`](TDigestMergeOptions::override) is not specified, \
+    /// * If `destination` already exists and [`override`](TDigestMergeOptions::_override) is not specified, \
     ///   its compression is not changed.
     #[must_use]
     pub fn compression(self, compression: usize) -> Self {

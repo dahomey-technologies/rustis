@@ -13,6 +13,7 @@ use std::{
 /// `Internal Use`
 /// 
 /// Gives a reason to retry sending a command to the Redis Server
+#[doc(hidden)]
 #[derive(Debug)]
 pub enum RetryReason {
     /// Received an ASK error from the Redis Server
@@ -47,6 +48,7 @@ pub enum Error {
     /// Raised by the TLS library
     Tls(String),
     /// Internal error to trigger retry sending the command
+    #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
 }
 

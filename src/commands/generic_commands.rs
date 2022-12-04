@@ -653,7 +653,7 @@ pub trait GenericCommands {
     }
 }
 
-/// Options for the [`expire`](crate::GenericCommands::expire) command
+/// Options for the [`expire`](GenericCommands::expire) command
 pub enum ExpireOption {
     /// No option
     None,
@@ -734,7 +734,7 @@ impl IntoArgs for MigrateOptions {
     }
 }
 
-/// Options for the [`restore`](crate::GenericCommands::restore) command
+/// Options for the [`restore`](GenericCommands::restore) command
 #[derive(Default)]
 pub struct RestoreOptions {
     command_args: CommandArgs,
@@ -776,7 +776,7 @@ impl IntoArgs for RestoreOptions {
     }
 }
 
-/// Order option of the [`sort`](crate::GenericCommands::sort) command
+/// Order option of the [`sort`](GenericCommands::sort) command
 pub enum SortOrder {
     Asc,
     Desc,
@@ -791,7 +791,7 @@ impl IntoArgs for SortOrder {
     }
 }
 
-/// Options for the [`sort`](crate::GenericCommands::sort) command
+/// Options for the [`sort`](GenericCommands::sort) command
 #[derive(Default)]
 pub struct SortOptions {
     command_args: CommandArgs,
@@ -840,7 +840,7 @@ impl IntoArgs for SortOptions {
     }
 }
 
-/// Result for the [`dump`](crate::GenericCommands::dump) command.
+/// Result for the [`dump`](GenericCommands::dump) command.
 pub struct DumpResult {
     pub serialized_value: Vec<u8>,
 }
@@ -856,7 +856,7 @@ impl FromValue for DumpResult {
     }
 }
 
-/// Options for the [`scan`](crate::GenericCommands::scan) command
+/// Options for the [`scan`](GenericCommands::scan) command
 #[derive(Default)]
 pub struct ScanOptions {
     command_args: CommandArgs,
@@ -891,7 +891,7 @@ impl IntoArgs for ScanOptions {
     }
 }
 
-/// Result for the [`migrate`](crate::GenericCommands::migrate) command
+/// Result for the [`migrate`](GenericCommands::migrate) command
 pub enum MigrateResult {
     /// key(s) successfully migrated
     Ok,

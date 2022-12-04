@@ -272,8 +272,8 @@ pub trait BloomCommands {
     }
 
     /// Begins an incremental save of the bloom filter.
-    /// This is useful for large bloom filters which cannot fit into the normal [`dump`](crate::GenericCommands::dump)
-    /// and [`restore`](crate::GenericCommands::restore) model.
+    /// This is useful for large bloom filters which cannot fit into the normal [`dump`](crate::commands::GenericCommands::dump)
+    /// and [`restore`](crate::commands::GenericCommands::restore) model.
     ///
     /// # Arguments
     /// * `key` - Name of the filter
@@ -353,7 +353,7 @@ impl FromValue for BfInfoResult {
     }
 }
 
-/// Options for the [`bf_insert`](crate::BloomCommands::bf_insert) command.
+/// Options for the [`bf_insert`](BloomCommands::bf_insert) command.
 #[derive(Default)]
 pub struct BfInsertOptions {
     command_args: CommandArgs,
@@ -427,7 +427,7 @@ impl IntoArgs for BfInsertOptions {
     }
 }
 
-/// Options for the [`bf_reserve`](crate::BloomCommands::bf_reserve) command.
+/// Options for the [`bf_reserve`](BloomCommands::bf_reserve) command.
 #[derive(Default)]
 pub struct BfReserveOptions {
     command_args: CommandArgs,

@@ -1,5 +1,5 @@
 use crate::{
-    client::{ClientPreparedCommand, PipelinePreparedCommand},
+    client::{ClientPreparedCommand, BatchPreparedCommand},
     commands::{
         ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
         ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,

@@ -340,7 +340,7 @@ pub trait HashCommands {
     }
 }
 
-/// Options for the [`hscan`](crate::HashCommands::hscan) command
+/// Options for the [`hscan`](HashCommands::hscan) command
 #[derive(Default)]
 pub struct HScanOptions {
     command_args: CommandArgs,

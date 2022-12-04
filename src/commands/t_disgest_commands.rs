@@ -438,7 +438,7 @@ impl FromValue for TDigestInfoResult {
     }
 }
 
-/// Options for the [`tdigest_merge`](crate::TDigestCommands::tdigest_merge) command.
+/// Options for the [`tdigest_merge`](TDigestCommands::tdigest_merge) command.
 #[derive(Default)]
 pub struct TDigestMergeOptions {
     command_args: CommandArgs,

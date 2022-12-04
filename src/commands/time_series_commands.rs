@@ -99,7 +99,7 @@ pub trait TimeSeriesCommands {
     ///
     /// # Notes
     /// * If a key already exists, you get a Redis error reply, TSDB: key already exists.
-    ///   You can check for the existence of a key with the [`exists`](crate::GenericCommands::exists) command.
+    ///   You can check for the existence of a key with the [`exists`](crate::commands::GenericCommands::exists) command.
     /// * Other commands that also create a new time series when called with a key that does not exist are
     /// [`ts_add`](TimeSeriesCommands::ts_add), [`ts_incrby`](TimeSeriesCommands::ts_incrby), and [`ts_decrby`](TimeSeriesCommands::ts_decrby).
     ///
@@ -615,7 +615,7 @@ pub trait TimeSeriesCommands {
     }
 }
 
-/// Options for the [`ts_add`](crate::TimeSeriesCommands::ts_add) command.
+/// Options for the [`ts_add`](TimeSeriesCommands::ts_add) command.
 ///
 /// # Notes
 /// * You can use this command to add data to a nonexisting time series in a single command.
@@ -773,7 +773,7 @@ impl FromValue for TsDuplicatePolicy {
     }
 }
 
-/// Options for the [`ts_add`](crate::TimeSeriesCommands::ts_create) command.
+/// Options for the [`ts_add`](TimeSeriesCommands::ts_create) command.
 #[derive(Default)]
 pub struct TsCreateOptions {
     command_args: CommandArgs,
@@ -941,7 +941,7 @@ impl FromValue for TsAggregationType {
     }
 }
 
-/// Options for the [`ts_createrule`](crate::TimeSeriesCommands::ts_createrule) command.
+/// Options for the [`ts_createrule`](TimeSeriesCommands::ts_createrule) command.
 #[derive(Default)]
 pub struct TsCreateRuleOptions {
     command_args: CommandArgs,
@@ -969,8 +969,8 @@ impl IntoArgs for TsCreateRuleOptions {
     }
 }
 
-/// Options for the [`ts_incrby`](crate::TimeSeriesCommands::ts_incrby)
-/// and [`ts_decrby`](crate::TimeSeriesCommands::ts_decrby) commands.
+/// Options for the [`ts_incrby`](TimeSeriesCommands::ts_incrby)
+/// and [`ts_decrby`](TimeSeriesCommands::ts_decrby) commands.
 ///
 /// # Notes
 /// * You can use this command to add data to a nonexisting time series in a single command.
@@ -1059,7 +1059,7 @@ impl IntoArgs for TsIncrByDecrByOptions {
     }
 }
 
-/// Options for the [`ts_get`](crate::TimeSeriesCommands::ts_get) command.
+/// Options for the [`ts_get`](TimeSeriesCommands::ts_get) command.
 #[derive(Default)]
 pub struct TsGetOptions {
     command_args: CommandArgs,
@@ -1068,10 +1068,10 @@ pub struct TsGetOptions {
 impl TsGetOptions {
     /// Used when a time series is a compaction.
     ///
-    /// With `latest`, [`ts_get`](crate::TimeSeriesCommands::ts_get)
+    /// With `latest`, [`ts_get`](TimeSeriesCommands::ts_get)
     /// also reports the compacted value of the latest possibly partial bucket,
     /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
-    /// Without `latest`, [`ts_get`](crate::TimeSeriesCommands::ts_get)
+    /// Without `latest`, [`ts_get`](TimeSeriesCommands::ts_get)
     ///  does not report the latest possibly partial bucket.
     /// When a time series is not a compaction, `latest` is ignored.
     ///
@@ -1237,7 +1237,7 @@ impl FromValue for TsCompactionRule {
     }
 }
 
-/// Options for the [`ts_mget`](crate::TimeSeriesCommands::ts_mget) command.
+/// Options for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
 #[derive(Default)]
 pub struct TsMGetOptions {
     command_args: CommandArgs,
@@ -1246,10 +1246,10 @@ pub struct TsMGetOptions {
 impl TsMGetOptions {
     /// Used when a time series is a compaction.
     ///
-    /// With `latest`, [`ts_mget`](crate::TimeSeriesCommands::ts_mget)
+    /// With `latest`, [`ts_mget`](TimeSeriesCommands::ts_mget)
     /// also reports the compacted value of the latest possibly partial bucket,
     /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
-    /// Without `latest`, [`ts_mget`](crate::TimeSeriesCommands::ts_mget)
+    /// Without `latest`, [`ts_mget`](TimeSeriesCommands::ts_mget)
     ///  does not report the latest possibly partial bucket.
     /// When a time series is not a compaction, `latest` is ignored.
     ///
@@ -1323,8 +1323,8 @@ impl FromValue for TsSample {
     }
 }
 
-/// Options for the [`ts_mrange`](crate::TimeSeriesCommands::ts_mrange) and
-/// [`ts_mrevrange`](crate::TimeSeriesCommands::ts_mrevrange) commands.
+/// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
+/// [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands.
 #[derive(Default)]
 pub struct TsMRangeOptions {
     command_args: CommandArgs,
@@ -1333,10 +1333,10 @@ pub struct TsMRangeOptions {
 impl TsMRangeOptions {
     /// Used when a time series is a compaction.
     ///
-    /// With `latest`, [`ts_mrange`](crate::TimeSeriesCommands::ts_mrange)
+    /// With `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
     /// also reports the compacted value of the latest possibly partial bucket,
     /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
-    /// Without `latest`, [`ts_mrange`](crate::TimeSeriesCommands::ts_mrange)
+    /// Without `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
     /// does not report the latest possibly partial bucket.
     /// When a time series is not a compaction, `latest` is ignored.
     ///
@@ -1482,7 +1482,7 @@ impl IntoArgs for TsMRangeOptions {
     }
 }
 
-/// Options for the [`ts_mrange`](crate::TimeSeriesCommands::ts_mrange) command.
+/// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) command.
 pub struct TsGroupByOptions {
     command_args: CommandArgs,
 }
@@ -1519,8 +1519,8 @@ impl IntoArgs for TsGroupByOptions {
     }
 }
 
-/// Options for the [`ts_range`](crate::TimeSeriesCommands::ts_range) and
-/// [`ts_revrange`](crate::TimeSeriesCommands::ts_revrange) commands.
+/// Options for the [`ts_range`](TimeSeriesCommands::ts_range) and
+/// [`ts_revrange`](TimeSeriesCommands::ts_revrange) commands.
 #[derive(Default)]
 pub struct TsRangeOptions {
     command_args: CommandArgs,
@@ -1529,10 +1529,10 @@ pub struct TsRangeOptions {
 impl TsRangeOptions {
     /// Used when a time series is a compaction.
     ///
-    /// With `latest`, [`ts_range`](crate::TimeSeriesCommands::ts_range)
+    /// With `latest`, [`ts_range`](TimeSeriesCommands::ts_range)
     /// also reports the compacted value of the latest possibly partial bucket,
     /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
-    /// Without `latest`, [`ts_range`](crate::TimeSeriesCommands::ts_range)
+    /// Without `latest`, [`ts_range`](TimeSeriesCommands::ts_range)
     /// does not report the latest possibly partial bucket.
     /// When a time series is not a compaction, `latest` is ignored.
     ///

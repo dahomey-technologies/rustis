@@ -1,5 +1,5 @@
 use crate::{
-    client::{prepare_command, ClientTrait, PipelinePreparedCommand, PreparedCommand},
+    client::{prepare_command, BatchPreparedCommand, ClientTrait, PreparedCommand},
     commands::{GraphCache, GraphValue},
     resp::{
         cmd, Command, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
@@ -125,7 +125,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to profile
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// String representation of a query execution plan, with details on results produced by and time spent in each operation.
@@ -150,7 +150,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to execute
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// returns a [`result set`](GraphResultSet)
@@ -184,7 +184,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to execute
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// returns a [`result set`](GraphResultSet)
@@ -234,7 +234,7 @@ pub trait GraphCommands {
     }
 }
 
-/// Options for the [`graph_query`](crate::GraphCommands::graph_query) command
+/// Options for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Default)]
 pub struct GraphQueryOptions {
     command_args: CommandArgs,
@@ -256,7 +256,7 @@ impl IntoArgs for GraphQueryOptions {
     }
 }
 
-/// Result set for the [`graph_query`](crate::GraphCommands::graph_query) command
+/// Result set for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Debug)]
 pub struct GraphResultSet {
     pub header: GraphHeader,
@@ -442,7 +442,7 @@ impl FromValue for GraphHeader {
     }
 }
 
-/// Result row for the [`graph_query`](crate::GraphCommands::graph_query) command
+/// Result row for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Debug)]
 pub struct GraphResultRow {
     /// collection of values
@@ -466,7 +466,7 @@ impl GraphResultRow {
     }
 }
 
-/// Statistics part of a graph ['result set`](crate::GraphResultSet)
+/// Statistics part of a graph ['result set`](GraphResultSet)
 #[derive(Debug)]
 pub struct GraphQueryStatistics {
     pub labels_added: usize,
@@ -554,7 +554,7 @@ impl FromValue for GraphQueryStatistics {
     }
 }
 
-/// Result for the [`graph_slowlog`](crate::GraphCommands::graph_slowlog) command
+/// Result for the [`graph_slowlog`](GraphCommands::graph_slowlog) command
 #[derive(Debug)]
 pub struct GraphSlowlogResult {
     /// A Unix timestamp at which the log entry was processed.

@@ -56,14 +56,14 @@ impl Pipeline {
     /// # Return
     /// It is the caller responsability to use the right type to cast the server response
     /// to the right tuple or collection depending on which command has been
-    /// [queued](PipelinePreparedCommand::queue) or [forgotten](PipelinePreparedCommand::forget).
+    /// [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
     ///
-    /// The most generic type that can requested as a result is `Vec<resp::Value>`
+    /// The most generic type that can be requested as a result is `Vec<resp::Value>`
     ///
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, Pipeline, PipelinePreparedCommand}, 
+    ///     client::{Client, Pipeline, BatchPreparedCommand}, 
     ///     commands::StringCommands,
     ///     resp::{cmd, Value}, Result,
     /// };
@@ -111,10 +111,10 @@ impl Pipeline {
     }
 }
 
-/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand)
-/// to add specific methods for the [`Pipeline`](crate::Pipeline) &
-/// the [`Transaction`](crate::Transaction) executors
-pub trait PipelinePreparedCommand<'a, R>
+/// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
+/// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
+/// the [`Transaction`](crate::client::Transaction) executors
+pub trait BatchPreparedCommand<'a, R>
 where
     R: FromValue,
 {
@@ -125,16 +125,18 @@ where
     fn forget(self);
 }
 
-impl<'a, R> PipelinePreparedCommand<'a, R> for PreparedCommand<'a, Pipeline, R>
+impl<'a, R> BatchPreparedCommand<'a, R> for PreparedCommand<'a, Pipeline, R>
 where
     R: FromValue + Send + 'a,
 {
     /// Queue a command.
+    #[inline]
     fn queue(self) {
         self.executor.queue(self.command)
     }
 
     /// Queue a command and forget its response.
+    #[inline]
     fn forget(self) {
         self.executor.forget(self.command)
     }

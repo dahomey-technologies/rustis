@@ -282,7 +282,7 @@ pub trait JsonCommands {
         prepare_command(self, cmd("JSON.DEL").arg(key).arg(path))
     }
 
-    /// See [`json_del`](crate::JsonCommands::json_del)
+    /// See [`json_del`](JsonCommands::json_del)
     ///
     /// # Arguments
     /// * `key` - The key to modify.
@@ -307,7 +307,7 @@ pub trait JsonCommands {
     ///
     /// # Arguments
     /// * `key` - The key to parse.
-    /// * `options`- See [`JsonOptions`](crate::JsonGetOptions)
+    /// * `options`- See [`JsonOptions`](JsonGetOptions)
     ///
     /// # Return
     /// A collection of bulk string replies. Each string is the JSON serialization of each JSON value that matches a path
@@ -328,7 +328,7 @@ pub trait JsonCommands {
     ///
     /// # Arguments
     /// * `key` - The key to parse.
-    /// * `options`- See [`JsonOptions`](crate::JsonGetOptions)
+    /// * `options`- See [`JsonOptions`](JsonGetOptions)
     ///
     /// # Return
     /// A collection of bulk string replies specified as the JSON serialization of the value at each key's path.
@@ -487,7 +487,7 @@ pub trait JsonCommands {
     ///  For existing keys, when the entire path exists, the value that it contains is replaced with the json value.\
     ///  For existing keys, when the path exists, except for the last element, a new child is added with the json value.
     /// * `value`- The value to set at the specified path
-    /// * `condition`- See [`SetCondition`](crate::SetCondition)
+    /// * `condition`- See [`SetCondition`](crate::commands::SetCondition)
     ///
     /// # See Also
     /// [<https://redis.io/commands/json.set/>](https://redis.io/commands/json.set/)
@@ -605,7 +605,7 @@ pub trait JsonCommands {
     }
 }
 
-/// Options for the [`json_get`](crate::JsonCommands::json_get) command
+/// Options for the [`json_get`](JsonCommands::json_get) command
 #[derive(Default)]
 pub struct JsonGetOptions {
     command_args: CommandArgs,
@@ -651,7 +651,7 @@ impl IntoArgs for JsonGetOptions {
     }
 }
 
-/// Options for the [`json_arrindex`](crate::JsonCommands::json_arrindex) command
+/// Options for the [`json_arrindex`](JsonCommands::json_arrindex) command
 #[derive(Default)]
 pub struct JsonArrIndexOptions {
     command_args: CommandArgs,

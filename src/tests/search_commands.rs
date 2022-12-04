@@ -1,5 +1,5 @@
 use crate::{
-    client::{Client, PipelinePreparedCommand},
+    client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
         FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute,

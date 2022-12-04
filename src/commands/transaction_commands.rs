@@ -23,7 +23,7 @@ pub trait TransactionCommands {
 
     /// Flushes all the previously watched keys for a transaction.
     ///
-    /// If you call [`execute`](crate::Transaction::execute),
+    /// If you call [`execute`](crate::client::Transaction::execute),
     /// there's no need to manually call UNWATCH.
     ///
     /// # See Also

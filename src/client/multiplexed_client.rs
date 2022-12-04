@@ -29,14 +29,18 @@ use std::future::IntoFuture;
 /// A multiplexed client that can be cloned, allowing requests
 /// to be be sent concurrently on the same underlying connection.
 ///
-/// Compared to a [single client](crate::Client), a multiplexed client cannot offers access
+/// Compared to a [single client](crate::client::Client), a multiplexed client cannot offers access
 /// to all existing Redis commands.
-/// Transactions and [blocking commands](crate::BlockingCommands) are not compatible with a multiplexed client
-/// because they monopolize the whole connection which cannot be shared anymore. It means other consumers of the same
+/// 
+/// Transactions and [blocking commands](crate::commands::BlockingCommands) are not compatible with a multiplexed client
+/// because they monopolize the whole connection which cannot be shared anymore. 
+/// 
+/// It means other consumers of the same
 /// multiplexed client will be blocked each time a transaction or a blocking command is in progress, losing the advantage
 /// of a shared connection.
 ///
-/// #See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
+/// ## See also 
+/// [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 #[derive(Clone)]
 pub struct MultiplexedClient {
     inner_client: InnerClient,
@@ -47,6 +51,7 @@ impl MultiplexedClient {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
+    #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
         let inner_client = InnerClient::connect(config).await?;
         Ok(Self { inner_client })
@@ -81,6 +86,7 @@ impl MultiplexedClient {
     ///     Ok(())
     /// }
     /// ```
+    #[inline]
     pub async fn send(&mut self, command: Command) -> Result<Value> {
         self.inner_client.send(command).await
     }
@@ -89,6 +95,8 @@ impl MultiplexedClient {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    
+    #[inline]
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
         self.inner_client.send_and_forget(command)
     }
@@ -97,11 +105,13 @@ impl MultiplexedClient {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    #[inline]
     pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
         self.inner_client.send_batch(commands).await
     }
 
     /// Create a new pipeline
+    #[inline]
     pub fn create_pipeline(&mut self) -> Pipeline {
         self.inner_client.create_pipeline()
     }
@@ -109,45 +119,52 @@ impl MultiplexedClient {
     /// Create a new transaction
     ///
     /// Because of the multiplexed nature of the client,
-    /// [`watch`](crate::TransactionCommands::watch) &
-    /// [`unwatch`](crate::TransactionCommands::unwatch)
+    /// [`watch`](crate::commands::TransactionCommands::watch) &
+    /// [`unwatch`](crate::commands::TransactionCommands::unwatch)
     /// commands cannot be supported.
     /// To be able to use these commands with a transaction,
-    /// [`Client`](crate::Client) or [`PooledClientManager`](crate::PooledClientManager)
+    /// [`Client`](crate::client::Client) or [`PooledClientManager`](crate::client::PooledClientManager)
     /// should be used instead
+    #[inline]
     pub fn create_transaction(&mut self) -> Transaction {
-        Transaction::new(self.inner_client.clone())
+        self.inner_client.create_transaction()
     }
 }
 
 impl ClientTrait for MultiplexedClient {
+    #[inline]
     fn send(&mut self, command: Command) -> Future<Value> {
         Box::pin(async move { self.send(command).await })
     }
 
+    #[inline]
     fn send_and_forget(&mut self, command: Command) -> Result<()> {
         self.send_and_forget(command)
     }
 
+    #[inline]
     fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
         Box::pin(async move { self.send_batch(commands).await })
     }
 
+    #[inline]
     fn create_pipeline(&mut self) -> Pipeline {
         self.create_pipeline()
     }
 
+    #[inline]
     fn create_transaction(&mut self) -> Transaction {
         self.create_transaction()
     }
 
+    #[inline]
     fn get_cache(&mut self) -> &mut Cache {
         self.inner_client.get_cache()
     }
 }
 
-/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand)
-/// to add specific methods for the [`MultiplexedClient`](crate::MultiplexedClient) executor
+/// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
+/// to add specific methods for the [`MultiplexedClient`](crate::client::MultiplexedClient) executor
 pub trait MultiplexedPreparedCommand<'a, R>
 where
     R: FromValue,
@@ -167,6 +184,7 @@ where
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
+    #[inline]
     fn forget(self) -> Result<()> {
         self.executor.send_and_forget(self.command)
     }
@@ -243,6 +261,7 @@ impl TimeSeriesCommands for MultiplexedClient {}
 impl TopKCommands for MultiplexedClient {}
 
 impl PubSubCommands for MultiplexedClient {
+    #[inline]
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,
@@ -251,6 +270,7 @@ impl PubSubCommands for MultiplexedClient {
         self.inner_client.subscribe(channels)
     }
 
+    #[inline]
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: Into<CommandArg> + Send + 'a,
@@ -259,6 +279,7 @@ impl PubSubCommands for MultiplexedClient {
         self.inner_client.psubscribe(patterns)
     }
 
+    #[inline]
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,

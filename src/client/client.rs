@@ -36,6 +36,7 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
+    #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
         let inner_client = InnerClient::connect(config).await?;
         Ok(Self { inner_client })
@@ -43,7 +44,8 @@ impl Client {
 
     /// We don't want the Client struct to be publicly cloneable
     /// If one wants to consume a multiplexed client,
-    /// the [MultiplexedClient](crate::MultiplexedClient) must be used instead
+    /// the [MultiplexedClient](crate::client::MultiplexedClient) must be used instead
+    #[inline]
     pub(crate) fn clone(&self) -> Client {
         Client {
             inner_client: self.inner_client.clone(),
@@ -78,6 +80,8 @@ impl Client {
     ///     Ok(())
     /// }
     /// ```
+    
+    #[inline]
     pub async fn send(&mut self, command: Command) -> Result<Value> {
         self.inner_client.send(command).await
     }
@@ -86,6 +90,7 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    #[inline]
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
         self.inner_client.send_and_forget(command)
     }
@@ -97,49 +102,58 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    #[inline]
     pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
         self.inner_client.send_batch(commands).await
     }
 
     /// Create a new transaction
+    #[inline]
     pub fn create_transaction(&mut self) -> Transaction {
-        Transaction::new(self.inner_client.clone())
+        self.inner_client.create_transaction()
     }
 
     /// Create a new pipeline
+    #[inline]
     pub fn create_pipeline(&mut self) -> Pipeline {
         self.inner_client.create_pipeline()
     }
 }
 
 impl ClientTrait for Client {
-    fn send(&mut self, command: Command) -> Future<Value> {
+    
+    #[inline]fn send(&mut self, command: Command) -> Future<Value> {
         Box::pin(async move { self.send(command).await })
     }
 
+    #[inline]
     fn send_and_forget(&mut self, command: Command) -> Result<()> {
         self.send_and_forget(command)
     }
 
+    #[inline]
     fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
         Box::pin(async move { self.send_batch(commands).await })
     }
 
+    #[inline]
     fn create_pipeline(&mut self) -> Pipeline {
         self.create_pipeline()
     }
 
+    #[inline]
     fn create_transaction(&mut self) -> Transaction {
         self.create_transaction()
     }
 
+    #[inline]
     fn get_cache(&mut self) -> &mut Cache {
         self.inner_client.get_cache()
     }
 }
 
-/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand)
-/// to add specific methods for the [`Client`](crate::Client) executor
+/// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
+/// to add specific methods for the [`Client`](crate::client::Client) executor
 pub trait ClientPreparedCommand<'a, R>
 where
     R: FromValue,
@@ -236,6 +250,7 @@ impl TransactionCommands for Client {}
 impl TopKCommands for Client {}
 
 impl PubSubCommands for Client {
+    #[inline]
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,
@@ -244,6 +259,7 @@ impl PubSubCommands for Client {
         self.inner_client.subscribe(channels)
     }
 
+    #[inline]
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: Into<CommandArg> + Send + 'a,
@@ -252,6 +268,7 @@ impl PubSubCommands for Client {
         self.inner_client.psubscribe(patterns)
     }
 
+    #[inline]
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,

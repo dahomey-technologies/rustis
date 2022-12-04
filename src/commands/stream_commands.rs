@@ -467,7 +467,7 @@ pub trait StreamCommands {
         )
     }
 
-    /// The XREADGROUP command is a special version of the [`xread`](crate::StreamCommands::xread)
+    /// The XREADGROUP command is a special version of the [`xread`](StreamCommands::xread)
     /// command with support for consumer groups.
     ///
     /// # Return
@@ -507,7 +507,7 @@ pub trait StreamCommands {
         )
     }
 
-    /// This command is exactly like [`xrange`](crate::StreamCommands::xrange),
+    /// This command is exactly like [`xrange`](StreamCommands::xrange),
     /// but with the notable difference of returning the entries in reverse order,
     /// and also taking the start-end range in reverse order
     ///
@@ -556,7 +556,7 @@ pub trait StreamCommands {
     }
 }
 
-/// Stream Add options for the [`xadd`](crate::StreamCommands::xadd) command.
+/// Stream Add options for the [`xadd`](StreamCommands::xadd) command.
 #[derive(Default)]
 pub struct XAddOptions {
     command_args: CommandArgs,
@@ -584,8 +584,8 @@ impl IntoArgs for XAddOptions {
     }
 }
 
-/// Stream Trim operator for the [`xadd`](crate::StreamCommands::xadd)
-/// and [`xtrim`](crate::StreamCommands::xtrim) commands
+/// Stream Trim operator for the [`xadd`](StreamCommands::xadd)
+/// and [`xtrim`](StreamCommands::xtrim) commands
 pub enum XTrimOperator {
     None,
     /// =
@@ -610,8 +610,8 @@ impl Default for XTrimOperator {
     }
 }
 
-/// Stream Trim options for the [`xadd`](crate::StreamCommands::xadd)
-/// and [`xtrim`](crate::StreamCommands::xtrim) commands
+/// Stream Trim options for the [`xadd`](StreamCommands::xadd)
+/// and [`xtrim`](StreamCommands::xtrim) commands
 #[derive(Default)]
 pub struct XTrimOptions {
     command_args: CommandArgs,
@@ -652,7 +652,7 @@ impl IntoArgs for XTrimOptions {
     }
 }
 
-/// Options for the [`xautoclaim`](crate::StreamCommands::xautoclaim) command
+/// Options for the [`xautoclaim`](StreamCommands::xautoclaim) command
 #[derive(Default)]
 pub struct XAutoClaimOptions {
     command_args: CommandArgs,
@@ -733,7 +733,7 @@ where
     }
 }
 
-/// Options for the [`xclaim`](crate::StreamCommands::xclaim) command
+/// Options for the [`xclaim`](StreamCommands::xclaim) command
 #[derive(Default)]
 pub struct XClaimOptions {
     command_args: CommandArgs,
@@ -791,7 +791,7 @@ impl IntoArgs for XClaimOptions {
     }
 }
 
-/// Options for the [`xgroup_create`](crate::StreamCommands::xgroup_create) command
+/// Options for the [`xgroup_create`](StreamCommands::xgroup_create) command
 #[derive(Default)]
 pub struct XGroupCreateOptions {
     command_args: CommandArgs,
@@ -826,7 +826,7 @@ impl IntoArgs for XGroupCreateOptions {
     }
 }
 
-/// Result entry for the [`xinfo_consumers`](crate::StreamCommands::xinfo_consumers) command.
+/// Result entry for the [`xinfo_consumers`](StreamCommands::xinfo_consumers) command.
 pub struct XConsumerInfo {
     /// the consumer's name
     pub name: String,
@@ -852,7 +852,7 @@ impl FromValue for XConsumerInfo {
     }
 }
 
-/// Result entry for the [`xinfo_groups`](crate::StreamCommands::xinfo_groups) command.
+/// Result entry for the [`xinfo_groups`](StreamCommands::xinfo_groups) command.
 pub struct XGroupInfo {
     /// the consumer group's name
     pub name: String,
@@ -890,7 +890,7 @@ impl FromValue for XGroupInfo {
     }
 }
 
-/// Options for the [`xinfo_stream`](crate::StreamCommands::xinfo_stream) command
+/// Options for the [`xinfo_stream`](StreamCommands::xinfo_stream) command
 #[derive(Default)]
 pub struct XInfoStreamOptions {
     command_args: CommandArgs,
@@ -921,9 +921,9 @@ impl IntoArgs for XInfoStreamOptions {
     }
 }
 
-/// Stream info returned by the [`xinfo_stream`](crate::StreamCommands::xinfo_stream) command.
+/// Stream info returned by the [`xinfo_stream`](StreamCommands::xinfo_stream) command.
 pub struct XStreamInfo {
-    /// the number of entries in the stream (see [`xlen`](crate::StreamCommands::xlen))
+    /// the number of entries in the stream (see [`xlen`](StreamCommands::xlen))
     pub length: usize,
 
     /// the number of keys in the underlying radix data structure
@@ -974,7 +974,7 @@ impl FromValue for XStreamInfo {
     }
 }
 
-/// Options for the [`xread`](crate::StreamCommands::xread) command
+/// Options for the [`xread`](StreamCommands::xread) command
 #[derive(Default)]
 pub struct XReadOptions {
     command_args: CommandArgs,
@@ -1002,7 +1002,7 @@ impl IntoArgs for XReadOptions {
     }
 }
 
-/// Options for the [`xreadgroup`](crate::StreamCommands::xreadgroup) command
+/// Options for the [`xreadgroup`](StreamCommands::xreadgroup) command
 #[derive(Default)]
 pub struct XReadGroupOptions {
     command_args: CommandArgs,
@@ -1037,7 +1037,7 @@ impl IntoArgs for XReadGroupOptions {
     }
 }
 
-/// Options for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+/// Options for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
 #[derive(Default)]
 pub struct XPendingOptions {
     command_args: CommandArgs,
@@ -1086,7 +1086,7 @@ impl IntoArgs for XPendingOptions {
     }
 }
 
-/// Result for the [`xpending`](crate::StreamCommands::xpending) command
+/// Result for the [`xpending`](StreamCommands::xpending) command
 pub struct XPendingResult {
     pub num_pending_messages: usize,
     pub smallest_id: String,
@@ -1111,7 +1111,7 @@ impl FromValue for XPendingResult {
     }
 }
 
-/// Customer info result for the [`xpending`](crate::StreamCommands::xpending) command
+/// Customer info result for the [`xpending`](StreamCommands::xpending) command
 pub struct XPendingConsumer {
     pub consumer: String,
     pub num_messages: usize,
@@ -1127,7 +1127,7 @@ impl FromValue for XPendingConsumer {
     }
 }
 
-/// Message result for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+/// Message result for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
 pub struct XPendingMessageResult {
     pub message_id: String,
     pub consumer: String,

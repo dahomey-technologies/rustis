@@ -1,6 +1,7 @@
 use crate::{
     client::{
         Cache, ClientPreparedCommand, IntoConfig, Message, Pipeline, PreparedCommand, PubSubStream,
+        Transaction,
     },
     commands::InternalPubSubCommands,
     network::{PubSubReceiver, PubSubSender},
@@ -67,6 +68,10 @@ impl InnerClient {
     pub fn send_message(&mut self, message: Message) -> Result<()> {
         self.msg_sender.unbounded_send(message)?;
         Ok(())
+    }
+
+    pub fn create_transaction(&mut self) -> Transaction {
+        Transaction::new(self.clone())
     }
 
     pub fn create_pipeline(&mut self) -> Pipeline {

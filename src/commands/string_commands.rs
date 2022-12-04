@@ -271,7 +271,7 @@ pub trait StringCommands {
     /// or contains a string that can not be represented as integer.
     /// This operation is limited to 64 bit signed integers.
     ///
-    /// See [incr](crate::StringCommands::incr) for extra information on increment/decrement operations.
+    /// See [incr](StringCommands::incr) for extra information on increment/decrement operations.
     ///
     /// # Return
     /// the value of key after the increment
@@ -454,7 +454,7 @@ pub trait StringCommands {
         prepare_command(self, cmd("MSETNX").arg(items))
     }
 
-    /// Works exactly like [setex](crate::StringCommands::setex) with the sole
+    /// Works exactly like [setex](StringCommands::setex) with the sole
     /// difference that the expire time is specified in milliseconds instead of seconds.
     ///
     /// If key already holds a value, it is overwritten, regardless of its type.
@@ -630,7 +630,7 @@ pub trait StringCommands {
     }
 }
 
-/// Options for the [`getex`](crate::StringCommands::getex) command
+/// Options for the [`getex`](StringCommands::getex) command
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -656,10 +656,10 @@ impl IntoArgs for GetExOptions {
     }
 }
 
-/// Part of the result for the [`lcs`](crate::StringCommands::lcs) command
+/// Part of the result for the [`lcs`](StringCommands::lcs) command
 pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
 
-/// Result for the [`lcs`](crate::StringCommands::lcs) command
+/// Result for the [`lcs`](StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,
@@ -725,7 +725,7 @@ impl FromValue for LcsResult {
     }
 }
 
-/// Expiration option for the [`set_with_options`](crate::StringCommands::set_with_options) command
+/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) command
 pub enum SetExpiration {
     /// No expiration
     None,
@@ -757,7 +757,7 @@ impl IntoArgs for SetExpiration {
     }
 }
 
-/// Condition option for the [`set_with_options`](crate::StringCommands::set_with_options) command
+/// Condition option for the [`set_with_options`](StringCommands::set_with_options) command
 pub enum SetCondition {
     /// No condition
     None,

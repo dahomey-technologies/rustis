@@ -4,8 +4,8 @@ use crate::{
     Future, Result,
 };
 
-/// Interface that brings together common features for [`Client`](crate::Client)
-/// and [`MultiplexedClient`](crate::MultiplexedClient)
+/// Interface that brings together common features for [`Client`](crate::client::Client)
+/// and [`MultiplexedClient`](crate::client::MultiplexedClient)
 pub trait ClientTrait: Send {
     /// Send an arbitrary command to the server.
     ///

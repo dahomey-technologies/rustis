@@ -16,7 +16,7 @@ pub trait SentinelCommands {
     /// Get the current value of a global Sentinel configuration parameter.
     ///
     /// The specified name may be a wildcard.
-    /// Similar to the Redis [`config_get`](crate::ServerCommands::config_get) command.
+    /// Similar to the Redis [`config_get`](crate::commands::ServerCommands::config_get) command.
     #[must_use]
     fn sentinel_config_get<N, RN, RV, R>(&mut self, name: N) -> PreparedCommand<Self, R>
     where
@@ -116,7 +116,7 @@ pub trait SentinelCommands {
         )
     }
 
-    /// Return cached [`info`](crate::ServerCommands::info) output from masters and replicas.
+    /// Return cached [`info`](crate::commands::ServerCommands::info) output from masters and replicas.
     #[must_use]
     fn sentinel_info_cache<N, NN, R>(&mut self, master_names: NN) -> PreparedCommand<Self, R>
     where
@@ -181,7 +181,7 @@ pub trait SentinelCommands {
     ///
     /// The master will no longer be monitored,
     /// and will totally be removed from the internal state of the Sentinel,
-    /// so it will no longer listed by [`sentinel_masters`](crate::SentinelCommands::sentinel_masters) and so forth.
+    /// so it will no longer listed by [`sentinel_masters`](SentinelCommands::sentinel_masters) and so forth.
     #[must_use]
     fn sentinel_remove<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
@@ -191,7 +191,7 @@ pub trait SentinelCommands {
         prepare_command(self, cmd("SENTINEL").arg("REMOVE").arg(name))
     }
 
-    /// The SET command is very similar to the [`config_set`](crate::ServerCommands::config_set) command of Redis,
+    /// The SET command is very similar to the [`config_set`](crate::commands::ServerCommands::config_set) command of Redis,
     /// and is used in order to change configuration parameters of a specific master.
     ///
     /// Multiple option / value pairs can be specified (or none at all).
@@ -432,7 +432,7 @@ impl FromValue for SentinelInfo {
 }
 
 /// Different crash simulation scenario modes for
-/// the [`sentinel_simulate_failure`](crate::SentinelCommands::sentinel_simulate_failure) command
+/// the [`sentinel_simulate_failure`](SentinelCommands::sentinel_simulate_failure) command
 pub enum SentinelSimulateFailureMode {
     CrashAfterElection,
     CrashAfterPromotion,

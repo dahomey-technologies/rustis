@@ -62,7 +62,7 @@ pub trait SetCommands {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
 
-    /// This command is equal to [sdiff](crate::SetCommands::sdiff), but instead of returning the resulting set,
+    /// This command is equal to [sdiff](SetCommands::sdiff), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -100,7 +100,7 @@ pub trait SetCommands {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
 
-    /// This command is similar to [sinter](crate::SetCommands::sinter), but instead of returning the result set,
+    /// This command is similar to [sinter](SetCommands::sinter), but instead of returning the result set,
     /// it returns just the cardinality of the result.
     ///
     /// limit: if the intersection cardinality reaches limit partway through the computation,
@@ -128,7 +128,7 @@ pub trait SetCommands {
         )
     }
 
-    /// This command is equal to [sinter](crate::SetCommands::sinter), but instead of returning the resulting set,
+    /// This command is equal to [sinter](SetCommands::sinter), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -317,7 +317,7 @@ pub trait SetCommands {
         prepare_command(self, cmd("SUNION").arg(keys))
     }
 
-    /// This command is equal to [sunion](crate::SetCommands::sunion), but instead of returning the resulting set,
+    /// This command is equal to [sunion](SetCommands::sunion), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -337,7 +337,7 @@ pub trait SetCommands {
     }
 }
 
-/// Options for the [`sscan`](crate::SetCommands::sscan) command
+/// Options for the [`sscan`](SetCommands::sscan) command
 #[derive(Default)]
 pub struct SScanOptions {
     command_args: CommandArgs,

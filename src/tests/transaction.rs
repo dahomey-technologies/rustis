@@ -1,5 +1,5 @@
 use crate::{
-    client::PipelinePreparedCommand,
+    client::BatchPreparedCommand,
     commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
     resp::cmd,
     tests::get_test_client,

@@ -11,7 +11,7 @@ pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 
 /// A group of blocking commands
 pub trait BlockingCommands {
-    /// This command is the blocking variant of [`lmove`](crate::ListCommands::lmove).
+    /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
     ///
     /// # Return
     /// the element being popped from `source` and pushed to `destination`.
@@ -45,7 +45,7 @@ pub trait BlockingCommands {
         )
     }
 
-    /// This command is the blocking variant of [`lmpop`](crate::ListCommands::lmpop).
+    /// This command is the blocking variant of [`lmpop`](crate::commands::ListCommands::lmpop).
     ///
     /// # Return
     /// - None when no element could be popped, and timeout is reached.
@@ -81,7 +81,7 @@ pub trait BlockingCommands {
 
     /// This command is a blocking list pop primitive.
     ///
-    /// It is the blocking version of [`lpop`](crate::ListCommands::lpop) because it
+    /// It is the blocking version of [`lpop`](crate::commands::ListCommands::lpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
     /// An element is popped from the head of the first list that is non-empty,
@@ -112,7 +112,7 @@ pub trait BlockingCommands {
 
     /// This command is a blocking list pop primitive.
     ///
-    /// It is the blocking version of [`rpop`](crate::ListCommands::rpop) because it
+    /// It is the blocking version of [`rpop`](crate::commands::ListCommands::rpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
     /// An element is popped from the tail of the first list that is non-empty,
@@ -141,7 +141,7 @@ pub trait BlockingCommands {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
 
-    /// This command is the blocking variant of [`zmpop`](crate::SortedSetCommands::zmpop).
+    /// This command is the blocking variant of [`zmpop`](crate::commands::SortedSetCommands::zmpop).
     ///
     /// # Return
     /// * `None` if no element could be popped
@@ -177,7 +177,7 @@ pub trait BlockingCommands {
         )
     }
 
-    /// This command is the blocking variant of [`zpopmax`](crate::SortedSetCommands::zpopmax).
+    /// This command is the blocking variant of [`zpopmax`](crate::commands::SortedSetCommands::zpopmax).
     ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.
@@ -204,7 +204,7 @@ pub trait BlockingCommands {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
 
-    /// This command is the blocking variant of [`zpopmin`](crate::SortedSetCommands::zpopmin).
+    /// This command is the blocking variant of [`zpopmin`](crate::commands::SortedSetCommands::zpopmin).
     ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.

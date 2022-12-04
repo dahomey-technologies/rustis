@@ -17,7 +17,9 @@ type Uri<'a> = (
     Option<HashMap<String, String>>,
 );
 
-/// Configuration options for a [`client`](crate::Client) or a [`multiplexed client`](crate::MultiplexedClient)
+/// Configuration options for a [`client`](crate::client::Client), 
+/// a [`multiplexed client`](crate::client::MultiplexedClient)
+/// or a [`pooled client`](crate::client::PooledClientManager)
 #[derive(Clone, Default)]
 pub struct Config {
     /// Connection server configuration (standalone, sentinel, or cluster)
@@ -555,13 +557,13 @@ impl TlsConfig {
     }
 }
 
-/// A value-to-[`Config`](crate::Config) conversion that consumes the input value. 
+/// A value-to-[`Config`](crate::client::Config) conversion that consumes the input value. 
 /// 
-/// This allows the `connect` method of the [`client`](crate::Client) 
-/// or [`multiplexed client`](crate::MultiplexedClient)
+/// This allows the `connect` associated function of the [`client`](crate::client::Client),
+/// [`multiplexed client`](crate::client::MultiplexedClient) or [`pooled client`](crate::client::PooledClientManager)
 /// to accept connection information in a range of different formats.
 pub trait IntoConfig {
-    /// Converts this type into a [`Config`](crate::Config).
+    /// Converts this type into a [`Config`](crate::client::Config).
     fn into_config(self) -> Result<Config>;
 }
 

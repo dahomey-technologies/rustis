@@ -11,7 +11,7 @@ use crate::commands::{
     BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
 };
 use crate::{
-    client::{InnerClient, PipelinePreparedCommand, PreparedCommand},
+    client::{InnerClient, BatchPreparedCommand, PreparedCommand},
     commands::{
         BitmapCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
@@ -96,7 +96,7 @@ impl Transaction {
     }
 }
 
-impl<'a, R> PipelinePreparedCommand<'a, R> for PreparedCommand<'a, Transaction, R>
+impl<'a, R> BatchPreparedCommand<'a, R> for PreparedCommand<'a, Transaction, R>
 where
     R: FromValue + Send + 'a,
 {

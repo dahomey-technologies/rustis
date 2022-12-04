@@ -106,7 +106,7 @@ pub trait SortedSetCommands {
         prepare_command(self, cmd("ZCOUNT").arg(key).arg(min).arg(max))
     }
 
-    /// This command is similar to [zdiffstore](crate::SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
+    /// This command is similar to [zdiffstore](SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
     /// it is returned to the client.
     ///
     /// # Return
@@ -125,7 +125,7 @@ pub trait SortedSetCommands {
         prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
     }
 
-    /// This command is similar to [zdiffstore](crate::SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
+    /// This command is similar to [zdiffstore](SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
     /// it is returned to the client.
     ///
     /// # Return
@@ -192,7 +192,7 @@ pub trait SortedSetCommands {
         prepare_command(self, cmd("ZINCRBY").arg(key).arg(increment).arg(member))
     }
 
-    /// This command is similar to [zinterstore](crate::SortedSetCommands::zinterstore),
+    /// This command is similar to [zinterstore](SortedSetCommands::zinterstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
     /// # Return
@@ -224,7 +224,7 @@ pub trait SortedSetCommands {
         )
     }
 
-    /// This command is similar to [zinterstore](crate::SortedSetCommands::zinterstore),
+    /// This command is similar to [zinterstore](SortedSetCommands::zinterstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
     /// # Return
@@ -257,7 +257,7 @@ pub trait SortedSetCommands {
         )
     }
 
-    /// This command is similar to [zinter](crate::SortedSetCommands::zinter),
+    /// This command is similar to [zinter](SortedSetCommands::zinter),
     /// but instead of returning the result set, it returns just the cardinality of the result.
     ///
     //// limit: if the intersection cardinality reaches limit partway through the computation,
@@ -550,7 +550,7 @@ pub trait SortedSetCommands {
         )
     }
 
-    /// This command is like [zrange](crate::SortedSetCommands::zrange),
+    /// This command is like [zrange](SortedSetCommands::zrange),
     /// but stores the result in the `dst` destination key.
     ///
     /// # Return
@@ -738,7 +738,7 @@ pub trait SortedSetCommands {
         prepare_command(self, cmd("ZSCORE").arg(key).arg(member))
     }
 
-    /// This command is similar to [zunionstore](crate::SortedSetCommands::zunionstore),
+    /// This command is similar to [zunionstore](SortedSetCommands::zunionstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
     /// # Return
@@ -770,7 +770,7 @@ pub trait SortedSetCommands {
         )
     }
 
-    /// This command is similar to [zunionstore](crate::SortedSetCommands::zunionstore),
+    /// This command is similar to [zunionstore](SortedSetCommands::zunionstore),
     /// but instead of storing the resulting sorted set, it is returned to the client.
     ///
     /// # Return
@@ -838,7 +838,7 @@ pub trait SortedSetCommands {
     }
 }
 
-/// Condition option for the [`zadd`](crate::SortedSetCommands::zadd) command
+/// Condition option for the [`zadd`](SortedSetCommands::zadd) command
 pub enum ZAddCondition {
     /// No condition
     None,
@@ -864,7 +864,7 @@ impl IntoArgs for ZAddCondition {
     }
 }
 
-/// Comparison option for the [`zadd`](crate::SortedSetCommands::zadd) command
+/// Comparison option for the [`zadd`](SortedSetCommands::zadd) command
 pub enum ZAddComparison {
     /// No comparison
     None,
@@ -894,7 +894,7 @@ impl IntoArgs for ZAddComparison {
     }
 }
 
-/// sort by option of the [`zrange`](crate::SortedSetCommands::zrange) command
+/// sort by option of the [`zrange`](SortedSetCommands::zrange) command
 pub enum ZRangeSortBy {
     /// No sort by
     None,
@@ -925,10 +925,10 @@ impl IntoArgs for ZRangeSortBy {
 /// Option that specify how results of an union or intersection are aggregated
 ///
 /// # See Also
-/// [zinter](crate::SortedSetCommands::zinter)
-/// [zinterstore](crate::SortedSetCommands::zinterstore)
-/// [zunion](crate::SortedSetCommands::zunion)
-/// [zunionstore](crate::SortedSetCommands::zunionstore)
+/// [zinter](SortedSetCommands::zinter)
+/// [zinterstore](SortedSetCommands::zinterstore)
+/// [zunion](SortedSetCommands::zunion)
+/// [zunionstore](SortedSetCommands::zunionstore)
 pub enum ZAggregate {
     /// No aggregation
     None,
@@ -957,7 +957,7 @@ impl IntoArgs for ZAggregate {
     }
 }
 
-/// Where option of the [`zmpop`](crate::SortedSetCommands::zmpop) command
+/// Where option of the [`zmpop`](SortedSetCommands::zmpop) command
 pub enum ZWhere {
     /// When the MIN modifier is used, the elements popped are those
     /// with the lowest scores from the first non-empty sorted set.
@@ -975,7 +975,7 @@ impl IntoArgs for ZWhere {
     }
 }
 
-/// Options for the [`zadd`](crate::SortedSetCommands::zadd) command.
+/// Options for the [`zadd`](SortedSetCommands::zadd) command.
 #[derive(Default)]
 pub struct ZAddOptions {
     command_args: CommandArgs,
@@ -1010,11 +1010,11 @@ impl IntoArgs for ZAddOptions {
     }
 }
 
-/// Result for [`zmpop`](crate::SortedSetCommands::zmpop) the command.
+/// Result for [`zmpop`](SortedSetCommands::zmpop) the command.
 pub type ZMPopResult<E> = (String, Vec<(E, f64)>);
 
-/// Options for the [`zrange`](crate::SortedSetCommands::zrange)
-/// and [`zrangestore`](crate::SortedSetCommands::zrangestore) commands
+/// Options for the [`zrange`](SortedSetCommands::zrange)
+/// and [`zrangestore`](SortedSetCommands::zrangestore) commands
 #[derive(Default)]
 pub struct ZRangeOptions {
     command_args: CommandArgs,
@@ -1049,7 +1049,7 @@ impl IntoArgs for ZRangeOptions {
     }
 }
 
-/// Options for the [`zscan`](crate::SortedSetCommands::zscan) command
+/// Options for the [`zscan`](SortedSetCommands::zscan) command
 #[derive(Default)]
 pub struct ZScanOptions {
     command_args: CommandArgs,

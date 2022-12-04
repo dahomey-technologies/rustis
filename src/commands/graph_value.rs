@@ -269,10 +269,10 @@ impl GraphProperties {
     }
 }
 
-/// Used to do [`GraphValue`](crate::GraphValue) to user type conversion
-///  while consuming the input [`GraphValue`](crate::GraphValue)
+/// Used to do [`GraphValue`](GraphValue) to user type conversion
+///  while consuming the input [`GraphValue`](GraphValue)
 pub trait FromGraphValue: Sized {
-    /// Converts to this type from the input [`GraphValue`](crate::GraphValue).
+    /// Converts to this type from the input [`GraphValue`](GraphValue).
     ///
     /// # Errors
     ///

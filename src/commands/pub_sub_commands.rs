@@ -237,7 +237,7 @@ pub trait PubSubCommands {
         CC: SingleArgOrCollection<C>;
 }
 
-/// Options for the [`pub_sub_channels`](crate::PubSubCommands::pub_sub_channels) command
+/// Options for the [`pub_sub_channels`](PubSubCommands::pub_sub_channels) command
 #[derive(Default)]
 pub struct PubSubChannelsOptions {
     command_args: CommandArgs,

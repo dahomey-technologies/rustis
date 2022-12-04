@@ -1,7 +1,6 @@
-use std::str::FromStr;
-
 use crate::{resp::cmd, tests::get_test_client, Error, RedisError, RedisErrorKind, Result};
 use serial_test::serial;
+use std::str::FromStr;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

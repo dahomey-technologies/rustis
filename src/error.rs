@@ -33,7 +33,7 @@ pub enum RetryReason {
 pub enum Error {
     /// Raised if an error occurs within the driver
     Client(String),
-    /// Raised if an error occurs in the [`Config`](crate::Config) parsing
+    /// Raised if an error occurs in the [`Config`](crate::client::Config) parsing
     Config(String),
     /// A transaction has been aborted
     Aborted,

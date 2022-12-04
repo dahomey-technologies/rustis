@@ -5,16 +5,16 @@ An asynchronous Redis client for Rust.
 [![Build](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml/badge.svg)](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Documentation
+# Documentation
 [Official Documentation](https://docs.rs/rustis/latest/rustis/)
 
-## Philosophy
+# Philosophy
 * Low allocations
 * Full async library
 * Lock free implementation
 * Rust idiomatic API
 
-## Features
+# Features
 * Support all [Redis Commands](https://redis.io/commands/) until Redis 7.0
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client types:
@@ -37,28 +37,35 @@ An asynchronous Redis client for Rust.
   * [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support
   * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
 
-## Roadmap
+# Roadmap
 * Advanced reconnection strategy
 * Advanced configuration (timeouts)
 * Improve documentation 
 
-## Basic Usage
+# Basic Usage
 
- ```rust
- use rustis::{
-     Client, FlushingMode,
-     Result, ServerCommands, StringCommands
- };
+```rust
+use rustis::{
+     client::Client, 
+     commands::{FlushingMode, ServerCommands, StringCommands},
+     Result,
+};
 
- #[tokio::main]
- async fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
+     // Connect the client to a Redis server from its IP and port
      let mut client = Client::connect("127.0.0.1:6379").await?;
+ 
+     // Flush all existing data in Redis
      client.flushdb(FlushingMode::Sync).await?;
 
+     // sends the command SET to Redis. This command is defined in the StringCommands trait
      client.set("key", "value").await?;
+ 
+     // sends the command GET to Redis. This command is defined in the StringCommands trait
      let value: String = client.get("key").await?;
      println!("value: {value:?}");
 
      Ok(())
- }
- ```
+}
+```

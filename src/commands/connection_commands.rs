@@ -244,7 +244,7 @@ pub trait ConnectionCommands {
     }
 
     /// Used to resume command processing for all clients that were
-    /// paused by [`client_pause`](crate::ConnectionCommands::client_pause).
+    /// paused by [`client_pause`](ConnectionCommands::client_pause).
     ///
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
@@ -335,7 +335,7 @@ pub trait ConnectionCommands {
     }
 }
 
-/// Client caching mode for the [`client_caching`](crate::ConnectionCommands::client_caching) command.
+/// Client caching mode for the [`client_caching`](ConnectionCommands::client_caching) command.
 pub enum ClientCachingMode {
     Yes,
     No,
@@ -350,8 +350,8 @@ impl IntoArgs for ClientCachingMode {
     }
 }
 
-/// Client info results for the [`client_info`](crate::ConnectionCommands::client_info)
-/// & [`client_list`](crate::ConnectionCommands::client_list) commands.
+/// Client info results for the [`client_info`](ConnectionCommands::client_info)
+/// & [`client_list`](ConnectionCommands::client_list) commands.
 #[derive(Debug)]
 pub struct ClientInfo {
     /// a unique 64-bit client ID
@@ -366,7 +366,7 @@ pub struct ClientInfo {
     /// file descriptor corresponding to the socket
     pub fd: u32,
 
-    /// the name set by the client with [`client_setname`](crate::ConnectionCommands::client_setname)
+    /// the name set by the client with [`client_setname`](ConnectionCommands::client_setname)
     pub name: String,
 
     /// total duration of the connection in seconds
@@ -547,7 +547,7 @@ impl FromValue for ClientInfo {
     }
 }
 
-/// Client type options for the [`client_list`](crate::ConnectionCommands::client_list) command.
+/// Client type options for the [`client_list`](ConnectionCommands::client_list) command.
 pub enum ClientType {
     Normal,
     Master,
@@ -566,7 +566,7 @@ impl IntoArgs for ClientType {
     }
 }
 
-/// Options for the [client_list](crate::ConnectionCommands::client_list) command.
+/// Options for the [client_list](ConnectionCommands::client_list) command.
 #[derive(Default)]
 pub struct ClientListOptions {
     command_args: CommandArgs,
@@ -596,7 +596,7 @@ impl ClientListOptions {
     }
 }
 
-/// Result for the [`client_list`](crate::ConnectionCommands::client_list) command.
+/// Result for the [`client_list`](ConnectionCommands::client_list) command.
 #[derive(Debug)]
 pub struct ClientListResult {
     pub client_infos: Vec<ClientInfo>,
@@ -615,7 +615,7 @@ impl FromValue for ClientListResult {
     }
 }
 
-/// Options for the [`client-kill`](crate::ConnectionCommands::client-kill) command.
+/// Options for the [`client-kill`](ConnectionCommands::client-kill) command.
 #[derive(Default)]
 pub struct ClientKillOptions {
     command_args: CommandArgs,
@@ -646,7 +646,7 @@ impl ClientKillOptions {
     /// Address in the format of `ip:port`
     ///
     /// The ip:port should match a line returned by the
-    /// [`client_list`](crate::ConnectionCommands::client_list) command (addr field).
+    /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
     pub fn addr<A: Into<CommandArg>>(self, addr: A) -> Self {
         Self {
@@ -681,7 +681,7 @@ impl IntoArgs for ClientKillOptions {
     }
 }
 
-/// Mode options for the [`client_pause`](crate::ConnectionCommands::client_pause) command.
+/// Mode options for the [`client_pause`](ConnectionCommands::client_pause) command.
 pub enum ClientPauseMode {
     /// Clients are only blocked if they attempt to execute a write command.
     Write,
@@ -704,7 +704,7 @@ impl Default for ClientPauseMode {
     }
 }
 
-/// Mode options for the [`client_reply`](crate::ConnectionCommands::client_reply) command.
+/// Mode options for the [`client_reply`](ConnectionCommands::client_reply) command.
 pub enum ClientReplyMode {
     On,
     Off,
@@ -721,7 +721,7 @@ impl IntoArgs for ClientReplyMode {
     }
 }
 
-/// Status options for the [`client_tracking`](crate::ConnectionCommands::client_tracking) command.
+/// Status options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
 pub enum ClientTrackingStatus {
     On,
     Off,
@@ -736,7 +736,7 @@ impl IntoArgs for ClientTrackingStatus {
     }
 }
 
-/// Options for the [`client_tracking`](crate::ConnectionCommands::client_tracking) command.
+/// Options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
 #[derive(Default)]
 pub struct ClientTrackingOptions {
     command_args: CommandArgs,
@@ -798,7 +798,7 @@ impl IntoArgs for ClientTrackingOptions {
     }
 }
 
-/// Result for the [`client_trackinginfo`](crate::ConnectionCommands::client_trackinginfo) command.
+/// Result for the [`client_trackinginfo`](ConnectionCommands::client_trackinginfo) command.
 pub struct ClientTrackingInfo {
     /// A list of tracking flags used by the connection.
     pub flags: Vec<String>,
@@ -830,7 +830,7 @@ impl FromValue for ClientTrackingInfo {
     }
 }
 
-/// Mode options for the [`client_unblock`](crate::ConnectionCommands::client_unblock) command.
+/// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
 pub enum ClientUnblockMode {
     /// By default the client is unblocked as if the timeout of the command was reached,
     Timeout,
@@ -853,7 +853,7 @@ impl Default for ClientUnblockMode {
     }
 }
 
-/// Options for the [`hello`](crate::ConnectionCommands::hello) command.
+/// Options for the [`hello`](ConnectionCommands::hello) command.
 #[derive(Default)]
 pub struct HelloOptions {
     command_args: CommandArgs,
@@ -895,7 +895,7 @@ impl IntoArgs for HelloOptions {
     }
 }
 
-/// Result for the [`hello`](crate::ConnectionCommands::hello) command
+/// Result for the [`hello`](ConnectionCommands::hello) command
 pub struct HelloResult {
     pub server: String,
     pub version: String,
@@ -930,7 +930,7 @@ impl FromValue for HelloResult {
     }
 }
 
-/// Options for the [`ping`](crate::ConnectionCommands::ping) command.
+/// Options for the [`ping`](ConnectionCommands::ping) command.
 #[derive(Default)]
 pub struct PingOptions {
     command_args: CommandArgs,

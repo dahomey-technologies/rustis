@@ -72,7 +72,7 @@ pub trait GeoCommands {
     }
 
     /// Return valid [Geohash](https://en.wikipedia.org/wiki/Geohash) strings representing the position of one or more elements
-    /// in a sorted set value representing a geospatial index (where elements were added using [geoadd](crate::GeoCommands::geoadd)).
+    /// in a sorted set value representing a geospatial index (where elements were added using [geoadd](GeoCommands::geoadd)).
     ///
     /// # Return
     /// An array where each element is the Geohash corresponding to each member name passed as argument to the command.
@@ -115,7 +115,7 @@ pub trait GeoCommands {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }
 
-    /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
+    /// Return the members of a sorted set populated with geospatial information using [geoadd](GeoCommands::geoadd),
     /// which are within the borders of the area specified by a given shape.
     ///
     /// # Return
@@ -145,7 +145,7 @@ pub trait GeoCommands {
         )
     }
 
-    /// This command is like [geosearch](crate::GeoCommands::geosearch), but stores the result in destination key.
+    /// This command is like [geosearch](GeoCommands::geosearch), but stores the result in destination key.
     ///
     /// # Return
     /// the number of elements in the resulting set.
@@ -179,7 +179,7 @@ pub trait GeoCommands {
     }
 }
 
-/// Condition for the [`geoadd`](crate::GeoCommands::geoadd) command
+/// Condition for the [`geoadd`](GeoCommands::geoadd) command
 pub enum GeoAddCondition {
     /// No option
     None,
@@ -293,7 +293,7 @@ impl IntoArgs for GeoSearchOrder {
     }
 }
 
-/// Options for the [`geosearch`](crate::GeoCommands::geosearch) command
+/// Options for the [`geosearch`](GeoCommands::geosearch) command
 #[derive(Default)]
 pub struct GeoSearchOptions {
     command_args: CommandArgs,
@@ -342,7 +342,7 @@ impl IntoArgs for GeoSearchOptions {
     }
 }
 
-/// Result of the [`geosearch`](crate::GeoCommands::geosearch) command.
+/// Result of the [`geosearch`](GeoCommands::geosearch) command.
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
@@ -408,7 +408,7 @@ where
     }
 }
 
-/// Options for the [`geosearchstore`](crate::GeoCommands::geosearchstore) command
+/// Options for the [`geosearchstore`](GeoCommands::geosearchstore) command
 #[derive(Default)]
 pub struct GeoSearchStoreOptions {
     command_args: CommandArgs,

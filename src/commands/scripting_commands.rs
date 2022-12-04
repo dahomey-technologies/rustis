@@ -29,7 +29,7 @@ pub trait ScriptingCommands {
         prepare_command(self, cmd("EVAL").arg(builder))
     }
 
-    /// This is a read-only variant of the [eval](crate::ScriptingCommands::eval)]
+    /// This is a read-only variant of the [eval](ScriptingCommands::eval)]
     /// command that cannot execute commands that modify data.
     ///
     /// # Return
@@ -62,7 +62,7 @@ pub trait ScriptingCommands {
         prepare_command(self, cmd("EVALSHA").arg(builder))
     }
 
-    /// This is a read-only variant of the [evalsha](crate::ScriptingCommands::evalsha)
+    /// This is a read-only variant of the [evalsha](ScriptingCommands::evalsha)
     /// command that cannot execute commands that modify data.
     ///
     /// # Return
@@ -126,7 +126,7 @@ pub trait ScriptingCommands {
 
     /// Return the serialized payload of loaded libraries.
     /// You can restore the serialized payload later with the
-    /// [`function_restore`](crate::ScriptingCommands::function_restore) command.
+    /// [`function_restore`](ScriptingCommands::function_restore) command.
     ///
     /// # Return
     /// The serialized payload
@@ -312,20 +312,20 @@ pub trait ScriptingCommands {
 }
 
 /// Builder for calling a script/function for the following commands:
-/// * [`eval`](crate::ScriptingCommands::eval)
-/// * [`eval_readonly`](crate::ScriptingCommands::eval_readonly)
-/// * [`evalsha`](crate::ScriptingCommands::evalsha)
-/// * [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly)
-/// * [`fcall`](crate::ScriptingCommands::fcall)
-/// * [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly)
+/// * [`eval`](ScriptingCommands::eval)
+/// * [`eval_readonly`](ScriptingCommands::eval_readonly)
+/// * [`evalsha`](ScriptingCommands::evalsha)
+/// * [`evalsha_readonly`](ScriptingCommands::evalsha_readonly)
+/// * [`fcall`](ScriptingCommands::fcall)
+/// * [`fcall_readonly`](ScriptingCommands::fcall_readonly)
 pub struct CallBuilder {
     command_args: CommandArgs,
     keys_added: bool,
 }
 
 impl CallBuilder {
-    /// Script name when used with [`eval`](crate::ScriptingCommands::eval)
-    /// and [`eval_readonly`](crate::ScriptingCommands::eval_readonly) commands
+    /// Script name when used with [`eval`](ScriptingCommands::eval)
+    /// and [`eval_readonly`](ScriptingCommands::eval_readonly) commands
     #[must_use]
     pub fn script<S: Into<CommandArg>>(script: S) -> Self {
         Self {
@@ -334,8 +334,8 @@ impl CallBuilder {
         }
     }
 
-    /// Sha1 haxadecimal string when used with [`eval`](crate::ScriptingCommands::evalsha)
-    /// and [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly) commands
+    /// Sha1 haxadecimal string when used with [`eval`](ScriptingCommands::evalsha)
+    /// and [`evalsha_readonly`](ScriptingCommands::evalsha_readonly) commands
     #[must_use]
     pub fn sha1<S: Into<CommandArg>>(sha1: S) -> Self {
         Self {
@@ -344,8 +344,8 @@ impl CallBuilder {
         }
     }
 
-    /// Sha1 haxadecimal string when used with [`fcall`](crate::ScriptingCommands::fcall)
-    /// and [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly) commands
+    /// Sha1 haxadecimal string when used with [`fcall`](ScriptingCommands::fcall)
+    /// and [`fcall_readonly`](ScriptingCommands::fcall_readonly) commands
     #[must_use]
     pub fn function<F: Into<CommandArg>>(function: F) -> Self {
         Self {
@@ -399,7 +399,7 @@ impl IntoArgs for CallBuilder {
     }
 }
 
-/// Policy option for the [`function_restore`](crate::ScriptingCommands::function_restore) command.
+/// Policy option for the [`function_restore`](ScriptingCommands::function_restore) command.
 pub enum FunctionRestorePolicy {
     /// Append
     Default,
@@ -509,7 +509,7 @@ impl FromValue for FunctionInfo {
     }
 }
 
-/// Result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
+/// Result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug)]
 pub struct FunctionStats {
     /// information about the running script. If there's no in-flight function, the server replies with `None`.
@@ -538,7 +538,7 @@ impl FromValue for FunctionStats {
     }
 }
 
-/// Sub-result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
+/// Sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug)]
 pub struct RunningScript {
     /// the name of the function.
@@ -569,7 +569,7 @@ impl FromValue for RunningScript {
     }
 }
 
-/// sub-result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
+/// sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug, Default)]
 pub struct EngineStats {
     /// Number of libraries of functions
@@ -617,7 +617,7 @@ impl IntoArgs for ScriptDebugMode {
     }
 }
 
-/// Options for the [`function_list`](crate::ScriptingCommands::function_list) command
+/// Options for the [`function_list`](ScriptingCommands::function_list) command
 #[derive(Default)]
 pub struct FunctionListOptions {
     command_args: CommandArgs,

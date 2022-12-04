@@ -6,7 +6,7 @@ use std::{
 
 /// A cache which goal is to give a generic access to attach any state to a client instance
 /// 
-/// It is internally used to cache [RedisGraph](crate::GraphCommands) metadata.
+/// It is internally used to cache [RedisGraph](crate::commands::GraphCommands) metadata.
 #[derive(Default)]
 pub struct Cache {
     cache: HashMap<String, Box<dyn Any + Send>>,

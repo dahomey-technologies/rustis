@@ -348,8 +348,8 @@ pub trait CuckooCommands {
     }
 
     /// Begins an incremental save of the cuckoo filter.
-    /// This is useful for large cuckoo filters which cannot fit into the normal [`dump`](crate::GenericCommands::dump)
-    /// and [`restore`](crate::GenericCommands::restore) model.
+    /// This is useful for large cuckoo filters which cannot fit into the normal [`dump`](crate::commands::GenericCommands::dump)
+    /// and [`restore`](crate::commands::GenericCommands::restore) model.
     ///
     /// # Arguments
     /// * `key` - Name of the filter
@@ -426,7 +426,7 @@ impl FromValue for CfInfoResult {
     }
 }
 
-/// Options for the [`cf_insert`](crate::CuckooCommands::cf_insert) command.
+/// Options for the [`cf_insert`](CuckooCommands::cf_insert) command.
 #[derive(Default)]
 pub struct CfInsertOptions {
     command_args: CommandArgs,
@@ -464,7 +464,7 @@ impl IntoArgs for CfInsertOptions {
     }
 }
 
-/// Options for the [`cf_reserve`](crate::CuckooCommands::cf_reserve) command.
+/// Options for the [`cf_reserve`](CuckooCommands::cf_reserve) command.
 #[derive(Default)]
 pub struct CfReserveOptions {
     command_args: CommandArgs,

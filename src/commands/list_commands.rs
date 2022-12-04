@@ -372,7 +372,7 @@ pub trait ListCommands {
     }
 }
 
-/// Where option for the [`linsert`][crate::ListCommands::linsert] command.
+/// Where option for the [`linsert`](ListCommands::linsert) command.
 pub enum LInsertWhere {
     Before,
     After,
@@ -387,7 +387,7 @@ impl IntoArgs for LInsertWhere {
     }
 }
 
-/// Where option for the [`lmove`][crate::ListCommands::lmove] command.
+/// Where option for the [`lmove`](ListCommands::lmove) command.
 pub enum LMoveWhere {
     Left,
     Right,

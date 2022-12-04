@@ -561,7 +561,7 @@ impl<T, S: BuildHasher + Default> FromSingleValueArray<T> for HashSet<T, S> wher
 }
 impl<T> FromSingleValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 
-/// Marker for key/value array
+/// Marker for key/value collections
 pub trait FromKeyValueValueArray<K, V>: FromValue
 where
     K: FromValue,

@@ -94,6 +94,13 @@ impl CommandArg {
     }
 }
 
+impl From<bool> for CommandArg {
+    #[inline]
+    fn from(b: bool) -> Self {
+        Self::Unsigned(u64::from(b))
+    }
+}
+
 impl From<char> for CommandArg {
     #[inline]
     fn from(ch: char) -> Self {

@@ -186,9 +186,9 @@ Once the pipeline is created, you can use exactly the same commands that you wou
 This is possible because the [`Pipeline`](Pipeline) implements all the built-in [command traits](crate::commands).
 
 The main difference, is that you have to choose for each command:
-* to [`queue`](BatchPreparedCommand::queue) it, menaning that the [`Pipeline`](Pipeline) instance will queue the command in an internal
+* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Pipeline`](Pipeline) instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
-* to [`forget`](BatchPreparedCommand::forget) it, meaning the command will be queued as well BUT its response won't be awaited
+* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well BUT its response won't be awaited
   by the [`Pipeline`](Pipeline) instance
 
 Finally, call the [`execute`](Pipeline::execute) associated function.
@@ -243,9 +243,9 @@ Once the transaction is created, you can use exactly the same commands that you 
 This is possible because the [`Transaction`](Transaction) implements all the built-in [command traits](crate::commands).
 
 The main difference, is that you have to choose for each command:
-* to [`queue`](BatchPreparedCommand::queue) it, menaning that the [`Transaction`](Transaction) instance will queue the command in an internal
+* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Transaction`](Transaction) instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
-* to [`forget`](BatchPreparedCommand::forget) it, meaning the command will be queued as well BUT its response won't be awaited
+* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well BUT its response won't be awaited
   by the [`Transaction`](Transaction) instance.
 
 Finally, call the [`execute`](Transaction::execute) associated function.
@@ -254,7 +254,7 @@ It is the caller responsability to use the right type to cast the server respons
 to the right tuple or collection depending on which command has been
 [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
 
-The most generic type that can be requested as a result is `Vec<resp::Value>`
+The most generic type that can be requested as a result is `Vec<(resp::Value)>`
 
 ### Example
 ```

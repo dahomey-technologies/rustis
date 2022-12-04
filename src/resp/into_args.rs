@@ -367,6 +367,14 @@ where
 {
 }
 
+impl<A, K, V> KeyValueArgOrCollection<K, V> for SmallVec<A>
+where
+    A: smallvec::Array<Item = (K, V)>,
+    K: Into<CommandArg>,
+    V: Into<CommandArg>,
+{
+}
+
 impl<K, V, const N: usize> KeyValueArgOrCollection<K, V> for [(K, V); N]
 where
     K: Into<CommandArg>,

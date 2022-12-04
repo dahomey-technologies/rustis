@@ -15,6 +15,7 @@ An asynchronous Redis client for Rust.
 * Rust idiomatic API
 
 # Features
+* Full documentation with multiple examples
 * Support all [Redis Commands](https://redis.io/commands/) until Redis 7.0
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client types:
@@ -40,7 +41,6 @@ An asynchronous Redis client for Rust.
 # Roadmap
 * Advanced reconnection strategy
 * Advanced configuration (timeouts)
-* Improve documentation 
 
 # Basic Usage
 

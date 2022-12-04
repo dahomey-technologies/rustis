@@ -280,6 +280,7 @@ pub trait SentinelCommands {
     }
 }
 
+/// Result for the [`sentinel_master`](SentinelCommands::sentinel_master) command.
 #[derive(Debug)]
 pub struct SentinelMasterInfo {
     pub name: String,
@@ -333,6 +334,7 @@ impl FromValue for SentinelMasterInfo {
     }
 }
 
+/// /// Result for the [`sentinel_replicas`](SentinelCommands::sentinel_replicas) command.
 #[derive(Debug)]
 pub struct SentinelReplicaInfo {
     pub name: String,
@@ -388,6 +390,7 @@ impl FromValue for SentinelReplicaInfo {
     }
 }
 
+/// Result for the [`sentinel_sentinels`](SentinelCommands::sentinel_sentinels) command.
 pub struct SentinelInfo {
     pub name: String,
     pub ip: String,

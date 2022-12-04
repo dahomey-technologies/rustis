@@ -442,6 +442,7 @@ impl FromValue for GraphHeader {
     }
 }
 
+/// Result row for the [`graph_query`](crate::GraphCommands::graph_query) command
 #[derive(Debug)]
 pub struct GraphResultRow {
     /// collection of values

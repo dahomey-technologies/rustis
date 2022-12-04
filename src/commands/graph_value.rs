@@ -43,18 +43,30 @@ impl FromValue for GraphValueType {
     }
 }
 
+/// Object model for the different [`RedisGraph Data Types`](https://redis.io/docs/stack/graph/datatypes/)
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphValue {
+    /// In RedisGraph, null is used to stand in for an unknown or missing value.
     Null,
+    /// RedisGraph strings are Unicode character sequences. 
     String(Vec<u8>),
+    /// All RedisGraph integers are treated as 64-bit signed integers.
     Integer(i64),
+    /// Boolean values are specified as true or false.
     Boolean(bool),
+    /// All RedisGraph floating-point values are treated as 64-bit signed doubles.
     Double(f64),
+    /// Arrays are ordered lists of elements.
     Array(Vec<GraphValue>),
+    /// Relationships are persistent graph elements that connect one node to another.
     Edge(GraphEdge),
+    /// Nodes are persistent graph elements that can be connected to each other via relationships.
     Node(GraphNode),
+    /// Paths are alternating sequences of nodes and edges, starting and ending with a node.
     Path(GraphPath),
+    /// Maps are order-agnostic collections of key-value pairs.
     Map(HashMap<String, GraphValue>),
+    /// The Point data type is a set of latitude/longitude coordinates, stored within RedisGraph as a pair of 32-bit floats. 
     Point((f32, f32)),
 }
 
@@ -256,12 +268,15 @@ impl GraphProperties {
     }
 }
 
+/// Used to do [`GraphValue`](crate::GraphValue) to user type conversion
+///  while consuming the input [`GraphValue`](crate::GraphValue)
 pub trait FromGraphValue: Sized {
-    /// Used to do [`GraphValue`](GraphValue) to user type conversion
+    /// Converts to this type from the input [`GraphValue`](crate::GraphValue).
     ///
     /// # Errors
     ///
-    /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
+    /// Any parsing error ([`Error::Client`](crate::Error::Client)) 
+    /// due to incompatibility between Value variant and taget type
     fn from_graph_value(value: GraphValue) -> Result<Self>;
 }
 

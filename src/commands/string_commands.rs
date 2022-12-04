@@ -652,6 +652,7 @@ impl IntoArgs for GetExOptions {
     }
 }
 
+/// Part of the result for the [`lcs`](crate::StringCommands::lcs) command
 pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
 
 /// Result for the [`lcs`](crate::StringCommands::lcs) command

@@ -315,7 +315,7 @@ pub trait ScriptingCommands {
 /// Builder for calling a script/function for the following commands:
 /// * [`eval`](crate::ScriptingCommands::eval)
 /// * [`eval_readonly`](crate::ScriptingCommands::eval_readonly)
-/// * [`eval_sha`](crate::ScriptingCommands::evalsha)
+/// * [`evalsha`](crate::ScriptingCommands::evalsha)
 /// * [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly)
 /// * [`fcall`](crate::ScriptingCommands::fcall)
 /// * [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly)
@@ -325,6 +325,8 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
+    /// Script name when used with [`eval`](crate::ScriptingCommands::eval) 
+    /// and [`eval_readonly`](crate::ScriptingCommands::eval_readonly) commands
     #[must_use]
     pub fn script<S: Into<CommandArg>>(script: S) -> Self {
         Self {
@@ -333,6 +335,8 @@ impl CallBuilder {
         }
     }
 
+    /// Sha1 haxadecimal string when used with [`eval`](crate::ScriptingCommands::evalsha) 
+    /// and [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly) commands
     #[must_use]
     pub fn sha1<S: Into<CommandArg>>(sha1: S) -> Self {
         Self {
@@ -341,6 +345,8 @@ impl CallBuilder {
         }
     }
 
+    /// Sha1 haxadecimal string when used with [`fcall`](crate::ScriptingCommands::fcall) 
+    /// and [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly) commands
     #[must_use]
     pub fn function<F: Into<CommandArg>>(function: F) -> Self {
         Self {
@@ -426,11 +432,17 @@ impl IntoArgs for FunctionRestorePolicy {
     }
 }
 
+/// Result for the [`function_list`](ScriptingCommands::function_list) command.
 #[derive(Debug)]
 pub struct LibraryInfo {
+    /// the name of the library.
     pub library_name: String,
+    /// the engine of the library.
     pub engine: String,
+    /// the list of functions in the library.
     pub functions: Vec<FunctionInfo>,
+    /// the library's source code (when given the 
+    /// [`with_code`](FunctionListOptions::with_code) modifier).
     pub library_code: Option<String>,
 }
 
@@ -467,10 +479,14 @@ impl FromValue for LibraryInfo {
     }
 }
 
+/// Sub-result for the [`function_list`](ScriptingCommands::function_list) command.
 #[derive(Debug)]
 pub struct FunctionInfo {
+    /// the name of the function.
     pub name: String,
+    /// the function's description.
     pub description: String,
+    /// an array of [function flags](https://redis.io/docs/manual/programmability/functions-intro/#function-flags).
     pub flags: Vec<String>,
 }
 
@@ -494,9 +510,13 @@ impl FromValue for FunctionInfo {
     }
 }
 
+/// Result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
 #[derive(Debug)]
 pub struct FunctionStats {
+    /// information about the running script. If there's no in-flight function, the server replies with `None`.
     pub running_script: Option<RunningScript>,
+    /// Each entry in the map represent a single engine.
+    /// Engine map contains statistics about the engine like number of functions and number of libraries.
     pub engines: HashMap<String, EngineStats>,
 }
 
@@ -519,10 +539,14 @@ impl FromValue for FunctionStats {
     }
 }
 
+/// Sub-result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
 #[derive(Debug)]
 pub struct RunningScript {
+    /// the name of the function.
     pub name: String,
+    /// the command and arguments used for invoking the function.
     pub command: Vec<String>,
+    /// the function's runtime duration in milliseconds.
     pub duration_ms: u64,
 }
 
@@ -546,9 +570,12 @@ impl FromValue for RunningScript {
     }
 }
 
+/// sub-result for the [`function_stats`](crate::ScriptingCommands::function_stats) command.
 #[derive(Debug, Default)]
 pub struct EngineStats {
+    /// Number of libraries of functions
     pub libraries_count: usize,
+    /// Number of functions
     pub functions_count: usize,
 }
 
@@ -571,17 +598,19 @@ impl FromValue for EngineStats {
     }
 }
 
+/// Options for the [`script_debug`](ScriptingCommands::script_debug) command.
 pub enum ScriptDebugMode {
-    Default,
+    /// Enable non-blocking asynchronous debugging of Lua scripts (changes are discarded).
     Yes,
+    /// Enable blocking synchronous debugging of Lua scripts (saves changes to data).
     Sync,
+    /// Disables scripts debug mode.
     No,
 }
 
 impl IntoArgs for ScriptDebugMode {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
-            ScriptDebugMode::Default => args,
             ScriptDebugMode::Yes => args.arg("YES"),
             ScriptDebugMode::Sync => args.arg("SYNC"),
             ScriptDebugMode::No => args.arg("NO"),
@@ -596,6 +625,7 @@ pub struct FunctionListOptions {
 }
 
 impl FunctionListOptions {
+    /// specifies a pattern for matching library names.
     #[must_use]
     pub fn library_name_pattern<P: Into<CommandArg>>(self, library_name_pattern: P) -> Self {
         Self {
@@ -606,6 +636,7 @@ impl FunctionListOptions {
         }
     }
 
+    /// will cause the server to include the libraries source implementation in the reply.
     #[must_use]
     pub fn with_code(self) -> Self {
         Self {

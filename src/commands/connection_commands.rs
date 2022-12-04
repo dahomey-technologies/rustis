@@ -895,6 +895,7 @@ impl IntoArgs for HelloOptions {
     }
 }
 
+/// Result for the [`hello`](crate::ConnectionCommands::hello) command
 pub struct HelloResult {
     pub server: String,
     pub version: String,

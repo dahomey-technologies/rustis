@@ -142,6 +142,8 @@ impl ClientTrait for MultiplexedClient {
     }
 }
 
+/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand) 
+/// to add specific methods for the [`MultiplexedClient`](crate::MultiplexedClient) executor
 pub trait MultiplexedPreparedCommand<'a, R>
 where
     R: FromValue,

@@ -163,6 +163,7 @@ impl BitRange {
         }
     }
 
+    /// Unit of the range, bit or byte
     #[must_use]
     pub fn unit(self, unit: BitUnit) -> Self {
         Self {
@@ -177,6 +178,7 @@ impl IntoArgs for BitRange {
     }
 }
 
+/// Unit of a [`range`](BitRange), bit or byte
 pub enum BitUnit {
     Byte,
     Bit,
@@ -208,16 +210,20 @@ where
     E: Into<CommandArg>,
     O: Into<CommandArg>,
 {
+    /// Returns the specified bit field.
     #[must_use]
     pub fn get(encoding: E, offset: O) -> Self {
         Self::Get(BitFieldGetSubCommand::new(encoding, offset))
     }
 
+    /// Set the specified bit field and returns its old value.
     #[must_use]
     pub fn set(encoding: E, offset: O, value: u64) -> Self {
         Self::Set(encoding, offset, value)
     }
 
+    ///  Increments or decrements (if a negative increment is given) 
+    /// the specified bit field and returns the new value.
     #[must_use]
     pub fn incr_by(encoding: E, offset: O, increment: i64) -> Self {
         Self::IncrBy(encoding, offset, increment)
@@ -248,6 +254,7 @@ where
     }
 }
 
+/// Sub-command for the [`bitfield`](crate::BitmapCommands::bitfield) command
 pub struct BitFieldGetSubCommand<E = &'static str, O = &'static str>
 where
     E: Into<CommandArg>,
@@ -278,6 +285,7 @@ where
     }
 }
 
+/// Option for the [`BitFieldSubCommand`](crate::BitFieldSubCommand) sub-command.
 pub enum BitFieldOverflow {
     Wrap,
     Sat,

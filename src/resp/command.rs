@@ -16,7 +16,7 @@ pub struct Command {
     /// 
     /// e.g. `cmd("CONFIG").arg("SET").arg("hash-max-listpack-entries").arg("1024")`
     pub name: &'static str,
-    /// List of arguments of the command.
+    /// Collection of arguments of the command.
     pub args: CommandArgs,
 }
 

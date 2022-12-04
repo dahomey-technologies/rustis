@@ -27,6 +27,8 @@ pub enum Value {
     Nil,
 }
 
+/// New type struct used to disambiguate `Vec<u8>` from other `Vec<T>` 
+/// when converting it from [`Value`](crate::resp::Value) or to [`CommandArg`](crate::resp::CommandArg)
 pub struct BulkString(pub Vec<u8>);
 
 impl Value {

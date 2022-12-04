@@ -1011,6 +1011,7 @@ impl IntoArgs for ZAddOptions {
     }
 }
 
+/// Result for [`zmpop`](crate::SortedSetCommands::zmpop) the command.
 pub type ZMPopResult<E> = (String, Vec<(E, f64)>);
 
 /// Options for the [`zrange`](crate::SortedSetCommands::zrange)

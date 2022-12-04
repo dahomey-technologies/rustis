@@ -44,7 +44,7 @@ impl CommandInfoManager {
         let command_info = self.command_info_map.get(command.name);
         if let Some(command_info) = command_info {
             if command_info.arity == -2 && !command_info.sub_commands.is_empty() {
-                let command_name = format!("{}|{}", command.name, command.args[0].to_string());
+                let command_name = format!("{}|{}", command.name, std::ops::Deref::deref(&command.args[0]));
                 return self.command_info_map.get(&command_name);
             }
         }

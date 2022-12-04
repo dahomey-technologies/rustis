@@ -137,6 +137,8 @@ impl ClientTrait for Client {
     }
 }
 
+/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand) 
+/// to add specific methods for the [`Client`](crate::Client) executor
 pub trait ClientPreparedCommand<'a, R>
 where
     R: FromValue,

@@ -1279,6 +1279,8 @@ impl FromValue for KeySpecification {
     }
 }
 
+/// The BeginSearch value of a specification informs 
+/// the client of the extraction's beginning
 #[derive(Debug, Clone)]
 pub enum BeginSearch {
     Index(usize),
@@ -1313,6 +1315,8 @@ impl FromValue for BeginSearch {
     }
 }
 
+/// The FindKeys value of a key specification tells the client 
+/// how to continue the search for key names.
 #[derive(Debug, Clone)]
 pub enum FindKeys {
     Range {
@@ -1424,6 +1428,7 @@ impl FromValue for CommandDocFlag {
     }
 }
 
+/// Sub-result for the [`command_docs`](crate::ServerCommands::command_docs) command
 #[derive(Debug)]
 pub struct HistoricalNote {
     pub version: String,
@@ -1950,6 +1955,7 @@ impl FromValue for MemoryStats {
     }
 }
 
+/// Sub-result for the [`memory_stats`](crate::ServerCommands::memory_stats) command.
 #[derive(Debug)]
 pub struct DatabaseOverhead {
     pub overhead_hashtable_main: usize,

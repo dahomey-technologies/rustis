@@ -680,11 +680,15 @@ impl IntoArgs for XAutoClaimOptions {
     }
 }
 
+/// Result for the [`xrange`](StreamCommands::xrange) and other associated commands.
 pub struct StreamEntry<V>
 where
     V: FromValue,
 {
+    /// The stream Id
     pub stream_id: String,
+    /// entries with their fields and values in the exact same 
+    /// order as [`xadd`](StreamCommands::xadd) added them.
     pub items: HashMap<String, V>,
 }
 
@@ -698,13 +702,20 @@ where
     }
 }
 
+/// Result for the [`xautoclaim`](StreamCommands::xautoclaim) command.
 pub struct XAutoClaimResult<V>
 where
     V: FromValue,
 {
+    /// A stream ID to be used as the <start> argument for 
+    /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
     pub start_stream_id: String,
+    /// An array containing all the successfully claimed messages in
+    /// the same format as [`xrange`](StreamCommands::xrange).
     pub entries: Vec<StreamEntry<V>>,
-    pub deleted_id: Vec<String>,
+    /// An array containing message IDs that no longer exist in the stream, 
+    /// and were deleted from the PEL in which they were found.
+    pub deleted_ids: Vec<String>,
 }
 
 impl<V> FromValue for XAutoClaimResult<V>
@@ -712,12 +723,12 @@ where
     V: FromValue,
 {
     fn from_value(value: Value) -> Result<Self> {
-        let (start_stream_id, entries, deleted_id): (String, Vec<StreamEntry<V>>, Vec<String>) =
+        let (start_stream_id, entries, deleted_ids): (String, Vec<StreamEntry<V>>, Vec<String>) =
             value.into()?;
         Ok(Self {
             start_stream_id,
             entries,
-            deleted_id,
+            deleted_ids,
         })
     }
 }

@@ -685,6 +685,7 @@ impl IntoArgs for ExpireOption {
     }
 }
 
+/// Options for the [`migrate`](GenericCommands::migrate) command.
 #[derive(Default)]
 pub struct MigrateOptions {
     command_args: CommandArgs,

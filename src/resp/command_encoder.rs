@@ -25,9 +25,19 @@ impl Encoder<&Command> for CommandEncoder {
 fn encode_bulkstring(bulk_string: &CommandArg, buf: &mut BytesMut) {
     match bulk_string {
         CommandArg::Nil => buf.put(&b"$-1\r\n"[..]),
-        CommandArg::Integer(i) => {
+        CommandArg::Signed(i) => {
             let mut temp = itoa::Buffer::new();
             let str = temp.format(*i);
+
+            buf.put_u8(b'$');
+            encode_integer(str.len() as i64, buf);
+            encode_crlf(buf);
+            buf.put(str.as_bytes());
+            encode_crlf(buf);
+        }
+        CommandArg::Unsigned(u) => {
+            let mut temp = itoa::Buffer::new();
+            let str = temp.format(*u);
 
             buf.put_u8(b'$');
             encode_integer(str.len() as i64, buf);

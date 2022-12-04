@@ -17,6 +17,7 @@ use crate::{
 use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use std::iter::zip;
 
+/// Represents a Redis command pipeline.
 pub struct Pipeline {
     client: InnerClient,
     commands: Vec<Command>,
@@ -44,6 +45,42 @@ impl Pipeline {
         self.forget_flags.push(true);
     }
 
+    /// Execute the pipeline by the sending the queued command
+    /// as a whole batch to the Redis server.
+    ///
+    /// # Return
+    /// It is the caller responsability to use the right type to cast the server response
+    /// to the right tuple or collection depending on which command has been
+    /// [queued](PipelinePreparedCommand::queue) or [forgotten](PipelinePreparedCommand::forget).
+    /// 
+    /// The most generic type that can requested as a result is `Vec<resp::Value>`
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{
+    ///     resp::{cmd, Value}, Client, Pipeline, PipelinePreparedCommand, Result, 
+    ///     StringCommands,
+    /// };
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    ///
+    ///     let mut pipeline = client.create_pipeline();
+    ///     pipeline.set("key1", "value1").forget();
+    ///     pipeline.set("key2", "value2").forget();
+    ///     pipeline.queue(cmd("UNKNOWN"));
+    ///     pipeline.get::<_, String>("key1").queue();
+    ///     pipeline.get::<_, String>("key2").queue();
+    ///
+    ///     let (result, value1, value2): (Value, String, String) = pipeline.execute().await?;
+    ///     assert!(matches!(result, Value::Error(_)));
+    ///     assert_eq!("value1", value1);
+    ///     assert_eq!("value2", value2);
+    /// 
+    ///     Ok(())
+    /// }
+    /// ```    
     pub async fn execute<T: FromValue>(mut self) -> Result<T> {
         let num_commands = self.commands.len();
         let result = self.client.send_batch(self.commands).await?;
@@ -68,6 +105,9 @@ impl Pipeline {
     }
 }
 
+/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand) 
+/// to add specific methods for the [`Pipeline`](crate::Pipeline) & 
+/// the [`Transaction`](crate::Transaction) executors
 pub trait PipelinePreparedCommand<'a, R>
 where
     R: FromValue,

@@ -10,8 +10,10 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
+/// Used to do [`Value`](crate::resp::Value) to user type conversion
+/// while consuming the input [`Value`](crate::resp::Value)
 pub trait FromValue: Sized {
-    /// Used to do [`Value`](crate::resp::Value) to user type conversion
+    /// Converts to this type from the input [`Value`](crate::resp::Value).
     ///
     /// # Errors
     ///

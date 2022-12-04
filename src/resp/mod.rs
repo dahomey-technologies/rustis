@@ -6,6 +6,7 @@ mod command_args;
 mod command_encoder;
 mod from_value;
 mod from_value_tuple;
+mod into_args;
 mod value;
 mod value_decoder;
 
@@ -15,5 +16,6 @@ pub use command_args::*;
 pub(crate) use command_encoder::*;
 pub use from_value::*;
 pub use from_value_tuple::*;
+pub use into_args::*;
 pub use value::*;
 pub(crate) use value_decoder::*;

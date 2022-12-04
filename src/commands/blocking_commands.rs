@@ -4,6 +4,8 @@ use crate::{
     Future, LMoveWhere, MonitorStream, PreparedCommand, ZMPopResult, ZWhere,
 };
 
+/// Result for the [`bzpopmin`](BlockingCommands::bzpopmin) 
+/// and [`bzpopmax`](BlockingCommands::bzpopmax) commands
 pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 
 /// A group of blocking commands

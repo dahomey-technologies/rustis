@@ -105,11 +105,12 @@ async fn main() -> Result<()> {
 }
 ```
 
-### SingleArgOrCollection
+### SingleArgCollection
 
-Several Redis commands expect one or multiple items, elements, values of the same type.
+Several Redis commands expect a collection with elements that will produced a single
+command argument each
 
-**rustis** uses the trait [`SingleArgOrCollection`](SingleArgOrCollection) to implement this behavior.
+**rustis** uses the trait [`SingleArgCollection`](SingleArgCollection) to implement this behavior.
 
 Current implementation provides the following conversions:
 * `T` (for the single item case)
@@ -158,11 +159,64 @@ async fn main() -> Result<()> {
 }
 ```
 
-### KeyValueArgOrCollection
+### MultipleArgsCollection
+
+Several Redis commands expect a collection with elements that will produced multiple
+command arguments each
+
+**rustis** uses the trait [`MultipleArgsCollection`](MultipleArgsCollection) to implement this behavior.
+
+Current implementation provides the following conversions:
+* `T` (for the single item case)
+* `Vec<T>`
+* `[T;N]`
+* `SmallVec<A>`
+* `BTreeSet<T>`
+* `HashSet<T, S>`
+
+where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
+
+#### Example
+```
+use rustis::{
+    client::Client,
+    commands::{FlushingMode, ServerCommands, ListCommands},
+    resp::{BulkString, CommandArg},
+    Result,
+};
+use smallvec::{SmallVec};
+use std::collections::{HashSet, BTreeSet};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Connect the client to a Redis server from its IP and port
+    let mut client = Client::connect("127.0.0.1:6379").await?;
+
+    // Flush all existing data in Redis
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.lpush("key", 12).await?;
+    client.lpush("key", [12, 13, 14]).await?;
+    client.lpush("key", vec![12, 13, 14]).await?;
+    client.lpush("key", SmallVec::from([12, 13, 14])).await?;
+    client.lpush("key", HashSet::from([12, 13, 14])).await?;
+    client.lpush("key", BTreeSet::from([12, 13, 14])).await?;
+
+    client.lpush("key", "value1").await?;
+    client.lpush("key", ["value1", "value2", "value13"]).await?;
+    client.lpush("key", vec!["value1", "value2", "value13"]).await?;
+    client.lpush("key", SmallVec::from(["value1", "value2", "value13"])).await?;
+    client.lpush("key", HashSet::from(["value1", "value2", "value13"])).await?;
+    client.lpush("key", BTreeSet::from(["value1", "value2", "value13"])).await?;
+
+    Ok(())
+}
+```
+### KeyValueArgsCollection
 
 Several Redis commands expect one or multiple key/value pairs.
 
-**rustis** uses the trait [`KeyValueArgOrCollection`](KeyValueArgOrCollection) to implement this behavior.
+**rustis** uses the trait [`KeyValueArgsCollection`](KeyValueArgsCollection) to implement this behavior.
 
 Current implementation provides the following conversions:
 * `(K, V)` (for the single item case)
@@ -210,6 +264,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
 # Command results
 
 **rustis** provides an idiomatic way to convert command results into Rust types.

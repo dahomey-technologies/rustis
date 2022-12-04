@@ -3,9 +3,9 @@ use std::{collections::HashMap, future};
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueArray,
+        cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromKeyValueArray,
         FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
-        SingleArgOrCollection, Value, Command, SingleArg,
+        SingleArgCollection, Value, Command, SingleArg,
     },
     Error, Result, commands::{SortOrder, GeoUnit},
 };
@@ -192,7 +192,7 @@ pub trait SearchCommands {
     where
         Self: Sized,
         I: SingleArg,
-        S: ArgsOrCollection<FtFieldSchema>,
+        S: MultipleArgsCollection<FtFieldSchema>,
     {
         prepare_command(
             self,
@@ -261,7 +261,7 @@ pub trait SearchCommands {
         Self: Sized,
         D: SingleArg,
         T: SingleArg,
-        TT: SingleArgOrCollection<T>,
+        TT: SingleArgCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTADD").arg(dict).arg(terms))
     }
@@ -283,7 +283,7 @@ pub trait SearchCommands {
         Self: Sized,
         D: SingleArg,
         T: SingleArg,
-        TT: SingleArgOrCollection<T>,
+        TT: SingleArgCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTDEL").arg(dict).arg(terms))
     }
@@ -480,7 +480,7 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        QQ: SingleArgOrCollection<Q>
+        QQ: SingleArgCollection<Q>
     {
         prepare_command(
             self,
@@ -607,7 +607,7 @@ pub trait SearchCommands {
         index: impl SingleArg,
         synonym_group_id: impl SingleArg,
         skip_initial_scan: bool,
-        terms: impl SingleArgOrCollection<T>
+        terms: impl SingleArgCollection<T>
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -1070,7 +1070,7 @@ impl FtCreateOptions {
     /// You can add several prefixes to index.
     /// Because the argument is optional, the default is * (all keys).
     #[must_use]
-    pub fn prefix<P: SingleArg, PP: SingleArgOrCollection<P>>(self, prefixes: PP) -> Self {
+    pub fn prefix<P: SingleArg, PP: SingleArgCollection<P>>(self, prefixes: PP) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1243,7 +1243,7 @@ impl FtCreateOptions {
     pub fn stop_words<W, WW>(self, stop_words: WW) -> Self
     where
         W: SingleArg,
-        WW: SingleArgOrCollection<W>,
+        WW: SingleArgCollection<W>,
     {
         Self {
             command_args: self
@@ -1284,7 +1284,7 @@ impl FtAggregateOptions {
 
     /// loads document attributes from the source document.
     #[must_use]
-    pub fn load<A: ArgsOrCollection<FtLoadAttribute>>(self, attributes: A) -> Self {
+    pub fn load<A: MultipleArgsCollection<FtLoadAttribute>>(self, attributes: A) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1312,8 +1312,8 @@ impl FtAggregateOptions {
     pub fn groupby<P, PP, R>(self, properties: PP, reducers: R) -> Self
     where
         P: SingleArg,
-        PP: SingleArgOrCollection<P>,
-        R: ArgsOrCollection<FtReducer>,
+        PP: SingleArgCollection<P>,
+        R: MultipleArgsCollection<FtReducer>,
     {
         Self {
             command_args: self
@@ -1332,7 +1332,7 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn sortby<P>(self, properties: P, max: Option<usize>) -> Self
     where
-        P: ArgsOrCollection<FtSortBy>,
+        P: MultipleArgsCollection<FtSortBy>,
     {
         Self {
             command_args: self
@@ -1424,7 +1424,7 @@ impl FtAggregateOptions {
     where
         N: SingleArg,
         V: SingleArg,
-        P: ArgsOrCollection<(N, V)>,
+        P: MultipleArgsCollection<(N, V)>,
     {
         Self {
             command_args: self
@@ -2366,7 +2366,7 @@ impl FtSearchOptions {
     /// 
     /// Non-existent keys are ignored, unless all the keys are non-existent.
     #[must_use]
-    pub fn inkeys<A>(self, keys: impl SingleArgOrCollection<A>) -> Self
+    pub fn inkeys<A>(self, keys: impl SingleArgCollection<A>) -> Self
     where 
         A: SingleArg
     {
@@ -2377,7 +2377,7 @@ impl FtSearchOptions {
 
     /// filters the results to those appearing only in specific attributes of the document, like `title` or `URL`. 
     #[must_use]
-    pub fn infields<A>(self, attributes: impl SingleArgOrCollection<A>) -> Self
+    pub fn infields<A>(self, attributes: impl SingleArgCollection<A>) -> Self
     where 
         A: SingleArg
     {
@@ -2390,7 +2390,7 @@ impl FtSearchOptions {
     /// 
     /// If attributes is empty, it acts like [`nocontent`](FtSearchOptions::nocontent). 
     #[must_use]
-    pub fn _return(self, attributes: impl ArgsOrCollection<FtSearchReturnAttribute>) -> Self
+    pub fn _return(self, attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>) -> Self
     {
         Self {
             command_args: self.command_args.arg("RETURN").arg(attributes.num_args()).arg(attributes),
@@ -2549,7 +2549,7 @@ impl FtSearchOptions {
     where
         N: SingleArg,
         V: SingleArg,
-        P: ArgsOrCollection<(N, V)>,
+        P: MultipleArgsCollection<(N, V)>,
     {
         Self {
             command_args: self.command_args.arg("PARAMS").arg(params.num_args()).arg(params),
@@ -2616,7 +2616,7 @@ impl FtSearchSummarizeOptions {
     /// Each field present is summarized. 
     /// If no `FIELDS` directive is passed, then all fields returned are summarized.
     #[must_use]
-    pub fn fields<F: SingleArg>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }
@@ -2673,7 +2673,7 @@ impl FtSearchHighlightOptions {
     /// Each field present is highlighted. 
     /// If no `FIELDS` directive is passed, then all fields returned are highlighted.
     #[must_use]
-    pub fn fields<F: SingleArg>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }

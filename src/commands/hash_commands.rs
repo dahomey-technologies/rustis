@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
-        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
 
@@ -24,7 +24,7 @@ pub trait HashCommands {
         Self: Sized,
         K: SingleArg,
         F: SingleArg,
-        C: SingleArgOrCollection<F>,
+        C: SingleArgCollection<F>,
     {
         prepare_command(self, cmd("HDEL").arg(key).arg(fields))
     }
@@ -166,7 +166,7 @@ pub trait HashCommands {
         Self: Sized,
         K: SingleArg,
         F: SingleArg,
-        C: SingleArgOrCollection<F>,
+        C: SingleArgCollection<F>,
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
@@ -279,7 +279,7 @@ pub trait HashCommands {
         K: SingleArg,
         F: SingleArg,
         V: SingleArg,
-        I: KeyValueArgOrCollection<F, V>,
+        I: KeyValueArgsCollection<F, V>,
     {
         prepare_command(self, cmd("HSET").arg(key).arg(items))
     }

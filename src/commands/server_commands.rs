@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue,
-        HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
+        HashMapExt, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -47,7 +47,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         U: SingleArg,
-        UU: SingleArgOrCollection<U>,
+        UU: SingleArgCollection<U>,
     {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
     }
@@ -201,7 +201,7 @@ pub trait ServerCommands {
         Self: Sized,
         U: SingleArg,
         R: SingleArg,
-        RR: SingleArgOrCollection<R>,
+        RR: SingleArgCollection<R>,
     {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
@@ -276,7 +276,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         N: SingleArg,
-        NN: SingleArgOrCollection<N>,
+        NN: SingleArgCollection<N>,
         DD: FromKeyValueArray<String, CommandDoc>,
     {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
@@ -293,7 +293,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         A: SingleArg,
-        AA: SingleArgOrCollection<A>,
+        AA: SingleArgCollection<A>,
         KK: FromSingleValueArray<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
@@ -310,7 +310,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         A: SingleArg,
-        AA: SingleArgOrCollection<A>,
+        AA: SingleArgCollection<A>,
         KK: FromKeyValueArray<String, Vec<String>>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
@@ -327,7 +327,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         N: SingleArg,
-        NN: SingleArgOrCollection<N>,
+        NN: SingleArgCollection<N>,
     {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
     }
@@ -362,7 +362,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         P: SingleArg,
-        PP: SingleArgOrCollection<P>,
+        PP: SingleArgCollection<P>,
         V: FromValue,
         VV: FromKeyValueArray<String, V>,
     {
@@ -406,7 +406,7 @@ pub trait ServerCommands {
         Self: Sized,
         P: SingleArg,
         V: SingleArg,
-        C: KeyValueArgOrCollection<P, V>,
+        C: KeyValueArgsCollection<P, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
     }
@@ -469,7 +469,7 @@ pub trait ServerCommands {
     fn info<SS>(&mut self, sections: SS) -> PreparedCommand<Self, String>
     where
         Self: Sized,
-        SS: SingleArgOrCollection<InfoSection>,
+        SS: SingleArgCollection<InfoSection>,
     {
         prepare_command(self, cmd("INFO").arg(sections))
     }
@@ -529,7 +529,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
         RR: FromKeyValueArray<String, CommandHistogram>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
@@ -588,7 +588,7 @@ pub trait ServerCommands {
     fn latency_reset<EE>(&mut self, events: EE) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        EE: SingleArgOrCollection<LatencyHistoryEvent>,
+        EE: SingleArgCollection<LatencyHistoryEvent>,
     {
         prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
     }
@@ -901,7 +901,7 @@ impl AclDryRunOptions {
     pub fn arg<A, AA>(self, args: AA) -> Self
     where
         A: SingleArg,
-        AA: SingleArgOrCollection<A>,
+        AA: SingleArgCollection<A>,
     {
         Self {
             command_args: self.command_args.arg(args),

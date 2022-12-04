@@ -1,6 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{cmd, SingleArg, SingleArgOrCollection},
+    resp::{cmd, SingleArg, SingleArgCollection},
 };
 
 /// A group of Redis commands related to Transactions
@@ -16,7 +16,7 @@ pub trait TransactionCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("WATCH").arg(keys))
     }

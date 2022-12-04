@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
+        cmd, MultipleArgsCollection, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -352,7 +352,7 @@ pub trait TimeSeriesCommands {
     #[must_use]
     fn ts_madd<K: SingleArg, T: SingleArg, R: FromSingleValueArray<u64>>(
         &mut self,
-        items: impl ArgsOrCollection<(K, T, f64)>,
+        items: impl MultipleArgsCollection<(K, T, f64)>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -387,7 +387,7 @@ pub trait TimeSeriesCommands {
     fn ts_mget<F: SingleArg, R: FromSingleValueArray<TsSample>>(
         &mut self,
         options: TsMGetOptions,
-        filters: impl SingleArgOrCollection<F>,
+        filters: impl SingleArgCollection<F>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -426,7 +426,7 @@ pub trait TimeSeriesCommands {
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsMRangeOptions,
-        filters: impl SingleArgOrCollection<F>,
+        filters: impl SingleArgCollection<F>,
         groupby_options: TsGroupByOptions,
     ) -> PreparedCommand<Self, R>
     where
@@ -475,7 +475,7 @@ pub trait TimeSeriesCommands {
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsMRangeOptions,
-        filters: impl SingleArgOrCollection<F>,
+        filters: impl SingleArgCollection<F>,
         groupby_options: TsGroupByOptions,
     ) -> PreparedCommand<Self, R>
     where
@@ -518,7 +518,7 @@ pub trait TimeSeriesCommands {
     #[must_use]
     fn ts_queryindex<F: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        filters: impl SingleArgOrCollection<F>,
+        filters: impl SingleArgCollection<F>,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -680,7 +680,7 @@ impl TsAddOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgOrCollection<L, V>>(
+    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
         self,
         labels: LL,
     ) -> Self {
@@ -846,7 +846,7 @@ impl TsCreateOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgOrCollection<L, V>>(
+    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
         self,
         labels: LL,
     ) -> Self {
@@ -1039,7 +1039,7 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`labels`](TsCreateOptions::labels).
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgOrCollection<L, V>>(
+    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
         self,
         labels: LL,
     ) -> Self {
@@ -1275,7 +1275,7 @@ impl TsMGetOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgOrCollection<L>) -> Self {
+    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgCollection<L>) -> Self {
         Self {
             command_args: self.command_args.arg("SELECTED_LABELS").arg(labels),
         }
@@ -1348,7 +1348,7 @@ impl TsMRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(self, ts: impl SingleArgOrCollection<u64>) -> Self {
+    pub fn filter_by_ts(self, ts: impl SingleArgCollection<u64>) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER_BY_TS").arg(ts),
         }
@@ -1377,7 +1377,7 @@ impl TsMRangeOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgOrCollection<L>) -> Self {
+    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgCollection<L>) -> Self {
         Self {
             command_args: self.command_args.arg("SELECTED_LABELS").arg(labels),
         }
@@ -1541,7 +1541,7 @@ impl TsRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(self, ts: impl SingleArgOrCollection<u64>) -> Self {
+    pub fn filter_by_ts(self, ts: impl SingleArgCollection<u64>) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER_BY_TS").arg(ts),
         }

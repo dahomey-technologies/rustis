@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -401,7 +401,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         V: FromValue,
         VV: FromSingleValueArray<V>,
     {
@@ -419,7 +419,7 @@ pub trait StringCommands {
     fn mset<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        C: KeyValueArgOrCollection<K, V>,
+        C: KeyValueArgsCollection<K, V>,
         K: SingleArg,
         V: SingleArg,
     {
@@ -447,7 +447,7 @@ pub trait StringCommands {
     fn msetnx<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        C: KeyValueArgOrCollection<K, V>,
+        C: KeyValueArgsCollection<K, V>,
         K: SingleArg,
         V: SingleArg,
     {

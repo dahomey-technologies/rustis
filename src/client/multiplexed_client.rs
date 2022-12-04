@@ -21,7 +21,7 @@ use crate::{
         ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
         StreamCommands, StringCommands,
     },
-    resp::{Command, FromValue, SingleArg, SingleArgOrCollection, Value},
+    resp::{Command, FromValue, SingleArg, SingleArgCollection, Value},
     Future, Result,
 };
 use std::future::IntoFuture;
@@ -265,7 +265,7 @@ impl PubSubCommands for MultiplexedClient {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         self.inner_client.subscribe(channels)
     }
@@ -274,7 +274,7 @@ impl PubSubCommands for MultiplexedClient {
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: SingleArg + Send + 'a,
-        PP: SingleArgOrCollection<P>,
+        PP: SingleArgCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
     }
@@ -283,7 +283,7 @@ impl PubSubCommands for MultiplexedClient {
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)
     }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
-    resp::{cmd, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgOrCollection, Value},
+    resp::{cmd, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgCollection, Value},
     Error, Result,
 };
 
@@ -263,7 +263,7 @@ pub trait ScriptingCommands {
     where
         Self: Sized,
         S: SingleArg,
-        C: SingleArgOrCollection<S>,
+        C: SingleArgCollection<S>,
     {
         prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
     }
@@ -359,7 +359,7 @@ impl CallBuilder {
     pub fn keys<K, C>(self, keys: C) -> Self
     where
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         Self {
             command_args: self.command_args.arg(keys.num_args()).arg(keys),
@@ -372,7 +372,7 @@ impl CallBuilder {
     pub fn args<A, C>(self, args: C) -> Self
     where
         A: SingleArg,
-        C: SingleArgOrCollection<A>,
+        C: SingleArgCollection<A>,
     {
         let command_args = if self.keys_added {
             self.command_args.arg(args)

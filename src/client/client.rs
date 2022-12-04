@@ -22,7 +22,7 @@ use crate::{
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
     network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgOrCollection, Value},
+    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value},
     Future, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -256,7 +256,7 @@ impl PubSubCommands for Client {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         self.inner_client.subscribe(channels)
     }
@@ -265,7 +265,7 @@ impl PubSubCommands for Client {
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: SingleArg + Send + 'a,
-        PP: SingleArgOrCollection<P>,
+        PP: SingleArgCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
     }
@@ -274,7 +274,7 @@ impl PubSubCommands for Client {
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)
     }

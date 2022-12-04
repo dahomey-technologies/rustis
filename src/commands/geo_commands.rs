@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArg, SingleArgOrCollection, Value,
+        cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
+        SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -32,7 +32,7 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        I: ArgsOrCollection<(f64, f64, M)>,
+        I: MultipleArgsCollection<(f64, f64, M)>,
     {
         prepare_command(
             self,
@@ -85,7 +85,7 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
     }
@@ -110,7 +110,7 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }

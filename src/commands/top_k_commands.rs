@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection, SingleArg,
-        SingleArgOrCollection, Value,
+        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgsCollection, SingleArg,
+        SingleArgCollection, Value,
     },
     Result,
 };
@@ -32,7 +32,7 @@ pub trait TopKCommands {
     fn topk_add<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -62,7 +62,7 @@ pub trait TopKCommands {
     fn topk_incrby<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
         key: impl SingleArg,
-        items: impl KeyValueArgOrCollection<I, i64>,
+        items: impl KeyValueArgsCollection<I, i64>,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -149,7 +149,7 @@ pub trait TopKCommands {
     fn topk_query<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,

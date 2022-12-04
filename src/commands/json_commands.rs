@@ -3,7 +3,7 @@ use crate::{
     commands::SetCondition,
     resp::{
         cmd, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
-        SingleArgOrCollection, Value,
+        SingleArgCollection, Value,
     },
 };
 
@@ -37,7 +37,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        VV: SingleArgOrCollection<V>,
+        VV: SingleArgCollection<V>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.ARRAPPEND").arg(key).arg(path).arg(values))
@@ -114,7 +114,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        VV: SingleArgOrCollection<V>,
+        VV: SingleArgCollection<V>,
         R: FromSingleValueArray<Option<usize>>,
     {
         prepare_command(
@@ -340,7 +340,7 @@ pub trait JsonCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         P: SingleArg,
         V: FromValue,
         VV: FromSingleValueArray<V>,
@@ -638,7 +638,7 @@ impl JsonGetOptions {
 
     /// JSONPath to specify
     #[must_use]
-    pub fn path<P: SingleArg, PP: SingleArgOrCollection<P>>(self, paths: PP) -> Self {
+    pub fn path<P: SingleArg, PP: SingleArgCollection<P>>(self, paths: PP) -> Self {
         Self {
             command_args: self.command_args.arg(paths),
         }

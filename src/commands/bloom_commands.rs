@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        SingleArg, SingleArgOrCollection, Value,
+        SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
@@ -123,7 +123,7 @@ pub trait BloomCommands {
     fn bf_insert<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
         options: BfInsertOptions,
     ) -> PreparedCommand<Self, R>
     where
@@ -184,7 +184,7 @@ pub trait BloomCommands {
     fn bf_madd<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -208,7 +208,7 @@ pub trait BloomCommands {
     fn bf_mexists<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,

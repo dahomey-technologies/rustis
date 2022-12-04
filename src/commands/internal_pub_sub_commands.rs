@@ -1,6 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{cmd, SingleArg, SingleArgOrCollection},
+    resp::{cmd, SingleArg, SingleArgCollection},
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
@@ -15,7 +15,7 @@ pub(crate) trait InternalPubSubCommands {
     where
         Self: Sized,
         P: SingleArg + Send,
-        PP: SingleArgOrCollection<P>,
+        PP: SingleArgCollection<P>,
     {
         prepare_command(self, cmd("PUNSUBSCRIBE").arg(patterns))
     }
@@ -28,7 +28,7 @@ pub(crate) trait InternalPubSubCommands {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         prepare_command(self, cmd("SUNSUBSCRIBE").arg(shardchannels))
     }
@@ -41,7 +41,7 @@ pub(crate) trait InternalPubSubCommands {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         prepare_command(self, cmd("UNSUBSCRIBE").arg(channels))
     }

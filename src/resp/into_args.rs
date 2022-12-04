@@ -414,18 +414,22 @@ impl SingleArg for BulkString {}
 impl<T: SingleArg> SingleArg for Option<T> {}
 
 /// Generic Marker for Collections of `IntoArgs`
-pub trait ArgsOrCollection<T>: IntoArgs
+/// 
+/// Each element of the collection can produce multiple args.
+pub trait MultipleArgsCollection<T>: IntoArgs
 where
     T: IntoArgs,
 {
 }
 
-impl<T, const N: usize> ArgsOrCollection<T> for [T; N] where T: IntoArgs {}
-impl<T> ArgsOrCollection<T> for Vec<T> where T: IntoArgs {}
-impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
+impl<T, const N: usize> MultipleArgsCollection<T> for [T; N] where T: IntoArgs {}
+impl<T> MultipleArgsCollection<T> for Vec<T> where T: IntoArgs {}
+impl<T> MultipleArgsCollection<T> for T where T: IntoArgs {}
 
 /// Marker for collections of single items (directly convertible to `CommandArg`) of `IntoArgs`
-pub trait SingleArgOrCollection<T>: IntoArgs
+/// 
+/// Each element of the collection can only produce a single arg.
+pub trait SingleArgCollection<T>: IntoArgs
 where
     T: SingleArg,
 {
@@ -434,7 +438,7 @@ where
     fn into_iter(self) -> Self::IntoIter;
 }
 
-impl<T, const N: usize> SingleArgOrCollection<T> for [T; N]
+impl<T, const N: usize> SingleArgCollection<T> for [T; N]
 where
     T: SingleArg,
 {
@@ -445,7 +449,7 @@ where
     }
 }
 
-impl<T> SingleArgOrCollection<T> for Vec<T>
+impl<T> SingleArgCollection<T> for Vec<T>
 where
     T: SingleArg,
 {
@@ -456,7 +460,7 @@ where
     }
 }
 
-impl<A, T> SingleArgOrCollection<T> for SmallVec<A>
+impl<A, T> SingleArgCollection<T> for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
     T: SingleArg,
@@ -468,7 +472,7 @@ where
     }
 }
 
-impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S>
+impl<T, S: BuildHasher> SingleArgCollection<T> for HashSet<T, S>
 where
     T: SingleArg,
 {
@@ -479,7 +483,7 @@ where
     }
 }
 
-impl<T> SingleArgOrCollection<T> for BTreeSet<T>
+impl<T> SingleArgCollection<T> for BTreeSet<T>
 where
     T: SingleArg,
 {
@@ -490,7 +494,7 @@ where
     }
 }
 
-impl<T> SingleArgOrCollection<T> for T
+impl<T> SingleArgCollection<T> for T
 where
     T: SingleArg,
 {
@@ -502,21 +506,23 @@ where
 }
 
 /// Marker for key/value collections of Args
-pub trait KeyValueArgOrCollection<K, V>: IntoArgs
+/// 
+/// The key and the value can only produce a single arg each.
+pub trait KeyValueArgsCollection<K, V>: IntoArgs
 where
     K: SingleArg,
     V: SingleArg,
 {
 }
 
-impl<K, V> KeyValueArgOrCollection<K, V> for Vec<(K, V)>
+impl<K, V> KeyValueArgsCollection<K, V> for Vec<(K, V)>
 where
     K: SingleArg,
     V: SingleArg,
 {
 }
 
-impl<A, K, V> KeyValueArgOrCollection<K, V> for SmallVec<A>
+impl<A, K, V> KeyValueArgsCollection<K, V> for SmallVec<A>
 where
     A: smallvec::Array<Item = (K, V)>,
     K: SingleArg,
@@ -524,28 +530,28 @@ where
 {
 }
 
-impl<K, V, const N: usize> KeyValueArgOrCollection<K, V> for [(K, V); N]
+impl<K, V, const N: usize> KeyValueArgsCollection<K, V> for [(K, V); N]
 where
     K: SingleArg,
     V: SingleArg,
 {
 }
 
-impl<K, V> KeyValueArgOrCollection<K, V> for (K, V)
+impl<K, V> KeyValueArgsCollection<K, V> for (K, V)
 where
     K: SingleArg,
     V: SingleArg,
 {
 }
 
-impl<K, V, S: BuildHasher> KeyValueArgOrCollection<K, V> for HashMap<K, V, S>
+impl<K, V, S: BuildHasher> KeyValueArgsCollection<K, V> for HashMap<K, V, S>
 where
     K: SingleArg,
     V: SingleArg,
 {
 }
 
-impl<K, V> KeyValueArgOrCollection<K, V> for BTreeMap<K, V>
+impl<K, V> KeyValueArgsCollection<K, V> for BTreeMap<K, V>
 where
     K: SingleArg,
     V: SingleArg,

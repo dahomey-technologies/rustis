@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
@@ -30,7 +30,7 @@ pub trait StreamCommands {
         K: SingleArg,
         G: SingleArg,
         I: SingleArg,
-        II: SingleArgOrCollection<I>,
+        II: SingleArgCollection<I>,
     {
         prepare_command(self, cmd("XACK").arg(key).arg(group).arg(ids))
     }
@@ -60,7 +60,7 @@ pub trait StreamCommands {
         I: SingleArg,
         F: SingleArg,
         V: SingleArg,
-        FFVV: KeyValueArgOrCollection<F, V>,
+        FFVV: KeyValueArgsCollection<F, V>,
         R: FromValue,
     {
         prepare_command(
@@ -133,7 +133,7 @@ pub trait StreamCommands {
         G: SingleArg,
         C: SingleArg,
         I: SingleArg,
-        II: SingleArgOrCollection<I>,
+        II: SingleArgCollection<I>,
         V: FromValue,
     {
         prepare_command(
@@ -160,7 +160,7 @@ pub trait StreamCommands {
         Self: Sized,
         K: SingleArg,
         I: SingleArg,
-        II: SingleArgOrCollection<I>,
+        II: SingleArgCollection<I>,
     {
         prepare_command(self, cmd("XDEL").arg(key).arg(ids))
     }
@@ -455,9 +455,9 @@ pub trait StreamCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         I: SingleArg,
-        II: SingleArgOrCollection<I>,
+        II: SingleArgCollection<I>,
         V: FromValue,
         R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {
@@ -488,9 +488,9 @@ pub trait StreamCommands {
         G: SingleArg,
         C: SingleArg,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         I: SingleArg,
-        II: SingleArgOrCollection<I>,
+        II: SingleArgCollection<I>,
         V: FromValue,
         R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {

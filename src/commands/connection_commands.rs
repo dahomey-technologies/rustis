@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value, SingleArg,
+        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgCollection, Value, SingleArg,
     },
     Error, Result,
 };
@@ -588,7 +588,7 @@ impl ClientListOptions {
 
     pub fn client_ids<II>(self, client_ids: II) -> Self
     where
-        II: SingleArgOrCollection<i64>,
+        II: SingleArgCollection<i64>,
     {
         Self {
             command_args: self.command_args.arg("ID").arg(client_ids),

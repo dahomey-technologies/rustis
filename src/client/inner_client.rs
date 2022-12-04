@@ -5,7 +5,7 @@ use crate::{
     },
     commands::InternalPubSubCommands,
     network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgOrCollection, Value},
+    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value},
     Future, MsgSender, NetworkHandler, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -81,7 +81,7 @@ impl InnerClient {
     pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         let channels: Vec<String> = channels
             .into_iter()
@@ -116,7 +116,7 @@ impl InnerClient {
     pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: SingleArg + Send + 'a,
-        PP: SingleArgOrCollection<P>,
+        PP: SingleArgCollection<P>,
     {
         let patterns: Vec<String> = patterns
             .into_iter()
@@ -151,7 +151,7 @@ impl InnerClient {
     pub fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
     {
         let shardchannels: Vec<String> = shardchannels
             .into_iter()

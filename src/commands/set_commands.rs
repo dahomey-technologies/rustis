@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
-        SingleArgOrCollection,
+        SingleArgCollection,
     },
 };
 use std::hash::Hash;
@@ -21,7 +21,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
     }
@@ -56,7 +56,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         A: FromSingleValueArray<M>,
     {
         prepare_command(self, cmd("SDIFF").arg(keys))
@@ -76,7 +76,7 @@ pub trait SetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
     }
@@ -94,7 +94,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         A: FromSingleValueArray<M>,
     {
         prepare_command(self, cmd("SINTER").arg(keys))
@@ -116,7 +116,7 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -142,7 +142,7 @@ pub trait SetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
     }
@@ -193,7 +193,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
     }
@@ -271,7 +271,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SREM").arg(key).arg(members))
     }
@@ -311,7 +311,7 @@ pub trait SetCommands {
         Self: Sized,
         K: SingleArg,
         M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         A: FromSingleValueArray<M>,
     {
         prepare_command(self, cmd("SUNION").arg(keys))
@@ -331,7 +331,7 @@ pub trait SetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
     }

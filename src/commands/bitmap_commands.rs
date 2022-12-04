@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArgs, IntoArgs, SingleArg, SingleArgOrCollection,
+        cmd, MultipleArgsCollection, CommandArgs, IntoArgs, SingleArg, SingleArgCollection,
     },
 };
 
@@ -44,7 +44,7 @@ pub trait BitmapCommands {
         K: SingleArg,
         E: SingleArg,
         O: SingleArg,
-        C: ArgsOrCollection<BitFieldSubCommand<E, O>>,
+        C: MultipleArgsCollection<BitFieldSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD").arg(key).arg(sub_commands))
     }
@@ -70,7 +70,7 @@ pub trait BitmapCommands {
         K: SingleArg,
         E: SingleArg,
         O: SingleArg,
-        C: ArgsOrCollection<BitFieldGetSubCommand<E, O>>,
+        C: MultipleArgsCollection<BitFieldGetSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD_RO").arg(key).arg(get_commands))
     }
@@ -95,7 +95,7 @@ pub trait BitmapCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
     }

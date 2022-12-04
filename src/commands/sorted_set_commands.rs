@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgOrCollection,
+        cmd, MultipleArgsCollection, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgCollection,
     },
 };
 
@@ -30,7 +30,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        I: ArgsOrCollection<(f64, M)>,
+        I: MultipleArgsCollection<(f64, M)>,
     {
         prepare_command(self, cmd("ZADD").arg(key).arg(options).arg(items))
     }
@@ -119,7 +119,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         E: FromValue,
     {
         prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
@@ -138,7 +138,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         E: FromValue,
     {
         prepare_command(
@@ -164,7 +164,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -210,8 +210,8 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
         E: FromValue,
     {
         prepare_command(
@@ -242,8 +242,8 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
         E: FromValue,
     {
         prepare_command(
@@ -270,7 +270,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -302,8 +302,8 @@ pub trait SortedSetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
     {
         prepare_command(
             self,
@@ -357,7 +357,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
         E: FromValue,
     {
         prepare_command(
@@ -386,7 +386,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("ZMSCORE").arg(key).arg(members))
     }
@@ -616,7 +616,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         M: SingleArg,
-        C: SingleArgOrCollection<M>,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("ZREM").arg(key).arg(members))
     }
@@ -756,8 +756,8 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
         E: FromValue,
     {
         prepare_command(
@@ -788,8 +788,8 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
         E: FromValue,
     {
         prepare_command(
@@ -823,8 +823,8 @@ pub trait SortedSetCommands {
         Self: Sized,
         D: SingleArg,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
-        W: SingleArgOrCollection<f64>,
+        C: SingleArgCollection<K>,
+        W: SingleArgCollection<f64>,
     {
         prepare_command(
             self,

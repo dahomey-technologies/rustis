@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -40,7 +40,7 @@ pub trait ClusterCommands {
     fn cluster_addslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<u16>,
+        S: SingleArgCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTS").arg(slots))
     }
@@ -58,7 +58,7 @@ pub trait ClusterCommands {
     fn cluster_addslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<u16, u16>,
+        S: KeyValueArgsCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTSRANGE").arg(slots))
     }
@@ -123,7 +123,7 @@ pub trait ClusterCommands {
     fn cluster_delslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<u16>,
+        S: SingleArgCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTS").arg(slots))
     }
@@ -140,7 +140,7 @@ pub trait ClusterCommands {
     fn cluster_delslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<u16, u16>,
+        S: KeyValueArgsCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTSRANGE").arg(slots))
     }

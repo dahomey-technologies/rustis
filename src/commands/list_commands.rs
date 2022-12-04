@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
-        SingleArgOrCollection,
+        SingleArgCollection,
     },
 };
 
@@ -121,7 +121,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: FromValue,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -230,7 +230,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        C: SingleArgOrCollection<E>,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("LPUSH").arg(key).arg(elements))
     }
@@ -249,7 +249,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        C: SingleArgOrCollection<E>,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("LPUSHX").arg(key).arg(elements))
     }
@@ -347,7 +347,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        C: SingleArgOrCollection<E>,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("RPUSH").arg(key).arg(elements))
     }
@@ -366,7 +366,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        C: SingleArgOrCollection<E>,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("RPUSHX").arg(key).arg(elements))
     }

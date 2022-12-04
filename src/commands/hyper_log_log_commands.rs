@@ -1,6 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{cmd, SingleArg, SingleArgOrCollection},
+    resp::{cmd, SingleArg, SingleArgCollection},
 };
 
 /// A group of Redis commands related to [`HyperLogLog`](https://redis.io/docs/data-types/hyperloglogs/)
@@ -21,7 +21,7 @@ pub trait HyperLogLogCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        EE: SingleArgOrCollection<E>,
+        EE: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("PFADD").arg(key).arg(elements))
     }
@@ -38,7 +38,7 @@ pub trait HyperLogLogCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("PFCOUNT").arg(keys))
     }
@@ -52,7 +52,7 @@ pub trait HyperLogLogCommands {
         Self: Sized,
         D: SingleArg,
         S: SingleArg,
-        SS: SingleArgOrCollection<S>,
+        SS: SingleArgCollection<S>,
     {
         prepare_command(self, cmd("PFMERGE").arg(dest_key).arg(source_keys))
     }

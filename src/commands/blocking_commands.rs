@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, FromValue, SingleArgOrCollection, SingleArg},
+    resp::{cmd, FromValue, SingleArgCollection, SingleArg},
     Future,
 };
 
@@ -64,7 +64,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         E: FromValue,
     {
         prepare_command(
@@ -103,7 +103,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         K1: FromValue,
         V: FromValue,
     {
@@ -134,7 +134,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         K1: FromValue,
         V: FromValue,
     {
@@ -162,7 +162,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         E: FromValue,
     {
         prepare_command(
@@ -197,7 +197,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         K1: FromValue,
         E: FromValue,
     {
@@ -224,7 +224,7 @@ pub trait BlockingCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
         K1: FromValue,
         E: FromValue,
     {

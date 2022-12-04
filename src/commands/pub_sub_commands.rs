@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
         cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArg, SingleArgOrCollection,
+        SingleArg, SingleArgCollection,
     },
     Future,
 };
@@ -55,7 +55,7 @@ pub trait PubSubCommands {
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: SingleArg + Send + 'a,
-        PP: SingleArgOrCollection<P>;
+        PP: SingleArgCollection<P>;
 
     /// Posts a message to the given channel.
     ///
@@ -122,7 +122,7 @@ pub trait PubSubCommands {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
         R: FromValue,
         RR: FromKeyValueArray<R, usize>,
     {
@@ -159,7 +159,7 @@ pub trait PubSubCommands {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgOrCollection<C>,
+        CC: SingleArgCollection<C>,
         R: FromValue,
         RR: FromKeyValueArray<R, usize>,
     {
@@ -189,7 +189,7 @@ pub trait PubSubCommands {
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>;
+        CC: SingleArgCollection<C>;
 
     /// Subscribes the client to the specified channels.
     ///
@@ -234,7 +234,7 @@ pub trait PubSubCommands {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
-        CC: SingleArgOrCollection<C>;
+        CC: SingleArgCollection<C>;
 }
 
 /// Options for the [`pub_sub_channels`](PubSubCommands::pub_sub_channels) command

@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs, SingleArg,
-        SingleArgOrCollection, Value,
+        SingleArgCollection, Value,
     },
     Result,
 };
@@ -26,7 +26,7 @@ pub trait TDigestCommands {
     fn tdigest_add(
         &mut self,
         key: impl SingleArg,
-        values: impl SingleArgOrCollection<f64>,
+        values: impl SingleArgCollection<f64>,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -57,7 +57,7 @@ pub trait TDigestCommands {
     fn tdigest_byrank<R: FromSingleValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
-        ranks: impl SingleArgOrCollection<usize>,
+        ranks: impl SingleArgCollection<usize>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -88,7 +88,7 @@ pub trait TDigestCommands {
     fn tdigest_byrevrank<R: FromSingleValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
-        ranks: impl SingleArgOrCollection<usize>,
+        ranks: impl SingleArgCollection<usize>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -116,7 +116,7 @@ pub trait TDigestCommands {
     fn tdigest_cdf<V: SingleArg, R: FromSingleValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
-        values: impl SingleArgOrCollection<V>,
+        values: impl SingleArgCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -205,7 +205,7 @@ pub trait TDigestCommands {
     fn tdigest_merge<S: SingleArg>(
         &mut self,
         destination: impl SingleArg,
-        sources: impl SingleArgOrCollection<S>,
+        sources: impl SingleArgCollection<S>,
         options: TDigestMergeOptions,
     ) -> PreparedCommand<Self, ()>
     where
@@ -262,7 +262,7 @@ pub trait TDigestCommands {
     fn tdigest_quantile<Q: SingleArg, R: FromSingleValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
-        quantiles: impl SingleArgOrCollection<Q>,
+        quantiles: impl SingleArgCollection<Q>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -297,7 +297,7 @@ pub trait TDigestCommands {
     fn tdigest_rank<V: SingleArg, R: FromSingleValueArray<isize>>(
         &mut self,
         key: impl SingleArg,
-        values: impl SingleArgOrCollection<V>,
+        values: impl SingleArgCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -347,7 +347,7 @@ pub trait TDigestCommands {
     fn tdigest_revrank<V: SingleArg, R: FromSingleValueArray<isize>>(
         &mut self,
         key: impl SingleArg,
-        values: impl SingleArgOrCollection<V>,
+        values: impl SingleArgCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,

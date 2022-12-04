@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        SingleArg, SingleArgOrCollection, Value,
+        SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
@@ -178,7 +178,7 @@ pub trait CuckooCommands {
         &mut self,
         key: impl SingleArg,
         options: CfInsertOptions,
-        item: impl SingleArgOrCollection<I>,
+        item: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -229,7 +229,7 @@ pub trait CuckooCommands {
         &mut self,
         key: impl SingleArg,
         options: CfInsertOptions,
-        item: impl SingleArgOrCollection<I>,
+        item: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -287,7 +287,7 @@ pub trait CuckooCommands {
     fn cf_mexists<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
-        items: impl SingleArgOrCollection<I>,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,

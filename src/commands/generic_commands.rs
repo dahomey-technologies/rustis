@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
-        SingleArgOrCollection, Value,
+        SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -54,7 +54,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("DEL").arg(keys))
     }
@@ -87,7 +87,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("EXISTS").arg(keys))
     }
@@ -578,7 +578,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        KK: SingleArgOrCollection<K>,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("TOUCH").arg(keys))
     }
@@ -631,7 +631,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        C: SingleArgOrCollection<K>,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("UNLINK").arg(keys))
     }
@@ -721,7 +721,7 @@ impl MigrateOptions {
     }
 
     #[must_use]
-    pub fn keys<K: SingleArg, KK: SingleArgOrCollection<K>>(self, keys: KK) -> Self {
+    pub fn keys<K: SingleArg, KK: SingleArgCollection<K>>(self, keys: KK) -> Self {
         Self {
             command_args: self.command_args.arg("KEYS").arg(keys),
         }

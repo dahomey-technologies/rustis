@@ -1,7 +1,9 @@
 use crate::{
+    client::{Client, ClientPreparedCommand},
+    commands::ConnectionCommands,
     network::MonitorReceiver,
     resp::{FromValue, Value},
-    Client, ClientPreparedCommand, ConnectionCommands, Error, Result,
+    Error, Result,
 };
 use futures::{Stream, StreamExt};
 use std::{

@@ -1,7 +1,11 @@
 use crate::{
-    resp::CommandArg, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
-    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
-    Result, StringCommands,
+    commands::{
+        BitFieldGetSubCommand, BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange,
+        BitUnit, BitmapCommands, StringCommands,
+    },
+    resp::CommandArg,
+    tests::get_test_client,
+    Result,
 };
 use serial_test::serial;
 

@@ -1,10 +1,16 @@
 use crate::{
-    network::sleep, resp::CommandArg, tests::get_redis_stack_test_client, Client, ClientReplyMode,
-    ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions, FtFieldSchema,
-    FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtProfileQueryType, FtQueryResult,
-    FtReducer, FtSearchOptions, FtSortBy, FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions,
-    FtTermType, FtWithCursorOptions, HashCommands, JsonCommands, PipelinePreparedCommand, Result,
-    SearchCommands, ServerCommands, SetCondition, SortOrder,
+    client::{Client, PipelinePreparedCommand},
+    commands::{
+        ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
+        FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute,
+        FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
+        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtWithCursorOptions,
+        HashCommands, JsonCommands, SearchCommands, ServerCommands, SetCondition, SortOrder,
+    },
+    network::sleep,
+    resp::CommandArg,
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use rand::{seq::SliceRandom, Rng};
 use serial_test::serial;

@@ -1,7 +1,8 @@
 use crate::{
+    client::{Config, PreparedCommand},
+    commands::{ClusterCommands, ConnectionCommands, SentinelCommands, ServerCommands},
     resp::{Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
-    tcp_connect, ClusterCommands, Config, ConnectionCommands, Error, Future, PreparedCommand,
-    Result, SentinelCommands, ServerCommands, TcpStreamReader, TcpStreamWriter, RetryReason,
+    tcp_connect, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
@@ -82,7 +83,11 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, _retry_reasons: &[RetryReason]) -> Result<()> {
+    pub async fn write_batch(
+        &mut self,
+        commands: impl Iterator<Item = &Command>,
+        _retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         self.buffer.clear();
 
         let command_encoder = match &mut self.streams {
@@ -99,7 +104,9 @@ impl StandaloneConnection {
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
             #[cfg(feature = "tls")]
-            Streams::TcpTls(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
+            Streams::TcpTls(_, framed_write) => {
+                framed_write.get_mut().write_all(&self.buffer).await?
+            }
         }
 
         Ok(())
@@ -115,7 +122,10 @@ impl StandaloneConnection {
                 match &value {
                     Ok(Value::Array(array)) => {
                         if array.len() > 100 {
-                            debug!("[{}:{}] Received result Array(Vec([...]))", self.host, self.port);
+                            debug!(
+                                "[{}:{}] Received result Array(Vec([...]))",
+                                self.host, self.port
+                            );
                         } else {
                             debug!("[{}:{}] Received result {value:?}", self.host, self.port);
                         }

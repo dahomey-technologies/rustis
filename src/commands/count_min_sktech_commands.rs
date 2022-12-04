@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection,
         SingleArgOrCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 use std::collections::HashMap;
 

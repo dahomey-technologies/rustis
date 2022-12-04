@@ -1,10 +1,11 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, MonitorStream, PreparedCommand},
+    commands::{LMoveWhere, ZMPopResult, ZWhere},
     resp::{cmd, CommandArg, FromValue, SingleArgOrCollection},
-    Future, LMoveWhere, MonitorStream, PreparedCommand, ZMPopResult, ZWhere,
+    Future,
 };
 
-/// Result for the [`bzpopmin`](BlockingCommands::bzpopmin) 
+/// Result for the [`bzpopmin`](BlockingCommands::bzpopmin)
 /// and [`bzpopmax`](BlockingCommands::bzpopmax) commands
 pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 

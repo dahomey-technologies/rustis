@@ -1,4 +1,4 @@
-use crate::{Message, Result};
+use crate::{client::Message, Result};
 use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,

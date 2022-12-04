@@ -1,7 +1,10 @@
 use crate::{
-    tests::get_test_client, GenericCommands, GeoAddCondition, GeoCommands, GeoSearchBy,
-    GeoSearchFrom, GeoSearchOptions, GeoSearchOrder, GeoSearchResult, GeoSearchStoreOptions,
-    GeoUnit, Result,
+    commands::{
+        GenericCommands, GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom,
+        GeoSearchOptions, GeoSearchOrder, GeoSearchResult, GeoSearchStoreOptions, GeoUnit,
+    },
+    tests::get_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -176,14 +179,8 @@ async fn geopos() -> Result<()> {
         .geopos("Sicily", ["Palermo", "Catania", "NonExisting"])
         .await?;
     assert_eq!(3, hashes.len());
-    assert_eq!(
-        Some((13.361389338970184, 38.1155563954963)),
-        hashes[0]
-    );
-    assert_eq!(
-        Some((15.087267458438873, 37.50266842333162)),
-        hashes[1]
-    );
+    assert_eq!(Some((13.361389338970184, 38.1155563954963)), hashes[0]);
+    assert_eq!(Some((15.087267458438873, 37.50266842333162)), hashes[1]);
     assert_eq!(None, hashes[2]);
 
     Ok(())

@@ -1,7 +1,11 @@
 use crate::{
-    resp::BulkString, tests::get_redis_stack_test_client, CfInsertOptions, CfReserveOptions,
-    CuckooCommands, Error, FlushingMode, RedisError, RedisErrorKind, Result, ServerCommands,
-    StringCommands,
+    commands::{
+        CfInsertOptions, CfReserveOptions, CuckooCommands, FlushingMode, ServerCommands,
+        StringCommands,
+    },
+    resp::BulkString,
+    tests::get_redis_stack_test_client,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::collections::VecDeque;

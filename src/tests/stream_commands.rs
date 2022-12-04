@@ -1,7 +1,11 @@
 use crate::{
-    tests::get_test_client, FlushingMode, Result, ServerCommands, StreamCommands, StreamEntry,
-    XAddOptions, XAutoClaimOptions, XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions,
-    XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
+    commands::{
+        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
+        XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingOptions,
+        XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
+    },
+    tests::get_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -243,18 +247,14 @@ async fn xread() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<(String, Vec<StreamEntry<String>>)> = client
-        .xread(Default::default(), "mystream", 0)
-        .await?;
+    let results: Vec<(String, Vec<StreamEntry<String>>)> =
+        client.xread(Default::default(), "mystream", 0).await?;
     assert_eq!(1, results.len());
     assert_eq!("mystream", results[0].0);
     assert_eq!(2, results[0].1.len());
     assert_eq!(id1, results[0].1[0].stream_id);
     assert_eq!(2, results[0].1[0].items.len());
-    assert_eq!(
-        Some(&"John".to_string()),
-        results[0].1[0].items.get("name")
-    );
+    assert_eq!(Some(&"John".to_string()), results[0].1[0].items.get("name"));
     assert_eq!(
         Some(&"Doe".to_string()),
         results[0].1[0].items.get("surname")
@@ -282,10 +282,7 @@ async fn xread() -> Result<()> {
     assert_eq!(1, results[0].1.len());
     assert_eq!(id1, results[0].1[0].stream_id);
     assert_eq!(2, results[0].1[0].items.len());
-    assert_eq!(
-        Some(&"John".to_string()),
-        results[0].1[0].items.get("name")
-    );
+    assert_eq!(Some(&"John".to_string()), results[0].1[0].items.get("name"));
     assert_eq!(
         Some(&"Doe".to_string()),
         results[0].1[0].items.get("surname")

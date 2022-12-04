@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    tests::get_redis_stack_test_client, FlushingMode, Result, ServerCommands, TimeSeriesCommands,
-    TsAddOptions, TsAggregationType, TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy,
-    TsGetOptions, TsGroupByOptions, TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions,
-    TsRangeOptions, TsSample,
+    commands::{
+        FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
+        TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsGetOptions, TsGroupByOptions,
+        TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsSample,
+    },
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 

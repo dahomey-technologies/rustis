@@ -1,9 +1,11 @@
 use crate::{
-    tests::get_test_client, FlushingMode, PipelinePreparedCommand, Result, ServerCommands,
-    StringCommands, resp::{cmd, Value},
+    client::PipelinePreparedCommand,
+    commands::{FlushingMode, ServerCommands, StringCommands},
+    resp::{cmd, Value},
+    tests::get_test_client,
+    Result,
 };
 use serial_test::serial;
-
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

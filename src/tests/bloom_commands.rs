@@ -1,6 +1,11 @@
 use crate::{
-    resp::CommandArg, tests::get_redis_stack_test_client, BfInfoParameter, BfInsertOptions,
-    BfReserveOptions, BloomCommands, FlushingMode, Result, ServerCommands,
+    commands::{
+        BfInfoParameter, BfInsertOptions, BfReserveOptions, BloomCommands, FlushingMode,
+        ServerCommands,
+    },
+    resp::CommandArg,
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 use std::collections::VecDeque;

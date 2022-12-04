@@ -1,4 +1,8 @@
-use crate::{tests::get_test_client, GenericCommands, HashCommands, Result, SetCommands};
+use crate::{
+    commands::{GenericCommands, HashCommands, SetCommands},
+    tests::get_test_client,
+    Result,
+};
 use serial_test::serial;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 

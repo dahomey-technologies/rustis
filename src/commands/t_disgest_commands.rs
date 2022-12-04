@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 
 /// A group of Redis commands related to [`T-Digest`](https://redis.io/docs/stack/bloom/)

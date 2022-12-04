@@ -1,6 +1,7 @@
 use crate::{
+    client::{Config, Message},
     resp::{Command, CommandArgs, Value},
-    spawn, Config, Connection, Error, Message, Result, RetryReason,
+    spawn, Connection, Error, Result, RetryReason,
 };
 use futures::{
     channel::{mpsc, oneshot},

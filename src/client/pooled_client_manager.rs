@@ -1,4 +1,8 @@
-use crate::{Client, Config, ConnectionCommands, Error, Future, IntoConfig, Result};
+use crate::{
+    client::{Client, Config, IntoConfig},
+    commands::ConnectionCommands,
+    Error, Future, Result,
+};
 use bb8::ManageConnection;
 
 /// An object which manages a pool of clients, based on [bb8](https://docs.rs/bb8/latest/bb8/)

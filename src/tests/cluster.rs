@@ -1,10 +1,14 @@
 use crate::{
+    client::Client,
+    commands::{
+        CallBuilder, ClusterCommands, ClusterNodeResult,
+        ClusterSetSlotSubCommand::{Importing, Migrating, Node},
+        ClusterShardResult, FlushingMode, GenericCommands, MigrateOptions, ScriptingCommands,
+        ServerCommands, StringCommands,
+    },
     sleep, spawn,
     tests::get_cluster_test_client,
-    CallBuilder, Client, ClusterCommands, ClusterNodeResult,
-    ClusterSetSlotSubCommand::{Importing, Migrating, Node},
-    ClusterShardResult, Error, FlushingMode, GenericCommands, MigrateOptions, RedisError,
-    RedisErrorKind, Result, ScriptingCommands, ServerCommands, StringCommands,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::collections::HashSet;

@@ -1,6 +1,8 @@
 use crate::{
+    client::{Client, IntoConfig},
+    commands::{ClientKillOptions, ConnectionCommands, ServerCommands},
     tests::{get_default_host, get_default_port, get_test_client},
-    Client, ClientKillOptions, ConnectionCommands, IntoConfig, Result, ServerCommands,
+    Result,
 };
 use serial_test::serial;
 
@@ -173,7 +175,11 @@ fn into_config() -> Result<()> {
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());
     assert!("http://username@127.0.0.1".into_config().is_err());
-    assert!("redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381".into_config().is_err());
+    assert!(
+        "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381"
+            .into_config()
+            .is_err()
+    );
     assert!("redis://127.0.0.1?param".into_config().is_err());
     assert!("redis://127.0.0.1?param=value".into_config().is_ok());
 

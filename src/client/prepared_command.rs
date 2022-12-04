@@ -1,6 +1,7 @@
 use crate::{
+    client::ClientTrait,
     resp::{Command, FromValue, Value},
-    ClientTrait, Future,
+    Future,
 };
 use std::marker::PhantomData;
 

@@ -1,13 +1,13 @@
 use std::{collections::HashMap, future};
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray,
         FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
         SingleArgOrCollection, Value, Command,
     },
-    Error, PreparedCommand, Result, SortOrder, GeoUnit,
+    Error, Result, commands::{SortOrder, GeoUnit},
 };
 
 /// A group of Redis commands related to [`RedisSearch`](https://redis.io/docs/stack/search/)

@@ -1,6 +1,6 @@
 #[cfg(feature = "tls")]
-use crate::IntoConfig;
-use crate::{Client, Result};
+use crate::client::IntoConfig;
+use crate::{client::Client, Result};
 #[cfg(feature = "tls")]
 use native_tls::Certificate;
 
@@ -100,15 +100,12 @@ pub(crate) async fn get_sentinel_test_client() -> Result<Client> {
 
 pub fn get_sentinel_master_test_uri() -> String {
     let host = get_default_host();
-    format!(
-        "redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice"
-    )
+    format!("redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice")
 }
 
 pub(crate) async fn get_sentinel_master_test_client() -> Result<Client> {
     log_try_init();
-    Client::connect(get_sentinel_master_test_uri())
-    .await
+    Client::connect(get_sentinel_master_test_uri()).await
 }
 
 pub(crate) async fn get_cluster_test_client() -> Result<Client> {

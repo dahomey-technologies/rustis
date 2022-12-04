@@ -1,20 +1,25 @@
 #[cfg(feature = "redis-graph")]
-use crate::GraphCommands;
+use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
-use crate::JsonCommands;
+use crate::commands::JsonCommands;
 #[cfg(feature = "redis-search")]
-use crate::SearchCommands;
+use crate::commands::SearchCommands;
 #[cfg(feature = "redis-time-series")]
-use crate::TimeSeriesCommands;
-use crate::{
-    resp::{Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
-    HashCommands, HyperLogLogCommands, InnerClient, ListCommands, PreparedCommand, Result,
-    ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands, StreamCommands,
-    StringCommands,
-};
+use crate::commands::TimeSeriesCommands;
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
+use crate::commands::{
+    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
+};
+use crate::{
+    client::{InnerClient, PreparedCommand},
+    commands::{
+        BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
+        HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
+        SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+    },
+    resp::{Command, FromValue, ResultValueExt, Value},
+    Result,
+};
 use std::iter::zip;
 
 /// Represents a Redis command pipeline.
@@ -52,14 +57,15 @@ impl Pipeline {
     /// It is the caller responsability to use the right type to cast the server response
     /// to the right tuple or collection depending on which command has been
     /// [queued](PipelinePreparedCommand::queue) or [forgotten](PipelinePreparedCommand::forget).
-    /// 
+    ///
     /// The most generic type that can requested as a result is `Vec<resp::Value>`
     ///
     /// # Example
     /// ```
     /// use rustis::{
-    ///     resp::{cmd, Value}, Client, Pipeline, PipelinePreparedCommand, Result, 
-    ///     StringCommands,
+    ///     client::{Client, Pipeline, PipelinePreparedCommand}, 
+    ///     commands::StringCommands,
+    ///     resp::{cmd, Value}, Result,
     /// };
     ///
     /// #[tokio::main]
@@ -77,7 +83,7 @@ impl Pipeline {
     ///     assert!(matches!(result, Value::Error(_)));
     ///     assert_eq!("value1", value1);
     ///     assert_eq!("value2", value2);
-    /// 
+    ///
     ///     Ok(())
     /// }
     /// ```    
@@ -105,8 +111,8 @@ impl Pipeline {
     }
 }
 
-/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand) 
-/// to add specific methods for the [`Pipeline`](crate::Pipeline) & 
+/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand)
+/// to add specific methods for the [`Pipeline`](crate::Pipeline) &
 /// the [`Transaction`](crate::Transaction) executors
 pub trait PipelinePreparedCommand<'a, R>
 where

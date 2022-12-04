@@ -1,9 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    client::{Client, IntoConfig},
+    commands::{
+        ClusterCommands, ClusterShardResult, FlushingMode, PubSubChannelsOptions, PubSubCommands,
+        ServerCommands, StringCommands,
+    },
     tests::{get_cluster_test_client, get_test_client},
-    ClusterCommands, ClusterShardResult, Error, FlushingMode, PubSubChannelsOptions,
-    PubSubCommands, Result, ServerCommands, StringCommands, Client, IntoConfig,
+    Error, Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -372,7 +376,8 @@ async fn pub_sub_shardchannels() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client = Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+    let mut master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
     let mut pub_sub_stream = pub_sub_client
         .ssubscribe([
@@ -430,7 +435,8 @@ async fn pub_sub_shardnumsub() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client = Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+    let mut master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
     let num_sub: Vec<(String, usize)> = master_client
         .pub_sub_shardnumsub(["mychannel1{1}", "mychannel2{1}"])

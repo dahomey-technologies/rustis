@@ -1,6 +1,7 @@
 use crate::{
+    commands::GraphCache,
     resp::{FromValue, Value, BulkString},
-    Error, GraphCache, Result,
+    Error, Result,
 };
 use std::collections::HashMap;
 

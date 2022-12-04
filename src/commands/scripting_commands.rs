@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
-    resp::{
-        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
-    },
-    Error, FlushingMode, PreparedCommand, Result,
+    client::{prepare_command, PreparedCommand},
+    commands::FlushingMode,
+    resp::{cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value},
+    Error, Result,
 };
 
 /// A group of Redis commands related to Scripting and Functions
@@ -325,7 +324,7 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
-    /// Script name when used with [`eval`](crate::ScriptingCommands::eval) 
+    /// Script name when used with [`eval`](crate::ScriptingCommands::eval)
     /// and [`eval_readonly`](crate::ScriptingCommands::eval_readonly) commands
     #[must_use]
     pub fn script<S: Into<CommandArg>>(script: S) -> Self {
@@ -335,7 +334,7 @@ impl CallBuilder {
         }
     }
 
-    /// Sha1 haxadecimal string when used with [`eval`](crate::ScriptingCommands::evalsha) 
+    /// Sha1 haxadecimal string when used with [`eval`](crate::ScriptingCommands::evalsha)
     /// and [`evalsha_readonly`](crate::ScriptingCommands::evalsha_readonly) commands
     #[must_use]
     pub fn sha1<S: Into<CommandArg>>(sha1: S) -> Self {
@@ -345,7 +344,7 @@ impl CallBuilder {
         }
     }
 
-    /// Sha1 haxadecimal string when used with [`fcall`](crate::ScriptingCommands::fcall) 
+    /// Sha1 haxadecimal string when used with [`fcall`](crate::ScriptingCommands::fcall)
     /// and [`fcall_readonly`](crate::ScriptingCommands::fcall_readonly) commands
     #[must_use]
     pub fn function<F: Into<CommandArg>>(function: F) -> Self {
@@ -441,7 +440,7 @@ pub struct LibraryInfo {
     pub engine: String,
     /// the list of functions in the library.
     pub functions: Vec<FunctionInfo>,
-    /// the library's source code (when given the 
+    /// the library's source code (when given the
     /// [`with_code`](FunctionListOptions::with_code) modifier).
     pub library_code: Option<String>,
 }

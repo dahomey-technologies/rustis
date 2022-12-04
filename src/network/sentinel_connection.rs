@@ -1,7 +1,8 @@
 use crate::{
+    client::{Config, SentinelConfig},
+    commands::{RoleResult, SentinelCommands, ServerCommands},
     resp::{Command, Value},
-    sleep, Config, Error, Result, RetryReason, RoleResult, SentinelCommands, SentinelConfig,
-    ServerCommands, StandaloneConnection,
+    sleep, Error, Result, RetryReason, StandaloneConnection,
 };
 use log::debug;
 

@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of generic Redis commands

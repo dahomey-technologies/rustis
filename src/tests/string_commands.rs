@@ -1,8 +1,8 @@
 use crate::{
-    resp::{Value},
+    commands::{GenericCommands, GetExOptions, SetCondition, SetExpiration, StringCommands},
+    resp::Value,
     tests::get_test_client,
-    Error, GenericCommands, GetExOptions, RedisError, RedisErrorKind, Result, SetCondition,
-    SetExpiration, StringCommands,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};

@@ -1,6 +1,9 @@
 use crate::{
-    resp::cmd, tests::get_test_client, Error, FlushingMode, ListCommands, PipelinePreparedCommand,
-    Result, ServerCommands, StringCommands, TransactionCommands, RedisError, RedisErrorKind,
+    client::PipelinePreparedCommand,
+    commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
+    resp::cmd,
+    tests::get_test_client,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 

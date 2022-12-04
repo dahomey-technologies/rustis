@@ -1,19 +1,25 @@
 #[cfg(feature = "redis-graph")]
-use crate::GraphCommands;
+use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
-use crate::JsonCommands;
+use crate::commands::JsonCommands;
 #[cfg(feature = "redis-search")]
-use crate::SearchCommands;
+use crate::commands::SearchCommands;
 #[cfg(feature = "redis-time-series")]
-use crate::TimeSeriesCommands;
-use crate::{
-    resp::{cmd, Command, FromValue, ResultValueExt, Value},
-    BitmapCommands, Error, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
-    InnerClient, ListCommands, PipelinePreparedCommand, PreparedCommand, Result, ScriptingCommands,
-    ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
-};
+use crate::commands::TimeSeriesCommands;
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
+use crate::commands::{
+    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
+};
+use crate::{
+    client::{InnerClient, PipelinePreparedCommand, PreparedCommand},
+    commands::{
+        BitmapCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
+        ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
+        StreamCommands, StringCommands,
+    },
+    resp::{cmd, Command, FromValue, ResultValueExt, Value},
+    Error, Result,
+};
 use std::iter::zip;
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.

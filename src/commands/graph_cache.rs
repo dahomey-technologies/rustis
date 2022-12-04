@@ -1,4 +1,4 @@
-use crate::{resp::Value, GraphValueType};
+use crate::{commands::GraphValueType, resp::Value};
 
 #[derive(Debug, Default)]
 pub(crate) struct GraphCache {
@@ -92,7 +92,7 @@ impl GraphCache {
                 return false;
             };
 
-            if ! self.check_for_value(value) {
+            if !self.check_for_value(value) {
                 return false;
             }
         }
@@ -144,8 +144,7 @@ impl GraphCache {
         };
 
         // nodes & edges
-        self.check_for_array(&path_parts[0])
-            && self.check_for_array(&path_parts[1])
+        self.check_for_array(&path_parts[0]) && self.check_for_array(&path_parts[1])
     }
 
     fn check_for_properties(&self, properties: &Value) -> bool {

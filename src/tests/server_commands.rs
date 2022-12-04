@@ -1,12 +1,16 @@
 use crate::{
+    client::Client,
+    commands::{
+        AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands,
+        ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands,
+        FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
+        ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, RoleResult, ServerCommands,
+        SlowLogOptions, StringCommands,
+    },
     resp::{cmd, Value},
     spawn,
     tests::get_test_client,
-    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands, Client,
-    ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error,
-    FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
-    ModuleInfo, ModuleLoadOptions, RedisError, RedisErrorKind, ReplicaOfOptions, Result,
-    RoleResult, ServerCommands, SlowLogOptions, StringCommands,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -106,9 +110,7 @@ async fn acl_getuser() -> Result<()> {
     client.acl_setuser("foo", Vec::<String>::new()).await?;
     let rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
     // default `commands` rule
-    assert!(
-        matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all")
-    );
+    assert!(matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all"));
 
     client.acl_deluser("foo").await?;
 
@@ -161,9 +163,7 @@ async fn acl_log() -> Result<()> {
     let logs: Vec<HashMap<String, Value>> =
         client.acl_log(AclLogOptions::default().count(1)).await?;
     assert_eq!(1, logs.len());
-    assert!(
-        matches!(logs[0].get("reason"), Some(Value::BulkString(reason)) if reason == b"auth")
-    );
+    assert!(matches!(logs[0].get("reason"), Some(Value::BulkString(reason)) if reason == b"auth"));
     let client_info: String = logs[0].get("client-info").unwrap().to_string();
     let client_info = ClientInfo::from_line(&client_info)?;
     assert_eq!("auth", client_info.cmd);

@@ -1,4 +1,5 @@
 mod cache;
+#[allow(clippy::module_inception)]
 mod client;
 mod client_trait;
 mod config;
@@ -6,10 +7,11 @@ mod inner_client;
 mod message;
 mod monitor_stream;
 mod multiplexed_client;
+mod pipeline;
 #[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]
 mod pooled_client_manager;
-mod pipeline;
+mod prepared_command;
 mod pub_sub_stream;
 mod transaction;
 
@@ -25,5 +27,6 @@ pub use pipeline::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]
 pub use pooled_client_manager::*;
+pub use prepared_command::*;
 pub use pub_sub_stream::*;
 pub use transaction::*;

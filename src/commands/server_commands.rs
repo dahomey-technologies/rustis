@@ -1,12 +1,12 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to Server Management

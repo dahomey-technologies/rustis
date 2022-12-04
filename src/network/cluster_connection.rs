@@ -1,8 +1,12 @@
 use crate::{
+    client::{ClusterConfig, Config},
+    commands::{
+        ClusterCommands, ClusterNodeResult, ClusterShardResult, CommandTip, RequestPolicy,
+        ResponsePolicy,
+    },
+    network::CommandInfoManager,
     resp::{Command, Value},
-    ClusterCommands, ClusterConfig, ClusterNodeResult, ClusterShardResult, CommandInfoManager,
-    CommandTip, Config, Error, RedisError, RedisErrorKind, RequestPolicy, ResponsePolicy, Result,
-    RetryReason, StandaloneConnection,
+    Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
 use futures::{future, FutureExt};
 use log::{debug, info, trace, warn};
@@ -579,9 +583,7 @@ impl ClusterConnection {
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
                     (Value::Integer(v), Value::Nil) => Value::Integer(v),
-                    (Value::Array(v), Value::Array(mut r))
-                        if v.len() == r.len() =>
-                    {
+                    (Value::Array(v), Value::Array(mut r)) if v.len() == r.len() => {
                         for i in 0..v.len() {
                             match (&v[i], &r[i]) {
                                 (Value::Integer(vi), Value::Integer(ri)) => {
@@ -594,9 +596,7 @@ impl ClusterConnection {
                         }
                         Value::Array(r)
                     }
-                    (Value::Array(v), Value::Nil) => {
-                        Value::Array(v)
-                    }
+                    (Value::Array(v), Value::Nil) => Value::Array(v),
                     _ => {
                         return Some(Err(Error::Client("Unexpected value".to_owned())));
                     }
@@ -657,9 +657,7 @@ impl ClusterConnection {
 
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
                 match sub_result {
-                    Ok(Value::Array(values))
-                        if sub_request.keys.len() == values.len() =>
-                    {
+                    Ok(Value::Array(values)) if sub_request.keys.len() == values.len() => {
                         results.extend(zip(&sub_request.keys, values))
                     }
                     Err(_) | Ok(Value::Error(_)) => return Some(sub_result),
@@ -982,8 +980,7 @@ fn is_push_message(value: &Result<Value>) -> bool {
             {
                 matches!(command.as_slice(), b"message" | b"smessage")
             }
-            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] =>
-            {
+            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] => {
                 matches!(
                     command.as_slice(),
                     b"subscribe"

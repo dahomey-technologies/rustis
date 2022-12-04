@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to [`Cluster Management`](https://redis.io/docs/management/scaling/)
@@ -428,7 +428,7 @@ pub trait ClusterCommands {
     fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
     where
         Self: Sized,
-        S: FromSingleValueArray<ClusterShardResult>
+        S: FromSingleValueArray<ClusterShardResult>,
     {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
@@ -653,10 +653,9 @@ impl FromValue for ClusterInfo {
             .map(|line| {
                 let mut parts = line.split(':');
                 match (parts.next(), parts.next(), parts.next()) {
-                    (Some(key), Some(value), None) => Ok((
-                        key.to_owned(),
-                        Value::BulkString(value.as_bytes().to_vec()),
-                    )),
+                    (Some(key), Some(value), None) => {
+                        Ok((key.to_owned(), Value::BulkString(value.as_bytes().to_vec())))
+                    }
                     _ => Err(Error::Client(
                         "Unexpected result for cluster_info".to_owned(),
                     )),

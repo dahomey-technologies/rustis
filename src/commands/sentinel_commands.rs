@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray, FromValue,
         HashMapExt, IntoArgs, KeyValueArgOrCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 
 /// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
@@ -245,7 +245,7 @@ pub trait SentinelCommands {
     /// The pattern argument is a glob-style pattern.
     /// The reset process clears any previous state in a master (including a failover in progress),
     /// and removes every replica and sentinel already discovered and associated with the master.
-    /// 
+    ///
     /// # Return
     /// The number of reset masters
     #[must_use]

@@ -1,5 +1,8 @@
 use crate::{
-    resp::Value, ClientPreparedCommand, InternalPubSubCommands, PubSubReceiver, Result, InnerClient,
+    client::{ClientPreparedCommand, InnerClient},
+    commands::InternalPubSubCommands,
+    resp::Value,
+    PubSubReceiver, Result,
 };
 use futures::{Stream, StreamExt};
 use std::{
@@ -12,8 +15,10 @@ use std::{
 /// # Example
 /// ```
 /// use rustis::{
-///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-///     PubSubCommands, ServerCommands, Result
+///     client::{Client, ClientPreparedCommand}, 
+///     commands::{FlushingMode, PubSubCommands, ServerCommands}, 
+///     resp::cmd, 
+///     Result,
 /// };
 /// use futures::StreamExt;
 ///

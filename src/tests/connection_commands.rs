@@ -1,9 +1,15 @@
 use crate::{
-    network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientKillOptions,
-    ClientListOptions, ClientPauseMode, ClientPreparedCommand, ClientReplyMode,
-    ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error,
-    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, RedisError,
-    RedisErrorKind, Result, ServerCommands, StringCommands, PipelinePreparedCommand,
+    client::{ClientPreparedCommand, PipelinePreparedCommand},
+    commands::{
+        ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
+        ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
+        FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, ServerCommands,
+        StringCommands,
+    },
+    network::spawn,
+    sleep,
+    tests::get_test_client,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -429,7 +435,7 @@ async fn reset() -> Result<()> {
 #[serial]
 async fn select() -> Result<()> {
     let mut client = get_test_client().await?;
-    client.flushall(crate::FlushingMode::Sync).await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
     client.move_("key", 1).await?;

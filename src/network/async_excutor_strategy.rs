@@ -2,7 +2,7 @@ use crate::{Result};
 #[cfg(feature = "tokio-runtime")]
 use crate::Error;
 #[cfg(feature = "tls")]
-use crate::TlsConfig;
+use crate::client::TlsConfig;
 use futures::{Future, FutureExt};
 use log::{debug, info};
 use std::{

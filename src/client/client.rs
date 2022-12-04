@@ -1,40 +1,37 @@
 #[cfg(feature = "redis-graph")]
-use crate::GraphCommands;
+use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
-use crate::JsonCommands;
+use crate::commands::JsonCommands;
 #[cfg(feature = "redis-search")]
-use crate::SearchCommands;
+use crate::commands::SearchCommands;
 #[cfg(feature = "redis-time-series")]
-use crate::TimeSeriesCommands;
+use crate::commands::TimeSeriesCommands;
 use crate::{
-    resp::{Command, CommandArg, FromValue, SingleArgOrCollection, Value},
-    BitmapCommands, Cache, ClientTrait, ClusterCommands, ConnectionCommands, Future,
-    GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, InnerClient,
-    InternalPubSubCommands, IntoConfig, ListCommands, Pipeline, PreparedCommand, PubSubCommands,
-    PubSubStream, Result, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-    SortedSetCommands, StreamCommands, StringCommands, Transaction,
+    client::{
+        Cache, ClientTrait, InnerClient, IntoConfig, Message, MonitorStream,
+        Pipeline, PreparedCommand, PubSubStream, Transaction,
+    },
+    commands::{
+        BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
+        GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands,
+        PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
+    },
+    network::{MonitorReceiver, MonitorSender},
+    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    Future, Result, ValueReceiver, ValueSender,
 };
 #[cfg(feature = "redis-bloom")]
-use crate::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
+use crate::commands::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
+use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
 
-/// A multiplexed client that can be cloned, allowing requests
-/// to be be sent concurrently on the same underlying connection.
-///
-/// Compared to a [single client](crate::Client), a multiplexed client cannot offers access
-/// to all existing Redis commands.
-/// Transactions and [blocking commands](crate::BlockingCommands) are not compatible with a multiplexed client
-/// because they monopolize the whole connection which cannot be shared anymore. It means other consumers of the same
-/// multiplexed client will be blocked each time a transaction or a blocking command is in progress, losing the advantage
-/// of a shared connection.
-///
-/// #See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
-#[derive(Clone)]
-pub struct MultiplexedClient {
+/// Client with a unique connection to a Redis server.
+pub struct Client {
     inner_client: InnerClient,
 }
 
-impl MultiplexedClient {
+impl Client {
     /// Connects asynchronously to the Redis server.
     ///
     /// # Errors
@@ -44,25 +41,33 @@ impl MultiplexedClient {
         Ok(Self { inner_client })
     }
 
-    /// Send an arbitrary command to the Redis server.
+    /// We don't want the Client struct to be publicly cloneable
+    /// If one wants to consume a multiplexed client,
+    /// the [MultiplexedClient](crate::MultiplexedClient) must be used instead
+    pub(crate) fn clone(&self) -> Client {
+        Client {
+            inner_client: self.inner_client.clone(),
+        }
+    }
+
+    /// Send an arbitrary command to the server.
     ///
     /// This is used primarily intended for implementing high level commands API
     /// but may also be used to provide access to new features that lack a direct API.
     ///
     /// # Arguments
-    /// * `name` - Command name in uppercase.
-    /// * `args` - Command arguments which can be provided as arrays (up to 4 elements) or vectors of [`CommandArg`](crate::resp::CommandArg).
+    /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     ///
     /// # Example
     /// ```
-    /// use rustis::{resp::cmd, MultiplexedClient, Result};
+    /// use rustis::{client::Client, resp::cmd, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let mut client = MultiplexedClient::connect("127.0.0.1:6379").await?;
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///
     ///     let values: Vec<String> = client
     ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
@@ -85,7 +90,10 @@ impl MultiplexedClient {
         self.inner_client.send_and_forget(command)
     }
 
-    /// Send a command batch to the Redis server.
+    /// Send a batch of commands to the Redis server.
+    ///
+    /// # Arguments
+    /// * `commands` - batch of generic [`Command`](crate::resp::Command)s meant to be sent to the Redis server.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -93,30 +101,20 @@ impl MultiplexedClient {
         self.inner_client.send_batch(commands).await
     }
 
+    /// Create a new transaction
+    pub fn create_transaction(&mut self) -> Transaction {
+        Transaction::new(self.inner_client.clone())
+    }
+
     /// Create a new pipeline
     pub fn create_pipeline(&mut self) -> Pipeline {
         self.inner_client.create_pipeline()
     }
-
-    /// Create a new transaction
-    ///
-    /// Because of the multiplexed nature of the client,
-    /// [`watch`](crate::TransactionCommands::watch) &
-    /// [`unwatch`](crate::TransactionCommands::unwatch)
-    /// commands cannot be supported.
-    /// To be able to use these commands with a transaction,
-    /// [`Client`](crate::Client) or [`PooledClientManager`](crate::PooledClientManager)
-    /// should be used instead
-    pub fn create_transaction(&mut self) -> Transaction {
-        Transaction::new(self.inner_client.clone())
-    }
 }
 
-impl ClientTrait for MultiplexedClient {
+impl ClientTrait for Client {
     fn send(&mut self, command: Command) -> Future<Value> {
-        Box::pin(async move {
-            self.send(command).await
-        })
+        Box::pin(async move { self.send(command).await })
     }
 
     fn send_and_forget(&mut self, command: Command) -> Result<()> {
@@ -124,9 +122,7 @@ impl ClientTrait for MultiplexedClient {
     }
 
     fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
-        Box::pin(async move {
-            self.send_batch(commands).await
-        })
+        Box::pin(async move { self.send_batch(commands).await })
     }
 
     fn create_pipeline(&mut self) -> Pipeline {
@@ -142,9 +138,9 @@ impl ClientTrait for MultiplexedClient {
     }
 }
 
-/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand) 
-/// to add specific methods for the [`MultiplexedClient`](crate::MultiplexedClient) executor
-pub trait MultiplexedPreparedCommand<'a, R>
+/// Extension trait dedicated to [`PreparedCommand`](crate::PreparedCommand)
+/// to add specific methods for the [`Client`](crate::Client) executor
+pub trait ClientPreparedCommand<'a, R>
 where
     R: FromValue,
 {
@@ -155,7 +151,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> MultiplexedPreparedCommand<'a, R> for PreparedCommand<'a, MultiplexedClient, R>
+impl<'a, R> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -168,7 +164,7 @@ where
     }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, MultiplexedClient, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, Client, R>
 where
     R: FromValue + Send + 'a,
 {
@@ -194,51 +190,52 @@ where
     }
 }
 
-impl BitmapCommands for MultiplexedClient {}
+impl BitmapCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl BloomCommands for MultiplexedClient {}
-impl ClusterCommands for MultiplexedClient {}
-impl ConnectionCommands for MultiplexedClient {}
+impl BloomCommands for Client {}
+impl ClusterCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for MultiplexedClient {}
+impl CountMinSketchCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CuckooCommands for MultiplexedClient {}
-impl GenericCommands for MultiplexedClient {}
-impl GeoCommands for MultiplexedClient {}
+impl CuckooCommands for Client {}
+impl ConnectionCommands for Client {}
+impl GenericCommands for Client {}
+impl GeoCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
-impl GraphCommands for MultiplexedClient {}
-impl HashCommands for MultiplexedClient {}
-impl HyperLogLogCommands for MultiplexedClient {}
-impl InternalPubSubCommands for MultiplexedClient {}
+impl GraphCommands for Client {}
+impl HashCommands for Client {}
+impl HyperLogLogCommands for Client {}
+impl InternalPubSubCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
-impl JsonCommands for MultiplexedClient {}
-impl ListCommands for MultiplexedClient {}
-impl ScriptingCommands for MultiplexedClient {}
+impl JsonCommands for Client {}
+impl ListCommands for Client {}
+impl ScriptingCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
-impl SearchCommands for MultiplexedClient {}
-impl SentinelCommands for MultiplexedClient {}
-impl ServerCommands for MultiplexedClient {}
-impl SetCommands for MultiplexedClient {}
-impl SortedSetCommands for MultiplexedClient {}
-impl StreamCommands for MultiplexedClient {}
-impl StringCommands for MultiplexedClient {}
+impl SearchCommands for Client {}
+impl SentinelCommands for Client {}
+impl ServerCommands for Client {}
+impl SetCommands for Client {}
+impl SortedSetCommands for Client {}
+impl StreamCommands for Client {}
+impl StringCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TDigestCommands for MultiplexedClient {}
+impl TDigestCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
-impl TimeSeriesCommands for MultiplexedClient {}
+impl TimeSeriesCommands for Client {}
+impl TransactionCommands for Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TopKCommands for MultiplexedClient {}
+impl TopKCommands for Client {}
 
-impl PubSubCommands for MultiplexedClient {
+impl PubSubCommands for Client {
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,
@@ -261,5 +258,22 @@ impl PubSubCommands for MultiplexedClient {
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)
+    }
+}
+
+impl BlockingCommands for Client {
+    fn monitor(&mut self) -> Future<MonitorStream> {
+        Box::pin(async move {
+            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+            let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
+                mpsc::unbounded();
+
+            let message = Message::monitor(cmd("MONITOR"), value_sender, monitor_sender);
+
+            self.inner_client.send_message(message)?;
+
+            let value = value_receiver.await?;
+            value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
+        })
     }
 }

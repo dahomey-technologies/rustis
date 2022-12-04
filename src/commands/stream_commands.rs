@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
@@ -687,7 +687,7 @@ where
 {
     /// The stream Id
     pub stream_id: String,
-    /// entries with their fields and values in the exact same 
+    /// entries with their fields and values in the exact same
     /// order as [`xadd`](StreamCommands::xadd) added them.
     pub items: HashMap<String, V>,
 }
@@ -707,13 +707,13 @@ pub struct XAutoClaimResult<V>
 where
     V: FromValue,
 {
-    /// A stream ID to be used as the <start> argument for 
+    /// A stream ID to be used as the <start> argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
     pub start_stream_id: String,
     /// An array containing all the successfully claimed messages in
     /// the same format as [`xrange`](StreamCommands::xrange).
     pub entries: Vec<StreamEntry<V>>,
-    /// An array containing message IDs that no longer exist in the stream, 
+    /// An array containing message IDs that no longer exist in the stream,
     /// and were deleted from the PEL in which they were found.
     pub deleted_ids: Vec<String>,
 }

@@ -1,6 +1,7 @@
 use crate::{
-    tests::get_redis_stack_test_client, FlushingMode, Result, ServerCommands, TDigestCommands,
-    TDigestMergeOptions,
+    commands::{FlushingMode, ServerCommands, TDigestCommands, TDigestMergeOptions},
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -42,7 +43,10 @@ async fn tdigest_byrank() -> Result<()> {
     client.tdigest_create("key", Some(1000)).await?;
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let values: Vec<f64> = client
@@ -86,7 +90,10 @@ async fn tdigest_byrevrank() -> Result<()> {
     client.tdigest_create("key", Some(1000)).await?;
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let values: Vec<f64> = client
@@ -130,7 +137,10 @@ async fn tdigest_cdf() -> Result<()> {
     client.tdigest_create("key", Some(1000)).await?;
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let values: Vec<f64> = client.tdigest_cdf("key", [0, 1, 2, 3, 4, 5, 6]).await?;
@@ -160,7 +170,10 @@ async fn tdigest_info() -> Result<()> {
     client.tdigest_create("key", Some(1000)).await?;
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let info = client.tdigest_info("key").await?;
@@ -183,7 +196,10 @@ async fn tdigest_max() -> Result<()> {
     assert!(max.is_nan());
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let max = client.tdigest_max("key").await?;
@@ -228,7 +244,10 @@ async fn tdigest_min() -> Result<()> {
     assert!(max.is_nan());
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let max = client.tdigest_min("key").await?;
@@ -247,7 +266,10 @@ async fn tdigest_quantile() -> Result<()> {
     client.tdigest_create("key", Some(1000)).await?;
 
     client
-        .tdigest_add("key", [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.])
+        .tdigest_add(
+            "key",
+            [1., 2., 2., 3., 3., 3., 4., 4., 4., 4., 5., 5., 5., 5., 5.],
+        )
         .await?;
 
     let values: Vec<f64> = client
@@ -267,7 +289,9 @@ async fn tdigest_rank_revrank() -> Result<()> {
 
     client.tdigest_create("key", Some(1000)).await?;
 
-    client.tdigest_add("key", [10., 20., 30., 40., 50., 60.]).await?;
+    client
+        .tdigest_add("key", [10., 20., 30., 40., 50., 60.])
+        .await?;
 
     let values: Vec<isize> = client
         .tdigest_rank("key", [0, 10, 20, 30, 40, 50, 60, 70])
@@ -291,7 +315,9 @@ async fn tdigest_reset() -> Result<()> {
 
     client.tdigest_create("key", Some(1000)).await?;
 
-    client.tdigest_add("key", [10., 20., 30., 40., 50., 60.]).await?;
+    client
+        .tdigest_add("key", [10., 20., 30., 40., 50., 60.])
+        .await?;
 
     let values: Vec<isize> = client.tdigest_rank("key", [10, 20, 30, 40, 50, 60]).await?;
     assert_eq!(vec![0, 1, 2, 3, 4, 5], values);
@@ -313,7 +339,9 @@ async fn tdigest_trimmed_mean() -> Result<()> {
 
     client.tdigest_create("key", Some(1000)).await?;
 
-    client.tdigest_add("key", [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.]).await?;
+    client
+        .tdigest_add("key", [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.])
+        .await?;
 
     let mean_value = client.tdigest_trimmed_mean("key", 0.1, 0.6).await?;
     assert_eq!(4., mean_value);

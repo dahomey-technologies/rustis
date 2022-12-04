@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgOrCollection, SingleArgOrCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
@@ -89,8 +89,10 @@ pub trait StringCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     resp::{cmd}, Client, ClientPreparedCommand, FlushingMode,
-    ///     ServerCommands, StringCommands, Result
+    ///     client::{Client, ClientPreparedCommand}, 
+    ///     commands::{FlushingMode, ServerCommands, StringCommands},
+    ///     resp::{cmd},
+    ///     Result
     /// };
     ///
     /// #[tokio::main]
@@ -162,8 +164,10 @@ pub trait StringCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
+    ///     client::{Client, ClientPreparedCommand}, 
+    ///     commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
+    ///     resp::cmd,
+    ///     Result,
     /// };
     ///
     /// #[tokio::main]

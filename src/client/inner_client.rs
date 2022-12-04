@@ -1,14 +1,14 @@
 use crate::{
+    client::{
+        Cache, ClientPreparedCommand, IntoConfig, Message, Pipeline, PreparedCommand, PubSubStream,
+    },
+    commands::InternalPubSubCommands,
     network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, CommandArg, Command, FromValue, ResultValueExt, SingleArgOrCollection, Value},
-    ClientPreparedCommand, Future, InternalPubSubCommands, IntoConfig, Message, MsgSender,
-    NetworkHandler, PreparedCommand, PubSubStream, Result, ValueReceiver, ValueSender, Pipeline, Cache,
+    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    Future, MsgSender, NetworkHandler, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
-use std::{
-    future::IntoFuture,
-    sync::Arc,
-};
+use std::{future::IntoFuture, sync::Arc};
 
 pub(crate) struct InnerClient {
     msg_sender: Arc<MsgSender>,

@@ -29,7 +29,6 @@ mod internal_pub_sub_commands;
 #[cfg(feature = "redis-json")]
 mod json_commands;
 mod list_commands;
-mod prepared_command;
 mod pub_sub_commands;
 mod scripting_commands;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
@@ -83,7 +82,6 @@ pub(crate) use internal_pub_sub_commands::*;
 #[cfg(feature = "redis-json")]
 pub use json_commands::*;
 pub use list_commands::*;
-pub use prepared_command::*;
 pub use pub_sub_commands::*;
 pub use scripting_commands::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]

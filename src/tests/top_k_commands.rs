@@ -1,5 +1,7 @@
 use crate::{
-    tests::get_redis_stack_test_client, FlushingMode, Result, ServerCommands, TopKCommands,
+    commands::{FlushingMode, ServerCommands, TopKCommands},
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -73,10 +75,20 @@ async fn tdigest_list() -> Result<()> {
         .await?;
 
     let items: Vec<String> = client.topk_list("key").await?;
-    assert_eq!(vec!["42".to_owned(), "foo".to_owned(), "bar".to_owned()], items);
+    assert_eq!(
+        vec!["42".to_owned(), "foo".to_owned(), "bar".to_owned()],
+        items
+    );
 
     let items: Vec<(String, usize)> = client.topk_list_with_count("key").await?;
-    assert_eq!(vec![("42".to_owned(), 31), ("foo".to_owned(), 4), ("bar".to_owned(), 3)], items);
+    assert_eq!(
+        vec![
+            ("42".to_owned(), 31),
+            ("foo".to_owned(), 4),
+            ("bar".to_owned(), 3)
+        ],
+        items
+    );
 
     Ok(())
 }

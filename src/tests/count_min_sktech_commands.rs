@@ -1,6 +1,7 @@
 use crate::{
-    tests::get_redis_stack_test_client, CountMinSketchCommands, FlushingMode, Result,
-    ServerCommands,
+    commands::{CountMinSketchCommands, FlushingMode, ServerCommands},
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -16,7 +17,9 @@ async fn cms_incrby() -> Result<()> {
 
     client.cms_initbydim("key", 2000, 5).await?;
 
-    let result: Vec<usize> = client.cms_incrby("key", [("item1", 1), ("item2", 2)]).await?;
+    let result: Vec<usize> = client
+        .cms_incrby("key", [("item1", 1), ("item2", 2)])
+        .await?;
     assert_eq!(vec![1, 2], result);
 
     Ok(())
@@ -31,7 +34,9 @@ async fn cms_info() -> Result<()> {
 
     client.cms_initbydim("key", 2000, 5).await?;
 
-    let result: Vec<usize> = client.cms_incrby("key", [("item1", 1), ("item2", 2)]).await?;
+    let result: Vec<usize> = client
+        .cms_incrby("key", [("item1", 1), ("item2", 2)])
+        .await?;
     assert_eq!(vec![1, 2], result);
 
     let info = client.cms_info("key").await?;
@@ -75,23 +80,31 @@ async fn cms_merge() -> Result<()> {
 
     client.cms_initbydim("key1", 2000, 5).await?;
 
-    let result: Vec<usize> = client.cms_incrby("key1", [("item1", 1), ("item2", 2)]).await?;
+    let result: Vec<usize> = client
+        .cms_incrby("key1", [("item1", 1), ("item2", 2)])
+        .await?;
     assert_eq!(vec![1, 2], result);
 
     client.cms_initbydim("key2", 2000, 5).await?;
 
-    let result: Vec<usize> = client.cms_incrby("key2", [("item1", 1), ("item2", 2)]).await?;
+    let result: Vec<usize> = client
+        .cms_incrby("key2", [("item1", 1), ("item2", 2)])
+        .await?;
     assert_eq!(vec![1, 2], result);
 
     client.cms_initbydim("key3", 2000, 5).await?;
 
-    client.cms_merge("key3", ["key1", "key2"], Some([1, 2])).await?;
+    client
+        .cms_merge("key3", ["key1", "key2"], Some([1, 2]))
+        .await?;
     let info = client.cms_info("key3").await?;
     assert_eq!(9, info.total_count);
 
     client.cms_initbydim("key4", 2000, 5).await?;
 
-    client.cms_merge("key4", ["key1", "key2"], Option::<usize>::None).await?;
+    client
+        .cms_merge("key4", ["key1", "key2"], Option::<usize>::None)
+        .await?;
     let info = client.cms_info("key4").await?;
     assert_eq!(6, info.total_count);
 
@@ -107,8 +120,12 @@ async fn cms_query() -> Result<()> {
 
     client.cms_initbydim("key1", 2000, 5).await?;
 
-    let _result: Vec<usize> = client.cms_incrby("key1", [("item1", 1), ("item2", 2)]).await?;
-    let _result: Vec<usize> = client.cms_incrby("key1", [("item1", 2), ("item2", 1)]).await?;
+    let _result: Vec<usize> = client
+        .cms_incrby("key1", [("item1", 1), ("item2", 2)])
+        .await?;
+    let _result: Vec<usize> = client
+        .cms_incrby("key1", [("item1", 2), ("item2", 1)])
+        .await?;
 
     let result: Vec<usize> = client.cms_query("key1", ["item1", "item2"]).await?;
     assert_eq!(vec![3, 3], result);

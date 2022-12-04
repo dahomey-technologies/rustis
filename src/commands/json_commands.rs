@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
+    commands::SetCondition,
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection, Value,
     },
-    PreparedCommand, SetCondition,
 };
 
 /// A group of Redis commands related to [`RedisJson`](https://redis.io/docs/stack/json/)
@@ -473,7 +473,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: Into<CommandArg>,
         P: Into<CommandArg>,
-        VV: FromSingleValueArray<Value>
+        VV: FromSingleValueArray<Value>,
     {
         prepare_command(self, cmd("JSON.RESP").arg(key).arg(path))
     }
@@ -542,7 +542,7 @@ pub trait JsonCommands {
     /// * `path`- The JSONPath to specify.
     ///
     /// # Return
-    /// returns by recursive descent a collection of integer replies for each path, 
+    /// returns by recursive descent a collection of integer replies for each path,
     /// the array's length, or nil, if the matching JSON value is not a string.
     ///
     /// # See Also
@@ -565,7 +565,7 @@ pub trait JsonCommands {
     /// * `path`- The JSONPath to specify.
     ///
     /// # Return
-    /// A collection of integer replies for each path, the new value (0 if false or 1 if true), 
+    /// A collection of integer replies for each path, the new value (0 if false or 1 if true),
     /// or nil for JSON values matching the path that are not Boolean.
     ///
     /// # See Also

@@ -1,4 +1,9 @@
-use crate::{tests::log_try_init, Client, ClusterCommands, ClusterShardResult, Result};
+use crate::{
+    client::Client,
+    commands::{ClusterCommands, ClusterShardResult},
+    tests::log_try_init,
+    Result,
+};
 use log::debug;
 use serial_test::serial;
 

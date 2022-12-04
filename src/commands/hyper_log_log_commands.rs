@@ -1,7 +1,6 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{cmd, CommandArg, SingleArgOrCollection},
-    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`HyperLogLog`](https://redis.io/docs/data-types/hyperloglogs/)

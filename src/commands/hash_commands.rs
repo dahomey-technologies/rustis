@@ -1,10 +1,9 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection,
     },
-    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`Hashes`](https://redis.io/docs/data-types/hashes/)

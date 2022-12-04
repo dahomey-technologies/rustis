@@ -1,6 +1,7 @@
 use crate::{
+    client::{Config, ServerConfig},
     resp::{Command, Value},
-    ClusterConnection, Config, Result, SentinelConnection, ServerConfig, StandaloneConnection, RetryReason,
+    ClusterConnection, Result, RetryReason, SentinelConnection, StandaloneConnection,
 };
 
 pub enum Connection {
@@ -24,11 +25,21 @@ impl Connection {
         }
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, retry_reasons: &[RetryReason]) -> Result<()> {
+    pub async fn write_batch(
+        &mut self,
+        commands: impl Iterator<Item = &Command>,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         match self {
-            Connection::Standalone(connection) => connection.write_batch(commands, retry_reasons).await,
-            Connection::Sentinel(connection) => connection.write_batch(commands, retry_reasons).await,
-            Connection::Cluster(connection) => connection.write_batch(commands, retry_reasons).await,
+            Connection::Standalone(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
+            Connection::Sentinel(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
+            Connection::Cluster(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
         }
     }
 

@@ -1,10 +1,9 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
         SingleArgOrCollection,
     },
-    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
@@ -387,7 +386,6 @@ impl IntoArgs for LInsertWhere {
         })
     }
 }
-
 
 /// Where option for the [`lmove`][crate::ListCommands::lmove] command.
 pub enum LMoveWhere {

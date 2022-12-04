@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
         cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
         IntoArgs, SingleArgOrCollection,
     },
-    PreparedCommand, Future, PubSubStream,
+    Future,
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
@@ -16,8 +16,10 @@ pub trait PubSubCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
+    ///     client::{Client, ClientPreparedCommand},
+    ///     commands::{FlushingMode, PubSubCommands, ServerCommands},
+    ///     resp::cmd,
+    ///     Result,
     /// };
     /// use futures::StreamExt;
     ///
@@ -187,15 +189,17 @@ pub trait PubSubCommands {
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: Into<CommandArg> + Send + 'a,
-        CC: SingleArgOrCollection<C>;    
+        CC: SingleArgOrCollection<C>;
 
     /// Subscribes the client to the specified channels.
     ///
     /// # Example
     /// ```
     /// use rustis::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
+    ///     client::{Client, ClientPreparedCommand}, 
+    ///     commands::{FlushingMode, PubSubCommands, ServerCommands},
+    ///     resp::cmd, 
+    ///     Result,
     /// };
     /// use futures::StreamExt;
     ///

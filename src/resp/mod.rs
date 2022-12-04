@@ -10,12 +10,12 @@ Each variant of this enum matches a [`RESP`](https://redis.io/docs/reference/pro
 
 Because, navigating through a [`resp::Value`](Value) instance can be verbose and requires a lot of pattern matching,
 ** rustis** provides:
-* Rust type to [`Command`](Command) conversion, with the trait [IntoArgs](IntoArgs).
-* [`resp::Value`](Value) to Rust type conversion, with the trait [FromValue](FromValue).
+* Rust type to [`Command`](Command) conversion, with the trait [`IntoArgs`](IntoArgs).
+* [`resp::Value`](Value) to Rust type conversion, with the trait [`FromValue`](FromValue).
 
 # Command arguments
 
-** rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
+**rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
 Basically a [`Command`](Command) is a collection of [`CommandArg`](CommandArg)
 
 You will notice that each built-in command expects arguments through a set of traits defined in this module.
@@ -23,30 +23,64 @@ You will notice that each built-in command expects arguments through a set of tr
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### Into\<CommandArg\>/From\<CommandArg\>
+### IntoArgs
 
-These traits let the caller transform any primitive rust type into a CommandArg.
+The trait [`IntoArgs`](IntoArgs) allows to convert a complex type into one ore multiple argumentss.
+Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.
 
-Current implementation provides the following conversions: `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`,
-`i64`, `usize`, `isize`, `f32`, `f64`, `bool`, `char`, `String`, `&str` and [`BulkString`](BulkString)
+Current implementation provides the following conversions:
+* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `f32`, `f64`,
+* `bool`,
+* `String`, `char`, `&str`, [`BulkString`](BulkString)
+* `Option<T>`
+* `(T, U)`
+* `(T, U, V)`
+* `Vec<T>`
+* `[T;N]`
+* `SmallVec<A>`
+* `BTreeSet<T>`
+* `HashSet<T, S>`
+* `BTreeMap<K, V>`
+* `HashMap<K, V, S>`
 
-Example:
+Nevertheless, [`IntoArgs`](IntoArgs) is not expected directly in built-in commands arguments.
+
+The following traits are used to constraints which implementations of [`IntoArgs`](IntoArgs)
+are expected by a specific argument of a built-in command
+
+### SingleArg
+
+Several Redis commands expect a Rust type that should be converted in a single command argument.
+
+**rustis** uses the trait [`SingleArg`](SingleArg) to implement this behavior.
+
+Current implementation provides the following conversions:
+* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `f32`, `f64`,
+* `bool`,
+* `String`, `char`, `&str`, [`BulkString`](BulkString)
+* `Option<T>` where `T: SingleArg`
+
+#### Example
 ```
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{BulkString, CommandArg},
+    resp::{BulkString, CommandArgs, IntoArgs, SingleArg},
     Result,
 };
 
 pub struct MyI32(i32);
 
-impl From<MyI32> for CommandArg {
+ impl IntoArgs for MyI32 {
     #[inline]
-    fn from(i: MyI32) -> Self {
-        Self::Signed(i.0 as i64)
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.0)
     }
 }
+
+impl SingleArg for MyI32 {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -71,43 +105,23 @@ async fn main() -> Result<()> {
 }
 ```
 
-### IntoArgs
-
-The trait [`IntoArgs`](IntoArgs) allows to convert a complex type into one ore multiple argumentss.
-Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.
-
-Current implementation provides the following conversions:
-* `(T, U)`
-* `(T, U, V)`
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* `Option<T>`
-* `SmallVec<A>`
-* `Vec<T>`
-* `[T;N]`
-
-Nevertheless, [`IntoArgs`](IntoArgs) is not expected directly in built-in commands arguments.
-
-The following traits are used to constraints which implementations of [`IntoArgs`](IntoArgs)
-are expected by a specific argument of a built-in command
-
 ### SingleArgOrCollection
 
 Several Redis commands expect one or multiple items, elements, values of the same type.
+
 **rustis** uses the trait [`SingleArgOrCollection`](SingleArgOrCollection) to implement this behavior.
 
 Current implementation provides the following conversions:
 * `T` (for the single item case)
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* `SmallVec<A>`
 * `Vec<T>`
 * `[T;N]`
+* `SmallVec<A>`
+* `BTreeSet<T>`
+* `HashSet<T, S>`
+
 where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 
-Example:
+#### Example
 ```
 use rustis::{
     client::Client,
@@ -147,17 +161,20 @@ async fn main() -> Result<()> {
 ### KeyValueArgOrCollection
 
 Several Redis commands expect one or multiple key/value pairs.
+
 **rustis** uses the trait [`KeyValueArgOrCollection`](KeyValueArgOrCollection) to implement this behavior.
 
 Current implementation provides the following conversions:
 * `(K, V)` (for the single item case)
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
 * `Vec<(K, V)>`
 * `[(K, V);N]`
+* `SmallVec<A>` where `A: Array<Item = (K, V)>`
+* `BTreeMap<K, V>`
+* `HashMap<K, V, S>`
+
 where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 
-Example:
+#### Example
 ```
 use rustis::{
     client::Client,
@@ -195,7 +212,7 @@ async fn main() -> Result<()> {
 ```
 # Command results
 
-** rustis** provides an idiomatic way to convert command results into Rust types.
+**rustis** provides an idiomatic way to convert command results into Rust types.
 
 You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand)
 where `R` must implement the [`FromValue`](FromValue) trait.
@@ -214,17 +231,17 @@ Current implementation provides the following conversions from [`Value`](Value):
 * `f32`, `f64`,
 * `bool`,
 * `String`, [`BulkString`](BulkString)
-* Option<T>
+* `Option<T>`
 * Tuples, up to 10 members
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
+* `Vec<T>`
+* `[T;N]`
 * `BTreeSet<T>`
 * `HashSet<T, S>`
 * `SmallVec<A>`
-* `Vec<T>`
-* `[T;N]`
+* `BTreeMap<K, V>`
+* `HashMap<K, V, S>`
 
-Example:
+#### Example
 ```
 use rustis::{
     client::Client,
@@ -274,14 +291,15 @@ Several Redis commands return a collection of items
 **rustis** uses the trait [`FromSingleValueArray`](FromSingleValueArray) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* `SmallVec<A>`
 * `Vec<T>`
 * `[T;N]`
+* `SmallVec<A>`
+* `BTreeSet<T>`
+* `HashSet<T, S>`
+
 where each of theses implementations must also implement [`FromValue`](FromValue)
 
-Example:
+#### Example
 ```
 use rustis::{
     client::Client,
@@ -315,19 +333,20 @@ async fn main() -> Result<()> {
 }
 ```
 
-### FromSingleValueArray
+### FromKeyValueArray
 
 Several Redis commands return a collection of key/value pairs
-**rustis** uses the trait [`FromKeyValueValueArray`](FromKeyValueValueArray) to implement this behavior.
+**rustis** uses the trait [`FromKeyValueArray`](FromKeyValueArray) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
 * `SmallVec<A>` where `A: Array<Item = (K, V)>`
 * `Vec<(K, V>)>`
+
 where each of theses implementations must also implement [`FromValue`](FromValue)
 
-Example:
+#### Example
 ```
 use rustis::{
     client::Client,

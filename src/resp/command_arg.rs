@@ -1,8 +1,6 @@
 use crate::{Error, Result};
 use std::{fmt, ops::Deref, str::from_utf8_unchecked};
 
-use super::BulkString;
-
 /// Argument of a [`Command`](crate::resp::Command).
 ///
 /// This enum is meant to hold direct native type until their conversion to RESP
@@ -91,111 +89,6 @@ impl CommandArg {
             CommandArg::F64(f) => Ok(*f as usize),
             CommandArg::Nil => Ok(0),
         }
-    }
-}
-
-impl From<bool> for CommandArg {
-    #[inline]
-    fn from(b: bool) -> Self {
-        Self::Unsigned(u64::from(b))
-    }
-}
-
-impl From<char> for CommandArg {
-    #[inline]
-    fn from(ch: char) -> Self {
-        Self::String(ch.to_string())
-    }
-}
-
-impl From<&'static str> for CommandArg {
-    #[inline]
-    fn from(str: &'static str) -> Self {
-        Self::Str(str)
-    }
-}
-
-impl From<String> for CommandArg {
-    #[inline]
-    fn from(string: String) -> Self {
-        Self::String(string)
-    }
-}
-
-impl From<i64> for CommandArg {
-    #[inline]
-    fn from(i: i64) -> Self {
-        Self::Signed(i)
-    }
-}
-
-impl From<u64> for CommandArg {
-    #[inline]
-    fn from(u: u64) -> Self {
-        Self::Unsigned(u)
-    }
-}
-
-impl From<i32> for CommandArg {
-    #[inline]
-    fn from(i: i32) -> Self {
-        Self::Signed(i64::from(i))
-    }
-}
-
-impl From<u32> for CommandArg {
-    #[inline]
-    fn from(u: u32) -> Self {
-        Self::Unsigned(u64::from(u))
-    }
-}
-
-impl From<i16> for CommandArg {
-    #[inline]
-    fn from(i: i16) -> Self {
-        Self::Signed(i64::from(i))
-    }
-}
-
-impl From<u16> for CommandArg {
-    #[inline]
-    fn from(u: u16) -> Self {
-        Self::Unsigned(u64::from(u))
-    }
-}
-
-impl From<isize> for CommandArg {
-    #[inline]
-    fn from(i: isize) -> Self {
-        Self::Signed(i as i64)
-    }
-}
-
-impl From<usize> for CommandArg {
-    #[inline]
-    fn from(u: usize) -> Self {
-        Self::Unsigned(u as u64)
-    }
-}
-
-impl From<f32> for CommandArg {
-    #[inline]
-    fn from(f: f32) -> Self {
-        Self::F32(f)
-    }
-}
-
-impl From<f64> for CommandArg {
-    #[inline]
-    fn from(f: f64) -> Self {
-        Self::F64(f)
-    }
-}
-
-impl From<BulkString> for CommandArg {
-    #[inline]
-    fn from(bs: BulkString) -> Self {
-        Self::Binary(bs.0)
     }
 }
 

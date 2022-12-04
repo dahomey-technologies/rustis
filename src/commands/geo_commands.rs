@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, ArgsOrCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArgOrCollection, Value,
+        SingleArg, SingleArgOrCollection, Value,
     },
     Error, Result,
 };
@@ -30,8 +30,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
         I: ArgsOrCollection<(f64, f64, M)>,
     {
         prepare_command(
@@ -62,8 +62,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Option<f64>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
     {
         prepare_command(
             self,
@@ -83,8 +83,8 @@ pub trait GeoCommands {
     fn geohash<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<String>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
@@ -108,8 +108,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Vec<Option<(f64, f64)>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
         C: SingleArgOrCollection<M>,
     {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
@@ -134,8 +134,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M1: Into<CommandArg>,
+        K: SingleArg,
+        M1: SingleArg,
         M2: FromValue,
         A: FromSingleValueArray<GeoSearchResult<M2>>,
     {
@@ -163,9 +163,9 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        S: Into<CommandArg>,
-        M: Into<CommandArg>,
+        D: SingleArg,
+        S: SingleArg,
+        M: SingleArg,
     {
         prepare_command(
             self,
@@ -227,7 +227,7 @@ impl IntoArgs for GeoUnit {
 /// The query's center point is provided by one of these mandatory options:
 pub enum GeoSearchFrom<M>
 where
-    M: Into<CommandArg>,
+    M: SingleArg,
 {
     /// Use the position of the given existing `member` in the sorted set.
     FromMember { member: M },
@@ -237,7 +237,7 @@ where
 
 impl<M> IntoArgs for GeoSearchFrom<M>
 where
-    M: Into<CommandArg>,
+    M: SingleArg,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {

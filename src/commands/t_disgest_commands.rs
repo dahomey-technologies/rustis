@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs, SingleArg,
         SingleArgOrCollection, Value,
     },
     Result,
@@ -25,7 +25,7 @@ pub trait TDigestCommands {
     #[must_use]
     fn tdigest_add(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         values: impl SingleArgOrCollection<f64>,
     ) -> PreparedCommand<Self, ()>
     where
@@ -56,7 +56,7 @@ pub trait TDigestCommands {
     #[must_use]
     fn tdigest_byrank<R: FromSingleValueArray<f64>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         ranks: impl SingleArgOrCollection<usize>,
     ) -> PreparedCommand<Self, R>
     where
@@ -87,7 +87,7 @@ pub trait TDigestCommands {
     #[must_use]
     fn tdigest_byrevrank<R: FromSingleValueArray<f64>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         ranks: impl SingleArgOrCollection<usize>,
     ) -> PreparedCommand<Self, R>
     where
@@ -113,9 +113,9 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.cdf/>](https://redis.io/commands/tdigest.cdf/)
     #[must_use]
-    fn tdigest_cdf<V: Into<CommandArg>, R: FromSingleValueArray<f64>>(
+    fn tdigest_cdf<V: SingleArg, R: FromSingleValueArray<f64>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         values: impl SingleArgOrCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
@@ -139,7 +139,7 @@ pub trait TDigestCommands {
     #[must_use]
     fn tdigest_create(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         compression: Option<i64>,
     ) -> PreparedCommand<Self, ()>
     where
@@ -164,10 +164,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.info/>](https://redis.io/commands/tdigest.info/)
     #[must_use]
-    fn tdigest_info(
-        &mut self,
-        key: impl Into<CommandArg>,
-    ) -> PreparedCommand<Self, TDigestInfoResult>
+    fn tdigest_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, TDigestInfoResult>
     where
         Self: Sized,
     {
@@ -186,7 +183,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.max/>](https://redis.io/commands/tdigest.max/)
     #[must_use]
-    fn tdigest_max(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, f64>
+    fn tdigest_max(&mut self, key: impl SingleArg) -> PreparedCommand<Self, f64>
     where
         Self: Sized,
     {
@@ -205,9 +202,9 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.merge/>](https://redis.io/commands/tdigest.merge/)
     #[must_use]
-    fn tdigest_merge<S: Into<CommandArg>>(
+    fn tdigest_merge<S: SingleArg>(
         &mut self,
-        destination: impl Into<CommandArg>,
+        destination: impl SingleArg,
         sources: impl SingleArgOrCollection<S>,
         options: TDigestMergeOptions,
     ) -> PreparedCommand<Self, ()>
@@ -236,7 +233,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.min/>](https://redis.io/commands/tdigest.min/)
     #[must_use]
-    fn tdigest_min(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, f64>
+    fn tdigest_min(&mut self, key: impl SingleArg) -> PreparedCommand<Self, f64>
     where
         Self: Sized,
     {
@@ -262,9 +259,9 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.quantile/>](https://redis.io/commands/tdigest.quantile/)
     #[must_use]
-    fn tdigest_quantile<Q: Into<CommandArg>, R: FromSingleValueArray<f64>>(
+    fn tdigest_quantile<Q: SingleArg, R: FromSingleValueArray<f64>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         quantiles: impl SingleArgOrCollection<Q>,
     ) -> PreparedCommand<Self, R>
     where
@@ -297,9 +294,9 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.rank/>](https://redis.io/commands/tdigest.rank/)
     #[must_use]
-    fn tdigest_rank<V: Into<CommandArg>, R: FromSingleValueArray<isize>>(
+    fn tdigest_rank<V: SingleArg, R: FromSingleValueArray<isize>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         values: impl SingleArgOrCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
@@ -316,7 +313,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.reset/>](https://redis.io/commands/tdigest.reset/)
     #[must_use]
-    fn tdigest_reset(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, ()>
+    fn tdigest_reset(&mut self, key: impl SingleArg) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
     {
@@ -347,9 +344,9 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.revrank/>](https://redis.io/commands/tdigest.revrank/)
     #[must_use]
-    fn tdigest_revrank<V: Into<CommandArg>, R: FromSingleValueArray<isize>>(
+    fn tdigest_revrank<V: SingleArg, R: FromSingleValueArray<isize>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         values: impl SingleArgOrCollection<V>,
     ) -> PreparedCommand<Self, R>
     where
@@ -377,7 +374,7 @@ pub trait TDigestCommands {
     #[must_use]
     fn tdigest_trimmed_mean(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         low_cut_quantile: f64,
         high_cut_quantile: f64,
     ) -> PreparedCommand<Self, f64>

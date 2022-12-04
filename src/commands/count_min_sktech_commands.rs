@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection,
+        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection, SingleArg,
         SingleArgOrCollection, Value,
     },
     Result,
@@ -29,9 +29,9 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
-    fn cms_incrby<I: Into<CommandArg>, R: FromSingleValueArray<usize>>(
+    fn cms_incrby<I: SingleArg, R: FromSingleValueArray<usize>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         items: impl KeyValueArgOrCollection<I, usize>,
     ) -> PreparedCommand<Self, R>
     where
@@ -48,7 +48,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
-    fn cms_info(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, CmsInfoResult>
+    fn cms_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, CmsInfoResult>
     where
         Self: Sized,
     {
@@ -69,7 +69,7 @@ pub trait CountMinSketchCommands {
     #[must_use]
     fn cms_initbydim(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         width: usize,
         depth: usize,
     ) -> PreparedCommand<Self, ()>
@@ -97,7 +97,7 @@ pub trait CountMinSketchCommands {
     #[must_use]
     fn cms_initbyprob(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         error: f64,
         probability: f64,
     ) -> PreparedCommand<Self, ()>
@@ -124,9 +124,9 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.merge/>](https://redis.io/commands/cms.merge/)
     #[must_use]
-    fn cms_merge<S: Into<CommandArg>, W: SingleArgOrCollection<usize>>(
+    fn cms_merge<S: SingleArg, W: SingleArgOrCollection<usize>>(
         &mut self,
-        destination: impl Into<CommandArg>,
+        destination: impl SingleArg,
         sources: impl SingleArgOrCollection<S>,
         weights: Option<W>,
     ) -> PreparedCommand<Self, ()>
@@ -159,9 +159,9 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
-    fn cms_query<I: Into<CommandArg>, C: FromSingleValueArray<usize>>(
+    fn cms_query<I: SingleArg, C: FromSingleValueArray<usize>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         items: impl SingleArgOrCollection<I>,
     ) -> PreparedCommand<Self, C>
     where

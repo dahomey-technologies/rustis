@@ -8,7 +8,7 @@ use crate::{
         HashCommands, JsonCommands, SearchCommands, ServerCommands, SetCondition, SortOrder,
     },
     network::sleep,
-    resp::CommandArg,
+    resp::{CommandArg, SingleArg},
     tests::get_redis_stack_test_client,
     Result,
 };
@@ -20,8 +20,8 @@ use std::{
     time::Duration,
 };
 
-async fn wait_for_index_scanned(client: &mut Client, index: impl Into<CommandArg>) -> Result<()> {
-    let index: CommandArg = index.into();
+async fn wait_for_index_scanned(client: &mut Client, index: impl SingleArg) -> Result<()> {
+    let index: CommandArg = index.into_command_arg();
 
     loop {
         let result = client.ft_info(index.clone()).await?;

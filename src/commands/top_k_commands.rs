@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection,
+        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgOrCollection, SingleArg,
         SingleArgOrCollection, Value,
     },
     Result,
@@ -29,9 +29,9 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<I: Into<CommandArg>, R: FromValue, RR: FromSingleValueArray<R>>(
+    fn topk_add<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         items: impl SingleArgOrCollection<I>,
     ) -> PreparedCommand<Self, RR>
     where
@@ -59,9 +59,9 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<I: Into<CommandArg>, R: FromValue, RR: FromSingleValueArray<R>>(
+    fn topk_incrby<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         items: impl KeyValueArgOrCollection<I, i64>,
     ) -> PreparedCommand<Self, RR>
     where
@@ -81,7 +81,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
-    fn topk_info(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, TopKInfoResult>
+    fn topk_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, TopKInfoResult>
     where
         Self: Sized,
     {
@@ -101,7 +101,7 @@ pub trait TopKCommands {
     #[must_use]
     fn topk_list<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -124,7 +124,7 @@ pub trait TopKCommands {
     #[must_use]
     fn topk_list_with_count<R: FromValue, RR: FromSingleValueArray<(R, usize)>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -146,9 +146,9 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
+    fn topk_query<I: SingleArg, R: FromSingleValueArray<bool>>(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         items: impl SingleArgOrCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
@@ -174,7 +174,7 @@ pub trait TopKCommands {
     #[must_use]
     fn topk_reserve(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         topk: usize,
         width_depth_decay: Option<(usize, usize, f64)>,
     ) -> PreparedCommand<Self, ()>

@@ -562,21 +562,21 @@ impl<T, S: BuildHasher + Default> FromSingleValueArray<T> for HashSet<T, S> wher
 impl<T> FromSingleValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 
 /// Marker for key/value collections
-pub trait FromKeyValueValueArray<K, V>: FromValue
+pub trait FromKeyValueArray<K, V>: FromValue
 where
     K: FromValue,
     V: FromValue,
 {
 }
 
-impl<K, V> FromKeyValueValueArray<K, V> for Vec<(K, V)>
+impl<K, V> FromKeyValueArray<K, V> for Vec<(K, V)>
 where
     K: FromValue,
     V: FromValue,
 {
 }
 
-impl<K, V, A> FromKeyValueValueArray<K, V> for SmallVec<A>
+impl<K, V, A> FromKeyValueArray<K, V> for SmallVec<A>
 where
     A: smallvec::Array<Item = (K, V)>,
     K: FromValue,
@@ -584,14 +584,14 @@ where
 {
 }
 
-impl<K, V, S: BuildHasher + Default> FromKeyValueValueArray<K, V> for HashMap<K, V, S>
+impl<K, V, S: BuildHasher + Default> FromKeyValueArray<K, V> for HashMap<K, V, S>
 where
     K: FromValue + Eq + Hash,
     V: FromValue,
 {
 }
 
-impl<K, V> FromKeyValueValueArray<K, V> for BTreeMap<K, V>
+impl<K, V> FromKeyValueArray<K, V> for BTreeMap<K, V>
 where
     K: FromValue + Ord,
     V: FromValue,

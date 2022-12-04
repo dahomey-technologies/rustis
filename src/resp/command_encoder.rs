@@ -15,7 +15,7 @@ impl Encoder<&Command> for CommandEncoder {
         encode_integer(command.args.len() as i64 + 1, buf);
         encode_crlf(buf);
     
-        encode_bulkstring(&CommandArg::from(command.name), buf);
+        encode_bulkstring(&CommandArg::Str(command.name), buf);
         encode_command_args(&command.args, buf);
 
         Ok(())

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
     },
     Error, Result,
 };
@@ -27,8 +27,8 @@ pub trait StringCommands {
     fn append<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
@@ -49,7 +49,7 @@ pub trait StringCommands {
     fn decr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("DECR").arg(key))
     }
@@ -70,7 +70,7 @@ pub trait StringCommands {
     fn decrby<K>(&mut self, key: K, decrement: i64) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
     }
@@ -89,7 +89,7 @@ pub trait StringCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, ClientPreparedCommand}, 
+    ///     client::{Client, ClientPreparedCommand},
     ///     commands::{FlushingMode, ServerCommands, StringCommands},
     ///     resp::{cmd},
     ///     Result
@@ -123,7 +123,7 @@ pub trait StringCommands {
     fn get<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
         Self: Sized,
     {
@@ -144,7 +144,7 @@ pub trait StringCommands {
     fn getdel<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
     {
         prepare_command(self, cmd("GETDEL").arg(key))
@@ -164,7 +164,7 @@ pub trait StringCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, ClientPreparedCommand}, 
+    ///     client::{Client, ClientPreparedCommand},
     ///     commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
     ///     resp::cmd,
     ///     Result,
@@ -192,7 +192,7 @@ pub trait StringCommands {
     fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
     {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
@@ -211,7 +211,7 @@ pub trait StringCommands {
     fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
     {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
@@ -230,8 +230,8 @@ pub trait StringCommands {
     fn getset<K, V, R>(&mut self, key: K, value: V) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
         R: FromValue,
     {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
@@ -259,7 +259,7 @@ pub trait StringCommands {
     fn incr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCR").arg(key))
     }
@@ -282,7 +282,7 @@ pub trait StringCommands {
     fn incrby<K>(&mut self, key: K, increment: i64) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
     }
@@ -316,7 +316,7 @@ pub trait StringCommands {
     fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> PreparedCommand<Self, f64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
@@ -332,7 +332,7 @@ pub trait StringCommands {
     fn lcs<K, V>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
@@ -349,7 +349,7 @@ pub trait StringCommands {
     fn lcs_len<K>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
@@ -373,7 +373,7 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, LcsResult>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -400,7 +400,7 @@ pub trait StringCommands {
     fn mget<K, KK, V, VV>(&mut self, keys: KK) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         KK: SingleArgOrCollection<K>,
         V: FromValue,
         VV: FromSingleValueArray<V>,
@@ -420,8 +420,8 @@ pub trait StringCommands {
     where
         Self: Sized,
         C: KeyValueArgOrCollection<K, V>,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("MSET").arg(items))
     }
@@ -448,8 +448,8 @@ pub trait StringCommands {
     where
         Self: Sized,
         C: KeyValueArgOrCollection<K, V>,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("MSETNX").arg(items))
     }
@@ -466,8 +466,8 @@ pub trait StringCommands {
     fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
@@ -483,8 +483,8 @@ pub trait StringCommands {
     fn set<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
         Self: Sized,
     {
         prepare_command(self, cmd("SET").arg(key).arg(value))
@@ -510,8 +510,8 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(
             self,
@@ -539,8 +539,8 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, V2>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V1: Into<CommandArg>,
+        K: SingleArg,
+        V1: SingleArg,
         V2: FromValue,
     {
         prepare_command(
@@ -563,8 +563,8 @@ pub trait StringCommands {
     fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
@@ -586,8 +586,8 @@ pub trait StringCommands {
     fn setnx<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETNX").arg(key).arg(value))
     }
@@ -605,8 +605,8 @@ pub trait StringCommands {
     fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
@@ -624,7 +624,7 @@ pub trait StringCommands {
     fn strlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("STRLEN").arg(key))
     }

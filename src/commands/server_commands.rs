@@ -3,8 +3,8 @@ use std::{collections::HashMap, str::FromStr};
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue,
+        HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
     },
     Error, Result,
 };
@@ -46,7 +46,7 @@ pub trait ServerCommands {
     fn acl_deluser<U, UU>(&mut self, usernames: UU) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        U: Into<CommandArg>,
+        U: SingleArg,
         UU: SingleArgOrCollection<U>,
     {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
@@ -68,8 +68,8 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        C: Into<CommandArg>,
+        U: SingleArg,
+        C: SingleArg,
         R: FromValue,
     {
         prepare_command(
@@ -110,8 +110,8 @@ pub trait ServerCommands {
     fn acl_getuser<U, RR>(&mut self, username: U) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        RR: FromKeyValueValueArray<String, Value>,
+        U: SingleArg,
+        RR: FromKeyValueArray<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
@@ -167,7 +167,7 @@ pub trait ServerCommands {
     fn acl_log<EE>(&mut self, options: AclLogOptions) -> PreparedCommand<Self, Vec<EE>>
     where
         Self: Sized,
-        EE: FromKeyValueValueArray<String, Value>,
+        EE: FromKeyValueArray<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
@@ -199,8 +199,8 @@ pub trait ServerCommands {
     fn acl_setuser<U, R, RR>(&mut self, username: U, rules: RR) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        R: Into<CommandArg>,
+        U: SingleArg,
+        R: SingleArg,
         RR: SingleArgOrCollection<R>,
     {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
@@ -275,9 +275,9 @@ pub trait ServerCommands {
     fn command_docs<N, NN, DD>(&mut self, command_names: NN) -> PreparedCommand<Self, DD>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
         NN: SingleArgOrCollection<N>,
-        DD: FromKeyValueValueArray<String, CommandDoc>,
+        DD: FromKeyValueArray<String, CommandDoc>,
     {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
     }
@@ -292,7 +292,7 @@ pub trait ServerCommands {
     fn command_getkeys<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<CommandArg>,
+        A: SingleArg,
         AA: SingleArgOrCollection<A>,
         KK: FromSingleValueArray<String>,
     {
@@ -309,9 +309,9 @@ pub trait ServerCommands {
     fn command_getkeysandflags<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<CommandArg>,
+        A: SingleArg,
         AA: SingleArgOrCollection<A>,
-        KK: FromKeyValueValueArray<String, Vec<String>>,
+        KK: FromKeyValueArray<String, Vec<String>>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
@@ -326,7 +326,7 @@ pub trait ServerCommands {
     fn command_info<N, NN>(&mut self, command_names: NN) -> PreparedCommand<Self, Vec<CommandInfo>>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
         NN: SingleArgOrCollection<N>,
     {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
@@ -361,10 +361,10 @@ pub trait ServerCommands {
     fn config_get<P, PP, V, VV>(&mut self, params: PP) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        P: Into<CommandArg>,
+        P: SingleArg,
         PP: SingleArgOrCollection<P>,
         V: FromValue,
-        VV: FromKeyValueValueArray<String, V>,
+        VV: FromKeyValueArray<String, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
@@ -404,8 +404,8 @@ pub trait ServerCommands {
     fn config_set<P, V, C>(&mut self, configs: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<CommandArg>,
-        V: Into<CommandArg>,
+        P: SingleArg,
+        V: SingleArg,
         C: KeyValueArgOrCollection<P, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
@@ -528,9 +528,9 @@ pub trait ServerCommands {
     fn latency_histogram<C, CC, RR>(&mut self, commands: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
+        C: SingleArg,
         CC: SingleArgOrCollection<C>,
-        RR: FromKeyValueValueArray<String, CommandHistogram>,
+        RR: FromKeyValueArray<String, CommandHistogram>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
@@ -682,7 +682,7 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, Option<usize>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
     }
@@ -712,7 +712,7 @@ pub trait ServerCommands {
     fn module_load<P>(&mut self, path: P, options: ModuleLoadOptions) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<CommandArg>,
+        P: SingleArg,
     {
         prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
     }
@@ -725,7 +725,7 @@ pub trait ServerCommands {
     fn module_unload<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
@@ -877,7 +877,7 @@ pub struct AclCatOptions {
 
 impl AclCatOptions {
     #[must_use]
-    pub fn category_name<C: Into<CommandArg>>(self, category_name: C) -> Self {
+    pub fn category_name<C: SingleArg>(self, category_name: C) -> Self {
         Self {
             command_args: self.command_args.arg(category_name),
         }
@@ -900,7 +900,7 @@ impl AclDryRunOptions {
     #[must_use]
     pub fn arg<A, AA>(self, args: AA) -> Self
     where
-        A: Into<CommandArg>,
+        A: SingleArg,
         AA: SingleArgOrCollection<A>,
     {
         Self {
@@ -1279,7 +1279,7 @@ impl FromValue for KeySpecification {
     }
 }
 
-/// The BeginSearch value of a specification informs 
+/// The BeginSearch value of a specification informs
 /// the client of the extraction's beginning
 #[derive(Debug, Clone)]
 pub enum BeginSearch {
@@ -1315,7 +1315,7 @@ impl FromValue for BeginSearch {
     }
 }
 
-/// The FindKeys value of a key specification tells the client 
+/// The FindKeys value of a key specification tells the client
 /// how to continue the search for key names.
 #[derive(Debug, Clone)]
 pub enum FindKeys {
@@ -1492,9 +1492,9 @@ impl FromValue for CommandArgument {
                 value @ Value::Array(_) => value.into()?,
                 Value::Nil => vec![],
                 value => {
-                    return Err(Error::Client(
-                        format!("Cannot parse CommandArgument from result: {value:?}"),
-                    ))
+                    return Err(Error::Client(format!(
+                        "Cannot parse CommandArgument from result: {value:?}"
+                    )))
                 }
             },
         })
@@ -1583,7 +1583,7 @@ pub struct CommandListOptions {
 impl CommandListOptions {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name<M: Into<CommandArg>>(self, module_name: M) -> Self {
+    pub fn filter_by_module_name<M: SingleArg>(self, module_name: M) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1595,7 +1595,7 @@ impl CommandListOptions {
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category<C: Into<CommandArg>>(self, category: C) -> Self {
+    pub fn filter_by_acl_category<C: SingleArg>(self, category: C) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1607,7 +1607,7 @@ impl CommandListOptions {
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn filter_by_pattern<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1633,7 +1633,7 @@ pub struct FailOverOptions {
 impl FailOverOptions {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to<H: Into<CommandArg>>(self, host: H, port: u16) -> Self {
+    pub fn to<H: SingleArg>(self, host: H, port: u16) -> Self {
         Self {
             command_args: self.command_args.arg("TO").arg(host).arg(port),
         }
@@ -1693,9 +1693,11 @@ pub enum InfoSection {
     Everything,
 }
 
-impl From<InfoSection> for CommandArg {
-    fn from(s: InfoSection) -> Self {
-        match s {
+impl SingleArg for InfoSection {}
+
+impl IntoArgs for InfoSection {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(match self {
             InfoSection::Server => CommandArg::Str("server"),
             InfoSection::Clients => CommandArg::Str("clients"),
             InfoSection::Memory => CommandArg::Str("memory"),
@@ -1712,7 +1714,7 @@ impl From<InfoSection> for CommandArg {
             InfoSection::All => CommandArg::Str("all"),
             InfoSection::Default => CommandArg::Str("default"),
             InfoSection::Everything => CommandArg::Str("everything"),
-        }
+        })
     }
 }
 
@@ -1737,26 +1739,28 @@ pub enum LatencyHistoryEvent {
     RdbUnlinkTempFile,
 }
 
-impl From<LatencyHistoryEvent> for CommandArg {
-    fn from(e: LatencyHistoryEvent) -> Self {
-        match e {
-            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle".into(),
-            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always".into(),
-            LatencyHistoryEvent::AofStat => "aof-stat".into(),
-            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write".into(),
-            LatencyHistoryEvent::AofRename => "aof-rename".into(),
-            LatencyHistoryEvent::AofWrite => "aof-write".into(),
-            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child".into(),
-            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone".into(),
-            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync".into(),
-            LatencyHistoryEvent::Command => "command".into(),
-            LatencyHistoryEvent::ExpireCycle => "expire-cycle".into(),
-            LatencyHistoryEvent::EvictionCycle => "eviction-cycle".into(),
-            LatencyHistoryEvent::EvictionDel => "eviction-del".into(),
-            LatencyHistoryEvent::FastCommand => "fast-command".into(),
-            LatencyHistoryEvent::Fork => "fork".into(),
-            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file".into(),
-        }
+impl SingleArg for LatencyHistoryEvent {}
+
+impl IntoArgs for LatencyHistoryEvent {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(match self {
+            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle",
+            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always",
+            LatencyHistoryEvent::AofStat => "aof-stat",
+            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write",
+            LatencyHistoryEvent::AofRename => "aof-rename",
+            LatencyHistoryEvent::AofWrite => "aof-write",
+            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child",
+            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone",
+            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync",
+            LatencyHistoryEvent::Command => "command",
+            LatencyHistoryEvent::ExpireCycle => "expire-cycle",
+            LatencyHistoryEvent::EvictionCycle => "eviction-cycle",
+            LatencyHistoryEvent::EvictionDel => "eviction-del",
+            LatencyHistoryEvent::FastCommand => "fast-command",
+            LatencyHistoryEvent::Fork => "fork",
+            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file",
+        })
     }
 }
 
@@ -1802,7 +1806,7 @@ impl LolWutOptions {
     }
 
     #[must_use]
-    pub fn optional_arg<A: Into<CommandArg>>(self, arg: A) -> Self {
+    pub fn optional_arg<A: SingleArg>(self, arg: A) -> Self {
         Self {
             command_args: self.command_args.arg(arg),
         }
@@ -2036,11 +2040,13 @@ impl ModuleLoadOptions {
     #[must_use]
     pub fn config<N, V>(self, name: N, value: V) -> Self
     where
-        N: Into<CommandArg>,
-        V: Into<CommandArg>,
+        N: SingleArg,
+        V: SingleArg,
     {
         if self.args_added {
-            panic!("associated function `config` should be called before associated function `arg`");
+            panic!(
+                "associated function `config` should be called before associated function `arg`"
+            );
         }
 
         Self {
@@ -2052,7 +2058,7 @@ impl ModuleLoadOptions {
     /// Any additional arguments are passed unmodified to the module.
     /// This associated function can be called multiple times
     #[must_use]
-    pub fn arg<A: Into<CommandArg>>(self, arg: A) -> Self {
+    pub fn arg<A: SingleArg>(self, arg: A) -> Self {
         if !self.args_added {
             Self {
                 command_args: self.command_args.arg("ARGS").arg(arg),
@@ -2092,7 +2098,7 @@ impl ReplicaOfOptions {
     /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
-    pub fn master<H: Into<CommandArg>>(host: H, port: u16) -> Self {
+    pub fn master<H: SingleArg>(host: H, port: u16) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(host).arg(port),
         }

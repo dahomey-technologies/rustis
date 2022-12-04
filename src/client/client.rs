@@ -6,10 +6,14 @@ use crate::commands::JsonCommands;
 use crate::commands::SearchCommands;
 #[cfg(feature = "redis-time-series")]
 use crate::commands::TimeSeriesCommands;
+#[cfg(feature = "redis-bloom")]
+use crate::commands::{
+    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
+};
 use crate::{
     client::{
-        Cache, ClientTrait, InnerClient, IntoConfig, Message, MonitorStream,
-        Pipeline, PreparedCommand, PubSubStream, Transaction,
+        Cache, ClientTrait, InnerClient, IntoConfig, Message, MonitorStream, Pipeline,
+        PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
         BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
@@ -18,11 +22,9 @@ use crate::{
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
     network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgOrCollection, Value},
     Future, Result, ValueReceiver, ValueSender,
 };
-#[cfg(feature = "redis-bloom")]
-use crate::commands::{BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands};
 use futures::channel::{mpsc, oneshot};
 use std::future::IntoFuture;
 
@@ -80,7 +82,7 @@ impl Client {
     ///     Ok(())
     /// }
     /// ```
-    
+
     #[inline]
     pub async fn send(&mut self, command: Command) -> Result<Value> {
         self.inner_client.send(command).await
@@ -121,8 +123,8 @@ impl Client {
 }
 
 impl ClientTrait for Client {
-    
-    #[inline]fn send(&mut self, command: Command) -> Future<Value> {
+    #[inline]
+    fn send(&mut self, command: Command) -> Future<Value> {
         Box::pin(async move { self.send(command).await })
     }
 
@@ -253,7 +255,7 @@ impl PubSubCommands for Client {
     #[inline]
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.subscribe(channels)
@@ -262,7 +264,7 @@ impl PubSubCommands for Client {
     #[inline]
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<CommandArg> + Send + 'a,
+        P: SingleArg + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
@@ -271,7 +273,7 @@ impl PubSubCommands for Client {
     #[inline]
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)

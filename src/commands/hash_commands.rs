@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
+        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection,
     },
 };
 
@@ -22,8 +22,8 @@ pub trait HashCommands {
     fn hdel<K, F, C>(&mut self, key: K, fields: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
         C: SingleArgOrCollection<F>,
     {
         prepare_command(self, cmd("HDEL").arg(key).arg(fields))
@@ -41,8 +41,8 @@ pub trait HashCommands {
     fn hexists<K, F>(&mut self, key: K, field: F) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
     {
         prepare_command(self, cmd("HEXISTS").arg(key).arg(field))
     }
@@ -58,8 +58,8 @@ pub trait HashCommands {
     fn hget<K, F, V>(&mut self, key: K, field: F) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
         V: FromValue,
     {
         prepare_command(self, cmd("HGET").arg(key).arg(field))
@@ -76,10 +76,10 @@ pub trait HashCommands {
     fn hgetall<K, F, V, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
         V: FromValue,
-        A: FromKeyValueValueArray<F, V>,
+        A: FromKeyValueArray<F, V>,
     {
         prepare_command(self, cmd("HGETALL").arg(key))
     }
@@ -95,8 +95,8 @@ pub trait HashCommands {
     fn hincrby<K, F>(&mut self, key: K, field: F, increment: i64) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
     {
         prepare_command(self, cmd("HINCRBY").arg(key).arg(field).arg(increment))
     }
@@ -113,8 +113,8 @@ pub trait HashCommands {
     fn hincrbyfloat<K, F>(&mut self, key: K, field: F, increment: f64) -> PreparedCommand<Self, f64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
     {
         prepare_command(self, cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
     }
@@ -130,7 +130,7 @@ pub trait HashCommands {
     fn hkeys<K, F, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
@@ -148,7 +148,7 @@ pub trait HashCommands {
     fn hlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("HLEN").arg(key))
     }
@@ -164,8 +164,8 @@ pub trait HashCommands {
     fn hmget<K, F, V, C, A>(&mut self, key: K, fields: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
         C: SingleArgOrCollection<F>,
         V: FromValue,
         A: FromSingleValueArray<V>,
@@ -184,7 +184,7 @@ pub trait HashCommands {
     fn hrandfield<K, F>(&mut self, key: K) -> PreparedCommand<Self, F>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key))
@@ -204,7 +204,7 @@ pub trait HashCommands {
     fn hrandfields<K, F, A>(&mut self, key: K, count: isize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
         A: FromSingleValueArray<F>,
     {
@@ -230,10 +230,10 @@ pub trait HashCommands {
     ) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
         V: FromValue,
-        A: FromKeyValueValueArray<F, V>,
+        A: FromKeyValueArray<F, V>,
     {
         prepare_command(
             self,
@@ -258,7 +258,7 @@ pub trait HashCommands {
     ) -> PreparedCommand<Self, (u64, Vec<(F, V)>)>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         F: FromValue,
         V: FromValue,
     {
@@ -276,9 +276,9 @@ pub trait HashCommands {
     fn hset<K, F, V, I>(&mut self, key: K, items: I) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
+        V: SingleArg,
         I: KeyValueArgOrCollection<F, V>,
     {
         prepare_command(self, cmd("HSET").arg(key).arg(items))
@@ -296,9 +296,9 @@ pub trait HashCommands {
     fn hsetnx<K, F, V>(&mut self, key: K, field: F, value: V) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("HSETNX").arg(key).arg(field).arg(value))
     }
@@ -315,8 +315,8 @@ pub trait HashCommands {
     fn hstrlen<K, F>(&mut self, key: K, field: F) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        F: Into<CommandArg>,
+        K: SingleArg,
+        F: SingleArg,
     {
         prepare_command(self, cmd("HSTRLEN").arg(key).arg(field))
     }
@@ -332,7 +332,7 @@ pub trait HashCommands {
     fn hvals<K, V, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         V: FromValue,
         A: FromSingleValueArray<V>,
     {
@@ -348,7 +348,7 @@ pub struct HScanOptions {
 
 impl HScanOptions {
     #[must_use]
-    pub fn match_pattern<P: Into<CommandArg>>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern),
         }

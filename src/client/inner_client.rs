@@ -5,7 +5,7 @@ use crate::{
     },
     commands::InternalPubSubCommands,
     network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, Command, CommandArg, FromValue, ResultValueExt, SingleArgOrCollection, Value},
+    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgOrCollection, Value},
     Future, MsgSender, NetworkHandler, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -80,10 +80,13 @@ impl InnerClient {
 
     pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
-        let channels: Vec<String> = channels.into_iter().map(|c| c.into().to_string()).collect();
+        let channels: Vec<String> = channels
+            .into_iter()
+            .map(|c| c.into_command_arg().to_string())
+            .collect();
 
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
@@ -112,10 +115,13 @@ impl InnerClient {
 
     pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<CommandArg> + Send + 'a,
+        P: SingleArg + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
-        let patterns: Vec<String> = patterns.into_iter().map(|p| p.into().to_string()).collect();
+        let patterns: Vec<String> = patterns
+            .into_iter()
+            .map(|p| p.into_command_arg().to_string())
+            .collect();
 
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
@@ -144,12 +150,12 @@ impl InnerClient {
 
     pub fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         let shardchannels: Vec<String> = shardchannels
             .into_iter()
-            .map(|c| c.into().to_string())
+            .map(|c| c.into_command_arg().to_string())
             .collect();
 
         Box::pin(async move {

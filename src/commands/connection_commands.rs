@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value, SingleArg,
     },
     Error, Result,
 };
@@ -23,8 +23,8 @@ pub trait ConnectionCommands {
     fn auth<U, P>(&mut self, username: Option<U>, password: P) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        P: Into<CommandArg>,
+        U: SingleArg,
+        P: SingleArg,
     {
         prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
@@ -186,7 +186,7 @@ pub trait ConnectionCommands {
     fn client_setname<CN>(&mut self, connection_name: CN) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        CN: Into<CommandArg>,
+        CN: SingleArg,
     {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
@@ -264,7 +264,7 @@ pub trait ConnectionCommands {
     fn echo<M, R>(&mut self, message: M) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        M: Into<CommandArg>,
+        M: SingleArg,
         R: FromValue,
     {
         prepare_command(self, cmd("ECHO").arg(message))
@@ -637,7 +637,7 @@ impl ClientKillOptions {
     }
 
     #[must_use]
-    pub fn user<U: Into<CommandArg>>(self, username: U) -> Self {
+    pub fn user<U: SingleArg>(self, username: U) -> Self {
         Self {
             command_args: self.command_args.arg("USER").arg(username),
         }
@@ -648,7 +648,7 @@ impl ClientKillOptions {
     /// The ip:port should match a line returned by the
     /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr<A: Into<CommandArg>>(self, addr: A) -> Self {
+    pub fn addr<A: SingleArg>(self, addr: A) -> Self {
         Self {
             command_args: self.command_args.arg("ADDR").arg(addr),
         }
@@ -656,7 +656,7 @@ impl ClientKillOptions {
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr<A: Into<CommandArg>>(self, laddr: A) -> Self {
+    pub fn laddr<A: SingleArg>(self, laddr: A) -> Self {
         Self {
             command_args: self.command_args.arg("LADDR").arg(laddr),
         }
@@ -762,7 +762,7 @@ impl ClientTrackingOptions {
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix<P: Into<CommandArg>>(self, prefix: P) -> Self {
+    pub fn prefix<P: SingleArg>(self, prefix: P) -> Self {
         Self {
             command_args: self.command_args.arg("PREFIX").arg(prefix),
         }
@@ -870,8 +870,8 @@ impl HelloOptions {
     #[must_use]
     pub fn auth<U, P>(self, username: U, password: P) -> Self
     where
-        U: Into<CommandArg>,
-        P: Into<CommandArg>,
+        U: SingleArg,
+        P: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("AUTH").arg(username).arg(password),
@@ -881,7 +881,7 @@ impl HelloOptions {
     #[must_use]
     pub fn set_name<C>(self, client_name: C) -> Self
     where
-        C: Into<CommandArg>,
+        C: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("SETNAME").arg(client_name),
@@ -938,7 +938,7 @@ pub struct PingOptions {
 
 impl PingOptions {
     #[must_use]
-    pub fn message<M: Into<CommandArg>>(self, message: M) -> Self {
+    pub fn message<M: SingleArg>(self, message: M) -> Self {
         Self {
             command_args: self.command_args.arg(message),
         }

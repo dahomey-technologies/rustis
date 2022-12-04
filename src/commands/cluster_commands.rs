@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgOrCollection, SingleArg, SingleArgOrCollection, Value,
     },
     Error, Result,
 };
@@ -90,7 +90,7 @@ pub trait ClusterCommands {
     fn cluster_count_failure_reports<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -184,7 +184,7 @@ pub trait ClusterCommands {
     fn cluster_forget<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("FORGET").arg(node_id))
     }
@@ -234,7 +234,7 @@ pub trait ClusterCommands {
     fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, u16>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").arg(key))
     }
@@ -276,7 +276,7 @@ pub trait ClusterCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        IP: Into<CommandArg>,
+        IP: SingleArg,
     {
         prepare_command(
             self,
@@ -338,7 +338,7 @@ pub trait ClusterCommands {
     fn cluster_replicas<I, R>(&mut self, node_id: I) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
         R: FromValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
@@ -353,7 +353,7 @@ pub trait ClusterCommands {
     fn cluster_replicate<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICATE").arg(node_id))
     }

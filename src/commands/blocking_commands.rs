@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, CommandArg, FromValue, SingleArgOrCollection},
+    resp::{cmd, FromValue, SingleArgOrCollection, SingleArg},
     Future,
 };
 
@@ -30,8 +30,8 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        S: Into<CommandArg>,
-        D: Into<CommandArg>,
+        S: SingleArg,
+        D: SingleArg,
         E: FromValue,
     {
         prepare_command(
@@ -54,18 +54,18 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
-    fn blmpop<K, E, C>(
+    fn blmpop<K, KK, E>(
         &mut self,
         timeout: f64,
-        keys: C,
+        keys: KK,
         where_: LMoveWhere,
         count: usize,
     ) -> PreparedCommand<Self, Option<(String, Vec<E>)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
+        KK: SingleArgOrCollection<K>,
         E: FromValue,
-        C: SingleArgOrCollection<K>,
     {
         prepare_command(
             self,
@@ -102,7 +102,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
@@ -133,7 +133,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         V: FromValue,
@@ -152,17 +152,17 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
-    fn bzmpop<K, C, E>(
+    fn bzmpop<K, KK, E>(
         &mut self,
         timeout: f64,
-        keys: C,
+        keys: KK,
         where_: ZWhere,
         count: usize,
     ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        KK: SingleArgOrCollection<K>,
         E: FromValue,
     {
         prepare_command(
@@ -196,7 +196,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,
@@ -223,7 +223,7 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
         KK: SingleArgOrCollection<K>,
         K1: FromValue,
         E: FromValue,

@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, BatchPreparedCommand, ClientTrait, PreparedCommand},
     commands::{GraphCache, GraphValue},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
-        FromValue, IntoArgs, Value,
+        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValueArray,
+        FromValue, IntoArgs, SingleArg, Value,
     },
     Error, Future, Result,
 };
@@ -31,12 +31,12 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<N, V, R>(&mut self, name: impl Into<CommandArg>) -> PreparedCommand<Self, R>
+    fn graph_config_get<N, V, R>(&mut self, name: impl SingleArg) -> PreparedCommand<Self, R>
     where
         Self: Sized,
         N: FromValue,
         V: FromValue,
-        R: FromKeyValueValueArray<N, V>,
+        R: FromKeyValueArray<N, V>,
     {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
     }
@@ -56,8 +56,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_config_set(
         &mut self,
-        name: impl Into<CommandArg>,
-        value: impl Into<CommandArg>,
+        name: impl SingleArg,
+        value: impl SingleArg,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -73,7 +73,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(&mut self, graph: impl Into<CommandArg>) -> PreparedCommand<Self, String>
+    fn graph_delete(&mut self, graph: impl SingleArg) -> PreparedCommand<Self, String>
     where
         Self: Sized,
     {
@@ -96,8 +96,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_explain<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -135,8 +135,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_profile<R: FromValue, RR: FromSingleValueArray<R>>(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, RR>
     where
@@ -161,8 +161,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_query(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -194,8 +194,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_ro_query(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -225,7 +225,7 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_slowlog<R: FromSingleValueArray<GraphSlowlogResult>>(
         &mut self,
-        graph: impl Into<CommandArg>,
+        graph: impl SingleArg,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,

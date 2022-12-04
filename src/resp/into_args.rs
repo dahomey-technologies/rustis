@@ -1,4 +1,4 @@
-use crate::resp::{CommandArg, CommandArgs};
+use crate::resp::{BulkString, CommandArg, CommandArgs};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -10,37 +10,34 @@ use std::{
 pub trait IntoArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs;
     fn num_args(&self) -> usize {
-        unimplemented!()
+        1
     }
 }
 
-impl<T> IntoArgs for T
-where
-    T: Into<CommandArg>,
-{
+impl IntoArgs for CommandArg {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match args {
-            CommandArgs::Empty => CommandArgs::Single(self.into()),
-            CommandArgs::Single(a) => CommandArgs::Array2([a, self.into()]),
+            CommandArgs::Empty => CommandArgs::Single(self),
+            CommandArgs::Single(a) => CommandArgs::Array2([a, self]),
             CommandArgs::Array2(a) => {
                 let [item1, item2] = a;
-                CommandArgs::Array3([item1, item2, self.into()])
+                CommandArgs::Array3([item1, item2, self])
             }
             CommandArgs::Array3(a) => {
                 let [item1, item2, item3] = a;
-                CommandArgs::Array4([item1, item2, item3, self.into()])
+                CommandArgs::Array4([item1, item2, item3, self])
             }
             CommandArgs::Array4(a) => {
                 let [item1, item2, item3, item4] = a;
-                CommandArgs::Array5([item1, item2, item3, item4, self.into()])
+                CommandArgs::Array5([item1, item2, item3, item4, self])
             }
             CommandArgs::Array5(a) => {
                 let [item1, item2, item3, item4, item5] = a;
-                CommandArgs::Vec(smallvec![item1, item2, item3, item4, item5, self.into()])
+                CommandArgs::Vec(smallvec![item1, item2, item3, item4, item5, self])
             }
             CommandArgs::Vec(mut vec) => {
-                vec.push(self.into());
+                vec.push(self);
                 CommandArgs::Vec(vec)
             }
         }
@@ -48,6 +45,125 @@ where
 
     fn num_args(&self) -> usize {
         1
+    }
+}
+
+impl IntoArgs for u8 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(u64::from(self)))
+    }
+}
+
+impl IntoArgs for i8 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Signed(i64::from(self)))
+    }
+}
+
+impl IntoArgs for u16 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(u64::from(self)))
+    }
+}
+
+impl IntoArgs for i16 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Signed(i64::from(self)))
+    }
+}
+
+impl IntoArgs for u32 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(u64::from(self)))
+    }
+}
+
+impl IntoArgs for i32 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Signed(i64::from(self)))
+    }
+}
+
+impl IntoArgs for u64 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(self))
+    }
+}
+
+impl IntoArgs for i64 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Signed(self))
+    }
+}
+
+impl IntoArgs for usize {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(self as u64))
+    }
+}
+
+impl IntoArgs for isize {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Signed(self as i64))
+    }
+}
+
+impl IntoArgs for f32 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::F32(self))
+    }
+}
+
+impl IntoArgs for f64 {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::F64(self))
+    }
+}
+
+impl IntoArgs for bool {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Unsigned(u64::from(self)))
+    }
+}
+
+impl IntoArgs for BulkString {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Binary(self.0))
+    }
+}
+
+impl IntoArgs for &'static str {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Str(self))
+    }
+}
+
+impl IntoArgs for String {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::String(self))
+    }
+}
+
+impl IntoArgs for char {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::String(self.to_string()))
     }
 }
 
@@ -170,8 +286,8 @@ where
 
 impl<K, V, S: BuildHasher> IntoArgs for HashMap<K, V, S>
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: IntoArgs,
+    V: IntoArgs,
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -192,8 +308,8 @@ where
 
 impl<K, V> IntoArgs for BTreeMap<K, V>
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: IntoArgs,
+    V: IntoArgs,
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -264,6 +380,39 @@ impl IntoArgs for CommandArgs {
     }
 }
 
+/// Generic Marker for single arguments (no collections nor tuples)
+pub trait SingleArg: IntoArgs {
+    fn into_command_arg(self) -> CommandArg
+    where
+        Self: Sized,
+    {
+        let CommandArgs::Single(arg) = self.into_args(CommandArgs::Empty) else {
+            panic!("Expected a single argument");
+        };
+        arg
+    }
+}
+
+impl SingleArg for CommandArg {}
+impl SingleArg for u8 {}
+impl SingleArg for i8 {}
+impl SingleArg for u16 {}
+impl SingleArg for i16 {}
+impl SingleArg for u32 {}
+impl SingleArg for i32 {}
+impl SingleArg for u64 {}
+impl SingleArg for i64 {}
+impl SingleArg for usize {}
+impl SingleArg for isize {}
+impl SingleArg for f32 {}
+impl SingleArg for f64 {}
+impl SingleArg for bool {}
+impl SingleArg for char {}
+impl SingleArg for &'static str {}
+impl SingleArg for String {}
+impl SingleArg for BulkString {}
+impl<T: SingleArg> SingleArg for Option<T> {}
+
 /// Generic Marker for Collections of `IntoArgs`
 pub trait ArgsOrCollection<T>: IntoArgs
 where
@@ -278,7 +427,7 @@ impl<T> ArgsOrCollection<T> for T where T: IntoArgs {}
 /// Marker for collections of single items (directly convertible to `CommandArg`) of `IntoArgs`
 pub trait SingleArgOrCollection<T>: IntoArgs
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter: Iterator<Item = T>;
 
@@ -287,7 +436,7 @@ where
 
 impl<T, const N: usize> SingleArgOrCollection<T> for [T; N]
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = std::array::IntoIter<T, N>;
 
@@ -298,7 +447,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for Vec<T>
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = std::vec::IntoIter<T>;
 
@@ -310,7 +459,7 @@ where
 impl<A, T> SingleArgOrCollection<T> for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = smallvec::IntoIter<A>;
 
@@ -321,7 +470,7 @@ where
 
 impl<T, S: BuildHasher> SingleArgOrCollection<T> for HashSet<T, S>
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = std::collections::hash_set::IntoIter<T>;
 
@@ -332,7 +481,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for BTreeSet<T>
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = std::collections::btree_set::IntoIter<T>;
 
@@ -343,7 +492,7 @@ where
 
 impl<T> SingleArgOrCollection<T> for T
 where
-    T: Into<CommandArg>,
+    T: SingleArg,
 {
     type IntoIter = Once<T>;
 
@@ -355,50 +504,50 @@ where
 /// Marker for key/value collections of Args
 pub trait KeyValueArgOrCollection<K, V>: IntoArgs
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for Vec<(K, V)>
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<A, K, V> KeyValueArgOrCollection<K, V> for SmallVec<A>
 where
     A: smallvec::Array<Item = (K, V)>,
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<K, V, const N: usize> KeyValueArgOrCollection<K, V> for [(K, V); N]
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for (K, V)
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<K, V, S: BuildHasher> KeyValueArgOrCollection<K, V> for HashMap<K, V, S>
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }
 
 impl<K, V> KeyValueArgOrCollection<K, V> for BTreeMap<K, V>
 where
-    K: Into<CommandArg>,
-    V: Into<CommandArg>,
+    K: SingleArg,
+    V: SingleArg,
 {
 }

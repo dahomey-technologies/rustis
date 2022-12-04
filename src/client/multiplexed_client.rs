@@ -21,7 +21,7 @@ use crate::{
         ScriptingCommands, SentinelCommands, ServerCommands, SetCommands, SortedSetCommands,
         StreamCommands, StringCommands,
     },
-    resp::{Command, CommandArg, FromValue, SingleArgOrCollection, Value},
+    resp::{Command, FromValue, SingleArg, SingleArgOrCollection, Value},
     Future, Result,
 };
 use std::future::IntoFuture;
@@ -31,15 +31,15 @@ use std::future::IntoFuture;
 ///
 /// Compared to a [single client](crate::client::Client), a multiplexed client cannot offers access
 /// to all existing Redis commands.
-/// 
+///
 /// Transactions and [blocking commands](crate::commands::BlockingCommands) are not compatible with a multiplexed client
-/// because they monopolize the whole connection which cannot be shared anymore. 
-/// 
+/// because they monopolize the whole connection which cannot be shared anymore.
+///
 /// It means other consumers of the same
 /// multiplexed client will be blocked each time a transaction or a blocking command is in progress, losing the advantage
 /// of a shared connection.
 ///
-/// ## See also 
+/// ## See also
 /// [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 #[derive(Clone)]
 pub struct MultiplexedClient {
@@ -95,7 +95,7 @@ impl MultiplexedClient {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
-    
+
     #[inline]
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
         self.inner_client.send_and_forget(command)
@@ -264,7 +264,7 @@ impl PubSubCommands for MultiplexedClient {
     #[inline]
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.subscribe(channels)
@@ -273,7 +273,7 @@ impl PubSubCommands for MultiplexedClient {
     #[inline]
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<CommandArg> + Send + 'a,
+        P: SingleArg + Send + 'a,
         PP: SingleArgOrCollection<P>,
     {
         self.inner_client.psubscribe(patterns)
@@ -282,7 +282,7 @@ impl PubSubCommands for MultiplexedClient {
     #[inline]
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>,
     {
         self.inner_client.ssubscribe(shardchannels)

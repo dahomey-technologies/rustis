@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        IntoArgs, SingleArgOrCollection,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
+        SingleArg, SingleArgOrCollection,
     },
     Future,
 };
@@ -54,7 +54,7 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<CommandArg> + Send + 'a,
+        P: SingleArg + Send + 'a,
         PP: SingleArgOrCollection<P>;
 
     /// Posts a message to the given channel.
@@ -70,8 +70,8 @@ pub trait PubSubCommands {
     fn publish<C, M>(&mut self, channel: C, message: M) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        M: Into<CommandArg>,
+        C: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
     }
@@ -121,10 +121,10 @@ pub trait PubSubCommands {
     fn pub_sub_numsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
+        C: SingleArg,
         CC: SingleArgOrCollection<C>,
         R: FromValue,
-        RR: FromKeyValueValueArray<R, usize>,
+        RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
@@ -158,10 +158,10 @@ pub trait PubSubCommands {
     fn pub_sub_shardnumsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
+        C: SingleArg,
         CC: SingleArgOrCollection<C>,
         R: FromValue,
-        RR: FromKeyValueValueArray<R, usize>,
+        RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }
@@ -176,8 +176,8 @@ pub trait PubSubCommands {
     fn spublish<C, M>(&mut self, shardchannel: C, message: M) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        M: Into<CommandArg>,
+        C: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("SPUBLISH").arg(shardchannel).arg(message))
     }
@@ -188,7 +188,7 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>;
 
     /// Subscribes the client to the specified channels.
@@ -196,9 +196,9 @@ pub trait PubSubCommands {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, ClientPreparedCommand}, 
+    ///     client::{Client, ClientPreparedCommand},
     ///     commands::{FlushingMode, PubSubCommands, ServerCommands},
-    ///     resp::cmd, 
+    ///     resp::cmd,
     ///     Result,
     /// };
     /// use futures::StreamExt;
@@ -233,7 +233,7 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
+        C: SingleArg + Send + 'a,
         CC: SingleArgOrCollection<C>;
 }
 
@@ -244,7 +244,7 @@ pub struct PubSubChannelsOptions {
 }
 
 impl PubSubChannelsOptions {
-    pub fn pattern<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn pattern<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg(pattern),
         }

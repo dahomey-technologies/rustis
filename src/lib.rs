@@ -73,6 +73,7 @@ async fn main() -> Result<()> {
 
 # Client
 See the module [`client`](crate::client) to discover which are the 3 types of clients and how to configure them.
+
 You will also learn how to use pipeline, pub/sub and transactions.
 
 # RESP
@@ -82,8 +83,8 @@ See the module [`resp`](crate::resp) to discover how **rustis**
 allows programmers to communicate with Redis in a Rust idiomatic way.
 
 You will learn how to:
-* Manipulate the **rustis** object model, the enuml [`Value`](resp::Value), which is a generic Rust data structure over RESP.
-* Convert Rust type into Rust Commands with the [`Command`](resp::Command) struct and the [`IntoArgs`](resp::IntoArgs) trait
+* Manipulate the **rustis** object model, the enum [`Value`](resp::Value), which is a generic Rust data structure over RESP.
+* Convert Rust type into Rust Commands with the [`Command`](resp::Command) struct and the [`IntoArgs`](resp::IntoArgs) trait.
 * Convert Rust command responses into Rust type with the [`FromValue`](resp::FromValue) trait.
 
 # Commands

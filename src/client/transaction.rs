@@ -53,6 +53,40 @@ impl Transaction {
         self.forget_flags.push(true);
     }
 
+    /// Execute the transaction by the sending the queued command
+    /// as a whole batch to the Redis server.
+    ///
+    /// # Return
+    /// It is the caller responsability to use the right type to cast the server response
+    /// to the right tuple or collection depending on which command has been
+    /// [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
+    ///
+    /// The most generic type that can be requested as a result is `Vec<resp::Value>`
+    /// 
+    /// # Example
+    /// ```
+    /// use rustis::{
+    ///     client::{Client, Transaction, BatchPreparedCommand}, 
+    ///     commands::StringCommands,
+    ///     resp::{cmd, Value}, Result,
+    /// };
+    /// 
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    /// 
+    ///     let mut transaction = client.create_transaction();
+    /// 
+    ///     transaction.set("key1", "value1").forget();
+    ///     transaction.set("key2", "value2").forget();
+    ///     transaction.get::<_, String>("key1").queue();
+    ///     let value: String = transaction.execute().await?;
+    /// 
+    ///     assert_eq!("value1", value);
+    /// 
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn execute<T: FromValue>(mut self) -> Result<T> {
         self.queue(cmd("EXEC"));
 

@@ -344,6 +344,8 @@ async fn main() -> Result<()> {
         assert_eq!("mymessage", payload);
     }
 
+    pub_sub_stream.close().await?;
+
     Ok(())
 }
 ```
@@ -354,7 +356,7 @@ Once the stream has been created, it is still possible to add addtional subscrip
 by calling [`subscribe`](PubSubStream::subscribe), [`psubscribe`](PubSubStream::psubscribe)
 or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`](PubSubStream) instance
 
-### Example
+#### Example
 
 ```
 use rustis::{
@@ -376,6 +378,8 @@ async fn main() -> Result<()> {
 
     // 3nd subscription (possibility to mix all the kinds of subscription)
     pub_sub_stream.psubscribe("o*").await?;
+
+    pub_sub_stream.close().await?;
 
     Ok(())
 }

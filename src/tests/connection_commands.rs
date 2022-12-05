@@ -1,5 +1,5 @@
 use crate::{
-    client::{ClientPreparedCommand, BatchPreparedCommand},
+    client::{BatchPreparedCommand, ClientPreparedCommand},
     commands::{
         ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
         ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
@@ -217,8 +217,8 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> =
+        invalidation_stream.next().await.unwrap()?.get_payload()?;
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 
@@ -247,8 +247,8 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value3").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> =
+        invalidation_stream.next().await.unwrap()?.get_payload()?;
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 
@@ -277,8 +277,8 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value4").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> =
+        invalidation_stream.next().await.unwrap()?.get_payload()?;
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 

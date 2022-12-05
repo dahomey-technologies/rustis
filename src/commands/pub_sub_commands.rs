@@ -34,15 +34,14 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel1", "mymessage").await?;
     ///
-    ///     let (pattern, channel, message): (String, String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
+    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
+    ///     let pattern: String = message.get_pattern()?;
+    ///     let channel: String = message.get_channel()?;
+    ///     let payload: String = message.get_payload()?;
     ///
     ///     assert_eq!("mychannel*", pattern);
     ///     assert_eq!("mychannel1", channel);
-    ///     assert_eq!("mymessage", message);
+    ///     assert_eq!("mymessage", payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///
@@ -214,14 +213,13 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel", "mymessage").await?;
     ///
-    ///     let (channel, message): (String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
+    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
+    ///     let pattern: String = message.get_pattern()?;
+    ///     let channel: String = message.get_channel()?;
+    ///     let payload: String = message.get_payload()?;
     ///
     ///     assert_eq!("mychannel", channel);
-    ///     assert_eq!("mymessage", message);
+    ///     assert_eq!("mymessage", payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///

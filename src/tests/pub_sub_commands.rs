@@ -7,7 +7,7 @@ use crate::{
         ServerCommands, StringCommands,
     },
     tests::{get_cluster_test_client, get_test_client},
-    Error, Result,
+    Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -25,14 +25,12 @@ async fn pubsub() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
     regular_client.publish("mychannel", "mymessage").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel", channel);
-    assert_eq!("mymessage", message);
+    assert_eq!("mymessage", payload);
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;
@@ -43,14 +41,12 @@ async fn pubsub() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel2").await?;
     regular_client.publish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     Ok(())
 }
@@ -101,23 +97,19 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     regular_client.publish("mychannel1", "mymessage1").await?;
     regular_client.publish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel1", channel);
-    assert_eq!("mymessage1", message);
+    assert_eq!("mymessage1", payload);
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 
@@ -143,41 +135,41 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     regular_client.publish("mychannel21", "mymessage21").await?;
     regular_client.publish("mychannel22", "mymessage22").await?;
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel11", channel);
-    assert_eq!("mymessage11", message);
+    assert_eq!("mymessage11", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel12", channel);
-    assert_eq!("mymessage12", message);
+    assert_eq!("mymessage12", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel21", channel);
-    assert_eq!("mymessage21", message);
+    assert_eq!("mymessage21", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel22", channel);
-    assert_eq!("mymessage22", message.to_string());
+    assert_eq!("mymessage22", payload);
 
     pub_sub_stream.close().await?;
 
@@ -281,14 +273,12 @@ async fn pubsub_shardchannels() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.ssubscribe("mychannel").await?;
     regular_client.spublish("mychannel", "mymessage").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel", channel);
-    assert_eq!("mymessage", message);
+    assert_eq!("mymessage", payload);
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;
@@ -299,14 +289,12 @@ async fn pubsub_shardchannels() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.ssubscribe("mychannel2").await?;
     regular_client.spublish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 
@@ -333,23 +321,19 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
         .spublish("mychannel2{1}", "mymessage2")
         .await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel1{1}", channel);
-    assert_eq!("mymessage1", message);
+    assert_eq!("mymessage1", payload);
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2{1}", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 

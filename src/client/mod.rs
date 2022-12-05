@@ -302,7 +302,7 @@ You can create a [`PubSubStream`](PubSubStream) by calling [`subscribe`](crate::
 on their dedicated crate.
 
 Then by calling [`next`](https://docs.rs/futures/latest/futures/stream/trait.StreamExt.html#method.next) on the pub/sub stream, you can
-wait for incoming message in the form of generic [`Value`](crate::resp::Value) (to be improved).
+wait for incoming message in the form of the struct [`PubSubMessage`](crate::client::PubSubMessage).
 
 ### Warning!
 
@@ -336,7 +336,9 @@ async fn main() -> Result<()> {
 
     // subscribing_client wait for the next message
     if let Some(message) = pub_sub_stream.next().await {
-        let (channel, payload): (String, String) = message?.into()?;
+        let mut message = message?;
+        let channel: String = message.get_channel()?;
+        let payload: String = message.get_payload()?;
 
         assert_eq!("mychannel", channel);
         assert_eq!("mymessage", payload);

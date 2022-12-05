@@ -207,7 +207,7 @@ impl InnerClient {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            self.psubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender).await?;
+            self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender).await?;
 
             Ok(PubSubStream::from_shardchannels(
                 shardchannels,

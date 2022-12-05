@@ -348,6 +348,38 @@ async fn main() -> Result<()> {
 }
 ```
 
+### Additional Subscriptions
+
+Once the stream has been created, it is still possible to add addtional subscriptions
+by calling [`subscribe`](PubSubStream::subscribe), [`psubscribe`](PubSubStream::psubscribe)
+or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`](PubSubStream) instance
+
+### Example
+
+```
+use rustis::{
+    client::{Client, ClientPreparedCommand}, 
+    commands::{FlushingMode, PubSubCommands, ServerCommands},
+    resp::{cmd, Value}, Result,
+};
+use futures::StreamExt;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let mut subscribing_client = Client::connect("127.0.0.1:6379").await?;
+
+    // 1st subscription
+    let mut pub_sub_stream = subscribing_client.subscribe("mychannel1").await?;
+
+    // 2nd subscription
+    pub_sub_stream.subscribe("mychannel2").await?;
+
+    // 3nd subscription (possibility to mix all the kinds of subscription)
+    pub_sub_stream.psubscribe("o*").await?;
+
+    Ok(())
+}
+```
 */
 
 mod cache;

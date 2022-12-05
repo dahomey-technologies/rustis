@@ -1955,7 +1955,7 @@ impl FromValue for FtQueryResult {
         let mut withpayloads = false;
         let mut withsortkeys = false;
 
-        for arg in command.args.into_iter() {
+        for arg in (&command.args).into_iter() {
             match arg {
                 CommandArg::Str("NOCONTENT") => nocontent = true,
                 CommandArg::Str("WITHSCORES") => withscores = true,

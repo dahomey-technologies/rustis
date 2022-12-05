@@ -56,7 +56,7 @@ Several Redis commands expect a Rust type that should be converted in a single c
 **rustis** uses the trait [`SingleArg`](SingleArg) to implement this behavior.
 
 Current implementation provides the following conversions:
-* CommandArg
+* [`CommandArg`](CommandArg)
 * `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
@@ -273,7 +273,7 @@ Several Redis commands return a single value.
 **rustis** uses the trait [`FromSingleValue`](FromSingleValue) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):
-* Value
+* [`Value`](Value)
 * ()
 * `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,

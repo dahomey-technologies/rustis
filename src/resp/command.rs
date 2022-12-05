@@ -1,6 +1,6 @@
 use crate::resp::{CommandArgs, IntoArgs};
 
-/// Shortcut function to creating a command.
+/// Shortcut function for creating a command.
 #[must_use]
 #[inline(always)]
 pub fn cmd(name: &'static str) -> Command {

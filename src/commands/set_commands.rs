@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
         SingleArgCollection,
     },
 };
@@ -55,9 +55,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
+        M: FromSingleValue + Eq + Hash,
         C: SingleArgCollection<K>,
-        A: FromSingleValueArray<M>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
@@ -93,9 +93,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
+        M: FromSingleValue + Eq + Hash,
         C: SingleArgCollection<K>,
-        A: FromSingleValueArray<M>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
@@ -174,8 +174,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SMEMBERS").arg(key))
     }
@@ -234,8 +234,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SPOP").arg(key).arg(count))
     }
@@ -252,8 +252,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
     }
@@ -293,7 +293,7 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
+        M: FromSingleValue,
     {
         prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -310,9 +310,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue + Eq + Hash,
+        M: FromSingleValue + Eq + Hash,
         C: SingleArgCollection<K>,
-        A: FromSingleValueArray<M>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SUNION").arg(keys))
     }

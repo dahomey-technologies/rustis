@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
         SingleArg, SingleArgCollection,
     },
     Future,
@@ -89,8 +89,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
@@ -123,7 +123,7 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromValue,
+        R: FromSingleValue,
         RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
@@ -142,8 +142,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
     }
@@ -160,7 +160,7 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromValue,
+        R: FromSingleValue,
         RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))

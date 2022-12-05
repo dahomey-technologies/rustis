@@ -1,7 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, MultipleArgsCollection, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgCollection,
+        cmd, CommandArgs, FromSingleValue, IntoArgs, MultipleArgsCollection, SingleArg,
+        SingleArgCollection, FromValue,
     },
 };
 
@@ -120,7 +121,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
     }
@@ -139,7 +140,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -212,7 +213,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -244,7 +245,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -358,7 +359,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -403,7 +404,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
+        M: FromSingleValue,
     {
         prepare_command(self, cmd("ZPOPMAX").arg(key).arg(count))
     }
@@ -420,7 +421,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
+        M: FromSingleValue,
     {
         prepare_command(self, cmd("ZPOPMIN").arg(key).arg(count))
     }
@@ -437,7 +438,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key))
     }
@@ -458,7 +459,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key).arg(count))
     }
@@ -510,7 +511,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -537,7 +538,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -716,7 +717,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
+        M: FromSingleValue,
     {
         prepare_command(self, cmd("ZSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -758,7 +759,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -790,7 +791,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,

@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, MultipleArgsCollection, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -350,7 +350,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
-    fn ts_madd<K: SingleArg, T: SingleArg, R: FromSingleValueArray<u64>>(
+    fn ts_madd<K: SingleArg, T: SingleArg, R: FromValueArray<u64>>(
         &mut self,
         items: impl MultipleArgsCollection<(K, T, f64)>,
     ) -> PreparedCommand<Self, R>
@@ -384,7 +384,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mget/>](https://redis.io/commands/ts.mget/)
     #[must_use]
-    fn ts_mget<F: SingleArg, R: FromSingleValueArray<TsSample>>(
+    fn ts_mget<F: SingleArg, R: FromValueArray<TsSample>>(
         &mut self,
         options: TsMGetOptions,
         filters: impl SingleArgCollection<F>,
@@ -421,7 +421,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
-    fn ts_mrange<F: SingleArg, R: FromSingleValueArray<TsSample>>(
+    fn ts_mrange<F: SingleArg, R: FromValueArray<TsSample>>(
         &mut self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -470,7 +470,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
-    fn ts_mrevrange<F: SingleArg, R: FromSingleValueArray<TsSample>>(
+    fn ts_mrevrange<F: SingleArg, R: FromValueArray<TsSample>>(
         &mut self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -516,7 +516,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<F: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
+    fn ts_queryindex<F: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         filters: impl SingleArgCollection<F>,
     ) -> PreparedCommand<Self, RR>
@@ -548,7 +548,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.range/>](https://redis.io/commands/ts.range/)
     #[must_use]
-    fn ts_range<R: FromSingleValueArray<(u64, f64)>>(
+    fn ts_range<R: FromValueArray<(u64, f64)>>(
         &mut self,
         key: impl SingleArg,
         from_timestamp: impl SingleArg,
@@ -590,7 +590,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.revrange/>](https://redis.io/commands/ts.revrange/)
     #[must_use]
-    fn ts_revrange<R: FromSingleValueArray<(u64, f64)>>(
+    fn ts_revrange<R: FromValueArray<(u64, f64)>>(
         &mut self,
         key: impl SingleArg,
         from_timestamp: impl SingleArg,

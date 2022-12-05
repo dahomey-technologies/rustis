@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgsCollection, SingleArg,
-        SingleArgCollection, Value,
+        cmd, FromSingleValue, FromValueArray, FromValue, HashMapExt, KeyValueArgsCollection,
+        SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
@@ -29,7 +29,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
+    fn topk_add<I: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -59,7 +59,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<I: SingleArg, R: FromValue, RR: FromSingleValueArray<R>>(
+    fn topk_incrby<I: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, i64>,
@@ -99,7 +99,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn topk_list<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
@@ -122,7 +122,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list_with_count<R: FromValue, RR: FromSingleValueArray<(R, usize)>>(
+    fn topk_list_with_count<R: FromSingleValue, RR: FromValueArray<(R, usize)>>(
         &mut self,
         key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
@@ -146,7 +146,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<I: SingleArg, R: FromSingleValueArray<bool>>(
+    fn topk_query<I: SingleArg, R: FromValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

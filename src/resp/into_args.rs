@@ -414,7 +414,7 @@ impl SingleArg for BulkString {}
 impl<T: SingleArg> SingleArg for Option<T> {}
 
 /// Generic Marker for Collections of `IntoArgs`
-/// 
+///
 /// Each element of the collection can produce multiple args.
 pub trait MultipleArgsCollection<T>: IntoArgs
 where
@@ -427,7 +427,7 @@ impl<T> MultipleArgsCollection<T> for Vec<T> where T: IntoArgs {}
 impl<T> MultipleArgsCollection<T> for T where T: IntoArgs {}
 
 /// Marker for collections of single items (directly convertible to `CommandArg`) of `IntoArgs`
-/// 
+///
 /// Each element of the collection can only produce a single arg.
 pub trait SingleArgCollection<T>: IntoArgs
 where
@@ -506,7 +506,7 @@ where
 }
 
 /// Marker for key/value collections of Args
-/// 
+///
 /// The key and the value can only produce a single arg each.
 pub trait KeyValueArgsCollection<K, V>: IntoArgs
 where

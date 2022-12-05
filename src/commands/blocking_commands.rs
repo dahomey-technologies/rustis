@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, FromValue, SingleArgCollection, SingleArg},
+    resp::{cmd, FromSingleValue, SingleArgCollection, SingleArg},
     Future,
 };
 
@@ -32,7 +32,7 @@ pub trait BlockingCommands {
         Self: Sized,
         S: SingleArg,
         D: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -65,7 +65,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -104,8 +104,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromValue,
-        V: FromValue,
+        K1: FromSingleValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
@@ -135,8 +135,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromValue,
-        V: FromValue,
+        K1: FromSingleValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
@@ -163,7 +163,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -198,8 +198,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromValue,
-        E: FromValue,
+        K1: FromSingleValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
@@ -225,8 +225,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromValue,
-        E: FromValue,
+        K1: FromSingleValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }

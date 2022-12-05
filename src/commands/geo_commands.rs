@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArg, SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
+        MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -136,8 +136,8 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M1: SingleArg,
-        M2: FromValue,
-        A: FromSingleValueArray<GeoSearchResult<M2>>,
+        M2: FromSingleValue,
+        A: FromValueArray<GeoSearchResult<M2>>,
     {
         prepare_command(
             self,
@@ -346,7 +346,7 @@ impl IntoArgs for GeoSearchOptions {
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
-    M: FromValue,
+    M: FromSingleValue,
 {
     /// The matched member.
     pub member: M,
@@ -363,7 +363,7 @@ where
 
 impl<M> FromValue for GeoSearchResult<M>
 where
-    M: FromValue,
+    M: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {

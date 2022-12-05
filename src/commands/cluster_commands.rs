@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
@@ -255,7 +255,7 @@ pub trait ClusterCommands {
     fn cluster_links<I>(&mut self) -> PreparedCommand<Self, Vec<I>>
     where
         Self: Sized,
-        I: FromSingleValueArray<ClusterLinkInfo>,
+        I: FromValueArray<ClusterLinkInfo>,
     {
         prepare_command(self, cmd("CLUSTER").arg("LINKS"))
     }
@@ -299,7 +299,7 @@ pub trait ClusterCommands {
     fn cluster_myid<N>(&mut self) -> PreparedCommand<Self, N>
     where
         Self: Sized,
-        N: FromValue,
+        N: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("MYID"))
     }
@@ -322,7 +322,7 @@ pub trait ClusterCommands {
     fn cluster_nodes<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("NODES"))
     }
@@ -339,7 +339,7 @@ pub trait ClusterCommands {
     where
         Self: Sized,
         I: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
     }
@@ -428,7 +428,7 @@ pub trait ClusterCommands {
     fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
     where
         Self: Sized,
-        S: FromSingleValueArray<ClusterShardResult>,
+        S: FromValueArray<ClusterShardResult>,
     {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }

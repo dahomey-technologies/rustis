@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
-    resp::{cmd, CommandArgs, FromValue, IntoArgs, SingleArg, SingleArgCollection, Value},
+    resp::{
+        cmd, CommandArgs, FromSingleValue, FromValue, IntoArgs, SingleArg, SingleArgCollection,
+        Value,
+    },
     Error, Result,
 };
 
@@ -24,7 +27,7 @@ pub trait ScriptingCommands {
     fn eval<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("EVAL").arg(builder))
     }
@@ -41,7 +44,7 @@ pub trait ScriptingCommands {
     fn eval_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("EVAL_RO").arg(builder))
     }
@@ -57,7 +60,7 @@ pub trait ScriptingCommands {
     fn evalsha<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("EVALSHA").arg(builder))
     }
@@ -74,7 +77,7 @@ pub trait ScriptingCommands {
     fn evalsha_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("EVALSHA_RO").arg(builder))
     }
@@ -90,7 +93,7 @@ pub trait ScriptingCommands {
     fn fcall<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("FCALL").arg(builder))
     }
@@ -106,7 +109,7 @@ pub trait ScriptingCommands {
     fn fcall_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("FCALL_RO").arg(builder))
     }
@@ -137,7 +140,7 @@ pub trait ScriptingCommands {
     fn function_dump<P>(&mut self) -> PreparedCommand<Self, P>
     where
         Self: Sized,
-        P: FromValue,
+        P: FromSingleValue,
     {
         prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
@@ -193,7 +196,7 @@ pub trait ScriptingCommands {
     where
         Self: Sized,
         F: SingleArg,
-        L: FromValue,
+        L: FromSingleValue,
     {
         prepare_command(
             self,
@@ -305,7 +308,7 @@ pub trait ScriptingCommands {
     where
         Self: Sized,
         S: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
     }

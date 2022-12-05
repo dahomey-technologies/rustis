@@ -4,7 +4,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromKeyValueArray,
-        FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
+        FromValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
         SingleArgCollection, Value, Command, SingleArg,
     },
     Error, Result, commands::{SortOrder, GeoUnit},
@@ -149,8 +149,8 @@ pub trait SearchCommands {
     where
         Self: Sized,
         O: SingleArg,
-        N: FromValue,
-        V: FromValue,
+        N: FromSingleValue,
+        V: FromSingleValue,
         R: FromKeyValueArray<N, V>,
     {
         prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option))
@@ -303,8 +303,8 @@ pub trait SearchCommands {
     where
         Self: Sized,
         D: SingleArg,
-        T: FromValue,
-        TT: FromSingleValueArray<T>,
+        T: FromSingleValue,
+        TT: FromValueArray<T>,
     {
         prepare_command(self, cmd("FT.DICTDUMP").arg(dict))
     }
@@ -367,7 +367,7 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -403,8 +403,8 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(
             self,
@@ -444,8 +444,8 @@ pub trait SearchCommands {
     fn ft_list<R, RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(self, cmd("FT._LIST"))
     }
@@ -634,7 +634,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
-    fn ft_tagvals<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn ft_tagvals<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         index: impl SingleArg,
         field_name: impl SingleArg,

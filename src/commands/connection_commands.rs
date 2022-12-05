@@ -1,7 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgCollection, Value, SingleArg,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValue, IntoArgs, SingleArg,
+        SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -53,7 +54,7 @@ pub trait ConnectionCommands {
     fn client_getname<CN>(&mut self) -> PreparedCommand<Self, Option<CN>>
     where
         Self: Sized,
-        CN: FromValue,
+        CN: FromSingleValue,
     {
         prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
@@ -265,7 +266,7 @@ pub trait ConnectionCommands {
     where
         Self: Sized,
         M: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("ECHO").arg(message))
     }
@@ -292,7 +293,7 @@ pub trait ConnectionCommands {
     fn ping<R>(&mut self, options: PingOptions) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("PING").arg(options))
     }

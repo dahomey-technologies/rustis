@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, MultipleArgsCollection, CommandArgs, FromKeyValueArray, FromValue, HashMapExt,
-        IntoArgs, KeyValueArgsCollection, SingleArg, Value,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, MultipleArgsCollection, SingleArg, Value,
     },
     Result,
 };
@@ -22,8 +22,8 @@ pub trait SentinelCommands {
     where
         Self: Sized,
         N: SingleArg,
-        RN: FromValue,
-        RV: FromValue,
+        RN: FromSingleValue,
+        RV: FromSingleValue,
         R: FromKeyValueArray<RN, RV>,
     {
         prepare_command(self, cmd("SENTINEL").arg("CONFIG").arg("GET").arg(name))

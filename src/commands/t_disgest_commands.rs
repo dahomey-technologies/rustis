@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs, SingleArg,
+        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs, SingleArg,
         SingleArgCollection, Value,
     },
     Result,
@@ -54,7 +54,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.byrank/>](https://redis.io/commands/tdigest.byrank/)
     #[must_use]
-    fn tdigest_byrank<R: FromSingleValueArray<f64>>(
+    fn tdigest_byrank<R: FromValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
         ranks: impl SingleArgCollection<usize>,
@@ -85,7 +85,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.byrevrank/>](https://redis.io/commands/tdigest.byrevrank/)
     #[must_use]
-    fn tdigest_byrevrank<R: FromSingleValueArray<f64>>(
+    fn tdigest_byrevrank<R: FromValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
         ranks: impl SingleArgCollection<usize>,
@@ -113,7 +113,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.cdf/>](https://redis.io/commands/tdigest.cdf/)
     #[must_use]
-    fn tdigest_cdf<V: SingleArg, R: FromSingleValueArray<f64>>(
+    fn tdigest_cdf<V: SingleArg, R: FromValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,
@@ -259,7 +259,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.quantile/>](https://redis.io/commands/tdigest.quantile/)
     #[must_use]
-    fn tdigest_quantile<Q: SingleArg, R: FromSingleValueArray<f64>>(
+    fn tdigest_quantile<Q: SingleArg, R: FromValueArray<f64>>(
         &mut self,
         key: impl SingleArg,
         quantiles: impl SingleArgCollection<Q>,
@@ -294,7 +294,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.rank/>](https://redis.io/commands/tdigest.rank/)
     #[must_use]
-    fn tdigest_rank<V: SingleArg, R: FromSingleValueArray<isize>>(
+    fn tdigest_rank<V: SingleArg, R: FromValueArray<isize>>(
         &mut self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,
@@ -344,7 +344,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.revrank/>](https://redis.io/commands/tdigest.revrank/)
     #[must_use]
-    fn tdigest_revrank<V: SingleArg, R: FromSingleValueArray<isize>>(
+    fn tdigest_revrank<V: SingleArg, R: FromValueArray<isize>>(
         &mut self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,

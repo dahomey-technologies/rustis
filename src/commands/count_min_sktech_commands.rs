@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, FromSingleValueArray, FromValue, HashMapExt, KeyValueArgsCollection, SingleArg,
+        cmd, FromValueArray, FromValue, HashMapExt, KeyValueArgsCollection, SingleArg,
         SingleArgCollection, Value,
     },
     Result,
@@ -29,7 +29,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
-    fn cms_incrby<I: SingleArg, R: FromSingleValueArray<usize>>(
+    fn cms_incrby<I: SingleArg, R: FromValueArray<usize>>(
         &mut self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, usize>,
@@ -159,7 +159,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
-    fn cms_query<I: SingleArg, C: FromSingleValueArray<usize>>(
+    fn cms_query<I: SingleArg, C: FromValueArray<usize>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

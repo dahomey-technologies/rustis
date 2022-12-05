@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::SetCondition,
     resp::{
-        cmd, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
         SingleArgCollection, Value,
     },
 };
@@ -38,7 +38,7 @@ pub trait JsonCommands {
         P: SingleArg,
         V: SingleArg,
         VV: SingleArgCollection<V>,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.ARRAPPEND").arg(key).arg(path).arg(values))
     }
@@ -71,7 +71,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: FromSingleValueArray<Option<isize>>,
+        R: FromValueArray<Option<isize>>,
     {
         prepare_command(
             self,
@@ -115,7 +115,7 @@ pub trait JsonCommands {
         P: SingleArg,
         V: SingleArg,
         VV: SingleArgCollection<V>,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(
             self,
@@ -145,7 +145,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.ARRLEN").arg(key).arg(path))
     }
@@ -177,8 +177,8 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(self, cmd("JSON.ARRPOP").arg(key).arg(path).arg(index))
     }
@@ -210,7 +210,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(
             self,
@@ -256,7 +256,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<usize>,
+        R: FromValueArray<usize>,
     {
         prepare_command(self, cmd("JSON.DEBUG").arg("MEMORY").arg(key).arg(path))
     }
@@ -319,7 +319,7 @@ pub trait JsonCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("JSON.GET").arg(key).arg(options))
     }
@@ -342,8 +342,8 @@ pub trait JsonCommands {
         K: SingleArg,
         KK: SingleArgCollection<K>,
         P: SingleArg,
-        V: FromValue,
-        VV: FromSingleValueArray<V>,
+        V: FromSingleValue,
+        VV: FromValueArray<V>,
     {
         prepare_command(self, cmd("JSON.MGET").arg(keys).arg(path))
     }
@@ -368,7 +368,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("JSON.NUMINCRBY").arg(key).arg(path).arg(value))
     }
@@ -393,7 +393,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("JSON.NUMMULTBY").arg(key).arg(path).arg(value))
     }
@@ -417,8 +417,8 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromValue,
-        RR: FromSingleValueArray<Vec<R>>,
+        R: FromSingleValue,
+        RR: FromValueArray<Vec<R>>,
     {
         prepare_command(self, cmd("JSON.OBJKEYS").arg(key).arg(path))
     }
@@ -441,7 +441,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.OBJLEN").arg(key).arg(path))
     }
@@ -473,7 +473,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        VV: FromSingleValueArray<Value>,
+        VV: FromValueArray<Value>,
     {
         prepare_command(self, cmd("JSON.RESP").arg(key).arg(path))
     }
@@ -530,7 +530,7 @@ pub trait JsonCommands {
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.STRAPPEND").arg(key).arg(path).arg(value))
     }
@@ -553,7 +553,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.STRLEN").arg(key).arg(path))
     }
@@ -576,7 +576,7 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromSingleValueArray<Option<usize>>,
+        R: FromValueArray<Option<usize>>,
     {
         prepare_command(self, cmd("JSON.TOGGLE").arg(key).arg(path))
     }
@@ -598,8 +598,8 @@ pub trait JsonCommands {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(self, cmd("JSON.TYPE").arg(key).arg(path))
     }

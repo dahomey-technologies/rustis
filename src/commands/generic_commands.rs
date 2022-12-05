@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
+        SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
@@ -173,8 +173,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         P: SingleArg,
-        K: FromValue,
-        A: FromSingleValueArray<K>,
+        K: FromSingleValue,
+        A: FromValueArray<K>,
     {
         prepare_command(self, cmd("KEYS").arg(pattern))
     }
@@ -243,7 +243,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").arg(key))
     }
@@ -414,7 +414,7 @@ pub trait GenericCommands {
     fn randomkey<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("RANDOMKEY"))
     }
@@ -492,8 +492,8 @@ pub trait GenericCommands {
     fn scan<K, A>(&mut self, cursor: u64, options: ScanOptions) -> PreparedCommand<Self, (u64, A)>
     where
         Self: Sized,
-        K: FromValue,
-        A: FromSingleValueArray<K>,
+        K: FromSingleValue,
+        A: FromValueArray<K>,
     {
         prepare_command(self, cmd("SCAN").arg(cursor).arg(options))
     }
@@ -510,8 +510,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
-        A: FromSingleValueArray<M>,
+        M: FromSingleValue,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SORT").arg(key).arg(options))
     }
@@ -560,8 +560,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromValue,
-        A: FromSingleValueArray<M>,
+        M: FromSingleValue,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SORT_RO").arg(key).arg(options))
     }

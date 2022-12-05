@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue, IntoArgs,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -60,7 +60,7 @@ pub trait HashCommands {
         Self: Sized,
         K: SingleArg,
         F: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("HGET").arg(key).arg(field))
     }
@@ -77,8 +77,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
-        V: FromValue,
+        F: FromSingleValue,
+        V: FromSingleValue,
         A: FromKeyValueArray<F, V>,
     {
         prepare_command(self, cmd("HGETALL").arg(key))
@@ -131,8 +131,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
-        A: FromSingleValueArray<F>,
+        F: FromSingleValue,
+        A: FromValueArray<F>,
     {
         prepare_command(self, cmd("HKEYS").arg(key))
     }
@@ -167,8 +167,8 @@ pub trait HashCommands {
         K: SingleArg,
         F: SingleArg,
         C: SingleArgCollection<F>,
-        V: FromValue,
-        A: FromSingleValueArray<V>,
+        V: FromSingleValue,
+        A: FromValueArray<V>,
     {
         prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
@@ -185,7 +185,7 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
+        F: FromSingleValue,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key))
     }
@@ -205,8 +205,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
-        A: FromSingleValueArray<F>,
+        F: FromSingleValue,
+        A: FromValueArray<F>,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
     }
@@ -231,8 +231,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
-        V: FromValue,
+        F: FromSingleValue,
+        V: FromSingleValue,
         A: FromKeyValueArray<F, V>,
     {
         prepare_command(
@@ -259,8 +259,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromValue,
-        V: FromValue,
+        F: FromSingleValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -333,8 +333,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
-        A: FromSingleValueArray<V>,
+        V: FromSingleValue,
+        A: FromValueArray<V>,
     {
         prepare_command(self, cmd("HVALS").arg(key))
     }

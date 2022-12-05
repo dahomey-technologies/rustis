@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt,
+        IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
@@ -61,7 +61,7 @@ pub trait StreamCommands {
         F: SingleArg,
         V: SingleArg,
         FFVV: KeyValueArgsCollection<F, V>,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -91,7 +91,7 @@ pub trait StreamCommands {
         G: SingleArg,
         C: SingleArg,
         I: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -134,7 +134,7 @@ pub trait StreamCommands {
         C: SingleArg,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -426,7 +426,7 @@ pub trait StreamCommands {
         K: SingleArg,
         S: SingleArg,
         E: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -458,7 +458,7 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromValue,
+        V: FromSingleValue,
         R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
@@ -491,7 +491,7 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromValue,
+        V: FromSingleValue,
         R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
@@ -528,7 +528,7 @@ pub trait StreamCommands {
         K: SingleArg,
         E: SingleArg,
         S: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -683,7 +683,7 @@ impl IntoArgs for XAutoClaimOptions {
 /// Result for the [`xrange`](StreamCommands::xrange) and other associated commands.
 pub struct StreamEntry<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     /// The stream Id
     pub stream_id: String,
@@ -694,7 +694,7 @@ where
 
 impl<V> FromValue for StreamEntry<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (stream_id, items): (String, HashMap<String, V>) = value.into()?;
@@ -705,7 +705,7 @@ where
 /// Result for the [`xautoclaim`](StreamCommands::xautoclaim) command.
 pub struct XAutoClaimResult<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     /// A stream ID to be used as the <start> argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
@@ -720,7 +720,7 @@ where
 
 impl<V> FromValue for XAutoClaimResult<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (start_stream_id, entries, deleted_ids): (String, Vec<StreamEntry<V>>, Vec<String>) =

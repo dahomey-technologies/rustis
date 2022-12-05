@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, BatchPreparedCommand, ClientTrait, PreparedCommand},
     commands::{GraphCache, GraphValue},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValueArray,
-        FromValue, IntoArgs, SingleArg, Value,
+        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, 
+        FromValueArray, FromValue, IntoArgs, SingleArg, Value,
     },
     Error, Future, Result,
 };
@@ -34,8 +34,8 @@ pub trait GraphCommands {
     fn graph_config_get<N, V, R>(&mut self, name: impl SingleArg) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: FromValue,
-        V: FromValue,
+        N: FromSingleValue,
+        V: FromSingleValue,
         R: FromKeyValueArray<N, V>,
     {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
@@ -94,7 +94,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.explain/>](https://redis.io/commands/graph.explain/)
     #[must_use]
-    fn graph_explain<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn graph_explain<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         graph: impl SingleArg,
         query: impl SingleArg,
@@ -113,7 +113,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_list<R: FromValue, RR: FromSingleValueArray<R>>(&mut self) -> PreparedCommand<Self, RR>
+    fn graph_list<R: FromSingleValue, RR: FromValueArray<R>>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
     {
@@ -133,7 +133,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_profile<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn graph_profile<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
         graph: impl SingleArg,
         query: impl SingleArg,
@@ -223,7 +223,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
-    fn graph_slowlog<R: FromSingleValueArray<GraphSlowlogResult>>(
+    fn graph_slowlog<R: FromValueArray<GraphSlowlogResult>>(
         &mut self,
         graph: impl SingleArg,
     ) -> PreparedCommand<Self, R>

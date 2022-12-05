@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, BulkString, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
         SingleArg, SingleArgCollection, Value,
     },
     Result,
@@ -225,7 +225,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
-    fn cf_insertnx<I: SingleArg, R: FromSingleValueArray<i64>>(
+    fn cf_insertnx<I: SingleArg, R: FromValueArray<i64>>(
         &mut self,
         key: impl SingleArg,
         options: CfInsertOptions,
@@ -284,7 +284,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// [<https://redis.io/commands/cf.mexists/>](https://redis.io/commands/cf.mexists/)
     #[must_use]
-    fn cf_mexists<I: SingleArg, R: FromSingleValueArray<bool>>(
+    fn cf_mexists<I: SingleArg, R: FromValueArray<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

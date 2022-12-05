@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
@@ -124,7 +124,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
         Self: Sized,
     {
         prepare_command(self, cmd("GET").arg(key))
@@ -145,7 +145,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
@@ -193,7 +193,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
@@ -212,7 +212,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
@@ -232,7 +232,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
@@ -333,7 +333,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
@@ -402,8 +402,8 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        V: FromValue,
-        VV: FromSingleValueArray<V>,
+        V: FromSingleValue,
+        VV: FromValueArray<V>,
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }
@@ -541,7 +541,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V1: SingleArg,
-        V2: FromValue,
+        V2: FromSingleValue,
     {
         prepare_command(
             self,

@@ -56,6 +56,7 @@ Several Redis commands expect a Rust type that should be converted in a single c
 **rustis** uses the trait [`SingleArg`](SingleArg) to implement this behavior.
 
 Current implementation provides the following conversions:
+* CommandArg
 * `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
@@ -170,9 +171,6 @@ Current implementation provides the following conversions:
 * `T` (for the single item case)
 * `Vec<T>`
 * `[T;N]`
-* `SmallVec<A>`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
 
 where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 
@@ -180,11 +178,10 @@ where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 ```
 use rustis::{
     client::Client,
-    commands::{FlushingMode, ServerCommands, ListCommands},
+    commands::{FlushingMode, ServerCommands, SortedSetCommands, ZAddOptions},
     resp::{BulkString, CommandArg},
     Result,
 };
-use smallvec::{SmallVec};
 use std::collections::{HashSet, BTreeSet};
 
 #[tokio::main]
@@ -195,19 +192,9 @@ async fn main() -> Result<()> {
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
 
-    client.lpush("key", 12).await?;
-    client.lpush("key", [12, 13, 14]).await?;
-    client.lpush("key", vec![12, 13, 14]).await?;
-    client.lpush("key", SmallVec::from([12, 13, 14])).await?;
-    client.lpush("key", HashSet::from([12, 13, 14])).await?;
-    client.lpush("key", BTreeSet::from([12, 13, 14])).await?;
-
-    client.lpush("key", "value1").await?;
-    client.lpush("key", ["value1", "value2", "value13"]).await?;
-    client.lpush("key", vec!["value1", "value2", "value13"]).await?;
-    client.lpush("key", SmallVec::from(["value1", "value2", "value13"])).await?;
-    client.lpush("key", HashSet::from(["value1", "value2", "value13"])).await?;
-    client.lpush("key", BTreeSet::from(["value1", "value2", "value13"])).await?;
+    client.zadd("key", (1.0, "member1"), ZAddOptions::default()).await?;
+    client.zadd("key", [(1.0, "member1"), (2.0, "member2")], ZAddOptions::default()).await?;
+    client.zadd("key", vec![(1.0, "member1"), (2.0, "member2")], ZAddOptions::default()).await?;
 
     Ok(())
 }
@@ -279,29 +266,27 @@ Some more advanced traits allow to constraint more which Rust types are allowed.
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### FromValue
+### FromSingleValue
+
+Several Redis commands return a single value.
+
+**rustis** uses the trait [`FromSingleValue`](FromSingleValue) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):
+* Value
+* ()
 * `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
 * `String`, [`BulkString`](BulkString)
 * `Option<T>`
-* Tuples, up to 10 members
-* `Vec<T>`
-* `[T;N]`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* `SmallVec<A>`
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
 
 #### Example
 ```
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{BulkString, FromValue, Value},
+    resp::{BulkString, FromSingleValue, FromValue, Value},
     Result,
 };
 
@@ -313,6 +298,8 @@ impl FromValue for MyI32 {
         Ok(MyI32(value.into()?))
     }
 }
+
+impl FromSingleValue for MyI32 {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -340,10 +327,10 @@ async fn main() -> Result<()> {
 }
 ```
 
-### FromSingleValueArray
+### FromValueArray
 
 Several Redis commands return a collection of items
-**rustis** uses the trait [`FromSingleValueArray`](FromSingleValueArray) to implement this behavior.
+**rustis** uses the trait [`FromValueArray`](FromValueArray) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):
 * `Vec<T>`

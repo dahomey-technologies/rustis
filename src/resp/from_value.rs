@@ -512,9 +512,7 @@ impl FromValue for f64 {
 impl FromValue for String {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(s) => {
-                String::from_utf8(s).map_err(|e| Error::Client(e.to_string()))
-            }
+            Value::BulkString(s) => String::from_utf8(s).map_err(|e| Error::Client(e.to_string())),
             Value::Nil => Ok(String::from("")),
             Value::SimpleString(s) => Ok(s),
             Value::Error(e) => Err(Error::Redis(e)),
@@ -540,26 +538,48 @@ impl FromValue for BulkString {
     }
 }
 
-/// Marker for single value array
-pub trait FromSingleValueArray<T>: FromValue
+/// Marker for single value
+pub trait FromSingleValue: FromValue {}
+
+impl FromSingleValue for Value {}
+impl FromSingleValue for () {}
+impl FromSingleValue for u8 {}
+impl FromSingleValue for i8 {}
+impl FromSingleValue for u16 {}
+impl FromSingleValue for i16 {}
+impl FromSingleValue for u32 {}
+impl FromSingleValue for i32 {}
+impl FromSingleValue for u64 {}
+impl FromSingleValue for i64 {}
+impl FromSingleValue for usize {}
+impl FromSingleValue for isize {}
+impl FromSingleValue for f32 {}
+impl FromSingleValue for f64 {}
+impl FromSingleValue for bool {}
+impl FromSingleValue for String {}
+impl FromSingleValue for BulkString {}
+impl<T: FromSingleValue> FromSingleValue for Option<T> {}
+
+/// Marker for a collection of values
+pub trait FromValueArray<T>: FromValue
 where
     T: FromValue,
 {
 }
 
-impl<T, const N: usize> FromSingleValueArray<T> for [T; N] where T: FromValue {}
-impl<T> FromSingleValueArray<T> for Vec<T> where T: FromValue {}
-impl<T, A> FromSingleValueArray<T> for SmallVec<A>
+impl<T, const N: usize> FromValueArray<T> for [T; N] where T: FromValue {}
+impl<T> FromValueArray<T> for Vec<T> where T: FromValue {}
+impl<T, A> FromValueArray<T> for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
     T: FromValue,
 {
 }
-impl<T, S: BuildHasher + Default> FromSingleValueArray<T> for HashSet<T, S> where
+impl<T, S: BuildHasher + Default> FromValueArray<T> for HashSet<T, S> where
     T: FromValue + Eq + Hash
 {
 }
-impl<T> FromSingleValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
+impl<T> FromValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 
 /// Marker for key/value collections
 pub trait FromKeyValueArray<K, V>: FromValue

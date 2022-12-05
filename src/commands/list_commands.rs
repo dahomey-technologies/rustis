@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs, SingleArg,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
         SingleArgCollection,
     },
 };
@@ -23,7 +23,7 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("LINDEX").arg(key).arg(index))
     }
@@ -91,7 +91,7 @@ pub trait ListCommands {
         Self: Sized,
         S: SingleArg,
         D: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -120,7 +120,7 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromSingleValue,
         C: SingleArgCollection<K>,
     {
         prepare_command(
@@ -146,8 +146,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
-        A: FromSingleValueArray<E>,
+        E: FromSingleValue,
+        A: FromValueArray<E>,
     {
         prepare_command(self, cmd("LPOP").arg(key).arg(count))
     }
@@ -203,7 +203,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        A: FromSingleValueArray<usize>,
+        A: FromValueArray<usize>,
     {
         prepare_command(
             self,
@@ -266,8 +266,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
-        A: FromSingleValueArray<E>,
+        E: FromSingleValue,
+        A: FromValueArray<E>,
     {
         prepare_command(self, cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
@@ -328,8 +328,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
-        C: FromSingleValueArray<E>,
+        E: FromSingleValue,
+        C: FromValueArray<E>,
     {
         prepare_command(self, cmd("RPOP").arg(key).arg(count))
     }

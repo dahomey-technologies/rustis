@@ -3,8 +3,9 @@ use std::{collections::HashMap, str::FromStr};
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValueArray, FromValue,
-        HashMapExt, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray,
+        FromValue, HashMapExt, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        Value,
     },
     Error, Result,
 };
@@ -28,8 +29,8 @@ pub trait ServerCommands {
     fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
     }
@@ -70,7 +71,7 @@ pub trait ServerCommands {
         Self: Sized,
         U: SingleArg,
         C: SingleArg,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -93,7 +94,10 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: FromValue>(&mut self, options: AclGenPassOptions) -> PreparedCommand<Self, R>
+    fn acl_genpass<R: FromSingleValue>(
+        &mut self,
+        options: AclGenPassOptions,
+    ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
     {
@@ -216,8 +220,8 @@ pub trait ServerCommands {
     fn acl_users<U, UU>(&mut self) -> PreparedCommand<Self, UU>
     where
         Self: Sized,
-        U: FromValue,
-        UU: FromSingleValueArray<U>,
+        U: FromSingleValue,
+        UU: FromValueArray<U>,
     {
         prepare_command(self, cmd("ACL").arg("USERS"))
     }
@@ -229,7 +233,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: FromValue>(&mut self) -> PreparedCommand<Self, U>
+    fn acl_whoami<U: FromSingleValue>(&mut self) -> PreparedCommand<Self, U>
     where
         Self: Sized,
     {
@@ -294,7 +298,7 @@ pub trait ServerCommands {
         Self: Sized,
         A: SingleArg,
         AA: SingleArgCollection<A>,
-        KK: FromSingleValueArray<String>,
+        KK: FromValueArray<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
@@ -342,7 +346,7 @@ pub trait ServerCommands {
     fn command_list<CC>(&mut self, options: CommandListOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        CC: FromSingleValueArray<String>,
+        CC: FromValueArray<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("LIST").arg(options))
     }
@@ -363,7 +367,7 @@ pub trait ServerCommands {
         Self: Sized,
         P: SingleArg,
         PP: SingleArgCollection<P>,
-        V: FromValue,
+        V: FromSingleValue,
         VV: FromKeyValueArray<String, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
@@ -548,7 +552,7 @@ pub trait ServerCommands {
     fn latency_history<RR>(&mut self, event: LatencyHistoryEvent) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromSingleValueArray<(u32, u32)>,
+        RR: FromValueArray<(u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTORY").arg(event))
     }
@@ -572,7 +576,7 @@ pub trait ServerCommands {
     fn latency_latest<RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromSingleValueArray<(String, u32, u32, u32)>,
+        RR: FromValueArray<(String, u32, u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("LATEST"))
     }
@@ -699,7 +703,7 @@ pub trait ServerCommands {
     fn module_list<MM>(&mut self) -> PreparedCommand<Self, MM>
     where
         Self: Sized,
-        MM: FromSingleValueArray<ModuleInfo>,
+        MM: FromValueArray<ModuleInfo>,
     {
         prepare_command(self, cmd("MODULE").arg("LIST"))
     }

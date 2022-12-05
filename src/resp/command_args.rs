@@ -109,6 +109,51 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
     }
 }
 
+impl IntoIterator for CommandArgs {
+    type Item = CommandArg;
+    type IntoIter = CommandArgsIntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            CommandArgs::Empty => CommandArgsIntoIter::Empty,
+            CommandArgs::Single(s) => CommandArgsIntoIter::Single(Some(s)),
+            CommandArgs::Array2(a) => CommandArgsIntoIter::Array2(a.into_iter()),
+            CommandArgs::Array3(a) => CommandArgsIntoIter::Array3(a.into_iter()),
+            CommandArgs::Array4(a) => CommandArgsIntoIter::Array4(a.into_iter()),
+            CommandArgs::Array5(a) => CommandArgsIntoIter::Array5(a.into_iter()),
+            CommandArgs::Vec(a) => CommandArgsIntoIter::Vec(a.into_iter()),
+        }
+    }
+}
+
+/// [`CommandArgs`](CommandArgs) iterator
+#[derive(Clone)]
+pub enum CommandArgsIntoIter {
+    Empty,
+    Single(Option<CommandArg>),
+    Array2(std::array::IntoIter<CommandArg, 2>),
+    Array3(std::array::IntoIter<CommandArg, 3>),
+    Array4(std::array::IntoIter<CommandArg, 4>),
+    Array5(std::array::IntoIter<CommandArg, 5>),
+    Vec(smallvec::IntoIter<[CommandArg; 10]>)
+}
+
+impl Iterator for CommandArgsIntoIter {
+    type Item = CommandArg;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            CommandArgsIntoIter::Empty => None,
+            CommandArgsIntoIter::Single(s) => s.take(),
+            CommandArgsIntoIter::Array2(i) => i.next(),
+            CommandArgsIntoIter::Array3(i) => i.next(),
+            CommandArgsIntoIter::Array4(i) => i.next(),
+            CommandArgsIntoIter::Array5(i) => i.next(),
+            CommandArgsIntoIter::Vec(i) => i.next(),
+        }
+    }
+}
+
 impl Deref for CommandArgs {
     type Target = [CommandArg];
 

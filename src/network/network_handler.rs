@@ -409,14 +409,14 @@ impl NetworkHandler {
         let is_pub_sub_message = match value {
             Ok(Value::Array(ref items)) | Ok(Value::Push(ref items)) => {
                 match &items[..] {
-                    [Value::BulkString(command), Value::BulkString(channel), _] => {
+                    [Value::BulkString(command), Value::BulkString(channel_or_pattern), _] => {
                         match command.as_slice() {
                             b"message" | b"smessage" => true,
                             b"subscribe" | b"psubscribe" | b"ssubscribe" => {
                                 if let Some(pub_sub_sender) =
-                                    self.pending_subscriptions.remove(channel)
+                                    self.pending_subscriptions.remove(channel_or_pattern)
                                 {
-                                    self.subscriptions.insert(channel.clone(), pub_sub_sender);
+                                    self.subscriptions.insert(channel_or_pattern.clone(), pub_sub_sender);
                                 }
                                 if !self.pending_subscriptions.is_empty() {
                                     return Ok(None);
@@ -424,7 +424,7 @@ impl NetworkHandler {
                                 false
                             }
                             b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
-                                self.subscriptions.remove(channel);
+                                self.subscriptions.remove(channel_or_pattern);
                                 if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
                                     if *remaining > 1 {
                                         *remaining -= 1;

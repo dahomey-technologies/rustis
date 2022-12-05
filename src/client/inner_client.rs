@@ -5,7 +5,9 @@ use crate::{
     },
     commands::InternalPubSubCommands,
     network::{PubSubReceiver, PubSubSender},
-    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value},
+    resp::{
+        cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
+    },
     Future, MsgSender, NetworkHandler, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
@@ -78,39 +80,74 @@ impl InnerClient {
         Pipeline::new(self.clone())
     }
 
+    pub async fn subscribe_from_pub_sub_sender(
+        &mut self,
+        channels: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+
+        let pub_sub_senders = channels
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
+
+        let message = Message::pub_sub(
+            cmd("SUBSCRIBE").arg(channels.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
+    }
+
     pub fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        let channels: Vec<String> = channels
-            .into_iter()
-            .map(|c| c.into_command_arg().to_string())
-            .collect();
+        let channels = channels.into_args(CommandArgs::Empty);
 
         Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            let pub_sub_senders = channels
-                .iter()
-                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
-                .collect::<Vec<_>>();
+            self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender).await?;
 
-            let message = Message::pub_sub(
-                cmd("SUBSCRIBE").arg(channels.clone()),
-                value_sender,
-                pub_sub_senders,
-            );
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_channels(channels, pub_sub_receiver, self.clone())
-            })
+            Ok(PubSubStream::from_channels(
+                channels,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
         })
+    }
+
+    pub async fn psubscribe_from_pub_sub_sender(
+        &mut self,
+        patterns: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+
+        let pub_sub_senders = patterns
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
+
+        let message = Message::pub_sub(
+            cmd("PSUBSCRIBE").arg(patterns.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
     }
 
     pub fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
@@ -118,34 +155,45 @@ impl InnerClient {
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>,
     {
-        let patterns: Vec<String> = patterns
-            .into_iter()
-            .map(|p| p.into_command_arg().to_string())
-            .collect();
+        let patterns = patterns.into_args(CommandArgs::Empty);
 
         Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            let pub_sub_senders = patterns
-                .iter()
-                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
-                .collect::<Vec<_>>();
+            self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender).await?;
 
-            let message = Message::pub_sub(
-                cmd("PSUBSCRIBE").arg(patterns.clone()),
-                value_sender,
-                pub_sub_senders,
-            );
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_patterns(patterns, pub_sub_receiver, self.clone())
-            })
+            Ok(PubSubStream::from_patterns(
+                patterns,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
         })
+    }
+
+    pub async fn ssubscribe_from_pub_sub_sender(
+        &mut self,
+        shardchannels: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+
+        let pub_sub_senders = shardchannels
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
+
+        let message = Message::pub_sub(
+            cmd("SSUBSCRIBE").arg(shardchannels.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
     }
 
     pub fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
@@ -153,33 +201,20 @@ impl InnerClient {
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        let shardchannels: Vec<String> = shardchannels
-            .into_iter()
-            .map(|c| c.into_command_arg().to_string())
-            .collect();
+        let shardchannels = shardchannels.into_args(CommandArgs::Empty);
 
         Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            let pub_sub_senders = shardchannels
-                .iter()
-                .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
-                .collect::<Vec<_>>();
+            self.psubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender).await?;
 
-            let message = Message::pub_sub(
-                cmd("SSUBSCRIBE").arg(shardchannels.clone()),
-                value_sender,
-                pub_sub_senders,
-            );
-
-            self.send_message(message)?;
-
-            let value = value_receiver.await?;
-            value.map_into_result(|_| {
-                PubSubStream::from_shardchannels(shardchannels, pub_sub_receiver, self.clone())
-            })
+            Ok(PubSubStream::from_shardchannels(
+                shardchannels,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
         })
     }
 }

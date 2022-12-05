@@ -249,7 +249,7 @@ impl CommandInfoManager {
     fn prepare_command_getkeys_args(command: &Command) -> SmallVec<[CommandArg; 10]> {
         let mut args = SmallVec::new();
         args.push(CommandArg::Str(command.name));
-        args.extend(command.args.into_iter().cloned());
+        args.extend((&command.args).into_iter().cloned());
         args
     }
 }

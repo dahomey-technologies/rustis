@@ -444,3 +444,82 @@ async fn pub_sub_shardnumsub() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn additional_sub() -> Result<()> {
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    // 1st subscription
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel1").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    // 2nd subscription
+    pub_sub_stream.subscribe("mychannel2").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel2", channel);
+    assert_eq!("mymessage2", payload);
+
+    // 3rd subscription
+    pub_sub_stream.psubscribe("o*").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+    regular_client.publish("otherchannel", "mymessage3").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel2", channel);
+    assert_eq!("mymessage2", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("otherchannel", channel);
+    assert_eq!("mymessage3", payload);
+
+    // close
+    pub_sub_stream.close().await?;
+
+    Ok(())
+}

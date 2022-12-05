@@ -1,4 +1,4 @@
-use crate::resp::{BulkString, CommandArg, CommandArgs};
+use crate::resp::{BulkString, CommandArg, CommandArgs, CommandArgsIntoIter};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -436,6 +436,15 @@ where
     type IntoIter: Iterator<Item = T>;
 
     fn into_iter(self) -> Self::IntoIter;
+}
+
+impl SingleArgCollection<CommandArg> for CommandArgs
+{
+    type IntoIter = CommandArgsIntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator::into_iter(self)
+    }
 }
 
 impl<T, const N: usize> SingleArgCollection<T> for [T; N]

@@ -2,6 +2,7 @@ An asynchronous Redis client for Rust.
 
 
 [![Crate](https://img.shields.io/crates/v/rustis.svg)](https://crates.io/crates/rustis)
+[![docs.rs](https://docs.rs/rustis/badge.svg)](https://docs.rs/rustis)
 [![Build](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml/badge.svg)](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 

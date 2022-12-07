@@ -217,7 +217,7 @@ impl PubSubStream {
     /// Close the stream by cancelling all subscriptions
     /// Calling `close` allows to wait for all the unsubscriptions.
     /// `drop` will achieve the same process but silently in background
-    pub async fn close(&mut self) -> Result<()> {
+    pub async fn close(mut self) -> Result<()> {
         let mut channels = CommandArgs::Empty;
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {

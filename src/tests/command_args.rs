@@ -37,6 +37,8 @@ async fn key_value_collection() -> Result<()> {
     let len = client.hset("key", items).await?;
     assert_eq!(2, len);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -70,6 +72,8 @@ async fn set_collection() -> Result<()> {
     let items = BTreeSet::from(["member1", "member2"]);
     let len = client.sadd("key", items).await?;
     assert_eq!(2, len);
+
+    client.close().await?;
 
     Ok(())
 }

@@ -66,7 +66,7 @@ async fn forbidden_command() -> Result<()> {
     assert_eq!("value", value);
 
     // subscribed mode
-    let mut pub_sub_stream = client.subscribe("mychannel").await?;
+    let pub_sub_stream = client.subscribe("mychannel").await?;
 
     // Cannot send regular commands during subscribed mode
     let result: Result<String> = client.get("key").await;
@@ -183,7 +183,7 @@ async fn pub_sub_channels() -> Result<()> {
     let mut pub_sub_client = get_test_client().await?;
     let mut regular_client = get_test_client().await?;
 
-    let mut stream = pub_sub_client
+    let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2", "mychannel3", "otherchannel"])
         .await?;
 
@@ -220,7 +220,7 @@ async fn pub_sub_numpat() -> Result<()> {
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(0, num_patterns);
 
-    let mut stream = pub_sub_client.psubscribe(["mychannel*"]).await?;
+    let stream = pub_sub_client.psubscribe(["mychannel*"]).await?;
 
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(1, num_patterns);
@@ -244,7 +244,7 @@ async fn pub_sub_numsub() -> Result<()> {
     assert_eq!(("mychannel1".to_string(), 0), num_sub[0]);
     assert_eq!(("mychannel2".to_string(), 0), num_sub[1]);
 
-    let mut stream = pub_sub_client
+    let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2"])
         .await?;
 
@@ -363,7 +363,7 @@ async fn pub_sub_shardchannels() -> Result<()> {
     let mut master_client =
         Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
-    let mut pub_sub_stream = pub_sub_client
+    let pub_sub_stream = pub_sub_client
         .ssubscribe([
             "mychannel1{1}",
             "mychannel2{1}",
@@ -429,7 +429,7 @@ async fn pub_sub_shardnumsub() -> Result<()> {
     assert_eq!(("mychannel1{1}".to_string(), 0), num_sub[0]);
     assert_eq!(("mychannel2{1}".to_string(), 0), num_sub[1]);
 
-    let mut pub_sub_stream = pub_sub_client
+    let pub_sub_stream = pub_sub_client
         .ssubscribe(["mychannel1{1}", "mychannel2{1}"])
         .await?;
 

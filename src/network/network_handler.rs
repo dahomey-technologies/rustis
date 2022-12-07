@@ -1,7 +1,7 @@
 use crate::{
     client::{Config, Message},
     resp::{Command, CommandArgs, Value},
-    spawn, Connection, Error, Result, RetryReason,
+    spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -48,7 +48,7 @@ pub(crate) struct NetworkHandler {
 }
 
 impl NetworkHandler {
-    pub async fn connect(config: Config) -> Result<MsgSender> {
+    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>)> {
         let connection = Connection::connect(config.clone()).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
 
@@ -67,13 +67,13 @@ impl NetworkHandler {
             pending_replies: None,
         };
 
-        spawn(async move {
+        let join_handle = spawn(async move {
             if let Err(e) = network_handler.network_loop().await {
                 error!("network loop ended in error: {e}");
             }
         });
 
-        Ok(msg_sender)
+        Ok((msg_sender, join_handle))
     }
 
     async fn network_loop(&mut self) -> Result<()> {

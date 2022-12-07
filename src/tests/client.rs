@@ -11,6 +11,8 @@ async fn send() -> Result<()> {
 
     client.send(cmd("PING")).await?;
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -22,6 +24,8 @@ async fn forget() -> Result<()> {
 
     client.send_and_forget(cmd("PING"))?;
     client.send(cmd("PING")).await?;
+
+    client.close().await?;
 
     Ok(())
 }

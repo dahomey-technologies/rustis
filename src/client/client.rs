@@ -12,8 +12,8 @@ use crate::commands::{
 };
 use crate::{
     client::{
-        ClientState, IntoConfig, Message, MonitorStream, Pipeline,
-        PreparedCommand, PubSubStream, Transaction,
+        ClientState, IntoConfig, Message, MonitorStream, Pipeline, PreparedCommand, PubSubStream,
+        Transaction,
     },
     commands::{
         BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
@@ -21,16 +21,22 @@ use crate::{
         PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
-    network::{MonitorReceiver, MonitorSender, NetworkHandler, MsgSender, PubSubSender, PubSubReceiver},
-    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value, CommandArgs},
-    Future, Result, ValueReceiver, ValueSender,
+    network::{
+        JoinHandle, MonitorReceiver, MonitorSender, MsgSender, NetworkHandler, PubSubReceiver,
+        PubSubSender,
+    },
+    resp::{
+        cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
+    },
+    Error, Future, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
 use std::{future::IntoFuture, sync::Arc};
 
 /// Client with a unique connection to a Redis server.
 pub struct Client {
-    msg_sender: Arc<MsgSender>,
+    msg_sender: Arc<Option<MsgSender>>,
+    network_task_join_handle: Arc<Option<JoinHandle<()>>>,
     client_state: ClientState,
 }
 
@@ -38,8 +44,32 @@ impl Clone for Client {
     fn clone(&self) -> Self {
         Self {
             msg_sender: self.msg_sender.clone(),
+            network_task_join_handle: self.network_task_join_handle.clone(),
             client_state: ClientState::new(),
         }
+    }
+}
+
+impl Drop for Client {
+    /// if this client is the last client on the shared connection, the channel to send messages
+    /// to the underlying network handler will be closed explicitely
+    fn drop(&mut self) {
+        let mut network_task_join_handle: Arc<Option<JoinHandle<()>>> = Arc::new(None);
+        std::mem::swap(
+            &mut network_task_join_handle,
+            &mut self.network_task_join_handle,
+        );
+
+        // stop the network loop if we are the last reference to its handle
+        if Arc::try_unwrap(network_task_join_handle).is_ok() {
+            let mut msg_sender: Arc<Option<MsgSender>> = Arc::new(None);
+            std::mem::swap(&mut msg_sender, &mut self.msg_sender);
+
+            if let Ok(Some(msg_sender)) = Arc::try_unwrap(msg_sender) {
+                // the network loop will automatically ends when it detects the sender bound has been closed
+                msg_sender.close_channel();
+            }
+        };
     }
 }
 
@@ -50,12 +80,40 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
-        let msg_sender = NetworkHandler::connect(config.into_config()?).await?;
+        let (msg_sender, network_task_join_handle) =
+            NetworkHandler::connect(config.into_config()?).await?;
 
         Ok(Self {
-            msg_sender: Arc::new(msg_sender),
+            msg_sender: Arc::new(Some(msg_sender)),
+            network_task_join_handle: Arc::new(Some(network_task_join_handle)),
             client_state: ClientState::new(),
         })
+    }
+
+    /// if this client is the last client on the shared connection, the channel to send messages
+    /// to the underlying network handler will be closed explicitely.
+    /// 
+    /// Then, this function will await for the network handler to be ended
+    pub async fn close(mut self) -> Result<()> {
+        let mut network_task_join_handle: Arc<Option<JoinHandle<()>>> = Arc::new(None);
+        std::mem::swap(
+            &mut network_task_join_handle,
+            &mut self.network_task_join_handle,
+        );
+
+        // stop the network loop if we are the last reference to its handle
+        if let Ok(Some(network_task_join_handle)) = Arc::try_unwrap(network_task_join_handle) {
+            let mut msg_sender: Arc<Option<MsgSender>> = Arc::new(None);
+            std::mem::swap(&mut msg_sender, &mut self.msg_sender);
+
+            if let Ok(Some(msg_sender)) = Arc::try_unwrap(msg_sender) {
+                // the network loop will automatically ends when it detects the sender bound has been closed
+                msg_sender.close_channel();
+                network_task_join_handle.await?;
+            }
+        };
+
+        Ok(())
     }
 
     /// Give a generic access to attach any state to a client instance
@@ -130,8 +188,14 @@ impl Client {
 
     #[inline]
     fn send_message(&mut self, message: Message) -> Result<()> {
-        self.msg_sender.unbounded_send(message)?;
-        Ok(())
+        if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
+            msg_sender.unbounded_send(message)?;
+            Ok(())
+        } else {
+            Err(Error::Client(
+                "Invalid channel to send messages to the network handler".to_owned(),
+            ))
+        }
     }
 
     /// Create a new transaction
@@ -329,7 +393,8 @@ impl PubSubCommands for Client {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender).await?;
+            self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender)
+                .await?;
 
             Ok(PubSubStream::from_channels(
                 channels,
@@ -352,7 +417,8 @@ impl PubSubCommands for Client {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender).await?;
+            self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender)
+                .await?;
 
             Ok(PubSubStream::from_patterns(
                 patterns,
@@ -375,7 +441,8 @@ impl PubSubCommands for Client {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
                 mpsc::unbounded();
 
-            self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender).await?;
+            self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender)
+                .await?;
 
             Ok(PubSubStream::from_shardchannels(
                 shardchannels,

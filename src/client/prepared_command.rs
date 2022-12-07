@@ -1,11 +1,11 @@
 use crate::{
-    client::ClientTrait,
+    client::Client,
     resp::{Command, FromValue, Value},
     Future,
 };
 use std::marker::PhantomData;
 
-type PostProcessFunc<'a, R> = dyn Fn(Value, Command, &'a mut dyn ClientTrait) -> Future<'a, R> + Send + Sync;
+type PostProcessFunc<'a, R> = dyn Fn(Value, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
 
 /// Wrapper around a command about to be send with a marker for the result type
 /// and a few options to decide how the result send back by Redis

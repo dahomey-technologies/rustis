@@ -49,6 +49,7 @@ impl SentinelConnection {
             database: config.database,
             #[cfg(feature = "tls")]
             tls_config: config.tls_config.clone(),
+            connect_timeout: config.connect_timeout
         };
 
         loop {

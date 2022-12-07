@@ -9,7 +9,7 @@ use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
-use std::future::IntoFuture;
+use std::{future::IntoFuture, time::Duration};
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
@@ -26,23 +26,28 @@ pub(crate) enum Streams {
 }
 
 impl Streams {
-    pub async fn connect(host: &str, port: u16, _config: &Config) -> Result<Self> {
+    pub async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
         #[cfg(feature = "tls")]
-        if let Some(tls_config) = &_config.tls_config {
-            let (reader, writer) = tcp_tls_connect(host, port, tls_config).await?;
+        if let Some(tls_config) = &config.tls_config {
+            let (reader, writer) =
+                tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
             let framed_read = FramedRead::new(reader, ValueDecoder);
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))
         } else {
-            Self::connect_non_secure(host, port).await
+            Self::connect_non_secure(host, port, config.connect_timeout).await
         }
 
         #[cfg(not(feature = "tls"))]
-        Self::connect_non_secure(host, port).await
+        Self::connect_non_secure(host, port, config.connect_timeout).await
     }
 
-    pub async fn connect_non_secure(host: &str, port: u16) -> Result<Self> {
-        let (reader, writer) = tcp_connect(host, port).await?;
+    pub async fn connect_non_secure(
+        host: &str,
+        port: u16,
+        connect_timeout: Duration,
+    ) -> Result<Self> {
+        let (reader, writer) = tcp_connect(host, port, connect_timeout).await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);
         Ok(Streams::Tcp(framed_read, framed_write))

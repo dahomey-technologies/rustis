@@ -11,7 +11,7 @@ use crate::commands::{
     BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
 };
 use crate::{
-    client::{InnerClient, BatchPreparedCommand, PreparedCommand},
+    client::{Client, BatchPreparedCommand, PreparedCommand},
     commands::{
         BitmapCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
@@ -24,13 +24,13 @@ use std::iter::zip;
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
-    client: InnerClient,
+    client: Client,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
 }
 
 impl Transaction {
-    pub(crate) fn new(client: InnerClient) -> Transaction {
+    pub(crate) fn new(client: Client) -> Transaction {
         let mut transaction = Transaction {
             client,
             commands: Vec::new(),

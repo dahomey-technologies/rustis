@@ -12,7 +12,7 @@ use crate::commands::{
 };
 use crate::{
     client::{
-        Cache, ClientTrait, InnerClient, IntoConfig, Message, MonitorStream, Pipeline,
+        ClientState, IntoConfig, Message, MonitorStream, Pipeline,
         PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
@@ -21,16 +21,26 @@ use crate::{
         PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
-    network::{MonitorReceiver, MonitorSender},
-    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value},
+    network::{MonitorReceiver, MonitorSender, NetworkHandler, MsgSender, PubSubSender, PubSubReceiver},
+    resp::{cmd, Command, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value, CommandArgs},
     Future, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
-use std::future::IntoFuture;
+use std::{future::IntoFuture, sync::Arc};
 
 /// Client with a unique connection to a Redis server.
 pub struct Client {
-    inner_client: InnerClient,
+    msg_sender: Arc<MsgSender>,
+    client_state: ClientState,
+}
+
+impl Clone for Client {
+    fn clone(&self) -> Self {
+        Self {
+            msg_sender: self.msg_sender.clone(),
+            client_state: ClientState::new(),
+        }
+    }
 }
 
 impl Client {
@@ -40,18 +50,16 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
-        let inner_client = InnerClient::connect(config).await?;
-        Ok(Self { inner_client })
+        let msg_sender = NetworkHandler::connect(config.into_config()?).await?;
+
+        Ok(Self {
+            msg_sender: Arc::new(msg_sender),
+            client_state: ClientState::new(),
+        })
     }
 
-    /// We don't want the Client struct to be publicly cloneable
-    /// If one wants to consume a multiplexed client,
-    /// the [MultiplexedClient](crate::client::MultiplexedClient) must be used instead
-    #[inline]
-    pub(crate) fn clone(&self) -> Client {
-        Client {
-            inner_client: self.inner_client.clone(),
-        }
+    pub(crate) fn get_client_state(&mut self) -> &mut ClientState {
+        &mut self.client_state
     }
 
     /// Send an arbitrary command to the server.
@@ -85,7 +93,11 @@ impl Client {
 
     #[inline]
     pub async fn send(&mut self, command: Command) -> Result<Value> {
-        self.inner_client.send(command).await
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let message = Message::single(command, value_sender);
+        self.send_message(message)?;
+        let value = value_receiver.await?;
+        value.into_result()
     }
 
     /// Send command to the Redis server and forget its response.
@@ -94,7 +106,9 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
     pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        self.inner_client.send_and_forget(command)
+        let message = Message::single_forget(command);
+        self.send_message(message)?;
+        Ok(())
     }
 
     /// Send a batch of commands to the Redis server.
@@ -106,51 +120,101 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
     pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
-        self.inner_client.send_batch(commands).await
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let message = Message::batch(commands, value_sender);
+        self.send_message(message)?;
+        let value = value_receiver.await?;
+        value.into_result()
+    }
+
+    #[inline]
+    fn send_message(&mut self, message: Message) -> Result<()> {
+        self.msg_sender.unbounded_send(message)?;
+        Ok(())
     }
 
     /// Create a new transaction
     #[inline]
     pub fn create_transaction(&mut self) -> Transaction {
-        self.inner_client.create_transaction()
+        Transaction::new(self.clone())
     }
 
     /// Create a new pipeline
     #[inline]
     pub fn create_pipeline(&mut self) -> Pipeline {
-        self.inner_client.create_pipeline()
-    }
-}
-
-impl ClientTrait for Client {
-    #[inline]
-    fn send(&mut self, command: Command) -> Future<Value> {
-        Box::pin(async move { self.send(command).await })
+        Pipeline::new(self.clone())
     }
 
-    #[inline]
-    fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        self.send_and_forget(command)
+    pub(crate) async fn subscribe_from_pub_sub_sender(
+        &mut self,
+        channels: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+
+        let pub_sub_senders = channels
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
+
+        let message = Message::pub_sub(
+            cmd("SUBSCRIBE").arg(channels.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
     }
 
-    #[inline]
-    fn send_batch(&mut self, commands: Vec<Command>) -> Future<Value> {
-        Box::pin(async move { self.send_batch(commands).await })
+    pub(crate) async fn psubscribe_from_pub_sub_sender(
+        &mut self,
+        patterns: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+
+        let pub_sub_senders = patterns
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
+
+        let message = Message::pub_sub(
+            cmd("PSUBSCRIBE").arg(patterns.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
     }
 
-    #[inline]
-    fn create_pipeline(&mut self) -> Pipeline {
-        self.create_pipeline()
-    }
+    pub(crate) async fn ssubscribe_from_pub_sub_sender(
+        &mut self,
+        shardchannels: &CommandArgs,
+        pub_sub_sender: &PubSubSender,
+    ) -> Result<()> {
+        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
 
-    #[inline]
-    fn create_transaction(&mut self) -> Transaction {
-        self.create_transaction()
-    }
+        let pub_sub_senders = shardchannels
+            .iter()
+            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .collect::<Vec<_>>();
 
-    #[inline]
-    fn get_cache(&mut self) -> &mut Cache {
-        self.inner_client.get_cache()
+        let message = Message::pub_sub(
+            cmd("SSUBSCRIBE").arg(shardchannels.clone()),
+            value_sender,
+            pub_sub_senders,
+        );
+
+        self.send_message(message)?;
+
+        let value = value_receiver.await?;
+        value.map_into_result(|_| ())
     }
 }
 
@@ -258,7 +322,21 @@ impl PubSubCommands for Client {
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        self.inner_client.subscribe(channels)
+        let channels = channels.into_args(CommandArgs::Empty);
+
+        Box::pin(async move {
+            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+                mpsc::unbounded();
+
+            self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender).await?;
+
+            Ok(PubSubStream::from_channels(
+                channels,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
+        })
     }
 
     #[inline]
@@ -267,7 +345,21 @@ impl PubSubCommands for Client {
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>,
     {
-        self.inner_client.psubscribe(patterns)
+        let patterns = patterns.into_args(CommandArgs::Empty);
+
+        Box::pin(async move {
+            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+                mpsc::unbounded();
+
+            self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender).await?;
+
+            Ok(PubSubStream::from_patterns(
+                patterns,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
+        })
     }
 
     #[inline]
@@ -276,7 +368,21 @@ impl PubSubCommands for Client {
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        self.inner_client.ssubscribe(shardchannels)
+        let shardchannels = shardchannels.into_args(CommandArgs::Empty);
+
+        Box::pin(async move {
+            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+                mpsc::unbounded();
+
+            self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender).await?;
+
+            Ok(PubSubStream::from_shardchannels(
+                shardchannels,
+                pub_sub_sender,
+                pub_sub_receiver,
+                self.clone(),
+            ))
+        })
     }
 }
 
@@ -289,7 +395,7 @@ impl BlockingCommands for Client {
 
             let message = Message::monitor(cmd("MONITOR"), value_sender, monitor_sender);
 
-            self.inner_client.send_message(message)?;
+            self.send_message(message)?;
 
             let value = value_receiver.await?;
             value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))

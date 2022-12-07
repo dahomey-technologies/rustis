@@ -11,7 +11,7 @@ use crate::commands::{
     BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
 };
 use crate::{
-    client::{InnerClient, PreparedCommand},
+    client::{Client, PreparedCommand},
     commands::{
         BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
         HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
@@ -24,13 +24,13 @@ use std::iter::zip;
 
 /// Represents a Redis command pipeline.
 pub struct Pipeline {
-    client: InnerClient,
+    client: Client,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
 }
 
 impl Pipeline {
-    pub(crate) fn new(client: InnerClient) -> Pipeline {
+    pub(crate) fn new(client: Client) -> Pipeline {
         Pipeline {
             client,
             commands: Vec::new(),

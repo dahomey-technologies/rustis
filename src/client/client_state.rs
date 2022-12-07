@@ -4,40 +4,40 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
-/// A cache which goal is to give a generic access to attach any state to a client instance
+/// A struct which goal is to give a generic access to attach any state to a client instance
 /// 
 /// It is internally used to cache [RedisGraph](crate::commands::GraphCommands) metadata.
 #[derive(Default)]
-pub struct Cache {
+pub struct ClientState {
     cache: HashMap<String, Box<dyn Any + Send>>,
 }
 
-impl Cache {
-    pub(crate) fn new() -> Cache {
-        Cache {
+impl ClientState {
+    pub(crate) fn new() -> ClientState {
+        ClientState {
             cache: HashMap::new(),
         }
     }
 
-    /// Get cache entry with a specific type `E` for a specific `key`
+    /// Get state with a specific type `S` for a specific `key`
     /// 
     /// # Return 
-    /// Casted cache entry to the required type.
+    /// Casted state to the required type.
     /// 
-    /// If the cache entry does not already exists, it is created on the fly
-    /// by calling `E::default()`
+    /// If the state does not already exists, it is created on the fly
+    /// by calling `S::default()`
     /// 
     /// # Errors
     /// An error if an entry has been found for the `key` but this entry cannot be
     /// downcasted to the required type.
-    pub fn get_entry<E: Default + Send + 'static>(&mut self, key: &str) -> Result<&mut E> {
+    pub fn get_state<S: Default + Send + 'static>(&mut self, key: &str) -> Result<&mut S> {
         let cache_entry = match self.cache.entry(key.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => v.insert(Box::new(E::default())),
+            Entry::Vacant(v) => v.insert(Box::new(S::default())),
         };
 
         let cache_entry = cache_entry
-            .downcast_mut::<E>()
+            .downcast_mut::<S>()
             .ok_or_else(|| Error::Client(format!("Cannot downcast cache entry '{key}'")));
 
         cache_entry

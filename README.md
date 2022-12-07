@@ -19,7 +19,7 @@ An asynchronous Redis client for Rust.
 * Full documentation with multiple examples
 * Support all [Redis Commands](https://redis.io/commands/) until Redis 7.0
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
-* Different client types:
+* Different client modes:
   * Single client
   * [Multiplexed](https://redis.com/blog/multiplexing-explained/) client
   * Pooled client manager (based on [bb8](https://docs.rs/bb8/latest/bb8/))

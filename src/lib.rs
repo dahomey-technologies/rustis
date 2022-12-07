@@ -72,7 +72,8 @@ async fn main() -> Result<()> {
 ```
 
 # Client
-See the module [`client`](crate::client) to discover which are the 3 types of clients and how to configure them.
+See the module [`client`](crate::client) to discover which are the 3 
+usages of the [`Client`](client::Client) struct and how to configure it.
 
 You will also learn how to use pipeline, pub/sub and transactions.
 

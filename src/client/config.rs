@@ -7,6 +7,7 @@ use url::Url;
 const DEFAULT_PORT: u16 = 6379;
 const DEFAULT_DATABASE: usize = 0;
 const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
+const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
 
 type Uri<'a> = (
     &'a str,
@@ -17,33 +18,49 @@ type Uri<'a> = (
     Option<HashMap<String, String>>,
 );
 
-/// Configuration options for a [`client`](crate::client::Client), 
+/// Configuration options for a [`client`](crate::client::Client),
 /// a [`multiplexed client`](crate::client::MultiplexedClient)
 /// or a [`pooled client`](crate::client::PooledClientManager)
-#[derive(Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Connection server configuration (standalone, sentinel, or cluster)
     pub server: ServerConfig,
     /// An optional ACL username for authentication.
-    /// 
+    ///
     /// See [`ACL`](https://redis.io/docs/management/security/acl/)
     pub username: Option<String>,
     /// An optional password for authentication.
-    /// 
+    ///
     /// The password could be either coupled with an ACL username either used alone.
-    /// # See 
+    /// # See
     /// *[`ACL`](https://redis.io/docs/management/security/acl/)
     /// * [`Authentication](https://redis.io/docs/management/security/#authentication)
     pub password: Option<String>,
     /// The default database for this connection.
-    /// 
-    /// If `database` is not set to `0`, a [`SELECT`](https://redis.io/commands/select/) 
+    ///
+    /// If `database` is not set to `0`, a [`SELECT`](https://redis.io/commands/select/)
     /// command will be automatically issued at connection or reconnection.
     pub database: usize,
     /// An optional TLS configuration.
     #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
     #[cfg(feature = "tls")]
     pub tls_config: Option<TlsConfig>,
+    /// The time to attempt a connection before timing out. The default is 10 seconds
+    pub connect_timeout: Duration,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            server: Default::default(),
+            username: Default::default(),
+            password: Default::default(),
+            database: Default::default(),
+            #[cfg(feature = "tls")]
+            tls_config: Default::default(),
+            connect_timeout: Duration::from_millis(DEFAULT_CONNECT_TIMEOUT),
+        }
+    }
 }
 
 impl FromStr for Config {
@@ -183,14 +200,25 @@ impl Config {
             None => DEFAULT_DATABASE,
         };
 
-        Some(Config {
+        let mut config = Config {
             server,
             username: username.map(|u| u.to_owned()),
             password: password.map(|p| p.to_owned()),
             database,
             #[cfg(feature = "tls")]
             tls_config,
-        })
+            ..Default::default()
+        };
+
+        if let Some(ref mut query) = query {
+            if let Some(millis) = query.remove("connect_timeout") {
+                if let Ok(millis) = millis.parse::<u64>() {
+                    config.connect_timeout = Duration::from_millis(millis);
+                }
+            }
+        }
+
+        Some(config)
     }
 
     /// break down an uri in a tuple (scheme, username, password, hosts, path_segments)
@@ -216,14 +244,14 @@ impl Config {
             None => (after_scheme, None),
         };
 
-        let (authority, path) = match after_scheme.find('/') {
+        let (authority, path) = match before_query.find('/') {
             Some(index) => match Self::exclusive_split_at(before_query, index) {
                 (Some(authority), path) => (authority, path),
                 _ => {
                     return None;
                 }
             },
-            None => (after_scheme, None),
+            None => (before_query, None),
         };
 
         let (user_info, hosts) = match authority.rfind('@') {
@@ -268,10 +296,9 @@ impl Config {
         };
 
         let query = match query.map(|q| {
-            q.split('&').map(|s| {
-                s.split_once('=')
-                    .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            }).collect::<Option<HashMap<String, String>>>()
+            q.split('&')
+                .map(|s| s.split_once('=').map(|(k, v)| (k.to_owned(), v.to_owned())))
+                .collect::<Option<HashMap<String, String>>>()
         }) {
             Some(Some(query)) => Some(query),
             Some(None) => return None,
@@ -332,15 +359,17 @@ impl ToString for Config {
         match &self.server {
             ServerConfig::Standalone { host, port } => {
                 s.push_str(host);
-                s.push(':');
-                s.push_str(&port.to_string());
+                if *port != DEFAULT_PORT {
+                    s.push(':');
+                    s.push_str(&port.to_string());
+                }
             }
             ServerConfig::Sentinel(SentinelConfig {
                 instances,
                 service_name,
-                wait_beetween_failures,
-                password,
-                username,
+                wait_beetween_failures: _,
+                password: _,
+                username: _,
             }) => {
                 s.push_str(
                     &instances
@@ -351,31 +380,6 @@ impl ToString for Config {
                 );
                 s.push('/');
                 s.push_str(service_name);
-                let mut query_separator = false;
-                let wait_between_failures = wait_beetween_failures.as_millis() as u64;
-                if wait_between_failures != DEFAULT_WAIT_BETWEEN_FAILURES {
-                    query_separator = true;
-                    s.push_str(&format!("?wait_between_failures={wait_between_failures}"));
-                }
-                if let Some(username) = username {
-                    if !query_separator {
-                        query_separator = true;
-                        s.push('?');
-                    } else {
-                        s.push('&');
-                    }
-                    s.push_str("sentinel_username=");
-                    s.push_str(username);
-                }
-                if let Some(password) = password {
-                    if !query_separator {
-                        s.push('?');
-                    } else {
-                        s.push('&');
-                    }
-                    s.push_str("sentinel_password=");
-                    s.push_str(password);
-                }
             }
             ServerConfig::Cluster(ClusterConfig { nodes }) => {
                 s.push_str(
@@ -393,12 +397,66 @@ impl ToString for Config {
             s.push_str(&self.database.to_string());
         }
 
+        // query
+
+        let mut query_separator = false;
+
+        let connect_timeout = self.connect_timeout.as_millis() as u64;
+        if connect_timeout != DEFAULT_CONNECT_TIMEOUT {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("connect_timeout={connect_timeout}"));
+        }
+
+        if let ServerConfig::Sentinel(SentinelConfig {
+            instances: _,
+            service_name: _,
+            wait_beetween_failures,
+            password,
+            username,
+        }) = &self.server
+        {
+            let wait_between_failures = wait_beetween_failures.as_millis() as u64;
+            if wait_between_failures != DEFAULT_WAIT_BETWEEN_FAILURES {
+                if !query_separator {
+                    query_separator = true;
+                    s.push('?');
+                } else {
+                    s.push('&');
+                }
+                s.push_str(&format!("wait_between_failures={wait_between_failures}"));
+            }
+            if let Some(username) = username {
+                if !query_separator {
+                    query_separator = true;
+                    s.push('?');
+                } else {
+                    s.push('&');
+                }
+                s.push_str("sentinel_username=");
+                s.push_str(username);
+            }
+            if let Some(password) = password {
+                if !query_separator {
+                    s.push('?');
+                } else {
+                    s.push('&');
+                }
+                s.push_str("sentinel_password=");
+                s.push_str(password);
+            }
+        }
+
         s
     }
 }
 
 /// Configuration for connecting to a Redis server
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ServerConfig {
     /// Configuration for connecting to a standalone server (no master-replica, no cluster)
     Standalone {
@@ -423,7 +481,7 @@ impl Default for ServerConfig {
 }
 
 /// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SentinelConfig {
     /// An array of `(host, port)` tuples for each known sentinel instance.
     pub instances: Vec<(String, u16)>,
@@ -454,7 +512,7 @@ impl Default for SentinelConfig {
 }
 
 /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
     pub nodes: Vec<(String, u16)>,
@@ -489,6 +547,26 @@ impl Default for TlsConfig {
             danger_accept_invalid_hostnames: false,
             use_sni: true,
         }
+    }
+}
+
+#[cfg(feature = "tls")]
+impl std::fmt::Debug for TlsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TlsConfig")
+            .field("min_protocol_version", &self.min_protocol_version)
+            .field("max_protocol_version", &self.max_protocol_version)
+            .field("disable_built_in_roots", &self.disable_built_in_roots)
+            .field(
+                "danger_accept_invalid_certs",
+                &self.danger_accept_invalid_certs,
+            )
+            .field(
+                "danger_accept_invalid_hostnames",
+                &self.danger_accept_invalid_hostnames,
+            )
+            .field("use_sni", &self.use_sni)
+            .finish()
     }
 }
 
@@ -557,8 +635,8 @@ impl TlsConfig {
     }
 }
 
-/// A value-to-[`Config`](crate::client::Config) conversion that consumes the input value. 
-/// 
+/// A value-to-[`Config`](crate::client::Config) conversion that consumes the input value.
+///
 /// This allows the `connect` associated function of the [`client`](crate::client::Client),
 /// [`multiplexed client`](crate::client::MultiplexedClient) or [`pooled client`](crate::client::PooledClientManager)
 /// to accept connection information in a range of different formats.
@@ -580,11 +658,7 @@ impl<T: Into<String>> IntoConfig for (T, u16) {
                 host: self.0.into(),
                 port: self.1,
             },
-            username: None,
-            password: None,
-            database: 0,
-            #[cfg(feature = "tls")]
-            tls_config: None,
+            ..Default::default()
         })
     }
 }

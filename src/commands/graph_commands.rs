@@ -1,9 +1,9 @@
 use crate::{
-    client::{prepare_command, BatchPreparedCommand, ClientTrait, PreparedCommand},
+    client::{prepare_command, BatchPreparedCommand, Client, PreparedCommand},
     commands::{GraphCache, GraphValue},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, 
-        FromValueArray, FromValue, IntoArgs, SingleArg, Value,
+        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue,
+        FromValueArray, IntoArgs, SingleArg, Value,
     },
     Error, Future, Result,
 };
@@ -268,7 +268,7 @@ impl GraphResultSet {
     pub(crate) fn post_process(
         value: Value,
         command: Command,
-        client: &mut dyn ClientTrait,
+        client: &mut Client,
     ) -> Future<Self> {
         let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
@@ -279,12 +279,12 @@ impl GraphResultSet {
     pub(crate) fn from_value_async<'a, 'b: 'a>(
         value: Value,
         graph_name: &'b str,
-        client: &'a mut dyn ClientTrait,
+        client: &'a mut Client,
     ) -> Future<'a, Self> {
         Box::pin(async move {
             let mut cache = client
-                .get_cache()
-                .get_entry::<GraphCache>(&format!("graph:{graph_name}"))?;
+                .get_client_state()
+                .get_state::<GraphCache>(&format!("graph:{graph_name}"))?;
 
             if !cache.check_for_result(&value) {
                 let num_node_labels = cache.node_labels.len();
@@ -301,8 +301,8 @@ impl GraphResultSet {
                 .await?;
 
                 cache = client
-                    .get_cache()
-                    .get_entry::<GraphCache>(&format!("graph:{graph_name}"))?;
+                    .get_client_state()
+                    .get_state::<GraphCache>(&format!("graph:{graph_name}"))?;
 
                 cache.update(node_labels, prop_keys, rel_types);
 
@@ -337,7 +337,7 @@ impl GraphResultSet {
 
     async fn load_missing_ids(
         graph_name: &str,
-        client: &mut dyn ClientTrait,
+        client: &mut Client,
         num_node_labels: usize,
         num_prop_keys: usize,
         num_rel_types: usize,

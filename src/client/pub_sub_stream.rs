@@ -1,5 +1,5 @@
 use crate::{
-    client::{ClientPreparedCommand, InnerClient},
+    client::{ClientPreparedCommand, Client},
     commands::InternalPubSubCommands,
     network::PubSubSender,
     resp::{CommandArgs, FromValue, SingleArg, SingleArgCollection, Value},
@@ -102,7 +102,7 @@ pub struct PubSubStream {
     shardchannels: CommandArgs,
     sender: PubSubSender,
     receiver: PubSubReceiver,
-    client: InnerClient,
+    client: Client,
 }
 
 impl PubSubStream {
@@ -110,7 +110,7 @@ impl PubSubStream {
         channels: CommandArgs,
         sender: PubSubSender,
         receiver: PubSubReceiver,
-        client: InnerClient,
+        client: Client,
     ) -> Self {
         Self {
             closed: false,
@@ -127,7 +127,7 @@ impl PubSubStream {
         patterns: CommandArgs,
         sender: PubSubSender,
         receiver: PubSubReceiver,
-        client: InnerClient,
+        client: Client,
     ) -> Self {
         Self {
             closed: false,
@@ -144,7 +144,7 @@ impl PubSubStream {
         shardchannels: CommandArgs,
         sender: PubSubSender,
         receiver: PubSubReceiver,
-        client: InnerClient,
+        client: Client,
     ) -> Self {
         Self {
             closed: false,

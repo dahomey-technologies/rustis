@@ -1,20 +1,32 @@
 /*!
-Defines types related to the 3 clients structs and their dependencies: 
+Defines types related to the 3 clients structs and their dependencies:
 [`Client`], [`MultiplexedClient`], and [`PooledClientManager`] and how to configure them
 
 # Clients
 
-The central object in **rustis** is the client.
-There are 3 kinds of clients.
+The central object in **rustis** is the [`Client`](Client).
+
+I will allow you to connect to the Redis server, to send command requests 
+and to receive command response and push messages.
+
+The [`Client`](Client) struct can be used in 3 different modes
+* As a single client
+* As a mutiplexer
+* In a pool of clients
 
 ## The single client
-The single [`Client`](crate::client::Client) maintains a unique connection to a Redis Server or cluster and is not thread-safe.
+The single [`Client`](crate::client::Client) maintains a unique connection to a Redis Server or cluster.
+
+This use case of the client is not meant to be use directly in a Web application, where multiple HTTP connections access
+The Redis server at the same time in a multi-thread architecture (like [Actix](https://actix.rs/) or [Rocket](https://rocket.rs/)).
+
+It could be use in tools where the load is minimal.
 
 ```
 use rustis::{
-    client::Client, 
+    client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    Result, 
+    Result,
 };
 
 #[tokio::main]
@@ -30,49 +42,77 @@ async fn main() -> Result<()> {
 }
 ```
 
-## The multiplexed client
-A [multiplexed client](crate::client::MultiplexedClient) can be cloned, allowing requests
+## The multiplexer
+A [`Client`](Client) instance can be cloned, allowing requests
 to be be sent concurrently on the same underlying connection.
 
-Compared to a [single client](crate::client::Client), a multiplexed client cannot offers access
-to all existing Redis commands.
-Transactions and [blocking commands](crate::commands::BlockingCommands) are not compatible with a multiplexed client
-because they monopolize the whole connection which cannot be shared anymore. It means other consumers of the same
-multiplexed client will be blocked each time a transaction or a blocking command is in progress, losing the advantage
-of a shared connection.
+The multiplexer mode is great because it offers much performance in a multithread architecture, with only a single
+underlying connections. It should be the prefered mode for Web applications.
+
+### Limitations
+Beware that using [`Client`](Client) in a multiplexer mode, by cloning an instance across multiple threads,
+is not suitable for using [blocking commands](crate::commands::BlockingCommands) 
+because they monopolize the whole connection which cannot be shared anymore.
+
+Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible 
+with the multiplexer mode is either. Indeed, it's the shared connection that will be watched, not only
+the [`Client`](Client) instance through which the `watch`](crate::commands::TransactionCommands::watch) command is sent.
+
+### Managing multiplexed subscriptions
+
+Even if the [`subscribe`][crate::commands::PubSubCommands::subscribe] monopolize the whole connection, 
+it is still possible to use it in a multiplexed [`Client`](Client). 
+
+Indeed the subscribing mode of Redis still allows to share the connection between multiple clients,
+at the only condition that this connection is dedicated to subscriptions.
+
+In a Web application that requires subscriptions and regualar commands, the prefered solution
+would be to connect two multiplexed clients to the Redis server:
+* 1 for the subscriptions
+* 1 for the regular commands
 
 See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 
+### Example
 ```
 use rustis::{
-    client::MultiplexedClient,
-    commands::{FlushingMode, ServerCommands, StringCommands},
+    client::{Client, IntoConfig},
+    commands::{FlushingMode, PubSubCommands, ServerCommands, StringCommands},
     Result
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client1 = MultiplexedClient::connect("127.0.0.1:6379").await?;
-    client1.flushdb(FlushingMode::Sync).await?;
+    let config = "127.0.0.1:6379".into_config()?;
+    let mut regular_client1 = Client::connect(config.clone()).await?;
+    let mut pub_sub_client = Client::connect(config).await?;
 
-    client1.set("key", "value").await?;
-    let value: String = client1.get("key").await?;
+    regular_client1.flushdb(FlushingMode::Sync).await?;
+
+    regular_client1.set("key", "value").await?;
+    let value: String = regular_client1.get("key").await?;
     println!("value: {value:?}");
 
     // clone a second instance on the same underlying connection
-    let mut client2 = client1.clone();
-    let value: String = client2.get("key").await?;
+    let mut regular_client2 = regular_client1.clone();
+    let value: String = regular_client2.get("key").await?;
     println!("value: {value:?}");
+
+    // use 2nd connection to manager subscriptions
+    let mut pub_sub_stream = pub_sub_client.subscribe("my_channel").await?;
+    pub_sub_stream.close().await?;
 
     Ok(())
 }
 ```
 
 ## The pooled client manager
-The pooled client manager holds a pool of client, based on [bb8](https://docs.rs/bb8/latest/bb8/).
+The pooled client manager holds a pool of [`Client`](Client)s, based on [bb8](https://docs.rs/bb8/latest/bb8/).
 
 Each time a new command must be sent to the Redis Server, a client will be borrowed temporarily to the manager
 and automatic given back to it at the end of the operation.
+
+It is an alternative way to multiplexing, of managing **rustin** within a Web application.
 
 The manager can be configured via [bb8](https://docs.rs/bb8/latest/bb8/) with a various of options like maximum size, maximum lifetime, etc.
 
@@ -80,7 +120,7 @@ For you convenience, [bb8](https://docs.rs/bb8/latest/bb8/) is reexported from t
 
 ```
 use rustis::{
-    client::PooledClientManager, commands::StringCommands, Result, 
+    client::PooledClientManager, commands::StringCommands, Result,
 };
 
 #[tokio::main]
@@ -106,7 +146,7 @@ async fn main() -> Result<()> {
 
 # Configuration
 
-Each of the 3 clients described above, can be configured with the [`Config`](Config) struct:
+A [`Client`](Client) instance can be configured with the [`Config`](Config) struct:
 * Authentication
 * [`TlsConfig`](TlsConfig)
 * [`ServerConfig`](ServerConfig) (Standalone, Sentinel or Cluster)
@@ -152,8 +192,9 @@ The URL scheme is used to detect the server type:
 * `rediss+cluster://`- Secure (TSL) TCP connection to a Redis cluster
 
 ### QueryParameters
-Query parameters match perfectly optional configuration fields 
+Query parameters match perfectly optional configuration fields
 of the struct [`Config`](Config) or its dependencies:
+* `connect_timeout` - The time to attempt a connection before timing out (default 10,000ms).
 * `wait_between_failures` - (Sentinel only) Waiting time after failing before connecting to the next Sentinel instance (default 250ms).
 * `sentinel_username` - (Sentinel only) Sentinel username
 * `sentinel_password` - (Sentinel only) Sentinel password
@@ -179,7 +220,7 @@ This allow to optimize round-trip times by batching Redis commands.
 
 ### API description
 
-You can create a pipeline on a client instance by calling the associated fonction [`create_pipeline`](Client::create_pipeline).
+You can create a pipeline on a [`Client`](Client) instance by calling the associated fonction [`create_pipeline`](Client::create_pipeline).
 Be sure to store the pipeline instance in a mutable variable because a pipeline requires an exclusive access.
 
 Once the pipeline is created, you can use exactly the same commands that you would directly use on a client instance.
@@ -202,7 +243,7 @@ The most generic type that can be requested as a result is `Vec<resp::Value>`
 ### Example
 ```
 use rustis::{
-    client::{Client, Pipeline, BatchPreparedCommand}, 
+    client::{Client, Pipeline, BatchPreparedCommand},
     commands::StringCommands,
     resp::{cmd, Value}, Result,
 };
@@ -225,13 +266,13 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-```  
+```
 
 # Transactions
 [Redis Transactions](https://redis.io/docs/manual/transactions/) allow the execution of a group of commands in a single step.
 
-All the commands in a transaction are serialized and executed sequentially. 
-A request sent by another client will never be served in the middle of the execution of a Redis Transaction. 
+All the commands in a transaction are serialized and executed sequentially.
+A request sent by another client will never be served in the middle of the execution of a Redis Transaction.
 This guarantees that the commands are executed as a single isolated operation.
 
 ### API description
@@ -259,7 +300,7 @@ The most generic type that can be requested as a result is `Vec<(resp::Value)>`
 ### Example
 ```
 use rustis::{
-    client::{Client, Transaction, BatchPreparedCommand}, 
+    client::{Client, Transaction, BatchPreparedCommand},
     commands::StringCommands,
     resp::{cmd, Value}, Result,
 };
@@ -282,15 +323,15 @@ async fn main() -> Result<()> {
 ```
 
 # Pub/Sub
-[`Pub/Sub`](https://redis.io/docs/manual/pubsub/) is a Redis architecture were senders can publish messages into channels 
+[`Pub/Sub`](https://redis.io/docs/manual/pubsub/) is a Redis architecture were senders can publish messages into channels
 and subscribers can subscribe by channel names or patterns to receive messages
 
 ### Publishing
 
-To publish a message, you can call the [`publish`](crate::commands::PubSubCommands::publish) 
+To publish a message, you can call the [`publish`](crate::commands::PubSubCommands::publish)
 associated function on its dedicated trait.
 
-It also possible to use the sharded flavor of the publish function: [`spublish`](crate::commands::PubSubCommands::spublish) 
+It also possible to use the sharded flavor of the publish function: [`spublish`](crate::commands::PubSubCommands::spublish)
 
 ### Subscribing
 
@@ -307,14 +348,14 @@ wait for incoming message in the form of the struct [`PubSubMessage`](crate::cli
 ### Warning!
 
 [`MultiplexedClient`](MultiplexedClient) instances must be decidated to Pub/Sub once a subscribing function has been called.
-Indeed, because subscription blocks the multiplexed client shared connection, 
+Indeed, because subscription blocks the multiplexed client shared connection,
 other callers would be blocked when sending regular commands.
 
 ### Example
 
 ```
 use rustis::{
-    client::{Client, ClientPreparedCommand}, 
+    client::{Client, ClientPreparedCommand},
     commands::{FlushingMode, PubSubCommands, ServerCommands},
     resp::{cmd, Value}, Result,
 };
@@ -360,7 +401,7 @@ or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`](PubSubStream
 
 ```
 use rustis::{
-    client::{Client, ClientPreparedCommand}, 
+    client::{Client, ClientPreparedCommand},
     commands::{FlushingMode, PubSubCommands, ServerCommands},
     resp::{cmd, Value}, Result,
 };
@@ -386,15 +427,12 @@ async fn main() -> Result<()> {
 ```
 */
 
-mod cache;
+mod client_state;
 #[allow(clippy::module_inception)]
 mod client;
-mod client_trait;
 mod config;
-mod inner_client;
 mod message;
 mod monitor_stream;
-mod multiplexed_client;
 mod pipeline;
 #[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]
@@ -403,14 +441,11 @@ mod prepared_command;
 mod pub_sub_stream;
 mod transaction;
 
-pub use cache::*;
+pub use client_state::*;
 pub use client::*;
-pub use client_trait::*;
 pub use config::*;
-pub(crate) use inner_client::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;
-pub use multiplexed_client::*;
 pub use pipeline::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
 #[cfg(feature = "pool")]

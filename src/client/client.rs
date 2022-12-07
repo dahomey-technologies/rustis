@@ -58,7 +58,8 @@ impl Client {
         })
     }
 
-    pub(crate) fn get_client_state(&mut self) -> &mut ClientState {
+    /// Give a generic access to attach any state to a client instance
+    pub fn get_client_state(&mut self) -> &mut ClientState {
         &mut self.client_state
     }
 

@@ -1,8 +1,14 @@
+use std::time::Duration;
+
 use crate::{
-    commands::{ClientKillOptions, ConnectionCommands, StringCommands},
+    client::{Client, IntoConfig},
+    commands::{
+        BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
+        ListCommands, ServerCommands, StringCommands,
+    },
     resp::cmd,
-    tests::get_test_client,
-    Result,
+    tests::{get_default_addr, get_test_client, log_try_init},
+    Error, Result,
 };
 use serial_test::serial;
 
@@ -58,6 +64,34 @@ async fn on_reconnect() -> Result<()> {
 
     client1.close().await?;
     client2.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_timeout() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_addr().into_config()?;
+    config.command_timeout = Duration::from_millis(10);
+
+    let mut client1 = Client::connect(config).await?;
+
+    client1.flushall(FlushingMode::Sync).await?;
+
+    // create an empty list
+    client1.lpush("key", "value").await?;
+    let _result: Vec<String> = client1.lpop("key", 1).await?;
+
+    // block for 1 second
+    // since the timeout is configured to 10ms, we should have a timeout error
+    let result: Result<Option<(String, Vec<String>)>> =
+        client1.blmpop(1., "key", LMoveWhere::Left, 1).await;
+    assert!(matches!(result, Err(Error::Timeout(_))));
+
+    client1.close().await?;
 
     Ok(())
 }

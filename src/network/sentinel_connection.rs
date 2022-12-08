@@ -42,15 +42,9 @@ impl SentinelConnection {
         let mut restart = false;
         let mut unreachable_sentinel = true;
 
-        let config = &Config {
-            server: config.server.clone(),
-            username: sentinel_config.username.clone(),
-            password: sentinel_config.password.clone(),
-            database: config.database,
-            #[cfg(feature = "tls")]
-            tls_config: config.tls_config.clone(),
-            connect_timeout: config.connect_timeout
-        };
+        let mut config = config.clone();
+        config.username = sentinel_config.username.clone();
+        config.password = sentinel_config.password.clone();
 
         loop {
             for sentinel_instance in &sentinel_config.instances {
@@ -58,7 +52,7 @@ impl SentinelConnection {
                 let (host, port) = sentinel_instance;
 
                 let mut sentinel_connection =
-                    match StandaloneConnection::connect(host, *port, config).await {
+                    match StandaloneConnection::connect(host, *port, &config).await {
                         Ok(sentinel_connection) => sentinel_connection,
                         Err(e) => {
                             debug!("Cannot connect to Sentinel {}:{} : {}", *host, *port, e);
@@ -88,7 +82,7 @@ impl SentinelConnection {
 
                 // Step 3: call the ROLE command in the target instance
                 let mut master_connection =
-                    StandaloneConnection::connect(&master_host, master_port, config).await?;
+                    StandaloneConnection::connect(&master_host, master_port, &config).await?;
 
                 let role: RoleResult = master_connection.role().await?;
 

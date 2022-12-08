@@ -50,6 +50,8 @@ pub enum Error {
     /// Internal error to trigger retry sending the command
     #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
+    /// The I/O operation’s timeout expired
+    Timeout(String)
 }
 
 impl std::fmt::Display for Error {
@@ -64,6 +66,7 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "tls")]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
             Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
+            Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {}", e)),
         }
     }
 }

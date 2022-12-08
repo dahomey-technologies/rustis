@@ -176,7 +176,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
     {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| Error::Client("The I/O operation’s timeout expired".to_owned()))
+            .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
     }
     #[cfg(feature = "async-std-runtime")]
     {
@@ -187,7 +187,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
         } else {
             async_std::future::timeout(timeout, future)
                 .await
-                .map_err(|_| Error::Client("The I/O operation’s timeout expired".to_owned()))
+                .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
         }
     }
 }

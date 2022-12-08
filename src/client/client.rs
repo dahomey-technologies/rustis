@@ -23,15 +23,15 @@ use crate::{
     },
     network::{
         JoinHandle, MonitorReceiver, MonitorSender, MsgSender, NetworkHandler, PubSubReceiver,
-        PubSubSender, ReconnectReceiver, ReconnectSender,
+        PubSubSender, ReconnectReceiver, ReconnectSender, timeout,
     },
     resp::{
         cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
     },
     Error, Future, Result, ValueReceiver, ValueSender,
 };
-use futures::{channel::{mpsc, oneshot}};
-use std::{future::IntoFuture, sync::Arc};
+use futures::channel::{mpsc, oneshot};
+use std::{future::IntoFuture, sync::Arc, time::Duration};
 
 /// Client with a unique connection to a Redis server.
 pub struct Client {
@@ -39,6 +39,7 @@ pub struct Client {
     network_task_join_handle: Arc<Option<JoinHandle<()>>>,
     reconnect_sender: ReconnectSender,
     client_state: ClientState,
+    command_timeout: Duration,
 }
 
 impl Clone for Client {
@@ -48,6 +49,7 @@ impl Clone for Client {
             network_task_join_handle: self.network_task_join_handle.clone(),
             reconnect_sender: self.reconnect_sender.clone(),
             client_state: ClientState::new(),
+            command_timeout: self.command_timeout,
         }
     }
 }
@@ -82,6 +84,8 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
+        let config = config.into_config()?;
+        let command_timeout = config.command_timeout;
         let (msg_sender, network_task_join_handle, reconnect_sender) =
             NetworkHandler::connect(config.into_config()?).await?;
 
@@ -90,6 +94,7 @@ impl Client {
             network_task_join_handle: Arc::new(Some(network_task_join_handle)),
             reconnect_sender,
             client_state: ClientState::new(),
+            command_timeout,
         })
     }
 
@@ -120,10 +125,10 @@ impl Client {
     }
 
     /// Used to receive notifications when the client reconnects to the Redis server.
-    /// 
-    /// To turn this receiver into a Stream, you can use the 
+    ///
+    /// To turn this receiver into a Stream, you can use the
     /// [`BroadcastStream`](https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.BroadcastStream.html) wrapper.
-    pub fn on_reconnect(&self) ->  ReconnectReceiver  {
+    pub fn on_reconnect(&self) -> ReconnectReceiver {
         self.reconnect_sender.subscribe()
     }
 
@@ -166,7 +171,11 @@ impl Client {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let message = Message::single(command, value_sender);
         self.send_message(message)?;
-        let value = value_receiver.await?;
+        let value = if self.command_timeout != Duration::ZERO {
+            timeout(self.command_timeout, value_receiver).await??
+        } else {
+            value_receiver.await?
+        };
         value.into_result()
     }
 

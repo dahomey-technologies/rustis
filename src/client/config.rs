@@ -8,6 +8,7 @@ const DEFAULT_PORT: u16 = 6379;
 const DEFAULT_DATABASE: usize = 0;
 const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
 const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
+const DEFAULT_COMMAND_TIMEOUT: u64 =  0;
 
 type Uri<'a> = (
     &'a str,
@@ -46,6 +47,13 @@ pub struct Config {
     pub tls_config: Option<TlsConfig>,
     /// The time to attempt a connection before timing out. The default is 10 seconds
     pub connect_timeout: Duration,
+    /// If a command does not return a reply within a set number of milliseconds,
+    /// a timeout error will be thrown.
+    /// 
+    /// IF set to 0, no timeout is apply
+    /// 
+    /// The default is 0
+    pub command_timeout: Duration,
 }
 
 impl Default for Config {
@@ -58,6 +66,7 @@ impl Default for Config {
             #[cfg(feature = "tls")]
             tls_config: Default::default(),
             connect_timeout: Duration::from_millis(DEFAULT_CONNECT_TIMEOUT),
+            command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT)
         }
     }
 }
@@ -213,6 +222,12 @@ impl Config {
             if let Some(millis) = query.remove("connect_timeout") {
                 if let Ok(millis) = millis.parse::<u64>() {
                     config.connect_timeout = Duration::from_millis(millis);
+                }
+            }
+
+            if let Some(millis) = query.remove("command_timeout") {
+                if let Ok(millis) = millis.parse::<u64>() {
+                    config.command_timeout = Duration::from_millis(millis);
                 }
             }
         }
@@ -409,6 +424,17 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("connect_timeout={connect_timeout}"));
+        }
+
+        let command_timeout = self.command_timeout.as_millis() as u64;
+        if command_timeout != DEFAULT_COMMAND_TIMEOUT {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("command_timeout={command_timeout}"));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

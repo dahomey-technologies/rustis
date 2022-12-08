@@ -10,6 +10,7 @@ use futures::{
 use log::{debug, error, info, log_enabled, Level};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
+use tokio::sync::broadcast;
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
@@ -19,6 +20,8 @@ pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 pub(crate) type MonitorSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type MonitorReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type ReconnectSender = broadcast::Sender<()>;
+pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
 enum Status {
     Disconnected,
@@ -45,12 +48,15 @@ pub(crate) struct NetworkHandler {
     is_reply_on: bool,
     monitor_sender: Option<MonitorSender>,
     pending_replies: Option<Vec<Value>>,
+    reconnect_sender: ReconnectSender,
 }
 
 impl NetworkHandler {
-    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>)> {
+    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender)> {
         let connection = Connection::connect(config.clone()).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
+        let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) =
+            broadcast::channel(32);
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
@@ -65,6 +71,7 @@ impl NetworkHandler {
             is_reply_on: true,
             monitor_sender: None,
             pending_replies: None,
+            reconnect_sender: reconnect_sender.clone(),
         };
 
         let join_handle = spawn(async move {
@@ -73,7 +80,11 @@ impl NetworkHandler {
             }
         });
 
-        Ok((msg_sender, join_handle))
+        Ok((
+            msg_sender,
+            join_handle,
+            reconnect_sender,
+        ))
     }
 
     async fn network_loop(&mut self) -> Result<()> {
@@ -416,7 +427,8 @@ impl NetworkHandler {
                                 if let Some(pub_sub_sender) =
                                     self.pending_subscriptions.remove(channel_or_pattern)
                                 {
-                                    self.subscriptions.insert(channel_or_pattern.clone(), pub_sub_sender);
+                                    self.subscriptions
+                                        .insert(channel_or_pattern.clone(), pub_sub_sender);
                                 }
                                 if !self.pending_subscriptions.is_empty() {
                                     return Ok(None);
@@ -526,6 +538,9 @@ impl NetworkHandler {
             }
         }
 
-        self.connection.reconnect().await
+        self.connection.reconnect().await?;
+        self.reconnect_sender.send(())?;
+
+        Ok(())
     }
 }

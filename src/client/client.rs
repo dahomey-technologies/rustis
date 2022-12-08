@@ -23,20 +23,21 @@ use crate::{
     },
     network::{
         JoinHandle, MonitorReceiver, MonitorSender, MsgSender, NetworkHandler, PubSubReceiver,
-        PubSubSender,
+        PubSubSender, ReconnectReceiver, ReconnectSender,
     },
     resp::{
         cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
     },
     Error, Future, Result, ValueReceiver, ValueSender,
 };
-use futures::channel::{mpsc, oneshot};
+use futures::{channel::{mpsc, oneshot}};
 use std::{future::IntoFuture, sync::Arc};
 
 /// Client with a unique connection to a Redis server.
 pub struct Client {
     msg_sender: Arc<Option<MsgSender>>,
     network_task_join_handle: Arc<Option<JoinHandle<()>>>,
+    reconnect_sender: ReconnectSender,
     client_state: ClientState,
 }
 
@@ -45,6 +46,7 @@ impl Clone for Client {
         Self {
             msg_sender: self.msg_sender.clone(),
             network_task_join_handle: self.network_task_join_handle.clone(),
+            reconnect_sender: self.reconnect_sender.clone(),
             client_state: ClientState::new(),
         }
     }
@@ -80,19 +82,20 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
-        let (msg_sender, network_task_join_handle) =
+        let (msg_sender, network_task_join_handle, reconnect_sender) =
             NetworkHandler::connect(config.into_config()?).await?;
 
         Ok(Self {
             msg_sender: Arc::new(Some(msg_sender)),
             network_task_join_handle: Arc::new(Some(network_task_join_handle)),
+            reconnect_sender,
             client_state: ClientState::new(),
         })
     }
 
     /// if this client is the last client on the shared connection, the channel to send messages
     /// to the underlying network handler will be closed explicitely.
-    /// 
+    ///
     /// Then, this function will await for the network handler to be ended
     pub async fn close(mut self) -> Result<()> {
         let mut network_task_join_handle: Arc<Option<JoinHandle<()>>> = Arc::new(None);
@@ -114,6 +117,14 @@ impl Client {
         };
 
         Ok(())
+    }
+
+    /// Used to receive notifications when the client reconnects to the Redis server.
+    /// 
+    /// To turn this receiver into a Stream, you can use the 
+    /// [`BroadcastStream`](https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.BroadcastStream.html) wrapper.
+    pub fn on_reconnect(&self) ->  ReconnectReceiver  {
+        self.reconnect_sender.subscribe()
     }
 
     /// Give a generic access to attach any state to a client instance

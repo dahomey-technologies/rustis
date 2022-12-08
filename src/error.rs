@@ -111,6 +111,12 @@ impl From<native_tls::Error> for Error {
     }
 }
 
+impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
+    fn from(e: tokio::sync::broadcast::error::SendError<()>) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
 /// Redis server error kind
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RedisErrorKind {

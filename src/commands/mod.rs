@@ -6,7 +6,7 @@ Define Redis built-in commands in a set of traits
 Because Redis offers hundreds of commands, in **rustis** commands have been split in several traits that gather commands by groups,
 most of the time, groups describe in [Redis official documentation](https://redis.io/commands/).
 
-Depending on the group of commands, traits will be implemented by [`Client`](crate::client::Client), [`MultiplexedClient`](crate::client::MultiplexedClient),
+Depending on the group of commands, traits will be implemented by [`Client`](crate::client::Client),
 [`Pipeline`](crate::client::Pipeline), [`Transaction`](crate::client::Transaction) or some of these structs.
 
 These is the list of existing command traits:

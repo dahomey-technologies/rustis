@@ -1,6 +1,6 @@
 /*!
-Defines types related to the 3 clients structs and their dependencies:
-[`Client`], [`MultiplexedClient`], and [`PooledClientManager`] and how to configure them
+Defines types related to the clients structs and their dependencies:
+[`Client`], [`PooledClientManager`], [`Pipeline`], [`Transaction`] and how to configure them
 
 # Clients
 
@@ -347,7 +347,7 @@ wait for incoming message in the form of the struct [`PubSubMessage`](crate::cli
 
 ### Warning!
 
-[`MultiplexedClient`](MultiplexedClient) instances must be decidated to Pub/Sub once a subscribing function has been called.
+mulitplexed [`Client`](Client) instances must be decidated to Pub/Sub once a subscribing function has been called.
 Indeed, because subscription blocks the multiplexed client shared connection,
 other callers would be blocked when sending regular commands.
 

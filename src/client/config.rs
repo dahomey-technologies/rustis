@@ -18,8 +18,7 @@ type Uri<'a> = (
     Option<HashMap<String, String>>,
 );
 
-/// Configuration options for a [`client`](crate::client::Client),
-/// a [`multiplexed client`](crate::client::MultiplexedClient)
+/// Configuration options for a [`client`](crate::client::Client)
 /// or a [`pooled client`](crate::client::PooledClientManager)
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -638,7 +637,7 @@ impl TlsConfig {
 /// A value-to-[`Config`](crate::client::Config) conversion that consumes the input value.
 ///
 /// This allows the `connect` associated function of the [`client`](crate::client::Client),
-/// [`multiplexed client`](crate::client::MultiplexedClient) or [`pooled client`](crate::client::PooledClientManager)
+/// or [`pooled client`](crate::client::PooledClientManager)
 /// to accept connection information in a range of different formats.
 pub trait IntoConfig {
     /// Converts this type into a [`Config`](crate::client::Config).

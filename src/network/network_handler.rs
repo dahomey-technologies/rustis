@@ -539,7 +539,9 @@ impl NetworkHandler {
         }
 
         self.connection.reconnect().await?;
-        self.reconnect_sender.send(())?;
+        if let Err(e) = self.reconnect_sender.send(()) {
+            debug!("Cannot send reconnect notification to clients: {e}")
+        }
 
         Ok(())
     }

@@ -202,7 +202,11 @@ impl Client {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
         let message = Message::batch(commands, value_sender);
         self.send_message(message)?;
-        let value = value_receiver.await?;
+        let value = if self.command_timeout != Duration::ZERO {
+            timeout(self.command_timeout, value_receiver).await??
+        } else {
+            value_receiver.await?
+        };
         value.into_result()
     }
 

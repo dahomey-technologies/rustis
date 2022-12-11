@@ -58,7 +58,7 @@ pub struct Config {
     /// When the client reconnects, channels subscribed in the previous connection will be
     /// resubscribed automatically if `auto_resubscribe` is `true`.
     /// 
-    /// The deault is `true`
+    /// The default is `true`
     pub auto_resubscribe: bool,
 }
 

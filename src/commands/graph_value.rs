@@ -1,6 +1,6 @@
 use crate::{
     commands::GraphCache,
-    resp::{FromValue, Value, BulkString},
+    resp::{FromValue, Value},
     Error, Result,
 };
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ pub(crate) enum GraphValueType {
 
 impl FromValue for GraphValueType {
     fn from_value(value: Value) -> Result<Self> {
-        let value_type: u8 = value.into()?;
+        let value_type: u16 = value.into()?;
 
         match value_type {
             0 => Ok(GraphValueType::Unknown),
@@ -96,7 +96,7 @@ impl GraphValue {
                 ))
             }
             GraphValueType::Null => GraphValue::Null,
-            GraphValueType::String => GraphValue::String(value.into::<BulkString>()?.0),
+            GraphValueType::String => GraphValue::String(value.into()?),
             GraphValueType::Integer => GraphValue::Integer(value.into()?),
             GraphValueType::Boolean => GraphValue::Boolean(value.into()?),
             GraphValueType::Double => GraphValue::Double(value.into()?),

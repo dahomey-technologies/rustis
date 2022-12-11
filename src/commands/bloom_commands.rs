@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, BulkString, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
         SingleArg, SingleArgCollection, Value,
     },
     Result,
@@ -290,16 +290,7 @@ pub trait BloomCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator)).post_process(Box::new(
-            |value, _command, _client| {
-                let result = match value.into::<(i64, BulkString)>() {
-                    Ok((iterator, BulkString(data))) => Ok((iterator, data)),
-                    Err(e) => Err(e),
-                };
-
-                Box::pin(future::ready(result))
-            },
-        ))
+        prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator))
     }
 }
 

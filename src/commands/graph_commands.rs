@@ -432,7 +432,7 @@ pub struct GraphHeader {
 
 impl FromValue for GraphHeader {
     fn from_value(value: Value) -> Result<Self> {
-        let header: SmallVec<[(u8, String); 10]> = value.into()?;
+        let header: SmallVec<[(u16, String); 10]> = value.into()?;
         let column_names = header
             .into_iter()
             .map(|(_colmun_type, column_name)| column_name)

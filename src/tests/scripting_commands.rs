@@ -4,7 +4,6 @@ use crate::{
         CallBuilder, FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands,
         ServerCommands, StringCommands,
     },
-    resp::BulkString,
     sleep, spawn,
     tests::get_test_client,
     Result,
@@ -114,8 +113,8 @@ async fn function_dump() -> Result<()> {
         .await?;
     assert_eq!("hello", result);
 
-    let serialized_payload: BulkString = client.function_dump().await?;
-    assert!(!serialized_payload.0.is_empty());
+    let serialized_payload: Vec<u8> = client.function_dump().await?;
+    assert!(!serialized_payload.is_empty());
 
     client.function_delete("mylib").await?;
 

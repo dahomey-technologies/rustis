@@ -1,4 +1,4 @@
-use crate::resp::{BulkString, CommandArg, CommandArgs, CommandArgsIntoIter};
+use crate::resp::{CommandArg, CommandArgs, CommandArgsIntoIter};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -132,17 +132,33 @@ impl IntoArgs for bool {
     }
 }
 
-impl IntoArgs for BulkString {
-    #[inline]
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Binary(self.0))
-    }
-}
-
 impl IntoArgs for Vec<u8> {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(CommandArg::Binary(self))
+    }
+}
+
+impl IntoArgs for &[u8] {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Binary(self.to_vec()))
+    }
+}
+
+impl<const N: usize> IntoArgs for &[u8; N]
+{
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Binary(self.to_vec()))
+    }
+}
+
+impl<const N: usize> IntoArgs for [u8; N]
+{
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Binary(self.to_vec()))
     }
 }
 
@@ -409,7 +425,9 @@ impl SingleArg for bool {}
 impl SingleArg for char {}
 impl SingleArg for &'static str {}
 impl SingleArg for String {}
-impl SingleArg for BulkString {}
+impl<const N: usize> SingleArg for &[u8; N] {}
+impl<const N: usize> SingleArg for [u8; N] {}
+impl SingleArg for &[u8] {}
 impl SingleArg for Vec<u8> {}
 impl<T: SingleArg> SingleArg for Option<T> {}
 

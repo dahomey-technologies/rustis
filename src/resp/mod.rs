@@ -29,10 +29,10 @@ The trait [`IntoArgs`](IntoArgs) allows to convert a complex type into one ore m
 Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.
 
 Current implementation provides the following conversions:
-* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`, [`BulkString`](BulkString)
+* `String`, `char`, `&str`
 * `Option<T>`
 * `(T, U)`
 * `(T, U, V)`
@@ -57,10 +57,10 @@ Several Redis commands expect a Rust type that should be converted in a single c
 
 Current implementation provides the following conversions:
 * [`CommandArg`](CommandArg)
-* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`, [`BulkString`](BulkString)
+* `String`, `char`, `&str`
 * `Option<T>` where `T: SingleArg`
 
 #### Example
@@ -68,7 +68,7 @@ Current implementation provides the following conversions:
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{BulkString, CommandArgs, IntoArgs, SingleArg},
+    resp::{CommandArgs, IntoArgs, SingleArg},
     Result,
 };
 
@@ -99,7 +99,9 @@ async fn main() -> Result<()> {
     client.set("key", "value").await?;
     client.set("key", "value".to_owned()).await?;
     client.set("key", 'c').await?;
-    client.set("key", BulkString(b"value".to_vec())).await?;
+    client.set("key", b"value").await?;
+    client.set("key", &b"value"[..]).await?;
+    client.set("key", b"value".to_vec()).await?;
     client.set("key", MyI32(12)).await?;
 
     Ok(())
@@ -128,7 +130,6 @@ where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, ListCommands},
-    resp::{BulkString, CommandArg},
     Result,
 };
 use smallvec::{SmallVec};
@@ -179,7 +180,6 @@ where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, SortedSetCommands, ZAddOptions},
-    resp::{BulkString, CommandArg},
     Result,
 };
 use std::collections::{HashSet, BTreeSet};
@@ -220,7 +220,6 @@ where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{BulkString, CommandArg},
     Result,
 };
 use smallvec::{SmallVec};
@@ -275,10 +274,10 @@ Several Redis commands return a single value.
 Current implementation provides the following conversions from [`Value`](Value):
 * [`Value`](Value)
 * ()
-* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, [`BulkString`](BulkString)
+* `String`
 * `Option<T>`
 
 #### Example
@@ -286,7 +285,7 @@ Current implementation provides the following conversions from [`Value`](Value):
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{BulkString, FromSingleValue, FromValue, Value},
+    resp::{FromSingleValue, FromValue, Value},
     Result,
 };
 
@@ -321,7 +320,7 @@ async fn main() -> Result<()> {
 
     client.set("key", "value").await?;
     let _result: String = client.get("key").await?;
-    let _result: BulkString = client.get("key").await?;
+    let _result: Vec<u8> = client.get("key").await?;
 
     Ok(())
 }
@@ -393,7 +392,6 @@ where each of theses implementations must also implement [`FromValue`](FromValue
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, HashCommands},
-    resp::{BulkString, CommandArg},
     Result,
 };
 use smallvec::{SmallVec};

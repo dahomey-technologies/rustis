@@ -1,12 +1,12 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, BulkString, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
         SingleArg, SingleArgCollection, Value,
     },
     Result,
 };
-use std::{collections::HashMap, future};
+use std::{collections::HashMap};
 
 /// A group of Redis commands related to [`Cuckoo filters`](https://redis.io/docs/stack/bloom/)
 ///
@@ -358,16 +358,7 @@ pub trait CuckooCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("CF.SCANDUMP").arg(key).arg(iterator)).post_process(Box::new(
-            |value, _command, _client| {
-                let result = match value.into::<(i64, BulkString)>() {
-                    Ok((iterator, BulkString(data))) => Ok((iterator, data)),
-                    Err(e) => Err(e),
-                };
-
-                Box::pin(future::ready(result))
-            },
-        ))
+        prepare_command(self, cmd("CF.SCANDUMP").arg(key).arg(iterator))
     }
 }
 

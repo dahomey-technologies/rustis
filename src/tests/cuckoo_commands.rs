@@ -3,7 +3,6 @@ use crate::{
         CfInsertOptions, CfReserveOptions, CuckooCommands, FlushingMode, ServerCommands,
         StringCommands,
     },
-    resp::BulkString,
     tests::get_redis_stack_test_client,
     Error, RedisError, RedisErrorKind, Result,
 };
@@ -218,7 +217,7 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
 
     while let Some((iterator, chunk)) = chunks.pop_front() {
         client
-            .cf_loadchunk("cf", iterator, BulkString(chunk))
+            .cf_loadchunk("cf", iterator, chunk)
             .await?;
     }
 

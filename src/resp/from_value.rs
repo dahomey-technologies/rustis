@@ -1,5 +1,5 @@
 use crate::{
-    resp::{BulkString, Command, IntoValueIterator, Value},
+    resp::{Command, IntoValueIterator, Value},
     Error, Result,
 };
 use smallvec::{smallvec, SmallVec};
@@ -394,34 +394,6 @@ impl FromValue for i8 {
     }
 }
 
-impl FromValue for u8 {
-    fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(i) => u8::try_from(i)
-                .map_err(|_| Error::Client("Cannot parse result tu8o u64".to_owned())),
-            Value::Nil => Ok(0),
-            Value::BulkString(s) => {
-                match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
-                    Ok(s) => match s.parse::<u8>() {
-                        Ok(u) => Ok(u),
-                        Err(e) => Err(Error::Client(e.to_string())),
-                    },
-                    Err(e) => Err(e),
-                }
-            }
-            Value::SimpleString(s) => match s.parse::<u8>() {
-                Ok(u) => Ok(u),
-                Err(e) => Err(Error::Client(e.to_string())),
-            },
-            Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client(format!(
-                "Cannot parse result {:?} to u8",
-                value
-            ))),
-        }
-    }
-}
-
 impl FromValue for isize {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -524,11 +496,11 @@ impl FromValue for String {
     }
 }
 
-impl FromValue for BulkString {
+impl FromValue for Vec<u8> {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::BulkString(s) => Ok(BulkString(s)),
-            Value::Nil => Ok(BulkString(Vec::new())),
+            Value::BulkString(s) => Ok(s),
+            Value::Nil => Ok(Vec::new()),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Bytes",
@@ -543,7 +515,6 @@ pub trait FromSingleValue: FromValue {}
 
 impl FromSingleValue for Value {}
 impl FromSingleValue for () {}
-impl FromSingleValue for u8 {}
 impl FromSingleValue for i8 {}
 impl FromSingleValue for u16 {}
 impl FromSingleValue for i16 {}
@@ -557,7 +528,7 @@ impl FromSingleValue for f32 {}
 impl FromSingleValue for f64 {}
 impl FromSingleValue for bool {}
 impl FromSingleValue for String {}
-impl FromSingleValue for BulkString {}
+impl FromSingleValue for Vec<u8> {}
 impl<T: FromSingleValue> FromSingleValue for Option<T> {}
 
 /// Marker for a collection of values

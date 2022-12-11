@@ -1,5 +1,6 @@
 use crate::{
-    client::{Config, Message},
+    client::{Commands, Config, Message},
+    commands::InternalPubSubCommands,
     resp::{Command, CommandArgs, Value},
     spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
@@ -33,6 +34,13 @@ enum Status {
     LeavingMonitor,
 }
 
+#[derive(Clone, Copy)]
+enum SubcribtionType {
+    Channel,
+    Pattern,
+    ShardChannel,
+}
+
 pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
@@ -41,22 +49,22 @@ pub(crate) struct NetworkHandler {
     msg_receiver: MsgReceiver,
     messages_to_send: VecDeque<Message>,
     messages_to_receive: VecDeque<(Message, usize)>,
-    pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
-    /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
-    pending_unsubscriptions: VecDeque<usize>,
-    subscriptions: HashMap<Vec<u8>, PubSubSender>,
+    pending_subscriptions: HashMap<Vec<u8>, (SubcribtionType, PubSubSender)>,
+    pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubcribtionType>>,
+    subscriptions: HashMap<Vec<u8>, (SubcribtionType, PubSubSender)>,
     is_reply_on: bool,
     monitor_sender: Option<MonitorSender>,
     pending_replies: Option<Vec<Value>>,
     reconnect_sender: ReconnectSender,
+    auto_resubscribe: bool,
 }
 
 impl NetworkHandler {
     pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender)> {
-        let connection = Connection::connect(config.clone()).await?;
+        let auto_resubscribe = config.auto_resubscribe;
+        let connection = Connection::connect(config).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
-        let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) =
-            broadcast::channel(32);
+        let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
@@ -72,6 +80,7 @@ impl NetworkHandler {
             monitor_sender: None,
             pending_replies: None,
             reconnect_sender: reconnect_sender.clone(),
+            auto_resubscribe
         };
 
         let join_handle = spawn(async move {
@@ -80,11 +89,7 @@ impl NetworkHandler {
             }
         });
 
-        Ok((
-            msg_sender,
-            join_handle,
-            reconnect_sender,
-        ))
+        Ok((msg_sender, join_handle, reconnect_sender))
     }
 
     async fn network_loop(&mut self) -> Result<()> {
@@ -107,7 +112,21 @@ impl NetworkHandler {
             if let Some(mut msg) = msg {
                 let pub_sub_senders = msg.pub_sub_senders.take();
                 if let Some(pub_sub_senders) = pub_sub_senders {
-                    self.pending_subscriptions.extend(pub_sub_senders);
+                    let subscribtion_type = match &msg.commands {
+                        Commands::Single(command) => match command.name {
+                            "SUBSCRIBE" => SubcribtionType::Channel,
+                            "PSUBSCRIBE" => SubcribtionType::Pattern,
+                            "SSUBSCRIBE" => SubcribtionType::ShardChannel,
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    };
+
+                    let pending_subscriptions = pub_sub_senders
+                        .into_iter()
+                        .map(|(channel, sender)| (channel, (subscribtion_type, sender)));
+
+                    self.pending_subscriptions.extend(pending_subscriptions);
                 }
 
                 match &self.status {
@@ -132,7 +151,19 @@ impl NetworkHandler {
                     Status::Subscribed => {
                         for command in &msg.commands {
                             if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" | "SUNSUBSCRIBE" = command.name {
-                                self.pending_unsubscriptions.push_back(command.args.len());
+                                let subscribtion_type = match command.name {
+                                    "UNSUBSCRIBE" => SubcribtionType::Channel,
+                                    "PUNSUBSCRIBE" => SubcribtionType::Pattern,
+                                    "SUNSUBSCRIBE" => SubcribtionType::ShardChannel,
+                                    _ => unreachable!(),
+                                };
+                                self.pending_unsubscriptions.push_back(
+                                    command
+                                        .args
+                                        .iter()
+                                        .map(|a| (a.as_bytes().to_vec(), subscribtion_type))
+                                        .collect(),
+                                );
                             }
                         }
                         self.messages_to_send.push_back(msg);
@@ -319,7 +350,11 @@ impl NetworkHandler {
                 debug!("reconnecting");
                 match self.reconnect().await {
                     Ok(()) => {
-                        self.status = Status::Connected;
+                        if !self.subscriptions.is_empty() {
+                            self.status = Status::Subscribed;
+                        } else {
+                            self.status = Status::Connected;
+                        }
                         info!("reconnected!");
                     }
                     Err(e) => {
@@ -438,12 +473,34 @@ impl NetworkHandler {
                             b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
                                 self.subscriptions.remove(channel_or_pattern);
                                 if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
-                                    if *remaining > 1 {
-                                        *remaining -= 1;
+                                    if remaining.len() > 1 {
+                                        if remaining.remove(channel_or_pattern).is_none() {
+                                            let error = format!(
+                                                "Cannot find channel or pattern to remove: {}",
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                            error!("{error}");
+                                            return Err(Error::Client(error));
+                                        }
                                         return Ok(None);
                                     } else {
                                         // last unsubscription notification received
-                                        self.pending_unsubscriptions.pop_front();
+                                        let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
+                                            let error = format!(
+                                                "Cannot find channel or pattern to remove: {}",
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                            error!("{error}");
+                                            return Err(Error::Client(error));
+                                        };
+                                        if remaining.remove(channel_or_pattern).is_none() {
+                                            let error = format!(
+                                                "Cannot find channel or pattern to remove: {}",
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                            error!("{error}");
+                                            return Err(Error::Client(error));
+                                        }
                                         return Ok(Some(Ok(Value::SimpleString("OK".to_owned()))));
                                     }
                                 }
@@ -487,6 +544,7 @@ impl NetworkHandler {
                 ) => match self.subscriptions.get_mut(&channel) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
+                            .1
                             .send(Ok(Value::Array(vec![Value::BulkString(channel), payload])))
                             .await?;
                         return Ok(None);
@@ -508,6 +566,7 @@ impl NetworkHandler {
                 ) => match self.subscriptions.get_mut(&pattern) {
                     Some(pub_sub_sender) => {
                         pub_sub_sender
+                            .1
                             .send(Ok(Value::Array(vec![
                                 Value::BulkString(pattern),
                                 channel,
@@ -530,7 +589,7 @@ impl NetworkHandler {
         panic!("Should not reach this point");
     }
 
-    pub(crate) async fn reconnect(&mut self) -> Result<()> {
+    async fn reconnect(&mut self) -> Result<()> {
         while let Some((msg, _)) = self.messages_to_receive.pop_front() {
             if let Some(value_sender) = msg.value_sender {
                 let _result =
@@ -539,8 +598,91 @@ impl NetworkHandler {
         }
 
         self.connection.reconnect().await?;
+
+        if self.auto_resubscribe {
+            self.auto_resubscribe().await?;
+        }
+
         if let Err(e) = self.reconnect_sender.send(()) {
             debug!("Cannot send reconnect notification to clients: {e}")
+        }
+
+        Ok(())
+    }
+
+    async fn auto_resubscribe(&mut self) -> Result<()> {
+        if !self.subscriptions.is_empty() {
+            for (channel_or_pattern, (subscribtion_type, _)) in &self.subscriptions {
+                match subscribtion_type {
+                    SubcribtionType::Channel => {
+                        self.connection
+                            .subscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcribtionType::Pattern => {
+                        self.connection
+                            .psubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcribtionType::ShardChannel => {
+                        self.connection
+                            .ssubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                }
+            }
+        }
+
+        if !self.pending_subscriptions.is_empty() {
+            for (channel_or_pattern, (subscribtion_type, sender)) in
+                self.pending_subscriptions.drain()
+            {
+                match subscribtion_type {
+                    SubcribtionType::Channel => {
+                        self.connection
+                            .subscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcribtionType::Pattern => {
+                        self.connection
+                            .psubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcribtionType::ShardChannel => {
+                        self.connection
+                            .ssubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                }
+
+                self.subscriptions.insert(channel_or_pattern, (subscribtion_type, sender));
+            }
+        }
+
+        if !self.pending_unsubscriptions.is_empty() {
+            for mut map in self.pending_unsubscriptions.drain(..) {
+                for (channel_or_pattern, subscribtion_type) in map.drain() {
+                    match subscribtion_type {
+                        SubcribtionType::Channel => {
+                            self.connection
+                                .subscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                        SubcribtionType::Pattern => {
+                            self.connection
+                                .psubscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                        SubcribtionType::ShardChannel => {
+                            self.connection
+                                .ssubscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                    }
+
+                    self.subscriptions.remove(&channel_or_pattern);
+                }
+            }
         }
 
         Ok(())

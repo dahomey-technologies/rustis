@@ -1,15 +1,15 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 
 use crate::{
     client::{Client, IntoConfig},
     commands::{
-        ClusterCommands, ClusterShardResult, FlushingMode, PubSubChannelsOptions, PubSubCommands,
-        ServerCommands, StringCommands,
+        ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
+        PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
     },
-    tests::{get_cluster_test_client, get_test_client},
-    Result,
+    tests::{get_cluster_test_client, get_test_client, get_default_addr},
+    Result
 };
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt, FutureExt};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -520,6 +520,80 @@ async fn additional_sub() -> Result<()> {
 
     // close
     pub_sub_stream.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn auto_resubscribe() -> Result<()> {
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
+
+    let pub_sub_client_id = pub_sub_client.client_id().await?;
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+    pub_sub_stream.psubscribe("o*").await?;
+
+    let mut on_reconnect = pub_sub_client.on_reconnect();
+
+    regular_client
+        .client_kill(ClientKillOptions::default().id(pub_sub_client_id))
+        .await?;
+
+    // wait for reconnection before publishing
+    on_reconnect.recv().await.unwrap();
+
+    regular_client.publish("mychannel", "mymessage").await?;
+    regular_client.publish("otherchannel", "othermessage").await?;
+
+    let mut message = pub_sub_stream.try_next().await?.unwrap();
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel", channel);
+    assert_eq!("mymessage", payload);
+
+    let mut message = pub_sub_stream.try_next().await?.unwrap();
+    let channel: String = message.get_channel()?;
+    let pattern: String = message.get_pattern()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("otherchannel", channel);
+    assert_eq!("o*", pattern);
+    assert_eq!("othermessage", payload);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn no_auto_resubscribe() -> Result<()> {
+    let mut config = get_default_addr().into_config()?;
+    config.auto_resubscribe = false;
+
+    let mut regular_client = get_test_client().await?;
+    let mut pub_sub_client = Client::connect(config).await?;
+
+    let pub_sub_client_id = pub_sub_client.client_id().await?;
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+    pub_sub_stream.psubscribe("o*").await?;
+
+    let mut on_reconnect = pub_sub_client.on_reconnect();
+
+    regular_client
+        .client_kill(ClientKillOptions::default().id(pub_sub_client_id))
+        .await?;
+
+    // wait for reconnection before publishing
+    on_reconnect.recv().await.unwrap();
+
+    regular_client.publish("mychannel", "mymessage").await?;
+    regular_client.publish("otherchannel", "othermessage").await?;
+
+    let message = pub_sub_stream.next().now_or_never();
+    assert!(message.is_none());
 
     Ok(())
 }

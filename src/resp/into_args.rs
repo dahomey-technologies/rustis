@@ -48,13 +48,6 @@ impl IntoArgs for CommandArg {
     }
 }
 
-impl IntoArgs for u8 {
-    #[inline]
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(u64::from(self)))
-    }
-}
-
 impl IntoArgs for i8 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
@@ -143,6 +136,13 @@ impl IntoArgs for BulkString {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(CommandArg::Binary(self.0))
+    }
+}
+
+impl IntoArgs for Vec<u8> {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(CommandArg::Binary(self))
     }
 }
 
@@ -394,7 +394,6 @@ pub trait SingleArg: IntoArgs {
 }
 
 impl SingleArg for CommandArg {}
-impl SingleArg for u8 {}
 impl SingleArg for i8 {}
 impl SingleArg for u16 {}
 impl SingleArg for i16 {}
@@ -411,6 +410,7 @@ impl SingleArg for char {}
 impl SingleArg for &'static str {}
 impl SingleArg for String {}
 impl SingleArg for BulkString {}
+impl SingleArg for Vec<u8> {}
 impl<T: SingleArg> SingleArg for Option<T> {}
 
 /// Generic Marker for Collections of `IntoArgs`

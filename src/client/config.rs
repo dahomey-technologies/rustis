@@ -9,6 +9,7 @@ const DEFAULT_DATABASE: usize = 0;
 const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
 const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
 const DEFAULT_COMMAND_TIMEOUT: u64 =  0;
+const DEFAULT_AUTO_RESUBSCRTBE: bool =  true;
 
 type Uri<'a> = (
     &'a str,
@@ -54,6 +55,11 @@ pub struct Config {
     /// 
     /// The default is 0
     pub command_timeout: Duration,
+    /// When the client reconnects, channels subscribed in the previous connection will be
+    /// resubscribed automatically if `auto_resubscribe` is `true`.
+    /// 
+    /// The deault is `true`
+    pub auto_resubscribe: bool,
 }
 
 impl Default for Config {
@@ -66,7 +72,8 @@ impl Default for Config {
             #[cfg(feature = "tls")]
             tls_config: Default::default(),
             connect_timeout: Duration::from_millis(DEFAULT_CONNECT_TIMEOUT),
-            command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT)
+            command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT),
+            auto_resubscribe: DEFAULT_AUTO_RESUBSCRTBE,
         }
     }
 }
@@ -228,6 +235,12 @@ impl Config {
             if let Some(millis) = query.remove("command_timeout") {
                 if let Ok(millis) = millis.parse::<u64>() {
                     config.command_timeout = Duration::from_millis(millis);
+                }
+            }
+
+            if let Some(auto_resubscribe) = query.remove("auto_resubscribe") {
+                if let Ok(auto_resubscribe) = auto_resubscribe.parse::<bool>() {
+                    config.auto_resubscribe = auto_resubscribe;
                 }
             }
         }
@@ -435,6 +448,17 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("command_timeout={command_timeout}"));
+        }
+
+        let auto_resubscribe = self.auto_resubscribe;
+        if auto_resubscribe != DEFAULT_AUTO_RESUBSCRTBE {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("auto_resubscribe={auto_resubscribe}"));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

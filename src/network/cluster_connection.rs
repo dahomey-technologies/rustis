@@ -99,6 +99,73 @@ impl ClusterConnection {
         })
     }
 
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
+        self.internal_write(command, &[]).await
+    }
+
+    async fn internal_write(&mut self, command: &Command, ask_reasons: &[(u16, (String, u16))]) -> Result<()> {
+        debug!("Analyzing command {command:?}");
+
+        let command_info = self.command_info_manager.get_command_info(command);
+
+        let command_info = if let Some(command_info) = command_info {
+            command_info
+        } else {
+            return Err(Error::Client(format!("Unknown command {}", command.name)));
+        };
+
+        let command_name = command_info.name.to_string();
+
+        let request_policy = command_info.command_tips.iter().find_map(|tip| {
+            if let CommandTip::RequestPolicy(request_policy) = tip {
+                Some(request_policy)
+            } else {
+                None
+            }
+        });
+
+        let node_idx = self.get_random_node_index();
+        let keys = self
+            .command_info_manager
+            .extract_keys(command, &mut self.nodes[node_idx].connection)
+            .await?;
+        let slots = Self::hash_slots(&keys);
+
+        debug!("keys: {keys:?}, slots: {slots:?}");
+
+        if let Some(request_policy) = request_policy {
+            match request_policy {
+                RequestPolicy::AllNodes => {
+                    self.request_policy_all_nodes(command, &command_name, keys)
+                        .await?;
+                }
+                RequestPolicy::AllShards => {
+                    self.request_policy_all_shards(command, &command_name, keys)
+                        .await?;
+                }
+                RequestPolicy::MultiShard => {
+                    self.request_policy_multi_shard(
+                        command,
+                        &command_name,
+                        keys,
+                        slots,
+                        ask_reasons,
+                    )
+                    .await?;
+                }
+                RequestPolicy::Special => {
+                    self.request_policy_special(command, command_name, keys, slots);
+                }
+            }
+        } else {
+            self.no_request_policy(command, command_name, keys, slots, ask_reasons)
+                .await?;
+        }
+
+        Ok(())
+
+    }
+
     pub async fn write_batch(
         &mut self,
         commands: impl Iterator<Item = &Command>,
@@ -128,63 +195,7 @@ impl ClusterConnection {
             .collect::<Vec<_>>();
 
         for command in commands {
-            debug!("Analyzing command {command:?}");
-
-            let command_info = self.command_info_manager.get_command_info(command);
-
-            let command_info = if let Some(command_info) = command_info {
-                command_info
-            } else {
-                return Err(Error::Client(format!("Unknown command {}", command.name)));
-            };
-
-            let command_name = command_info.name.to_string();
-
-            let request_policy = command_info.command_tips.iter().find_map(|tip| {
-                if let CommandTip::RequestPolicy(request_policy) = tip {
-                    Some(request_policy)
-                } else {
-                    None
-                }
-            });
-
-            let node_idx = self.get_random_node_index();
-            let keys = self
-                .command_info_manager
-                .extract_keys(command, &mut self.nodes[node_idx].connection)
-                .await?;
-            let slots = Self::hash_slots(&keys);
-
-            debug!("keys: {keys:?}, slots: {slots:?}");
-
-            if let Some(request_policy) = request_policy {
-                match request_policy {
-                    RequestPolicy::AllNodes => {
-                        self.request_policy_all_nodes(command, &command_name, keys)
-                            .await?;
-                    }
-                    RequestPolicy::AllShards => {
-                        self.request_policy_all_shards(command, &command_name, keys)
-                            .await?;
-                    }
-                    RequestPolicy::MultiShard => {
-                        self.request_policy_multi_shard(
-                            command,
-                            &command_name,
-                            keys,
-                            slots,
-                            &ask_reasons,
-                        )
-                        .await?;
-                    }
-                    RequestPolicy::Special => {
-                        self.request_policy_special(command, command_name, keys, slots);
-                    }
-                }
-            } else {
-                self.no_request_policy(command, command_name, keys, slots, &ask_reasons)
-                    .await?;
-            }
+            self.internal_write(command, &ask_reasons).await?;
         }
 
         Ok(())

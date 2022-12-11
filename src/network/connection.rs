@@ -1,8 +1,11 @@
 use crate::{
-    client::{Config, ServerConfig},
-    resp::{Command, Value},
-    ClusterConnection, Result, RetryReason, SentinelConnection, StandaloneConnection,
+    client::{Config, PreparedCommand, ServerConfig},
+    commands::InternalPubSubCommands,
+    resp::{Command, FromValue, ResultValueExt, Value},
+    ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
+    StandaloneConnection,
 };
+use std::future::IntoFuture;
 
 pub enum Connection {
     Standalone(StandaloneConnection),
@@ -22,6 +25,14 @@ impl Connection {
             ServerConfig::Cluster(cluster_config) => Ok(Connection::Cluster(
                 ClusterConnection::connect(cluster_config, &config).await?,
             )),
+        }
+    }
+
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
+        match self {
+            Connection::Standalone(connection) => connection.write(command).await,
+            Connection::Sentinel(connection) => connection.write(command).await,
+            Connection::Cluster(connection) => connection.write(command).await,
         }
     }
 
@@ -59,3 +70,26 @@ impl Connection {
         }
     }
 }
+
+impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
+where
+    R: FromValue + Send + 'a,
+{
+    type Output = Result<R>;
+    type IntoFuture = Future<'a, R>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            self.executor.write(&self.command).await?;
+
+            self.executor
+                .read()
+                .await
+                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+                .into_result()?
+                .into()
+        })
+    }
+}
+
+impl InternalPubSubCommands for Connection {}

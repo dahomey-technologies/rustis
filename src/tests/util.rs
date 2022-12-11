@@ -69,7 +69,7 @@ pub(crate) async fn get_test_client() -> Result<Client> {
     log_try_init();
     Client::connect(get_default_addr()).await
 }
-
+    
 #[cfg(feature = "tls")]
 pub(crate) async fn get_tls_test_client() -> Result<Client> {
     log_try_init();

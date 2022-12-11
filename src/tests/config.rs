@@ -140,7 +140,18 @@ fn into_config() -> Result<()> {
             .into_config()?
             .to_string()
     );
-
+    assert_eq!(
+        "redis://127.0.0.1",
+        "redis://127.0.0.1?auto_remonitor=true"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?auto_remonitor=false",
+        "redis://127.0.0.1?auto_remonitor=false"
+            .into_config()?
+            .to_string()
+    );
     assert_eq!(
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1",
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1"

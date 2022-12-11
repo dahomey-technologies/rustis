@@ -69,6 +69,14 @@ impl Connection {
             Connection::Cluster(connection) => connection.reconnect().await,
         }
     }
+
+    pub async fn send(&mut self, command: &Command) -> Result<Value> {
+        self.write(command).await?;
+        self.read()
+            .await
+            .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+            .into_result()
+    }
 }
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
@@ -79,16 +87,7 @@ where
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            self.executor.write(&self.command).await?;
-
-            self.executor
-                .read()
-                .await
-                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
-                .into_result()?
-                .into()
-        })
+        Box::pin(async move { self.executor.send(&self.command).await?.into() })
     }
 }
 

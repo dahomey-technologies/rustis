@@ -1,7 +1,7 @@
 use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{Command, CommandArgs, Value},
+    resp::{Command, CommandArgs, Value, cmd},
     spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
 use futures::{
@@ -24,6 +24,7 @@ pub(crate) type MonitorReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
+#[derive(Debug)]
 enum Status {
     Disconnected,
     Connected,
@@ -57,11 +58,13 @@ pub(crate) struct NetworkHandler {
     pending_replies: Option<Vec<Value>>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
+    auto_remonitor: bool,
 }
 
 impl NetworkHandler {
     pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender)> {
         let auto_resubscribe = config.auto_resubscribe;
+        let auto_remonitor = config.auto_remonitor;
         let connection = Connection::connect(config).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
@@ -80,7 +83,8 @@ impl NetworkHandler {
             monitor_sender: None,
             pending_replies: None,
             reconnect_sender: reconnect_sender.clone(),
-            auto_resubscribe
+            auto_resubscribe,
+            auto_remonitor
         };
 
         let join_handle = spawn(async move {
@@ -352,6 +356,8 @@ impl NetworkHandler {
                     Ok(()) => {
                         if !self.subscriptions.is_empty() {
                             self.status = Status::Subscribed;
+                        } else if self.monitor_sender.is_some() {
+                            self.status = Status::Monitor;
                         } else {
                             self.status = Status::Connected;
                         }
@@ -603,6 +609,10 @@ impl NetworkHandler {
             self.auto_resubscribe().await?;
         }
 
+        if self.auto_remonitor {
+            self.auto_remonitor().await?;
+        }
+
         if let Err(e) = self.reconnect_sender.send(()) {
             debug!("Cannot send reconnect notification to clients: {e}")
         }
@@ -683,6 +693,14 @@ impl NetworkHandler {
                     self.subscriptions.remove(&channel_or_pattern);
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    async fn auto_remonitor(&mut self) -> Result<()> {
+        if self.monitor_sender.is_some() {
+            self.connection.send(&cmd("MONITOR")).await?;
         }
 
         Ok(())

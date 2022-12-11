@@ -2,10 +2,10 @@ use crate::{
     client::Client,
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands,
-        ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands,
-        FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
-        ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, RoleResult, ServerCommands,
-        SlowLogOptions, StringCommands,
+        ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram, CommandListOptions,
+        ConnectionCommands, FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent,
+        MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, RoleResult,
+        ServerCommands, SlowLogOptions, StringCommands,
     },
     resp::{cmd, Value},
     spawn,
@@ -933,6 +933,61 @@ async fn monitor() -> Result<()> {
     // RESET is the only command allowed during a MONITOR session
     let result: Result<String> = client.get("key").await;
     assert!(result.is_err());
+
+    monitor_stream.close().await?;
+
+    client.select(2).await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value3", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn auto_remonitor() -> Result<()> {
+    let mut client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let mut client2 = get_test_client().await?;
+    client2.select(2).await?;
+
+    let client_id = client.client_id().await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    let mut monitor_stream = client.monitor().await?;
+
+    client2
+        .client_kill(ClientKillOptions::default().id(client_id))
+        .await?;
+
+    // wait for reconnection before monitoring
+    on_reconnect.recv().await.unwrap();
+
+    spawn(async move {
+        async fn calls(client: &mut Client) -> Result<()> {
+            client.set("key", "value1").await?;
+            client.set("key", "value2").await?;
+            client.set("key", "value3").await?;
+
+            Ok(())
+        }
+
+        let _result = calls(&mut client2).await;
+    });
+
+    for _ in 0..3 {
+        let result = monitor_stream
+            .next()
+            .await
+            .ok_or_else(|| Error::Client("fail".to_owned()))?;
+
+        assert!(result.unix_timestamp_millis > 0.0);
+        assert_eq!(2, result.database);
+        assert_eq!("SET", result.command);
+        assert_eq!(2, result.command_args.len());
+    }
 
     monitor_stream.close().await?;
 

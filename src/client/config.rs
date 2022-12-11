@@ -10,6 +10,7 @@ const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
 const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
 const DEFAULT_COMMAND_TIMEOUT: u64 =  0;
 const DEFAULT_AUTO_RESUBSCRTBE: bool =  true;
+const DEFAULT_AUTO_REMONITOR: bool = true;
 
 type Uri<'a> = (
     &'a str,
@@ -60,6 +61,12 @@ pub struct Config {
     /// 
     /// The default is `true`
     pub auto_resubscribe: bool,
+    /// When the client reconnects, if in `monitor` mode, the 
+    /// [`monitor`](crate::commands::BlockingCommands::monitor) command
+    /// will be resent automatically
+    /// 
+    /// The default is `true`
+    pub auto_remonitor: bool,
 }
 
 impl Default for Config {
@@ -74,6 +81,7 @@ impl Default for Config {
             connect_timeout: Duration::from_millis(DEFAULT_CONNECT_TIMEOUT),
             command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT),
             auto_resubscribe: DEFAULT_AUTO_RESUBSCRTBE,
+            auto_remonitor: DEFAULT_AUTO_REMONITOR,
         }
     }
 }
@@ -241,6 +249,12 @@ impl Config {
             if let Some(auto_resubscribe) = query.remove("auto_resubscribe") {
                 if let Ok(auto_resubscribe) = auto_resubscribe.parse::<bool>() {
                     config.auto_resubscribe = auto_resubscribe;
+                }
+            }
+
+            if let Some(auto_remonitor) = query.remove("auto_remonitor") {
+                if let Ok(auto_remonitor) = auto_remonitor.parse::<bool>() {
+                    config.auto_remonitor = auto_remonitor;
                 }
             }
         }
@@ -459,6 +473,17 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("auto_resubscribe={auto_resubscribe}"));
+        }
+
+        let auto_remonitor = self.auto_remonitor;
+        if auto_remonitor != DEFAULT_AUTO_REMONITOR {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("auto_remonitor={auto_remonitor}"));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

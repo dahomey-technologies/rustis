@@ -195,11 +195,14 @@ The URL scheme is used to detect the server type:
 Query parameters match perfectly optional configuration fields
 of the struct [`Config`](Config) or its dependencies:
 * [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default 10,000ms).
-* [`command_timeout`](Config.command_timeout) - If a command does not return a reply within a set number of milliseconds,
+* [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
    a timeout error will be thrown. If set to 0, no timeout is apply (default 0).
-* [`auto_resubscribe`](Config.auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
+* [`auto_resubscribe`](Config::auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
  resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
-* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after failing before connecting to the next Sentinel instance (default 250ms).
+ * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the 
+   [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
+* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
+  failing before connecting to the next Sentinel instance (default 250ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
 

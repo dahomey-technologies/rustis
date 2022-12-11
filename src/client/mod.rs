@@ -201,6 +201,8 @@ of the struct [`Config`](Config) or its dependencies:
  resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
  * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the 
    [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
+* [`connection_name`](Config::connection_name) - Set the name of the connection to make 
+  it easier to identity the connection in client list.
 * [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
   failing before connecting to the next Sentinel instance (default 250ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username

@@ -165,6 +165,12 @@ impl StandaloneConnection {
             self.select(self.config.database).await?;
         }
 
+        // connection name
+        if !self.config.connection_name.is_empty() {
+            self.client_setname(self.config.connection_name.clone())
+                .await?;
+        }
+
         Ok(())
     }
 }

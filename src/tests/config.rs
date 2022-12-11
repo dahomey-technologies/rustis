@@ -153,6 +153,12 @@ fn into_config() -> Result<()> {
             .to_string()
     );
     assert_eq!(
+        "redis://127.0.0.1?connection_name=myclient",
+        "redis://127.0.0.1?connection_name=myclient"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1",
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1"
             .into_config()?

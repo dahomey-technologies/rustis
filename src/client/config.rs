@@ -67,6 +67,10 @@ pub struct Config {
     /// 
     /// The default is `true`
     pub auto_remonitor: bool,
+    /// Set the name of the connection to make it easier to identity the connection in client list.
+    /// 
+    /// See [`client_setname`](crate::commands::ConnectionCommands::client_setname)
+    pub connection_name: String,
 }
 
 impl Default for Config {
@@ -82,6 +86,7 @@ impl Default for Config {
             command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT),
             auto_resubscribe: DEFAULT_AUTO_RESUBSCRTBE,
             auto_remonitor: DEFAULT_AUTO_REMONITOR,
+            connection_name: String::from(""),
         }
     }
 }
@@ -256,6 +261,10 @@ impl Config {
                 if let Ok(auto_remonitor) = auto_remonitor.parse::<bool>() {
                     config.auto_remonitor = auto_remonitor;
                 }
+            }
+
+            if let Some(connection_name) = query.remove("connection_name") {
+                config.connection_name = connection_name;
             }
         }
 
@@ -464,26 +473,34 @@ impl ToString for Config {
             s.push_str(&format!("command_timeout={command_timeout}"));
         }
 
-        let auto_resubscribe = self.auto_resubscribe;
-        if auto_resubscribe != DEFAULT_AUTO_RESUBSCRTBE {
+        if self.auto_resubscribe != DEFAULT_AUTO_RESUBSCRTBE {
             if !query_separator {
                 query_separator = true;
                 s.push('?');
             } else {
                 s.push('&');
             }
-            s.push_str(&format!("auto_resubscribe={auto_resubscribe}"));
+            s.push_str(&format!("auto_resubscribe={}", self.auto_resubscribe));
         }
 
-        let auto_remonitor = self.auto_remonitor;
-        if auto_remonitor != DEFAULT_AUTO_REMONITOR {
+        if self.auto_remonitor != DEFAULT_AUTO_REMONITOR {
             if !query_separator {
                 query_separator = true;
                 s.push('?');
             } else {
                 s.push('&');
             }
-            s.push_str(&format!("auto_remonitor={auto_remonitor}"));
+            s.push_str(&format!("auto_remonitor={}", self.auto_remonitor));
+        }
+
+        if !self.connection_name.is_empty() {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("connection_name={}", self.connection_name));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

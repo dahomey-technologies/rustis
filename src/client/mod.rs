@@ -199,8 +199,8 @@ of the struct [`Config`](Config) or its dependencies:
    a timeout error will be thrown. If set to 0, no timeout is apply (default 0).
 * [`auto_resubscribe`](Config::auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
  resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
- * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the 
-   [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
+* [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the 
+  [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
 * [`connection_name`](Config::connection_name) - Set the name of the connection to make 
   it easier to identity the connection in client list.
 * [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)

@@ -9,7 +9,7 @@ use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
-use std::{future::IntoFuture};
+use std::future::IntoFuture;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
@@ -42,11 +42,7 @@ impl Streams {
         Self::connect_non_secure(host, port, config).await
     }
 
-    pub async fn connect_non_secure(
-        host: &str,
-        port: u16,
-        config: &Config,
-    ) -> Result<Self> {
+    pub async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);
@@ -80,7 +76,13 @@ impl StandaloneConnection {
     }
 
     pub async fn write(&mut self, command: &Command) -> Result<()> {
-        debug!("[{}:{}] Sending {command:?}", self.host, self.port);
+        if log_enabled!(Level::Debug) {
+            if self.config.connection_name.is_empty() {
+                debug!("[{}:{}] Sending {command:?}", self.host, self.port);
+            } else {
+                debug!("[{}] Sending {command:?}", self.config.connection_name);
+            }
+        }
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(feature = "tls")]
@@ -102,7 +104,13 @@ impl StandaloneConnection {
         };
 
         for command in commands {
-            debug!("[{}:{}] Sending {command:?}", self.host, self.port);
+            if log_enabled!(Level::Debug) {
+                if self.config.connection_name.is_empty() {
+                    debug!("[{}:{}] Sending {command:?}", self.host, self.port);
+                } else {
+                    debug!("[{}] Sending {command:?}", self.config.connection_name);
+                }
+            }
             command_encoder.encode(command, &mut self.buffer)?;
         }
 
@@ -124,18 +132,22 @@ impl StandaloneConnection {
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
         } {
             if log_enabled!(Level::Debug) {
+                let connection_name = if self.config.connection_name.is_empty() {
+                    format!("{}:{}", self.host, self.port)
+                } else {
+                    self.config.connection_name.clone()
+                };
                 match &value {
                     Ok(Value::Array(array)) => {
                         if array.len() > 100 {
                             debug!(
-                                "[{}:{}] Received result Array(Vec([...]))",
-                                self.host, self.port
+                                "[{connection_name}] Received result Array(Vec([...]))",
                             );
                         } else {
-                            debug!("[{}:{}] Received result {value:?}", self.host, self.port);
+                            debug!("[{connection_name}] Received result {value:?}");
                         }
                     }
-                    _ => debug!("[{}:{}] Received result {value:?}", self.host, self.port),
+                    _ => debug!("[{connection_name}] Received result {value:?}"),
                 }
             }
             Some(value)

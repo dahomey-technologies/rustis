@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}};
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     client::{Client, IntoConfig},
@@ -6,18 +6,25 @@ use crate::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
     },
-    tests::{get_cluster_test_client, get_test_client, get_default_addr},
-    Result
+    tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
+    Result,
 };
-use futures::{StreamExt, TryStreamExt, FutureExt};
+use futures::{FutureExt, StreamExt, TryStreamExt};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pubsub() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    log_try_init();
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "pub/sub".to_owned();
+    let mut pub_sub_client = Client::connect(config).await?;
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "regular".to_owned();
+    let mut regular_client = Client::connect(config).await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -545,7 +552,9 @@ async fn auto_resubscribe() -> Result<()> {
     on_reconnect.recv().await.unwrap();
 
     regular_client.publish("mychannel", "mymessage").await?;
-    regular_client.publish("otherchannel", "othermessage").await?;
+    regular_client
+        .publish("otherchannel", "othermessage")
+        .await?;
 
     let mut message = pub_sub_stream.try_next().await?.unwrap();
     let channel: String = message.get_channel()?;
@@ -570,11 +579,16 @@ async fn auto_resubscribe() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn no_auto_resubscribe() -> Result<()> {
-    let mut config = get_default_addr().into_config()?;
-    config.auto_resubscribe = false;
+    log_try_init();
 
-    let mut regular_client = get_test_client().await?;
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "pub/sub".to_owned();
+    config.auto_resubscribe = false;
     let mut pub_sub_client = Client::connect(config).await?;
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "regular".to_owned();
+    let mut regular_client = Client::connect(config).await?;
 
     let pub_sub_client_id = pub_sub_client.client_id().await?;
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
@@ -590,7 +604,9 @@ async fn no_auto_resubscribe() -> Result<()> {
     on_reconnect.recv().await.unwrap();
 
     regular_client.publish("mychannel", "mymessage").await?;
-    regular_client.publish("otherchannel", "othermessage").await?;
+    regular_client
+        .publish("otherchannel", "othermessage")
+        .await?;
 
     let message = pub_sub_stream.next().now_or_never();
     assert!(message.is_none());

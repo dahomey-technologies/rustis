@@ -203,6 +203,8 @@ of the struct [`Config`](Config) or its dependencies:
    [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
 * [`connection_name`](Config::connection_name) - Set the name of the connection to make 
   it easier to identity the connection in client list.
+* [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
+* [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
 * [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
   failing before connecting to the next Sentinel instance (default 250ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username

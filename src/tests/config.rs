@@ -159,6 +159,18 @@ fn into_config() -> Result<()> {
             .to_string()
     );
     assert_eq!(
+        "redis://127.0.0.1?keep_alive=30000",
+        "redis://127.0.0.1?keep_alive=30000"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?no_delay=false",
+        "redis://127.0.0.1?no_delay=false"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1",
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1"
             .into_config()?

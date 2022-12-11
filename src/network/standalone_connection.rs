@@ -9,7 +9,7 @@ use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
-use std::{future::IntoFuture, time::Duration};
+use std::{future::IntoFuture};
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
@@ -35,19 +35,19 @@ impl Streams {
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))
         } else {
-            Self::connect_non_secure(host, port, config.connect_timeout).await
+            Self::connect_non_secure(host, port, config).await
         }
 
         #[cfg(not(feature = "tls"))]
-        Self::connect_non_secure(host, port, config.connect_timeout).await
+        Self::connect_non_secure(host, port, config).await
     }
 
     pub async fn connect_non_secure(
         host: &str,
         port: u16,
-        connect_timeout: Duration,
+        config: &Config,
     ) -> Result<Self> {
-        let (reader, writer) = tcp_connect(host, port, connect_timeout).await?;
+        let (reader, writer) = tcp_connect(host, port, config).await?;
         let framed_read = FramedRead::new(reader, ValueDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);
         Ok(Streams::Tcp(framed_read, framed_write))

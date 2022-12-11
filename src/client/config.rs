@@ -11,6 +11,8 @@ const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
 const DEFAULT_COMMAND_TIMEOUT: u64 =  0;
 const DEFAULT_AUTO_RESUBSCRTBE: bool =  true;
 const DEFAULT_AUTO_REMONITOR: bool = true;
+const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
+const DEFAULT_NO_DELAY: bool = true;
 
 type Uri<'a> = (
     &'a str,
@@ -71,6 +73,15 @@ pub struct Config {
     /// 
     /// See [`client_setname`](crate::commands::ConnectionCommands::client_setname)
     pub connection_name: String,
+    /// Enable/disable keep-alive functionality (default `None`)
+    /// 
+    /// See [`TcpKeepAlive::with_time`](https://docs.rs/socket2/latest/socket2/struct.TcpKeepalive.html#method.with_time)
+    pub keep_alive: Option<Duration>,
+
+    /// Enable/disable the use of Nagle's algorithm (default `true`)
+    /// 
+    /// See [`TcpStream::set_nodelay`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html#method.set_nodelay)    
+    pub no_delay: bool,
 }
 
 impl Default for Config {
@@ -87,6 +98,8 @@ impl Default for Config {
             auto_resubscribe: DEFAULT_AUTO_RESUBSCRTBE,
             auto_remonitor: DEFAULT_AUTO_REMONITOR,
             connection_name: String::from(""),
+            keep_alive: DEFAULT_KEEP_ALIVE,
+            no_delay: DEFAULT_NO_DELAY,
         }
     }
 }
@@ -265,6 +278,18 @@ impl Config {
 
             if let Some(connection_name) = query.remove("connection_name") {
                 config.connection_name = connection_name;
+            }
+
+            if let Some(keep_alive) = query.remove("keep_alive") {
+                if let Ok(keep_alive) = keep_alive.parse::<u64>() {
+                    config.keep_alive = Some(Duration::from_millis(keep_alive));
+                }
+            }
+
+            if let Some(no_delay) = query.remove("no_delay") {
+                if let Ok(no_delay) = no_delay.parse::<bool>() {
+                    config.no_delay = no_delay;
+                }
             }
         }
 
@@ -501,6 +526,26 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("connection_name={}", self.connection_name));
+        }
+
+        if let Some(keep_alive) = self.keep_alive {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("keep_alive={}", keep_alive.as_millis()));
+        }
+
+        if self.no_delay != DEFAULT_NO_DELAY {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("no_delay={}", self.no_delay));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

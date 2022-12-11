@@ -1,8 +1,9 @@
 #[cfg(feature = "tls")]
 use crate::client::TlsConfig;
-use crate::{Error, Result};
+use crate::{client::Config, Error, Result};
 use futures::{Future, FutureExt};
 use log::{debug, info};
+use socket2::{SockRef, TcpKeepalive};
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -38,9 +39,12 @@ pub(crate) type TcpTlsStreamWriter = tokio_util::compat::Compat<
 pub(crate) async fn tcp_connect(
     host: &str,
     port: u16,
-    connect_timeout: Duration,
+    config: &Config,
 ) -> Result<(TcpStreamReader, TcpStreamWriter)> {
-    debug!("Connecting to {host}:{port} with timeout {connect_timeout:?}...");
+    debug!(
+        "Connecting to {host}:{port} with timeout {:?}...",
+        config.connect_timeout
+    );
 
     let reader: TcpStreamReader;
     let writer: TcpStreamWriter;
@@ -48,10 +52,19 @@ pub(crate) async fn tcp_connect(
     #[cfg(feature = "tokio-runtime")]
     {
         let stream = timeout(
-            connect_timeout,
+            config.connect_timeout,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
+
+        if let Some(keep_alive) = config.keep_alive {
+            SockRef::from(&stream).set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+        }
+
+        if config.no_delay {
+            stream.set_nodelay(true)?;
+        }
+
         (reader, writer) = tokio::io::split(stream);
     }
     #[cfg(feature = "async-std-runtime")]
@@ -60,10 +73,19 @@ pub(crate) async fn tcp_connect(
         use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
         let stream = timeout(
-            connect_timeout,
+            config.connect_timeout,
             async_std::net::TcpStream::connect((host, port)),
         )
         .await??;
+
+        if let Some(keep_alive) = config.keep_alive {
+            SockRef::from(&stream).set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+        }
+
+        if config.no_delay {
+            stream.set_nodelay(true)?;
+        }
+
         let (r, w) = stream.split();
         reader = r.compat();
         writer = w.compat_write();

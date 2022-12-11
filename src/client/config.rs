@@ -51,7 +51,7 @@ pub struct Config {
     /// If a command does not return a reply within a set number of milliseconds,
     /// a timeout error will be thrown.
     /// 
-    /// IF set to 0, no timeout is apply
+    /// If set to 0, no timeout is apply
     /// 
     /// The default is 0
     pub command_timeout: Duration,
@@ -185,7 +185,7 @@ impl Config {
                 if let Some(ref mut query) = query {
                     if let Some(millis) = query.remove("wait_between_failures") {
                         if let Ok(millis) = millis.parse::<u64>() {
-                            sentinel_config.wait_beetween_failures = Duration::from_millis(millis);
+                            sentinel_config.wait_between_failures = Duration::from_millis(millis);
                         }
                     }
 
@@ -394,7 +394,7 @@ impl ToString for Config {
             ServerConfig::Sentinel(SentinelConfig {
                 instances,
                 service_name,
-                wait_beetween_failures: _,
+                wait_between_failures: _,
                 password: _,
                 username: _,
             }) => {
@@ -464,7 +464,7 @@ impl ToString for Config {
         if let ServerConfig::Sentinel(SentinelConfig {
             instances: _,
             service_name: _,
-            wait_beetween_failures,
+            wait_between_failures: wait_beetween_failures,
             password,
             username,
         }) = &self.server
@@ -539,7 +539,7 @@ pub struct SentinelConfig {
     pub service_name: String,
 
     /// Waiting time after failing before connecting to the next Sentinel instance (default 250ms).
-    pub wait_beetween_failures: Duration,
+    pub wait_between_failures: Duration,
 
     /// Sentinel username
     pub username: Option<String>,
@@ -553,7 +553,7 @@ impl Default for SentinelConfig {
         Self {
             instances: Default::default(),
             service_name: Default::default(),
-            wait_beetween_failures: Duration::from_millis(DEFAULT_WAIT_BETWEEN_FAILURES),
+            wait_between_failures: Duration::from_millis(DEFAULT_WAIT_BETWEEN_FAILURES),
             password: None,
             username: None,
         }

@@ -99,7 +99,7 @@ impl SentinelConnection {
                         inner_connection: master_connection,
                     });
                 } else {
-                    sleep(sentinel_config.wait_beetween_failures).await;
+                    sleep(sentinel_config.wait_between_failures).await;
                     // restart from the beginning
                     restart = true;
                     break;

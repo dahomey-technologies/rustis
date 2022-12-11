@@ -40,8 +40,7 @@ An asynchronous Redis client for Rust.
   * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
 
 # Roadmap
-* Advanced reconnection strategy
-* Advanced configuration (timeouts)
+* Advanced reconnection & retry strategy
 
 # Basic Usage
 

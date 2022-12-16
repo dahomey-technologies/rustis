@@ -10,13 +10,34 @@ pub(crate) struct GraphCache {
 impl GraphCache {
     pub fn update(
         &mut self,
+        num_node_labels: usize,
+        num_prop_keys: usize,
+        num_rel_types: usize,
         node_labels: Vec<String>,
         property_keys: Vec<String>,
         relationship_types: Vec<String>,
     ) {
-        self.node_labels.extend(node_labels);
-        self.property_keys.extend(property_keys);
-        self.relationship_types.extend(relationship_types);
+        if self.node_labels.len() == num_node_labels {
+            self.node_labels.extend(node_labels);
+        } else if self.node_labels.len() < num_node_labels + node_labels.len() {
+            self.node_labels
+                .extend(node_labels[self.node_labels.len() - num_node_labels..].to_vec());
+        }
+
+        if self.property_keys.len() == num_prop_keys {
+            self.property_keys.extend(property_keys);
+        } else if self.property_keys.len() < num_prop_keys + property_keys.len() {
+            self.property_keys
+                .extend(property_keys[self.property_keys.len() - num_prop_keys..].to_vec());
+        }
+
+        if self.relationship_types.len() == num_rel_types {
+            self.relationship_types.extend(relationship_types);
+        } else if self.relationship_types.len() < num_rel_types + relationship_types.len() {
+            self.relationship_types.extend(
+                relationship_types[self.relationship_types.len() - num_rel_types..].to_vec(),
+            );
+        }
     }
 
     // returns true if we can parse this result without any cache miss
@@ -167,5 +188,32 @@ impl GraphCache {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::commands::GraphCache;
+
+    #[test]
+    fn partial_update() {
+        let mut cache = GraphCache {
+            node_labels: vec!["node1".to_owned(), "node2".to_owned()],
+            property_keys: vec!["prop1".to_owned(), "prop2".to_owned()],
+            relationship_types: vec![],
+        };
+
+        cache.update(
+            2,
+            1,
+            0,
+            vec!["node3".to_owned(), "node4".to_owned(), "node5".to_owned()],
+            vec!["prop2".to_owned(), "prop3".to_owned(), "prop4".to_owned(), "prop5".to_owned()],
+            vec!["rel1".to_owned()],
+        );
+
+        assert_eq!(vec!["node1".to_owned(), "node2".to_owned(), "node3".to_owned(), "node4".to_owned(), "node5".to_owned()], cache.node_labels);
+        assert_eq!(vec!["prop1".to_owned(), "prop2".to_owned(), "prop3".to_owned(), "prop4".to_owned(), "prop5".to_owned()], cache.property_keys);
+        assert_eq!(vec!["rel1".to_owned()], cache.relationship_types);
     }
 }

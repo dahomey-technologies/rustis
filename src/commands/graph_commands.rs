@@ -282,15 +282,35 @@ impl GraphResultSet {
         client: &'a mut Client,
     ) -> Future<'a, Self> {
         Box::pin(async move {
-            let mut cache = client
-                .get_client_state()
-                .get_state::<GraphCache>(&format!("graph:{graph_name}"))?;
+            let cache_key = format!("graph:{graph_name}");
+            let (cache_hit, num_node_labels, num_prop_keys, num_rel_types) = {
+                let client_state = client.get_client_state();
+                match client_state.get_state::<GraphCache>(&cache_key)? {
+                    Some(cache) => {
+                        if cache.check_for_result(&value) {
+                            (true, 0, 0, 0)
+                        } else {
+                            (
+                                false,
+                                cache.node_labels.len(),
+                                cache.property_keys.len(),
+                                cache.relationship_types.len(),
+                            )
+                        }
+                    }
+                    None => {
+                        let cache = GraphCache::default();
 
-            if !cache.check_for_result(&value) {
-                let num_node_labels = cache.node_labels.len();
-                let num_prop_keys = cache.property_keys.len();
-                let num_rel_types = cache.relationship_types.len();
+                        if cache.check_for_result(&value) {
+                            (true, 0, 0, 0)
+                        } else {
+                            (false, 0, 0, 0)
+                        }
+                    }
+                }
+            };
 
+            if !cache_hit {
                 let (node_labels, prop_keys, rel_types) = Self::load_missing_ids(
                     graph_name,
                     client,
@@ -300,13 +320,25 @@ impl GraphResultSet {
                 )
                 .await?;
 
-                cache = client
-                    .get_client_state()
-                    .get_state::<GraphCache>(&format!("graph:{graph_name}"))?;
+                let mut client_state = client.get_client_state_mut();
+                let cache = client_state.get_state_mut::<GraphCache>(&cache_key)?;
 
-                cache.update(node_labels, prop_keys, rel_types);
+                cache.update(
+                    num_node_labels,
+                    num_prop_keys,
+                    num_rel_types,
+                    node_labels,
+                    prop_keys,
+                    rel_types,
+                );
 
                 log::debug!("cache updated: {cache:?}");
+            } else if num_node_labels == 0 && num_prop_keys == 0 && num_rel_types == 0 {
+                // force cache creation
+                let mut client_state = client.get_client_state_mut();
+                client_state.get_state_mut::<GraphCache>(&cache_key)?;
+
+                log::debug!("graph cache created");
             }
 
             let values: Vec<Value> = value.into()?;
@@ -319,6 +351,11 @@ impl GraphResultSet {
                     statistics: statistics.into()?,
                 }),
                 (Some(header), Some(Value::Array(rows)), Some(statistics), None) => {
+                    let client_state = client.get_client_state();
+                    let Some(cache) = client_state.get_state::<GraphCache>(&cache_key)? else {
+                        return Err(Error::Client("Cannot find graph cache".to_owned()));
+                    };
+
                     let rows = rows
                         .into_iter()
                         .map(|v| GraphResultRow::from_value(v, cache))

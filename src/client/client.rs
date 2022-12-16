@@ -31,27 +31,16 @@ use crate::{
     Error, Future, Result, ValueReceiver, ValueSender,
 };
 use futures::channel::{mpsc, oneshot};
-use std::{future::IntoFuture, sync::Arc, time::Duration};
+use std::{future::IntoFuture, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}, time::Duration};
 
 /// Client with a unique connection to a Redis server.
+#[derive(Clone)]
 pub struct Client {
     msg_sender: Arc<Option<MsgSender>>,
     network_task_join_handle: Arc<Option<JoinHandle<()>>>,
     reconnect_sender: ReconnectSender,
-    client_state: ClientState,
+    client_state: Arc<RwLock<ClientState>>,
     command_timeout: Duration,
-}
-
-impl Clone for Client {
-    fn clone(&self) -> Self {
-        Self {
-            msg_sender: self.msg_sender.clone(),
-            network_task_join_handle: self.network_task_join_handle.clone(),
-            reconnect_sender: self.reconnect_sender.clone(),
-            client_state: ClientState::new(),
-            command_timeout: self.command_timeout,
-        }
-    }
 }
 
 impl Drop for Client {
@@ -93,7 +82,7 @@ impl Client {
             msg_sender: Arc::new(Some(msg_sender)),
             network_task_join_handle: Arc::new(Some(network_task_join_handle)),
             reconnect_sender,
-            client_state: ClientState::new(),
+            client_state: Arc::new(RwLock::new(ClientState::new())),
             command_timeout,
         })
     }
@@ -132,9 +121,14 @@ impl Client {
         self.reconnect_sender.subscribe()
     }
 
-    /// Give a generic access to attach any state to a client instance
-    pub fn get_client_state(&mut self) -> &mut ClientState {
-        &mut self.client_state
+    /// Give an immutable generic access to attach any state to a client instance
+    pub fn get_client_state(&mut self) -> RwLockReadGuard<ClientState> {
+        self.client_state.read().unwrap()
+    }
+
+    /// Give a mutable generic access to attach any state to a client instance
+    pub fn get_client_state_mut(&mut self) -> RwLockWriteGuard<ClientState> {
+        self.client_state.write().unwrap()
     }
 
     /// Send an arbitrary command to the server.

@@ -13,6 +13,7 @@ mod count_min_sktech_commands;
 #[cfg(feature = "redis-bloom")]
 mod cuckoo_commands;
 mod error;
+mod from_value;
 mod generic_commands;
 mod geo_commands;
 #[cfg(feature = "redis-graph")]

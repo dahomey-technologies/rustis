@@ -4,10 +4,10 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValue, IntoArgs, SingleArg, SingleArgCollection,
-        Value,
+        cmd, CommandArgs, FromSingleValue, FromValue, HashMapExt, IntoArgs, SingleArg,
+        SingleArgCollection, Value,
     },
-    Error, Result,
+    Result,
 };
 
 /// A group of Redis commands related to Scripting and Functions
@@ -450,34 +450,14 @@ pub struct LibraryInfo {
 
 impl FromValue for LibraryInfo {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 8 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
-                    Some(LibraryInfo {
-                        library_name: values.remove("library_name")?.into().ok()?,
-                        engine: values.remove("engine")?.into().ok()?,
-                        functions: values.remove("functions")?.into().ok()?,
-                        library_code: values.remove("library_code")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse LibraryInfo".to_owned()))
-            }
-            _ => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<LibraryInfo> {
-                    Some(LibraryInfo {
-                        library_name: values.remove("library_name")?.into().ok()?,
-                        engine: values.remove("engine")?.into().ok()?,
-                        functions: values.remove("functions")?.into().ok()?,
-                        library_code: None,
-                    })
-                }
-
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse LibraryInfo".to_owned()))
-            }
-        }
+        Ok(Self {
+            library_name: values.remove_or_default("library_name").into()?,
+            engine: values.remove_or_default("engine").into()?,
+            functions: values.remove_or_default("functions").into()?,
+            library_code: values.remove_or_default("library_code").into()?,
+        })
     }
 }
 
@@ -494,21 +474,13 @@ pub struct FunctionInfo {
 
 impl FromValue for FunctionInfo {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 6 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionInfo> {
-                    Some(FunctionInfo {
-                        name: values.remove("name")?.into().ok()?,
-                        description: values.remove("description")?.into().ok()?,
-                        flags: values.remove("flags")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse FunctionInfo".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse FunctionInfo".to_owned())),
-        }
+        Ok(Self {
+            name: values.remove_or_default("name").into()?,
+            description: values.remove_or_default("description").into()?,
+            flags: values.remove_or_default("flags").into()?,
+        })
     }
 }
 
@@ -524,20 +496,12 @@ pub struct FunctionStats {
 
 impl FromValue for FunctionStats {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 4 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<FunctionStats> {
-                    Some(FunctionStats {
-                        running_script: values.remove("running_script")?.into().ok()?,
-                        engines: values.remove("engines")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse FunctionStats".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse FunctionStats".to_owned())),
-        }
+        Ok(Self {
+            running_script: values.remove_or_default("running_script").into()?,
+            engines: values.remove_or_default("engines").into()?,
+        })
     }
 }
 
@@ -554,21 +518,13 @@ pub struct RunningScript {
 
 impl FromValue for RunningScript {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 6 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<RunningScript> {
-                    Some(RunningScript {
-                        name: values.remove("name")?.into().ok()?,
-                        command: values.remove("command")?.into().ok()?,
-                        duration_ms: values.remove("duration_ms")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse RunningScript".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse RunningScript".to_owned())),
-        }
+        Ok(Self {
+            name: values.remove_or_default("name").into()?,
+            command: values.remove_or_default("command").into()?,
+            duration_ms: values.remove_or_default("duration_ms").into()?,
+        })
     }
 }
 
@@ -583,20 +539,12 @@ pub struct EngineStats {
 
 impl FromValue for EngineStats {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 4 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<EngineStats> {
-                    Some(EngineStats {
-                        libraries_count: values.remove("libraries_count")?.into().ok()?,
-                        functions_count: values.remove("functions_count")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse EngineStats".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse EngineStats".to_owned())),
-        }
+        Ok(Self {
+            libraries_count: values.remove_or_default("libraries_count").into()?,
+            functions_count: values.remove_or_default("functions_count").into()?,
+        })
     }
 }
 

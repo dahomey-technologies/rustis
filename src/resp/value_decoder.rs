@@ -41,7 +41,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
             None => (Value::Nil, pos),
         })),
         b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Array(v), pos),
+            Some(v) => (Value::Map(v), pos),
             None => (Value::Nil, pos),
         })),
         b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
@@ -125,21 +125,31 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Val
     }
 }
 
-fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
+#[allow(clippy::complexity)]
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<(Value, Value)>>, usize)>> {
     match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, mut pos)) => {
-            let len = len * 2;
             let mut values = Vec::with_capacity(len as usize);
             for _ in 0..len {
-                match decode(buf, pos)? {
+                let key = match decode(buf, pos)? {
+                    None => return Ok(None),
+                    Some((key, new_pos)) => {
+                        pos = new_pos;
+                        key
+                    }
+                };
+
+                let value = match decode(buf, pos)? {
                     None => return Ok(None),
                     Some((value, new_pos)) => {
-                        values.push(value);
                         pos = new_pos;
+                        value
                     }
-                }
+                };
+
+                values.push((key, value));
             }
             Ok(Some((Some(values), pos)))
         }

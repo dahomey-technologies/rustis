@@ -16,7 +16,14 @@ where
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
                     v => Err(Error::Client(format!("Cannot parse result {v:?} to Tuple"))),
                 }
-            }
+            },
+            Value::Map(values) => {
+                let mut it = values.into_iter();
+                match (it.next(), it.next()) {
+                    (Some((k, v)), None) => Ok((k.into()?, v.into()?)),
+                    v => Err(Error::Client(format!("Cannot parse result {v:?} to Tuple"))),
+                }
+            },
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to Tuple",

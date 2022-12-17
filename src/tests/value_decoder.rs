@@ -210,11 +210,12 @@ fn map() -> Result<()> {
 
     let result = decode_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
-        Some(Value::Array(vec![
-            Value::BulkString(b"id".to_vec()),
-            Value::Integer(12),
-            Value::BulkString(b"name".to_vec()),
-            Value::BulkString(b"Mike".to_vec())
+        Some(Value::Map(vec![
+            (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
+            (
+                Value::BulkString(b"name".to_vec()),
+                Value::BulkString(b"Mike".to_vec())
+            )
         ])),
         result
     );

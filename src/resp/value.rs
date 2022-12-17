@@ -5,7 +5,7 @@ use crate::{
 use std::fmt;
 
 /// Generic Redis Object Model
-/// 
+///
 /// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/reference/protocol-spec/) (RESP)
 #[derive(PartialEq)]
 pub enum Value {
@@ -19,6 +19,8 @@ pub enum Value {
     BulkString(Vec<u8>),
     /// [RESP Array](https://redis.io/docs/reference/protocol-spec/#resp-arrays)
     Array(Vec<Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Map type
+    Map(Vec<(Value, Value)>),
     /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Push
     Push(Vec<Value>),
     /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
@@ -67,6 +69,13 @@ impl ToString for Value {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Value::Map(v) => format!(
+                "[{}]",
+                v.iter()
+                    .map(|(k, v)| format!("({}, {})", k.to_string(), v.to_string()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Value::Push(v) => format!(
                 "Push[{}]",
                 v.iter()
@@ -91,6 +100,7 @@ impl fmt::Debug for Value {
                 .field(&String::from_utf8_lossy(arg0).into_owned())
                 .finish(),
             Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
+            Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
             Self::Nil => write!(f, "Nil"),
@@ -132,14 +142,14 @@ impl ResultValueExt for Result<Value> {
     }
 }
 
-pub(crate) trait IntoValueIterator: Sized {
-    fn into_value_iter<T>(self) -> ValueIterator<T>
+pub(crate) trait IntoValueIterator<I: Iterator<Item = Value>>: Sized {
+    fn into_value_iter<T>(self) -> ValueIterator<T, I>
     where
         T: FromValue;
 }
 
-impl IntoValueIterator for Vec<Value> {
-    fn into_value_iter<T>(self) -> ValueIterator<T>
+impl IntoValueIterator<std::vec::IntoIter<Value>> for Vec<Value> {
+    fn into_value_iter<T>(self) -> ValueIterator<T, std::vec::IntoIter<Value>>
     where
         T: FromValue,
     {
@@ -147,21 +157,23 @@ impl IntoValueIterator for Vec<Value> {
     }
 }
 
-pub(crate) struct ValueIterator<T>
+pub(crate) struct ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
-    iter: std::vec::IntoIter<Value>,
+    iter: I,
     phantom: std::marker::PhantomData<T>,
     #[allow(clippy::complexity)]
-    next_functor: Box<dyn FnMut(&mut std::vec::IntoIter<Value>) -> Option<Result<T>>>,
+    next_functor: Box<dyn FnMut(&mut I) -> Option<Result<T>>>,
 }
 
-impl<T> ValueIterator<T>
+impl<T, I> ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
-    pub fn new(iter: std::vec::IntoIter<Value>) -> Self {
+    pub fn new(iter: I) -> Self {
         Self {
             iter,
             phantom: std::marker::PhantomData,
@@ -170,9 +182,10 @@ where
     }
 }
 
-impl<T> Iterator for ValueIterator<T>
+impl<T, I> Iterator for ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
     type Item = Result<T>;
 

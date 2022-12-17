@@ -1,5 +1,5 @@
 use crate::{
-    resp::{Command, IntoValueIterator, Value},
+    resp::{Command, IntoValueIterator, Value, ValueIterator},
     Error, Result,
 };
 use smallvec::{smallvec, SmallVec};
@@ -79,6 +79,7 @@ where
         match value {
             Value::Nil => Ok(Vec::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(vec![value.into()?]),
         }
@@ -94,6 +95,7 @@ where
         match value {
             Value::Nil => Ok(SmallVec::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(smallvec![value.into()?]),
         }
@@ -141,8 +143,15 @@ where
         match value {
             Value::Nil => Ok(HashMap::default()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Map(v) => v
+                .into_iter()
+                .map(|(k, v)| Ok((k.into()?, v.into()?)))
+                .collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => Err(Error::Client(format!(
+                "Cannot parse result {:?} to HashMap",
+                value
+            ))),
         }
     }
 }
@@ -156,8 +165,15 @@ where
         match value {
             Value::Nil => Ok(BTreeMap::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Map(v) => v
+                .into_iter()
+                .map(|(k, v)| Ok((k.into()?, v.into()?)))
+                .collect(),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Unexpected result value type".to_owned())),
+            _ => Err(Error::Client(format!(
+                "Cannot parse result {:?} to BTreeMap",
+                value
+            ))),
         }
     }
 }

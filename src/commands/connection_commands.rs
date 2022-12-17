@@ -1,7 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
+    commands::ModuleInfo,
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValue, IntoArgs, SingleArg,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValue, HashMapExt, IntoArgs, SingleArg,
         SingleArgCollection, Value,
     },
     Error, Result,
@@ -904,30 +905,22 @@ pub struct HelloResult {
     pub id: i64,
     pub mode: String,
     pub role: String,
-    pub modules: Vec<String>,
+    pub modules: Vec<ModuleInfo>,
 }
 
 impl FromValue for HelloResult {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(v) if v.len() == 14 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<HelloResult> {
-                    Some(HelloResult {
-                        server: values.remove("server")?.into().ok()?,
-                        version: values.remove("version")?.into().ok()?,
-                        proto: values.remove("proto")?.into().ok()?,
-                        id: values.remove("id")?.into().ok()?,
-                        mode: values.remove("mode")?.into().ok()?,
-                        role: values.remove("role")?.into().ok()?,
-                        modules: values.remove("modules")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse HelloResult".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse HelloResult".to_owned())),
-        }
+        Ok(Self {
+            server: values.remove_or_default("server").into()?,
+            version: values.remove_or_default("version").into()?,
+            proto: values.remove_or_default("proto").into()?,
+            id: values.remove_or_default("id").into()?,
+            mode: values.remove_or_default("mode").into()?,
+            role: values.remove_or_default("role").into()?,
+            modules: values.remove_or_default("modules").into()?,
+        })
     }
 }
 

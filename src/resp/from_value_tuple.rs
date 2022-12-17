@@ -10,7 +10,7 @@ where
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
-            Value::Array(values) => {
+            Value::Push(values) | Value::Array(values) => {
                 let mut it = values.into_iter();
                 match (it.next(), it.next(), it.next()) {
                     (Some(v1), Some(v2), None) => Ok((v1.into()?, v2.into()?)),
@@ -33,7 +33,7 @@ where
         Box::new(|iter| {
             let first = iter.next()?;
             match first {
-                Value::Array(_) => Some(Self::from_value(first)),
+                Value::Push(_) | Value::Array(_) => Some(Self::from_value(first)),
                 _ => Some(transpose((first.into(), iter.next()?.into()))),
             }
         })

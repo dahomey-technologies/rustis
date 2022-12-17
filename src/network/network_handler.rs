@@ -8,7 +8,7 @@ use futures::{
     channel::{mpsc, oneshot},
     select, FutureExt, SinkExt, StreamExt,
 };
-use log::{debug, error, info, log_enabled, Level};
+use log::{debug, error, info, log_enabled, Level, warn};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
 use tokio::sync::broadcast;
@@ -19,12 +19,12 @@ pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
 pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
-pub(crate) type MonitorSender = mpsc::UnboundedSender<Result<Value>>;
-pub(crate) type MonitorReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type PushSender = mpsc::UnboundedSender<Result<Value>>;
+pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Status {
     Disconnected,
     Connected,
@@ -44,6 +44,7 @@ enum SubcribtionType {
 
 pub(crate) struct NetworkHandler {
     status: Status,
+    old_status: Status,
     connection: Connection,
     /// for retries
     msg_sender: MsgSender,
@@ -54,7 +55,7 @@ pub(crate) struct NetworkHandler {
     pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubcribtionType>>,
     subscriptions: HashMap<Vec<u8>, (SubcribtionType, PubSubSender)>,
     is_reply_on: bool,
-    monitor_sender: Option<MonitorSender>,
+    push_sender: Option<PushSender>,
     pending_replies: Option<Vec<Value>>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
@@ -71,6 +72,7 @@ impl NetworkHandler {
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
+            old_status: Status::Disconnected,
             connection,
             msg_sender: msg_sender.clone(),
             msg_receiver,
@@ -80,7 +82,7 @@ impl NetworkHandler {
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
             is_reply_on: true,
-            monitor_sender: None,
+            push_sender: None,
             pending_replies: None,
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
@@ -133,6 +135,12 @@ impl NetworkHandler {
                     self.pending_subscriptions.extend(pending_subscriptions);
                 }
 
+                let push_sender = msg.push_sender.take();
+                if let Some(push_sender) = push_sender {
+                    debug!("Registering push_sender");
+                    self.push_sender = Some(push_sender);
+                }
+
                 match &self.status {
                     Status::Connected => {
                         for command in &msg.commands {
@@ -141,7 +149,6 @@ impl NetworkHandler {
                                     self.status = Status::Subscribing;
                                 }
                                 "MONITOR" => {
-                                    self.monitor_sender = msg.monitor_sender.take();
                                     self.status = Status::EnteringMonitor;
                                 }
                                 _ => (),
@@ -299,7 +306,14 @@ impl NetworkHandler {
                     panic!("Should not happen!");
                 }
                 Status::Connected => {
-                    self.receive_result(value);
+                    if let Ok(Value::Push(_)) = &value {
+                        match &mut self.push_sender {
+                            Some(push_sender) => push_sender.send(value).await?,
+                            None => warn!("Received a push message with no sender configured: {value:?}"),
+                        }
+                    } else {
+                        self.receive_result(value);
+                    }
                 }
                 Status::Subscribing => {
                     if value.is_ok() {
@@ -326,8 +340,8 @@ impl NetworkHandler {
                     Ok(Value::SimpleString(monitor_event))
                         if monitor_event.starts_with(char::is_numeric) =>
                     {
-                        if let Some(monitor_sender) = &mut self.monitor_sender {
-                            monitor_sender.send(value).await?;
+                        if let Some(push_sender) = &mut self.push_sender {
+                            push_sender.send(value).await?;
                         }
                     }
                     _ => self.receive_result(value),
@@ -337,8 +351,8 @@ impl NetworkHandler {
                     Ok(Value::SimpleString(monitor_event))
                         if monitor_event.starts_with(char::is_numeric) =>
                     {
-                        if let Some(monitor_sender) = &mut self.monitor_sender {
-                            monitor_sender.send(value).await?;
+                        if let Some(push_sender) = &mut self.push_sender {
+                            push_sender.send(value).await?;
                         }
                     }
                     _ => {
@@ -349,6 +363,7 @@ impl NetworkHandler {
             },
             // disconnection
             None => {
+                self.old_status = self.status;
                 self.status = Status::Disconnected;
                 // reconnect
                 debug!("reconnecting");
@@ -356,7 +371,7 @@ impl NetworkHandler {
                     Ok(()) => {
                         if !self.subscriptions.is_empty() {
                             self.status = Status::Subscribed;
-                        } else if self.monitor_sender.is_some() {
+                        } else if self.push_sender.is_some() {
                             self.status = Status::Monitor;
                         } else {
                             self.status = Status::Connected;
@@ -699,7 +714,7 @@ impl NetworkHandler {
     }
 
     async fn auto_remonitor(&mut self) -> Result<()> {
-        if self.monitor_sender.is_some() {
+        if let Status::Monitor | Status::EnteringMonitor = self.old_status {
             self.connection.send(&cmd("MONITOR")).await?;
         }
 

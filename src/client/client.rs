@@ -22,7 +22,7 @@ use crate::{
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
     network::{
-        JoinHandle, MonitorReceiver, MonitorSender, MsgSender, NetworkHandler, PubSubReceiver,
+        JoinHandle, PushReceiver, PushSender, MsgSender, NetworkHandler, PubSubReceiver,
         PubSubSender, ReconnectReceiver, ReconnectSender, timeout,
     },
     resp::{
@@ -30,8 +30,10 @@ use crate::{
     },
     Error, Future, Result, ValueReceiver, ValueSender,
 };
-use futures::channel::{mpsc, oneshot};
+use futures::{channel::{mpsc, oneshot}, Stream};
 use std::{future::IntoFuture, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}, time::Duration};
+
+use super::ClientTrackingInvalidationStream;
 
 /// Client with a unique connection to a Redis server.
 #[derive(Clone)]
@@ -226,6 +228,13 @@ impl Client {
     #[inline]
     pub fn create_pipeline(&mut self) -> Pipeline {
         Pipeline::new(self.clone())
+    }
+
+    pub fn create_client_tracking_invalidation_stream(&mut self) -> Result<impl Stream<Item = Vec<String>>> {
+        let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
+        let message = Message::client_tracking_invalidation(push_sender);
+        self.send_message(message)?;
+        Ok(ClientTrackingInvalidationStream::new(push_receiver))
     }
 
     pub(crate) async fn subscribe_from_pub_sub_sender(
@@ -476,15 +485,15 @@ impl BlockingCommands for Client {
     fn monitor(&mut self) -> Future<MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-            let (monitor_sender, monitor_receiver): (MonitorSender, MonitorReceiver) =
+            let (push_sender, push_receiver): (PushSender, PushReceiver) =
                 mpsc::unbounded();
 
-            let message = Message::monitor(cmd("MONITOR"), value_sender, monitor_sender);
+            let message = Message::monitor(cmd("MONITOR"), value_sender, push_sender);
 
             self.send_message(message)?;
 
             let value = value_receiver.await?;
-            value.map_into_result(|_| MonitorStream::new(monitor_receiver, self.clone()))
+            value.map_into_result(|_| MonitorStream::new(push_receiver, self.clone()))
         })
     }
 }

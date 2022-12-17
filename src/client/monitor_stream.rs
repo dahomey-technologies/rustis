@@ -1,7 +1,7 @@
 use crate::{
     client::{Client, ClientPreparedCommand},
     commands::ConnectionCommands,
-    network::MonitorReceiver,
+    network::PushReceiver,
     resp::{FromValue, Value},
     Error, Result,
 };
@@ -16,12 +16,12 @@ use std::{
 /// when the stream is dropped or closed, a reset command is sent to the Redis server
 pub struct MonitorStream {
     closed: bool,
-    receiver: MonitorReceiver,
+    receiver: PushReceiver,
     client: Client,
 }
 
 impl MonitorStream {
-    pub(crate) fn new(receiver: MonitorReceiver, client: Client) -> Self {
+    pub(crate) fn new(receiver: PushReceiver, client: Client) -> Self {
         Self {
             closed: false,
             receiver,

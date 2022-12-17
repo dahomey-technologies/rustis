@@ -2017,7 +2017,7 @@ pub struct ModuleInfo {
     /// Name of the module
     pub name: String,
     /// Version of the module
-    pub version: String,
+    pub version: u64,
 }
 
 impl FromValue for ModuleInfo {

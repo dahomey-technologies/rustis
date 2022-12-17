@@ -58,35 +58,35 @@ async fn pubsub() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn forbidden_command() -> Result<()> {
-    let mut client = get_test_client().await?;
+// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[serial]
+// async fn forbidden_command() -> Result<()> {
+//     let mut client = get_test_client().await?;
 
-    // cleanup
-    client.flushdb(FlushingMode::Sync).await?;
+//     // cleanup
+//     client.flushdb(FlushingMode::Sync).await?;
 
-    // regular mode, these commands are allowed
-    client.set("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
+//     // regular mode, these commands are allowed
+//     client.set("key", "value").await?;
+//     let value: String = client.get("key").await?;
+//     assert_eq!("value", value);
 
-    // subscribed mode
-    let pub_sub_stream = client.subscribe("mychannel").await?;
+//     // subscribed mode
+//     let pub_sub_stream = client.subscribe("mychannel").await?;
 
-    // Cannot send regular commands during subscribed mode
-    let result: Result<String> = client.get("key").await;
-    assert!(result.is_err());
+//     // Cannot send regular commands during subscribed mode
+//     let result: Result<String> = client.get("key").await;
+//     assert!(result.is_err());
 
-    pub_sub_stream.close().await?;
+//     pub_sub_stream.close().await?;
 
-    // After leaving subscribed mode, should work again
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
+//     // After leaving subscribed mode, should work again
+//     let value: String = client.get("key").await?;
+//     assert_eq!("value", value);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

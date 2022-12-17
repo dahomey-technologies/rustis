@@ -180,6 +180,7 @@ impl FromValue for bool {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i != 0),
+            Value::Double(d) => Ok(d != 0.),
             Value::SimpleString(s) if s == "OK" => Ok(true),
             Value::Nil => Ok(false),
             Value::BulkString(s) if s == b"0" || s == b"false" => Ok(false),
@@ -197,6 +198,7 @@ impl FromValue for i64 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i),
+            Value::Double(d) => Ok(d as i64),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -226,6 +228,7 @@ impl FromValue for u64 {
             Value::Integer(i) => {
                 u64::try_from(i).map_err(|_| Error::Client("Cannot parse result to u64".to_owned()))
             }
+            Value::Double(d) => Ok(d as u64),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -255,6 +258,7 @@ impl FromValue for i32 {
             Value::Integer(i) => {
                 i32::try_from(i).map_err(|_| Error::Client("Cannot parse result to i32".to_owned()))
             }
+            Value::Double(d) => Ok(d as i32),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -284,6 +288,7 @@ impl FromValue for u32 {
             Value::Integer(i) => {
                 u32::try_from(i).map_err(|_| Error::Client("Cannot parse result to u32".to_owned()))
             }
+            Value::Double(d) => Ok(d as u32),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -313,6 +318,7 @@ impl FromValue for i16 {
             Value::Integer(i) => {
                 i16::try_from(i).map_err(|_| Error::Client("Cannot parse result to i16".to_owned()))
             }
+            Value::Double(d) => Ok(d as i16),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -342,6 +348,7 @@ impl FromValue for u16 {
             Value::Integer(i) => {
                 u16::try_from(i).map_err(|_| Error::Client("Cannot parse result to u16".to_owned()))
             }
+            Value::Double(d) => Ok(d as u16),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -371,6 +378,7 @@ impl FromValue for i8 {
             Value::Integer(i) => {
                 i8::try_from(i).map_err(|_| Error::Client("Cannot parse result i8 u64".to_owned()))
             }
+            Value::Double(d) => Ok(d as i8),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -399,6 +407,7 @@ impl FromValue for isize {
         match value {
             Value::Integer(i) => isize::try_from(i)
                 .map_err(|_| Error::Client("Cannot parse result to isize".to_owned())),
+            Value::Double(d) => Ok(d as isize),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -427,6 +436,7 @@ impl FromValue for usize {
         match value {
             Value::Integer(i) => usize::try_from(i)
                 .map_err(|_| Error::Client("Cannot parse result to usize".to_owned())),
+            Value::Double(d) => Ok(d as usize),
             Value::Nil => Ok(0),
             Value::BulkString(s) => {
                 match String::from_utf8(s).map_err(|e| Error::Client(e.to_string())) {
@@ -484,6 +494,7 @@ impl FromValue for f64 {
 impl FromValue for String {
     fn from_value(value: Value) -> Result<Self> {
         match value {
+            Value::Double(d) => Ok(d.to_string()),
             Value::BulkString(s) => String::from_utf8(s).map_err(|e| Error::Client(e.to_string())),
             Value::Nil => Ok(String::from("")),
             Value::SimpleString(s) => Ok(s),
@@ -546,10 +557,7 @@ where
     T: FromValue,
 {
 }
-impl<T, S: BuildHasher + Default> FromValueArray<T> for HashSet<T, S> where
-    T: FromValue + Eq + Hash
-{
-}
+impl<T, S: BuildHasher + Default> FromValueArray<T> for HashSet<T, S> where T: FromValue + Eq + Hash {}
 impl<T> FromValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 
 /// Marker for key/value collections

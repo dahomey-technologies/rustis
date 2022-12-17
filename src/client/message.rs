@@ -1,10 +1,11 @@
 use smallvec::SmallVec;
 
-use crate::{resp::Command, MonitorSender, PubSubSender, ValueSender, RetryReason};
+use crate::{resp::Command, PushSender, PubSubSender, ValueSender, RetryReason};
 
 #[allow(clippy::large_enum_variant)] 
 #[derive(Debug)]
 pub(crate) enum Commands {
+    None,
     Single(Command),
     Batch(Vec<Command>),
 }
@@ -12,6 +13,7 @@ pub(crate) enum Commands {
 impl Commands {
     pub fn len(&self) -> usize {
         match &self {
+            Commands::None => 0,
             Commands::Single(_) => 1,
             Commands::Batch(commands) => commands.len(),
         }
@@ -24,6 +26,7 @@ impl IntoIterator for Commands {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
+            Commands::None => CommandsIterator::Single(None),
             Commands::Single(command) => CommandsIterator::Single(Some(command)),
             Commands::Batch(commands) => CommandsIterator::Batch(commands.into_iter()),
         }
@@ -36,6 +39,7 @@ impl<'a> IntoIterator for &'a Commands {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
+            Commands::None => RefCommandsIterator::Single(None),
             Commands::Single(command) => RefCommandsIterator::Single(Some(command)),
             Commands::Batch(commands) => RefCommandsIterator::Batch(commands.iter()),
         }
@@ -80,7 +84,7 @@ pub(crate) struct Message {
     pub commands: Commands,
     pub value_sender: Option<ValueSender>,
     pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
-    pub monitor_sender: Option<MonitorSender>,
+    pub push_sender: Option<PushSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
 }
 
@@ -90,7 +94,7 @@ impl Message {
             commands: Commands::Single(command),
             value_sender: Some(value_sender),
             pub_sub_senders: None,
-            monitor_sender: None,
+            push_sender: None,
             retry_reasons: None,
         }
     }
@@ -100,7 +104,7 @@ impl Message {
             commands: Commands::Single(command),
             value_sender: None,
             pub_sub_senders: None,
-            monitor_sender: None,
+            push_sender: None,
             retry_reasons: None,
         }
     }
@@ -110,7 +114,7 @@ impl Message {
             commands: Commands::Batch(commands),
             value_sender: Some(value_sender),
             pub_sub_senders: None,
-            monitor_sender: None,
+            push_sender: None,
             retry_reasons: None,
         }
     }
@@ -124,7 +128,7 @@ impl Message {
             commands: Commands::Single(command),
             value_sender: Some(value_sender),
             pub_sub_senders: Some(pub_sub_senders),
-            monitor_sender: None,
+            push_sender: None,
             retry_reasons: None,
         }
     }
@@ -132,13 +136,23 @@ impl Message {
     pub fn monitor(
         command: Command,
         value_sender: ValueSender,
-        monitor_sender: MonitorSender,
+        push_sender: PushSender,
     ) -> Self {
         Message {
             commands: Commands::Single(command),
             value_sender: Some(value_sender),
             pub_sub_senders: None,
-            monitor_sender: Some(monitor_sender),
+            push_sender: Some(push_sender),
+            retry_reasons: None,
+        }
+    }
+
+    pub fn client_tracking_invalidation(push_sender: PushSender) -> Self {
+        Message {
+            commands: Commands::None,
+            value_sender: None,
+            pub_sub_senders: None,
+            push_sender: Some(push_sender),
             retry_reasons: None,
         }
     }

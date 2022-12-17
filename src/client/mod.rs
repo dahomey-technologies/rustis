@@ -6,7 +6,7 @@ Defines types related to the clients structs and their dependencies:
 
 The central object in **rustis** is the [`Client`](Client).
 
-I will allow you to connect to the Redis server, to send command requests 
+I will allow you to connect to the Redis server, to send command requests
 and to receive command response and push messages.
 
 The [`Client`](Client) struct can be used in 3 different modes
@@ -51,17 +51,17 @@ underlying connections. It should be the prefered mode for Web applications.
 
 ### Limitations
 Beware that using [`Client`](Client) in a multiplexer mode, by cloning an instance across multiple threads,
-is not suitable for using [blocking commands](crate::commands::BlockingCommands) 
+is not suitable for using [blocking commands](crate::commands::BlockingCommands)
 because they monopolize the whole connection which cannot be shared anymore.
 
-Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible 
+Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
 with the multiplexer mode is either. Indeed, it's the shared connection that will be watched, not only
 the [`Client`](Client) instance through which the `watch`](crate::commands::TransactionCommands::watch) command is sent.
 
 ### Managing multiplexed subscriptions
 
-Even if the [`subscribe`][crate::commands::PubSubCommands::subscribe] monopolize the whole connection, 
-it is still possible to use it in a multiplexed [`Client`](Client). 
+Even if the [`subscribe`][crate::commands::PubSubCommands::subscribe] monopolize the whole connection,
+it is still possible to use it in a multiplexed [`Client`](Client).
 
 Indeed the subscribing mode of Redis still allows to share the connection between multiple clients,
 at the only condition that this connection is dedicated to subscriptions.
@@ -199,13 +199,13 @@ of the struct [`Config`](Config) or its dependencies:
    a timeout error will be thrown. If set to 0, no timeout is apply (default 0).
 * [`auto_resubscribe`](Config::auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
  resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
-* [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the 
+* [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the
   [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
-* [`connection_name`](Config::connection_name) - Set the name of the connection to make 
+* [`connection_name`](Config::connection_name) - Set the name of the connection to make
   it easier to identity the connection in client list.
 * [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
-* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
+* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after
   failing before connecting to the next Sentinel instance (default 250ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
@@ -438,9 +438,10 @@ async fn main() -> Result<()> {
 ```
 */
 
-mod client_state;
 #[allow(clippy::module_inception)]
 mod client;
+mod client_state;
+mod client_tracking_invalidation_stream;
 mod config;
 mod message;
 mod monitor_stream;
@@ -452,8 +453,9 @@ mod prepared_command;
 mod pub_sub_stream;
 mod transaction;
 
-pub use client_state::*;
 pub use client::*;
+pub use client_state::*;
+pub(crate) use client_tracking_invalidation_stream::*;
 pub use config::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;

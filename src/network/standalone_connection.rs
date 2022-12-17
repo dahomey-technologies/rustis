@@ -1,6 +1,6 @@
 use crate::{
     client::{Config, PreparedCommand},
-    commands::{ClusterCommands, ConnectionCommands, SentinelCommands, ServerCommands},
+    commands::{ClusterCommands, ConnectionCommands, SentinelCommands, ServerCommands, HelloOptions},
     resp::{Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
     tcp_connect, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
 };
@@ -166,21 +166,27 @@ impl StandaloneConnection {
     }
 
     async fn post_connect(&mut self) -> Result<()> {
+        // RESP3
+        let mut hello_options = HelloOptions::new(3);
+
         // authentication
         if let Some(ref password) = self.config.password {
-            self.auth(self.config.username.clone(), password.clone())
-                .await?;
-        }
-
-        // select database
-        if self.config.database != 0 {
-            self.select(self.config.database).await?;
+            hello_options = hello_options.auth(match &self.config.username {
+                Some(username) => username.clone(),
+                None => "default".to_owned(),
+            }, password.clone());
         }
 
         // connection name
         if !self.config.connection_name.is_empty() {
-            self.client_setname(self.config.connection_name.clone())
-                .await?;
+            hello_options = hello_options.set_name(self.config.connection_name.clone());
+        }
+
+        self.hello(hello_options).await?;
+
+        // select database
+        if self.config.database != 0 {
+            self.select(self.config.database).await?;
         }
 
         Ok(())

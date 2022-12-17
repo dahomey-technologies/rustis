@@ -247,7 +247,7 @@ fn set() -> Result<()> {
 
     let result = decode_value("~2\r\n:12\r\n:13\r\n")?; // [12, 13]
     assert_eq!(
-        Some(Value::Array(vec![Value::Integer(12), Value::Integer(13)])),
+        Some(Value::Set(vec![Value::Integer(12), Value::Integer(13)])),
         result
     );
 
@@ -274,7 +274,7 @@ fn set() -> Result<()> {
 
     let result = decode_value("~2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello, b"world"]
     assert_eq!(
-        Some(Value::Array(vec![
+        Some(Value::Set(vec![
             Value::BulkString(b"hello".to_vec()),
             Value::BulkString(b"world".to_vec())
         ])),

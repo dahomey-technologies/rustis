@@ -22,6 +22,8 @@ pub enum Value {
     /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Map type
     Map(Vec<(Value, Value)>),
     /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Push
+    Set(Vec<Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Set reply
     Push(Vec<Value>),
     /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
     Error(RedisError),
@@ -69,6 +71,13 @@ impl ToString for Value {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Value::Set(v) => format!(
+                "[{}]",
+                v.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Value::Map(v) => format!(
                 "[{}]",
                 v.iter()
@@ -101,6 +110,7 @@ impl fmt::Debug for Value {
                 .finish(),
             Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
             Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
+            Self::Set(arg0) => f.debug_tuple("Set").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
             Self::Nil => write!(f, "Nil"),

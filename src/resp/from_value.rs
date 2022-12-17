@@ -79,6 +79,7 @@ where
         match value {
             Value::Nil => Ok(Vec::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Set(v) => v.into_value_iter().collect(),
             Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(vec![value.into()?]),
@@ -95,6 +96,7 @@ where
         match value {
             Value::Nil => Ok(SmallVec::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Set(v) => v.into_value_iter().collect(),
             Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(smallvec![value.into()?]),
@@ -110,6 +112,7 @@ where
         match value {
             Value::Nil => Ok(HashSet::default()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Set(v) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => {
                 let mut hash_set = HashSet::default();
@@ -128,6 +131,7 @@ where
         match value {
             Value::Nil => Ok(BTreeSet::new()),
             Value::Array(v) => v.into_value_iter().collect(),
+            Value::Set(v) => v.into_value_iter().collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(BTreeSet::from([value.into()?])),
         }

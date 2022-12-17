@@ -45,7 +45,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
             None => (Value::Nil, pos),
         })),
         b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Array(v), pos),
+            Some(v) => (Value::Set(v), pos),
             None => (Value::Nil, pos),
         })),
         b':' => Ok(decode_number::<i64>(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),

@@ -1,3 +1,5 @@
+use std::collections::{HashMap};
+
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
@@ -78,10 +80,10 @@ fn boolean() -> Result<()> {
     log_try_init();
 
     let result = decode_value("#f\r\n")?; // false
-    assert_eq!(Some(Value::Integer(0)), result);
+    assert_eq!(Some(Value::Boolean(false)), result);
 
     let result = decode_value("#t\r\n")?; // true
-    assert_eq!(Some(Value::Integer(1)), result);
+    assert_eq!(Some(Value::Boolean(true)), result);
 
     let result = decode_value("#f\r")?;
     assert_eq!(None, result);
@@ -210,13 +212,13 @@ fn map() -> Result<()> {
 
     let result = decode_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
-        Some(Value::Map(vec![
+        Some(Value::Map(HashMap::from([
             (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
             (
                 Value::BulkString(b"name".to_vec()),
                 Value::BulkString(b"Mike".to_vec())
             )
-        ])),
+        ]))),
         result
     );
 

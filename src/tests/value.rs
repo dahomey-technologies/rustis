@@ -1,11 +1,11 @@
 use crate::{
     commands::{GenericCommands, SetCommands},
     resp::Value,
-    tests::get_test_client,
-    Result,
+    tests::{get_test_client, log_try_init},
+    RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -85,4 +85,29 @@ fn tuple() -> Result<()> {
     assert_eq!(("third".to_owned(), "fourth".to_owned()), result[1]);
 
     Ok(())
+}
+
+#[test]
+fn display() {
+    log_try_init();
+
+    log::debug!(
+        "{}",
+        Value::Array(vec![
+            Value::Integer(12),
+            Value::Double(12.12),
+            Value::SimpleString("OK".to_owned()),
+            Value::BulkString(b"mystring".to_vec()),
+            Value::Boolean(true),
+            Value::Error(RedisError {
+                kind: RedisErrorKind::Err,
+                description: "MyError".to_owned()
+            }),
+            Value::Nil,
+            Value::Map(HashMap::from([
+                (Value::BulkString(b"field1".to_vec()), Value::Integer(12)),
+                (Value::BulkString(b"field2".to_vec()), Value::Double(12.12))
+            ]))
+        ])
+    );
 }

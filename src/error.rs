@@ -121,7 +121,7 @@ impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
 }
 
 /// Redis server error kind
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RedisErrorKind {
     Ask {
         hash_slot: u16,
@@ -255,7 +255,7 @@ impl Display for RedisErrorKind {
 }
 
 /// Error issued by the Redis server
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RedisError {
     pub kind: RedisErrorKind,
     pub description: String,

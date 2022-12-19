@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     commands::{GenericCommands, HScanOptions, HashCommands},
     tests::get_test_client,
@@ -77,10 +79,10 @@ async fn hget_all() -> Result<()> {
     client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
-    let result: Vec<(String, String)> = client.hgetall("key").await?;
+    let result: HashMap<String, String> = client.hgetall("key").await?;
     assert_eq!(2, result.len());
-    assert_eq!(("field1".to_owned(), "Hello".to_owned()), result[0]);
-    assert_eq!(("field2".to_owned(), "World".to_owned()), result[1]);
+    assert_eq!(Some(&"Hello".to_owned()), result.get("field1"));
+    assert_eq!(Some(&"World".to_owned()), result.get("field2"));
 
     Ok(())
 }

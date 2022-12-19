@@ -1,7 +1,7 @@
 use crate::{resp::Value, Error, RedisError, Result};
 use bytes::{Buf, BytesMut};
 use log::trace;
-use std::str::{self, FromStr};
+use std::{str::{self, FromStr}, collections::{HashMap}};
 use tokio_util::codec::Decoder;
 
 pub(crate) struct ValueDecoder;
@@ -57,7 +57,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
             .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
             .transpose(),
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::Nil, pos))),
-        b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
+        b'#' => Ok(decode_boolean(buf, idx)?.map(|(b, pos)| (Value::Boolean(b), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
             Some(bs) => (Value::BulkString(bs), pos),
             None => (Value::Nil, pos),
@@ -126,12 +126,12 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Val
 }
 
 #[allow(clippy::complexity)]
-fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<(Value, Value)>>, usize)>> {
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<HashMap<Value, Value>>, usize)>> {
     match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((None, pos))),
         Some((len, mut pos)) => {
-            let mut values = Vec::with_capacity(len as usize);
+            let mut values = HashMap::with_capacity(len as usize);
             for _ in 0..len {
                 let key = match decode(buf, pos)? {
                     None => return Ok(None),
@@ -149,7 +149,7 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<(Valu
                     }
                 };
 
-                values.push((key, value));
+                values.insert(key, value);
             }
             Ok(Some((Some(values), pos)))
         }
@@ -187,11 +187,11 @@ fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
     }
 }
 
-fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>> {
+fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(bool, usize)>> {
     match decode_line(buf, idx)? {
         Some((slice, pos)) if slice.len() == 1 => match slice[0] {
-            b't' => Ok(Some((1, pos))),
-            b'f' => Ok(Some((0, pos))),
+            b't' => Ok(Some((true, pos))),
+            b'f' => Ok(Some((false, pos))),
             _ => Err(Error::Client("Cannot parse boolean".to_owned())),
         },
         None => Ok(None),

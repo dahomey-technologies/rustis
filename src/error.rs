@@ -14,7 +14,7 @@ use std::{
 /// 
 /// Gives a reason to retry sending a command to the Redis Server
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RetryReason {
     /// Received an ASK error from the Redis Server
     Ask {
@@ -29,7 +29,7 @@ pub enum RetryReason {
 }
 
 /// All error kinds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     /// Raised if an error occurs within the driver
     Client(String),
@@ -42,7 +42,7 @@ pub enum Error {
     /// Error returned by the Redis sercer
     Redis(RedisError),
     /// IO error when connecting the Redis server
-    IO(std::io::Error),
+    IO(String),
     #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
     #[cfg(feature = "tls")]
     /// Raised by the TLS library
@@ -62,7 +62,7 @@ impl std::fmt::Display for Error {
             Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
             Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
             Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
-            Error::IO(e) => f.write_fmt(format_args!("IO erro: {}", e)),
+            Error::IO(e) => f.write_fmt(format_args!("IO error: {}", e)),
             #[cfg(feature = "tls")]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
             Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
@@ -73,7 +73,7 @@ impl std::fmt::Display for Error {
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error::IO(e)
+        Error::IO(format!("[{}] {}", e.kind(), e))
     }
 }
 

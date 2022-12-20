@@ -205,7 +205,8 @@ of the struct [`Config`](Config) or its dependencies:
   it easier to identity the connection in client list.
 * [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
-* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after
+* [`max_command_attempts`](Config::max_command_attempts) - Maximum number of retry attempts to send a command to the Redis server.
+* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
   failing before connecting to the next Sentinel instance (default 250ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password

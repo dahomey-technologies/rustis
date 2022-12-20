@@ -13,6 +13,7 @@ const DEFAULT_AUTO_RESUBSCRTBE: bool =  true;
 const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
+const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 3;
 
 type Uri<'a> = (
     &'a str,
@@ -77,11 +78,12 @@ pub struct Config {
     /// 
     /// See [`TcpKeepAlive::with_time`](https://docs.rs/socket2/latest/socket2/struct.TcpKeepalive.html#method.with_time)
     pub keep_alive: Option<Duration>,
-
     /// Enable/disable the use of Nagle's algorithm (default `true`)
     /// 
     /// See [`TcpStream::set_nodelay`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html#method.set_nodelay)    
     pub no_delay: bool,
+    /// Maximum number of retry attempts to send a command to the Redis server.
+    pub max_command_attempts: usize,
 }
 
 impl Default for Config {
@@ -100,6 +102,7 @@ impl Default for Config {
             connection_name: String::from(""),
             keep_alive: DEFAULT_KEEP_ALIVE,
             no_delay: DEFAULT_NO_DELAY,
+            max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
         }
     }
 }
@@ -289,6 +292,12 @@ impl Config {
             if let Some(no_delay) = query.remove("no_delay") {
                 if let Ok(no_delay) = no_delay.parse::<bool>() {
                     config.no_delay = no_delay;
+                }
+            }
+
+            if let Some(max_command_attempts) = query.remove("max_command_attempts") {
+                if let Ok(max_command_attempts) = max_command_attempts.parse::<usize>() {
+                    config.max_command_attempts = max_command_attempts;
                 }
             }
         }
@@ -546,6 +555,16 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("no_delay={}", self.no_delay));
+        }
+
+        if self.max_command_attempts != DEFAULT_MAX_COMMAND_ATTEMPTS {
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("max_command_attempts={}", self.max_command_attempts));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

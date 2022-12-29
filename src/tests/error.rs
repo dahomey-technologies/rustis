@@ -8,7 +8,7 @@ use std::{str::FromStr};
 async fn unknown_command() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    let result = client.send(cmd("UNKNOWN").arg("arg")).await;
+    let result = client.send(cmd("UNKNOWN").arg("arg"), false).await;
 
     assert!(matches!(
         result,
@@ -99,7 +99,7 @@ fn ask_error() {
 //                     let i = rand::thread_rng().gen_range(1..1000);
 //                     let key = format!("key{i}");
 //                     println!("getting key: {key:?}");
-//                     let result: Result<String> = client.get(key.clone()).await;
+//                     let result: Result<String> = client.get(key.clone()).retry_on_error().await;
 //                     println!("got key: {key:?}, result: {result:?}");
 //                     if let Ok(value) = result {
 //                         assert_eq!(format!("value{i}"), value);
@@ -135,6 +135,7 @@ fn ask_error() {
 //                     let i = rand::thread_rng().gen_range(1..1000);
 //                     let result = client
 //                         .set(format!("key{i}"), format!("value{i}"))
+//                         .retry_on_error()
 //                         .forget();
 //                     println!("test key: key{i}, value: value{i}, result:{result:?}");
 //                 }
@@ -151,3 +152,24 @@ fn ask_error() {
 
 //     Ok(())
 // }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn kill_on_write() -> Result<()> {
+    let mut client = get_test_client().await?;
+
+    // 3 reconnections
+    let result = client.send(cmd("SET").arg("key1").arg("value1").kill_connection_on_write(3), true).await;
+    assert!(result.is_err());
+
+    // 2 reconnections
+    let result = client.send(cmd("SET").arg("key2").arg("value2").kill_connection_on_write(2), true).await;
+    assert!(result.is_ok());
+
+    // 2 reconnections / no retry
+    let result = client.send(cmd("SET").arg("key3").arg("value3").kill_connection_on_write(2), false).await;
+    assert!(result.is_err());
+
+    Ok(())
+}

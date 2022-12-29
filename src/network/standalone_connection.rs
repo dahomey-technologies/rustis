@@ -92,7 +92,7 @@ impl StandaloneConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &Command>,
+        commands: impl Iterator<Item = &mut Command>,
         _retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.buffer.clear();
@@ -103,6 +103,9 @@ impl StandaloneConnection {
             Streams::TcpTls(_, framed_write) => framed_write.encoder_mut(),
         };
 
+        #[cfg(debug_assertions)]
+        let mut kill_connection = false;
+
         for command in commands {
             if log_enabled!(Level::Debug) {
                 if self.config.connection_name.is_empty() {
@@ -111,7 +114,23 @@ impl StandaloneConnection {
                     debug!("[{}] Sending {command:?}", self.config.connection_name);
                 }
             }
+
+            #[cfg(debug_assertions)]
+            if command.kill_connection_on_write > 0 {
+                kill_connection = true;
+                command.kill_connection_on_write -= 1;
+            }
+
             command_encoder.encode(command, &mut self.buffer)?;
+        }
+
+        #[cfg(debug_assertions)]
+        if kill_connection {
+            let client_id = self.client_id().await?;
+            let mut config = self.config.clone();
+            config.connection_name = "killer".to_owned();
+            let mut connection = StandaloneConnection::connect(&self.host, self.port, &config).await?;
+            connection.client_kill(crate::commands::ClientKillOptions::default().id(client_id)).await?;
         }
 
         match &mut self.streams {

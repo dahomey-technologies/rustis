@@ -140,6 +140,7 @@ impl Client {
     ///
     /// # Arguments
     /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
+    /// * `retry_on_error` - retry to send the command on network error.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -153,7 +154,7 @@ impl Client {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///
     ///     let values: Vec<String> = client
-    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"))
+    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), false)
     ///         .await?
     ///         .into()?;
     ///     println!("{:?}", values);
@@ -163,9 +164,9 @@ impl Client {
     /// ```
 
     #[inline]
-    pub async fn send(&mut self, command: Command) -> Result<Value> {
+    pub async fn send(&mut self, command: Command, retry_on_error: bool) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::single(command, value_sender);
+        let message = Message::single(command, value_sender, retry_on_error);
         self.send_message(message)?;
         let value = if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, value_receiver).await??
@@ -176,12 +177,16 @@ impl Client {
     }
 
     /// Send command to the Redis server and forget its response.
+    /// 
+    /// # Arguments
+    /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
+    /// * `retry_on_error` - retry to send the command on network error.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub fn send_and_forget(&mut self, command: Command) -> Result<()> {
-        let message = Message::single_forget(command);
+    pub fn send_and_forget(&mut self, command: Command, retry_on_error: bool) -> Result<()> {
+        let message = Message::single_forget(command, retry_on_error);
         self.send_message(message)?;
         Ok(())
     }
@@ -190,13 +195,14 @@ impl Client {
     ///
     /// # Arguments
     /// * `commands` - batch of generic [`Command`](crate::resp::Command)s meant to be sent to the Redis server.
+    /// * `retry_on_error` - retry to send the command batch on network error.
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub async fn send_batch(&mut self, commands: Vec<Command>) -> Result<Value> {
+    pub async fn send_batch(&mut self, commands: Vec<Command>, retry_on_error: bool) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::batch(commands, value_sender);
+        let message = Message::batch(commands, value_sender, retry_on_error);
         self.send_message(message)?;
         let value = if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, value_receiver).await??
@@ -332,7 +338,7 @@ where
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn forget(self) -> Result<()> {
-        self.executor.send_and_forget(self.command)
+        self.executor.send_and_forget(self.command, self.retry_on_error)
     }
 }
 
@@ -348,15 +354,15 @@ where
             if self.keep_command_for_result {
                 let command_for_result = self.command.clone();
                 self.executor
-                    .send(self.command)
+                    .send(self.command, self.retry_on_error)
                     .await?
                     .into_with_command(&command_for_result)
             } else if let Some(post_process) = self.post_process {
                 let command_for_result = self.command.clone();
-                let result = self.executor.send(self.command).await?;
+                let result = self.executor.send(self.command, self.retry_on_error).await?;
                 post_process(result, command_for_result, self.executor).await
             } else {
-                self.executor.send(self.command).await?.into()
+                self.executor.send(self.command, self.retry_on_error).await?.into()
             }
         })
     }

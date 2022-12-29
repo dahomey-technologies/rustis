@@ -44,14 +44,14 @@ enum SubcriptionType {
 
 struct MessageToSend {
     pub message: Message,
-    pub retry_attempts: usize,
+    pub attempts: usize,
 }
 
 impl MessageToSend {
     pub fn new(message: Message) -> Self {
         Self {
             message,
-            retry_attempts: 1,
+            attempts: 0,
         }
     }
 }
@@ -59,15 +59,15 @@ impl MessageToSend {
 struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
-    pub retry_attempts: usize,
+    pub attempts: usize,
 }
 
 impl MessageToReceive {
-    pub fn new(message: Message, num_commands: usize, retry_attemps: usize) -> Self {
+    pub fn new(message: Message, num_commands: usize, attempts: usize) -> Self {
         Self {
             message,
             num_commands,
-            retry_attempts: retry_attemps,
+            attempts,
         }
     }
 }
@@ -270,13 +270,13 @@ impl NetworkHandler {
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&Command; 10]>::new();
+        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::new();
         let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
         for message_to_send in self.messages_to_send.iter_mut() {
             let msg = &mut message_to_send.message;
-            let commands = &msg.commands;
+            let commands = &mut msg.commands;
             let mut num_commands_to_receive: usize = 0;
 
             for command in commands.into_iter() {
@@ -326,7 +326,7 @@ impl NetworkHandler {
                     self.messages_to_receive.push_back(MessageToReceive::new(
                         msg.message,
                         commands_to_receive[idx],
-                        msg.retry_attempts,
+                        msg.attempts,
                     ));
                 }
                 idx += 1;
@@ -641,72 +641,77 @@ impl NetworkHandler {
     }
 
     async fn reconnect(&mut self) {
+        debug!("reconnecting...");
         let old_status = self.status;
         self.status = Status::Disconnected;
 
+        for message_to_receive in &mut self.messages_to_receive {
+            if message_to_receive.message.retry_on_error {
+                message_to_receive.attempts += 1;
+                debug!(
+                    "{:?}: attempt {}",
+                    message_to_receive.message.commands, message_to_receive.attempts
+                );
+            }
+        }
+
+        while let Some(message_to_receive) = self.messages_to_receive.front() {
+            if !message_to_receive.message.retry_on_error || message_to_receive.attempts >= self.max_command_attempts {
+                debug!(
+                    "{:?}, max attempts reached",
+                    message_to_receive.message.commands
+                );
+                if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
+                    if let Some(value_sender) = message_to_receive.message.value_sender {
+                        if let Err(e) = value_sender
+                            .send(Err(Error::Client("Disconnected from server".to_string())))
+                        {
+                            warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        for message_to_send in &mut self.messages_to_send {
+            if message_to_send.message.retry_on_error {
+                message_to_send.attempts += 1;
+                debug!(
+                    "{:?}: attempt {}",
+                    message_to_send.message.commands, message_to_send.attempts
+                );
+            }
+        }
+
+        while let Some(message_to_send) = self.messages_to_send.front() {
+            if !message_to_send.message.retry_on_error || message_to_send.attempts >= self.max_command_attempts {
+                debug!(
+                    "{:?}, max attempts reached",
+                    message_to_send.message.commands
+                );
+                if let Some(message_to_send) = self.messages_to_send.pop_front() {
+                    if let Some(value_sender) = message_to_send.message.value_sender {
+                        if let Err(e) = value_sender
+                            .send(Err(Error::Client("Disconnected from server".to_string())))
+                        {
+                            warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
         if let Err(e) = self.connection.reconnect().await {
-            while let Some(message_to_receive) = self.messages_to_receive.front() {
-                if message_to_receive.retry_attempts >= self.max_command_attempts {
-                    debug!(
-                        "{:?}, max attempts reached",
-                        message_to_receive.message.commands
-                    );
-                    if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                        if let Some(value_sender) = message_to_receive.message.value_sender {
-                            if let Err(e) = value_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                    "Cannot send value to caller because receiver is not there anymore: {:?}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            for message_to_receive in &mut self.messages_to_receive {
-                message_to_receive.retry_attempts += 1;
-                debug!(
-                    "{:?}, scheduling attempt {}",
-                    message_to_receive.message.commands, message_to_receive.retry_attempts
-                );
-            }
-
-            while let Some(message_to_send) = self.messages_to_send.front() {
-                if message_to_send.retry_attempts >= self.max_command_attempts {
-                    debug!(
-                        "{:?}, max attempts reached",
-                        message_to_send.message.commands
-                    );
-                    if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                        if let Some(value_sender) = message_to_send.message.value_sender {
-                            if let Err(e) = value_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                    "Cannot send value to caller because receiver is not there anymore: {:?}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            for message_to_send in &mut self.messages_to_send {
-                message_to_send.retry_attempts += 1;
-                debug!(
-                    "{:?}, scheduling attempt {}",
-                    message_to_send.message.commands, message_to_send.retry_attempts
-                );
-            }
-
             error!("Failed to reconnect: {:?}", e);
             return;
         }
@@ -730,13 +735,9 @@ impl NetworkHandler {
         }
 
         while let Some(message_to_receive) = self.messages_to_receive.pop_back() {
-            debug!(
-                "resending {:?}, attempt {}",
-                message_to_receive.message.commands, message_to_receive.retry_attempts
-            );
             self.messages_to_send.push_front(MessageToSend {
                 message: message_to_receive.message,
-                retry_attempts: message_to_receive.retry_attempts,
+                attempts: message_to_receive.attempts,
             });
         }
 

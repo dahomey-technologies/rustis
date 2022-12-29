@@ -38,7 +38,7 @@ impl Connection {
 
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &Command>,
+        commands: impl Iterator<Item = &mut Command>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         match self {

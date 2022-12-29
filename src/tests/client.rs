@@ -18,7 +18,7 @@ use serial_test::serial;
 async fn send() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    client.send(cmd("PING")).await?;
+    client.send(cmd("PING"), false).await?;
 
     client.close().await?;
 
@@ -31,8 +31,8 @@ async fn send() -> Result<()> {
 async fn forget() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    client.send_and_forget(cmd("PING"))?;
-    client.send(cmd("PING")).await?;
+    client.send_and_forget(cmd("PING"), false)?;
+    client.send(cmd("PING"), false).await?;
 
     client.close().await?;
 

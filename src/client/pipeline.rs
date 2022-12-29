@@ -27,6 +27,7 @@ pub struct Pipeline {
     client: Client,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
+    retry_on_error: bool,
 }
 
 impl Pipeline {
@@ -35,7 +36,13 @@ impl Pipeline {
             client,
             commands: Vec::new(),
             forget_flags: Vec::new(),
+            retry_on_error: false,
         }
+    }
+
+    /// Set a flag to retry sending the command on network error (default `false`).
+    pub fn retry_on_error(&mut self) {
+        self.retry_on_error = true;
     }
 
     /// Queue a command
@@ -63,7 +70,7 @@ impl Pipeline {
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, Pipeline, BatchPreparedCommand}, 
+    ///     client::{Client, Pipeline, BatchPreparedCommand},
     ///     commands::StringCommands,
     ///     resp::{cmd, Value}, Result,
     /// };
@@ -89,7 +96,7 @@ impl Pipeline {
     /// ```    
     pub async fn execute<T: FromValue>(mut self) -> Result<T> {
         let num_commands = self.commands.len();
-        let result = self.client.send_batch(self.commands).await?;
+        let result = self.client.send_batch(self.commands, self.retry_on_error).await?;
 
         match result {
             Value::Array(results) if num_commands > 1 => {

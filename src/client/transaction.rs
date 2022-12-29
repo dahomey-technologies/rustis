@@ -27,6 +27,7 @@ pub struct Transaction {
     client: Client,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
+    retry_on_error: bool,
 }
 
 impl Transaction {
@@ -35,10 +36,16 @@ impl Transaction {
             client,
             commands: Vec::new(),
             forget_flags: Vec::new(),
+            retry_on_error: false,
         };
 
         transaction.queue(cmd("MULTI"));
         transaction
+    }
+
+    /// Set a flag to retry sending the command on network error (default `false`).
+    pub fn retry_on_error(&mut self) {
+        self.retry_on_error = true;
     }
 
     /// Queue a command into the transaction.
@@ -92,7 +99,7 @@ impl Transaction {
 
         let num_commands = self.commands.len();
 
-        let values: Vec<Value> = self.client.send_batch(self.commands).await?.into()?;
+        let values: Vec<Value> = self.client.send_batch(self.commands, self.retry_on_error).await?.into()?;
         let mut iter = values.into_iter();
 
         // MULTI + QUEUED commands

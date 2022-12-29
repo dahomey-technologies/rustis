@@ -28,6 +28,8 @@ where
     /// Post process functor te be called instead of 
     /// the [`FromValue`](crate::resp::FromValue) trait.
     pub post_process: Option<Box<PostProcessFunc<'a, R>>>,
+    /// Flag to retry sending the command on network error (default `false`).
+    pub retry_on_error: bool,
 }
 
 impl<'a, T, R> PreparedCommand<'a, T, R>
@@ -43,6 +45,7 @@ where
             command,
             keep_command_for_result: false,
             post_process: None,
+            retry_on_error: false,
         }
     }
 
@@ -55,6 +58,12 @@ where
     /// Set the functor [`self.post_process`]
     pub fn post_process(mut self, post_process: Box<PostProcessFunc<'a, R>>) -> Self {
         self.post_process = Some(post_process);
+        self
+    }
+
+    /// Set a flag to retry sending the command on network error (default `false`).
+    pub fn retry_on_error(mut self) -> Self {
+        self.retry_on_error = true;
         self
     }
 

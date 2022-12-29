@@ -46,6 +46,19 @@ impl<'a> IntoIterator for &'a Commands {
     }
 }
 
+impl<'a> IntoIterator for &'a mut Commands {
+    type Item = &'a mut Command;
+    type IntoIter = CommandsIteratorMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Commands::None => CommandsIteratorMut::Single(None),
+            Commands::Single(command) => CommandsIteratorMut::Single(Some(command)),
+            Commands::Batch(commands) => CommandsIteratorMut::Batch(commands.iter_mut()),
+        }
+    }
+}
+
 #[allow(clippy::large_enum_variant)] 
 pub enum CommandsIterator {
     Single(Option<Command>),
@@ -79,6 +92,22 @@ impl<'a> Iterator for RefCommandsIterator<'a> {
     }
 }
 
+pub enum CommandsIteratorMut<'a> {
+    Single(Option<&'a mut Command>),
+    Batch(std::slice::IterMut<'a, Command>),
+}
+
+impl<'a> Iterator for CommandsIteratorMut<'a> {
+    type Item = &'a mut Command;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Single(command) => command.take(),
+            Self::Batch(iter) => iter.next(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Message {
     pub commands: Commands,
@@ -86,36 +115,40 @@ pub(crate) struct Message {
     pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
     pub push_sender: Option<PushSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
+    pub retry_on_error: bool
 }
 
 impl Message {
-    pub fn single(command: Command, value_sender: ValueSender) -> Self {
+    pub fn single(command: Command, value_sender: ValueSender, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command),
             value_sender: Some(value_sender),
             pub_sub_senders: None,
             push_sender: None,
             retry_reasons: None,
+            retry_on_error,
         }
     }
 
-    pub fn single_forget(command: Command) -> Self {
+    pub fn single_forget(command: Command, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command),
             value_sender: None,
             pub_sub_senders: None,
             push_sender: None,
             retry_reasons: None,
+            retry_on_error,
         }
     }
 
-    pub fn batch(commands: Vec<Command>, value_sender: ValueSender) -> Self {
+    pub fn batch(commands: Vec<Command>, value_sender: ValueSender, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Batch(commands),
             value_sender: Some(value_sender),
             pub_sub_senders: None,
             push_sender: None,
             retry_reasons: None,
+            retry_on_error,
         }
     }
 
@@ -130,6 +163,7 @@ impl Message {
             pub_sub_senders: Some(pub_sub_senders),
             push_sender: None,
             retry_reasons: None,
+            retry_on_error: true,
         }
     }
 
@@ -144,6 +178,7 @@ impl Message {
             pub_sub_senders: None,
             push_sender: Some(push_sender),
             retry_reasons: None,
+            retry_on_error: true,
         }
     }
 
@@ -154,6 +189,7 @@ impl Message {
             pub_sub_senders: None,
             push_sender: Some(push_sender),
             retry_reasons: None,
+            retry_on_error: false,
         }
     }
 }

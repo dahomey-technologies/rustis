@@ -38,9 +38,10 @@ pub struct Config {
     /// An optional password for authentication.
     ///
     /// The password could be either coupled with an ACL username either used alone.
-    /// # See
-    /// *[`ACL`](https://redis.io/docs/management/security/acl/)
-    /// * [`Authentication](https://redis.io/docs/management/security/#authentication)
+    /// 
+    /// See:
+    /// * [`ACL`](https://redis.io/docs/management/security/acl/)
+    /// * [`Authentication`](https://redis.io/docs/management/security/#authentication)
     pub password: Option<String>,
     /// The default database for this connection.
     ///

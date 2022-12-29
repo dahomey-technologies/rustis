@@ -642,9 +642,9 @@ async fn latency_graph() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -692,9 +692,9 @@ async fn latency_history() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -715,9 +715,9 @@ async fn latency_latest() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), false).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
     assert!(!report.is_empty());

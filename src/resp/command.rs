@@ -18,6 +18,7 @@ pub struct Command {
     pub name: &'static str,
     /// Collection of arguments of the command.
     pub args: CommandArgs,
+    #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: usize,
 }

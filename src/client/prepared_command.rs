@@ -28,8 +28,8 @@ where
     /// Post process functor te be called instead of 
     /// the [`FromValue`](crate::resp::FromValue) trait.
     pub post_process: Option<Box<PostProcessFunc<'a, R>>>,
-    /// Flag to retry sending the command on network error (default `false`).
-    pub retry_on_error: bool,
+    /// Flag to retry sending the command on network error.
+    pub retry_on_error: Option<bool>,
 }
 
 impl<'a, T, R> PreparedCommand<'a, T, R>
@@ -45,7 +45,7 @@ where
             command,
             keep_command_for_result: false,
             post_process: None,
-            retry_on_error: false,
+            retry_on_error: None,
         }
     }
 
@@ -61,9 +61,11 @@ where
         self
     }
 
-    /// Set a flag to retry sending the command on network error (default `false`).
-    pub fn retry_on_error(mut self) -> Self {
-        self.retry_on_error = true;
+    /// Set a flag to override default `retry_on_error` behavior.
+    /// 
+    /// See [Config::retry_on_error](crate::client::Config::retry_on_error)
+    pub fn retry_on_error(mut self, retry_on_error: bool) -> Self {
+        self.retry_on_error = Some(retry_on_error);
         self
     }
 

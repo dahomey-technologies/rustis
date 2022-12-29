@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
 
     let values: Vec<String> = client
-        .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), false)
+        .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), None)
         .await?
         .into()?;
     println!("{:?}", values);

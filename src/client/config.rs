@@ -14,6 +14,7 @@ const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
 const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 3;
+const DEFAULT_RETRY_ON_ERROR: bool = false;
 
 type Uri<'a> = (
     &'a str,
@@ -84,6 +85,17 @@ pub struct Config {
     pub no_delay: bool,
     /// Maximum number of retry attempts to send a command to the Redis server.
     pub max_command_attempts: usize,
+    /// Defines the default strategy for retries on network error (default `false`). 
+    /// 
+    /// This strategy can be overriden for each command/batch 
+    /// of commands in the following functions:
+    /// * [`PreparedCommand::retry_on_error`](crate::client::PreparedCommand::retry_on_error)
+    /// * [`Pipeline::retry_on_error`](crate::client::Pipeline::retry_on_error)
+    /// * [`Transaction::retry_on_error`](crate::client::Transaction::retry_on_error)
+    /// * [`Client::send`](crate::client::Client::send)
+    /// * [`Client::send_and_forget`](crate::client::Client::send_and_forget)
+    /// * [`Client::send_batch`](crate::client::Client::send_batch)
+    pub retry_on_error: bool,
 }
 
 impl Default for Config {
@@ -103,6 +115,7 @@ impl Default for Config {
             keep_alive: DEFAULT_KEEP_ALIVE,
             no_delay: DEFAULT_NO_DELAY,
             max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
+            retry_on_error: DEFAULT_RETRY_ON_ERROR,
         }
     }
 }
@@ -298,6 +311,12 @@ impl Config {
             if let Some(max_command_attempts) = query.remove("max_command_attempts") {
                 if let Ok(max_command_attempts) = max_command_attempts.parse::<usize>() {
                     config.max_command_attempts = max_command_attempts;
+                }
+            }
+
+            if let Some(retry_on_error) = query.remove("retry_on_error") {
+                if let Ok(retry_on_error) = retry_on_error.parse::<bool>() {
+                    config.retry_on_error = retry_on_error;
                 }
             }
         }
@@ -565,6 +584,16 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("max_command_attempts={}", self.max_command_attempts));
+        }
+
+        if self.retry_on_error != DEFAULT_RETRY_ON_ERROR{
+            if !query_separator {
+                query_separator = true;
+                s.push('?');
+            } else {
+                s.push('&');
+            }
+            s.push_str(&format!("retry_on_error={}", self.retry_on_error));
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {

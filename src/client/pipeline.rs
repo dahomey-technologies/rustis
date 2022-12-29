@@ -27,7 +27,7 @@ pub struct Pipeline {
     client: Client,
     commands: Vec<Command>,
     forget_flags: Vec<bool>,
-    retry_on_error: bool,
+    retry_on_error: Option<bool>,
 }
 
 impl Pipeline {
@@ -36,13 +36,14 @@ impl Pipeline {
             client,
             commands: Vec::new(),
             forget_flags: Vec::new(),
-            retry_on_error: false,
+            retry_on_error: None,
         }
     }
-
-    /// Set a flag to retry sending the command on network error (default `false`).
-    pub fn retry_on_error(&mut self) {
-        self.retry_on_error = true;
+    /// Set a flag to override default `retry_on_error` behavior.
+    /// 
+    /// See [Config::retry_on_error](crate::client::Config::retry_on_error)
+    pub fn retry_on_error(&mut self, retry_on_error: bool) {
+        self.retry_on_error = Some(retry_on_error);
     }
 
     /// Queue a command

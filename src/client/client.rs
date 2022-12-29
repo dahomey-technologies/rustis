@@ -22,16 +22,23 @@ use crate::{
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
     network::{
-        JoinHandle, PushReceiver, PushSender, MsgSender, NetworkHandler, PubSubReceiver,
-        PubSubSender, ReconnectReceiver, ReconnectSender, timeout,
+        timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
+        PushSender, ReconnectReceiver, ReconnectSender,
     },
     resp::{
         cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
     },
     Error, Future, Result, ValueReceiver, ValueSender,
 };
-use futures::{channel::{mpsc, oneshot}, Stream};
-use std::{future::IntoFuture, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}, time::Duration};
+use futures::{
+    channel::{mpsc, oneshot},
+    Stream,
+};
+use std::{
+    future::IntoFuture,
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    time::Duration,
+};
 
 use super::ClientTrackingInvalidationStream;
 
@@ -43,6 +50,7 @@ pub struct Client {
     reconnect_sender: ReconnectSender,
     client_state: Arc<RwLock<ClientState>>,
     command_timeout: Duration,
+    retry_on_error: bool,
 }
 
 impl Drop for Client {
@@ -77,6 +85,7 @@ impl Client {
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
         let config = config.into_config()?;
         let command_timeout = config.command_timeout;
+        let retry_on_error = config.retry_on_error;
         let (msg_sender, network_task_join_handle, reconnect_sender) =
             NetworkHandler::connect(config.into_config()?).await?;
 
@@ -86,6 +95,7 @@ impl Client {
             reconnect_sender,
             client_state: Arc::new(RwLock::new(ClientState::new())),
             command_timeout,
+            retry_on_error,
         })
     }
 
@@ -141,6 +151,9 @@ impl Client {
     /// # Arguments
     /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
     /// * `retry_on_error` - retry to send the command on network error.
+    ///   * `None` - default behaviour defined in [`Config::retry_on_error`](crate::client::Config::retry_on_error)
+    ///   * `Some(true)` - retry sending command on network error
+    ///   * `Some(false)` - do not retry sending command on network error
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
@@ -154,7 +167,7 @@ impl Client {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///
     ///     let values: Vec<String> = client
-    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), false)
+    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), None)
     ///         .await?
     ///         .into()?;
     ///     println!("{:?}", values);
@@ -164,9 +177,13 @@ impl Client {
     /// ```
 
     #[inline]
-    pub async fn send(&mut self, command: Command, retry_on_error: bool) -> Result<Value> {
+    pub async fn send(&mut self, command: Command, retry_on_error: Option<bool>) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::single(command, value_sender, retry_on_error);
+        let message = Message::single(
+            command,
+            value_sender,
+            retry_on_error.unwrap_or(self.retry_on_error),
+        );
         self.send_message(message)?;
         let value = if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, value_receiver).await??
@@ -177,16 +194,24 @@ impl Client {
     }
 
     /// Send command to the Redis server and forget its response.
-    /// 
+    ///
     /// # Arguments
     /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
     /// * `retry_on_error` - retry to send the command on network error.
+    ///   * `None` - default behaviour defined in [`Config::retry_on_error`](crate::client::Config::retry_on_error)
+    ///   * `Some(true)` - retry sending command on network error
+    ///   * `Some(false)` - do not retry sending command on network error
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub fn send_and_forget(&mut self, command: Command, retry_on_error: bool) -> Result<()> {
-        let message = Message::single_forget(command, retry_on_error);
+    pub fn send_and_forget(
+        &mut self,
+        command: Command,
+        retry_on_error: Option<bool>,
+    ) -> Result<()> {
+        let message =
+            Message::single_forget(command, retry_on_error.unwrap_or(self.retry_on_error));
         self.send_message(message)?;
         Ok(())
     }
@@ -196,13 +221,24 @@ impl Client {
     /// # Arguments
     /// * `commands` - batch of generic [`Command`](crate::resp::Command)s meant to be sent to the Redis server.
     /// * `retry_on_error` - retry to send the command batch on network error.
+    ///   * `None` - default behaviour defined in [`Config::retry_on_error`](crate::client::Config::retry_on_error)
+    ///   * `Some(true)` - retry sending batch on network error
+    ///   * `Some(false)` - do not retry sending batch on network error
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub async fn send_batch(&mut self, commands: Vec<Command>, retry_on_error: bool) -> Result<Value> {
+    pub async fn send_batch(
+        &mut self,
+        commands: Vec<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<Value> {
         let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-        let message = Message::batch(commands, value_sender, retry_on_error);
+        let message = Message::batch(
+            commands,
+            value_sender,
+            retry_on_error.unwrap_or(self.retry_on_error),
+        );
         self.send_message(message)?;
         let value = if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, value_receiver).await??
@@ -236,7 +272,9 @@ impl Client {
         Pipeline::new(self.clone())
     }
 
-    pub fn create_client_tracking_invalidation_stream(&mut self) -> Result<impl Stream<Item = Vec<String>>> {
+    pub fn create_client_tracking_invalidation_stream(
+        &mut self,
+    ) -> Result<impl Stream<Item = Vec<String>>> {
         let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
         let message = Message::client_tracking_invalidation(push_sender);
         self.send_message(message)?;
@@ -338,7 +376,8 @@ where
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occur during the send operation
     fn forget(self) -> Result<()> {
-        self.executor.send_and_forget(self.command, self.retry_on_error)
+        self.executor
+            .send_and_forget(self.command, self.retry_on_error)
     }
 }
 
@@ -359,10 +398,16 @@ where
                     .into_with_command(&command_for_result)
             } else if let Some(post_process) = self.post_process {
                 let command_for_result = self.command.clone();
-                let result = self.executor.send(self.command, self.retry_on_error).await?;
+                let result = self
+                    .executor
+                    .send(self.command, self.retry_on_error)
+                    .await?;
                 post_process(result, command_for_result, self.executor).await
             } else {
-                self.executor.send(self.command, self.retry_on_error).await?.into()
+                self.executor
+                    .send(self.command, self.retry_on_error)
+                    .await?
+                    .into()
             }
         })
     }
@@ -491,8 +536,7 @@ impl BlockingCommands for Client {
     fn monitor(&mut self) -> Future<MonitorStream> {
         Box::pin(async move {
             let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
-            let (push_sender, push_receiver): (PushSender, PushReceiver) =
-                mpsc::unbounded();
+            let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
 
             let message = Message::monitor(cmd("MONITOR"), value_sender, push_sender);
 

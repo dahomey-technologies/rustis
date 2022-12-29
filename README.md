@@ -24,6 +24,7 @@ An asynchronous Redis client for Rust.
   * [Multiplexed](https://redis.com/blog/multiplexing-explained/) client
   * Pooled client manager (based on [bb8](https://docs.rs/bb8/latest/bb8/))
 * Automatic command batching
+* Advanced reconnection & retry strategy
 * [Pipelining](https://redis.io/docs/manual/pipelining/) support
 * Configuration with Redis URL or dedicated builder
 * [TLS](https://redis.io/docs/manual/security/encryption/) support
@@ -38,9 +39,6 @@ An asynchronous Redis client for Rust.
   * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
   * [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support
   * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
-
-# Roadmap
-* Advanced reconnection & retry strategy
 
 # Basic Usage
 

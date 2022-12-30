@@ -146,7 +146,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(HashMap::default()),
-            Value::Array(v) => {v.into_value_iter().collect()},
+            Value::Array(v) => v.into_value_iter().collect(),
             Value::Map(v) => v
                 .into_iter()
                 .map(|(k, v)| Ok((k.into()?, v.into()?)))
@@ -584,14 +584,14 @@ impl<T> FromValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 /// Marker for key/value collections
 pub trait FromKeyValueArray<K, V>: FromValue
 where
-    K: FromValue,
+    K: FromSingleValue,
     V: FromValue,
 {
 }
 
 impl<K, V> FromKeyValueArray<K, V> for Vec<(K, V)>
 where
-    K: FromValue,
+    K: FromSingleValue,
     V: FromValue,
 {
 }
@@ -599,21 +599,21 @@ where
 impl<K, V, A> FromKeyValueArray<K, V> for SmallVec<A>
 where
     A: smallvec::Array<Item = (K, V)>,
-    K: FromValue,
+    K: FromSingleValue,
     V: FromValue,
 {
 }
 
 impl<K, V, S: BuildHasher + Default> FromKeyValueArray<K, V> for HashMap<K, V, S>
 where
-    K: FromValue + Eq + Hash,
+    K: FromSingleValue + Eq + Hash,
     V: FromValue,
 {
 }
 
 impl<K, V> FromKeyValueArray<K, V> for BTreeMap<K, V>
 where
-    K: FromValue + Ord,
+    K: FromSingleValue + Ord,
     V: FromValue,
 {
 }

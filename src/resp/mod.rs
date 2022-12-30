@@ -277,7 +277,7 @@ Current implementation provides the following conversions from [`Value`](Value):
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`
+* `String`, `Vec<u8>`,
 * `Option<T>`
 
 #### Example

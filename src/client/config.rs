@@ -84,9 +84,11 @@ pub struct Config {
     /// 
     /// See [`TcpStream::set_nodelay`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html#method.set_nodelay)    
     pub no_delay: bool,
-    /// Maximum number of retry attempts to send a command to the Redis server.
+    /// Maximum number of retry attempts to send a command to the Redis server (default `3`).
     pub max_command_attempts: usize,
-    /// Defines the default strategy for retries on network error (default `false`). 
+    /// Defines the default strategy for retries on network error (default `false`):
+    /// * `true` - retry sending the command/batch of commands on network error
+    /// * `false` - do not retry sending the command/batch of commands on network error
     /// 
     /// This strategy can be overriden for each command/batch 
     /// of commands in the following functions:

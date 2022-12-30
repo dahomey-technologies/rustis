@@ -9,14 +9,14 @@ and which matches perfectly the RESP protocol: the enum [`resp::Value`](Value).
 Each variant of this enum matches a [`RESP`](https://redis.io/docs/reference/protocol-spec/) type.
 
 Because, navigating through a [`resp::Value`](Value) instance can be verbose and requires a lot of pattern matching,
-** rustis** provides:
+**rustis** provides:
 * Rust type to [`Command`](Command) conversion, with the trait [`IntoArgs`](IntoArgs).
 * [`resp::Value`](Value) to Rust type conversion, with the trait [`FromValue`](FromValue).
 
 # Command arguments
 
 **rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
-Basically a [`Command`](Command) is a collection of [`CommandArg`](CommandArg)
+Basically a [`Command`](Command) is a collection of [`CommandArg`](CommandArg)s
 
 You will notice that each built-in command expects arguments through a set of traits defined in this module.
 
@@ -32,7 +32,7 @@ Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`
+* `String`, `char`, `&str`, `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
 * `Option<T>`
 * `(T, U)`
 * `(T, U, V)`
@@ -47,7 +47,7 @@ Current implementation provides the following conversions:
 Nevertheless, [`IntoArgs`](IntoArgs) is not expected directly in built-in commands arguments.
 
 The following traits are used to constraints which implementations of [`IntoArgs`](IntoArgs)
-are expected by a specific argument of a built-in command
+are expected by a specific argument of a built-in command.
 
 ### SingleArg
 
@@ -60,7 +60,7 @@ Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`
+* `String`, `char`, `&str`, `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
 * `Option<T>` where `T: SingleArg`
 
 #### Example
@@ -328,7 +328,7 @@ async fn main() -> Result<()> {
 
 ### FromValueArray
 
-Several Redis commands return a collection of items
+Several Redis commands return a collection of items.
 **rustis** uses the trait [`FromValueArray`](FromValueArray) to implement this behavior.
 
 Current implementation provides the following conversions from [`Value`](Value):

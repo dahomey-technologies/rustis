@@ -15,6 +15,7 @@ rustis is a Redis client for Rust.
   * [Multiplexed](https://redis.com/blog/multiplexing-explained/) client
   * Pooled client manager (based on [bb8](https://docs.rs/bb8/latest/bb8/))
 * Automatic command batching
+* Advanced reconnection & retry strategy
 * [Pipelining](https://redis.io/docs/manual/pipelining/) support
 * Configuration with Redis URL or dedicated builder
 * [TLS](https://redis.io/docs/manual/security/encryption/) support
@@ -31,17 +32,19 @@ rustis is a Redis client for Rust.
   * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
 
 # Optional Features
-* `tokio-runtime` - [Tokio](https://tokio.rs/) runime (default)
-* `async-std-runtime` - [async-std](https://async.rs/) runtime (optional)
-* `tokio-tls` - Tokio TLS support (optional)
-* `async-std-tls`- async-std TLS support (optional)
-* `pool` - Pooled client manager (optional)
-* `redis-json`- [RedisJSON v2.4](https://redis.io/docs/stack/json/) support (optional)
-* `redis-search` - [RedisSearch v2.6](https://redis.io/docs/stack/search/) support (optional)
-* `redis-graph` - [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional)
-* `redis-bloom` - [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support (optional)
-* `redis-time-series` - [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support (optional)
-* `redis-stack` - activate `redis-json`, `redis-search`, `redis-graph`, `redis-bloom` & `redis-time-series` at the same time (optional)
+| Feature | Description |
+| ------- | ----------- |
+| `tokio-runtime` | [Tokio](https://tokio.rs/) runime (default) |
+| `async-std-runtime` | [async-std](https://async.rs/) runtime (optional) |
+| `tokio-tls` | Tokio TLS support (optional) |
+| `async-std-tls` | async-std TLS support (optional) |
+| `pool` | Pooled client manager (optional) |
+| `redis-json` | [RedisJSON v2.4](https://redis.io/docs/stack/json/) support (optional) |
+| `redis-search` | [RedisSearch v2.6](https://redis.io/docs/stack/search/) support (optional) |
+| `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
+| `redis-bloom` | [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support (optional) |
+| `redis-time-series` | [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support (optional) |
+| `redis-stack` | activate `redis-json`, `redis-search`, `redis-graph`, `redis-bloom` & `redis-time-series` at the same time (optional) |
 
 # Basic Usage
 

@@ -6,8 +6,8 @@ Defines types related to the clients structs and their dependencies:
 
 The central object in **rustis** is the [`Client`](Client).
 
-I will allow you to connect to the Redis server, to send command requests
-and to receive command response and push messages.
+It will allow you to connect to the Redis server, to send command requests
+and to receive command responses and push messages.
 
 The [`Client`](Client) struct can be used in 3 different modes
 * As a single client
@@ -17,10 +17,10 @@ The [`Client`](Client) struct can be used in 3 different modes
 ## The single client
 The single [`Client`](crate::client::Client) maintains a unique connection to a Redis Server or cluster.
 
-This use case of the client is not meant to be use directly in a Web application, where multiple HTTP connections access
-The Redis server at the same time in a multi-thread architecture (like [Actix](https://actix.rs/) or [Rocket](https://rocket.rs/)).
+This use case of the client is not meant to be used directly in a Web application, where multiple HTTP connections access
+the Redis server at the same time in a multi-threaded architecture (like [Actix](https://actix.rs/) or [Rocket](https://rocket.rs/)).
 
-It could be use in tools where the load is minimal.
+It could be used in tools where the load is minimal.
 
 ```
 use rustis::{
@@ -44,10 +44,10 @@ async fn main() -> Result<()> {
 
 ## The multiplexer
 A [`Client`](Client) instance can be cloned, allowing requests
-to be be sent concurrently on the same underlying connection.
+to be sent concurrently on the same underlying connection.
 
-The multiplexer mode is great because it offers much performance in a multithread architecture, with only a single
-underlying connections. It should be the prefered mode for Web applications.
+The multiplexer mode is great because it offers much performance in a multi-threaded architecture, with only a single
+underlying connection. It should be the prefered mode for Web applications.
 
 ### Limitations
 Beware that using [`Client`](Client) in a multiplexer mode, by cloning an instance across multiple threads,
@@ -56,7 +56,7 @@ because they monopolize the whole connection which cannot be shared anymore.
 
 Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
 with the multiplexer mode is either. Indeed, it's the shared connection that will be watched, not only
-the [`Client`](Client) instance through which the `watch`](crate::commands::TransactionCommands::watch) command is sent.
+the [`Client`](Client) instance through which the [`watch`](crate::commands::TransactionCommands::watch) command is sent.
 
 ### Managing multiplexed subscriptions
 
@@ -71,7 +71,8 @@ would be to connect two multiplexed clients to the Redis server:
 * 1 for the subscriptions
 * 1 for the regular commands
 
-See also [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
+### See also 
+[Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 
 ### Example
 ```
@@ -110,9 +111,9 @@ async fn main() -> Result<()> {
 The pooled client manager holds a pool of [`Client`](Client)s, based on [bb8](https://docs.rs/bb8/latest/bb8/).
 
 Each time a new command must be sent to the Redis Server, a client will be borrowed temporarily to the manager
-and automatic given back to it at the end of the operation.
+and automatically given back to it at the end of the operation.
 
-It is an alternative way to multiplexing, of managing **rustin** within a Web application.
+It is an alternative to multiplexing, for managing **rustis** within a Web application.
 
 The manager can be configured via [bb8](https://docs.rs/bb8/latest/bb8/) with a various of options like maximum size, maximum lifetime, etc.
 
@@ -152,10 +153,10 @@ A [`Client`](Client) instance can be configured with the [`Config`](Config) stru
 * [`ServerConfig`](ServerConfig) (Standalone, Sentinel or Cluster)
 
 [`IntoConfig`] is a convenient trait to convert more known types to a [`Config`](Config) instance:
-* &[`str`](https://doc.rust-lang.org/std/primitive.str.html)
-* `(impl Into\<String\>, u16)`: a pair of host + port
-* [`String`](https://doc.rust-lang.org/alloc/string/struct.String.html)
-* [`Url`](https://docs.rs/url/latest/url/struct.Url.html)
+* &[`str`](https://doc.rust-lang.org/std/primitive.str.html): host and port separated by a colon
+* `(impl Into<String>, u16)`: a pair of host and port
+* [`String`](https://doc.rust-lang.org/alloc/string/struct.String.html): host and port separated by a colon
+* [`Url`](https://docs.rs/url/latest/url/struct.Url.html): see Url syntax below.
 
 ## Url Syntax
 
@@ -184,19 +185,19 @@ redis|rediss[+sentinel]://[[<username>]:<password>@]<host>[:<port>]/<service>[/<
 
 ### Schemes
 The URL scheme is used to detect the server type:
-* `redis://`- Non secure TCP connection to a standalone Redis server
-* `rediss://`- Secure (TSL) TCP connection to a standalone Redis server
-* `redis+sentinel://`- Non secure TCP connection to a Redis sentinel network
-* `rediss+sentinel://`- Secure (TSL) TCP connection to a Redis sentinel network
-* `redis+cluster://`- Non secure TCP connection to a Redis cluster
-* `rediss+cluster://`- Secure (TSL) TCP connection to a Redis cluster
+* `redis://` - Non secure TCP connection to a standalone Redis server
+* `rediss://` - Secure (TSL) TCP connection to a standalone Redis server
+* `redis+sentinel://` - Non secure TCP connection to a Redis sentinel network
+* `rediss+sentinel://` - Secure (TSL) TCP connection to a Redis sentinel network
+* `redis+cluster://` - Non secure TCP connection to a Redis cluster
+* `rediss+cluster://` - Secure (TSL) TCP connection to a Redis cluster
 
 ### QueryParameters
 Query parameters match perfectly optional configuration fields
 of the struct [`Config`](Config) or its dependencies:
-* [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default 10,000ms).
+* [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default `10,000` ms).
 * [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
-   a timeout error will be thrown. If set to 0, no timeout is apply (default 0).
+   a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).
 * [`auto_resubscribe`](Config::auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
  resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
 * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the
@@ -205,10 +206,10 @@ of the struct [`Config`](Config) or its dependencies:
   it easier to identity the connection in client list.
 * [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
-* [`max_command_attempts`](Config::max_command_attempts) - Maximum number of retry attempts to send a command to the Redis server.
+* [`max_command_attempts`](Config::max_command_attempts) - Maximum number of retry attempts to send a command to the Redis server (default `3`).
 * [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`). 
 * [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
-  failing before connecting to the next Sentinel instance (default 250ms).
+  failing before connecting to the next Sentinel instance (default `250` ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
 
@@ -228,7 +229,7 @@ async fn main() -> Result<()> {
 
 # Pipelining
 
-One of the most performant Redis server is [pipelining](https://redis.io/docs/manual/pipelining/).
+One of the most performant Redis feature is [pipelining](https://redis.io/docs/manual/pipelining/).
 This allow to optimize round-trip times by batching Redis commands.
 
 ### API description
@@ -242,7 +243,7 @@ This is possible because the [`Pipeline`](Pipeline) implements all the built-in 
 The main difference, is that you have to choose for each command:
 * to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Pipeline`](Pipeline) instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
-* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well BUT its response won't be awaited
+* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well **BUT** its response won't be awaited
   by the [`Pipeline`](Pipeline) instance
 
 Finally, call the [`execute`](Pipeline::execute) associated function.
@@ -299,7 +300,7 @@ This is possible because the [`Transaction`](Transaction) implements all the bui
 The main difference, is that you have to choose for each command:
 * to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Transaction`](Transaction) instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
-* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well BUT its response won't be awaited
+* to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well **BUT** its response won't be awaited
   by the [`Transaction`](Transaction) instance.
 
 Finally, call the [`execute`](Transaction::execute) associated function.
@@ -337,18 +338,18 @@ async fn main() -> Result<()> {
 
 # Pub/Sub
 [`Pub/Sub`](https://redis.io/docs/manual/pubsub/) is a Redis architecture were senders can publish messages into channels
-and subscribers can subscribe by channel names or patterns to receive messages
+and subscribers can subscribe by channel names or patterns to receive messages.
 
 ### Publishing
 
 To publish a message, you can call the [`publish`](crate::commands::PubSubCommands::publish)
 associated function on its dedicated trait.
 
-It also possible to use the sharded flavor of the publish function: [`spublish`](crate::commands::PubSubCommands::spublish)
+It also possible to use the sharded flavor of the publish function: [`spublish`](crate::commands::PubSubCommands::spublish).
 
 ### Subscribing
 
-Subscribing is blocking the current client connection, in order to let the client wait for incoming messages.
+Subscribing will block the current client connection, in order to let the client wait for incoming messages.
 Consequently, **rustis** implements subsribing through an async [`Stream`](https://docs.rs/futures/latest/futures/stream/trait.Stream.html).
 
 You can create a [`PubSubStream`](PubSubStream) by calling [`subscribe`](crate::commands::PubSubCommands::subscribe),
@@ -360,7 +361,7 @@ wait for incoming message in the form of the struct [`PubSubMessage`](crate::cli
 
 ### Warning!
 
-mulitplexed [`Client`](Client) instances must be decidated to Pub/Sub once a subscribing function has been called.
+Mulitplexed [`Client`](Client) instances must be decidated to Pub/Sub once a subscribing function has been called.
 Indeed, because subscription blocks the multiplexed client shared connection,
 other callers would be blocked when sending regular commands.
 

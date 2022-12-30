@@ -44,7 +44,7 @@ Redis Stack commands:
 
 # Example
 
-To use a command, simple add the related trait to your use declerations
+To use a command, simply add the related trait to your `use` declerations
 and call the related associated function directly to a client, pipeline, transaction instance.
 
 Commands can be directly awaited or [forgotten](crate::client::ClientPreparedCommand::forget).

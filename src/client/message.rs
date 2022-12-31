@@ -119,6 +119,7 @@ pub(crate) struct Message {
 }
 
 impl Message {
+    #[inline(always)]
     pub fn single(command: Command, value_sender: ValueSender, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command),
@@ -130,6 +131,7 @@ impl Message {
         }
     }
 
+    #[inline(always)]
     pub fn single_forget(command: Command, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command),
@@ -141,6 +143,7 @@ impl Message {
         }
     }
 
+    #[inline(always)]
     pub fn batch(commands: Vec<Command>, value_sender: ValueSender, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Batch(commands),
@@ -152,6 +155,7 @@ impl Message {
         }
     }
 
+    #[inline(always)]
     pub fn pub_sub(
         command: Command,
         value_sender: ValueSender,
@@ -167,6 +171,7 @@ impl Message {
         }
     }
 
+    #[inline(always)]
     pub fn monitor(
         command: Command,
         value_sender: ValueSender,
@@ -182,6 +187,7 @@ impl Message {
         }
     }
 
+    #[inline(always)]
     pub fn client_tracking_invalidation(push_sender: PushSender) -> Self {
         Message {
             commands: Commands::None,

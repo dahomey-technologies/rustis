@@ -460,6 +460,7 @@ impl SingleArgCollection<CommandArg> for CommandArgs
 {
     type IntoIter = CommandArgsIntoIter;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -471,6 +472,7 @@ where
 {
     type IntoIter = std::array::IntoIter<T, N>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -482,6 +484,7 @@ where
 {
     type IntoIter = std::vec::IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -494,6 +497,7 @@ where
 {
     type IntoIter = smallvec::IntoIter<A>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -505,6 +509,7 @@ where
 {
     type IntoIter = std::collections::hash_set::IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -516,6 +521,7 @@ where
 {
     type IntoIter = std::collections::btree_set::IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self)
     }
@@ -527,6 +533,7 @@ where
 {
     type IntoIter = Once<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         once(self)
     }

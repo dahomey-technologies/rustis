@@ -73,3 +73,7 @@ async fn main() -> Result<()> {
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
 2. run `cargo test --features pool,redis-stack,tokio-tls` (Tokio runtime)
 3. run `cargo test --no-default-features --features redis-stack,async-std-runtime,async-std-tls` (async-std runtime)
+
+# Benchmarks
+1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
+2. run `cargo bench`

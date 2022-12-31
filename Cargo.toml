@@ -72,7 +72,25 @@ serial_test = "0"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 rand = "0.8.4"
 env_logger = "0"
+criterion = "0"
+redis = { version = "0", features = ["aio", "tokio-comp"] }
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-tls", "redis-stack", "pool"]
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[bench]]
+name = "generic_api"
+harness = false
+
+[[bench]]
+name = "native_api"
+harness = false
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+[[bench]]
+name = "multiplexer"
+harness = false

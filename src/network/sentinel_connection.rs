@@ -11,10 +11,12 @@ pub struct SentinelConnection {
 }
 
 impl SentinelConnection {
+    #[inline]
     pub async fn write(&mut self, command: &Command) -> Result<()> {
         self.inner_connection.write(command).await
     }
 
+    #[inline]
     pub async fn write_batch(
         &mut self,
         commands: impl Iterator<Item = &mut Command>,
@@ -25,10 +27,12 @@ impl SentinelConnection {
             .await
     }
 
+    #[inline]
     pub async fn read(&mut self) -> Option<Result<Value>> {
         self.inner_connection.read().await
     }
 
+    #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
         self.inner_connection.reconnect().await
     }

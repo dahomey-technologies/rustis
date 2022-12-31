@@ -1,0 +1,169 @@
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use futures::Future;
+use std::time::Duration;
+
+pub fn current_thread_runtime() -> tokio::runtime::Runtime {
+    let mut builder = tokio::runtime::Builder::new_current_thread();
+    builder.enable_io();
+    builder.enable_time();
+    builder.build().unwrap()
+}
+
+pub fn block_on_all<F>(f: F) -> F::Output
+where
+    F: Future,
+{
+    current_thread_runtime().block_on(f)
+}
+
+fn get_redis_client() -> redis::Client {
+    redis::Client::open("redis://127.0.0.1:6379").unwrap()
+}
+
+async fn get_rustis_client() -> rustis::client::Client {
+    rustis::client::Client::connect("127.0.0.1:6379")
+        .await
+        .unwrap()
+}
+
+fn bench_redis_simple_getsetdel_pipeline(b: &mut Bencher) {
+    let client = get_redis_client();
+    let mut con = client.get_connection().unwrap();
+
+    b.iter(|| {
+        let key = "test_key";
+        let _: (usize,) = redis::pipe()
+            .cmd("SET")
+            .arg(key)
+            .arg(42)
+            .ignore()
+            .cmd("GET")
+            .arg(key)
+            .cmd("DEL")
+            .arg(key)
+            .ignore()
+            .query(&mut con)
+            .unwrap();
+    });
+}
+
+fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
+    use rustis::{resp::cmd, Error};
+
+    let runtime = current_thread_runtime();
+
+    let mut client = runtime.block_on(get_rustis_client());
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let key = "test_key";
+
+                let mut pipeline = client.create_pipeline();
+                pipeline.forget(cmd("SET").arg(key).arg(42));
+                pipeline.queue(cmd("GET").arg(key));
+                pipeline.forget(cmd("DEL").arg(key));
+                let _: usize = pipeline.execute().await?;
+
+                Ok::<_, Error>(())
+            })
+            .unwrap()
+    });
+}
+
+const PIPELINE_QUERIES: usize = 1_000;
+
+fn bench_redis_async_long_pipeline(b: &mut Bencher) {
+    let client = get_redis_client();
+    let runtime = current_thread_runtime();
+    let mut con = runtime.block_on(client.get_async_connection()).unwrap();
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let mut pipe = redis::pipe();
+
+                for i in 0..PIPELINE_QUERIES {
+                    pipe.set(format!("foo{}", i), "bar").ignore();
+                }
+
+                pipe.query_async::<_, ()>(&mut con).await
+            })
+            .unwrap();
+    });
+}
+
+fn bench_redis_multiplexed_async_long_pipeline(b: &mut Bencher) {
+    let client = get_redis_client();
+    let runtime = current_thread_runtime();
+    let mut con = runtime
+        .block_on(client.get_multiplexed_tokio_connection())
+        .unwrap();
+        
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let mut pipe = redis::pipe();
+
+                for i in 0..PIPELINE_QUERIES {
+                    pipe.set(format!("foo{}", i), "bar").ignore();
+                }
+
+                pipe.query_async::<_, ()>(&mut con).await
+            })
+            .unwrap();
+    });
+}
+
+fn bench_rustis_long_pipeline(b: &mut Bencher) {
+    use rustis::{client::BatchPreparedCommand, commands::StringCommands, Error};
+
+    let runtime = current_thread_runtime();
+    let mut client = runtime.block_on(get_rustis_client());
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let mut pipeline = client.create_pipeline();
+                for i in 0..PIPELINE_QUERIES {
+                    pipeline.set(format!("foo{}", i), "bar").forget();
+                }
+
+                pipeline.execute::<()>().await?;
+
+                Ok::<_, Error>(())
+            })
+            .unwrap()
+    });
+}
+
+fn bench_simple(c: &mut Criterion) {
+    let mut group = c.benchmark_group("simple_pipeline");
+    group
+        .measurement_time(Duration::from_secs(10))
+        .bench_function(
+            "redis_simple_getsetdel_pipeline",
+            bench_redis_simple_getsetdel_pipeline,
+        )
+        .bench_function(
+            "rustis_simple_getsetdel_pipeline",
+            bench_rustis_simple_getsetdel_pipeline,
+        );
+    group.finish();
+}
+
+fn bench_long(c: &mut Criterion) {
+    let mut group = c.benchmark_group("long_pipeline");
+    group
+        .measurement_time(Duration::from_secs(10))
+        .bench_function("redis_async_long_pipeline", bench_redis_async_long_pipeline)
+        .bench_function(
+            "redis_multiplexed_async_long_pipeline",
+            bench_redis_multiplexed_async_long_pipeline,
+        )
+        .bench_function("rustis_long_pipeline", bench_rustis_long_pipeline);
+    group.finish();
+}
+
+criterion_group!(bench, bench_simple, bench_long);
+criterion_main!(bench);

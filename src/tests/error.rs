@@ -90,7 +90,7 @@ fn ask_error() {
 
 //     use rand::Rng;
 
-//     let tasks: Vec<_> = (1..8)
+//     let tasks: Vec<_> = (0..8)
 //         .into_iter()
 //         .map(|_| {
 //             let mut client = client.clone();
@@ -99,7 +99,7 @@ fn ask_error() {
 //                     let i = rand::thread_rng().gen_range(1..1000);
 //                     let key = format!("key{i}");
 //                     println!("getting key: {key:?}");
-//                     let result: Result<String> = client.get(key.clone()).retry_on_error().await;
+//                     let result: Result<String> = client.get(key.clone()).retry_on_error(true).await;
 //                     println!("got key: {key:?}, result: {result:?}");
 //                     if let Ok(value) = result {
 //                         assert_eq!(format!("value{i}"), value);
@@ -153,6 +153,7 @@ fn ask_error() {
 //     Ok(())
 // }
 
+#[cfg(debug_assertions)]
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]

@@ -14,6 +14,7 @@ pub enum Connection {
 }
 
 impl Connection {
+    #[inline]
     pub async fn connect(config: Config) -> Result<Self> {
         match &config.server {
             ServerConfig::Standalone { host, port } => Ok(Connection::Standalone(
@@ -28,6 +29,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn write(&mut self, command: &Command) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.write(command).await,
@@ -36,6 +38,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn write_batch(
         &mut self,
         commands: impl Iterator<Item = &mut Command>,
@@ -54,6 +57,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn read(&mut self) -> Option<Result<Value>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,
@@ -62,6 +66,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.reconnect().await,
@@ -70,6 +75,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn send(&mut self, command: &Command) -> Result<Value> {
         self.write(command).await?;
         self.read()
@@ -86,6 +92,7 @@ where
     type Output = Result<R>;
     type IntoFuture = Future<'a, R>;
 
+    #[inline]
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move { self.executor.send(&self.command).await?.into() })
     }

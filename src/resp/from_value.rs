@@ -20,6 +20,7 @@ pub trait FromValue: Sized {
     /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
     fn from_value(value: Value) -> Result<Self>;
 
+    #[inline]
     fn from_value_with_command(value: Value, _command: &Command) -> Result<Self> {
         Self::from_value(value)
     }
@@ -35,15 +36,21 @@ pub trait FromValue: Sized {
 }
 
 impl FromValue for Value {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         Ok(value)
     }
 }
 
 impl FromValue for () {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::SimpleString(_) => Ok(()),
+            Value::BulkString(bs) if bs.is_empty() => Ok(()),
+            Value::Array(a) if a.is_empty() => Ok(()),
+            Value::Set(s) if s.is_empty() => Ok(()),
+            Value::Map(m) if m.is_empty() => Ok(()),
             _ => Err(Error::Client(format!(
                 "Cannot parse result {:?} to ())",
                 value
@@ -56,6 +63,7 @@ impl<T, const N: usize> FromValue for [T; N]
 where
     T: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Array(v) if v.len() == N => v
@@ -75,6 +83,7 @@ impl<T> FromValue for Vec<T>
 where
     T: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(Vec::new()),
@@ -92,6 +101,7 @@ where
     A: smallvec::Array<Item = T>,
     T: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(SmallVec::new()),
@@ -108,6 +118,7 @@ impl<T, S: BuildHasher + Default> FromValue for HashSet<T, S>
 where
     T: FromValue + Eq + Hash,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(HashSet::default()),
@@ -127,6 +138,7 @@ impl<T> FromValue for BTreeSet<T>
 where
     T: FromValue + Ord,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(BTreeSet::new()),
@@ -143,6 +155,7 @@ where
     K: FromValue + Eq + Hash,
     V: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(HashMap::default()),
@@ -165,6 +178,7 @@ where
     K: FromValue + Ord,
     V: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(BTreeMap::new()),
@@ -186,6 +200,7 @@ impl<T> FromValue for Option<T>
 where
     T: FromValue,
 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(None),
@@ -197,6 +212,7 @@ where
 }
 
 impl FromValue for bool {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i != 0),
@@ -216,6 +232,7 @@ impl FromValue for bool {
 }
 
 impl FromValue for i64 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(i),
@@ -244,6 +261,7 @@ impl FromValue for i64 {
 }
 
 impl FromValue for u64 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -274,6 +292,7 @@ impl FromValue for u64 {
 }
 
 impl FromValue for i32 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -304,6 +323,7 @@ impl FromValue for i32 {
 }
 
 impl FromValue for u32 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -334,6 +354,7 @@ impl FromValue for u32 {
 }
 
 impl FromValue for i16 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -364,6 +385,7 @@ impl FromValue for i16 {
 }
 
 impl FromValue for u16 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -394,6 +416,7 @@ impl FromValue for u16 {
 }
 
 impl FromValue for i8 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => {
@@ -424,6 +447,7 @@ impl FromValue for i8 {
 }
 
 impl FromValue for isize {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => isize::try_from(i)
@@ -453,6 +477,7 @@ impl FromValue for isize {
 }
 
 impl FromValue for usize {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => usize::try_from(i)
@@ -482,6 +507,7 @@ impl FromValue for usize {
 }
 
 impl FromValue for f32 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(b) => Ok(String::from_utf8_lossy(&b).parse::<f32>()?),
@@ -497,6 +523,7 @@ impl FromValue for f32 {
 }
 
 impl FromValue for f64 {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(b) => Ok(String::from_utf8_lossy(&b).parse::<f64>()?),
@@ -513,6 +540,7 @@ impl FromValue for f64 {
 }
 
 impl FromValue for String {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Double(d) => Ok(d.to_string()),
@@ -529,6 +557,7 @@ impl FromValue for String {
 }
 
 impl FromValue for Vec<u8> {
+    #[inline]
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::BulkString(s) => Ok(s),
@@ -634,6 +663,7 @@ pub(crate) trait HashMapExt<K, V, S> {
 }
 
 impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
+    #[inline]
     fn remove_with_result<Q: ?Sized>(&mut self, k: &Q) -> Result<V>
     where
         K: Borrow<Q> + Hash + Eq,
@@ -644,6 +674,7 @@ impl<K, V, S> HashMapExt<K, V, S> for HashMap<K, V, S> {
             .ok_or_else(|| Error::Client(format!("Cannot parse field '{}'", k)))
     }
 
+    #[inline]
     fn remove_or_default<Q: ?Sized>(&mut self, k: &Q) -> V
     where
         K: Borrow<Q> + Hash + Eq,

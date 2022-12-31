@@ -72,7 +72,8 @@ impl PubSubMessage {
 /// };
 /// use futures::StreamExt;
 ///
-/// #[tokio::main]
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 /// async fn main() -> Result<()> {
 ///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
 ///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;

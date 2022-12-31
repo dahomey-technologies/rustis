@@ -55,7 +55,8 @@ use rustis::{
     Result,
 };
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
     let mut client = Client::connect("127.0.0.1:6379").await?;
@@ -117,7 +118,8 @@ depending on the client, transaction or pipeline struct used:
 ```
 use rustis::{client::Client, resp::cmd, Result};
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
 

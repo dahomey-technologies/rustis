@@ -29,7 +29,8 @@ use rustis::{
     Result,
 };
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
     client.flushdb(FlushingMode::Sync).await?;
@@ -82,7 +83,8 @@ use rustis::{
     Result
 };
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let config = "127.0.0.1:6379".into_config()?;
     let mut regular_client1 = Client::connect(config.clone()).await?;
@@ -120,26 +122,31 @@ The manager can be configured via [bb8](https://docs.rs/bb8/latest/bb8/) with a 
 For you convenience, [bb8](https://docs.rs/bb8/latest/bb8/) is reexported from the **rustis** crate.
 
 ```
+#[cfg(feature = "pool")]
 use rustis::{
-    client::PooledClientManager, commands::StringCommands, Result,
+    client::PooledClientManager, commands::StringCommands,
 };
+use rustis::Result;
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let manager = PooledClientManager::new("127.0.0.1:6379")?;
-    let pool = rustis::bb8::Pool::builder()
-        .max_size(10)
-        .build(manager).await?;
+    #[cfg(feature = "pool")] {
+        let manager = PooledClientManager::new("127.0.0.1:6379")?;
+        let pool = rustis::bb8::Pool::builder()
+            .max_size(10)
+            .build(manager).await?;
 
-    let mut client1 = pool.get().await.unwrap();
-    client1.set("key1", "value1").await?;
-    let value: String = client1.get("key1").await?;
-    println!("value: {value:?}");
+        let mut client1 = pool.get().await.unwrap();
+        client1.set("key1", "value1").await?;
+        let value: String = client1.get("key1").await?;
+        println!("value: {value:?}");
 
-    let mut client2 = pool.get().await.unwrap();
-    client2.set("key2", "value2").await?;
-    let value: String = client2.get("key2").await?;
-    println!("value: {value:?}");
+        let mut client2 = pool.get().await.unwrap();
+        client2.set("key2", "value2").await?;
+        let value: String = client2.get("key2").await?;
+        println!("value: {value:?}");
+        }
 
     Ok(())
 }
@@ -218,7 +225,8 @@ of the struct [`Config`](Config) or its dependencies:
 ```
 use rustis::{client::Client, resp::cmd, Result};
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // standalone, host=localhost, port=6379 (default), database=1
     let mut client = Client::connect("redis://localhost/1").await?;
@@ -262,7 +270,8 @@ use rustis::{
     resp::{cmd, Value}, Result,
 };
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
 
@@ -319,7 +328,8 @@ use rustis::{
     resp::{cmd, Value}, Result,
 };
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
 
@@ -375,7 +385,8 @@ use rustis::{
 };
 use futures::StreamExt;
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut subscribing_client = Client::connect("127.0.0.1:6379").await?;
     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
@@ -421,7 +432,8 @@ use rustis::{
 };
 use futures::StreamExt;
 
-#[tokio::main]
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let mut subscribing_client = Client::connect("127.0.0.1:6379").await?;
 

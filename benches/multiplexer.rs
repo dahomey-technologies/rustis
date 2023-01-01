@@ -26,6 +26,17 @@ async fn get_rustis_client() -> rustis::client::Client {
         .unwrap()
 }
 
+async fn get_fred_client() -> fred::clients::RedisClient {
+    use fred::prelude::*;
+
+    let config = RedisConfig::default();
+    let client = RedisClient::new(config, None, None);
+    let _ = client.connect();
+    client.wait_for_connect().await.unwrap();
+
+    client
+}
+
 const PARALLEL_QUERIES: usize = 8;
 const ITERATIONS: usize = 100;
 
@@ -49,6 +60,33 @@ fn bench_redis_parallel(b: &mut Bencher) {
                             let key = format!("key{i}");
                             let value = format!("value{i}");
                             let _: Result<(), RedisError> = con.set(key, value).await;
+                        }
+                    })
+                })
+                .collect();
+
+            futures::future::join_all(tasks).await;
+        })
+    });
+}
+
+fn bench_fred_parallel(b: &mut Bencher) {
+    use fred::prelude::*;
+
+    let runtime = current_thread_runtime();
+    let client = runtime.block_on(get_fred_client());
+
+    b.iter(|| {
+        runtime.block_on(async {
+            let tasks: Vec<_> = (0..PARALLEL_QUERIES)
+                .into_iter()
+                .map(|i| {
+                    let client = client.clone();
+                    tokio::spawn(async move {
+                        for _ in 0..ITERATIONS {
+                            let key = format!("key{i}");
+                            let value = format!("value{i}");
+                            let _: Result<(), RedisError> = client.set(key, value, None, None, false).await;
                         }
                     })
                 })
@@ -92,6 +130,7 @@ fn bench_parallel(c: &mut Criterion) {
     group
         .measurement_time(Duration::from_secs(10))
         .bench_function("redis_parallel", bench_redis_parallel)
+        .bench_function("fred_parallel", bench_fred_parallel)
         .bench_function("rustis_parallel", bench_rustis_parallel);
     group.finish();
 }

@@ -20,6 +20,17 @@ fn get_redis_client() -> redis::Client {
     redis::Client::open("redis://127.0.0.1:6379").unwrap()
 }
 
+async fn get_fred_client() -> fred::clients::RedisClient {
+    use fred::prelude::*;
+
+    let config = RedisConfig::default();
+    let client = RedisClient::new(config, None, None);
+    let _ = client.connect();
+    client.wait_for_connect().await.unwrap();
+
+    client
+}
+
 async fn get_rustis_client() -> rustis::client::Client {
     rustis::client::Client::connect("127.0.0.1:6379")
         .await
@@ -45,6 +56,33 @@ fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
                     .await?;
                 let _: f64 = cmd("GET").arg(key).query_async(&mut con).await?;
                 cmd("DEL").arg(key).query_async(&mut con).await?;
+                Ok::<_, RedisError>(())
+            })
+            .unwrap()
+    });
+}
+
+fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
+    use fred::prelude::*;
+    use fred::types::CustomCommand;
+
+    let runtime = current_thread_runtime();
+    let client = runtime.block_on(get_fred_client());
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let key = "test_key";
+
+                let args: Vec<RedisValue> = vec![key.into(), 42.423456.into()];
+                client.custom(CustomCommand::new_static("SET", None, false), args).await?;
+
+                let args: Vec<RedisValue> = vec![key.into()];
+                let _: f64 = client.custom(CustomCommand::new_static("GET", None, false), args).await?;
+
+                let args: Vec<RedisValue> = vec![key.into()];
+                client.custom(CustomCommand::new_static("DEL", None, false), args).await?;
+
                 Ok::<_, RedisError>(())
             })
             .unwrap()
@@ -84,9 +122,13 @@ fn bench_generic_api(c: &mut Criterion) {
             bench_redis_simple_getsetdel_async,
         )
         .bench_function(
+            "fred_simple_getsetdel_async",
+            bench_fred_simple_getsetdel_async,
+        )
+        .bench_function(
             "rustis_simple_getsetdel_async",
             bench_rustis_simple_getsetdel_async,
-        );
+        );        
     group.finish();
 }
 

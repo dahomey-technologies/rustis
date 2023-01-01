@@ -26,6 +26,17 @@ async fn get_rustis_client() -> rustis::client::Client {
         .unwrap()
 }
 
+async fn get_fred_client() -> fred::clients::RedisClient {
+    use fred::prelude::*;
+
+    let config = RedisConfig::default();
+    let client = RedisClient::new(config, None, None);
+    let _ = client.connect();
+    client.wait_for_connect().await.unwrap();
+
+    client
+}
+
 fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
     use redis::{AsyncCommands, RedisError};
 
@@ -41,6 +52,26 @@ fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
                 con.set(key, 42.423456).await?;
                 let _: f64 = con.get(key).await?;
                 con.del(key).await?;
+                Ok::<_, RedisError>(())
+            })
+            .unwrap()
+    });
+}
+
+fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
+    use fred::prelude::*;
+
+    let runtime = current_thread_runtime();
+    let client = runtime.block_on(get_fred_client());
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let key = "test_key";
+                client.set(key, 42.423456, None, None, false).await?;
+                let _: f64 = client.get(key).await?;
+                client.del(key).await?;
+
                 Ok::<_, RedisError>(())
             })
             .unwrap()
@@ -78,6 +109,10 @@ fn bench_generic_api(c: &mut Criterion) {
         .bench_function(
             "redis_simple_getsetdel_async",
             bench_redis_simple_getsetdel_async,
+        )
+        .bench_function(
+            "fred_simple_getsetdel_async",
+            bench_fred_simple_getsetdel_async,
         )
         .bench_function(
             "rustis_simple_getsetdel_async",

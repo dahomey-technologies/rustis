@@ -9,7 +9,7 @@ type PostProcessFunc<'a, R> = dyn Fn(Value, Command, &'a mut Client) -> Future<'
 
 /// Wrapper around a command about to be send with a marker for the result type
 /// and a few options to decide how the result send back by Redis
-pub struct PreparedCommand<'a, T, R>
+pub struct PreparedCommand<'a, T, R = ()>
 where
     R: FromValue,
 {

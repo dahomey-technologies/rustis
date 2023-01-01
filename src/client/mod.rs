@@ -279,8 +279,8 @@ async fn main() -> Result<()> {
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
     pipeline.queue(cmd("UNKNOWN"));
-    pipeline.get::<_, String>("key1").queue();
-    pipeline.get::<_, String>("key2").queue();
+    pipeline.get::<_, ()>("key1").queue();
+    pipeline.get::<_, ()>("key2").queue();
 
     let (result, value1, value2): (Value, String, String) = pipeline.execute().await?;
     assert!(matches!(result, Value::Error(_)));
@@ -337,7 +337,7 @@ async fn main() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, String>("key1").queue();
+    transaction.get::<_, ()>("key1").queue();
     let value: String = transaction.execute().await?;
 
     assert_eq!("value1", value);

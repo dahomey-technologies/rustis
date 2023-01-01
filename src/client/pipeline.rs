@@ -40,7 +40,7 @@ impl Pipeline {
         }
     }
     /// Set a flag to override default `retry_on_error` behavior.
-    /// 
+    ///
     /// See [Config::retry_on_error](crate::client::Config::retry_on_error)
     pub fn retry_on_error(&mut self, retry_on_error: bool) {
         self.retry_on_error = Some(retry_on_error);
@@ -98,7 +98,10 @@ impl Pipeline {
     /// ```    
     pub async fn execute<T: FromValue>(mut self) -> Result<T> {
         let num_commands = self.commands.len();
-        let result = self.client.send_batch(self.commands, self.retry_on_error).await?;
+        let result = self
+            .client
+            .send_batch(self.commands, self.retry_on_error)
+            .await?;
 
         match result {
             Value::Array(results) if num_commands > 1 => {
@@ -123,7 +126,9 @@ impl Pipeline {
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
 /// the [`Transaction`](crate::client::Transaction) executors
-pub trait BatchPreparedCommand
+pub trait BatchPreparedCommand<R = ()>
+where
+    R: FromValue,
 {
     /// Queue a command.
     fn queue(self);
@@ -132,8 +137,7 @@ pub trait BatchPreparedCommand
     fn forget(self);
 }
 
-impl BatchPreparedCommand for PreparedCommand<'_, Pipeline, ()>
-{
+impl<R: FromValue> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
     /// Queue a command.
     #[inline]
     fn queue(self) {

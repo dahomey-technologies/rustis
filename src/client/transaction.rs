@@ -11,7 +11,7 @@ use crate::commands::{
     BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
 };
 use crate::{
-    client::{Client, BatchPreparedCommand, PreparedCommand},
+    client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         BitmapCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
@@ -44,7 +44,7 @@ impl Transaction {
     }
 
     /// Set a flag to override default `retry_on_error` behavior.
-    /// 
+    ///
     /// See [Config::retry_on_error](crate::client::Config::retry_on_error)
     pub fn retry_on_error(&mut self, retry_on_error: bool) {
         self.retry_on_error = Some(retry_on_error);
@@ -71,29 +71,29 @@ impl Transaction {
     /// [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
     ///
     /// The most generic type that can be requested as a result is `Vec<resp::Value>`
-    /// 
+    ///
     /// # Example
     /// ```
     /// use rustis::{
-    ///     client::{Client, Transaction, BatchPreparedCommand}, 
+    ///     client::{Client, Transaction, BatchPreparedCommand},
     ///     commands::StringCommands,
     ///     resp::{cmd, Value}, Result,
     /// };
-    /// 
+    ///
     /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
-    /// 
+    ///
     ///     let mut transaction = client.create_transaction();
-    /// 
+    ///
     ///     transaction.set("key1", "value1").forget();
     ///     transaction.set("key2", "value2").forget();
     ///     transaction.get::<_, String>("key1").queue();
     ///     let value: String = transaction.execute().await?;
-    /// 
+    ///
     ///     assert_eq!("value1", value);
-    /// 
+    ///
     ///     Ok(())
     /// }
     /// ```
@@ -102,7 +102,11 @@ impl Transaction {
 
         let num_commands = self.commands.len();
 
-        let values: Vec<Value> = self.client.send_batch(self.commands, self.retry_on_error).await?.into()?;
+        let values: Vec<Value> = self
+            .client
+            .send_batch(self.commands, self.retry_on_error)
+            .await?
+            .into()?;
         let mut iter = values.into_iter();
 
         // MULTI + QUEUED commands
@@ -140,8 +144,7 @@ impl Transaction {
     }
 }
 
-impl BatchPreparedCommand for PreparedCommand<'_, Transaction, ()>
-{
+impl<R: FromValue> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
         self.executor.queue(self.command)

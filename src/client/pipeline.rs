@@ -123,9 +123,7 @@ impl Pipeline {
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
 /// the [`Transaction`](crate::client::Transaction) executors
-pub trait BatchPreparedCommand<'a, R>
-where
-    R: FromValue,
+pub trait BatchPreparedCommand
 {
     /// Queue a command.
     fn queue(self);
@@ -134,9 +132,7 @@ where
     fn forget(self);
 }
 
-impl<'a, R> BatchPreparedCommand<'a, R> for PreparedCommand<'a, Pipeline, R>
-where
-    R: FromValue + Send + 'a,
+impl BatchPreparedCommand for PreparedCommand<'_, Pipeline, ()>
 {
     /// Queue a command.
     #[inline]

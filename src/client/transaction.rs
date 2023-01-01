@@ -140,9 +140,7 @@ impl Transaction {
     }
 }
 
-impl<'a, R> BatchPreparedCommand<'a, R> for PreparedCommand<'a, Transaction, R>
-where
-    R: FromValue + Send + 'a,
+impl BatchPreparedCommand for PreparedCommand<'_, Transaction, ()>
 {
     /// Queue a command into the transaction.
     fn queue(self) {

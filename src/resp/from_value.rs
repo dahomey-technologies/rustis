@@ -599,6 +599,7 @@ where
 {
 }
 
+impl<T> FromValueArray<T> for () where T: FromValue {}
 impl<T, const N: usize> FromValueArray<T> for [T; N] where T: FromValue {}
 impl<T> FromValueArray<T> for Vec<T> where T: FromValue {}
 impl<T, A> FromValueArray<T> for SmallVec<A>
@@ -612,6 +613,13 @@ impl<T> FromValueArray<T> for BTreeSet<T> where T: FromValue + Ord {}
 
 /// Marker for key/value collections
 pub trait FromKeyValueArray<K, V>: FromValue
+where
+    K: FromSingleValue,
+    V: FromValue,
+{
+}
+
+impl<K, V> FromKeyValueArray<K, V> for ()
 where
     K: FromSingleValue,
     V: FromValue,

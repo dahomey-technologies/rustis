@@ -4,7 +4,7 @@ use log::trace;
 use std::{str::{self, FromStr}, collections::{HashMap}};
 use tokio_util::codec::Decoder;
 
-pub(crate) struct ValueDecoder;
+pub struct ValueDecoder;
 
 impl Decoder for ValueDecoder {
     type Item = Value;

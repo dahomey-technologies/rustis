@@ -98,3 +98,7 @@ harness = false
 [[bench]]
 name = "multiplexer"
 harness = false
+
+[[bench]]
+name = "serialization"
+harness = false

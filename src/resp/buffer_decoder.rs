@@ -2,7 +2,7 @@ use crate::{Error, Result};
 use bytes::{BytesMut, Buf};
 use tokio_util::codec::Decoder;
 
-pub(crate) struct BufferDecoder;
+pub struct BufferDecoder;
 
 impl Decoder for BufferDecoder {
     type Item = Vec<u8>;
@@ -57,42 +57,58 @@ fn next_crlf(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
 }
 
 fn sized_string(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
-    let Some(new_pos) = next_crlf(buf, pos)? else {
-        return Ok(None);
-    };
-    next_crlf(buf, new_pos)
+    match size(buf, pos)? {
+        None => Ok(None),
+        Some((len, pos)) => {
+            let len = len as usize;
+            if buf.len() - pos < len + 2 {
+                if buf.len() - pos == len + 1 && buf[pos + len] != b'\r' {
+                    Err(Error::Client("Cannot parse bulk string".to_owned()))
+                } else {
+                    Ok(None) // EOF
+                }
+            } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
+                Err(Error::Client("Cannot parse bulk string".to_owned()))
+            } else {
+                Ok(Some(pos + len + 2))
+            }
+        }
+    }
 }
 
 fn map(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
-    let Some((size, mut new_pos)) = size(buf, pos)? else {
-        return Ok(None);
-    };
-
-    for _ in 0..size * 2 {
-        let Some(p) = decode(buf, new_pos)? else {
-            return Ok(None);
-        };
-
-        new_pos = p;
+    match size(buf, pos)? {
+        None => Ok(None),
+        Some((0, pos)) => Ok(Some(pos)),
+        Some((len, mut new_pos)) => {
+            for _ in 0..len * 2 {
+                let Some(p) = decode(buf, new_pos)? else {
+                    return Ok(None);
+                };
+        
+                new_pos = p;
+            }
+        
+            Ok(Some(new_pos))
+        }
     }
-
-    Ok(Some(new_pos))
 }
 
 fn array(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
-    let Some((size, mut new_pos)) = size(buf, pos)? else {
-        return Ok(None);
-    };
-
-    for _ in 0..size {
-        let Some(p) = decode(buf, new_pos)? else {
-            return Ok(None);
-        };
-
-        new_pos = p;
+    match size(buf, pos)? {
+        None => Ok(None),
+        Some((len, mut new_pos)) => {
+            for _ in 0..len {
+                let Some(p) = decode(buf, new_pos)? else {
+                    return Ok(None);
+                };
+        
+                new_pos = p;
+            }
+        
+            Ok(Some(new_pos))
+        }
     }
-
-    Ok(Some(new_pos))
 }
 
 fn size(buf: &mut BytesMut, pos: usize) -> Result<Option<(usize, usize)>> {

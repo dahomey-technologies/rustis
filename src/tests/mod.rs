@@ -31,6 +31,7 @@ mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
 mod resp_deserializer;
+mod resp_deserializer2;
 mod scripting_commands;
 #[cfg(feature = "redis-search")]
 mod search_commands;

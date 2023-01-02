@@ -92,9 +92,29 @@ fn bool() -> Result<()> {
 }
 
 #[test]
+fn nil() -> Result<()> {
+    let result = decode("_\r\n")?;
+    assert_eq!(Some("_\r\n".as_bytes().to_vec()), result);
+
+    let result = decode("_\r")?;
+    assert_eq!(None, result);
+
+    let result = decode("_")?;
+    assert_eq!(None, result);
+
+    Ok(())
+}
+
+#[test]
 fn bulk_string() -> Result<()> {
     let result = decode("$5\r\nhello\r\n")?;
     assert_eq!(Some("$5\r\nhello\r\n".as_bytes().to_vec()), result);
+
+    let result = decode("$7\r\nhel\r\nlo\r\n")?; // b"hel\r\nlo"
+    assert_eq!(Some("$7\r\nhel\r\nlo\r\n".as_bytes().to_vec()), result);
+
+    let result = decode("$0\r\n\r\n")?; // b""
+    assert_eq!(Some("$0\r\n\r\n".as_bytes().to_vec()), result);
 
     let result = decode("$5")?;
     assert_eq!(None, result);
@@ -111,9 +131,6 @@ fn bulk_string() -> Result<()> {
     let result = decode("$5\r\nhello\r")?;
     assert_eq!(None, result);
 
-    // bulk_string len is not checked
-    let result = decode("$1\r\nhello\r");
-    assert!(result.is_ok());
     Ok(())
 }
 

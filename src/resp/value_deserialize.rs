@@ -5,7 +5,7 @@ use serde::{
 };
 use std::fmt;
 
-use super::PUSH_FAKE_FIELD;
+pub(crate) const PUSH_FAKE_FIELD: &str = ">>>PUSH>>>";
 
 /// Implementation meant to be used with [`RespDeserializer`](crate::resp::RespDeserializer)
 impl<'de> Deserialize<'de> for Value {

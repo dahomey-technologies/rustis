@@ -13,16 +13,10 @@ use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
 use tokio::sync::broadcast;
 
-#[derive(Debug)]
-pub(crate) enum  ValueOrBuffer{
-    Value(Value),
-    Buffer(Vec<u8>)
-}
-
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
-pub(crate) type ValueSender = oneshot::Sender<Result<ValueOrBuffer>>;
-pub(crate) type ValueReceiver = oneshot::Receiver<Result<ValueOrBuffer>>;
+pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
+pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
 pub(crate) type PushSender = mpsc::UnboundedSender<Result<Value>>;

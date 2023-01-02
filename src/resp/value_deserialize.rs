@@ -47,13 +47,12 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::SimpleString(v.to_owned()))
     }
 
-    // null BulkString
     fn visit_none<E>(self) -> std::result::Result<Value, E> {
-        Ok(Value::BulkString(None))
+        Ok(Value::Nil)
     }
 
     fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Value, E> {
-        Ok(Value::BulkString(Some(v)))
+        Ok(Value::BulkString(v))
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Value, A::Error>
@@ -63,7 +62,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = seq.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Array(None))
+            Ok(Value::Nil)
         } else {
             let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
             loop {
@@ -72,7 +71,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                     Some(value) => values.push(value),
                 };
             }
-            Ok(Value::Array(Some(values)))
+            Ok(Value::Array(values))
         }
     }
 
@@ -83,7 +82,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = map.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Array(None))
+            Ok(Value::Nil)
         } else {
             let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
             loop {
@@ -92,9 +91,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
                     Some(PushOrKey::Push) => {
                         let values: Vec<Value> = map.next_value()?;
                         if values.is_empty() {
-                            return Ok(Value::Push(None));
+                            return Ok(Value::Nil);
                         } else {
-                            return Ok(Value::Push(Some(values)));
+                            return Ok(Value::Push(values));
                         }
                     },
                     Some(PushOrKey::Key(value)) => values.push(value),
@@ -102,7 +101,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
                 values.push(map.next_value()?);
             }
-            Ok(Value::Array(Some(values)))
+            Ok(Value::Array(values))
         }
     }
 }

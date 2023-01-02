@@ -1,7 +1,10 @@
 use crate::{resp::Value, Error, RedisError, Result};
 use bytes::{Buf, BytesMut};
 use log::trace;
-use std::{str::{self, FromStr}, collections::{HashMap}};
+use std::{
+    collections::HashMap,
+    str::{self, FromStr},
+};
 use tokio_util::codec::Decoder;
 
 pub(crate) struct ValueDecoder;
@@ -32,22 +35,10 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
 
     // cf. https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
     match first_byte {
-        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
-            Some(bs) => (Value::BulkString(bs), pos),
-            None => (Value::Nil, pos),
-        })),
-        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Array(v), pos),
-            None => (Value::Nil, pos),
-        })),
-        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Map(v), pos),
-            None => (Value::Nil, pos),
-        })),
-        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Set(v), pos),
-            None => (Value::Nil, pos),
-        })),
+        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
+        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
+        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| (Value::Map(v), pos))),
+        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Set(v), pos))),
         b':' => Ok(decode_number::<i64>(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
         b',' => Ok(decode_number::<f64>(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
         b'+' => {
@@ -58,14 +49,13 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
             .transpose(),
         b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::Nil, pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(b, pos)| (Value::Boolean(b), pos))),
-        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
-            Some(bs) => (Value::BulkString(bs), pos),
-            None => (Value::Nil, pos),
-        })),
-        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
-            Some(v) => (Value::Push(v), pos),
-            None => (Value::Nil, pos),
-        })),
+        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
+        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
+        b'!' => decode_bulk_string(buf, idx)?
+            .map(|(bs, pos)| {
+                RedisError::from_str(str::from_utf8(&bs)?).map(|e| (Value::Error(e), pos))
+            })
+            .transpose(),
         _ => Err(Error::Client(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte
@@ -83,76 +73,69 @@ fn decode_line(buf: &mut BytesMut, idx: usize) -> Result<Option<(&[u8], usize)>>
     }
 }
 
-fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<u8>>, usize)>> {
-    match decode_number::<isize>(buf, idx)? {
-        None => Ok(None),
-        Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, pos)) if len >= 0 => {
-            let len = len as usize;
-            if buf.len() - pos < len + 2 {
-                if buf.len() - pos == len + 1 && buf[pos + len] != b'\r' {
-                    Err(Error::Client("Cannot parse bulk string".to_owned()))
-                } else {
-                    Ok(None) // EOF
-                }
-            } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
+fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(Vec<u8>, usize)>> {
+    if let Some((len, pos)) = decode_number::<usize>(buf, idx)? {
+        let len = len as usize;
+        if buf.len() - pos < len + 2 {
+            if buf.len() - pos == len + 1 && buf[pos + len] != b'\r' {
                 Err(Error::Client("Cannot parse bulk string".to_owned()))
             } else {
-                Ok(Some((Some(buf[pos..(pos + len)].to_vec()), pos + len + 2)))
+                Ok(None) // EOF
             }
+        } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
+            Err(Error::Client("Cannot parse bulk string".to_owned()))
+        } else {
+            Ok(Some((buf[pos..(pos + len)].to_vec(), pos + len + 2)))
         }
-        _ => Err(Error::Client("Cannot parse bulk string".to_owned())),
+    } else {
+        Ok(None)
     }
 }
 
-fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
-    match decode_number::<isize>(buf, idx)? {
-        None => Ok(None),
-        Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, mut pos)) => {
-            let mut values = Vec::with_capacity(len as usize);
-            for _ in 0..len {
-                match decode(buf, pos)? {
-                    None => return Ok(None),
-                    Some((value, new_pos)) => {
-                        values.push(value);
-                        pos = new_pos;
-                    }
+fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Vec<Value>, usize)>> {
+    if let Some((len, mut pos)) = decode_number::<usize>(buf, idx)? {
+        let mut values = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            match decode(buf, pos)? {
+                None => return Ok(None),
+                Some((value, new_pos)) => {
+                    values.push(value);
+                    pos = new_pos;
                 }
             }
-            Ok(Some((Some(values), pos)))
         }
+        Ok(Some((values, pos)))
+    } else {
+        Ok(None)
     }
 }
 
 #[allow(clippy::complexity)]
-fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<HashMap<Value, Value>>, usize)>> {
-    match decode_number::<isize>(buf, idx)? {
-        None => Ok(None),
-        Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, mut pos)) => {
-            let mut values = HashMap::with_capacity(len as usize);
-            for _ in 0..len {
-                let key = match decode(buf, pos)? {
-                    None => return Ok(None),
-                    Some((key, new_pos)) => {
-                        pos = new_pos;
-                        key
-                    }
-                };
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(HashMap<Value, Value>, usize)>> {
+    if let Some((len, mut pos)) = decode_number::<usize>(buf, idx)? {
+        let mut values = HashMap::with_capacity(len as usize);
+        for _ in 0..len {
+            let key = match decode(buf, pos)? {
+                None => return Ok(None),
+                Some((key, new_pos)) => {
+                    pos = new_pos;
+                    key
+                }
+            };
 
-                let value = match decode(buf, pos)? {
-                    None => return Ok(None),
-                    Some((value, new_pos)) => {
-                        pos = new_pos;
-                        value
-                    }
-                };
+            let value = match decode(buf, pos)? {
+                None => return Ok(None),
+                Some((value, new_pos)) => {
+                    pos = new_pos;
+                    value
+                }
+            };
 
-                values.insert(key, value);
-            }
-            Ok(Some((Some(values), pos)))
+            values.insert(key, value);
         }
+        Ok(Some((values, pos)))
+    } else {
+        Ok(None)
     }
 }
 

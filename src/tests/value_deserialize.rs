@@ -158,8 +158,35 @@ fn error() -> Result<()> {
         result,
         Err(Error::Redis(RedisError {
             kind: RedisErrorKind::Err,
-            description: _
-        }))
+            description
+        })) if description == "error"
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn blob_error() -> Result<()> {
+    log_try_init();
+
+    let result = deserialize_value("!9\r\nERR error\r\n");
+    println!("result: {result:?}");
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description == "error"
+    ));
+
+    let result = deserialize_value("!11\r\nERR er\r\nror\r\n");
+    println!("result: {result:?}");
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        })) if description == "er\r\nror"
     ));
 
     Ok(())

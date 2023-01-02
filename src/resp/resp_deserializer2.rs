@@ -50,6 +50,7 @@ impl<'de> RespDeserializer2<'de> {
         }
     }
 
+    #[inline(always)]
     fn next(&mut self) -> Result<RawValue> {
         match self.peek() {
             Ok(v) => {
@@ -380,9 +381,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer2<'de> {
         V: Visitor<'de>,
     {
         match self.peek()? {
-            RawValue::BulkString(_) => {
-                visitor.visit_some(self)
-            }
+            RawValue::BulkString(_) => visitor.visit_some(self),
             RawValue::Nil => {
                 self.advance();
                 visitor.visit_none()
@@ -395,11 +394,10 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer2<'de> {
     where
         V: Visitor<'de>,
     {
-        match self.next()? {
-            RawValue::Nil => {
-                visitor.visit_unit()
-            }
-            _ => Err(Error::Client("Expected null".to_owned())),
+        if let RawValue::Nil = self.next()? {
+            visitor.visit_unit()
+        } else {
+            Err(Error::Client("Expected null".to_owned()))
         }
     }
 
@@ -469,9 +467,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer2<'de> {
                     ));
                 }
             }
-            RawValue::Map(len) => {
-                len
-            }
+            RawValue::Map(len) => len,
             _ => return Err(Error::Client("Cannot parse map".to_owned())),
         };
 

@@ -47,10 +47,12 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::SimpleString(v.to_owned()))
     }
 
+    #[inline]
     fn visit_none<E>(self) -> std::result::Result<Value, E> {
         Ok(Value::Nil)
     }
 
+    #[inline]
     fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Value, E> {
         Ok(Value::BulkString(v))
     }
@@ -112,6 +114,7 @@ pub enum PushOrKey {
 }
 
 impl<'de> Deserialize<'de> for PushOrKey {
+    #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -125,6 +128,7 @@ struct PushOrKeyVisitor;
 impl<'de> Visitor<'de> for PushOrKeyVisitor {
     type Value = PushOrKey;
 
+    #[inline]
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("PushOrKey")
     }
@@ -158,16 +162,19 @@ impl<'de> Visitor<'de> for PushOrKeyVisitor {
     }
 
     // null BulkString
+    #[inline]
     fn visit_none<E: serde::de::Error>(self) -> std::result::Result<PushOrKey, E> {
         let value_visitor = ValueVisitor;
         value_visitor.visit_none().map(PushOrKey::Key)
     }
 
+    #[inline]
     fn visit_byte_buf<E: serde::de::Error>(self, v: Vec<u8>) -> Result<PushOrKey, E> {
         let value_visitor = ValueVisitor;
         value_visitor.visit_byte_buf(v).map(PushOrKey::Key)
     }
 
+    #[inline]
     fn visit_seq<A>(self, seq: A) -> Result<PushOrKey, A::Error>
     where
         A: SeqAccess<'de>,
@@ -176,6 +183,7 @@ impl<'de> Visitor<'de> for PushOrKeyVisitor {
         value_visitor.visit_seq(seq).map(PushOrKey::Key)
     }
 
+    #[inline]
     fn visit_map<A>(self, map: A) -> Result<PushOrKey, A::Error>
     where
         A: MapAccess<'de>,

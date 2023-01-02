@@ -70,9 +70,6 @@ fn integer() -> Result<()> {
     let result: i64 = deserialize(":12\r\n")?; // 12
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("$-1\r\n")?; // ""
-    assert_eq!(0, result);
-
     let result: i64 = deserialize("_\r\n")?; // null
     assert_eq!(0, result);
 
@@ -103,9 +100,6 @@ fn float() -> Result<()> {
 
     let result: f64 = deserialize(",12.12\r\n")?; // 12.12
     assert_eq!(12.12, result);
-
-    let result: f64 = deserialize("$-1\r\n")?; // ""
-    assert_eq!(0.0, result);
 
     let result: f64 = deserialize("_\r\n")?; // null
     assert_eq!(0.0, result);
@@ -160,7 +154,7 @@ fn str() -> Result<()> {
     let result: &str = deserialize("+hello\r\n")?; // "hello"
     assert_eq!("hello", result);
 
-    let result: &str = deserialize("$-1\r\n")?; // b""
+    let result: &str = deserialize("$0\r\n\r\n")?; // b""
     assert_eq!("", result);
 
     Ok(())
@@ -185,7 +179,7 @@ fn string() -> Result<()> {
     let result: String = deserialize("+hello\r\n")?; // "hello"
     assert_eq!("hello", result);
 
-    let result: String = deserialize("$-1\r\n")?; // b""
+    let result: String = deserialize("$0\r\n\r\n")?; // b""
     assert_eq!("", result);
 
     Ok(())
@@ -207,17 +201,14 @@ fn option() -> Result<()> {
     let result: Option<String> = deserialize("$5\r\nhello\r\n")?; // b"hello"
     assert_eq!(Some("hello".to_owned()), result);
 
-    let result: Option<String> = deserialize("$-1\r\n")?; // b""
-    assert_eq!(None, result);
+    let result: Option<String> = deserialize("$0\r\n\r\n")?; // b""
+    assert_eq!(Some("".to_owned()), result);
 
     let result: Option<String> = deserialize("_\r\n")?; // null
     assert_eq!(None, result);
 
     let result: Option<i64> = deserialize(":12\r\n")?; // b"12"
     assert_eq!(Some(12), result);
-
-    let result: Option<i64> = deserialize("$-1\r\n")?; // b""
-    assert_eq!(None, result);
 
     let result: Option<i64> = deserialize("_\r\n")?; // null
     assert_eq!(None, result);
@@ -237,9 +228,6 @@ fn unit() -> Result<()> {
             description: _
         }))
     ));
-
-    let result: Result<()> = deserialize("$-1\r\n"); // ""
-    assert!(result.is_ok());
 
     let result: Result<()> = deserialize("_\r\n"); // null
     assert!(result.is_ok());
@@ -265,9 +253,6 @@ fn unit_struct() -> Result<()> {
             description: _
         }))
     ));
-
-    let result: Result<Unit> = deserialize("$-1\r\n"); // ""
-    assert!(result.is_ok());
 
     let result: Result<Unit> = deserialize("_\r\n"); // null
     assert!(result.is_ok());
@@ -331,6 +316,15 @@ fn tuple() -> Result<()> {
     log_try_init();
 
     let result: Result<(i32, i32)> = deserialize("-ERR error\r\n"); // error
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
+
+    let result: Result<(i32, i32)> = deserialize("!9\r\nERR error\r\n"); // error
     assert!(matches!(
         result,
         Err(Error::Redis(RedisError {

@@ -67,6 +67,32 @@ fn deserialize_string_from_serde_with_copy2(b: &mut Bencher) {
     });
 }
 
+fn deserialize_int_from_value(b: &mut Bencher) {
+    b.iter(|| {
+        let value = decode_value(b":12\r\n");
+        let _: i64 = value.into().unwrap();
+    });
+}
+
+fn deserialize_int_from_serde(b: &mut Bencher) {
+    b.iter(|| {
+        let _: i64 = deserialize(b":12\r\n");
+    });
+}
+
+fn deserialize_int_from_serde_with_copy(b: &mut Bencher) {
+    b.iter(|| {
+        let buffer = decode_buffer(b":12\r\n");
+        let _: i64 = deserialize(&buffer);
+    });
+}
+
+fn deserialize_int_from_serde_with_copy2(b: &mut Bencher) {
+    b.iter(|| {
+        let _: i64 = deserialize3(b":12\r\n");
+    });
+}
+
 #[derive(Debug, Deserialize)]
 struct Person {
     pub id: u64,
@@ -126,6 +152,28 @@ fn bench_deserialize_string(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_deserialize_int(c: &mut Criterion) {
+    let mut group = c.benchmark_group("deserialize_int");
+    group
+        .bench_function(
+            "deserialize_int_from_value",
+            deserialize_int_from_value,
+        )
+        .bench_function(
+            "deserialize_int_from_serde",
+            deserialize_int_from_serde,
+        )
+        .bench_function(
+            "deserialize_int_from_serde_with_copy",
+            deserialize_int_from_serde_with_copy,
+        )
+        .bench_function(
+            "deserialize_int_from_serde_with_copy2",
+            deserialize_int_from_serde_with_copy2,
+        );
+    group.finish();
+}
+
 fn bench_deserialize_struct(c: &mut Criterion) {
     let mut group = c.benchmark_group("deserialize_struct");
     group
@@ -148,5 +196,5 @@ fn bench_deserialize_struct(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(bench, bench_deserialize_string, bench_deserialize_struct);
+criterion_group!(bench, bench_deserialize_string, bench_deserialize_int, bench_deserialize_struct);
 criterion_main!(bench);

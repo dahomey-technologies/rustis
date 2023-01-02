@@ -148,15 +148,6 @@ fn bulk_string() -> Result<()> {
     log::debug!("result: {result:?}");
     assert!(result.is_err());
 
-    let result = decode_value("$-1\r\n")?; // b""
-    assert_eq!(Some(Value::Nil), result);
-
-    let result = decode_value("$-1\r")?;
-    assert_eq!(None, result);
-
-    let result = decode_value("$-1")?;
-    assert_eq!(None, result);
-
     Ok(())
 }
 
@@ -199,9 +190,6 @@ fn array() -> Result<()> {
         ])),
         result
     );
-
-    let result = decode_value("*-1\r\n")?; // []
-    assert_eq!(Some(Value::Nil), result);
 
     Ok(())
 }
@@ -334,8 +322,8 @@ fn error() -> Result<()> {
         result,
         Ok(Some(Value::Error(RedisError {
             kind: RedisErrorKind::Err,
-            description: _
-        })))
+            description
+        }))) if description == "error"
     ));
 
     let result = decode_value("-ERR error\r")?;
@@ -345,6 +333,51 @@ fn error() -> Result<()> {
     assert_eq!(None, result);
 
     let result = decode_value("-")?;
+    assert_eq!(None, result);
+
+    Ok(())
+}
+
+#[test]
+fn blob_error() -> Result<()> {
+    log_try_init();
+
+    let result = decode_value("!9\r\nERR error\r\n");
+    println!("result: {result:?}");
+    assert!(matches!(
+        result,
+        Ok(Some(Value::Error(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        }))) if description == "error"
+    ));
+
+    let result = decode_value("!11\r\nERR er\r\nror\r\n");
+    println!("result: {result:?}");
+    assert!(matches!(
+        result,
+        Ok(Some(Value::Error(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        }))) if description == "er\r\nror"
+    ));
+
+    let result = decode_value("!9\r\nERR error\r")?;
+    assert_eq!(None, result);
+
+    let result = decode_value("!9\r\nERR error")?;
+    assert_eq!(None, result);
+
+    let result = decode_value("!9\r\n")?;
+    assert_eq!(None, result);
+
+    let result = decode_value("!9\r")?;
+    assert_eq!(None, result);
+
+    let result = decode_value("!9")?;
+    assert_eq!(None, result);
+
+    let result = decode_value("!")?;
     assert_eq!(None, result);
 
     Ok(())

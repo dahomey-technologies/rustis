@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to [`Cluster Management`](https://redis.io/docs/management/scaling/)
@@ -40,15 +40,15 @@ pub trait ClusterCommands {
     fn cluster_addslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<u16>,
+        S: SingleArgCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTS").arg(slots))
     }
 
-    /// This command is similar to the [`cluster_addslots`](crate::ClusterCommands::cluster_addslots)
+    /// This command is similar to the [`cluster_addslots`](ClusterCommands::cluster_addslots)
     /// command in that they both assign hash slots to nodes.
     ///
-    /// The difference between the two commands is that [`cluster_addslots`](crate::ClusterCommands::cluster_addslots)
+    /// The difference between the two commands is that [`cluster_addslots`](ClusterCommands::cluster_addslots)
     /// takes a list of slots to assign to the node, while this command takes a list of slot ranges
     /// (specified by a tuple containing start and end slots) to assign to the node.
     ///
@@ -58,7 +58,7 @@ pub trait ClusterCommands {
     fn cluster_addslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<u16, u16>,
+        S: KeyValueArgsCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTSRANGE").arg(slots))
     }
@@ -90,7 +90,7 @@ pub trait ClusterCommands {
     fn cluster_count_failure_reports<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -123,15 +123,15 @@ pub trait ClusterCommands {
     fn cluster_delslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: SingleArgOrCollection<u16>,
+        S: SingleArgCollection<u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTS").arg(slots))
     }
 
-    /// This command is similar to the [`cluster_delslotsrange`](crate::ClusterCommands::cluster_delslotsrange)
+    /// This command is similar to the [`cluster_delslotsrange`](ClusterCommands::cluster_delslotsrange)
     ///  command in that they both remove hash slots from the node.
     ///
-    /// The difference is that [`cluster_delslotsrange`](crate::ClusterCommands::cluster_delslotsrange)
+    /// The difference is that [`cluster_delslotsrange`](ClusterCommands::cluster_delslotsrange)
     ///  takes a list of hash slots to remove from the node,
     /// while this command takes a list of slot ranges (specified by a tuple containing start and end slots) to remove from the node.
     /// # See Also
@@ -140,7 +140,7 @@ pub trait ClusterCommands {
     fn cluster_delslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        S: KeyValueArgOrCollection<u16, u16>,
+        S: KeyValueArgsCollection<u16, u16>,
     {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTSRANGE").arg(slots))
     }
@@ -184,7 +184,7 @@ pub trait ClusterCommands {
     fn cluster_forget<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("FORGET").arg(node_id))
     }
@@ -208,7 +208,7 @@ pub trait ClusterCommands {
         )
     }
 
-    /// This command provides [`info`](crate::ServerCommands::info) style information about Redis Cluster vital parameters.
+    /// This command provides [`info`](crate::commands::ServerCommands::info) style information about Redis Cluster vital parameters.
     ///
     /// # Return
     /// The Cluster information
@@ -234,7 +234,7 @@ pub trait ClusterCommands {
     fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, u16>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").arg(key))
     }
@@ -255,7 +255,7 @@ pub trait ClusterCommands {
     fn cluster_links<I>(&mut self) -> PreparedCommand<Self, Vec<I>>
     where
         Self: Sized,
-        I: FromSingleValueArray<ClusterLinkInfo>,
+        I: FromValueArray<ClusterLinkInfo>,
     {
         prepare_command(self, cmd("CLUSTER").arg("LINKS"))
     }
@@ -276,7 +276,7 @@ pub trait ClusterCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        IP: Into<CommandArg>,
+        IP: SingleArg,
     {
         prepare_command(
             self,
@@ -299,7 +299,7 @@ pub trait ClusterCommands {
     fn cluster_myid<N>(&mut self) -> PreparedCommand<Self, N>
     where
         Self: Sized,
-        N: FromValue,
+        N: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("MYID"))
     }
@@ -322,7 +322,7 @@ pub trait ClusterCommands {
     fn cluster_nodes<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("NODES"))
     }
@@ -330,7 +330,7 @@ pub trait ClusterCommands {
     /// The command provides a list of replica nodes replicating from the specified master node.
     ///
     /// # Return
-    /// The command returns data in the same format as [`cluster_nodes`](crate::ClusterCommands::cluster_nodes).
+    /// The command returns data in the same format as [`cluster_nodes`](ClusterCommands::cluster_nodes).
     ///
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicas/>](https://redis.io/commands/cluster-replicas/)
@@ -338,8 +338,8 @@ pub trait ClusterCommands {
     fn cluster_replicas<I, R>(&mut self, node_id: I) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        R: FromValue,
+        I: SingleArg,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
     }
@@ -353,7 +353,7 @@ pub trait ClusterCommands {
     fn cluster_replicate<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICATE").arg(node_id))
     }
@@ -428,7 +428,7 @@ pub trait ClusterCommands {
     fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
     where
         Self: Sized,
-        S: FromSingleValueArray<ClusterShardResult>
+        S: FromValueArray<ClusterShardResult>,
     {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
@@ -458,7 +458,7 @@ pub trait ClusterCommands {
     }
 }
 
-/// Result for the [`cluster_bumpepoch`](crate::ClusterCommands::cluster_bumpepoch) command
+/// Result for the [`cluster_bumpepoch`](ClusterCommands::cluster_bumpepoch) command
 pub enum ClusterBumpEpochResult {
     /// if the epoch was incremented
     Bumped,
@@ -479,7 +479,7 @@ impl FromValue for ClusterBumpEpochResult {
     }
 }
 
-/// Options for the [`cluster_failover`](crate::ClusterCommands::cluster_failover) command
+/// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command
 pub enum ClusterFailoverOption {
     /// No option
     Default,
@@ -505,7 +505,7 @@ impl IntoArgs for ClusterFailoverOption {
     }
 }
 
-/// Cluster state used in the `cluster_state` field of [`ClusterInfo`](crate::ClusterInfo)
+/// Cluster state used in the `cluster_state` field of [`ClusterInfo`](ClusterInfo)
 pub enum ClusterState {
     /// State is `ok` if the node is able to receive queries.
     Ok,
@@ -525,7 +525,7 @@ impl FromValue for ClusterState {
     }
 }
 
-/// Result for the [`cluster_info`](crate::ClusterCommands::cluster_info) command
+/// Result for the [`cluster_info`](ClusterCommands::cluster_info) command
 pub struct ClusterInfo {
     /// State is ok if the node is able to receive queries.
     /// fail if there is at least one hash slot which is unbound (no node associated),
@@ -577,10 +577,10 @@ pub struct ClusterInfo {
     /// Accumulated count of cluster links freed due to exceeding the `cluster-link-sendbuf-limit` configuration.
     pub total_cluster_links_buffer_limit_exceeded: usize,
 
-    /// Cluster bus PING sent (not to be confused with the client command [`ping`](crate::ConnectionCommands::ping)).
+    /// Cluster bus PING sent (not to be confused with the client command [`ping`](crate::commands::ConnectionCommands::ping)).
     pub cluster_stats_messages_ping_sent: usize,
 
-    /// Cluster bus PING received (not to be confused with the client command [`ping`](crate::ConnectionCommands::ping)).
+    /// Cluster bus PING received (not to be confused with the client command [`ping`](crate::commands::ConnectionCommands::ping)).
     pub cluster_stats_messages_ping_received: usize,
 
     /// PONG sent (reply to PING).
@@ -589,10 +589,10 @@ pub struct ClusterInfo {
     /// PONG received (reply to PING).
     pub cluster_stats_messages_pong_received: usize,
 
-    /// Handshake message sent to a new node, either through gossip or [`cluster_meet`](crate::ClusterCommands::cluster_meet).
+    /// Handshake message sent to a new node, either through gossip or [`cluster_meet`](crate::commands::ClusterCommands::cluster_meet).
     pub cluster_stats_messages_meet_sent: usize,
 
-    /// Handshake message sent to a new node, either through gossip or [`cluster_meet`](crate::ClusterCommands::cluster_meet).
+    /// Handshake message sent to a new node, either through gossip or [`cluster_meet`](crate::commands::ClusterCommands::cluster_meet).
     pub cluster_stats_messages_meet_received: usize,
 
     /// Mark node xxx as failing.
@@ -653,10 +653,9 @@ impl FromValue for ClusterInfo {
             .map(|line| {
                 let mut parts = line.split(':');
                 match (parts.next(), parts.next(), parts.next()) {
-                    (Some(key), Some(value), None) => Ok((
-                        key.to_owned(),
-                        Value::BulkString(Some(value.as_bytes().to_vec())),
-                    )),
+                    (Some(key), Some(value), None) => {
+                        Ok((key.to_owned(), Value::BulkString(value.as_bytes().to_vec())))
+                    }
                     _ => Err(Error::Client(
                         "Unexpected result for cluster_info".to_owned(),
                     )),
@@ -771,7 +770,7 @@ impl FromValue for ClusterLinkDirection {
     }
 }
 
-/// Result for the [`cluster_links`](crate::ClusterCommands::cluster_links) command
+/// Result for the [`cluster_links`](ClusterCommands::cluster_links) command
 pub struct ClusterLinkInfo {
     /// This link is established by the local node to the peer,
     /// or accepted by the local node from the peer.
@@ -806,7 +805,7 @@ impl FromValue for ClusterLinkInfo {
     }
 }
 
-/// Type of [`cluster reset`](crate::ClusterCommands::cluster_reset)
+/// Type of [`cluster reset`](ClusterCommands::cluster_reset)
 pub enum ClusterResetType {
     Hard,
     Soft,
@@ -821,7 +820,7 @@ impl IntoArgs for ClusterResetType {
     }
 }
 
-/// Subcommand for the [`cluster_setslot`](crate::ClusterCommands::cluster_setslot) command.
+/// Subcommand for the [`cluster_setslot`](ClusterCommands::cluster_setslot) command.
 pub enum ClusterSetSlotSubCommand {
     /// Set a hash slot in importing state.
     Importing { node_id: String },
@@ -844,7 +843,7 @@ impl IntoArgs for ClusterSetSlotSubCommand {
     }
 }
 
-/// Result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+/// Result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
 #[derive(Debug)]
 pub struct ClusterShardResult {
     pub slots: Vec<(u16, u16)>,
@@ -862,7 +861,7 @@ impl FromValue for ClusterShardResult {
     }
 }
 
-/// Cluster node result for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+/// Cluster node result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
 #[derive(Debug)]
 pub struct ClusterNodeResult {
     /// The unique node id for this particular node.
@@ -915,7 +914,7 @@ impl FromValue for ClusterNodeResult {
     }
 }
 
-/// Cluster health status for the [`cluster_shards`](crate::ClusterCommands::cluster_shards) command.
+/// Cluster health status for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
 #[derive(Debug)]
 pub enum ClusterHealthStatus {
     Online,

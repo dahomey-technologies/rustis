@@ -1,11 +1,11 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, BatchPreparedCommand, Client, PreparedCommand},
+    commands::{GraphCache, GraphValue},
     resp::{
-        cmd, CommandArg, Command, CommandArgs, FromKeyValueValueArray, FromSingleValueArray,
-        FromValue, IntoArgs, Value,
+        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue,
+        FromValueArray, IntoArgs, SingleArg, Value,
     },
-    ClientTrait, Error, Future, GraphCache, GraphValue, PipelinePreparedCommand, PreparedCommand,
-    Result,
+    Error, Future, Result,
 };
 use smallvec::SmallVec;
 use std::{
@@ -31,12 +31,12 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<N, V, R>(&mut self, name: impl Into<CommandArg>) -> PreparedCommand<Self, R>
+    fn graph_config_get<N, V, R>(&mut self, name: impl SingleArg) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: FromValue,
-        V: FromValue,
-        R: FromKeyValueValueArray<N, V>,
+        N: FromSingleValue,
+        V: FromSingleValue,
+        R: FromKeyValueArray<N, V>,
     {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
     }
@@ -56,8 +56,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_config_set(
         &mut self,
-        name: impl Into<CommandArg>,
-        value: impl Into<CommandArg>,
+        name: impl SingleArg,
+        value: impl SingleArg,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -73,7 +73,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(&mut self, graph: impl Into<CommandArg>) -> PreparedCommand<Self, String>
+    fn graph_delete(&mut self, graph: impl SingleArg) -> PreparedCommand<Self, String>
     where
         Self: Sized,
     {
@@ -94,10 +94,10 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.explain/>](https://redis.io/commands/graph.explain/)
     #[must_use]
-    fn graph_explain<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn graph_explain<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -113,7 +113,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_list<R: FromValue, RR: FromSingleValueArray<R>>(&mut self) -> PreparedCommand<Self, RR>
+    fn graph_list<R: FromSingleValue, RR: FromValueArray<R>>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
     {
@@ -125,7 +125,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to profile
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// String representation of a query execution plan, with details on results produced by and time spent in each operation.
@@ -133,10 +133,10 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_profile<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn graph_profile<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, RR>
     where
@@ -150,7 +150,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to execute
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// returns a [`result set`](GraphResultSet)
@@ -161,8 +161,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_query(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -184,7 +184,7 @@ pub trait GraphCommands {
     /// # Arguments
     /// * `graph` - graph name.
     /// * `query`- query to execute
-    /// * `options` - See [`GraphQueryOptions`](crate::GraphQueryOptions)
+    /// * `options` - See [`GraphQueryOptions`](GraphQueryOptions)
     ///
     /// # Return
     /// returns a [`result set`](GraphResultSet)
@@ -194,8 +194,8 @@ pub trait GraphCommands {
     #[must_use]
     fn graph_ro_query(
         &mut self,
-        graph: impl Into<CommandArg>,
-        query: impl Into<CommandArg>,
+        graph: impl SingleArg,
+        query: impl SingleArg,
         options: GraphQueryOptions,
     ) -> PreparedCommand<Self, GraphResultSet>
     where
@@ -223,9 +223,9 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
-    fn graph_slowlog<R: FromSingleValueArray<GraphSlowlogResult>>(
+    fn graph_slowlog<R: FromValueArray<GraphSlowlogResult>>(
         &mut self,
-        graph: impl Into<CommandArg>,
+        graph: impl SingleArg,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -234,7 +234,7 @@ pub trait GraphCommands {
     }
 }
 
-/// Options for the [`graph_query`](crate::GraphCommands::graph_query) command
+/// Options for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Default)]
 pub struct GraphQueryOptions {
     command_args: CommandArgs,
@@ -256,7 +256,7 @@ impl IntoArgs for GraphQueryOptions {
     }
 }
 
-/// Result set for the [`graph_query`](crate::GraphCommands::graph_query) command
+/// Result set for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Debug)]
 pub struct GraphResultSet {
     pub header: GraphHeader,
@@ -268,7 +268,7 @@ impl GraphResultSet {
     pub(crate) fn post_process(
         value: Value,
         command: Command,
-        client: &mut dyn ClientTrait,
+        client: &mut Client,
     ) -> Future<Self> {
         let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
@@ -279,18 +279,38 @@ impl GraphResultSet {
     pub(crate) fn from_value_async<'a, 'b: 'a>(
         value: Value,
         graph_name: &'b str,
-        client: &'a mut dyn ClientTrait,
+        client: &'a mut Client,
     ) -> Future<'a, Self> {
         Box::pin(async move {
-            let mut cache = client
-                .get_cache()
-                .get_entry::<GraphCache>(&format!("graph:{graph_name}"))?;
+            let cache_key = format!("graph:{graph_name}");
+            let (cache_hit, num_node_labels, num_prop_keys, num_rel_types) = {
+                let client_state = client.get_client_state();
+                match client_state.get_state::<GraphCache>(&cache_key)? {
+                    Some(cache) => {
+                        if cache.check_for_result(&value) {
+                            (true, 0, 0, 0)
+                        } else {
+                            (
+                                false,
+                                cache.node_labels.len(),
+                                cache.property_keys.len(),
+                                cache.relationship_types.len(),
+                            )
+                        }
+                    }
+                    None => {
+                        let cache = GraphCache::default();
 
-            if !cache.check_for_result(&value) {
-                let num_node_labels = cache.node_labels.len();
-                let num_prop_keys = cache.property_keys.len();
-                let num_rel_types = cache.relationship_types.len();
+                        if cache.check_for_result(&value) {
+                            (true, 0, 0, 0)
+                        } else {
+                            (false, 0, 0, 0)
+                        }
+                    }
+                }
+            };
 
+            if !cache_hit {
                 let (node_labels, prop_keys, rel_types) = Self::load_missing_ids(
                     graph_name,
                     client,
@@ -300,13 +320,25 @@ impl GraphResultSet {
                 )
                 .await?;
 
-                cache = client
-                    .get_cache()
-                    .get_entry::<GraphCache>(&format!("graph:{graph_name}"))?;
+                let mut client_state = client.get_client_state_mut();
+                let cache = client_state.get_state_mut::<GraphCache>(&cache_key)?;
 
-                cache.update(node_labels, prop_keys, rel_types);
+                cache.update(
+                    num_node_labels,
+                    num_prop_keys,
+                    num_rel_types,
+                    node_labels,
+                    prop_keys,
+                    rel_types,
+                );
 
                 log::debug!("cache updated: {cache:?}");
+            } else if num_node_labels == 0 && num_prop_keys == 0 && num_rel_types == 0 {
+                // force cache creation
+                let mut client_state = client.get_client_state_mut();
+                client_state.get_state_mut::<GraphCache>(&cache_key)?;
+
+                log::debug!("graph cache created");
             }
 
             let values: Vec<Value> = value.into()?;
@@ -318,7 +350,12 @@ impl GraphResultSet {
                     rows: Default::default(),
                     statistics: statistics.into()?,
                 }),
-                (Some(header), Some(Value::Array(Some(rows))), Some(statistics), None) => {
+                (Some(header), Some(Value::Array(rows)), Some(statistics), None) => {
+                    let client_state = client.get_client_state();
+                    let Some(cache) = client_state.get_state::<GraphCache>(&cache_key)? else {
+                        return Err(Error::Client("Cannot find graph cache".to_owned()));
+                    };
+
                     let rows = rows
                         .into_iter()
                         .map(|v| GraphResultRow::from_value(v, cache))
@@ -337,7 +374,7 @@ impl GraphResultSet {
 
     async fn load_missing_ids(
         graph_name: &str,
-        client: &mut dyn ClientTrait,
+        client: &mut Client,
         num_node_labels: usize,
         num_prop_keys: usize,
         num_rel_types: usize,
@@ -382,7 +419,7 @@ impl GraphResultSet {
 
         let result: Value = pipeline.execute().await?;
 
-        let Value::Array(Some(results)) = result else {
+        let Value::Array(results) = result else {
             return Err(Error::Client("Cannot parse GraphResultSet from result".to_owned()));
         };
 
@@ -432,7 +469,7 @@ pub struct GraphHeader {
 
 impl FromValue for GraphHeader {
     fn from_value(value: Value) -> Result<Self> {
-        let header: SmallVec<[(u8, String); 10]> = value.into()?;
+        let header: SmallVec<[(u16, String); 10]> = value.into()?;
         let column_names = header
             .into_iter()
             .map(|(_colmun_type, column_name)| column_name)
@@ -442,6 +479,7 @@ impl FromValue for GraphHeader {
     }
 }
 
+/// Result row for the [`graph_query`](GraphCommands::graph_query) command
 #[derive(Debug)]
 pub struct GraphResultRow {
     /// collection of values
@@ -452,7 +490,7 @@ pub struct GraphResultRow {
 
 impl GraphResultRow {
     pub(crate) fn from_value(value: Value, cache: &GraphCache) -> Result<Self> {
-        let Value::Array(Some(values)) = value else {
+        let Value::Array(values) = value else {
             return Err(Error::Client("Cannot parse GraphResultRow".to_owned()));
         };
 
@@ -465,7 +503,7 @@ impl GraphResultRow {
     }
 }
 
-/// Statistics part of a graph ['result set`](crate::GraphResultSet)
+/// Statistics part of a graph ['result set`](GraphResultSet)
 #[derive(Debug)]
 pub struct GraphQueryStatistics {
     pub labels_added: usize,
@@ -522,7 +560,7 @@ impl FromValue for GraphQueryStatistics {
         let mut statistics: HashMap<String, String> = values
             .into_iter()
             .map(|v| {
-                let Value::BulkString(Some(s)) = v else {
+                let Value::BulkString(s) = v else {
                     return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
                 };
 
@@ -553,7 +591,7 @@ impl FromValue for GraphQueryStatistics {
     }
 }
 
-/// Result for the [`graph_slowlog`](crate::GraphCommands::graph_slowlog) command
+/// Result for the [`graph_slowlog`](GraphCommands::graph_slowlog) command
 #[derive(Debug)]
 pub struct GraphSlowlogResult {
     /// A Unix timestamp at which the log entry was processed.

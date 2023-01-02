@@ -1,30 +1,30 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray, FromValue,
-        HashMapExt, IntoArgs, KeyValueArgOrCollection, Value,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, MultipleArgsCollection, SingleArg, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 
-/// A group of Redis commands related to Sentinel
+/// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
 /// # See Also
 /// [Sentinel Commands](https://redis.io/docs/management/sentinel/#sentinel-commands)
 pub trait SentinelCommands {
     /// Get the current value of a global Sentinel configuration parameter.
     ///
     /// The specified name may be a wildcard.
-    /// Similar to the Redis [`config_get`](crate::ServerCommands::config_get) command.
+    /// Similar to the Redis [`config_get`](crate::commands::ServerCommands::config_get) command.
     #[must_use]
     fn sentinel_config_get<N, RN, RV, R>(&mut self, name: N) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        RN: FromValue,
-        RV: FromValue,
-        R: FromKeyValueValueArray<RN, RV>,
+        N: SingleArg,
+        RN: FromSingleValue,
+        RV: FromSingleValue,
+        R: FromKeyValueArray<RN, RV>,
     {
         prepare_command(self, cmd("SENTINEL").arg("CONFIG").arg("GET").arg(name))
     }
@@ -34,8 +34,8 @@ pub trait SentinelCommands {
     fn sentinel_config_set<N, V>(&mut self, name: N, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        V: Into<CommandArg>,
+        N: SingleArg,
+        V: SingleArg,
     {
         prepare_command(
             self,
@@ -55,7 +55,7 @@ pub trait SentinelCommands {
     fn sentinel_ckquorum<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("CKQUORUM").arg(master_name))
     }
@@ -68,7 +68,7 @@ pub trait SentinelCommands {
     fn sentinel_failover<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("FAILOVER").arg(master_name))
     }
@@ -106,7 +106,7 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, Option<(String, u16)>>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(
             self,
@@ -116,14 +116,14 @@ pub trait SentinelCommands {
         )
     }
 
-    /// Return cached [`info`](crate::ServerCommands::info) output from masters and replicas.
+    /// Return cached [`info`](crate::commands::ServerCommands::info) output from masters and replicas.
     #[must_use]
     fn sentinel_info_cache<N, NN, R>(&mut self, master_names: NN) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        NN: ArgsOrCollection<N>,
-        R: FromKeyValueValueArray<String, Vec<(u64, String)>>,
+        N: SingleArg,
+        NN: MultipleArgsCollection<N>,
+        R: FromKeyValueArray<String, Vec<(u64, String)>>,
     {
         prepare_command(self, cmd("SENTINEL").arg("INFO-CACHE").arg(master_names))
     }
@@ -133,7 +133,7 @@ pub trait SentinelCommands {
     fn sentinel_master<N>(&mut self, master_name: N) -> PreparedCommand<Self, SentinelMasterInfo>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("MASTER").arg(master_name))
     }
@@ -163,8 +163,8 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        I: Into<CommandArg>,
+        N: SingleArg,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -181,17 +181,17 @@ pub trait SentinelCommands {
     ///
     /// The master will no longer be monitored,
     /// and will totally be removed from the internal state of the Sentinel,
-    /// so it will no longer listed by [`sentinel_masters`](crate::SentinelCommands::sentinel_masters) and so forth.
+    /// so it will no longer listed by [`sentinel_masters`](SentinelCommands::sentinel_masters) and so forth.
     #[must_use]
     fn sentinel_remove<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("REMOVE").arg(name))
     }
 
-    /// The SET command is very similar to the [`config_set`](crate::ServerCommands::config_set) command of Redis,
+    /// The SET command is very similar to the [`config_set`](crate::commands::ServerCommands::config_set) command of Redis,
     /// and is used in order to change configuration parameters of a specific master.
     ///
     /// Multiple option / value pairs can be specified (or none at all).
@@ -201,10 +201,10 @@ pub trait SentinelCommands {
     fn sentinel_set<N, O, V, C>(&mut self, name: N, configs: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        O: Into<CommandArg>,
-        V: Into<CommandArg>,
-        C: KeyValueArgOrCollection<O, V>,
+        N: SingleArg,
+        O: SingleArg,
+        V: SingleArg,
+        C: KeyValueArgsCollection<O, V>,
     {
         prepare_command(self, cmd("SENTINEL").arg("SET").arg(name).arg(configs))
     }
@@ -235,7 +235,7 @@ pub trait SentinelCommands {
     ) -> PreparedCommand<Self, Vec<SentinelReplicaInfo>>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("REPLICAS").arg(master_name))
     }
@@ -245,14 +245,14 @@ pub trait SentinelCommands {
     /// The pattern argument is a glob-style pattern.
     /// The reset process clears any previous state in a master (including a failover in progress),
     /// and removes every replica and sentinel already discovered and associated with the master.
-    /// 
+    ///
     /// # Return
     /// The number of reset masters
     #[must_use]
     fn sentinel_reset<P>(&mut self, pattern: P) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        P: Into<CommandArg>,
+        P: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("RESET").arg(pattern))
     }
@@ -262,7 +262,7 @@ pub trait SentinelCommands {
     fn sentinel_sentinels<N>(&mut self, master_name: N) -> PreparedCommand<Self, Vec<SentinelInfo>>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("SENTINEL").arg("SENTINELS").arg(master_name))
     }
@@ -280,6 +280,7 @@ pub trait SentinelCommands {
     }
 }
 
+/// Result for the [`sentinel_master`](SentinelCommands::sentinel_master) command.
 #[derive(Debug)]
 pub struct SentinelMasterInfo {
     pub name: String,
@@ -333,6 +334,7 @@ impl FromValue for SentinelMasterInfo {
     }
 }
 
+/// /// Result for the [`sentinel_replicas`](SentinelCommands::sentinel_replicas) command.
 #[derive(Debug)]
 pub struct SentinelReplicaInfo {
     pub name: String,
@@ -388,6 +390,7 @@ impl FromValue for SentinelReplicaInfo {
     }
 }
 
+/// Result for the [`sentinel_sentinels`](SentinelCommands::sentinel_sentinels) command.
 pub struct SentinelInfo {
     pub name: String,
     pub ip: String,
@@ -429,7 +432,7 @@ impl FromValue for SentinelInfo {
 }
 
 /// Different crash simulation scenario modes for
-/// the [`sentinel_simulate_failure`](crate::SentinelCommands::sentinel_simulate_failure) command
+/// the [`sentinel_simulate_failure`](SentinelCommands::sentinel_simulate_failure) command
 pub enum SentinelSimulateFailureMode {
     CrashAfterElection,
     CrashAfterPromotion,

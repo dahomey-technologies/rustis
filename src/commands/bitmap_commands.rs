@@ -1,7 +1,8 @@
 use crate::{
-    prepare_command,
-    resp::{cmd, ArgsOrCollection, CommandArg, CommandArgs, IntoArgs, SingleArgOrCollection},
-    PreparedCommand,
+    client::{prepare_command, PreparedCommand},
+    resp::{
+        cmd, MultipleArgsCollection, CommandArgs, IntoArgs, SingleArg, SingleArgCollection,
+    },
 };
 
 /// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/)
@@ -21,7 +22,7 @@ pub trait BitmapCommands {
     fn bitcount<K>(&mut self, key: K, range: BitRange) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("BITCOUNT").arg(key).arg(range))
     }
@@ -40,10 +41,10 @@ pub trait BitmapCommands {
     fn bitfield<K, C, E, O>(&mut self, key: K, sub_commands: C) -> PreparedCommand<Self, Vec<u64>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        O: Into<CommandArg>,
-        C: ArgsOrCollection<BitFieldSubCommand<E, O>>,
+        K: SingleArg,
+        E: SingleArg,
+        O: SingleArg,
+        C: MultipleArgsCollection<BitFieldSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD").arg(key).arg(sub_commands))
     }
@@ -66,10 +67,10 @@ pub trait BitmapCommands {
     ) -> PreparedCommand<Self, Vec<u64>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        O: Into<CommandArg>,
-        C: ArgsOrCollection<BitFieldGetSubCommand<E, O>>,
+        K: SingleArg,
+        E: SingleArg,
+        O: SingleArg,
+        C: MultipleArgsCollection<BitFieldGetSubCommand<E, O>>,
     {
         prepare_command(self, cmd("BITFIELD_RO").arg(key).arg(get_commands))
     }
@@ -92,9 +93,9 @@ pub trait BitmapCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
+        D: SingleArg,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
     }
@@ -111,7 +112,7 @@ pub trait BitmapCommands {
     fn bitpos<K>(&mut self, key: K, bit: u64, range: BitRange) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("BITPOS").arg(key).arg(bit).arg(range))
     }
@@ -127,7 +128,7 @@ pub trait BitmapCommands {
     fn getbit<K>(&mut self, key: K, offset: u64) -> PreparedCommand<Self, u64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("GETBIT").arg(key).arg(offset))
     }
@@ -143,13 +144,13 @@ pub trait BitmapCommands {
     fn setbit<K>(&mut self, key: K, offset: u64, value: u64) -> PreparedCommand<Self, u64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("SETBIT").arg(key).arg(offset).arg(value))
     }
 }
 
-/// Interval options for the [`bitcount`](crate::BitmapCommands::bitcount) command
+/// Interval options for the [`bitcount`](BitmapCommands::bitcount) command
 #[derive(Default)]
 pub struct BitRange {
     command_args: CommandArgs,
@@ -163,6 +164,7 @@ impl BitRange {
         }
     }
 
+    /// Unit of the range, bit or byte
     #[must_use]
     pub fn unit(self, unit: BitUnit) -> Self {
         Self {
@@ -177,6 +179,7 @@ impl IntoArgs for BitRange {
     }
 }
 
+/// Unit of a [`range`](BitRange), bit or byte
 pub enum BitUnit {
     Byte,
     Bit,
@@ -191,11 +194,11 @@ impl IntoArgs for BitUnit {
     }
 }
 
-/// Sub-command for the [`bitfield`](crate::BitmapCommands::bitfield) command
+/// Sub-command for the [`bitfield`](BitmapCommands::bitfield) command
 pub enum BitFieldSubCommand<E = &'static str, O = &'static str>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
     Get(BitFieldGetSubCommand<E, O>),
     Set(E, O, u64),
@@ -205,19 +208,23 @@ where
 
 impl<E, O> BitFieldSubCommand<E, O>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
+    /// Returns the specified bit field.
     #[must_use]
     pub fn get(encoding: E, offset: O) -> Self {
         Self::Get(BitFieldGetSubCommand::new(encoding, offset))
     }
 
+    /// Set the specified bit field and returns its old value.
     #[must_use]
     pub fn set(encoding: E, offset: O, value: u64) -> Self {
         Self::Set(encoding, offset, value)
     }
 
+    ///  Increments or decrements (if a negative increment is given)
+    /// the specified bit field and returns the new value.
     #[must_use]
     pub fn incr_by(encoding: E, offset: O, increment: i64) -> Self {
         Self::IncrBy(encoding, offset, increment)
@@ -231,8 +238,8 @@ where
 
 impl<E, O> IntoArgs for BitFieldSubCommand<E, O>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
@@ -248,10 +255,11 @@ where
     }
 }
 
+/// Sub-command for the [`bitfield`](BitmapCommands::bitfield) command
 pub struct BitFieldGetSubCommand<E = &'static str, O = &'static str>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
     encoding: E,
     offset: O,
@@ -259,8 +267,8 @@ where
 
 impl<E, O> BitFieldGetSubCommand<E, O>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
     #[must_use]
     pub fn new(encoding: E, offset: O) -> Self {
@@ -270,14 +278,15 @@ where
 
 impl<E, O> IntoArgs for BitFieldGetSubCommand<E, O>
 where
-    E: Into<CommandArg>,
-    O: Into<CommandArg>,
+    E: SingleArg,
+    O: SingleArg,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg("GET").arg(self.encoding).arg(self.offset)
     }
 }
 
+/// Option for the [`BitFieldSubCommand`](BitFieldSubCommand) sub-command.
 pub enum BitFieldOverflow {
     Wrap,
     Sat,
@@ -294,7 +303,7 @@ impl IntoArgs for BitFieldOverflow {
     }
 }
 
-/// Bit operation for the [`bitop`](crate::BitmapCommands::bitop) command.
+/// Bit operation for the [`bitop`](BitmapCommands::bitop) command.
 pub enum BitOperation {
     And,
     Or,

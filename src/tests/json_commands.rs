@@ -1,6 +1,8 @@
 use crate::{
-    resp::Value, tests::get_redis_stack_test_client, FlushingMode, JsonArrIndexOptions,
-    JsonCommands, JsonGetOptions, Result, ServerCommands,
+    commands::{FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetOptions, ServerCommands},
+    resp::Value,
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use serial_test::serial;
 use smallvec::SmallVec;
@@ -572,7 +574,12 @@ async fn json_toggle() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     client
-        .json_set("key", "$", r#"{"foo":[{"bar":true},{"bar":12}]}"#, Default::default())
+        .json_set(
+            "key",
+            "$",
+            r#"{"foo":[{"bar":true},{"bar":12}]}"#,
+            Default::default(),
+        )
         .await?;
 
     let result: Vec<Option<usize>> = client.json_toggle("key", "$.foo[*].bar").await?;
@@ -602,7 +609,12 @@ async fn json_type() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     client
-        .json_set("key", "$", r#"{"a":2, "nested": {"a": true}, "foo": "bar"}"#, Default::default())
+        .json_set(
+            "key",
+            "$",
+            r#"{"a":2, "nested": {"a": true}, "foo": "bar"}"#,
+            Default::default(),
+        )
         .await?;
 
     let result: Vec<String> = client.json_type("key", "$..foo").await?;
@@ -619,4 +631,3 @@ async fn json_type() -> Result<()> {
 
     Ok(())
 }
-

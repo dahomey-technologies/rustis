@@ -1,12 +1,13 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        HashMapExt, IntoArgs, KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray,
+        FromValue, HashMapExt, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to Server Management
@@ -28,8 +29,8 @@ pub trait ServerCommands {
     fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
     }
@@ -46,8 +47,8 @@ pub trait ServerCommands {
     fn acl_deluser<U, UU>(&mut self, usernames: UU) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        UU: SingleArgOrCollection<U>,
+        U: SingleArg,
+        UU: SingleArgCollection<U>,
     {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
     }
@@ -68,9 +69,9 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        C: Into<CommandArg>,
-        R: FromValue,
+        U: SingleArg,
+        C: SingleArg,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -93,7 +94,10 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: FromValue>(&mut self, options: AclGenPassOptions) -> PreparedCommand<Self, R>
+    fn acl_genpass<R: FromSingleValue>(
+        &mut self,
+        options: AclGenPassOptions,
+    ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
     {
@@ -110,8 +114,8 @@ pub trait ServerCommands {
     fn acl_getuser<U, RR>(&mut self, username: U) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        RR: FromKeyValueValueArray<String, Value>,
+        U: SingleArg,
+        RR: FromKeyValueArray<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
@@ -160,14 +164,14 @@ pub trait ServerCommands {
     ///
     /// # Return
     /// A key/value collection of ACL security events.
-    /// Empty collection when called with the [`reset`](crate::AclLogOptions::reset) option
+    /// Empty collection when called with the [`reset`](AclLogOptions::reset) option
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
     fn acl_log<EE>(&mut self, options: AclLogOptions) -> PreparedCommand<Self, Vec<EE>>
     where
         Self: Sized,
-        EE: FromKeyValueValueArray<String, Value>,
+        EE: FromKeyValueArray<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
@@ -199,9 +203,9 @@ pub trait ServerCommands {
     fn acl_setuser<U, R, RR>(&mut self, username: U, rules: RR) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        R: Into<CommandArg>,
-        RR: SingleArgOrCollection<R>,
+        U: SingleArg,
+        R: SingleArg,
+        RR: SingleArgCollection<R>,
     {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
@@ -216,8 +220,8 @@ pub trait ServerCommands {
     fn acl_users<U, UU>(&mut self) -> PreparedCommand<Self, UU>
     where
         Self: Sized,
-        U: FromValue,
-        UU: FromSingleValueArray<U>,
+        U: FromSingleValue,
+        UU: FromValueArray<U>,
     {
         prepare_command(self, cmd("ACL").arg("USERS"))
     }
@@ -229,7 +233,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: FromValue>(&mut self) -> PreparedCommand<Self, U>
+    fn acl_whoami<U: FromSingleValue>(&mut self) -> PreparedCommand<Self, U>
     where
         Self: Sized,
     {
@@ -254,7 +258,7 @@ pub trait ServerCommands {
     /// Number of total commands in this Redis server.
     ///
     /// # Return
-    /// number of commands returned by [`command`](crate::ServerCommands::command)
+    /// number of commands returned by [`command`](ServerCommands::command)
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
@@ -275,9 +279,9 @@ pub trait ServerCommands {
     fn command_docs<N, NN, DD>(&mut self, command_names: NN) -> PreparedCommand<Self, DD>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        NN: SingleArgOrCollection<N>,
-        DD: FromKeyValueValueArray<String, CommandDoc>,
+        N: SingleArg,
+        NN: SingleArgCollection<N>,
+        DD: FromKeyValueArray<String, CommandDoc>,
     {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
     }
@@ -292,9 +296,9 @@ pub trait ServerCommands {
     fn command_getkeys<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<CommandArg>,
-        AA: SingleArgOrCollection<A>,
-        KK: FromSingleValueArray<String>,
+        A: SingleArg,
+        AA: SingleArgCollection<A>,
+        KK: FromValueArray<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
@@ -309,9 +313,9 @@ pub trait ServerCommands {
     fn command_getkeysandflags<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
     where
         Self: Sized,
-        A: Into<CommandArg>,
-        AA: SingleArgOrCollection<A>,
-        KK: FromKeyValueValueArray<String, Vec<String>>,
+        A: SingleArg,
+        AA: SingleArgCollection<A>,
+        KK: FromKeyValueArray<String, Vec<String>>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
@@ -326,8 +330,8 @@ pub trait ServerCommands {
     fn command_info<N, NN>(&mut self, command_names: NN) -> PreparedCommand<Self, Vec<CommandInfo>>
     where
         Self: Sized,
-        N: Into<CommandArg>,
-        NN: SingleArgOrCollection<N>,
+        N: SingleArg,
+        NN: SingleArgCollection<N>,
     {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
     }
@@ -342,7 +346,7 @@ pub trait ServerCommands {
     fn command_list<CC>(&mut self, options: CommandListOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        CC: FromSingleValueArray<String>,
+        CC: FromValueArray<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("LIST").arg(options))
     }
@@ -361,15 +365,15 @@ pub trait ServerCommands {
     fn config_get<P, PP, V, VV>(&mut self, params: PP) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        P: Into<CommandArg>,
-        PP: SingleArgOrCollection<P>,
-        V: FromValue,
-        VV: FromKeyValueValueArray<String, V>,
+        P: SingleArg,
+        PP: SingleArgCollection<P>,
+        V: FromSingleValue,
+        VV: FromKeyValueArray<String, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
 
-    /// Resets the statistics reported by Redis using the [`info`](crate::ServerCommands::info) command.
+    /// Resets the statistics reported by Redis using the [`info`](ServerCommands::info) command.
     ///
     /// # See Also
     /// [<https://redis.io/commands/config-resetstat/>](https://redis.io/commands/config-resetstat/)
@@ -384,7 +388,7 @@ pub trait ServerCommands {
     /// Rewrites the redis.conf file the server was started with,
     /// applying the minimal changes needed to make it reflect the configuration currently used by the server,
     /// which may be different compared to the original one because of the use of the
-    /// [`config_set`](crate::ServerCommands::config_set) command.
+    /// [`config_set`](ServerCommands::config_set) command.
     ///
     /// # See Also
     /// [<https://redis.io/commands/config-rewrite/>](https://redis.io/commands/config-rewrite/)
@@ -404,9 +408,9 @@ pub trait ServerCommands {
     fn config_set<P, V, C>(&mut self, configs: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<CommandArg>,
-        V: Into<CommandArg>,
-        C: KeyValueArgOrCollection<P, V>,
+        P: SingleArg,
+        V: SingleArg,
+        C: KeyValueArgsCollection<P, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
     }
@@ -469,7 +473,7 @@ pub trait ServerCommands {
     fn info<SS>(&mut self, sections: SS) -> PreparedCommand<Self, String>
     where
         Self: Sized,
-        SS: SingleArgOrCollection<InfoSection>,
+        SS: SingleArgCollection<InfoSection>,
     {
         prepare_command(self, cmd("INFO").arg(sections))
     }
@@ -528,9 +532,9 @@ pub trait ServerCommands {
     fn latency_histogram<C, CC, RR>(&mut self, commands: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        CC: SingleArgOrCollection<C>,
-        RR: FromKeyValueValueArray<String, CommandHistogram>,
+        C: SingleArg,
+        CC: SingleArgCollection<C>,
+        RR: FromKeyValueArray<String, CommandHistogram>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
@@ -548,7 +552,7 @@ pub trait ServerCommands {
     fn latency_history<RR>(&mut self, event: LatencyHistoryEvent) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromSingleValueArray<(u32, u32)>,
+        RR: FromValueArray<(u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTORY").arg(event))
     }
@@ -564,7 +568,7 @@ pub trait ServerCommands {
     /// - All-time maximum latency for this event.
     ///
     /// "All-time" means the maximum latency since the Redis instance was started,
-    /// or the time that events were [`reset`](crate::ConnectionCommands::reset).
+    /// or the time that events were [`reset`](crate::commands::ConnectionCommands::reset).
     ///
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
@@ -572,7 +576,7 @@ pub trait ServerCommands {
     fn latency_latest<RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromSingleValueArray<(String, u32, u32, u32)>,
+        RR: FromValueArray<(String, u32, u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("LATEST"))
     }
@@ -588,7 +592,7 @@ pub trait ServerCommands {
     fn latency_reset<EE>(&mut self, events: EE) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        EE: SingleArgOrCollection<LatencyHistoryEvent>,
+        EE: SingleArgCollection<LatencyHistoryEvent>,
     {
         prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
     }
@@ -682,7 +686,7 @@ pub trait ServerCommands {
     ) -> PreparedCommand<Self, Option<usize>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
     }
@@ -691,7 +695,7 @@ pub trait ServerCommands {
     ///
     /// # Return
     /// list of loaded modules.
-    /// Each element in the list represents a module as an instance of [`ModuleInfo`](crate::ModuleInfo)
+    /// Each element in the list represents a module as an instance of [`ModuleInfo`](ModuleInfo)
     ///
     /// # See Also
     /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
@@ -699,7 +703,7 @@ pub trait ServerCommands {
     fn module_list<MM>(&mut self) -> PreparedCommand<Self, MM>
     where
         Self: Sized,
-        MM: FromSingleValueArray<ModuleInfo>,
+        MM: FromValueArray<ModuleInfo>,
     {
         prepare_command(self, cmd("MODULE").arg("LIST"))
     }
@@ -712,7 +716,7 @@ pub trait ServerCommands {
     fn module_load<P>(&mut self, path: P, options: ModuleLoadOptions) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        P: Into<CommandArg>,
+        P: SingleArg,
     {
         prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
     }
@@ -725,7 +729,7 @@ pub trait ServerCommands {
     fn module_unload<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        N: Into<CommandArg>,
+        N: SingleArg,
     {
         prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
@@ -869,7 +873,7 @@ impl IntoArgs for FlushingMode {
     }
 }
 
-/// Options for the [`acl_cat`](crate::ServerCommands::acl_cat) command
+/// Options for the [`acl_cat`](ServerCommands::acl_cat) command
 #[derive(Default)]
 pub struct AclCatOptions {
     command_args: CommandArgs,
@@ -877,7 +881,7 @@ pub struct AclCatOptions {
 
 impl AclCatOptions {
     #[must_use]
-    pub fn category_name<C: Into<CommandArg>>(self, category_name: C) -> Self {
+    pub fn category_name<C: SingleArg>(self, category_name: C) -> Self {
         Self {
             command_args: self.command_args.arg(category_name),
         }
@@ -890,7 +894,7 @@ impl IntoArgs for AclCatOptions {
     }
 }
 
-/// Options for the [`acl_dryrun`](crate::ServerCommands::acl_dryrun) command
+/// Options for the [`acl_dryrun`](ServerCommands::acl_dryrun) command
 #[derive(Default)]
 pub struct AclDryRunOptions {
     command_args: CommandArgs,
@@ -900,8 +904,8 @@ impl AclDryRunOptions {
     #[must_use]
     pub fn arg<A, AA>(self, args: AA) -> Self
     where
-        A: Into<CommandArg>,
-        AA: SingleArgOrCollection<A>,
+        A: SingleArg,
+        AA: SingleArgCollection<A>,
     {
         Self {
             command_args: self.command_args.arg(args),
@@ -915,7 +919,7 @@ impl IntoArgs for AclDryRunOptions {
     }
 }
 
-/// Options for the [`acl_genpass`](crate::ServerCommands::acl_genpass) command
+/// Options for the [`acl_genpass`](ServerCommands::acl_genpass) command
 #[derive(Default)]
 pub struct AclGenPassOptions {
     command_args: CommandArgs,
@@ -941,7 +945,7 @@ impl IntoArgs for AclGenPassOptions {
     }
 }
 
-/// Options for the [`acl_log`](crate::ServerCommands::acl_log) command
+/// Options for the [`acl_log`](ServerCommands::acl_log) command
 #[derive(Default)]
 pub struct AclLogOptions {
     command_args: CommandArgs,
@@ -972,7 +976,7 @@ impl IntoArgs for AclLogOptions {
     }
 }
 
-/// Command info result for the [`command`](crate::ServerCommands::command) command.
+/// Command info result for the [`command`](ServerCommands::command) command.
 #[derive(Debug, Clone)]
 pub struct CommandInfo {
     /// This is the command's name in lowercase.
@@ -1098,7 +1102,7 @@ impl FromValue for CommandInfo {
 }
 
 /// Get additional information about a command
-/// 
+///
 /// See <https://redis.io/docs/reference/command-tips/>
 #[derive(Debug, Clone)]
 pub enum CommandTip {
@@ -1132,32 +1136,32 @@ impl FromValue for CommandTip {
     }
 }
 
-/// This tip can help clients determine the shards to send the command in clustering mode. 
-/// 
+/// This tip can help clients determine the shards to send the command in clustering mode.
+///
 /// The default behavior a client should implement for commands without the request_policy tip is as follows:
 /// 1. The command doesn't accept key name arguments: the client can execute the command on an arbitrary shard.
-/// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard, 
+/// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard,
 /// as determined by the hash slot of the input keys.
 #[derive(Debug, Clone)]
 pub enum RequestPolicy {
-    /// the client should execute the command on all nodes - masters and replicas alike. 
-    /// 
-    /// An example is the [`config_set`](crate::ServerCommands::config_set) command. 
+    /// the client should execute the command on all nodes - masters and replicas alike.
+    ///
+    /// An example is the [`config_set`](ServerCommands::config_set) command.
     /// This tip is in-use by commands that don't accept key name arguments. The command operates atomically per shard.
     AllNodes,
-    /// the client should execute the command on all master shards (e.g., the [`dbsize`](crate::ServerCommands::dbsize) command). 
-    /// 
+    /// the client should execute the command on all master shards (e.g., the [`dbsize`](ServerCommands::dbsize) command).
+    ///
     /// This tip is in-use by commands that don't accept key name arguments. The command operates atomically per shard.
     AllShards,
-    /// the client should execute the command on several shards. 
-    /// 
-    /// The shards that execute the command are determined by the hash slots of its input key name arguments. 
-    /// Examples for such commands include [`mset`](crate::StringCommands::mset), [`mget`](crate::StringCommands::mget) 
-    /// and [`del`](crate::GenericCommands::del). 
-    /// However, note that [`sunionstore`](crate::SetCommands::sunionstore) isn't considered 
+    /// the client should execute the command on several shards.
+    ///
+    /// The shards that execute the command are determined by the hash slots of its input key name arguments.
+    /// Examples for such commands include [`mset`](crate::commands::StringCommands::mset), [`mget`](crate::commands::StringCommands::mget)
+    /// and [`del`](crate::commands::GenericCommands::del).
+    /// However, note that [`sunionstore`](crate::commands::SetCommands::sunionstore) isn't considered
     /// as multi_shard because all of its keys must belong to the same hash slot.
     MultiShard,
-    /// indicates a non-trivial form of the client's request policy, such as the [`scan`](crate::GenericCommands::scan) command.
+    /// indicates a non-trivial form of the client's request policy, such as the [`scan`](crate::commands::GenericCommands::scan) command.
     Special,
 }
 
@@ -1177,58 +1181,58 @@ impl FromStr for RequestPolicy {
     }
 }
 
-/// This tip can help clients determine the aggregate they need to compute from the replies of multiple shards in a cluster. 
-/// 
-/// The default behavior for commands without a request_policy tip only applies to replies with of nested types 
-/// (i.e., an array, a set, or a map). 
+/// This tip can help clients determine the aggregate they need to compute from the replies of multiple shards in a cluster.
+///
+/// The default behavior for commands without a request_policy tip only applies to replies with of nested types
+/// (i.e., an array, a set, or a map).
 /// The client's implementation for the default behavior should be as follows:
-/// 1. The command doesn't accept key name arguments: the client can aggregate all replies within a single nested data structure. 
-/// For example, the array replies we get from calling [`keys`](crate::GenericCommands::keys) against all shards. 
+/// 1. The command doesn't accept key name arguments: the client can aggregate all replies within a single nested data structure.
+/// For example, the array replies we get from calling [`keys`](crate::commands::GenericCommands::keys) against all shards.
 /// These should be packed in a single in no particular order.
-/// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names. 
-/// For example, [`mget`](crate::StringCommands::mget)'s aggregated reply.
+/// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names.
+/// For example, [`mget`](crate::commands::StringCommands::mget)'s aggregated reply.
 #[derive(Debug, Clone)]
 pub enum ResponsePolicy {
-    /// the clients should return success if at least one shard didn't reply with an error. 
-    /// 
-    /// The client should reply with the first non-error reply it obtains. 
-    /// If all shards return an error, the client can reply with any one of these. 
-    /// For example, consider a [`script_kill`](crate::ScriptingCommands::script_kill) command that's sent to all shards. 
-    /// Although the script should be loaded in all of the cluster's shards, 
-    /// the [`script_kill`](crate::ScriptingCommands::script_kill) will typically run only on one at a given time.
+    /// the clients should return success if at least one shard didn't reply with an error.
+    ///
+    /// The client should reply with the first non-error reply it obtains.
+    /// If all shards return an error, the client can reply with any one of these.
+    /// For example, consider a [`script_kill`](crate::commands::ScriptingCommands::script_kill) command that's sent to all shards.
+    /// Although the script should be loaded in all of the cluster's shards,
+    /// the [`script_kill`](crate::commands::ScriptingCommands::script_kill) will typically run only on one at a given time.
     OneSucceeded,
-    /// the client should return successfully only if there are no error replies. 
-    /// 
-    /// Even a single error reply should disqualify the aggregate and be returned. 
-    /// Otherwise, the client should return one of the non-error replies. 
-    /// As an example, consider the [`config_set`](crate::ServerCommands::config_set), 
-    /// [`script_flush`](crate::ScriptingCommands::script_flush) and 
-    /// [`script_load`](crate::ScriptingCommands::script_load) commands.
+    /// the client should return successfully only if there are no error replies.
+    ///
+    /// Even a single error reply should disqualify the aggregate and be returned.
+    /// Otherwise, the client should return one of the non-error replies.
+    /// As an example, consider the [`config_set`](ServerCommands::config_set),
+    /// [`script_flush`](crate::commands::ScriptingCommands::script_flush) and
+    /// [`script_load`](crate::commands::ScriptingCommands::script_load) commands.
     AllSucceeded,
-    /// the client should return the result of a logical `AND` operation on all replies 
-    /// (only applies to integer replies, usually from commands that return either 0 or 1). 
-    /// 
-    /// Consider the [`script_exists`](crate::ScriptingCommands::script_exists) command as an example. 
-    /// It returns an array of 0's and 1's that denote the existence of its given SHA1 sums in the script cache. 
+    /// the client should return the result of a logical `AND` operation on all replies
+    /// (only applies to integer replies, usually from commands that return either 0 or 1).
+    ///
+    /// Consider the [`script_exists`](crate::commands::ScriptingCommands::script_exists) command as an example.
+    /// It returns an array of 0's and 1's that denote the existence of its given SHA1 sums in the script cache.
     /// The aggregated response should be 1 only when all shards had reported that a given script SHA1 sum is in their respective cache.
     AggLogicalAnd,
-    /// the client should return the result of a logical `OR` operation on all replies 
+    /// the client should return the result of a logical `OR` operation on all replies
     /// (only applies to integer replies, usually from commands that return either 0 or 1).
     AggLogicalOr,
-    /// the client should return the minimal value from the replies (only applies to numerical replies). 
-    /// 
-    /// The aggregate reply from a cluster-wide [`wait`](crate::GenericCommands::wait) command, for example, 
+    /// the client should return the minimal value from the replies (only applies to numerical replies).
+    ///
+    /// The aggregate reply from a cluster-wide [`wait`](crate::commands::GenericCommands::wait) command, for example,
     /// should be the minimal value (number of synchronized replicas) from all shards
     AggMin,
     /// the client should return the maximal value from the replies (only applies to numerical replies).
     AggMax,
-    /// the client should return the sum of replies (only applies to numerical replies). 
-    /// 
-    /// Example: [`dbsize`](crate::ServerCommands::dbsize).
+    /// the client should return the sum of replies (only applies to numerical replies).
+    ///
+    /// Example: [`dbsize`](ServerCommands::dbsize).
     AggSum,
-    /// this type of tip indicates a non-trivial form of reply policy. 
-    /// 
-    /// [`info`](crate::ServerCommands::info) is an excellent example of that.
+    /// this type of tip indicates a non-trivial form of reply policy.
+    ///
+    /// [`info`](ServerCommands::info) is an excellent example of that.
     Special,
 }
 
@@ -1252,7 +1256,7 @@ impl FromStr for ResponsePolicy {
     }
 }
 
-/// Key specifications of a command for the [`command`](crate::ServerCommands::command) command.
+/// Key specifications of a command for the [`command`](ServerCommands::command) command.
 #[derive(Debug, Clone)]
 pub struct KeySpecification {
     pub begin_search: BeginSearch,
@@ -1279,6 +1283,8 @@ impl FromValue for KeySpecification {
     }
 }
 
+/// The BeginSearch value of a specification informs
+/// the client of the extraction's beginning
 #[derive(Debug, Clone)]
 pub enum BeginSearch {
     Index(usize),
@@ -1313,6 +1319,8 @@ impl FromValue for BeginSearch {
     }
 }
 
+/// The FindKeys value of a key specification tells the client
+/// how to continue the search for key names.
 #[derive(Debug, Clone)]
 pub enum FindKeys {
     Range {
@@ -1358,7 +1366,7 @@ impl FromValue for FindKeys {
     }
 }
 
-/// Command doc result for the [`command_docs`](crate::ServerCommands::command_docs) command
+/// Command doc result for the [`command_docs`](ServerCommands::command_docs) command
 #[derive(Debug, Default)]
 pub struct CommandDoc {
     /// short command description.
@@ -1424,6 +1432,7 @@ impl FromValue for CommandDocFlag {
     }
 }
 
+/// Sub-result for the [`command_docs`](ServerCommands::command_docs) command
 #[derive(Debug)]
 pub struct HistoricalNote {
     pub version: String,
@@ -1485,10 +1494,11 @@ impl FromValue for CommandArgument {
             value: match values.remove_or_default("value") {
                 value @ Value::BulkString(_) => vec![value.into()?],
                 value @ Value::Array(_) => value.into()?,
-                _ => {
-                    return Err(Error::Client(
-                        "Cannot parse CommandArgument from result".to_owned(),
-                    ))
+                Value::Nil => vec![],
+                value => {
+                    return Err(Error::Client(format!(
+                        "Cannot parse CommandArgument from result: {value:?}"
+                    )))
                 }
             },
         })
@@ -1568,7 +1578,7 @@ impl FromValue for ArgumentFlag {
     }
 }
 
-/// Options for the [`command_list`](crate::ServerCommands::command_list) command.
+/// Options for the [`command_list`](ServerCommands::command_list) command.
 #[derive(Default)]
 pub struct CommandListOptions {
     command_args: CommandArgs,
@@ -1577,7 +1587,7 @@ pub struct CommandListOptions {
 impl CommandListOptions {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name<M: Into<CommandArg>>(self, module_name: M) -> Self {
+    pub fn filter_by_module_name<M: SingleArg>(self, module_name: M) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1589,7 +1599,7 @@ impl CommandListOptions {
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category<C: Into<CommandArg>>(self, category: C) -> Self {
+    pub fn filter_by_acl_category<C: SingleArg>(self, category: C) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1601,7 +1611,7 @@ impl CommandListOptions {
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn filter_by_pattern<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1618,7 +1628,7 @@ impl IntoArgs for CommandListOptions {
     }
 }
 
-/// Options for the [`failover`](crate::ServerCommands::failover) command.
+/// Options for the [`failover`](ServerCommands::failover) command.
 #[derive(Default)]
 pub struct FailOverOptions {
     command_args: CommandArgs,
@@ -1627,7 +1637,7 @@ pub struct FailOverOptions {
 impl FailOverOptions {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to<H: Into<CommandArg>>(self, host: H, port: u16) -> Self {
+    pub fn to<H: SingleArg>(self, host: H, port: u16) -> Self {
         Self {
             command_args: self.command_args.arg("TO").arg(host).arg(port),
         }
@@ -1642,7 +1652,7 @@ impl FailOverOptions {
         }
     }
 
-    /// If both the [`timeout`](crate::FailOverOptions::timeout) and [`to`](crate::FailOverOptions::to) options are set,
+    /// If both the [`timeout`](FailOverOptions::timeout) and [`to`](FailOverOptions::to) options are set,
     /// the force flag can also be used to designate that that once the timeout has elapsed,
     /// the master should failover to the target replica instead of rolling back.
     #[must_use]
@@ -1667,7 +1677,7 @@ impl IntoArgs for FailOverOptions {
     }
 }
 
-/// Section for the [`info`](crate::ServerCommands::info) command.
+/// Section for the [`info`](ServerCommands::info) command.
 pub enum InfoSection {
     Server,
     Clients,
@@ -1687,9 +1697,11 @@ pub enum InfoSection {
     Everything,
 }
 
-impl From<InfoSection> for CommandArg {
-    fn from(s: InfoSection) -> Self {
-        match s {
+impl SingleArg for InfoSection {}
+
+impl IntoArgs for InfoSection {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(match self {
             InfoSection::Server => CommandArg::Str("server"),
             InfoSection::Clients => CommandArg::Str("clients"),
             InfoSection::Memory => CommandArg::Str("memory"),
@@ -1706,12 +1718,12 @@ impl From<InfoSection> for CommandArg {
             InfoSection::All => CommandArg::Str("all"),
             InfoSection::Default => CommandArg::Str("default"),
             InfoSection::Everything => CommandArg::Str("everything"),
-        }
+        })
     }
 }
 
-/// Latency history event for the [`latency_graph`](crate::ServerCommands::latency_graph)
-/// & [`latency_history`](crate::ServerCommands::latency_history) commands.
+/// Latency history event for the [`latency_graph`](ServerCommands::latency_graph)
+/// & [`latency_history`](ServerCommands::latency_history) commands.
 pub enum LatencyHistoryEvent {
     ActiveDefragCycle,
     AofFsyncAlways,
@@ -1731,30 +1743,32 @@ pub enum LatencyHistoryEvent {
     RdbUnlinkTempFile,
 }
 
-impl From<LatencyHistoryEvent> for CommandArg {
-    fn from(e: LatencyHistoryEvent) -> Self {
-        match e {
-            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle".into(),
-            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always".into(),
-            LatencyHistoryEvent::AofStat => "aof-stat".into(),
-            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write".into(),
-            LatencyHistoryEvent::AofRename => "aof-rename".into(),
-            LatencyHistoryEvent::AofWrite => "aof-write".into(),
-            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child".into(),
-            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone".into(),
-            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync".into(),
-            LatencyHistoryEvent::Command => "command".into(),
-            LatencyHistoryEvent::ExpireCycle => "expire-cycle".into(),
-            LatencyHistoryEvent::EvictionCycle => "eviction-cycle".into(),
-            LatencyHistoryEvent::EvictionDel => "eviction-del".into(),
-            LatencyHistoryEvent::FastCommand => "fast-command".into(),
-            LatencyHistoryEvent::Fork => "fork".into(),
-            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file".into(),
-        }
+impl SingleArg for LatencyHistoryEvent {}
+
+impl IntoArgs for LatencyHistoryEvent {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(match self {
+            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle",
+            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always",
+            LatencyHistoryEvent::AofStat => "aof-stat",
+            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write",
+            LatencyHistoryEvent::AofRename => "aof-rename",
+            LatencyHistoryEvent::AofWrite => "aof-write",
+            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child",
+            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone",
+            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync",
+            LatencyHistoryEvent::Command => "command",
+            LatencyHistoryEvent::ExpireCycle => "expire-cycle",
+            LatencyHistoryEvent::EvictionCycle => "eviction-cycle",
+            LatencyHistoryEvent::EvictionDel => "eviction-del",
+            LatencyHistoryEvent::FastCommand => "fast-command",
+            LatencyHistoryEvent::Fork => "fork",
+            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file",
+        })
     }
 }
 
-/// Command Histogram for the [`latency_histogram`](crate::ServerCommands::latency_histogram) commands.
+/// Command Histogram for the [`latency_histogram`](ServerCommands::latency_histogram) commands.
 #[derive(Default)]
 pub struct CommandHistogram {
     /// The total calls for that command.
@@ -1781,7 +1795,7 @@ impl FromValue for CommandHistogram {
     }
 }
 
-/// Options for the [`lolwut`](crate::ServerCommands::lolwut) command
+/// Options for the [`lolwut`](ServerCommands::lolwut) command
 #[derive(Default)]
 pub struct LolWutOptions {
     command_args: CommandArgs,
@@ -1796,7 +1810,7 @@ impl LolWutOptions {
     }
 
     #[must_use]
-    pub fn optional_arg<A: Into<CommandArg>>(self, arg: A) -> Self {
+    pub fn optional_arg<A: SingleArg>(self, arg: A) -> Self {
         Self {
             command_args: self.command_args.arg(arg),
         }
@@ -1809,7 +1823,7 @@ impl IntoArgs for LolWutOptions {
     }
 }
 
-/// Result for the [`memory_stats`](crate::ServerCommands::memory_stats) command.
+/// Result for the [`memory_stats`](ServerCommands::memory_stats) command.
 #[derive(Debug)]
 pub struct MemoryStats {
     /// Peak memory consumed by Redis in bytes
@@ -1949,6 +1963,7 @@ impl FromValue for MemoryStats {
     }
 }
 
+/// Sub-result for the [`memory_stats`](ServerCommands::memory_stats) command.
 #[derive(Debug)]
 pub struct DatabaseOverhead {
     pub overhead_hashtable_main: usize,
@@ -1972,7 +1987,7 @@ impl FromValue for DatabaseOverhead {
     }
 }
 
-/// Options for the [`memory_usage`](crate::ServerCommands::memory_usage) command
+/// Options for the [`memory_usage`](ServerCommands::memory_usage) command
 #[derive(Default)]
 pub struct MemoryUsageOptions {
     command_args: CommandArgs,
@@ -1997,12 +2012,12 @@ impl IntoArgs for MemoryUsageOptions {
     }
 }
 
-/// Module information result for the [`module_list`](crate::ServerCommands::module_list) command.
+/// Module information result for the [`module_list`](ServerCommands::module_list) command.
 pub struct ModuleInfo {
     /// Name of the module
     pub name: String,
     /// Version of the module
-    pub version: String,
+    pub version: u64,
 }
 
 impl FromValue for ModuleInfo {
@@ -2016,7 +2031,7 @@ impl FromValue for ModuleInfo {
     }
 }
 
-/// Options for the [`module_load`](crate::ServerCommands::module_load) command
+/// Options for the [`module_load`](ServerCommands::module_load) command
 #[derive(Default)]
 pub struct ModuleLoadOptions {
     command_args: CommandArgs,
@@ -2024,16 +2039,18 @@ pub struct ModuleLoadOptions {
 }
 
 impl ModuleLoadOptions {
-    /// You can use this optional method to provide the module with configuration directives.
-    /// This method can be called multiple times
+    /// You can use this optional associated function to provide the module with configuration directives.
+    /// This associated function can be called multiple times
     #[must_use]
     pub fn config<N, V>(self, name: N, value: V) -> Self
     where
-        N: Into<CommandArg>,
-        V: Into<CommandArg>,
+        N: SingleArg,
+        V: SingleArg,
     {
         if self.args_added {
-            panic!("method config should be called before method arg");
+            panic!(
+                "associated function `config` should be called before associated function `arg`"
+            );
         }
 
         Self {
@@ -2043,9 +2060,9 @@ impl ModuleLoadOptions {
     }
 
     /// Any additional arguments are passed unmodified to the module.
-    /// This method can be called multiple times
+    /// This associated function can be called multiple times
     #[must_use]
-    pub fn arg<A: Into<CommandArg>>(self, arg: A) -> Self {
+    pub fn arg<A: SingleArg>(self, arg: A) -> Self {
         if !self.args_added {
             Self {
                 command_args: self.command_args.arg("ARGS").arg(arg),
@@ -2066,7 +2083,7 @@ impl IntoArgs for ModuleLoadOptions {
     }
 }
 
-/// options for the [`replicaof`](crate::ServerCommands::replicaof) command.
+/// options for the [`replicaof`](ServerCommands::replicaof) command.
 pub struct ReplicaOfOptions {
     command_args: CommandArgs,
 }
@@ -2085,7 +2102,7 @@ impl ReplicaOfOptions {
     /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
-    pub fn master<H: Into<CommandArg>>(host: H, port: u16) -> Self {
+    pub fn master<H: SingleArg>(host: H, port: u16) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(host).arg(port),
         }
@@ -2098,7 +2115,7 @@ impl IntoArgs for ReplicaOfOptions {
     }
 }
 
-/// Result for the [`role`](crate::ServerCommands::role) command.
+/// Result for the [`role`](ServerCommands::role) command.
 pub enum RoleResult {
     Master {
         /// The current master replication offset,
@@ -2140,7 +2157,7 @@ impl FromValue for RoleResult {
             iter.next(),
         ) {
             (
-                Some(Value::BulkString(Some(s))),
+                Some(Value::BulkString(s)),
                 Some(master_replication_offset),
                 Some(replica_infos),
                 None,
@@ -2151,7 +2168,7 @@ impl FromValue for RoleResult {
                 replica_infos: replica_infos.into()?,
             }),
             (
-                Some(Value::BulkString(Some(s))),
+                Some(Value::BulkString(s)),
                 Some(master_ip),
                 Some(master_port),
                 Some(state),
@@ -2163,16 +2180,13 @@ impl FromValue for RoleResult {
                 state: state.into()?,
                 amount_data_received: amount_data_received.into()?,
             }),
-            (
-                Some(Value::BulkString(Some(s))),
-                Some(master_names),
-                None,
-                None,
-                None,
-                None,
-            ) if s == b"sentinel" => Ok(Self::Sentinel {
-                master_names: master_names.into()?,
-            }),
+            (Some(Value::BulkString(s)), Some(master_names), None, None, None, None)
+                if s == b"sentinel" =>
+            {
+                Ok(Self::Sentinel {
+                    master_names: master_names.into()?,
+                })
+            }
             _ => Err(Error::Client(
                 "Cannot parse RoleResult from result".to_string(),
             )),
@@ -2181,8 +2195,8 @@ impl FromValue for RoleResult {
 }
 
 /// Represents a connected replicas to a master
-/// 
-/// returned by the [`role`](crate::ServerCommands::role) command.
+///
+/// returned by the [`role`](ServerCommands::role) command.
 pub struct ReplicaInfo {
     /// the replica IP
     pub ip: String,
@@ -2203,9 +2217,9 @@ impl FromValue for ReplicaInfo {
     }
 }
 
-/// The state of the replication from the point of view of the master, 
-/// 
-/// returned by the [`role`](crate::ServerCommands::role) command.
+/// The state of the replication from the point of view of the master,
+///
+/// returned by the [`role`](ServerCommands::role) command.
 pub enum ReplicationState {
     /// the instance needs to connect to its master
     Connect,
@@ -2233,7 +2247,7 @@ impl FromValue for ReplicationState {
     }
 }
 
-/// options for the [`shutdown`](crate::ServerCommands::shutdown) command.
+/// options for the [`shutdown`](ServerCommands::shutdown) command.
 #[derive(Default)]
 pub struct ShutdownOptions {
     command_args: CommandArgs,
@@ -2280,7 +2294,7 @@ impl IntoArgs for ShutdownOptions {
     }
 }
 
-/// options for the [`slowlog_get`](crate::ServerCommands::slowlog_get) command.
+/// options for the [`slowlog_get`](ServerCommands::slowlog_get) command.
 #[derive(Default)]
 pub struct SlowLogOptions {
     command_args: CommandArgs,
@@ -2302,7 +2316,7 @@ impl IntoArgs for SlowLogOptions {
     }
 }
 
-/// Result [`slowlog_get`](crate::ServerCommands::slowlog_get) for the command.
+/// Result [`slowlog_get`](ServerCommands::slowlog_get) for the command.
 pub struct SlowLogEntry {
     /// A unique progressive identifier for every slow log entry.
     pub id: i64,

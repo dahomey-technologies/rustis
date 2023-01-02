@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt,
+        IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
@@ -27,10 +27,10 @@ pub trait StreamCommands {
     fn xack<K, G, I, II>(&mut self, key: K, group: G, ids: II) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        I: Into<CommandArg>,
-        II: SingleArgOrCollection<I>,
+        K: SingleArg,
+        G: SingleArg,
+        I: SingleArg,
+        II: SingleArgCollection<I>,
     {
         prepare_command(self, cmd("XACK").arg(key).arg(group).arg(ids))
     }
@@ -56,12 +56,12 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        I: Into<CommandArg>,
-        F: Into<CommandArg>,
-        V: Into<CommandArg>,
-        FFVV: KeyValueArgOrCollection<F, V>,
-        R: FromValue,
+        K: SingleArg,
+        I: SingleArg,
+        F: SingleArg,
+        V: SingleArg,
+        FFVV: KeyValueArgsCollection<F, V>,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -87,11 +87,11 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, XAutoClaimResult<V>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        C: Into<CommandArg>,
-        I: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        G: SingleArg,
+        C: SingleArg,
+        I: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -129,12 +129,12 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        C: Into<CommandArg>,
-        I: Into<CommandArg>,
-        II: SingleArgOrCollection<I>,
-        V: FromValue,
+        K: SingleArg,
+        G: SingleArg,
+        C: SingleArg,
+        I: SingleArg,
+        II: SingleArgCollection<I>,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -158,14 +158,14 @@ pub trait StreamCommands {
     fn xdel<K, I, II>(&mut self, key: K, ids: II) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        I: Into<CommandArg>,
-        II: SingleArgOrCollection<I>,
+        K: SingleArg,
+        I: SingleArg,
+        II: SingleArgCollection<I>,
     {
         prepare_command(self, cmd("XDEL").arg(key).arg(ids))
     }
 
-    /// This command creates a new consumer group uniquely identified by <groupname> for the stream stored at <key>.
+    /// This command creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
     ///
     /// # Return
     /// * `true` success
@@ -182,9 +182,9 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        I: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -214,9 +214,9 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        C: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
+        C: SingleArg,
     {
         prepare_command(
             self,
@@ -243,9 +243,9 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        C: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
+        C: SingleArg,
     {
         prepare_command(
             self,
@@ -268,8 +268,8 @@ pub trait StreamCommands {
     fn xgroup_destroy<K, G>(&mut self, key: K, groupname: G) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
     {
         prepare_command(self, cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
     }
@@ -287,9 +287,9 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
-        I: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -316,8 +316,8 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, Vec<XConsumerInfo>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
     {
         prepare_command(self, cmd("XINFO").arg("CONSUMERS").arg(key).arg(groupname))
     }
@@ -333,7 +333,7 @@ pub trait StreamCommands {
     fn xinfo_groups<K>(&mut self, key: K) -> PreparedCommand<Self, Vec<XGroupInfo>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("XINFO").arg("GROUPS").arg(key))
     }
@@ -352,7 +352,7 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, XStreamInfo>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("XINFO").arg("STREAM").arg(key).arg(options))
     }
@@ -367,7 +367,7 @@ pub trait StreamCommands {
     fn xlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("XLEN").arg(key))
     }
@@ -379,8 +379,8 @@ pub trait StreamCommands {
     fn xpending<K, G>(&mut self, key: K, group: G) -> PreparedCommand<Self, XPendingResult>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
     {
         prepare_command(self, cmd("XPENDING").arg(key).arg(group))
     }
@@ -397,8 +397,8 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, Vec<XPendingMessageResult>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        G: Into<CommandArg>,
+        K: SingleArg,
+        G: SingleArg,
     {
         prepare_command(self, cmd("XPENDING").arg(key).arg(group).arg(options))
     }
@@ -423,10 +423,10 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        S: Into<CommandArg>,
-        E: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        S: SingleArg,
+        E: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -454,12 +454,12 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        I: Into<CommandArg>,
-        II: SingleArgOrCollection<I>,
-        V: FromValue,
-        R: FromKeyValueValueArray<String, Vec<StreamEntry<V>>>,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        I: SingleArg,
+        II: SingleArgCollection<I>,
+        V: FromSingleValue,
+        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -467,7 +467,7 @@ pub trait StreamCommands {
         )
     }
 
-    /// The XREADGROUP command is a special version of the [`xread`](crate::StreamCommands::xread)
+    /// The XREADGROUP command is a special version of the [`xread`](StreamCommands::xread)
     /// command with support for consumer groups.
     ///
     /// # Return
@@ -485,14 +485,14 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        G: Into<CommandArg>,
-        C: Into<CommandArg>,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        I: Into<CommandArg>,
-        II: SingleArgOrCollection<I>,
-        V: FromValue,
-        R: FromKeyValueValueArray<String, Vec<StreamEntry<V>>>,
+        G: SingleArg,
+        C: SingleArg,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        I: SingleArg,
+        II: SingleArgCollection<I>,
+        V: FromSingleValue,
+        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -507,7 +507,7 @@ pub trait StreamCommands {
         )
     }
 
-    /// This command is exactly like [`xrange`](crate::StreamCommands::xrange),
+    /// This command is exactly like [`xrange`](StreamCommands::xrange),
     /// but with the notable difference of returning the entries in reverse order,
     /// and also taking the start-end range in reverse order
     ///
@@ -525,10 +525,10 @@ pub trait StreamCommands {
     ) -> PreparedCommand<Self, Vec<StreamEntry<V>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        S: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        E: SingleArg,
+        S: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(
             self,
@@ -550,13 +550,13 @@ pub trait StreamCommands {
     fn xtrim<K>(&mut self, key: K, options: XTrimOptions) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("XTRIM").arg(key).arg(options))
     }
 }
 
-/// Stream Add options for the [`xadd`](crate::StreamCommands::xadd) command.
+/// Stream Add options for the [`xadd`](StreamCommands::xadd) command.
 #[derive(Default)]
 pub struct XAddOptions {
     command_args: CommandArgs,
@@ -584,8 +584,8 @@ impl IntoArgs for XAddOptions {
     }
 }
 
-/// Stream Trim operator for the [`xadd`](crate::StreamCommands::xadd)
-/// and [`xtrim`](crate::StreamCommands::xtrim) commands
+/// Stream Trim operator for the [`xadd`](StreamCommands::xadd)
+/// and [`xtrim`](StreamCommands::xtrim) commands
 pub enum XTrimOperator {
     None,
     /// =
@@ -610,8 +610,8 @@ impl Default for XTrimOperator {
     }
 }
 
-/// Stream Trim options for the [`xadd`](crate::StreamCommands::xadd)
-/// and [`xtrim`](crate::StreamCommands::xtrim) commands
+/// Stream Trim options for the [`xadd`](StreamCommands::xadd)
+/// and [`xtrim`](StreamCommands::xtrim) commands
 #[derive(Default)]
 pub struct XTrimOptions {
     command_args: CommandArgs,
@@ -629,7 +629,7 @@ impl XTrimOptions {
     }
 
     #[must_use]
-    pub fn min_id<I: Into<CommandArg>>(operator: XTrimOperator, threshold_id: I) -> Self {
+    pub fn min_id<I: SingleArg>(operator: XTrimOperator, threshold_id: I) -> Self {
         Self {
             command_args: CommandArgs::default()
                 .arg("MINID")
@@ -652,7 +652,7 @@ impl IntoArgs for XTrimOptions {
     }
 }
 
-/// Options for the [`xautoclaim`](crate::StreamCommands::xautoclaim) command
+/// Options for the [`xautoclaim`](StreamCommands::xautoclaim) command
 #[derive(Default)]
 pub struct XAutoClaimOptions {
     command_args: CommandArgs,
@@ -680,17 +680,21 @@ impl IntoArgs for XAutoClaimOptions {
     }
 }
 
+/// Result for the [`xrange`](StreamCommands::xrange) and other associated commands.
 pub struct StreamEntry<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
+    /// The stream Id
     pub stream_id: String,
+    /// entries with their fields and values in the exact same
+    /// order as [`xadd`](StreamCommands::xadd) added them.
     pub items: HashMap<String, V>,
 }
 
 impl<V> FromValue for StreamEntry<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         let (stream_id, items): (String, HashMap<String, V>) = value.into()?;
@@ -698,31 +702,38 @@ where
     }
 }
 
+/// Result for the [`xautoclaim`](StreamCommands::xautoclaim) command.
 pub struct XAutoClaimResult<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
+    /// A stream ID to be used as the <start> argument for
+    /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
     pub start_stream_id: String,
+    /// An array containing all the successfully claimed messages in
+    /// the same format as [`xrange`](StreamCommands::xrange).
     pub entries: Vec<StreamEntry<V>>,
-    pub deleted_id: Vec<String>,
+    /// An array containing message IDs that no longer exist in the stream,
+    /// and were deleted from the PEL in which they were found.
+    pub deleted_ids: Vec<String>,
 }
 
 impl<V> FromValue for XAutoClaimResult<V>
 where
-    V: FromValue,
+    V: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
-        let (start_stream_id, entries, deleted_id): (String, Vec<StreamEntry<V>>, Vec<String>) =
+        let (start_stream_id, entries, deleted_ids): (String, Vec<StreamEntry<V>>, Vec<String>) =
             value.into()?;
         Ok(Self {
             start_stream_id,
             entries,
-            deleted_id,
+            deleted_ids,
         })
     }
 }
 
-/// Options for the [`xclaim`](crate::StreamCommands::xclaim) command
+/// Options for the [`xclaim`](StreamCommands::xclaim) command
 #[derive(Default)]
 pub struct XClaimOptions {
     command_args: CommandArgs,
@@ -780,7 +791,7 @@ impl IntoArgs for XClaimOptions {
     }
 }
 
-/// Options for the [`xgroup_create`](crate::StreamCommands::xgroup_create) command
+/// Options for the [`xgroup_create`](StreamCommands::xgroup_create) command
 #[derive(Default)]
 pub struct XGroupCreateOptions {
     command_args: CommandArgs,
@@ -815,7 +826,7 @@ impl IntoArgs for XGroupCreateOptions {
     }
 }
 
-/// Result entry for the [`xinfo_consumers`](crate::StreamCommands::xinfo_consumers) command.
+/// Result entry for the [`xinfo_consumers`](StreamCommands::xinfo_consumers) command.
 pub struct XConsumerInfo {
     /// the consumer's name
     pub name: String,
@@ -841,7 +852,7 @@ impl FromValue for XConsumerInfo {
     }
 }
 
-/// Result entry for the [`xinfo_groups`](crate::StreamCommands::xinfo_groups) command.
+/// Result entry for the [`xinfo_groups`](StreamCommands::xinfo_groups) command.
 pub struct XGroupInfo {
     /// the consumer group's name
     pub name: String,
@@ -879,7 +890,7 @@ impl FromValue for XGroupInfo {
     }
 }
 
-/// Options for the [`xinfo_stream`](crate::StreamCommands::xinfo_stream) command
+/// Options for the [`xinfo_stream`](StreamCommands::xinfo_stream) command
 #[derive(Default)]
 pub struct XInfoStreamOptions {
     command_args: CommandArgs,
@@ -910,9 +921,9 @@ impl IntoArgs for XInfoStreamOptions {
     }
 }
 
-/// Stream info returned by the [`xinfo_stream`](crate::StreamCommands::xinfo_stream) command.
+/// Stream info returned by the [`xinfo_stream`](StreamCommands::xinfo_stream) command.
 pub struct XStreamInfo {
-    /// the number of entries in the stream (see [`xlen`](crate::StreamCommands::xlen))
+    /// the number of entries in the stream (see [`xlen`](StreamCommands::xlen))
     pub length: usize,
 
     /// the number of keys in the underlying radix data structure
@@ -963,7 +974,7 @@ impl FromValue for XStreamInfo {
     }
 }
 
-/// Options for the [`xread`](crate::StreamCommands::xread) command
+/// Options for the [`xread`](StreamCommands::xread) command
 #[derive(Default)]
 pub struct XReadOptions {
     command_args: CommandArgs,
@@ -991,7 +1002,7 @@ impl IntoArgs for XReadOptions {
     }
 }
 
-/// Options for the [`xreadgroup`](crate::StreamCommands::xreadgroup) command
+/// Options for the [`xreadgroup`](StreamCommands::xreadgroup) command
 #[derive(Default)]
 pub struct XReadGroupOptions {
     command_args: CommandArgs,
@@ -1026,7 +1037,7 @@ impl IntoArgs for XReadGroupOptions {
     }
 }
 
-/// Options for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+/// Options for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
 #[derive(Default)]
 pub struct XPendingOptions {
     command_args: CommandArgs,
@@ -1041,14 +1052,14 @@ impl XPendingOptions {
     }
 
     #[must_use]
-    pub fn start<S: Into<CommandArg>>(self, start: S) -> Self {
+    pub fn start<S: SingleArg>(self, start: S) -> Self {
         Self {
             command_args: self.command_args.arg(start),
         }
     }
 
     #[must_use]
-    pub fn end<E: Into<CommandArg>>(self, end: E) -> Self {
+    pub fn end<E: SingleArg>(self, end: E) -> Self {
         Self {
             command_args: self.command_args.arg(end),
         }
@@ -1062,7 +1073,7 @@ impl XPendingOptions {
     }
 
     #[must_use]
-    pub fn consumer<C: Into<CommandArg>>(self, consumer: C) -> Self {
+    pub fn consumer<C: SingleArg>(self, consumer: C) -> Self {
         Self {
             command_args: self.command_args.arg(consumer),
         }
@@ -1075,7 +1086,7 @@ impl IntoArgs for XPendingOptions {
     }
 }
 
-/// Result for the [`xpending`](crate::StreamCommands::xpending) command
+/// Result for the [`xpending`](StreamCommands::xpending) command
 pub struct XPendingResult {
     pub num_pending_messages: usize,
     pub smallest_id: String,
@@ -1100,7 +1111,7 @@ impl FromValue for XPendingResult {
     }
 }
 
-/// Customer info result for the [`xpending`](crate::StreamCommands::xpending) command
+/// Customer info result for the [`xpending`](StreamCommands::xpending) command
 pub struct XPendingConsumer {
     pub consumer: String,
     pub num_messages: usize,
@@ -1116,7 +1127,7 @@ impl FromValue for XPendingConsumer {
     }
 }
 
-/// Message result for the [`xpending_with_options`](crate::StreamCommands::xpending_with_options) command
+/// Message result for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
 pub struct XPendingMessageResult {
     pub message_id: String,
     pub consumer: String,

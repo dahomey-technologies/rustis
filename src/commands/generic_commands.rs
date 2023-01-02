@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
+        SingleArg, SingleArgCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of generic Redis commands
@@ -29,8 +29,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        S: Into<CommandArg>,
-        D: Into<CommandArg>,
+        S: SingleArg,
+        D: SingleArg,
     {
         prepare_command(
             self,
@@ -53,8 +53,8 @@ pub trait GenericCommands {
     fn del<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("DEL").arg(keys))
     }
@@ -70,7 +70,7 @@ pub trait GenericCommands {
     fn dump<K>(&mut self, key: K) -> PreparedCommand<Self, DumpResult>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("DUMP").arg(key))
     }
@@ -86,8 +86,8 @@ pub trait GenericCommands {
     fn exists<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("EXISTS").arg(keys))
     }
@@ -109,7 +109,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("EXPIRE").arg(key).arg(seconds).arg(option))
     }
@@ -135,7 +135,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -156,7 +156,7 @@ pub trait GenericCommands {
     fn expiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("EXPIRETIME").arg(key))
     }
@@ -172,9 +172,9 @@ pub trait GenericCommands {
     fn keys<P, K, A>(&mut self, pattern: P) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        P: Into<CommandArg>,
-        K: FromValue,
-        A: FromSingleValueArray<K>,
+        P: SingleArg,
+        K: FromSingleValue,
+        A: FromValueArray<K>,
     {
         prepare_command(self, cmd("KEYS").arg(pattern))
     }
@@ -199,8 +199,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, MigrateResult>
     where
         Self: Sized,
-        H: Into<CommandArg>,
-        K: Into<CommandArg>,
+        H: SingleArg,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -226,7 +226,7 @@ pub trait GenericCommands {
     fn move_<K>(&mut self, key: K, db: usize) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("MOVE").arg(key).arg(db))
     }
@@ -242,8 +242,8 @@ pub trait GenericCommands {
     fn object_encoding<K, E>(&mut self, key: K) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
+        K: SingleArg,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").arg(key))
     }
@@ -259,7 +259,7 @@ pub trait GenericCommands {
     fn object_freq<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("OBJECT").arg("FREQ").arg(key))
     }
@@ -275,7 +275,7 @@ pub trait GenericCommands {
     fn object_idle_time<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("OBJECT").arg("IDLETIME").arg(key))
     }
@@ -291,7 +291,7 @@ pub trait GenericCommands {
     fn object_refcount<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("OBJECT").arg("REFCOUNT").arg(key))
     }
@@ -310,7 +310,7 @@ pub trait GenericCommands {
     fn persist<K>(&mut self, key: K) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("PERSIST").arg(key))
     }
@@ -332,7 +332,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("PEXPIRE").arg(key).arg(milliseconds).arg(option))
     }
@@ -355,7 +355,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -380,7 +380,7 @@ pub trait GenericCommands {
     fn pexpiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("PEXPIRETIME").arg(key))
     }
@@ -398,7 +398,7 @@ pub trait GenericCommands {
     fn pttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("PTTL").arg(key))
     }
@@ -414,7 +414,7 @@ pub trait GenericCommands {
     fn randomkey<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("RANDOMKEY"))
     }
@@ -427,8 +427,8 @@ pub trait GenericCommands {
     fn rename<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K1: Into<CommandArg>,
-        K2: Into<CommandArg>,
+        K1: SingleArg,
+        K2: SingleArg,
     {
         prepare_command(self, cmd("RENAME").arg(key).arg(new_key))
     }
@@ -445,8 +445,8 @@ pub trait GenericCommands {
     fn renamenx<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K1: Into<CommandArg>,
-        K2: Into<CommandArg>,
+        K1: SingleArg,
+        K2: SingleArg,
     {
         prepare_command(self, cmd("RENAMENX").arg(key).arg(new_key))
     }
@@ -469,7 +469,7 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -492,8 +492,8 @@ pub trait GenericCommands {
     fn scan<K, A>(&mut self, cursor: u64, options: ScanOptions) -> PreparedCommand<Self, (u64, A)>
     where
         Self: Sized,
-        K: FromValue,
-        A: FromSingleValueArray<K>,
+        K: FromSingleValue,
+        A: FromValueArray<K>,
     {
         prepare_command(self, cmd("SCAN").arg(cursor).arg(options))
     }
@@ -509,9 +509,9 @@ pub trait GenericCommands {
     fn sort<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SORT").arg(key).arg(options))
     }
@@ -532,8 +532,8 @@ pub trait GenericCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        D: Into<CommandArg>,
+        K: SingleArg,
+        D: SingleArg,
     {
         prepare_command(
             self,
@@ -559,9 +559,9 @@ pub trait GenericCommands {
     fn sort_readonly<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SORT_RO").arg(key).arg(options))
     }
@@ -577,8 +577,8 @@ pub trait GenericCommands {
     fn touch<K, KK>(&mut self, keys: KK) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("TOUCH").arg(keys))
     }
@@ -596,7 +596,7 @@ pub trait GenericCommands {
     fn ttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("TTL").arg(key))
     }
@@ -614,7 +614,7 @@ pub trait GenericCommands {
     fn type_<K>(&mut self, key: K) -> PreparedCommand<Self, String>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("TYPE").arg(key))
     }
@@ -630,8 +630,8 @@ pub trait GenericCommands {
     fn unlink<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("UNLINK").arg(keys))
     }
@@ -653,7 +653,7 @@ pub trait GenericCommands {
     }
 }
 
-/// Options for the [`expire`](crate::GenericCommands::expire) command
+/// Options for the [`expire`](GenericCommands::expire) command
 pub enum ExpireOption {
     /// No option
     None,
@@ -685,6 +685,7 @@ impl IntoArgs for ExpireOption {
     }
 }
 
+/// Options for the [`migrate`](GenericCommands::migrate) command.
 #[derive(Default)]
 pub struct MigrateOptions {
     command_args: CommandArgs,
@@ -706,21 +707,21 @@ impl MigrateOptions {
     }
 
     #[must_use]
-    pub fn auth<P: Into<CommandArg>>(self, password: P) -> Self {
+    pub fn auth<P: SingleArg>(self, password: P) -> Self {
         Self {
             command_args: self.command_args.arg("AUTH").arg(password),
         }
     }
 
     #[must_use]
-    pub fn auth2<U: Into<CommandArg>, P: Into<CommandArg>>(self, username: U, password: P) -> Self {
+    pub fn auth2<U: SingleArg, P: SingleArg>(self, username: U, password: P) -> Self {
         Self {
             command_args: self.command_args.arg("AUTH2").arg(username).arg(password),
         }
     }
 
     #[must_use]
-    pub fn keys<K: Into<CommandArg>, KK: SingleArgOrCollection<K>>(self, keys: KK) -> Self {
+    pub fn keys<K: SingleArg, KK: SingleArgCollection<K>>(self, keys: KK) -> Self {
         Self {
             command_args: self.command_args.arg("KEYS").arg(keys),
         }
@@ -733,7 +734,7 @@ impl IntoArgs for MigrateOptions {
     }
 }
 
-/// Options for the [`restore`](crate::GenericCommands::restore) command
+/// Options for the [`restore`](GenericCommands::restore) command
 #[derive(Default)]
 pub struct RestoreOptions {
     command_args: CommandArgs,
@@ -775,7 +776,7 @@ impl IntoArgs for RestoreOptions {
     }
 }
 
-/// Order option of the [`sort`](crate::GenericCommands::sort) command
+/// Order option of the [`sort`](GenericCommands::sort) command
 pub enum SortOrder {
     Asc,
     Desc,
@@ -790,7 +791,7 @@ impl IntoArgs for SortOrder {
     }
 }
 
-/// Options for the [`sort`](crate::GenericCommands::sort) command
+/// Options for the [`sort`](GenericCommands::sort) command
 #[derive(Default)]
 pub struct SortOptions {
     command_args: CommandArgs,
@@ -798,7 +799,7 @@ pub struct SortOptions {
 
 impl SortOptions {
     #[must_use]
-    pub fn by<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn by<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("BY").arg(pattern),
         }
@@ -812,7 +813,7 @@ impl SortOptions {
     }
 
     #[must_use]
-    pub fn get<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn get<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("GET").arg(pattern),
         }
@@ -839,7 +840,7 @@ impl IntoArgs for SortOptions {
     }
 }
 
-/// Result for the [`dump`](crate::GenericCommands::dump) command.
+/// Result for the [`dump`](GenericCommands::dump) command.
 pub struct DumpResult {
     pub serialized_value: Vec<u8>,
 }
@@ -847,7 +848,7 @@ pub struct DumpResult {
 impl FromValue for DumpResult {
     fn from_value(value: Value) -> crate::Result<Self> {
         match value {
-            Value::BulkString(Some(b)) => Ok(DumpResult {
+            Value::BulkString(b) => Ok(DumpResult {
                 serialized_value: b,
             }),
             _ => Err(Error::Client("Unexpected dump format".to_owned())),
@@ -855,7 +856,7 @@ impl FromValue for DumpResult {
     }
 }
 
-/// Options for the [`scan`](crate::GenericCommands::scan) command
+/// Options for the [`scan`](GenericCommands::scan) command
 #[derive(Default)]
 pub struct ScanOptions {
     command_args: CommandArgs,
@@ -863,7 +864,7 @@ pub struct ScanOptions {
 
 impl ScanOptions {
     #[must_use]
-    pub fn match_pattern<P: Into<CommandArg>>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern),
         }
@@ -877,7 +878,7 @@ impl ScanOptions {
     }
 
     #[must_use]
-    pub fn type_<TY: Into<CommandArg>>(self, type_: TY) -> Self {
+    pub fn type_<TY: SingleArg>(self, type_: TY) -> Self {
         Self {
             command_args: self.command_args.arg("TYPE").arg(type_),
         }
@@ -890,7 +891,7 @@ impl IntoArgs for ScanOptions {
     }
 }
 
-/// Result for the [`migrate`](crate::GenericCommands::migrate) command
+/// Result for the [`migrate`](GenericCommands::migrate) command
 pub enum MigrateResult {
     /// key(s) successfully migrated
     Ok,

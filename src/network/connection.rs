@@ -1,7 +1,11 @@
 use crate::{
-    resp::{Command, Value},
-    ClusterConnection, Config, Result, SentinelConnection, ServerConfig, StandaloneConnection, RetryReason,
+    client::{Config, PreparedCommand, ServerConfig},
+    commands::InternalPubSubCommands,
+    resp::{Command, FromValue, ResultValueExt, Value},
+    ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
+    StandaloneConnection,
 };
+use std::future::IntoFuture;
 
 pub enum Connection {
     Standalone(StandaloneConnection),
@@ -10,6 +14,7 @@ pub enum Connection {
 }
 
 impl Connection {
+    #[inline]
     pub async fn connect(config: Config) -> Result<Self> {
         match &config.server {
             ServerConfig::Standalone { host, port } => Ok(Connection::Standalone(
@@ -24,14 +29,35 @@ impl Connection {
         }
     }
 
-    pub async fn write_batch(&mut self, commands: impl Iterator<Item = &Command>, retry_reasons: &[RetryReason]) -> Result<()> {
+    #[inline]
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
         match self {
-            Connection::Standalone(connection) => connection.write_batch(commands, retry_reasons).await,
-            Connection::Sentinel(connection) => connection.write_batch(commands, retry_reasons).await,
-            Connection::Cluster(connection) => connection.write_batch(commands, retry_reasons).await,
+            Connection::Standalone(connection) => connection.write(command).await,
+            Connection::Sentinel(connection) => connection.write(command).await,
+            Connection::Cluster(connection) => connection.write(command).await,
         }
     }
 
+    #[inline]
+    pub async fn write_batch(
+        &mut self,
+        commands: impl Iterator<Item = &mut Command>,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
+        match self {
+            Connection::Standalone(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
+            Connection::Sentinel(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
+            Connection::Cluster(connection) => {
+                connection.write_batch(commands, retry_reasons).await
+            }
+        }
+    }
+
+    #[inline]
     pub async fn read(&mut self) -> Option<Result<Value>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,
@@ -40,6 +66,7 @@ impl Connection {
         }
     }
 
+    #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.reconnect().await,
@@ -47,4 +74,28 @@ impl Connection {
             Connection::Cluster(connection) => connection.reconnect().await,
         }
     }
+
+    #[inline]
+    pub async fn send(&mut self, command: &Command) -> Result<Value> {
+        self.write(command).await?;
+        self.read()
+            .await
+            .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+            .into_result()
+    }
 }
+
+impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
+where
+    R: FromValue + Send + 'a,
+{
+    type Output = Result<R>;
+    type IntoFuture = Future<'a, R>;
+
+    #[inline]
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move { self.executor.send(&self.command).await?.into() })
+    }
+}
+
+impl InternalPubSubCommands for Connection {}

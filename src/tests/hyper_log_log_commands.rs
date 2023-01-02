@@ -1,4 +1,8 @@
-use crate::{tests::get_test_client, FlushingMode, HyperLogLogCommands, Result, ServerCommands};
+use crate::{
+    commands::{FlushingMode, HyperLogLogCommands, ServerCommands},
+    tests::get_test_client,
+    Result,
+};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

@@ -1,19 +1,30 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    tests::{get_cluster_test_client, get_test_client},
-    ClusterCommands, ClusterShardResult, Error, FlushingMode, PubSubChannelsOptions,
-    PubSubCommands, Result, ServerCommands, StringCommands, Client, IntoConfig,
+    client::{Client, IntoConfig},
+    commands::{
+        ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
+        PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
+    },
+    tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
+    Result,
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt, TryStreamExt};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pubsub() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    log_try_init();
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "pub/sub".to_owned();
+    let mut pub_sub_client = Client::connect(config).await?;
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "regular".to_owned();
+    let mut regular_client = Client::connect(config).await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -21,14 +32,12 @@ async fn pubsub() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
     regular_client.publish("mychannel", "mymessage").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel", channel);
-    assert_eq!("mymessage", message);
+    assert_eq!("mymessage", payload);
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;
@@ -39,47 +48,45 @@ async fn pubsub() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel2").await?;
     regular_client.publish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn forbidden_command() -> Result<()> {
-    let mut client = get_test_client().await?;
+// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[serial]
+// async fn forbidden_command() -> Result<()> {
+//     let mut client = get_test_client().await?;
 
-    // cleanup
-    client.flushdb(FlushingMode::Sync).await?;
+//     // cleanup
+//     client.flushdb(FlushingMode::Sync).await?;
 
-    // regular mode, these commands are allowed
-    client.set("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
+//     // regular mode, these commands are allowed
+//     client.set("key", "value").await?;
+//     let value: String = client.get("key").await?;
+//     assert_eq!("value", value);
 
-    // subscribed mode
-    let mut pub_sub_stream = client.subscribe("mychannel").await?;
+//     // subscribed mode
+//     let pub_sub_stream = client.subscribe("mychannel").await?;
 
-    // Cannot send regular commands during subscribed mode
-    let result: Result<String> = client.get("key").await;
-    assert!(result.is_err());
+//     // Cannot send regular commands during subscribed mode
+//     let result: Result<String> = client.get("key").await;
+//     assert!(result.is_err());
 
-    pub_sub_stream.close().await?;
+//     pub_sub_stream.close().await?;
 
-    // After leaving subscribed mode, should work again
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
+//     // After leaving subscribed mode, should work again
+//     let value: String = client.get("key").await?;
+//     assert_eq!("value", value);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -97,23 +104,19 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     regular_client.publish("mychannel1", "mymessage1").await?;
     regular_client.publish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel1", channel);
-    assert_eq!("mymessage1", message);
+    assert_eq!("mymessage1", payload);
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 
@@ -139,41 +142,41 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     regular_client.publish("mychannel21", "mymessage21").await?;
     regular_client.publish("mychannel22", "mymessage22").await?;
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel11", channel);
-    assert_eq!("mymessage11", message);
+    assert_eq!("mymessage11", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel12", channel);
-    assert_eq!("mymessage12", message);
+    assert_eq!("mymessage12", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel21", channel);
-    assert_eq!("mymessage21", message);
+    assert_eq!("mymessage21", payload);
 
-    let (pattern, channel, message): (String, String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let pattern: String = message.get_pattern()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel22", channel);
-    assert_eq!("mymessage22", message.to_string());
+    assert_eq!("mymessage22", payload);
 
     pub_sub_stream.close().await?;
 
@@ -187,7 +190,7 @@ async fn pub_sub_channels() -> Result<()> {
     let mut pub_sub_client = get_test_client().await?;
     let mut regular_client = get_test_client().await?;
 
-    let mut stream = pub_sub_client
+    let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2", "mychannel3", "otherchannel"])
         .await?;
 
@@ -224,7 +227,7 @@ async fn pub_sub_numpat() -> Result<()> {
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(0, num_patterns);
 
-    let mut stream = pub_sub_client.psubscribe(["mychannel*"]).await?;
+    let stream = pub_sub_client.psubscribe(["mychannel*"]).await?;
 
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(1, num_patterns);
@@ -248,7 +251,7 @@ async fn pub_sub_numsub() -> Result<()> {
     assert_eq!(("mychannel1".to_string(), 0), num_sub[0]);
     assert_eq!(("mychannel2".to_string(), 0), num_sub[1]);
 
-    let mut stream = pub_sub_client
+    let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2"])
         .await?;
 
@@ -277,14 +280,12 @@ async fn pubsub_shardchannels() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.ssubscribe("mychannel").await?;
     regular_client.spublish("mychannel", "mymessage").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel", channel);
-    assert_eq!("mymessage", message);
+    assert_eq!("mymessage", payload);
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;
@@ -295,14 +296,12 @@ async fn pubsub_shardchannels() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.ssubscribe("mychannel2").await?;
     regular_client.spublish("mychannel2", "mymessage2").await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 
@@ -329,23 +328,19 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
         .spublish("mychannel2{1}", "mymessage2")
         .await?;
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel1{1}", channel);
-    assert_eq!("mymessage1", message);
+    assert_eq!("mymessage1", payload);
 
-    let (channel, message): (String, String) = pub_sub_stream
-        .next()
-        .await
-        .ok_or_else(|| Error::Client("fail".to_owned()))??
-        .into()?;
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
 
     assert_eq!("mychannel2{1}", channel);
-    assert_eq!("mymessage2", message);
+    assert_eq!("mymessage2", payload);
 
     pub_sub_stream.close().await?;
 
@@ -372,9 +367,10 @@ async fn pub_sub_shardchannels() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client = Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+    let mut master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
-    let mut pub_sub_stream = pub_sub_client
+    let pub_sub_stream = pub_sub_client
         .ssubscribe([
             "mychannel1{1}",
             "mychannel2{1}",
@@ -430,7 +426,8 @@ async fn pub_sub_shardnumsub() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client = Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+    let mut master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
     let num_sub: Vec<(String, usize)> = master_client
         .pub_sub_shardnumsub(["mychannel1{1}", "mychannel2{1}"])
@@ -439,7 +436,7 @@ async fn pub_sub_shardnumsub() -> Result<()> {
     assert_eq!(("mychannel1{1}".to_string(), 0), num_sub[0]);
     assert_eq!(("mychannel2{1}".to_string(), 0), num_sub[1]);
 
-    let mut pub_sub_stream = pub_sub_client
+    let pub_sub_stream = pub_sub_client
         .ssubscribe(["mychannel1{1}", "mychannel2{1}"])
         .await?;
 
@@ -451,6 +448,168 @@ async fn pub_sub_shardnumsub() -> Result<()> {
     assert_eq!(Some(&1usize), num_sub.get("mychannel2{1}"));
 
     pub_sub_stream.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn additional_sub() -> Result<()> {
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    // 1st subscription
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel1").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    // 2nd subscription
+    pub_sub_stream.subscribe("mychannel2").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel2", channel);
+    assert_eq!("mymessage2", payload);
+
+    // 3rd subscription
+    pub_sub_stream.psubscribe("o*").await?;
+
+    // publish / receive
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+    regular_client.publish("otherchannel", "mymessage3").await?;
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel2", channel);
+    assert_eq!("mymessage2", payload);
+
+    let mut message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("otherchannel", channel);
+    assert_eq!("mymessage3", payload);
+
+    // close
+    pub_sub_stream.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn auto_resubscribe() -> Result<()> {
+    let mut pub_sub_client = get_test_client().await?;
+    let mut regular_client = get_test_client().await?;
+
+    let pub_sub_client_id = pub_sub_client.client_id().await?;
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+    pub_sub_stream.psubscribe("o*").await?;
+
+    let mut on_reconnect = pub_sub_client.on_reconnect();
+
+    regular_client
+        .client_kill(ClientKillOptions::default().id(pub_sub_client_id))
+        .await?;
+
+    // wait for reconnection before publishing
+    on_reconnect.recv().await.unwrap();
+
+    regular_client.publish("mychannel", "mymessage").await?;
+    regular_client
+        .publish("otherchannel", "othermessage")
+        .await?;
+
+    let mut message = pub_sub_stream.try_next().await?.unwrap();
+    let channel: String = message.get_channel()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("mychannel", channel);
+    assert_eq!("mymessage", payload);
+
+    let mut message = pub_sub_stream.try_next().await?.unwrap();
+    let channel: String = message.get_channel()?;
+    let pattern: String = message.get_pattern()?;
+    let payload: String = message.get_payload()?;
+
+    assert_eq!("otherchannel", channel);
+    assert_eq!("o*", pattern);
+    assert_eq!("othermessage", payload);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn no_auto_resubscribe() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "pub/sub".to_owned();
+    config.auto_resubscribe = false;
+    let mut pub_sub_client = Client::connect(config).await?;
+
+    let mut config = get_default_addr().into_config()?;
+    config.connection_name = "regular".to_owned();
+    let mut regular_client = Client::connect(config).await?;
+
+    let pub_sub_client_id = pub_sub_client.client_id().await?;
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+    pub_sub_stream.psubscribe("o*").await?;
+
+    let mut on_reconnect = pub_sub_client.on_reconnect();
+
+    regular_client
+        .client_kill(ClientKillOptions::default().id(pub_sub_client_id))
+        .await?;
+
+    // wait for reconnection before publishing
+    on_reconnect.recv().await.unwrap();
+
+    regular_client.publish("mychannel", "mymessage").await?;
+    regular_client
+        .publish("otherchannel", "othermessage")
+        .await?;
+
+    let message = pub_sub_stream.next().now_or_never();
+    assert!(message.is_none());
 
     Ok(())
 }

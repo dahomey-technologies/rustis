@@ -1,11 +1,12 @@
 use crate::{
-    resp::{Value},
+    commands::{
+        BlockingCommands, FlushingMode, GenericCommands, LInsertWhere, LMoveWhere::Left,
+        LMoveWhere::Right, ListCommands, ServerCommands,
+    },
+    resp::Value,
     sleep, spawn,
     tests::get_test_client,
-    BlockingCommands, FlushingMode, GenericCommands, LInsertWhere,
-    LMoveWhere::Left,
-    LMoveWhere::Right,
-    ListCommands, Result, ServerCommands,
+    Result,
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -207,7 +208,7 @@ async fn lindex() -> Result<()> {
     assert_eq!("element3", element);
 
     let element: Value = client.lindex("mylist", 3).await?;
-    assert!(matches!(element, Value::BulkString(None)));
+    assert!(matches!(element, Value::Nil));
 
     Ok(())
 }

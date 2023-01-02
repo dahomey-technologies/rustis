@@ -1,8 +1,12 @@
 use crate::{
+    client::{ClusterConfig, Config},
+    commands::{
+        ClusterCommands, ClusterNodeResult, ClusterShardResult, CommandTip, RequestPolicy,
+        ResponsePolicy,
+    },
+    network::CommandInfoManager,
     resp::{Command, Value},
-    ClusterCommands, ClusterConfig, ClusterNodeResult, ClusterShardResult, CommandInfoManager,
-    CommandTip, Config, Error, RedisError, RedisErrorKind, RequestPolicy, ResponsePolicy, Result,
-    RetryReason, StandaloneConnection,
+    Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
 use futures::{future, FutureExt};
 use log::{debug, info, trace, warn};
@@ -95,9 +99,76 @@ impl ClusterConnection {
         })
     }
 
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
+        self.internal_write(command, &[]).await
+    }
+
+    async fn internal_write(&mut self, command: &Command, ask_reasons: &[(u16, (String, u16))]) -> Result<()> {
+        debug!("Analyzing command {command:?}");
+
+        let command_info = self.command_info_manager.get_command_info(command);
+
+        let command_info = if let Some(command_info) = command_info {
+            command_info
+        } else {
+            return Err(Error::Client(format!("Unknown command {}", command.name)));
+        };
+
+        let command_name = command_info.name.to_string();
+
+        let request_policy = command_info.command_tips.iter().find_map(|tip| {
+            if let CommandTip::RequestPolicy(request_policy) = tip {
+                Some(request_policy)
+            } else {
+                None
+            }
+        });
+
+        let node_idx = self.get_random_node_index();
+        let keys = self
+            .command_info_manager
+            .extract_keys(command, &mut self.nodes[node_idx].connection)
+            .await?;
+        let slots = Self::hash_slots(&keys);
+
+        debug!("keys: {keys:?}, slots: {slots:?}");
+
+        if let Some(request_policy) = request_policy {
+            match request_policy {
+                RequestPolicy::AllNodes => {
+                    self.request_policy_all_nodes(command, &command_name, keys)
+                        .await?;
+                }
+                RequestPolicy::AllShards => {
+                    self.request_policy_all_shards(command, &command_name, keys)
+                        .await?;
+                }
+                RequestPolicy::MultiShard => {
+                    self.request_policy_multi_shard(
+                        command,
+                        &command_name,
+                        keys,
+                        slots,
+                        ask_reasons,
+                    )
+                    .await?;
+                }
+                RequestPolicy::Special => {
+                    self.request_policy_special(command, command_name, keys, slots);
+                }
+            }
+        } else {
+            self.no_request_policy(command, command_name, keys, slots, ask_reasons)
+                .await?;
+        }
+
+        Ok(())
+
+    }
+
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &Command>,
+        commands: impl Iterator<Item = &mut Command>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         if retry_reasons.iter().any(|r| {
@@ -124,63 +195,7 @@ impl ClusterConnection {
             .collect::<Vec<_>>();
 
         for command in commands {
-            debug!("Analyzing command {command:?}");
-
-            let command_info = self.command_info_manager.get_command_info(command);
-
-            let command_info = if let Some(command_info) = command_info {
-                command_info
-            } else {
-                return Err(Error::Client(format!("Unknown command {}", command.name)));
-            };
-
-            let command_name = command_info.name.to_string();
-
-            let request_policy = command_info.command_tips.iter().find_map(|tip| {
-                if let CommandTip::RequestPolicy(request_policy) = tip {
-                    Some(request_policy)
-                } else {
-                    None
-                }
-            });
-
-            let node_idx = self.get_random_node_index();
-            let keys = self
-                .command_info_manager
-                .extract_keys(command, &mut self.nodes[node_idx].connection)
-                .await?;
-            let slots = Self::hash_slots(&keys);
-
-            debug!("keys: {keys:?}, slots: {slots:?}");
-
-            if let Some(request_policy) = request_policy {
-                match request_policy {
-                    RequestPolicy::AllNodes => {
-                        self.request_policy_all_nodes(command, &command_name, keys)
-                            .await?;
-                    }
-                    RequestPolicy::AllShards => {
-                        self.request_policy_all_shards(command, &command_name, keys)
-                            .await?;
-                    }
-                    RequestPolicy::MultiShard => {
-                        self.request_policy_multi_shard(
-                            command,
-                            &command_name,
-                            keys,
-                            slots,
-                            &ask_reasons,
-                        )
-                        .await?;
-                    }
-                    RequestPolicy::Special => {
-                        self.request_policy_special(command, command_name, keys, slots);
-                    }
-                }
-            } else {
-                self.no_request_policy(command, command_name, keys, slots, &ask_reasons)
-                    .await?;
-            }
+            self.internal_write(command, &ask_reasons).await?;
         }
 
         Ok(())
@@ -531,7 +546,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(None));
+        let mut result: Result<Value> = Ok(Value::Nil);
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -548,7 +563,7 @@ impl ClusterConnection {
         &mut self,
         sub_results: Vec<Result<Value>>,
     ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::BulkString(None));
+        let mut result: Result<Value> = Ok(Value::Nil);
 
         for sub_result in sub_results {
             if let Err(_) | Ok(Value::Error(_)) = sub_result {
@@ -569,7 +584,7 @@ impl ClusterConnection {
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut result = Value::BulkString(None);
+        let mut result = Value::Nil;
 
         for sub_result in sub_results {
             result = match sub_result {
@@ -578,10 +593,8 @@ impl ClusterConnection {
                 }
                 Ok(value) => match (value, result) {
                     (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
-                    (Value::Integer(v), Value::BulkString(None)) => Value::Integer(v),
-                    (Value::Array(Some(v)), Value::Array(Some(mut r)))
-                        if v.len() == r.len() =>
-                    {
+                    (Value::Integer(v), Value::Nil) => Value::Integer(v),
+                    (Value::Array(v), Value::Array(mut r)) if v.len() == r.len() => {
                         for i in 0..v.len() {
                             match (&v[i], &r[i]) {
                                 (Value::Integer(vi), Value::Integer(ri)) => {
@@ -592,11 +605,9 @@ impl ClusterConnection {
                                 }
                             }
                         }
-                        Value::Array(Some(r))
+                        Value::Array(r)
                     }
-                    (Value::Array(Some(v)), Value::BulkString(None)) => {
-                        Value::Array(Some(v))
-                    }
+                    (Value::Array(v), Value::Nil) => Value::Array(v),
                     _ => {
                         return Some(Err(Error::Client("Unexpected value".to_owned())));
                     }
@@ -634,7 +645,7 @@ impl ClusterConnection {
             let mut values = Vec::<Value>::new();
             for sub_result in sub_results {
                 match sub_result {
-                    Ok(Value::Array(Some(v))) => {
+                    Ok(Value::Array(v)) => {
                         values.extend(v);
                     }
                     Err(_) | Ok(Value::Error(_)) => {
@@ -648,7 +659,7 @@ impl ClusterConnection {
                 }
             }
 
-            Some(Ok(Value::Array(Some(values))))
+            Some(Ok(Value::Array(values)))
         } else {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
@@ -657,9 +668,7 @@ impl ClusterConnection {
 
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
                 match sub_result {
-                    Ok(Value::Array(Some(values)))
-                        if sub_request.keys.len() == values.len() =>
-                    {
+                    Ok(Value::Array(values)) if sub_request.keys.len() == values.len() => {
                         results.extend(zip(&sub_request.keys, values))
                     }
                     Err(_) | Ok(Value::Error(_)) => return Some(sub_result),
@@ -681,7 +690,7 @@ impl ClusterConnection {
             });
 
             let values = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(Value::Array(Some(values))))
+            Some(Ok(Value::Array(values)))
         }
     }
 
@@ -977,13 +986,12 @@ impl ClusterConnection {
 fn is_push_message(value: &Result<Value>) -> bool {
     match value {
         // RESP2 pub/sub messages
-        Ok(Value::Array(Some(ref items))) => match &items[..] {
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] =>
+        Ok(Value::Array(ref items)) => match &items[..] {
+            [Value::BulkString(command), Value::BulkString(_channel), Value::BulkString(_payload)] =>
             {
                 matches!(command.as_slice(), b"message" | b"smessage")
             }
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_channel)), Value::Integer(_)] =>
-            {
+            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] => {
                 matches!(
                     command.as_slice(),
                     b"subscribe"
@@ -994,7 +1002,7 @@ fn is_push_message(value: &Result<Value>) -> bool {
                         | b"sunsubscribe"
                 )
             }
-            [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
+            [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
                 command.as_slice() == b"pmessage"
             }
             _ => false,

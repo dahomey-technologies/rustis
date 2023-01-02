@@ -1,5 +1,9 @@
 use crate::{
-    tests::log_try_init, FlushingMode, MultiplexedClient, Result, ServerCommands, StringCommands, spawn,
+    client::Client,
+    commands::{FlushingMode, ServerCommands, StringCommands},
+    spawn,
+    tests::log_try_init,
+    Result,
 };
 use futures::future;
 use rand::Rng;
@@ -10,7 +14,7 @@ use serial_test::serial;
 #[serial]
 async fn multiplexed_client() -> Result<()> {
     log_try_init();
-    let mut client = MultiplexedClient::connect("redis://127.0.0.1:6379").await?;
+    let mut client = Client::connect("redis://127.0.0.1:6379").await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client

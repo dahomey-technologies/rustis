@@ -1,6 +1,7 @@
 use crate::{
-    resp::{FromValue, Value, BulkString},
-    Error, GraphCache, Result,
+    commands::GraphCache,
+    resp::{FromValue, Value},
+    Error, Result,
 };
 use std::collections::HashMap;
 
@@ -21,7 +22,7 @@ pub(crate) enum GraphValueType {
 
 impl FromValue for GraphValueType {
     fn from_value(value: Value) -> Result<Self> {
-        let value_type: u8 = value.into()?;
+        let value_type: u16 = value.into()?;
 
         match value_type {
             0 => Ok(GraphValueType::Unknown),
@@ -43,18 +44,30 @@ impl FromValue for GraphValueType {
     }
 }
 
+/// Object model for the different [`RedisGraph Data Types`](https://redis.io/docs/stack/graph/datatypes/)
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphValue {
+    /// In RedisGraph, null is used to stand in for an unknown or missing value.
     Null,
+    /// RedisGraph strings are Unicode character sequences. 
     String(Vec<u8>),
+    /// All RedisGraph integers are treated as 64-bit signed integers.
     Integer(i64),
+    /// Boolean values are specified as true or false.
     Boolean(bool),
+    /// All RedisGraph floating-point values are treated as 64-bit signed doubles.
     Double(f64),
+    /// Arrays are ordered lists of elements.
     Array(Vec<GraphValue>),
+    /// Relationships are persistent graph elements that connect one node to another.
     Edge(GraphEdge),
+    /// Nodes are persistent graph elements that can be connected to each other via relationships.
     Node(GraphNode),
+    /// Paths are alternating sequences of nodes and edges, starting and ending with a node.
     Path(GraphPath),
+    /// Maps are order-agnostic collections of key-value pairs.
     Map(HashMap<String, GraphValue>),
+    /// The Point data type is a set of latitude/longitude coordinates, stored within RedisGraph as a pair of 32-bit floats. 
     Point((f32, f32)),
 }
 
@@ -83,12 +96,12 @@ impl GraphValue {
                 ))
             }
             GraphValueType::Null => GraphValue::Null,
-            GraphValueType::String => GraphValue::String(value.into::<BulkString>()?.0),
+            GraphValueType::String => GraphValue::String(value.into()?),
             GraphValueType::Integer => GraphValue::Integer(value.into()?),
             GraphValueType::Boolean => GraphValue::Boolean(value.into()?),
             GraphValueType::Double => GraphValue::Double(value.into()?),
             GraphValueType::Array => {
-                let Value::Array(Some(values)) = value else {
+                let Value::Array(values) = value else {
                     return Err(Error::Client("Cannot parse GraphValue".to_owned()));
                 };
 
@@ -103,7 +116,7 @@ impl GraphValue {
             GraphValueType::Node => GraphValue::Node(GraphNode::from_value(value, cache)?),
             GraphValueType::Path => GraphValue::Path(GraphPath::from_value(value, cache)?),
             GraphValueType::Map => {
-                let Value::Array(Some(values)) = value else {
+                let Value::Array(values) = value else {
                     return Err(Error::Client("Cannot parse GraphValue".to_owned()));
                 };
 
@@ -256,12 +269,15 @@ impl GraphProperties {
     }
 }
 
+/// Used to do [`GraphValue`](GraphValue) to user type conversion
+///  while consuming the input [`GraphValue`](GraphValue)
 pub trait FromGraphValue: Sized {
-    /// Used to do [`GraphValue`](GraphValue) to user type conversion
+    /// Converts to this type from the input [`GraphValue`](GraphValue).
     ///
     /// # Errors
     ///
-    /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
+    /// Any parsing error ([`Error::Client`](crate::Error::Client)) 
+    /// due to incompatibility between Value variant and taget type
     fn from_graph_value(value: GraphValue) -> Result<Self>;
 }
 

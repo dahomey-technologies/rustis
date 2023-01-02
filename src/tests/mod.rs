@@ -9,7 +9,12 @@ mod command_args;
 mod command_info_manager;
 mod config;
 mod connection_commands;
+#[cfg(feature = "redis-bloom")]
+mod count_min_sktech_commands;
+#[cfg(feature = "redis-bloom")]
+mod cuckoo_commands;
 mod error;
+mod from_value;
 mod generic_commands;
 mod geo_commands;
 #[cfg(feature = "redis-graph")]
@@ -35,10 +40,17 @@ mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
+#[cfg(feature = "redis-bloom")]
+mod t_disgest_commands;
+#[cfg(feature = "redis-time-series")]
+mod time_series_commands;
 mod tls;
+#[cfg(feature = "redis-bloom")]
+mod top_k_commands;
 mod transaction;
 mod util;
 mod value;
 mod value_deserialize;
+mod value_decoder;
 
 pub(crate) use util::*;

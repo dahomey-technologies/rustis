@@ -1,7 +1,9 @@
 use crate::{
-    network::MonitorReceiver,
+    client::{Client, ClientPreparedCommand},
+    commands::ConnectionCommands,
+    network::PushReceiver,
     resp::{FromValue, Value},
-    Client, ClientPreparedCommand, ConnectionCommands, Error, Result,
+    Error, Result,
 };
 use futures::{Stream, StreamExt};
 use std::{
@@ -14,12 +16,12 @@ use std::{
 /// when the stream is dropped or closed, a reset command is sent to the Redis server
 pub struct MonitorStream {
     closed: bool,
-    receiver: MonitorReceiver,
+    receiver: PushReceiver,
     client: Client,
 }
 
 impl MonitorStream {
-    pub(crate) fn new(receiver: MonitorReceiver, client: Client) -> Self {
+    pub(crate) fn new(receiver: PushReceiver, client: Client) -> Self {
         Self {
             closed: false,
             receiver,
@@ -68,6 +70,7 @@ impl Drop for MonitorStream {
     }
 }
 
+/// Result for the [`monitor`](crate::commands::BlockingCommands::monitor) command.
 #[derive(Debug)]
 pub struct MonitoredCommandInfo {
     pub unix_timestamp_millis: f64,

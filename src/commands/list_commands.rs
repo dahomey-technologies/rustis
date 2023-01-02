@@ -1,10 +1,9 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArgOrCollection,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
-    PreparedCommand,
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
@@ -23,8 +22,8 @@ pub trait ListCommands {
     fn lindex<K, E>(&mut self, key: K, index: isize) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
+        K: SingleArg,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("LINDEX").arg(key).arg(index))
     }
@@ -46,8 +45,8 @@ pub trait ListCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
+        K: SingleArg,
+        E: SingleArg,
     {
         prepare_command(
             self,
@@ -66,7 +65,7 @@ pub trait ListCommands {
     fn llen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("LLEN").arg(key))
     }
@@ -90,9 +89,9 @@ pub trait ListCommands {
     ) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        S: Into<CommandArg>,
-        D: Into<CommandArg>,
-        E: FromValue,
+        S: SingleArg,
+        D: SingleArg,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -120,9 +119,9 @@ pub trait ListCommands {
     ) -> PreparedCommand<Self, (String, Vec<E>)>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        E: FromSingleValue,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -146,9 +145,9 @@ pub trait ListCommands {
     fn lpop<K, E, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
-        A: FromSingleValueArray<E>,
+        K: SingleArg,
+        E: FromSingleValue,
+        A: FromValueArray<E>,
     {
         prepare_command(self, cmd("LPOP").arg(key).arg(count))
     }
@@ -170,8 +169,8 @@ pub trait ListCommands {
     ) -> PreparedCommand<Self, Option<usize>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
+        K: SingleArg,
+        E: SingleArg,
     {
         prepare_command(
             self,
@@ -202,9 +201,9 @@ pub trait ListCommands {
     ) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        A: FromSingleValueArray<usize>,
+        K: SingleArg,
+        E: SingleArg,
+        A: FromValueArray<usize>,
     {
         prepare_command(
             self,
@@ -229,9 +228,9 @@ pub trait ListCommands {
     fn lpush<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        C: SingleArgOrCollection<E>,
+        K: SingleArg,
+        E: SingleArg,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("LPUSH").arg(key).arg(elements))
     }
@@ -248,9 +247,9 @@ pub trait ListCommands {
     fn lpushx<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        C: SingleArgOrCollection<E>,
+        K: SingleArg,
+        E: SingleArg,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("LPUSHX").arg(key).arg(elements))
     }
@@ -266,9 +265,9 @@ pub trait ListCommands {
     fn lrange<K, E, A>(&mut self, key: K, start: isize, stop: isize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
-        A: FromSingleValueArray<E>,
+        K: SingleArg,
+        E: FromSingleValue,
+        A: FromValueArray<E>,
     {
         prepare_command(self, cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
@@ -284,8 +283,8 @@ pub trait ListCommands {
     fn lrem<K, E>(&mut self, key: K, count: isize, element: E) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
+        K: SingleArg,
+        E: SingleArg,
     {
         prepare_command(self, cmd("LREM").arg(key).arg(count).arg(element))
     }
@@ -298,8 +297,8 @@ pub trait ListCommands {
     fn lset<K, E>(&mut self, key: K, index: isize, element: E) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
+        K: SingleArg,
+        E: SingleArg,
     {
         prepare_command(self, cmd("LSET").arg(key).arg(index).arg(element))
     }
@@ -312,7 +311,7 @@ pub trait ListCommands {
     fn ltrim<K>(&mut self, key: K, start: isize, stop: isize) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("LTRIM").arg(key).arg(start).arg(stop))
     }
@@ -328,9 +327,9 @@ pub trait ListCommands {
     fn rpop<K, E, C>(&mut self, key: K, count: usize) -> PreparedCommand<Self, C>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
-        C: FromSingleValueArray<E>,
+        K: SingleArg,
+        E: FromSingleValue,
+        C: FromValueArray<E>,
     {
         prepare_command(self, cmd("RPOP").arg(key).arg(count))
     }
@@ -346,9 +345,9 @@ pub trait ListCommands {
     fn rpush<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        C: SingleArgOrCollection<E>,
+        K: SingleArg,
+        E: SingleArg,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("RPUSH").arg(key).arg(elements))
     }
@@ -365,14 +364,15 @@ pub trait ListCommands {
     fn rpushx<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: Into<CommandArg>,
-        C: SingleArgOrCollection<E>,
+        K: SingleArg,
+        E: SingleArg,
+        C: SingleArgCollection<E>,
     {
         prepare_command(self, cmd("RPUSHX").arg(key).arg(elements))
     }
 }
 
+/// Where option for the [`linsert`](ListCommands::linsert) command.
 pub enum LInsertWhere {
     Before,
     After,
@@ -387,6 +387,7 @@ impl IntoArgs for LInsertWhere {
     }
 }
 
+/// Where option for the [`lmove`](ListCommands::lmove) command.
 pub enum LMoveWhere {
     Left,
     Right,

@@ -1,9 +1,12 @@
 use crate::{
-    resp::{BulkString},
+    client::ClientPreparedCommand,
+    commands::{
+        CallBuilder, FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands,
+        ServerCommands, StringCommands,
+    },
     sleep, spawn,
     tests::get_test_client,
-    CallBuilder, ClientPreparedCommand, FlushingMode, FunctionListOptions, LibraryInfo, Result,
-    ScriptingCommands, ServerCommands, StringCommands,
+    Result,
 };
 use serial_test::serial;
 
@@ -110,8 +113,8 @@ async fn function_dump() -> Result<()> {
         .await?;
     assert_eq!("hello", result);
 
-    let serialized_payload: BulkString = client.function_dump().await?;
-    assert!(!serialized_payload.0.is_empty());
+    let serialized_payload: Vec<u8> = client.function_dump().await?;
+    assert!(!serialized_payload.is_empty());
 
     client.function_delete("mylib").await?;
 

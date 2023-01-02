@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueValueArray, FromSingleValueArray, FromValue,
-        IntoArgs, SingleArgOrCollection,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
+        SingleArg, SingleArgCollection,
     },
-    PreparedCommand, Future, PubSubStream,
+    Future,
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
@@ -15,13 +15,16 @@ pub trait PubSubCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
+    /// use rustis::{
+    ///     client::{Client, ClientPreparedCommand},
+    ///     commands::{FlushingMode, PubSubCommands, ServerCommands},
+    ///     resp::cmd,
+    ///     Result,
     /// };
     /// use futures::StreamExt;
     ///
-    /// #[tokio::main]
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
@@ -32,15 +35,14 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel1", "mymessage").await?;
     ///
-    ///     let (pattern, channel, message): (String, String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
+    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
+    ///     let pattern: String = message.get_pattern()?;
+    ///     let channel: String = message.get_channel()?;
+    ///     let payload: String = message.get_payload()?;
     ///
     ///     assert_eq!("mychannel*", pattern);
     ///     assert_eq!("mychannel1", channel);
-    ///     assert_eq!("mymessage", message);
+    ///     assert_eq!("mymessage", payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///
@@ -52,8 +54,8 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
     fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
     where
-        P: Into<CommandArg> + Send + 'a,
-        PP: SingleArgOrCollection<P>;
+        P: SingleArg + Send + 'a,
+        PP: SingleArgCollection<P>;
 
     /// Posts a message to the given channel.
     ///
@@ -68,8 +70,8 @@ pub trait PubSubCommands {
     fn publish<C, M>(&mut self, channel: C, message: M) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        M: Into<CommandArg>,
+        C: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
     }
@@ -87,8 +89,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
@@ -119,10 +121,10 @@ pub trait PubSubCommands {
     fn pub_sub_numsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        CC: SingleArgOrCollection<C>,
-        R: FromValue,
-        RR: FromKeyValueValueArray<R, usize>,
+        C: SingleArg,
+        CC: SingleArgCollection<C>,
+        R: FromSingleValue,
+        RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
@@ -140,8 +142,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromValue,
-        CC: FromSingleValueArray<C>,
+        C: FromSingleValue,
+        CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
     }
@@ -156,10 +158,10 @@ pub trait PubSubCommands {
     fn pub_sub_shardnumsub<C, CC, R, RR>(&mut self, channels: CC) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        CC: SingleArgOrCollection<C>,
-        R: FromValue,
-        RR: FromKeyValueValueArray<R, usize>,
+        C: SingleArg,
+        CC: SingleArgCollection<C>,
+        R: FromSingleValue,
+        RR: FromKeyValueArray<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }
@@ -174,8 +176,8 @@ pub trait PubSubCommands {
     fn spublish<C, M>(&mut self, shardchannel: C, message: M) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        C: Into<CommandArg>,
-        M: Into<CommandArg>,
+        C: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("SPUBLISH").arg(shardchannel).arg(message))
     }
@@ -186,20 +188,23 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
-        CC: SingleArgOrCollection<C>;    
+        C: SingleArg + Send + 'a,
+        CC: SingleArgCollection<C>;
 
     /// Subscribes the client to the specified channels.
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     PubSubCommands, ServerCommands, Result
+    /// use rustis::{
+    ///     client::{Client, ClientPreparedCommand},
+    ///     commands::{FlushingMode, PubSubCommands, ServerCommands},
+    ///     resp::cmd,
+    ///     Result,
     /// };
     /// use futures::StreamExt;
     ///
-    /// #[tokio::main]
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let mut regular_client = Client::connect("127.0.0.1:6379").await?;
@@ -210,14 +215,13 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel", "mymessage").await?;
     ///
-    ///     let (channel, message): (String, String) = pub_sub_stream
-    ///         .next()
-    ///         .await
-    ///         .unwrap()?
-    ///         .into()?;
+    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
+    ///     let pattern: String = message.get_pattern()?;
+    ///     let channel: String = message.get_channel()?;
+    ///     let payload: String = message.get_payload()?;
     ///
     ///     assert_eq!("mychannel", channel);
-    ///     assert_eq!("mymessage", message);
+    ///     assert_eq!("mymessage", payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///
@@ -229,18 +233,18 @@ pub trait PubSubCommands {
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
     where
-        C: Into<CommandArg> + Send + 'a,
-        CC: SingleArgOrCollection<C>;
+        C: SingleArg + Send + 'a,
+        CC: SingleArgCollection<C>;
 }
 
-/// Options for the [`pub_sub_channels`](crate::PubSubCommands::pub_sub_channels) command
+/// Options for the [`pub_sub_channels`](PubSubCommands::pub_sub_channels) command
 #[derive(Default)]
 pub struct PubSubChannelsOptions {
     command_args: CommandArgs,
 }
 
 impl PubSubChannelsOptions {
-    pub fn pattern<P: Into<CommandArg>>(self, pattern: P) -> Self {
+    pub fn pattern<P: SingleArg>(self, pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg(pattern),
         }

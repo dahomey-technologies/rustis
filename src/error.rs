@@ -1,4 +1,4 @@
-use crate::{Message, Result};
+use crate::{client::Message, Result};
 use futures::channel::{
     mpsc::{self, TrySendError},
     oneshot,
@@ -13,7 +13,8 @@ use std::{
 /// `Internal Use`
 ///
 /// Gives a reason to retry sending a command to the Redis Server
-#[derive(Debug)]
+#[doc(hidden)]
+#[derive(Debug, Clone)]
 pub enum RetryReason {
     /// Received an ASK error from the Redis Server
     Ask {
@@ -28,11 +29,11 @@ pub enum RetryReason {
 }
 
 /// All error kinds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     /// Raised if an error occurs within the driver
     Client(String),
-    /// Raised if an error occurs in the [`Config`](crate::Config) parsing
+    /// Raised if an error occurs in the [`Config`](crate::client::Config) parsing
     Config(String),
     /// A transaction has been aborted
     Aborted,
@@ -41,12 +42,16 @@ pub enum Error {
     /// Error returned by the Redis sercer
     Redis(RedisError),
     /// IO error when connecting the Redis server
-    IO(std::io::Error),
+    IO(String),
+    #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
     #[cfg(feature = "tls")]
     /// Raised by the TLS library
     Tls(String),
     /// Internal error to trigger retry sending the command
+    #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
+    /// The I/O operation’s timeout expired
+    Timeout(String)
 }
 
 impl std::fmt::Display for Error {
@@ -57,10 +62,11 @@ impl std::fmt::Display for Error {
             Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
             Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
             Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
-            Error::IO(e) => f.write_fmt(format_args!("IO erro: {}", e)),
+            Error::IO(e) => f.write_fmt(format_args!("IO error: {}", e)),
             #[cfg(feature = "tls")]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
             Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
+            Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {}", e)),
         }
     }
 }
@@ -78,7 +84,7 @@ impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error::IO(e)
+        Error::IO(format!("[{}] {}", e.kind(), e))
     }
 }
 
@@ -119,8 +125,14 @@ impl From<native_tls::Error> for Error {
     }
 }
 
+impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
+    fn from(e: tokio::sync::broadcast::error::SendError<()>) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
 /// Redis server error kind
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RedisErrorKind {
     Ask {
         hash_slot: u16,
@@ -254,7 +266,7 @@ impl Display for RedisErrorKind {
 }
 
 /// Error issued by the Redis server
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RedisError {
     pub kind: RedisErrorKind,
     pub description: String,

@@ -2,20 +2,39 @@ use crate::{
     resp::{Command, FromValue},
     Error, RedisError, Result,
 };
-use std::fmt;
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Formatter, Write},
+    hash::{Hash, Hasher},
+};
 
-#[derive(PartialEq)]
+/// Generic Redis Object Model
+///
+/// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/reference/protocol-spec/) (RESP)
 pub enum Value {
+    /// [RESP Simple String](https://redis.io/docs/reference/protocol-spec/#resp-simple-strings)
     SimpleString(String),
+    /// [RESP Integer](https://redis.io/docs/reference/protocol-spec/#resp-integers)
     Integer(i64),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Double
     Double(f64),
-    BulkString(Option<Vec<u8>>),
-    Array(Option<Vec<Value>>),
-    Push(Option<Vec<Value>>),
+    /// [RESP Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
+    BulkString(Vec<u8>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Boolean
+    Boolean(bool),
+    /// [RESP Array](https://redis.io/docs/reference/protocol-spec/#resp-arrays)
+    Array(Vec<Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Map type
+    Map(HashMap<Value, Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Push
+    Set(Vec<Value>),
+    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Set reply
+    Push(Vec<Value>),
+    /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
     Error(RedisError),
+    /// [RESP Null](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
+    Nil,
 }
-
-pub struct BulkString(pub Vec<u8>);
 
 impl Value {
     /// A [`Value`](crate::resp::Value) to user type conversion that consumes the input value.
@@ -39,52 +58,124 @@ impl Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value::BulkString(None)
+        Value::Nil
     }
 }
 
-impl ToString for Value {
-    fn to_string(&self) -> String {
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::SimpleString(s) => s.hash(state),
+            Value::Integer(i) => i.hash(state),
+            Value::Double(d) => d.to_string().hash(state),
+            Value::BulkString(bs) => bs.hash(state),
+            Value::Error(e) => e.hash(state),
+            Value::Nil => "_\r\n".hash(state),
+            _ => unimplemented!("Hash not implemented for {self}"),
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::SimpleString(l0), Self::SimpleString(r0)) => l0 == r0,
+            (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
+            (Self::Double(l0), Self::Double(r0)) => l0 == r0,
+            (Self::BulkString(l0), Self::BulkString(r0)) => l0 == r0,
+            (Self::Array(l0), Self::Array(r0)) => l0 == r0,
+            (Self::Map(l0), Self::Map(r0)) => l0 == r0,
+            (Self::Set(l0), Self::Set(r0)) => l0 == r0,
+            (Self::Push(l0), Self::Push(r0)) => l0 == r0,
+            (Self::Error(l0), Self::Error(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
-            Value::SimpleString(s) => s.clone(),
-            Value::Integer(i) => i.to_string(),
-            Value::Double(f) => f.to_string(),
-            Value::BulkString(s) => match s {
-                Some(s) => String::from_utf8_lossy(s).into_owned(),
-                None => String::from(""),
-            },
-            Value::Array(Some(v)) => format!(
-                "[{}]",
-                v.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Value::Array(None) => "[]".to_string(),
-            Value::Push(Some(v)) => format!(
-                "Push[{}]",
-                v.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Value::Push(None) => "Push[]".to_string(),
-            Value::Error(e) => e.to_string(),
+            Value::SimpleString(s) => s.fmt(f),
+            Value::Integer(i) => i.fmt(f),
+            Value::Double(d) => d.fmt(f),
+            Value::BulkString(s) => String::from_utf8_lossy(s).fmt(f),
+            Value::Boolean(b) => b.fmt(f),
+            Value::Array(v) => {
+                f.write_char('[')?;
+                let mut first = true;
+                for value in v {
+                    if !first {
+                        f.write_str(", ")?;
+                    }
+                    first = false;
+                    value.fmt(f)?;
+                }
+                f.write_char(']')
+            }
+            Value::Map(m) => {
+                f.write_char('{')?;
+                let mut first = true;
+                for (key, value) in m {
+                    if !first {
+                        f.write_str(", ")?;
+                    }
+                    first = false;
+                    key.fmt(f)?;
+                    f.write_str(": ")?;
+                    value.fmt(f)?;
+                }
+                f.write_char('}')
+            }
+            Value::Set(v) => {
+                f.write_char('[')?;
+                let mut first = true;
+                for value in v {
+                    if !first {
+                        f.write_str(", ")?;
+                    }
+                    first = false;
+                    value.fmt(f)?;
+                }
+                f.write_char(']')
+            }
+            Value::Push(v) => {
+                f.write_char('[')?;
+                let mut first = true;
+                for value in v {
+                    if !first {
+                        f.write_str(", ")?;
+                    }
+                    first = false;
+                    value.fmt(f)?;
+                }
+                f.write_char(']')
+            }
+            Value::Error(e) => e.fmt(f),
+            Value::Nil => f.write_str("Nil"),
         }
     }
 }
 
 impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::SimpleString(arg0) => f.debug_tuple("SimpleString").field(arg0).finish(),
             Self::Integer(arg0) => f.debug_tuple("Integer").field(arg0).finish(),
             Self::Double(arg0) => f.debug_tuple("Double").field(arg0).finish(),
-            Self::BulkString(Some(arg0)) => f.debug_tuple("CommandArg").field(&String::from_utf8_lossy(arg0).into_owned()).finish(),
-            Self::BulkString(None) => f.debug_tuple("CommandArg").field(&None::<Vec<u8>>).finish(),
+            Self::BulkString(arg0) => f
+                .debug_tuple("BulkString")
+                .field(&String::from_utf8_lossy(arg0).into_owned())
+                .finish(),
+            Self::Boolean(arg0) => f.debug_tuple("Boolean").field(arg0).finish(),
             Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
+            Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
+            Self::Set(arg0) => f.debug_tuple("Set").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
+            Self::Nil => write!(f, "Nil"),
         }
     }
 }
@@ -123,14 +214,14 @@ impl ResultValueExt for Result<Value> {
     }
 }
 
-pub(crate) trait IntoValueIterator: Sized {
-    fn into_value_iter<T>(self) -> ValueIterator<T>
+pub(crate) trait IntoValueIterator<I: Iterator<Item = Value>>: Sized {
+    fn into_value_iter<T>(self) -> ValueIterator<T, I>
     where
         T: FromValue;
 }
 
-impl IntoValueIterator for Vec<Value> {
-    fn into_value_iter<T>(self) -> ValueIterator<T>
+impl IntoValueIterator<std::vec::IntoIter<Value>> for Vec<Value> {
+    fn into_value_iter<T>(self) -> ValueIterator<T, std::vec::IntoIter<Value>>
     where
         T: FromValue,
     {
@@ -138,21 +229,23 @@ impl IntoValueIterator for Vec<Value> {
     }
 }
 
-pub(crate) struct ValueIterator<T>
+pub(crate) struct ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
-    iter: std::vec::IntoIter<Value>,
+    iter: I,
     phantom: std::marker::PhantomData<T>,
     #[allow(clippy::complexity)]
-    next_functor: Box<dyn FnMut(&mut std::vec::IntoIter<Value>) -> Option<Result<T>>>,
+    next_functor: Box<dyn FnMut(&mut I) -> Option<Result<T>>>,
 }
 
-impl<T> ValueIterator<T>
+impl<T, I> ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
-    pub fn new(iter: std::vec::IntoIter<Value>) -> Self {
+    pub fn new(iter: I) -> Self {
         Self {
             iter,
             phantom: std::marker::PhantomData,
@@ -161,9 +254,10 @@ where
     }
 }
 
-impl<T> Iterator for ValueIterator<T>
+impl<T, I> Iterator for ValueIterator<T, I>
 where
     T: FromValue,
+    I: Iterator<Item = Value>,
 {
     type Item = Result<T>;
 

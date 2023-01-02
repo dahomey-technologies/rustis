@@ -82,7 +82,6 @@ pub(crate) struct Message {
     pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
     pub monitor_sender: Option<MonitorSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
-    pub buffer_reply: bool
 }
 
 impl Message {
@@ -93,18 +92,6 @@ impl Message {
             pub_sub_senders: None,
             monitor_sender: None,
             retry_reasons: None,
-            buffer_reply: false,
-        }
-    }
-
-    pub fn single_buffer_reply(command: Command, value_sender: ValueSender) -> Self {
-        Message {
-            commands: Commands::Single(command),
-            value_sender: Some(value_sender),
-            pub_sub_senders: None,
-            monitor_sender: None,
-            retry_reasons: None,
-            buffer_reply: true,
         }
     }
 
@@ -115,7 +102,6 @@ impl Message {
             pub_sub_senders: None,
             monitor_sender: None,
             retry_reasons: None,
-            buffer_reply: false,
         }
     }
 
@@ -126,7 +112,6 @@ impl Message {
             pub_sub_senders: None,
             monitor_sender: None,
             retry_reasons: None,
-            buffer_reply: false,
         }
     }
 
@@ -141,7 +126,6 @@ impl Message {
             pub_sub_senders: Some(pub_sub_senders),
             monitor_sender: None,
             retry_reasons: None,
-            buffer_reply: false,
         }
     }
 
@@ -156,7 +140,6 @@ impl Message {
             pub_sub_senders: None,
             monitor_sender: Some(monitor_sender),
             retry_reasons: None,
-            buffer_reply: false,
         }
     }
 }

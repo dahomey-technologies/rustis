@@ -1,12 +1,16 @@
 use crate::{
+    client::Client,
+    commands::{
+        AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands,
+        ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram, CommandListOptions,
+        ConnectionCommands, FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent,
+        MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, RoleResult,
+        ServerCommands, SlowLogOptions, StringCommands,
+    },
     resp::{cmd, Value},
     spawn,
     tests::get_test_client,
-    AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands, Client,
-    ClientInfo, CommandDoc, CommandHistogram, CommandListOptions, ConnectionCommands, Error,
-    FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent, MemoryUsageOptions,
-    ModuleInfo, ModuleLoadOptions, RedisError, RedisErrorKind, ReplicaOfOptions, Result,
-    RoleResult, ServerCommands, SlowLogOptions, StringCommands,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -106,9 +110,7 @@ async fn acl_getuser() -> Result<()> {
     client.acl_setuser("foo", Vec::<String>::new()).await?;
     let rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
     // default `commands` rule
-    assert!(
-        matches!(rules.get("commands"), Some(Value::BulkString(Some(rule))) if rule == b"-@all")
-    );
+    assert!(matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all"));
 
     client.acl_deluser("foo").await?;
 
@@ -161,9 +163,7 @@ async fn acl_log() -> Result<()> {
     let logs: Vec<HashMap<String, Value>> =
         client.acl_log(AclLogOptions::default().count(1)).await?;
     assert_eq!(1, logs.len());
-    assert!(
-        matches!(logs[0].get("reason"), Some(Value::BulkString(Some(reason))) if reason == b"auth")
-    );
+    assert!(matches!(logs[0].get("reason"), Some(Value::BulkString(reason)) if reason == b"auth"));
     let client_info: String = logs[0].get("client-info").unwrap().to_string();
     let client_info = ClientInfo::from_line(&client_info)?;
     assert_eq!("auth", client_info.cmd);
@@ -539,10 +539,10 @@ async fn flushdb() -> Result<()> {
     client0.flushdb(FlushingMode::Default).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     let value: String = client1.get("key1").await?;
     assert_eq!("value1", value);
@@ -570,16 +570,16 @@ async fn flushall() -> Result<()> {
     client0.flushall(FlushingMode::Default).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     let value: Value = client1.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     let value: Value = client1.get("key2").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
 
     Ok(())
 }
@@ -642,9 +642,9 @@ async fn latency_graph() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -692,9 +692,9 @@ async fn latency_history() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -715,9 +715,9 @@ async fn latency_latest() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2)).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
     assert!(!report.is_empty());
@@ -933,6 +933,61 @@ async fn monitor() -> Result<()> {
     // RESET is the only command allowed during a MONITOR session
     let result: Result<String> = client.get("key").await;
     assert!(result.is_err());
+
+    monitor_stream.close().await?;
+
+    client.select(2).await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value3", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn auto_remonitor() -> Result<()> {
+    let mut client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let mut client2 = get_test_client().await?;
+    client2.select(2).await?;
+
+    let client_id = client.client_id().await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    let mut monitor_stream = client.monitor().await?;
+
+    client2
+        .client_kill(ClientKillOptions::default().id(client_id))
+        .await?;
+
+    // wait for reconnection before monitoring
+    on_reconnect.recv().await.unwrap();
+
+    spawn(async move {
+        async fn calls(client: &mut Client) -> Result<()> {
+            client.set("key", "value1").await?;
+            client.set("key", "value2").await?;
+            client.set("key", "value3").await?;
+
+            Ok(())
+        }
+
+        let _result = calls(&mut client2).await;
+    });
+
+    for _ in 0..3 {
+        let result = monitor_stream
+            .next()
+            .await
+            .ok_or_else(|| Error::Client("fail".to_owned()))?;
+
+        assert!(result.unix_timestamp_millis > 0.0);
+        assert_eq!(2, result.database);
+        assert_eq!("SET", result.command);
+        assert_eq!(2, result.command_args.len());
+    }
 
     monitor_stream.close().await?;
 

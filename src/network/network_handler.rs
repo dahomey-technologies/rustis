@@ -1,14 +1,17 @@
 use crate::{
-    resp::{Command, CommandArgs, Value},
-    spawn, Config, Connection, Error, Message, Result, RetryReason,
+    client::{Commands, Config, Message},
+    commands::InternalPubSubCommands,
+    resp::{cmd, Command, CommandArgs, Value},
+    spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
 use futures::{
     channel::{mpsc, oneshot},
     select, FutureExt, SinkExt, StreamExt,
 };
-use log::{debug, error, info, log_enabled, Level};
+use log::{debug, error, info, log_enabled, warn, Level};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
+use tokio::sync::broadcast;
 
 #[derive(Debug)]
 pub(crate) enum  ValueOrBuffer{
@@ -22,9 +25,12 @@ pub(crate) type ValueSender = oneshot::Sender<Result<ValueOrBuffer>>;
 pub(crate) type ValueReceiver = oneshot::Receiver<Result<ValueOrBuffer>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
-pub(crate) type MonitorSender = mpsc::UnboundedSender<Result<Value>>;
-pub(crate) type MonitorReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type PushSender = mpsc::UnboundedSender<Result<Value>>;
+pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type ReconnectSender = broadcast::Sender<()>;
+pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
+#[derive(Clone, Copy, Debug)]
 enum Status {
     Disconnected,
     Connected,
@@ -35,27 +41,73 @@ enum Status {
     LeavingMonitor,
 }
 
+#[derive(Clone, Copy)]
+enum SubcriptionType {
+    Channel,
+    Pattern,
+    ShardChannel,
+}
+
+struct MessageToSend {
+    pub message: Message,
+    pub attempts: usize,
+}
+
+impl MessageToSend {
+    pub fn new(message: Message) -> Self {
+        Self {
+            message,
+            attempts: 0,
+        }
+    }
+}
+
+struct MessageToReceive {
+    pub message: Message,
+    pub num_commands: usize,
+    pub attempts: usize,
+}
+
+impl MessageToReceive {
+    pub fn new(message: Message, num_commands: usize, attempts: usize) -> Self {
+        Self {
+            message,
+            num_commands,
+            attempts,
+        }
+    }
+}
+
 pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
     /// for retries
     msg_sender: MsgSender,
     msg_receiver: MsgReceiver,
-    messages_to_send: VecDeque<Message>,
-    messages_to_receive: VecDeque<(Message, usize)>,
-    pending_subscriptions: HashMap<Vec<u8>, PubSubSender>,
-    /// for each UNSUBSCRIBE/PUNSUBSCRIBE message, the number of channels/patterns to unsubscribe from
-    pending_unsubscriptions: VecDeque<usize>,
-    subscriptions: HashMap<Vec<u8>, PubSubSender>,
+    messages_to_send: VecDeque<MessageToSend>,
+    messages_to_receive: VecDeque<MessageToReceive>,
+    pending_subscriptions: HashMap<Vec<u8>, (SubcriptionType, PubSubSender)>,
+    pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubcriptionType>>,
+    subscriptions: HashMap<Vec<u8>, (SubcriptionType, PubSubSender)>,
     is_reply_on: bool,
-    monitor_sender: Option<MonitorSender>,
+    push_sender: Option<PushSender>,
     pending_replies: Option<Vec<Value>>,
+    reconnect_sender: ReconnectSender,
+    auto_resubscribe: bool,
+    auto_remonitor: bool,
+    max_command_attempts: usize,
 }
 
 impl NetworkHandler {
-    pub async fn connect(config: Config) -> Result<MsgSender> {
-        let connection = Connection::connect(config.clone()).await?;
+    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender)> {
+        // options
+        let auto_resubscribe = config.auto_resubscribe;
+        let auto_remonitor = config.auto_remonitor;
+        let max_command_attempts = config.max_command_attempts;
+
+        let connection = Connection::connect(config).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
+        let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
@@ -68,24 +120,34 @@ impl NetworkHandler {
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
             is_reply_on: true,
-            monitor_sender: None,
+            push_sender: None,
             pending_replies: None,
+            reconnect_sender: reconnect_sender.clone(),
+            auto_resubscribe,
+            auto_remonitor,
+            max_command_attempts,
         };
 
-        spawn(async move {
+        let join_handle = spawn(async move {
             if let Err(e) = network_handler.network_loop().await {
                 error!("network loop ended in error: {e}");
             }
         });
 
-        Ok(msg_sender)
+        Ok((msg_sender, join_handle, reconnect_sender))
     }
 
     async fn network_loop(&mut self) -> Result<()> {
         loop {
             select! {
-                msg = self.msg_receiver.next().fuse() => if !self.handle_message(msg).await { break; },
-                value = self.connection.read().fuse() => self.handle_result(value).await?,
+                msg = self.msg_receiver.next().fuse() => {
+                    debug!("self.msg_receiver.next().fuse()");
+                    if !self.handle_message(msg).await { break; }
+                } ,
+                value = self.connection.read().fuse() => {
+                    debug!("self.connection.read().fuse()");
+                    self.handle_result(value).await;
+                }
             }
         }
 
@@ -93,15 +155,34 @@ impl NetworkHandler {
         Ok(())
     }
 
-    async fn handle_message(&mut self, msg: Option<Message>) -> bool {
+    async fn handle_message(&mut self, mut msg: Option<Message>) -> bool {
         let is_channel_closed: bool;
-        let mut msg = msg;
 
         loop {
             if let Some(mut msg) = msg {
                 let pub_sub_senders = msg.pub_sub_senders.take();
                 if let Some(pub_sub_senders) = pub_sub_senders {
-                    self.pending_subscriptions.extend(pub_sub_senders);
+                    let subscription_type = match &msg.commands {
+                        Commands::Single(command) => match command.name {
+                            "SUBSCRIBE" => SubcriptionType::Channel,
+                            "PSUBSCRIBE" => SubcriptionType::Pattern,
+                            "SSUBSCRIBE" => SubcriptionType::ShardChannel,
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    };
+
+                    let pending_subscriptions = pub_sub_senders
+                        .into_iter()
+                        .map(|(channel, sender)| (channel, (subscription_type, sender)));
+
+                    self.pending_subscriptions.extend(pending_subscriptions);
+                }
+
+                let push_sender = msg.push_sender.take();
+                if let Some(push_sender) = push_sender {
+                    debug!("Registering push_sender");
+                    self.push_sender = Some(push_sender);
                 }
 
                 match &self.status {
@@ -112,43 +193,53 @@ impl NetworkHandler {
                                     self.status = Status::Subscribing;
                                 }
                                 "MONITOR" => {
-                                    self.monitor_sender = msg.monitor_sender.take();
                                     self.status = Status::EnteringMonitor;
                                 }
                                 _ => (),
                             }
                         }
-                        self.messages_to_send.push_back(msg);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                     Status::Subscribing => {
-                        self.messages_to_send.push_back(msg);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                     Status::Subscribed => {
                         for command in &msg.commands {
                             if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" | "SUNSUBSCRIBE" = command.name {
-                                self.pending_unsubscriptions.push_back(command.args.len());
+                                let subscription_type = match command.name {
+                                    "UNSUBSCRIBE" => SubcriptionType::Channel,
+                                    "PUNSUBSCRIBE" => SubcriptionType::Pattern,
+                                    "SUNSUBSCRIBE" => SubcriptionType::ShardChannel,
+                                    _ => unreachable!(),
+                                };
+                                self.pending_unsubscriptions.push_back(
+                                    command
+                                        .args
+                                        .iter()
+                                        .map(|a| (a.as_bytes().to_vec(), subscription_type))
+                                        .collect(),
+                                );
                             }
                         }
-                        self.messages_to_send.push_back(msg);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                     Status::Disconnected => {
-                        let value_sender = msg.value_sender;
-                        if let Some(value_sender) = value_sender {
-                            let _result = value_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())));
-                        }
+                        debug!("network disconnected, queuing command: {:?}", msg.commands);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
-                    Status::EnteringMonitor => self.messages_to_send.push_back(msg),
+                    Status::EnteringMonitor => {
+                        self.messages_to_send.push_back(MessageToSend::new(msg))
+                    }
                     Status::Monitor => {
                         for command in &msg.commands {
                             if command.name == "RESET" {
                                 self.status = Status::LeavingMonitor;
                             }
                         }
-                        self.messages_to_send.push_back(msg);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                     Status::LeavingMonitor => {
-                        self.messages_to_send.push_back(msg);
+                        self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                 }
             } else {
@@ -166,8 +257,10 @@ impl NetworkHandler {
             }
         }
 
-        self.send_messages().await;
-        self.messages_to_send.clear();
+        if let Status::Disconnected = self.status {
+        } else {
+            self.send_messages().await
+        }
 
         !is_channel_closed
     }
@@ -177,18 +270,19 @@ impl NetworkHandler {
             let num_commands = self
                 .messages_to_send
                 .iter()
-                .fold(0, |sum, msg| sum + msg.commands.len());
+                .fold(0, |sum, msg| sum + msg.message.commands.len());
             if num_commands > 1 {
                 debug!("sending batch of {} commands", num_commands);
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&Command; 10]>::new();
+        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::new();
         let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
-        for msg in self.messages_to_send.iter_mut() {
-            let commands = &msg.commands;
+        for message_to_send in self.messages_to_send.iter_mut() {
+            let msg = &mut message_to_send.message;
+            let commands = &mut msg.commands;
             let mut num_commands_to_receive: usize = 0;
 
             for command in commands.into_iter() {
@@ -230,35 +324,41 @@ impl NetworkHandler {
             .write_batch(commands_to_write.into_iter(), &retry_reasons)
             .await
         {
-            let mut idx: usize = 0;
-            while let Some(msg) = self.messages_to_send.pop_front() {
-                if let Some(value_sender) = msg.value_sender {
-                    if commands_to_receive[idx] > 0 {
-                        let _result = value_sender.send(Err(Error::Client(e.to_string())));
-                    }
-                }
-                idx += 1;
-            }
+            error!("Error while writing batch: {e}");
         } else {
             let mut idx: usize = 0;
             while let Some(msg) = self.messages_to_send.pop_front() {
                 if commands_to_receive[idx] > 0 {
-                    self.messages_to_receive
-                        .push_back((msg, commands_to_receive[idx]));
+                    self.messages_to_receive.push_back(MessageToReceive::new(
+                        msg.message,
+                        commands_to_receive[idx],
+                        msg.attempts,
+                    ));
                 }
                 idx += 1;
             }
         }
     }
 
-    async fn handle_result(&mut self, result: Option<Result<Value>>) -> Result<()> {
+    async fn handle_result(&mut self, result: Option<Result<Value>>) {
         match result {
             Some(value) => match self.status {
-                Status::Disconnected => {
-                    panic!("Should not happen!");
-                }
+                Status::Disconnected => (),
                 Status::Connected => {
-                    self.receive_result(value);
+                    if let Ok(Value::Push(_)) = &value {
+                        match &mut self.push_sender {
+                            Some(push_sender) => {
+                                if let Err(e) = push_sender.send(value).await {
+                                    warn!("Cannot send monitor result to caller: {e}");
+                                }
+                            }
+                            None => warn!(
+                                "Received a push message with no sender configured: {value:?}"
+                            ),
+                        }
+                    } else {
+                        self.receive_result(value);
+                    }
                 }
                 Status::Subscribing => {
                     if value.is_ok() {
@@ -267,12 +367,12 @@ impl NetworkHandler {
                         self.status = Status::Connected;
                     }
 
-                    if let Some(value) = self.try_match_pubsub_message(value).await? {
+                    if let Some(value) = self.try_match_pubsub_message(value).await {
                         self.receive_result(value);
                     }
                 }
                 Status::Subscribed => {
-                    if let Some(value) = self.try_match_pubsub_message(value).await? {
+                    if let Some(value) = self.try_match_pubsub_message(value).await {
                         self.receive_result(value);
                     }
                 }
@@ -285,8 +385,10 @@ impl NetworkHandler {
                     Ok(Value::SimpleString(monitor_event))
                         if monitor_event.starts_with(char::is_numeric) =>
                     {
-                        if let Some(monitor_sender) = &mut self.monitor_sender {
-                            monitor_sender.send(value).await?;
+                        if let Some(push_sender) = &mut self.push_sender {
+                            if let Err(e) = push_sender.send(value).await {
+                                warn!("Cannot send monitor result to caller: {e}");
+                            }
                         }
                     }
                     _ => self.receive_result(value),
@@ -296,8 +398,10 @@ impl NetworkHandler {
                     Ok(Value::SimpleString(monitor_event))
                         if monitor_event.starts_with(char::is_numeric) =>
                     {
-                        if let Some(monitor_sender) = &mut self.monitor_sender {
-                            monitor_sender.send(value).await?;
+                        if let Some(push_sender) = &mut self.push_sender {
+                            if let Err(e) = push_sender.send(value).await {
+                                warn!("Cannot send monitor result to caller: {e}");
+                            }
                         }
                     }
                     _ => {
@@ -307,68 +411,60 @@ impl NetworkHandler {
                 },
             },
             // disconnection
-            None => {
-                self.status = Status::Disconnected;
-                // reconnect
-                debug!("reconnecting");
-                match self.reconnect().await {
-                    Ok(()) => {
-                        self.status = Status::Connected;
-                        info!("reconnected!");
-                    }
-                    Err(e) => {
-                        error!("Failed to reconnect: {:?}", e);
-                    }
-                }
-            }
+            None => self.reconnect().await,
         }
-
-        Ok(())
     }
 
     fn receive_result(&mut self, value: Result<Value>) {
         match self.messages_to_receive.front_mut() {
-            Some((msg, num_commands)) => {
-                if *num_commands == 1 || value.is_err() {
-                    if let Some((mut msg, _)) = self.messages_to_receive.pop_front() {
+            Some(message_to_receive) => {
+                if message_to_receive.num_commands == 1 || value.is_err() {
+                    if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
                         let mut should_retry = false;
 
                         if let Err(Error::Retry(_)) = &value {
                             should_retry = true;
-                        } else if msg.retry_reasons.is_some() {
+                        } else if message_to_receive.message.retry_reasons.is_some() {
                             should_retry = true;
                         }
 
                         if should_retry {
                             if let Err(Error::Retry(reasons)) = value {
-                                if let Some(retry_reasons) = &mut msg.retry_reasons {
+                                if let Some(retry_reasons) =
+                                    &mut message_to_receive.message.retry_reasons
+                                {
                                     retry_reasons.extend(reasons);
                                 } else {
-                                    msg.retry_reasons =
+                                    message_to_receive.message.retry_reasons =
                                         Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
                                 }
                             }
 
                             // retry
-                            let result = self.msg_sender.unbounded_send(msg);
+                            let result = self.msg_sender.unbounded_send(message_to_receive.message);
                             if let Err(e) = result {
                                 error!("Cannot retry message: {e}");
                             }
-                        } else if let Some(value_sender) = msg.value_sender {
+                        } else if let Some(value_sender) = message_to_receive.message.value_sender {
                             match value {
                                 Ok(value) => {
                                     let pending_replies = self.pending_replies.take();
 
                                     if let Some(mut pending_replies) = pending_replies {
                                         pending_replies.push(value);
-                                        let _result = value_sender
-                                            .send(Ok(ValueOrBuffer::Value(Value::Array(Some(pending_replies)))));
-                                    } else {
-                                        let _result = value_sender.send(Ok(ValueOrBuffer::Value(value)));
+                                        if let Err(e) =
+                                            value_sender.send(Ok(Value::Array(pending_replies)))
+                                        {
+                                            warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                        }
+                                    } else if let Err(e) = value_sender.send(Ok(value)) {
+                                        warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
                                     }
                                 }
                                 Err(_) => {
-                                    let _result = value_sender.send(value.map(ValueOrBuffer::Value));
+                                    if let Err(e) = value_sender.send(value) {
+                                        warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                    }
                                 }
                             }
                         } else {
@@ -384,13 +480,15 @@ impl NetworkHandler {
                         match value {
                             Ok(value) => {
                                 pending_replies.push(value);
-                                *num_commands -= 1;
+                                message_to_receive.num_commands -= 1;
                             }
                             Err(Error::Retry(reasons)) => {
-                                if let Some(retry_reasons) = &mut msg.retry_reasons {
+                                if let Some(retry_reasons) =
+                                    &mut message_to_receive.message.retry_reasons
+                                {
                                     retry_reasons.extend(reasons);
                                 } else {
-                                    msg.retry_reasons =
+                                    message_to_receive.message.retry_reasons =
                                         Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
                                 }
                             }
@@ -406,39 +504,54 @@ impl NetworkHandler {
         }
     }
 
-    async fn try_match_pubsub_message(
-        &mut self,
-        value: Result<Value>,
-    ) -> Result<Option<Result<Value>>> {
+    async fn try_match_pubsub_message(&mut self, value: Result<Value>) -> Option<Result<Value>> {
         // first pass check if received value if a PubSub message with matching on references
         let is_pub_sub_message = match value {
-            Ok(Value::Array(Some(ref items))) | Ok(Value::Push(Some(ref items))) => {
+            Ok(Value::Array(ref items)) | Ok(Value::Push(ref items)) => {
                 match &items[..] {
-                    [Value::BulkString(Some(command)), Value::BulkString(Some(channel)), _] =>
-                    {
+                    [Value::BulkString(command), Value::BulkString(channel_or_pattern), _] => {
                         match command.as_slice() {
                             b"message" | b"smessage" => true,
                             b"subscribe" | b"psubscribe" | b"ssubscribe" => {
                                 if let Some(pub_sub_sender) =
-                                    self.pending_subscriptions.remove(channel)
+                                    self.pending_subscriptions.remove(channel_or_pattern)
                                 {
-                                    self.subscriptions.insert(channel.clone(), pub_sub_sender);
+                                    self.subscriptions
+                                        .insert(channel_or_pattern.clone(), pub_sub_sender);
                                 }
                                 if !self.pending_subscriptions.is_empty() {
-                                    return Ok(None);
+                                    return None;
                                 }
                                 false
                             }
                             b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
-                                self.subscriptions.remove(channel);
+                                self.subscriptions.remove(channel_or_pattern);
                                 if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
-                                    if *remaining > 1 {
-                                        *remaining -= 1;
-                                        return Ok(None);
+                                    if remaining.len() > 1 {
+                                        if remaining.remove(channel_or_pattern).is_none() {
+                                            error!(
+                                                "Cannot find channel or pattern to remove: {}",
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                        }
+                                        return None;
                                     } else {
                                         // last unsubscription notification received
-                                        self.pending_unsubscriptions.pop_front();
-                                        return Ok(Some(Ok(Value::SimpleString("OK".to_owned()))));
+                                        let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
+                                            error!(
+                                                "Cannot find channel or pattern to remove: {}", 
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                            return None;
+                                        };
+                                        if remaining.remove(channel_or_pattern).is_none() {
+                                            error!(
+                                                "Cannot find channel or pattern to remove: {}",
+                                                String::from_utf8_lossy(channel_or_pattern)
+                                            );
+                                            return None;
+                                        }
+                                        return Some(Ok(Value::SimpleString("OK".to_owned())));
                                     }
                                 }
                                 false
@@ -446,7 +559,7 @@ impl NetworkHandler {
                             _ => false,
                         }
                     }
-                    [Value::BulkString(Some(command)), Value::BulkString(Some(_pattern)), Value::BulkString(Some(_channel)), Value::BulkString(Some(_payload))] => {
+                    [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
                         command.as_slice() == b"pmessage"
                     }
                     _ => false,
@@ -458,11 +571,11 @@ impl NetworkHandler {
         // because value is not consumed we can send it back to the caller
         // if it is not a PubSub message
         if !is_pub_sub_message {
-            return Ok(Some(value));
+            return Some(value);
         }
 
         // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(Some(items))) | Ok(Value::Push(Some(items))) = value {
+        if let Ok(Value::Array(items)) | Ok(Value::Push(items)) = value {
             let mut iter = items.into_iter();
             match (
                 iter.next(),
@@ -473,68 +586,266 @@ impl NetworkHandler {
             ) {
                 // message or smessage
                 (
-                    Some(Value::BulkString(Some(_command))),
-                    Some(Value::BulkString(Some(channel))),
+                    Some(Value::BulkString(_command)),
+                    Some(Value::BulkString(channel)),
                     Some(payload),
                     None,
                     None,
                 ) => match self.subscriptions.get_mut(&channel) {
-                    Some(pub_sub_sender) => {
-                        pub_sub_sender
-                            .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(Some(channel)),
-                                payload,
-                            ]))))
-                            .await?;
-                        return Ok(None);
+                    Some((_subscription_type, pub_sub_sender)) => {
+                        if let Err(e) = pub_sub_sender
+                            .send(Ok(Value::Array(vec![Value::BulkString(channel), payload])))
+                            .await
+                        {
+                            warn!("Cannot send pub/sub message to caller: {e}");
+                        }
+                        return None;
                     }
                     None => {
-                        return Err(Error::Client(format!(
-                            "Unexpected message on channel: {:?}",
+                        error!(
+                            "Unexpected message on channel '{:?}'",
                             String::from_utf8_lossy(&channel)
-                        )));
+                        );
+                        return None;
                     }
                 },
                 // pmessage
                 (
-                    Some(Value::BulkString(Some(_command))),
-                    Some(Value::BulkString(Some(pattern))),
-                    Some(channel),
+                    Some(Value::BulkString(_command)),
+                    Some(Value::BulkString(pattern)),
+                    Some(Value::BulkString(channel)),
                     Some(payload),
                     None,
                 ) => match self.subscriptions.get_mut(&pattern) {
-                    Some(pub_sub_sender) => {
-                        pub_sub_sender
-                            .send(Ok(Value::Array(Some(vec![
-                                Value::BulkString(Some(pattern)),
-                                channel,
+                    Some((_subscription_type, pub_sub_sender)) => {
+                        if let Err(e) = pub_sub_sender
+                            .send(Ok(Value::Array(vec![
+                                Value::BulkString(pattern),
+                                Value::BulkString(channel),
                                 payload,
-                            ]))))
-                            .await?;
-                        return Ok(None);
+                            ])))
+                            .await
+                        {
+                            warn!("Cannot send pub/sub message to caller: {e}");
+                        }
+                        return None;
                     }
                     None => {
-                        return Err(Error::Client(format!(
-                            "Unexpected pmessage on channel: {:?}",
+                        error!(
+                            "Unexpected message on channel '{:?}' for pattern '{:?}'",
+                            String::from_utf8_lossy(&channel),
                             String::from_utf8_lossy(&pattern)
-                        )));
+                        );
+                        return None;
                     }
                 },
                 _ => (),
             }
         }
 
-        panic!("Should not reach this point");
+        unreachable!();
     }
 
-    pub(crate) async fn reconnect(&mut self) -> Result<()> {
-        while let Some((msg, _)) = self.messages_to_receive.pop_front() {
-            if let Some(value_sender) = msg.value_sender {
-                let _result =
-                    value_sender.send(Err(Error::Client("Disconnected from server".to_string())));
+    async fn reconnect(&mut self) {
+        debug!("reconnecting...");
+        let old_status = self.status;
+        self.status = Status::Disconnected;
+
+        for message_to_receive in &mut self.messages_to_receive {
+            if message_to_receive.message.retry_on_error {
+                message_to_receive.attempts += 1;
+                debug!(
+                    "{:?}: attempt {}",
+                    message_to_receive.message.commands, message_to_receive.attempts
+                );
             }
         }
 
-        self.connection.reconnect().await
+        while let Some(message_to_receive) = self.messages_to_receive.front() {
+            if !message_to_receive.message.retry_on_error || message_to_receive.attempts >= self.max_command_attempts {
+                debug!(
+                    "{:?}, max attempts reached",
+                    message_to_receive.message.commands
+                );
+                if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
+                    if let Some(value_sender) = message_to_receive.message.value_sender {
+                        if let Err(e) = value_sender
+                            .send(Err(Error::Client("Disconnected from server".to_string())))
+                        {
+                            warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        for message_to_send in &mut self.messages_to_send {
+            if message_to_send.message.retry_on_error {
+                message_to_send.attempts += 1;
+                debug!(
+                    "{:?}: attempt {}",
+                    message_to_send.message.commands, message_to_send.attempts
+                );
+            }
+        }
+
+        while let Some(message_to_send) = self.messages_to_send.front() {
+            if !message_to_send.message.retry_on_error || message_to_send.attempts >= self.max_command_attempts {
+                debug!(
+                    "{:?}, max attempts reached",
+                    message_to_send.message.commands
+                );
+                if let Some(message_to_send) = self.messages_to_send.pop_front() {
+                    if let Some(value_sender) = message_to_send.message.value_sender {
+                        if let Err(e) = value_sender
+                            .send(Err(Error::Client("Disconnected from server".to_string())))
+                        {
+                            warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        if let Err(e) = self.connection.reconnect().await {
+            error!("Failed to reconnect: {:?}", e);
+            return;
+        }
+
+        if self.auto_resubscribe {
+            if let Err(e) = self.auto_resubscribe().await {
+                error!("Failed to reconnect: {:?}", e);
+                return;
+            }
+        }
+
+        if self.auto_remonitor {
+            if let Err(e) = self.auto_remonitor(old_status).await {
+                error!("Failed to reconnect: {:?}", e);
+                return;
+            }
+        }
+
+        if let Err(e) = self.reconnect_sender.send(()) {
+            debug!("Cannot send reconnect notification to clients: {e}")
+        }
+
+        while let Some(message_to_receive) = self.messages_to_receive.pop_back() {
+            self.messages_to_send.push_front(MessageToSend {
+                message: message_to_receive.message,
+                attempts: message_to_receive.attempts,
+            });
+        }
+
+        self.send_messages().await;
+
+        if !self.subscriptions.is_empty() {
+            self.status = Status::Subscribed;
+        } else if let Status::Monitor | Status::EnteringMonitor = old_status {
+            if self.push_sender.is_some() {
+                self.status = Status::Monitor;
+            }
+        } else {
+            self.status = Status::Connected;
+        }
+
+        info!("reconnected!");
+    }
+
+    async fn auto_resubscribe(&mut self) -> Result<()> {
+        if !self.subscriptions.is_empty() {
+            for (channel_or_pattern, (subscription_type, _)) in &self.subscriptions {
+                match subscription_type {
+                    SubcriptionType::Channel => {
+                        self.connection
+                            .subscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcriptionType::Pattern => {
+                        self.connection
+                            .psubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcriptionType::ShardChannel => {
+                        self.connection
+                            .ssubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                }
+            }
+        }
+
+        if !self.pending_subscriptions.is_empty() {
+            for (channel_or_pattern, (subscription_type, sender)) in
+                self.pending_subscriptions.drain()
+            {
+                match subscription_type {
+                    SubcriptionType::Channel => {
+                        self.connection
+                            .subscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcriptionType::Pattern => {
+                        self.connection
+                            .psubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                    SubcriptionType::ShardChannel => {
+                        self.connection
+                            .ssubscribe(channel_or_pattern.clone())
+                            .await?;
+                    }
+                }
+
+                self.subscriptions
+                    .insert(channel_or_pattern, (subscription_type, sender));
+            }
+        }
+
+        if !self.pending_unsubscriptions.is_empty() {
+            for mut map in self.pending_unsubscriptions.drain(..) {
+                for (channel_or_pattern, subscription_type) in map.drain() {
+                    match subscription_type {
+                        SubcriptionType::Channel => {
+                            self.connection
+                                .subscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                        SubcriptionType::Pattern => {
+                            self.connection
+                                .psubscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                        SubcriptionType::ShardChannel => {
+                            self.connection
+                                .ssubscribe(channel_or_pattern.clone())
+                                .await?;
+                        }
+                    }
+
+                    self.subscriptions.remove(&channel_or_pattern);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn auto_remonitor(&mut self, old_status: Status) -> Result<()> {
+        if let Status::Monitor | Status::EnteringMonitor = old_status {
+            self.connection.send(&cmd("MONITOR")).await?;
+        }
+
+        Ok(())
     }
 }

@@ -1,19 +1,20 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, future};
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromKeyValueValueArray,
-        FromSingleValueArray, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
-        SingleArgOrCollection, Value, Command,
+        cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromKeyValueArray,
+        FromValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
+        SingleArgCollection, Value, Command, SingleArg,
     },
-    Error, PreparedCommand, Result, SortOrder, GeoUnit,
+    Error, Result, commands::{SortOrder, GeoUnit},
 };
 
 /// A group of Redis commands related to [`RedisSearch`](https://redis.io/docs/stack/search/)
 ///
 /// # See Also
-/// [RedisSearch Commands](https://redis.io/commands/?group=search)
+/// * [RedisSearch Commands](https://redis.io/commands/?group=search)
+/// * [Auto-Suggest Commands](https://redis.io/commands/?group=suggestion)
 pub trait SearchCommands {
     /// Run a search query on an index,
     /// and perform aggregate transformations on the results,
@@ -24,7 +25,7 @@ pub trait SearchCommands {
     /// * `query`- is base filtering query that retrieves the documents.\
     ///  It follows the exact same syntax as the search query,\
     ///  including filters, unions, not, optional, and so on.
-    /// * `options` - See [`FtAggregateOptions`](crate::FtAggregateOptions)
+    /// * `options` - See [`FtAggregateOptions`](FtAggregateOptions)
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ft.aggregate/>](https://redis.io/commands/ft.aggregate/)
@@ -38,8 +39,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
+        I: SingleArg,
+        Q: SingleArg,
     {
         prepare_command(self, cmd("FT.AGGREGATE").arg(index).arg(query).arg(options))
     }
@@ -56,8 +57,8 @@ pub trait SearchCommands {
     fn ft_aliasadd<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<CommandArg>,
-        I: Into<CommandArg>,
+        A: SingleArg,
+        I: SingleArg,
     {
         prepare_command(self, cmd("FT.ALIASADD").arg(alias).arg(index))
     }
@@ -73,7 +74,7 @@ pub trait SearchCommands {
     fn ft_aliasdel<A>(&mut self, alias: A) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<CommandArg>,
+        A: SingleArg,
     {
         prepare_command(self, cmd("FT.ALIASDEL").arg(alias))
     }
@@ -93,8 +94,8 @@ pub trait SearchCommands {
     fn ft_aliasupdate<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        A: Into<CommandArg>,
-        I: Into<CommandArg>,
+        A: SingleArg,
+        I: SingleArg,
     {
         prepare_command(self, cmd("FT.ALIASUPDATE").arg(alias).arg(index))
     }
@@ -120,7 +121,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(
             self,
@@ -147,10 +148,10 @@ pub trait SearchCommands {
     fn ft_config_get<O, N, V, R>(&mut self, option: O) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        O: Into<CommandArg>,
-        N: FromValue,
-        V: FromValue,
-        R: FromKeyValueValueArray<N, V>,
+        O: SingleArg,
+        N: FromSingleValue,
+        V: FromSingleValue,
+        R: FromKeyValueArray<N, V>,
     {
         prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option))
     }
@@ -167,8 +168,8 @@ pub trait SearchCommands {
     fn ft_config_set<O, V>(&mut self, option: O, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        O: Into<CommandArg>,
-        V: Into<CommandArg>,
+        O: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("FT.CONFIG").arg("SET").arg(option).arg(value))
     }
@@ -190,8 +191,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        S: ArgsOrCollection<FtFieldSchema>,
+        I: SingleArg,
+        S: MultipleArgsCollection<FtFieldSchema>,
     {
         prepare_command(
             self,
@@ -215,7 +216,7 @@ pub trait SearchCommands {
     fn ft_cursor_del<I>(&mut self, index: I, cursor_id: u64) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("FT.CURSOR").arg("DEL").arg(index).arg(cursor_id))
     }
@@ -226,7 +227,7 @@ pub trait SearchCommands {
     /// * `index` - index name.
     /// * `cursor_id` - id of the cursor.
     /// * `read_size` - number of results to read. This parameter overrides
-    /// [`count`](crate::FtWithCursorOptions::count) specified in [`ft_aggregate`](crate::SearchCommands::ft_aggregate).
+    /// [`count`](FtWithCursorOptions::count) specified in [`ft_aggregate`](SearchCommands::ft_aggregate).
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.cursor-read/>](https://redis.io/commands/ft.cursor-read/)
@@ -238,7 +239,7 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("FT.CURSOR").arg("READ").arg(index).arg(cursor_id))
     }
@@ -258,9 +259,9 @@ pub trait SearchCommands {
     fn ft_dictadd<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        T: Into<CommandArg>,
-        TT: SingleArgOrCollection<T>,
+        D: SingleArg,
+        T: SingleArg,
+        TT: SingleArgCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTADD").arg(dict).arg(terms))
     }
@@ -280,9 +281,9 @@ pub trait SearchCommands {
     fn ft_dictdel<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        T: Into<CommandArg>,
-        TT: SingleArgOrCollection<T>,
+        D: SingleArg,
+        T: SingleArg,
+        TT: SingleArgCollection<T>,
     {
         prepare_command(self, cmd("FT.DICTDEL").arg(dict).arg(terms))
     }
@@ -301,9 +302,9 @@ pub trait SearchCommands {
     fn ft_dictdump<D, T, TT>(&mut self, dict: D) -> PreparedCommand<Self, TT>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        T: FromValue,
-        TT: FromSingleValueArray<T>,
+        D: SingleArg,
+        T: FromSingleValue,
+        TT: FromValueArray<T>,
     {
         prepare_command(self, cmd("FT.DICTDUMP").arg(dict))
     }
@@ -311,17 +312,17 @@ pub trait SearchCommands {
     /// Delete an index
     ///
     /// # Arguments
-    /// * `index` - full-text index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `dd` - drop operation that, if set, deletes the actual document hashes
     ///
     /// # Notes
     /// * By default, `ft_dropindex` does not delete the document hashes associated with the index.
     /// Adding the `dd` option deletes the hashes as well.
     /// * When using `ft_dropindex` with the parameter `dd`, if an index creation is still running
-    /// ([`ft_create`](crate::SearchCommands::ft_create) is running asynchronously),
+    /// ([`ft_create`](SearchCommands::ft_create) is running asynchronously),
     /// only the document hashes that have already been indexed are deleted.
     /// The document hashes left to be indexed remain in the database.
-    /// You can use [`ft_info`](crate::SearchCommands::ft_info) to check the completion of the indexing.
+    /// You can use [`ft_info`](SearchCommands::ft_info) to check the completion of the indexing.
     ///
     /// # Return
     /// the number of new terms that were added.
@@ -332,7 +333,7 @@ pub trait SearchCommands {
     fn ft_dropindex<I>(&mut self, index: I, dd: bool) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        I: Into<CommandArg>,
+        I: SingleArg,
     {
         prepare_command(self, cmd("FT.DROPINDEX").arg(index).arg_if(dd, "DD"))
     }
@@ -340,11 +341,11 @@ pub trait SearchCommands {
     /// Return the execution plan for a complex query
     ///
     /// # Arguments
-    /// * `index` - full-text index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
-    /// * `query` - query string, as if sent to [`ft_search`](crate::SearchCommands::ft_search).
+    /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
+    /// * `query` - query string, as if sent to [`ft_search`](SearchCommands::ft_search).
     /// * `dialect_version` - dialect version under which to execute the query. \
     ///  If not specified, the query executes under the default dialect version set during module initial loading\
-    ///  or via [`ft_config_set`](crate::SearchCommands::ft_config_set) command.
+    ///  or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     ///
     /// # Notes
     /// * In the returned response, a `+` on a term is an indication of stemming.
@@ -364,9 +365,9 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
-        R: FromValue,
+        I: SingleArg,
+        Q: SingleArg,
+        R: FromSingleValue,
     {
         prepare_command(
             self,
@@ -377,11 +378,11 @@ pub trait SearchCommands {
     /// Return the execution plan for a complex query but formatted for easier reading without using `redis-cli --raw`
     ///
     /// # Arguments
-    /// * `index` - full-text index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
-    /// * `query` - query string, as if sent to [`ft_search`](crate::SearchCommands::ft_search).
+    /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
+    /// * `query` - query string, as if sent to [`ft_search`](SearchCommands::ft_search).
     /// * `dialect_version` - dialect version under which to execute the query. \
     ///  If not specified, the query executes under the default dialect version set during module initial loading\
-    ///  or via [`ft_config_set`](crate::SearchCommands::ft_config_set) command.
+    ///  or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     ///
     /// # Notes
     /// * In the returned response, a `+` on a term is an indication of stemming.
@@ -400,10 +401,10 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        I: SingleArg,
+        Q: SingleArg,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(
             self,
@@ -417,15 +418,15 @@ pub trait SearchCommands {
     /// Return information and statistics on the index
     ///
     /// # Arguments
-    /// * `index` - full-text index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     ///
     /// # Return
-    /// an instance of [`FtInfoResult`](crate::FtInfoResult)
+    /// an instance of [`FtInfoResult`](FtInfoResult)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.info/>](https://redis.io/commands/ft.info/)
     #[must_use]
-    fn ft_info(&mut self, index: impl Into<CommandArg>) -> PreparedCommand<Self, FtInfoResult>
+    fn ft_info(&mut self, index: impl SingleArg) -> PreparedCommand<Self, FtInfoResult>
     where
         Self: Sized,
     {
@@ -443,17 +444,17 @@ pub trait SearchCommands {
     fn ft_list<R, RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        R: FromValue,
-        RR: FromSingleValueArray<R>,
+        R: FromSingleValue,
+        RR: FromValueArray<R>,
     {
         prepare_command(self, cmd("FT._LIST"))
     }
 
-    /// Perform a [`ft_search`](crate::SearchCommands::ft_search)
-    /// or [`ft_aggregate`](crate::SearchCommands::ft_aggregate) command and collects performance information
+    /// Perform a [`ft_search`](SearchCommands::ft_search)
+    /// or [`ft_aggregate`](SearchCommands::ft_aggregate) command and collects performance information
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `query_type` - SEARCH or AGGREGATE query type
     /// * `limited` - if set, removes details of reader iterator.
     /// * `query` - collection of query parameters (non including the index name)
@@ -463,7 +464,7 @@ pub trait SearchCommands {
     /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
     ///
     /// # Return
-    /// An instance of [`FtProfileQueryType`](crate::FtProfileQueryType)
+    /// An instance of [`FtProfileQueryType`](FtProfileQueryType)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
@@ -477,9 +478,9 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtProfileResult>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
-        QQ: SingleArgOrCollection<Q>
+        I: SingleArg,
+        Q: SingleArg,
+        QQ: SingleArgCollection<Q>
     {
         prepare_command(
             self,
@@ -495,12 +496,12 @@ pub trait SearchCommands {
     /// Search the index with a textual query, returning either documents or just ids
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `query` - text query to search. Refer to [`Query syntax`](https://redis.io/docs/stack/search/reference/query_syntax) for more details.
-    /// * `options` - See [`FtSearchOptions`](crate::FtSearchOptions)
+    /// * `options` - See [`FtSearchOptions`](FtSearchOptions)
     ///
     /// # Return
-    /// An instance of [`FtQueryResult`](crate::FtQueryResult)
+    /// An instance of [`FtQueryResult`](FtQueryResult)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.search/>](https://redis.io/commands/ft.search/)
@@ -513,8 +514,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtQueryResult>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
+        I: SingleArg,
+        Q: SingleArg,
     {
         prepare_command(
             self,
@@ -528,12 +529,12 @@ pub trait SearchCommands {
     /// Perform spelling correction on a query, returning suggestions for misspelled terms
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `query` - search query. See [`Spellchecking`](https://redis.io/docs/stack/search/reference/spellcheck) for more details.
-    /// * `options` - See [`FtSpellCheckOptions`](crate::FtSpellCheckOptions)
+    /// * `options` - See [`FtSpellCheckOptions`](FtSpellCheckOptions)
     ///
     /// # Return
-    /// An instance of [`FtSpellCheckResult`](crate::FtSpellCheckResult)
+    /// An instance of [`FtSpellCheckResult`](FtSpellCheckResult)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.spellcheck/>](https://redis.io/commands/ft.spellcheck/)
@@ -546,8 +547,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, FtSpellCheckResult>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        Q: Into<CommandArg>,
+        I: SingleArg,
+        Q: SingleArg,
     {
         prepare_command(
             self,
@@ -561,7 +562,7 @@ pub trait SearchCommands {
     /// Dump the contents of a synonym group
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     ///
     /// # Return
     /// This command returns a list of synonym terms and their synonym group ids.
@@ -576,8 +577,8 @@ pub trait SearchCommands {
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        I: Into<CommandArg>,
-        R: FromKeyValueValueArray<String, Vec<String>> 
+        I: SingleArg,
+        R: FromKeyValueArray<String, Vec<String>> 
     {
         prepare_command(self, cmd("FT.SYNDUMP").arg(index)
         )
@@ -589,7 +590,7 @@ pub trait SearchCommands {
     /// The command triggers a scan of all documents.    /// 
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `synonym_group_id` - synonym group to return.
     /// * `skip_initial_scan` - does not scan and index, and only documents that are indexed after the update are affected.
     /// * `terms` - terms to add to the synonym group
@@ -601,12 +602,12 @@ pub trait SearchCommands {
     /// * [<https://redis.io/commands/ft.synupdate/>](https://redis.io/commands/ft.synupdate/)
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
-    fn ft_synupdate<T: Into<CommandArg>>(
+    fn ft_synupdate<T: SingleArg>(
         &mut self,
-        index: impl Into<CommandArg>,
-        synonym_group_id: impl Into<CommandArg>,
+        index: impl SingleArg,
+        synonym_group_id: impl SingleArg,
         skip_initial_scan: bool,
-        terms: impl SingleArgOrCollection<T>
+        terms: impl SingleArgCollection<T>
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -624,7 +625,7 @@ pub trait SearchCommands {
     /// Use this command if your tag indexes things like cities, categories, and so on.
     ///
     /// # Arguments
-    /// * `index` - index name. You must first create the index using [`ft_create`](crate::SearchCommands::ft_create).
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `field_name` - name of a Tag file defined in the schema.
     ///
     /// # Return
@@ -633,10 +634,10 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
-    fn ft_tagvals<R: FromValue, RR: FromSingleValueArray<R>>(
+    fn ft_tagvals<R: FromSingleValue, RR: FromValueArray<R>>(
         &mut self,
-        index: impl Into<CommandArg>,
-        field_name: impl Into<CommandArg>,
+        index: impl SingleArg,
+        field_name: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
@@ -646,10 +647,164 @@ pub trait SearchCommands {
             .arg(field_name)
         )
     }
+
+    /// Add a suggestion string to an auto-complete suggestion dictionary
+    /// 
+    /// The auto-complete suggestion dictionary is disconnected from the index definitions 
+    /// and leaves creating and updating suggestions dictionaries to the user.
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `string` - suggestion string to index.
+    /// * `score` - floating point number of the suggestion string's weight.
+    /// * `options` - See [`FtSugAddOptions`](FtSugAddOptions)
+    ///
+    /// # Return
+    /// the current size of the suggestion dictionary.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugadd/>](https://redis.io/commands/ft.sugadd/)
+    #[must_use]
+    fn ft_sugadd(
+        &mut self,
+        key: impl SingleArg,
+        string: impl SingleArg,
+        score: f64,
+        options: FtSugAddOptions
+    ) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGADD")
+            .arg(key)
+            .arg(string)
+            .arg(score)
+            .arg(options)
+        )
+    }
+
+    /// Delete a string from a suggestion index
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `string` - suggestion string to delete
+    ///
+    /// # Return
+    /// * `true` - if the string was found and deleted
+    /// * `false` - otherwise
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugdel/>](https://redis.io/commands/ft.sugdel/)
+    #[must_use]
+    fn ft_sugdel(
+        &mut self,
+        key: impl SingleArg,
+        string: impl SingleArg,
+    ) -> PreparedCommand<Self, bool>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGDEL")
+            .arg(key)
+            .arg(string)
+        )
+    }
+
+    /// Get completion suggestions for a prefix
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    /// * `prefix` - prefix to complete on.
+    /// * `options` - See [`FtSugGetOptions`](FtSugGetOptions)
+    ///
+    /// # Return
+    /// A collection of the top suggestions matching the prefix
+    /// 
+    /// # See Also
+    /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
+    #[must_use]
+    fn ft_sugget(
+        &mut self,
+        key: impl SingleArg,
+        prefix: impl SingleArg,
+        options: FtSugGetOptions
+    ) -> PreparedCommand<Self, Vec<FtSuggestion>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGGET")
+            .arg(key)
+            .arg(prefix)
+            .arg(options)
+        ).post_process(Box::new(
+            |value, command, _client| {
+                fn from_value(command: Command, value: Value) -> Result<Vec<FtSuggestion>> {
+                    let with_scores = command.args.iter().any(|a| *a == "WITHSCORES");
+                    let with_payloads = command.args.iter().any(|a| *a == "WITHPAYLOADS");
+
+                    let values: Vec<Value> = value.into()?;
+                    let mut iter = values.into_iter();
+                    let mut suggestions = Vec::<FtSuggestion>::new();
+
+                    while let Some(suggestion) = iter.next() {
+                        let suggestion: String = suggestion.into()?;
+
+                        let score = if with_scores {
+                            let Some(value) = iter.next() else {
+                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
+                            };
+
+                            value.into()?
+                        } else {
+                            0.
+                        };
+
+                        let payload = if with_payloads {
+                            let Some(value) = iter.next() else {
+                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
+                            };
+
+                            value.into()?                        
+                        } else {
+                            String::from("")
+                        };
+
+                        suggestions.push(FtSuggestion { suggestion, score, payload });
+                    }
+
+                    Ok(suggestions)
+                }
+
+                Box::pin(future::ready(from_value(command, value)))
+            },
+        ))
+    }
+
+    /// Get the size of an auto-complete suggestion dictionary
+    ///
+    /// # Arguments
+    /// * `key` - suggestion dictionary key.
+    ///
+    /// # Return
+    /// The the current size of the suggestion dictionary.
+    /// 
+    /// # See Also
+    /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
+    #[must_use]
+    fn ft_suglen(
+        &mut self,
+        key: impl SingleArg,
+    ) -> PreparedCommand<Self, usize>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FT.SUGLEN")
+            .arg(key)
+        )
+    }
 }
 
 /// Field type used to declare an index schema
-/// for the [`ft_create`](crate::SearchCommands::ft_create) command
+/// for the [`ft_create`](SearchCommands::ft_create) command
 #[derive(Debug)]
 pub enum FtFieldType {
     /// Allows full-text search queries against the value in this attribute.
@@ -700,7 +855,7 @@ impl FromValue for FtFieldType {
     }
 }
 
-/// Phonetic algorithm and language used for the [`FtFieldSchema::phonetic`](crate::FtFieldSchema::phonetic) method
+/// Phonetic algorithm and language used for the [`FtFieldSchema::phonetic`](FtFieldSchema::phonetic) associated function
 ///
 /// For more information, see [`Phonetic Matching`](https://redis.io/docs/stack/search/reference/phonetic_matching).
 pub enum FtPhoneticMatcher {
@@ -725,7 +880,7 @@ impl IntoArgs for FtPhoneticMatcher {
     }
 }
 
-/// field schema for the [`ft_create`](crate::SearchCommands::ft_create) command
+/// field schema for the [`ft_create`](SearchCommands::ft_create) command
 #[derive(Default)]
 pub struct FtFieldSchema {
     command_args: CommandArgs,
@@ -735,7 +890,7 @@ impl FtFieldSchema {
     /// * For hashes, is a field name within the hash.
     /// * For JSON, the identifier is a JSON Path expression.
     #[must_use]
-    pub fn identifier<N: Into<CommandArg>>(identifier: N) -> Self {
+    pub fn identifier<N: SingleArg>(identifier: N) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -746,7 +901,7 @@ impl FtFieldSchema {
     ///  For example, you can use this feature to alias a complex JSONPath
     ///  expression with more memorable (and easier to type) name.
     #[must_use]
-    pub fn as_attribute<A: Into<CommandArg>>(self, as_attribute: A) -> Self {
+    pub fn as_attribute<A: SingleArg>(self, as_attribute: A) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(as_attribute),
         }
@@ -864,7 +1019,7 @@ impl IntoArgs for FtFieldSchema {
     }
 }
 
-/// Redis Data type of an index defined in [`FtCreateOptions`](crate::FtCreateOptions) struct
+/// Redis Data type of an index defined in [`FtCreateOptions`](FtCreateOptions) struct
 #[derive(Debug)]
 pub enum FtIndexDataType {
     /// [`hash`](https://redis.io/docs/data-types/hashes/) (default)
@@ -894,7 +1049,7 @@ impl FromValue for FtIndexDataType {
     }
 }
 
-/// Options for the [`ft_create`](crate::SearchCommands::ft_create) command
+/// Options for the [`ft_create`](SearchCommands::ft_create) command
 #[derive(Default)]
 pub struct FtCreateOptions {
     command_args: CommandArgs,
@@ -915,7 +1070,7 @@ impl FtCreateOptions {
     /// You can add several prefixes to index.
     /// Because the argument is optional, the default is * (all keys).
     #[must_use]
-    pub fn prefix<P: Into<CommandArg>, PP: SingleArgOrCollection<P>>(self, prefixes: PP) -> Self {
+    pub fn prefix<P: SingleArg, PP: SingleArgCollection<P>>(self, prefixes: PP) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -930,7 +1085,7 @@ impl FtCreateOptions {
     /// It is possible to use `@__key` to access the key that was just added/changed.
     /// A field can be used to set field name by passing `FILTER @indexName=="myindexname"`.
     #[must_use]
-    pub fn filter<F: Into<CommandArg>>(self, filter: F) -> Self {
+    pub fn filter<F: SingleArg>(self, filter: F) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER").arg(filter),
         }
@@ -963,7 +1118,7 @@ impl FtCreateOptions {
 
     /// document attribute set as the document language.
     #[must_use]
-    pub fn language_field<L: Into<CommandArg>>(self, default_lang: L) -> Self {
+    pub fn language_field<L: SingleArg>(self, default_lang: L) -> Self {
         Self {
             command_args: self.command_args.arg("LANGUAGE_FIELD").arg(default_lang),
         }
@@ -983,7 +1138,7 @@ impl FtCreateOptions {
     ///
     /// Ranking must be between 0.0 and 1.0. If not set, the default score is 1.
     #[must_use]
-    pub fn score_field<S: Into<CommandArg>>(self, score_attribute: S) -> Self {
+    pub fn score_field<S: SingleArg>(self, score_attribute: S) -> Self {
         Self {
             command_args: self.command_args.arg("SCORE_FIELD").arg(score_attribute),
         }
@@ -992,7 +1147,7 @@ impl FtCreateOptions {
     /// document attribute that you use as a binary safe payload string to the document
     /// that can be evaluated at query time by a custom scoring function or retrieved to the client.
     #[must_use]
-    pub fn payload_field<P: Into<CommandArg>>(self, payload_attribute: P) -> Self {
+    pub fn payload_field<P: SingleArg>(self, payload_attribute: P) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1002,7 +1157,7 @@ impl FtCreateOptions {
     }
 
     /// forces RediSearch to encode indexes as if there were more than 32 text attributes,
-    /// which allows you to add additional attributes (beyond 32) using [`ft_alter`](crate::SearchCommands::ft_alter).
+    /// which allows you to add additional attributes (beyond 32) using [`ft_alter`](SearchCommands::ft_alter).
     ///
     /// For efficiency, RediSearch encodes indexes differently if they are created with less than 32 text attributes.
     #[must_use]
@@ -1015,7 +1170,7 @@ impl FtCreateOptions {
     /// does not store term offsets for documents.
     ///
     /// It saves memory, but does not allow exact searches or highlighting.
-    /// It implies [`NOHL`](crate::FtCreateOptions::nohl).
+    /// It implies [`NOHL`](FtCreateOptions::nohl).
     #[must_use]
     pub fn no_offsets(self) -> Self {
         Self {
@@ -1030,7 +1185,7 @@ impl FtCreateOptions {
     /// The internal idle timer is reset whenever the index is searched or added to.
     /// Because such indexes are lightweight,
     /// you can create thousands of such indexes without negative performance implications and, therefore,
-    /// you should consider using [`SKIPINITIALSCAN`](crate::FtCreateOptions::skip_initial_scan) to avoid costly scanning.
+    /// you should consider using [`SKIPINITIALSCAN`](FtCreateOptions::skip_initial_scan) to avoid costly scanning.
     #[must_use]
     pub fn temporary(self, expiration_sec: u64) -> Self {
         Self {
@@ -1041,7 +1196,7 @@ impl FtCreateOptions {
     /// conserves storage space and memory by disabling highlighting support.
     ///
     /// If set, the corresponding byte offsets for term positions are not stored.
-    /// `NOHL` is also implied by [`NOOFFSETS`](crate::FtCreateOptions::no_offsets).
+    /// `NOHL` is also implied by [`NOOFFSETS`](FtCreateOptions::no_offsets).
     #[must_use]
     pub fn nohl(self) -> Self {
         Self {
@@ -1082,13 +1237,13 @@ impl FtCreateOptions {
     /// # Arguments
     /// * `stop_words` - a list of stopword arguments.
     ///
-    /// If not set, [`FT.CREATE`](crate::SearchCommands::ft_create) takes the default list of stopwords.
+    /// If not set, [`FT.CREATE`](SearchCommands::ft_create) takes the default list of stopwords.
     /// If `count` is set to 0, the index does not have stopwords.
     #[must_use]
     pub fn stop_words<W, WW>(self, stop_words: WW) -> Self
     where
-        W: Into<CommandArg>,
-        WW: SingleArgOrCollection<W>,
+        W: SingleArg,
+        WW: SingleArgCollection<W>,
     {
         Self {
             command_args: self
@@ -1106,7 +1261,7 @@ impl IntoArgs for FtCreateOptions {
     }
 }
 
-/// Options for the [`ft_create`](crate::SearchCommands::ft_aggregate) command
+/// Options for the [`ft_create`](SearchCommands::ft_aggregate) command
 #[derive(Default)]
 pub struct FtAggregateOptions {
     command_args: CommandArgs,
@@ -1115,10 +1270,10 @@ pub struct FtAggregateOptions {
 impl FtAggregateOptions {
     /// if set, does not try to use stemming for query expansion but searches the query terms verbatim.
     ///
-    /// Attributes needed for aggregations should be stored as [`SORTABLE`](crate::FtFieldSchema::sortable),
+    /// Attributes needed for aggregations should be stored as [`SORTABLE`](FtFieldSchema::sortable),
     /// where they are available to the aggregation pipeline with very low latency.
     /// `LOAD` hurts the performance of aggregate queries considerably because every processed record
-    /// needs to execute the equivalent of [`HMGET`](crate::HashCommands::hmget) against a Redis key,
+    /// needs to execute the equivalent of [`HMGET`](crate::commands::HashCommands::hmget) against a Redis key,
     /// which when executed over millions of keys, amounts to high processing times.
     #[must_use]
     pub fn verbatim(self) -> Self {
@@ -1129,7 +1284,7 @@ impl FtAggregateOptions {
 
     /// loads document attributes from the source document.
     #[must_use]
-    pub fn load<A: ArgsOrCollection<FtLoadAttribute>>(self, attributes: A) -> Self {
+    pub fn load<A: MultipleArgsCollection<FtLoadAttribute>>(self, attributes: A) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1152,13 +1307,13 @@ impl FtAggregateOptions {
     /// Each group should have at least one reducer,
     /// a function that handles the group entries,
     /// either counting them,
-    /// or performing multiple aggregate operations (see [`FtReducer`](crate::FtReducer)).
+    /// or performing multiple aggregate operations (see [`FtReducer`](FtReducer)).
     #[must_use]
     pub fn groupby<P, PP, R>(self, properties: PP, reducers: R) -> Self
     where
-        P: Into<CommandArg>,
-        PP: SingleArgOrCollection<P>,
-        R: ArgsOrCollection<FtReducer>,
+        P: SingleArg,
+        PP: SingleArgCollection<P>,
+        R: MultipleArgsCollection<FtReducer>,
     {
         Self {
             command_args: self
@@ -1177,7 +1332,7 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn sortby<P>(self, properties: P, max: Option<usize>) -> Self
     where
-        P: ArgsOrCollection<FtSortBy>,
+        P: MultipleArgsCollection<FtSortBy>,
     {
         Self {
             command_args: self
@@ -1200,8 +1355,8 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn apply<E, N>(self, expr: E, name: N) -> Self
     where
-        E: Into<CommandArg>,
-        N: Into<CommandArg>,
+        E: SingleArg,
+        N: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("APPLY").arg(expr).arg("AS").arg(name),
@@ -1230,14 +1385,14 @@ impl FtAggregateOptions {
     #[must_use]
     pub fn filter<E, N>(self, expr: E) -> Self
     where
-        E: Into<CommandArg>,
+        E: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("FILTER").arg(expr),
         }
     }
 
-    /// Scan part of the results with a quicker alternative than [`limit`](crate::FtAggregateOptions::limit).
+    /// Scan part of the results with a quicker alternative than [`limit`](FtAggregateOptions::limit).
     /// See [`Cursor API`](https://redis.io/docs/stack/search/reference/aggregations/#cursor-api) for more details.
     #[must_use]
     pub fn withcursor(self, options: FtWithCursorOptions) -> Self {
@@ -1263,13 +1418,13 @@ impl FtAggregateOptions {
     /// For example, with parameter definition `params[("lon", 29.69465), ("lat", 34.95126)])`,
     /// the expression `@loc:[$lon $lat 10 km]` is evaluated to `@loc:[29.69465 34.95126 10 km]`.
     /// You cannot reference parameters in the query string where concrete values are not allowed,
-    /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](crate::FtAggregateOptions::dialect) to 2 or greater than 2.
+    /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](FtAggregateOptions::dialect) to 2 or greater than 2.
     #[must_use]
     pub fn params<N, V, P>(self, params: P) -> Self
     where
-        N: Into<CommandArg>,
-        V: Into<CommandArg>,
-        P: ArgsOrCollection<(N, V)>,
+        N: SingleArg,
+        V: SingleArg,
+        P: MultipleArgsCollection<(N, V)>,
     {
         Self {
             command_args: self
@@ -1283,7 +1438,7 @@ impl FtAggregateOptions {
     /// selects the dialect version under which to execute the query.
     ///
     /// If not specified, the query will execute under the default dialect version
-    /// set during module initial loading or via [`ft_config_set`](crate::SearchCommands::ft_config_set) command.
+    /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
     pub fn dialect(self, dialect_version: u64) -> Self {
         Self {
@@ -1298,7 +1453,7 @@ impl IntoArgs for FtAggregateOptions {
     }
 }
 
-/// Attribute for the [`LOAD`](crate::FtAggregateOptions::load) aggregate option
+/// Attribute for the [`LOAD`](FtAggregateOptions::load) aggregate option
 pub struct FtLoadAttribute {
     command_args: CommandArgs,
 }
@@ -1306,7 +1461,7 @@ pub struct FtLoadAttribute {
 impl FtLoadAttribute {
     #[must_use]
     /// `identifier` is either an attribute name for hashes and JSON or a JSON Path expression for JSON.
-    pub fn new<I: Into<CommandArg>>(identifier: I) -> Self {
+    pub fn new<I: SingleArg>(identifier: I) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -1317,7 +1472,7 @@ impl FtLoadAttribute {
     /// If it is not provided, the identifier is used.
     /// This should be avoided.
     #[must_use]
-    pub fn property<P: Into<CommandArg>>(property: P) -> Self {
+    pub fn property<P: SingleArg>(property: P) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg("AS").arg(property),
         }
@@ -1334,7 +1489,7 @@ impl IntoArgs for FtLoadAttribute {
     }
 }
 
-/// Reducer for the [`groupby`](crate::FtAggregateOptions::groupby) aggregate option
+/// Reducer for the [`groupby`](FtAggregateOptions::groupby) aggregate option
 pub struct FtReducer {
     command_args: CommandArgs,
 }
@@ -1353,7 +1508,7 @@ impl FtReducer {
     /// # Note
     /// The reducer creates a hash-set per group, and hashes each record.
     /// This can be memory heavy if the groups are big.
-    pub fn count_distinct<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn count_distinct<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1363,7 +1518,7 @@ impl FtReducer {
         }
     }
 
-    /// Same as [`count_distinct`](crate::FtReducer::count_distinct) - but provide an approximation instead of an exact count,
+    /// Same as [`count_distinct`](FtReducer::count_distinct) - but provide an approximation instead of an exact count,
     /// at the expense of less memory and CPU in big groups.
     ///
     /// # Note
@@ -1371,9 +1526,9 @@ impl FtReducer {
     /// at ~3% error rate, and 1024 Bytes of constant space allocation per group.
     /// This means it is ideal for few huge groups and not ideal for many small groups.
     /// In the former case, it can be an order of magnitude faster and consume much less memory
-    /// than [`count_distinct`](crate::FtReducer::count_distinct),
+    /// than [`count_distinct`](FtReducer::count_distinct),
     /// but again, it does not fit every user case.
-    pub fn count_distinctish<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn count_distinctish<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1386,7 +1541,7 @@ impl FtReducer {
     /// Return the sum of all numeric values of a given property in a group.
     ///
     /// Non numeric values if the group are counted as 0.
-    pub fn sum<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn sum<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1397,7 +1552,7 @@ impl FtReducer {
     }
 
     /// Return the minimal value of a property, whether it is a string, number or NULL.
-    pub fn min<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn min<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1408,7 +1563,7 @@ impl FtReducer {
     }
 
     /// Return the maximal value of a property, whether it is a string, number or NULL.
-    pub fn max<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn max<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1422,7 +1577,7 @@ impl FtReducer {
     ///
     /// This is equivalent to reducing by sum and count,
     /// and later on applying the ratio of them as an APPLY step.
-    pub fn avg<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn avg<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1434,7 +1589,7 @@ impl FtReducer {
 
     /// Return the [`standard deviation`](https://en.wikipedia.org/wiki/Standard_deviation)
     /// of a numeric property in the group.
-    pub fn stddev<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn stddev<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1450,7 +1605,7 @@ impl FtReducer {
     /// For example, the median can be expressed as the quantile at 0.5, e.g. REDUCE QUANTILE 2 @foo 0.5 AS median .
     /// If multiple quantiles are required, just repeat the QUANTILE reducer for each quantile.
     /// e.g. REDUCE QUANTILE 2 @foo 0.5 AS median REDUCE QUANTILE 2 @foo 0.99 AS p99
-    pub fn quantile<P: Into<CommandArg>>(property: P, quantile: f64) -> FtReducer {
+    pub fn quantile<P: SingleArg>(property: P, quantile: f64) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1462,7 +1617,7 @@ impl FtReducer {
     }
 
     /// Merge all `distinct` values of a given property into a single array.
-    pub fn tolist<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn tolist<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1478,7 +1633,7 @@ impl FtReducer {
     /// If you with to get the top or bottom value in the group sorted by the same value,
     /// you are better off using the MIN/MAX reducers,
     /// but the same effect will be achieved by doing REDUCE FIRST_VALUE 4 @foo BY @foo DESC.
-    pub fn first_value<P: Into<CommandArg>>(property: P) -> FtReducer {
+    pub fn first_value<P: SingleArg>(property: P) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1489,7 +1644,7 @@ impl FtReducer {
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
-    pub fn first_value_by<P: Into<CommandArg>, BP: Into<CommandArg>>(
+    pub fn first_value_by<P: SingleArg, BP: SingleArg>(
         property: P,
         by_property: BP,
     ) -> FtReducer {
@@ -1504,7 +1659,7 @@ impl FtReducer {
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
-    pub fn first_value_by_order<P: Into<CommandArg>, BP: Into<CommandArg>>(
+    pub fn first_value_by_order<P: SingleArg, BP: SingleArg>(
         property: P,
         by_property: BP,
         order: SortOrder,
@@ -1522,7 +1677,7 @@ impl FtReducer {
 
     /// Perform a reservoir sampling of the group elements with a given size,
     ///  and return an array of the sampled items with an even distribution.
-    pub fn random_sample<P: Into<CommandArg>, BP: Into<CommandArg>>(
+    pub fn random_sample<P: SingleArg, BP: SingleArg>(
         property: P,
         sample_size: usize,
     ) -> FtReducer {
@@ -1542,7 +1697,7 @@ impl FtReducer {
     /// the name of the reduce function and the group properties.
     /// For example, if a name is not given to COUNT_DISTINCT by property @foo,
     /// the resulting name will be count_distinct(@foo).
-    pub fn as_name<N: Into<CommandArg>>(self, name: N) -> Self {
+    pub fn as_name<N: SingleArg>(self, name: N) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(name),
         }
@@ -1555,14 +1710,14 @@ impl IntoArgs for FtReducer {
     }
 }
 
-/// option for the [`sortby`](crate::FtAggregateOptions::sortby) aggregate option
+/// option for the [`sortby`](FtAggregateOptions::sortby) aggregate option
 pub struct FtSortBy {
     command_args: CommandArgs,
 }
 
 impl FtSortBy {
     /// sort by property
-    pub fn property<P: Into<CommandArg>>(property: P) -> FtSortBy {
+    pub fn property<P: SingleArg>(property: P) -> FtSortBy {
         Self {
             command_args: CommandArgs::Empty.arg(property),
         }
@@ -1593,7 +1748,7 @@ impl IntoArgs for FtSortBy {
     }
 }
 
-/// options for the [`withcursor`](crate::FtAggregateOptions::withcursor) aggregate option
+/// options for the [`withcursor`](FtAggregateOptions::withcursor) aggregate option
 #[derive(Default)]
 pub struct FtWithCursorOptions {
     command_args: CommandArgs,
@@ -1629,8 +1784,8 @@ impl IntoArgs for FtWithCursorOptions {
     }
 }
 
-/// Result for the [`ft_aggregate`](crate::SearchCommands::ft_aggregate) 
-/// & [`ft_search`](crate::SearchCommands::ft_search) commands
+/// Result for the [`ft_aggregate`](SearchCommands::ft_aggregate) 
+/// & [`ft_search`](SearchCommands::ft_search) commands
 #[derive(Debug)]
 pub struct FtQueryResult {
     pub total_results: usize,
@@ -1638,16 +1793,16 @@ pub struct FtQueryResult {
     pub cursor_id: Option<u64>,
 }
 
-/// A row in a [`FtQueryResult`](crate::FtQueryResult)
+/// A row in a [`FtQueryResult`](FtQueryResult)
 #[derive(Debug, Default)]
 pub struct FtQueryResultRow {
-    /// Will be empty for [`ft_aggregate`](crate::SearchCommands::ft_aggregate) 
+    /// Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate) 
     pub document_id: String,
-    /// relative internal score of each document. only if [`withscores`](crate::FtSearchOptions::withscores) is set
+    /// relative internal score of each document. only if [`withscores`](FtSearchOptions::withscores) is set
     pub score: f64,
-    /// document payload. only if [`withpayloads`](crate::FtSearchOptions::withpayloads) is set
+    /// document payload. only if [`withpayloads`](FtSearchOptions::withpayloads) is set
     pub payload: Vec<u8>,
-    /// value of the sorting key. only if [`withsortkeys`](crate::FtSearchOptions::withsortkeys) is set
+    /// value of the sorting key. only if [`withsortkeys`](FtSearchOptions::withsortkeys) is set
     pub sortkey: String,
     /// collection of attribute/value pairs.
     pub values: Vec<(String, String)>,
@@ -1686,7 +1841,7 @@ impl FtQueryResult {
                         };
 
                         let payload = if withpayloads {
-                            if let Some(Value::BulkString(Some(payload))) = iter.next() {
+                            if let Some(Value::BulkString(payload)) = iter.next() {
                                 payload
                             } else {
                                 return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
@@ -1783,9 +1938,9 @@ impl FtQueryResult {
 impl FromValue for FtQueryResult {
     fn from_value(value: Value) -> Result<Self> {
         log::debug!("value: {:?}", value);
-        let is_search = if let Value::Array(Some(ref values)) = &value {
+        let is_search = if let Value::Array(ref values) = &value {
             log::debug!("&values[0..2]: {:?}", &values[0..2]);
-            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(Some(_doc_id))])
+            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(_doc_id)])
         } else {
             false
         };
@@ -1800,7 +1955,7 @@ impl FromValue for FtQueryResult {
         let mut withpayloads = false;
         let mut withsortkeys = false;
 
-        for arg in command.args.into_iter() {
+        for arg in (&command.args).into_iter() {
             match arg {
                 CommandArg::Str("NOCONTENT") => nocontent = true,
                 CommandArg::Str("WITHSCORES") => withscores = true,
@@ -1815,14 +1970,14 @@ impl FromValue for FtQueryResult {
 
 }
 
-/// Result for the [`ft_info`](crate::SearchCommands::ft_info) command
+/// Result for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug)]
 pub struct FtInfoResult {
     /// Name of the index
     pub index_name: String,
-    /// index [`creation`](crate::SearchCommands::ft_create) options without paramater
+    /// index [`creation`](SearchCommands::ft_create) options without paramater
     pub index_options: Vec<String>,
-    /// index [`creation`](crate::SearchCommands::ft_create) options with a paramater
+    /// index [`creation`](SearchCommands::ft_create) options with a paramater
     pub index_definition: FtIndexDefinition,
     /// index attributes
     pub attributes: Vec<FtIndexAttribute>,
@@ -1939,7 +2094,7 @@ impl FromValue for FtIndexAttribute {
     }
 }
 
-/// Garbage collector stats for the [`ft_info`](crate::SearchCommands::ft_info) command
+/// Garbage collector stats for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug)]
 pub struct FtGcStats {
     pub bytes_collected: usize,
@@ -1967,7 +2122,7 @@ impl FromValue for FtGcStats {
     }
 }
 
-/// Cursor stats for the [`ft_info`](crate::SearchCommands::ft_info) command
+/// Cursor stats for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug)]
 pub struct FtCursorStats {
     pub global_idle: usize,
@@ -1989,7 +2144,7 @@ impl FromValue for FtCursorStats {
     }
 }
 
-/// Index definitin for the [`ft_info`](crate::SearchCommands::ft_info) command
+/// Index definitin for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug)]
 pub struct FtIndexDefinition {
     pub key_type: FtIndexDataType,
@@ -2019,11 +2174,11 @@ impl FromValue for FtIndexDefinition {
     }
 }
 
-/// Type of query for the [`ft_profile`](crate::SearchCommands::ft_profile) command
+/// Type of query for the [`ft_profile`](SearchCommands::ft_profile) command
 pub enum FtProfileQueryType {
-    /// [`ft_search`](crate::SearchCommands::ft_search) query type
+    /// [`ft_search`](SearchCommands::ft_search) query type
     Search,
-    /// [`ft_aggregate`](crate::SearchCommands::ft_aggregate) query type
+    /// [`ft_aggregate`](SearchCommands::ft_aggregate) query type
     Aggregate,
 }
 
@@ -2036,7 +2191,7 @@ impl IntoArgs for FtProfileQueryType {
     }
 }
 
-/// Result for the [`ft_profile`](crate::SearchCommands::ft_profile) command.
+/// Result for the [`ft_profile`](SearchCommands::ft_profile) command.
 #[derive(Debug)]
 pub struct FtProfileResult {
     pub results: FtQueryResult,
@@ -2059,7 +2214,7 @@ impl FromValue for FtProfileResult {
     }
 }
 
-/// Details of a [`ft_profile`](crate::SearchCommands::ft_profile) command.
+/// Details of a [`ft_profile`](SearchCommands::ft_profile) command.
 #[derive(Debug)]
 pub struct FtProfileDetails {
     /// The total runtime of the query.
@@ -2096,7 +2251,7 @@ impl FromValue for FtProfileDetails {
             _ => return Err(Error::Client("Cannot parse FtProfileResult".to_owned())),
         }
 
-        let result_processors_profile = Value::Array(Some(iter.collect()));
+        let result_processors_profile = Value::Array(iter.collect());
 
         Ok(Self {
             total_profile_time: total_profile_time.into::<HashMap<String, Value>>()?.remove_or_default("Total profile time").into()?,
@@ -2108,7 +2263,7 @@ impl FromValue for FtProfileDetails {
     }
 }
 
-/// Result processors profile for the [`ft_profile`](crate::SearchCommands::ft_profile) command.
+/// Result processors profile for the [`ft_profile`](SearchCommands::ft_profile) command.
 #[derive(Debug)]
 pub struct FtResultProcessorsProfile {
     pub _type: String,
@@ -2128,7 +2283,7 @@ impl FromValue for FtResultProcessorsProfile {
     }
 }
 
-/// Options for the [`ft_search`](crate::SearchCommands::ft_search) command.
+/// Options for the [`ft_search`](SearchCommands::ft_search) command.
 #[derive(Default)]
 pub struct FtSearchOptions {
     command_args: CommandArgs,
@@ -2164,8 +2319,8 @@ impl FtSearchOptions {
 
     /// retrieves optional document payloads. 
     /// 
-    /// See [`ft_create`](crate::SearchCommands::ft_create)
-    /// The payloads follow the document id and, if [`withscores`](crate::FtSearchOptions::withscores) is set, the scores.
+    /// See [`ft_create`](SearchCommands::ft_create)
+    /// The payloads follow the document id and, if [`withscores`](FtSearchOptions::withscores) is set, the scores.
     #[must_use]
     pub fn withpayloads(self) -> Self {
         Self {
@@ -2176,7 +2331,7 @@ impl FtSearchOptions {
     /// returns the value of the sorting key, right after the id and score and/or payload, if requested. 
     /// 
     /// This is usually not needed, and exists for distributed search coordination purposes. 
-    /// This option is relevant only if used in conjunction with [`sortby`](crate::FtSearchOptions::sortby).
+    /// This option is relevant only if used in conjunction with [`sortby`](FtSearchOptions::sortby).
     #[must_use]
     pub fn withsortkeys(self) -> Self {
         Self {
@@ -2185,12 +2340,12 @@ impl FtSearchOptions {
     }
 
     /// limits results to those having numeric values ranging between min and max, 
-    /// if numeric_field is defined as a numeric field in [`ft_create`](crate::SearchCommands::ft_create). 
+    /// if numeric_field is defined as a numeric field in [`ft_create`](SearchCommands::ft_create). 
     /// 
-    /// `min` and `max` follow [`zrange`](crate::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`, 
+    /// `min` and `max` follow [`zrange`](crate::commands::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`, 
     /// and use `(` for exclusive ranges. Multiple numeric filters for different attributes are supported in one query.
     #[must_use]
-    pub fn filter(self, numeric_field: impl Into<CommandArg>, min: impl Into<CommandArg>, max: impl Into<CommandArg>) -> Self {
+    pub fn filter(self, numeric_field: impl SingleArg, min: impl SingleArg, max: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER").arg(numeric_field).arg(min).arg(max),
         }
@@ -2199,9 +2354,9 @@ impl FtSearchOptions {
     /// filter the results to a given `radius` from `lon` and `lat`. 
     /// 
     /// `radius` is given as a number and units. 
-    /// See [`geosearch`](crate::GeoCommands::geosearch) for more details.
+    /// See [`geosearch`](crate::commands::GeoCommands::geosearch) for more details.
     #[must_use]
-    pub fn geo_filter(self, geo_field: impl Into<CommandArg>, lon: f64, lat: f64, radius: f64, unit: GeoUnit) -> Self {
+    pub fn geo_filter(self, geo_field: impl SingleArg, lon: f64, lat: f64, radius: f64, unit: GeoUnit) -> Self {
         Self {
             command_args: self.command_args.arg("GEOFILTER").arg(geo_field).arg(lon).arg(lat).arg(radius).arg(unit),
         }
@@ -2211,9 +2366,9 @@ impl FtSearchOptions {
     /// 
     /// Non-existent keys are ignored, unless all the keys are non-existent.
     #[must_use]
-    pub fn inkeys<A>(self, keys: impl SingleArgOrCollection<A>) -> Self
+    pub fn inkeys<A>(self, keys: impl SingleArgCollection<A>) -> Self
     where 
-        A: Into<CommandArg>
+        A: SingleArg
     {
         Self {
             command_args: self.command_args.arg("INKEYS").arg(keys.num_args()).arg(keys),
@@ -2222,9 +2377,9 @@ impl FtSearchOptions {
 
     /// filters the results to those appearing only in specific attributes of the document, like `title` or `URL`. 
     #[must_use]
-    pub fn infields<A>(self, attributes: impl SingleArgOrCollection<A>) -> Self
+    pub fn infields<A>(self, attributes: impl SingleArgCollection<A>) -> Self
     where 
-        A: Into<CommandArg>
+        A: SingleArg
     {
         Self {
             command_args: self.command_args.arg("INFIELDS").arg(attributes.num_args()).arg(attributes),
@@ -2233,9 +2388,9 @@ impl FtSearchOptions {
 
     /// limits the attributes returned from the document.
     /// 
-    /// If attributes is empty, it acts like [`nocontent`](crate::FtSearchOptions::nocontent). 
+    /// If attributes is empty, it acts like [`nocontent`](FtSearchOptions::nocontent). 
     #[must_use]
-    pub fn _return(self, attributes: impl ArgsOrCollection<FtSearchReturnAttribute>) -> Self
+    pub fn _return(self, attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>) -> Self
     {
         Self {
             command_args: self.command_args.arg("RETURN").arg(attributes.num_args()).arg(attributes),
@@ -2278,7 +2433,7 @@ impl FtSearchOptions {
     /// puts the query terms in the same order in the document as in the query, 
     /// regardless of the offsets between them. 
     /// 
-    /// Typically used in conjunction with [`slop`](crate::FtSearchOptions::slop).
+    /// Typically used in conjunction with [`slop`](FtSearchOptions::slop).
     #[must_use]
     pub fn inorder(self) -> Self
     {
@@ -2305,7 +2460,7 @@ impl FtSearchOptions {
     /// 
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn expander(self, expander: impl Into<CommandArg>) -> Self
+    pub fn expander(self, expander: impl SingleArg) -> Self
     {
         Self {
             command_args: self.command_args.arg("EXPANDER").arg(expander),
@@ -2316,7 +2471,7 @@ impl FtSearchOptions {
     /// 
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn scorer(self, scorer: impl Into<CommandArg>) -> Self
+    pub fn scorer(self, scorer: impl SingleArg) -> Self
     {
         Self {
             command_args: self.command_args.arg("SCORER").arg(scorer),
@@ -2325,7 +2480,7 @@ impl FtSearchOptions {
 
     /// returns a textual description of how the scores were calculated. 
     /// 
-    /// Using this options requires the [`withscores`](crate::FtSearchOptions::withscores) option.
+    /// Using this options requires the [`withscores`](FtSearchOptions::withscores) option.
     #[must_use]
     pub fn explainscore(self) -> Self
     {
@@ -2338,7 +2493,7 @@ impl FtSearchOptions {
     /// 
      /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn payload(self, payload: impl Into<CommandArg>) -> Self
+    pub fn payload(self, payload: impl SingleArg) -> Self
     {
         Self {
             command_args: self.command_args.arg("PAYLOAD").arg(payload),
@@ -2348,10 +2503,10 @@ impl FtSearchOptions {
     /// orders the results by the value of this attribute. 
     /// 
     /// This applies to both text and numeric attributes. 
-    /// Attributes needed for `sortby` should be declared as [`SORTABLE`](crate::FtFieldSchema::sortable) in the index, 
+    /// Attributes needed for `sortby` should be declared as [`SORTABLE`](FtFieldSchema::sortable) in the index, 
     /// in order to be available with very low latency. Note that this adds memory overhead.
     #[must_use]
-    pub fn sortby(self, attribute: impl Into<CommandArg>, order: SortOrder) -> Self
+    pub fn sortby(self, attribute: impl SingleArg, order: SortOrder) -> Self
     {
         Self {
             command_args: self.command_args.arg("SORTBY").arg(attribute).arg(order),
@@ -2388,13 +2543,13 @@ impl FtSearchOptions {
     /// For example, with parameter definition `params[("lon", 29.69465), ("lat", 34.95126)])`,
     /// the expression `@loc:[$lon $lat 10 km]` is evaluated to `@loc:[29.69465 34.95126 10 km]`.
     /// You cannot reference parameters in the query string where concrete values are not allowed,
-    /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](crate::FtSearchOptions::dialect) to 2 or greater than 2.
+    /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](FtSearchOptions::dialect) to 2 or greater than 2.
     #[must_use]
     pub fn params<N, V, P>(self, params: P) -> Self
     where
-        N: Into<CommandArg>,
-        V: Into<CommandArg>,
-        P: ArgsOrCollection<(N, V)>,
+        N: SingleArg,
+        V: SingleArg,
+        P: MultipleArgsCollection<(N, V)>,
     {
         Self {
             command_args: self.command_args.arg("PARAMS").arg(params.num_args()).arg(params),
@@ -2404,7 +2559,7 @@ impl FtSearchOptions {
     /// selects the dialect version under which to execute the query.
     ///
     /// If not specified, the query will execute under the default dialect version
-    /// set during module initial loading or via [`ft_config_set`](crate::SearchCommands::ft_config_set) command.
+    /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
     pub fn dialect(self, dialect_version: u64) -> Self {
         Self {
@@ -2419,7 +2574,7 @@ impl IntoArgs for FtSearchOptions {
     }
 }
 
-/// attribute for the [`search`](crate::SearchCommands::ft_search) option [`return`](crate::FtSearchOptions::_return)
+/// attribute for the [`search`](SearchCommands::ft_search) option [`return`](FtSearchOptions::_return)
 pub struct FtSearchReturnAttribute {
     command_args: CommandArgs,
 }
@@ -2427,7 +2582,7 @@ pub struct FtSearchReturnAttribute {
 impl FtSearchReturnAttribute {
     /// `identifier`is either an attribute name (for hashes and JSON) or a JSON Path expression (for JSON).
     #[must_use]
-    pub fn identifier(identifier: impl Into<CommandArg>) -> Self {
+    pub fn identifier(identifier: impl SingleArg) -> Self {
         Self {
             command_args: CommandArgs::Empty.arg(identifier),
         }
@@ -2437,7 +2592,7 @@ impl FtSearchReturnAttribute {
     /// 
     /// If not provided, the `identifier` is used in the result.
     #[must_use]
-    pub fn as_property(self, property: impl Into<CommandArg>) -> Self {
+    pub fn as_property(self, property: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("AS").arg(property),
         }
@@ -2450,7 +2605,7 @@ impl IntoArgs for FtSearchReturnAttribute {
     }
 }
 
-/// sub-options for the [`search`](crate::SearchCommands::ft_search) option [`summarize`](crate::FtSearchOptions::summarize)
+/// sub-options for the [`search`](SearchCommands::ft_search) option [`summarize`](FtSearchOptions::summarize)
 #[derive(Default)]
 pub struct FtSearchSummarizeOptions {
     command_args: CommandArgs,
@@ -2461,7 +2616,7 @@ impl FtSearchSummarizeOptions {
     /// Each field present is summarized. 
     /// If no `FIELDS` directive is passed, then all fields returned are summarized.
     #[must_use]
-    pub fn fields<F: Into<CommandArg>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }
@@ -2494,7 +2649,7 @@ impl FtSearchSummarizeOptions {
     /// You may use a newline sequence, as newlines are stripped from the result body anyway 
     /// (thus, it will not be conflated with an embedded newline in the text)
     #[must_use]
-    pub fn separator(self, separator: impl Into<CommandArg>) -> Self {
+    pub fn separator(self, separator: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("SEPARATOR").arg(separator),
         }
@@ -2507,7 +2662,7 @@ impl IntoArgs for FtSearchSummarizeOptions {
     }
 }
 
-/// sub-options for the [`search`](crate::SearchCommands::ft_search) option [`summarize`](crate::FtSearchOptions::highlight)
+/// sub-options for the [`search`](SearchCommands::ft_search) option [`summarize`](FtSearchOptions::highlight)
 #[derive(Default)]
 pub struct FtSearchHighlightOptions {
     command_args: CommandArgs,
@@ -2518,7 +2673,7 @@ impl FtSearchHighlightOptions {
     /// Each field present is highlighted. 
     /// If no `FIELDS` directive is passed, then all fields returned are highlighted.
     #[must_use]
-    pub fn fields<F: Into<CommandArg>>(self, fields: impl SingleArgOrCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
         }
@@ -2528,7 +2683,7 @@ impl FtSearchHighlightOptions {
     /// * `close_tag` - appended to each term match
     /// If no `TAGS` are specified, a built-in tag value is appended and prepended.
     #[must_use]
-    pub fn tags(self, open_tag: impl Into<CommandArg>, close_tag: impl Into<CommandArg>) -> Self {
+    pub fn tags(self, open_tag: impl SingleArg, close_tag: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("TAGS").arg(open_tag).arg(close_tag),
         }
@@ -2617,7 +2772,7 @@ impl IntoArgs for FtLanguage {
     }
 }
 
-/// Options for the [`ft_spellcheck`](crate::SearchCommands::ft_spellcheck) command.
+/// Options for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
 #[derive(Default)]
 pub struct FtSpellCheckOptions {
     command_args: CommandArgs,
@@ -2634,10 +2789,10 @@ impl FtSpellCheckOptions {
 
     /// specifies an inclusion (`FtTermType::Include`) or exclusion (`FtTermType::Exclude`) of a custom dictionary named `dictionary`
     /// 
-    /// Refer to [`ft_dictadd`](crate::SearchCommands::ft_dictadd), [`ft_dictdel`](crate::SearchCommands::ft_dictdel)
-    /// and [`ft_dictdump`](crate::SearchCommands::ft_dictdump) about managing custom dictionaries.
+    /// Refer to [`ft_dictadd`](SearchCommands::ft_dictadd), [`ft_dictdel`](SearchCommands::ft_dictdel)
+    /// and [`ft_dictdump`](SearchCommands::ft_dictdump) about managing custom dictionaries.
     #[must_use]
-    pub fn terms(self, term_type: FtTermType, dictionary: impl Into<CommandArg>) -> Self {
+    pub fn terms(self, term_type: FtTermType, dictionary: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("TERMS").arg(term_type).arg(dictionary),
         }
@@ -2646,7 +2801,7 @@ impl FtSpellCheckOptions {
     /// selects the dialect version under which to execute the query. 
     /// 
     /// If not specified, the query will execute under the default dialect version
-    /// set during module initial loading or via [`ft_config_set`](crate::SearchCommands::ft_config_set) command.
+    /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
     pub fn dialect(self, dialect_version: u64) -> Self {
         Self {
@@ -2661,7 +2816,7 @@ impl IntoArgs for FtSpellCheckOptions {
     }
 }
 
-/// Term type for the option [`terms`](crate::FtSpellCheckOptions::terms)
+/// Term type for the option [`terms`](FtSpellCheckOptions::terms)
 pub enum FtTermType {
     Include,
     Exclude,
@@ -2676,7 +2831,7 @@ impl IntoArgs for FtTermType {
     }
 }
 
-/// Result for the [`ft_spellcheck`](crate::SearchCommands::ft_spellcheck) command.
+/// Result for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
 pub struct FtSpellCheckResult {
     /// a collection where each element represents a misspelled term from the query + suggestions for this term
     /// 
@@ -2692,7 +2847,7 @@ impl FromValue for FtSpellCheckResult {
     }
 }
 
-/// Misspelled term + suggestions for the [`ft_spellcheck`](crate::SearchCommands::ft_spellcheck) command.
+/// Misspelled term + suggestions for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
 pub struct FtMisspelledTerm {
     /// Misspelled term
     pub misspelled_term: String,
@@ -2708,7 +2863,7 @@ impl FromValue for FtMisspelledTerm {
         let mut iter = values.into_iter();
 
         match (iter.next(), iter.next(), iter.next(), iter.next()) {
-            (Some(Value::BulkString(Some(term))), Some(misspelled_term), Some(suggestions), None) 
+            (Some(Value::BulkString(term)), Some(misspelled_term), Some(suggestions), None) 
             if term == b"TERM" => {
                 Ok(Self {
                     misspelled_term: misspelled_term.into()?,
@@ -2717,5 +2872,100 @@ impl FromValue for FtMisspelledTerm {
             },
             _ => Err(Error::Client("Cannot parse result to FtMisspelledTerm".to_owned()))
         }
+    }
+}
+
+/// Options for the [`ft_sugadd`](SearchCommands::ft_sugadd) command.
+#[derive(Default)]
+pub struct FtSugAddOptions {
+    command_args: CommandArgs,
+}
+
+impl FtSugAddOptions {
+    /// increments the existing entry of the suggestion by the given score, instead of replacing the score. 
+    /// 
+    /// This is useful for updating the dictionary based on user queries in real time.
+    #[must_use]
+    pub fn incr(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("INCR"),
+        }
+    }
+
+    /// saves an extra payload with the suggestion
+    #[must_use]
+    pub fn payload(self, payload: impl SingleArg) -> Self {
+        Self {
+            command_args: self.command_args.arg("PAYLOAD").arg(payload),
+        }
+    }
+}
+
+impl IntoArgs for FtSugAddOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Options for the [`ft_sugget`](SearchCommands::ft_sugget) command.
+#[derive(Default)]
+pub struct FtSugGetOptions {
+    command_args: CommandArgs,
+}
+
+impl FtSugGetOptions {
+    /// performs a fuzzy prefix search, including prefixes at Levenshtein distance of 1 from the prefix sent.
+    #[must_use]
+    pub fn fuzzy(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("INCR"),
+        }
+    }
+
+    /// limits the results to a maximum of `num` (default: 5).
+    #[must_use]
+    pub fn max(self, num: usize) -> Self {
+        Self {
+            command_args: self.command_args.arg("MAX").arg(num),
+        }
+    }
+
+    /// returns the score of each suggestion. 
+    /// 
+    /// This can be used to merge results from multiple instances.
+    #[must_use]
+    pub fn withscores(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHSCORES"),
+        }
+    }
+
+    /// returns optional payloads saved along with the suggestions. 
+    /// 
+    /// If no payload is present for an entry, it returns a null reply.
+    #[must_use]
+    pub fn withpayload(self) -> Self {
+        Self {
+            command_args: self.command_args.arg("WITHPAYLOADS"),
+        }
+    }
+}
+
+impl IntoArgs for FtSugGetOptions {
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        args.arg(self.command_args)
+    }
+}
+
+/// Sugestion for the [`ft_sugget`](SearchCommands::ft_sugget) command.
+pub struct FtSuggestion {
+    pub suggestion: String,
+    pub score: f64,
+    pub payload: String,
+}
+
+impl FromValue for FtSuggestion {
+    fn from_value(_: Value) -> Result<Self> {
+        unimplemented!()
     }
 }

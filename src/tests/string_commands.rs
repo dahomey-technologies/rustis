@@ -1,8 +1,8 @@
 use crate::{
-    resp::{Value},
+    commands::{GenericCommands, GetExOptions, SetCondition, SetExpiration, StringCommands},
+    resp::Value,
     tests::get_test_client,
-    Error, GenericCommands, GetExOptions, RedisError, RedisErrorKind, Result, SetCondition,
-    SetExpiration, StringCommands,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};
@@ -20,6 +20,8 @@ async fn append() -> Result<()> {
 
     let value: String = client.get("key").await?;
     assert_eq!("value12", value);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -52,6 +54,8 @@ async fn decr() -> Result<()> {
         }))
     ));
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -83,6 +87,8 @@ async fn decrby() -> Result<()> {
         }))
     ));
 
+    client.close().await?;    
+
     Ok(())
 }
 
@@ -98,6 +104,8 @@ async fn get_and_set() -> Result<()> {
     client.set("key", "value").await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -115,6 +123,8 @@ async fn get_ex() -> Result<()> {
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -130,6 +140,8 @@ async fn get_pex() -> Result<()> {
 
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -155,6 +167,8 @@ async fn get_exat() -> Result<()> {
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -179,6 +193,8 @@ async fn get_pxat() -> Result<()> {
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -198,6 +214,8 @@ async fn get_persist() -> Result<()> {
     let ttl = client.pttl("key").await?;
     assert_eq!(-1, ttl);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -214,6 +232,8 @@ async fn getrange() -> Result<()> {
 
     let value: String = client.getrange("key", 1, -3).await?;
     assert_eq!("al", value);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -232,7 +252,9 @@ async fn getset() -> Result<()> {
     client.del("key").await?;
 
     let value: Value = client.getset("key", "newvalue").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
+
+    client.close().await?;
 
     Ok(())
 }
@@ -265,6 +287,8 @@ async fn incr() -> Result<()> {
         }))
     ));
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -296,6 +320,8 @@ async fn incrby() -> Result<()> {
         }))
     ));
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -320,6 +346,8 @@ async fn incrbyfloat() -> Result<()> {
 
     let value = client.incrbyfloat("key", 2.0e2f64).await?;
     assert_eq!(5200f64, value);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -360,6 +388,8 @@ async fn lcs() -> Result<()> {
     assert_eq!(((4, 7), (5, 8), Some(4)), result.matches[0]);
     assert_eq!(((2, 3), (0, 1), Some(2)), result.matches[1]);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -382,6 +412,8 @@ async fn mget_mset() -> Result<()> {
     assert!(matches!(&values[1], Some(value) if value == "value2"));
     assert!(matches!(&values[2], Some(value) if value == "value3"));
     assert_eq!(values[3], None);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -417,6 +449,8 @@ async fn msetnx() -> Result<()> {
     assert!(matches!(&values[0], Some(value) if value == "value1"));
     assert_eq!(values[1], None);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -432,6 +466,8 @@ async fn psetex() -> Result<()> {
 
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -569,6 +605,8 @@ async fn set_with_options() -> Result<()> {
     let value: String = client.get("key").await?;
     assert_eq!("value1", value);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -584,6 +622,8 @@ async fn setex() -> Result<()> {
 
     let ttl = client.pttl("key").await?;
     assert!(ttl <= 1000);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -607,6 +647,8 @@ async fn setnx() -> Result<()> {
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -627,6 +669,8 @@ async fn setrange() -> Result<()> {
     let value: String = client.get("key").await?;
     assert_eq!("Hello Redis", value);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -643,6 +687,8 @@ async fn strlen() -> Result<()> {
 
     let len = client.strlen("nonexisting").await?;
     assert_eq!(0, len);
+
+    client.close().await?;
 
     Ok(())
 }

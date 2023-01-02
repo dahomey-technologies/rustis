@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgOrCollection, SingleArgOrCollection, Value,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
@@ -27,8 +27,8 @@ pub trait StringCommands {
     fn append<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
@@ -49,7 +49,7 @@ pub trait StringCommands {
     fn decr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("DECR").arg(key))
     }
@@ -70,7 +70,7 @@ pub trait StringCommands {
     fn decrby<K>(&mut self, key: K, decrement: i64) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
     }
@@ -88,12 +88,15 @@ pub trait StringCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
-    ///     resp::{cmd}, Client, ClientPreparedCommand, FlushingMode,
-    ///     ServerCommands, StringCommands, Result
+    /// use rustis::{
+    ///     client::{Client, ClientPreparedCommand},
+    ///     commands::{FlushingMode, ServerCommands, StringCommands},
+    ///     resp::{cmd},
+    ///     Result
     /// };
     ///
-    /// #[tokio::main]
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
@@ -121,8 +124,8 @@ pub trait StringCommands {
     fn get<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        V: FromSingleValue,
         Self: Sized,
     {
         prepare_command(self, cmd("GET").arg(key))
@@ -142,8 +145,8 @@ pub trait StringCommands {
     fn getdel<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
@@ -161,12 +164,15 @@ pub trait StringCommands {
     ///
     /// # Example
     /// ```
-    /// use redis_driver::{
-    ///     resp::cmd, Client, ClientPreparedCommand, FlushingMode,
-    ///     GetExOptions, GenericCommands, ServerCommands, StringCommands, Result
+    /// use rustis::{
+    ///     client::{Client, ClientPreparedCommand},
+    ///     commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
+    ///     resp::cmd,
+    ///     Result,
     /// };
     ///
-    /// #[tokio::main]
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
@@ -188,8 +194,8 @@ pub trait StringCommands {
     fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
@@ -207,8 +213,8 @@ pub trait StringCommands {
     fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
@@ -226,9 +232,9 @@ pub trait StringCommands {
     fn getset<K, V, R>(&mut self, key: K, value: V) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
-        R: FromValue,
+        K: SingleArg,
+        V: SingleArg,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
@@ -255,7 +261,7 @@ pub trait StringCommands {
     fn incr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCR").arg(key))
     }
@@ -267,7 +273,7 @@ pub trait StringCommands {
     /// or contains a string that can not be represented as integer.
     /// This operation is limited to 64 bit signed integers.
     ///
-    /// See [incr](crate::StringCommands::incr) for extra information on increment/decrement operations.
+    /// See [incr](StringCommands::incr) for extra information on increment/decrement operations.
     ///
     /// # Return
     /// the value of key after the increment
@@ -278,7 +284,7 @@ pub trait StringCommands {
     fn incrby<K>(&mut self, key: K, increment: i64) -> PreparedCommand<Self, i64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
     }
@@ -312,7 +318,7 @@ pub trait StringCommands {
     fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> PreparedCommand<Self, f64>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
@@ -328,8 +334,8 @@ pub trait StringCommands {
     fn lcs<K, V>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, V>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: FromValue,
+        K: SingleArg,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
@@ -345,7 +351,7 @@ pub trait StringCommands {
     fn lcs_len<K>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
@@ -369,7 +375,7 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, LcsResult>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(
             self,
@@ -396,10 +402,10 @@ pub trait StringCommands {
     fn mget<K, KK, V, VV>(&mut self, keys: KK) -> PreparedCommand<Self, VV>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        V: FromValue,
-        VV: FromSingleValueArray<V>,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        V: FromSingleValue,
+        VV: FromValueArray<V>,
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }
@@ -415,9 +421,9 @@ pub trait StringCommands {
     fn mset<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        C: KeyValueArgOrCollection<K, V>,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        C: KeyValueArgsCollection<K, V>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("MSET").arg(items))
     }
@@ -443,14 +449,14 @@ pub trait StringCommands {
     fn msetnx<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        C: KeyValueArgOrCollection<K, V>,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        C: KeyValueArgsCollection<K, V>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("MSETNX").arg(items))
     }
 
-    /// Works exactly like [setex](crate::StringCommands::setex) with the sole
+    /// Works exactly like [setex](StringCommands::setex) with the sole
     /// difference that the expire time is specified in milliseconds instead of seconds.
     ///
     /// If key already holds a value, it is overwritten, regardless of its type.
@@ -462,8 +468,8 @@ pub trait StringCommands {
     fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
@@ -479,8 +485,8 @@ pub trait StringCommands {
     fn set<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
         Self: Sized,
     {
         prepare_command(self, cmd("SET").arg(key).arg(value))
@@ -506,8 +512,8 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(
             self,
@@ -535,9 +541,9 @@ pub trait StringCommands {
     ) -> PreparedCommand<Self, V2>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V1: Into<CommandArg>,
-        V2: FromValue,
+        K: SingleArg,
+        V1: SingleArg,
+        V2: FromSingleValue,
     {
         prepare_command(
             self,
@@ -559,8 +565,8 @@ pub trait StringCommands {
     fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
@@ -582,8 +588,8 @@ pub trait StringCommands {
     fn setnx<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETNX").arg(key).arg(value))
     }
@@ -601,8 +607,8 @@ pub trait StringCommands {
     fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        V: Into<CommandArg>,
+        K: SingleArg,
+        V: SingleArg,
     {
         prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
@@ -620,13 +626,13 @@ pub trait StringCommands {
     fn strlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("STRLEN").arg(key))
     }
 }
 
-/// Options for the [`getex`](crate::StringCommands::getex) command
+/// Options for the [`getex`](StringCommands::getex) command
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -652,9 +658,10 @@ impl IntoArgs for GetExOptions {
     }
 }
 
+/// Part of the result for the [`lcs`](StringCommands::lcs) command
 pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
 
-/// Result for the [`lcs`](crate::StringCommands::lcs) command
+/// Result for the [`lcs`](StringCommands::lcs) command
 #[derive(Debug)]
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,
@@ -720,7 +727,7 @@ impl FromValue for LcsResult {
     }
 }
 
-/// Expiration option for the [`set_with_options`](crate::StringCommands::set_with_options) command
+/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) command
 pub enum SetExpiration {
     /// No expiration
     None,
@@ -752,7 +759,7 @@ impl IntoArgs for SetExpiration {
     }
 }
 
-/// Condition option for the [`set_with_options`](crate::StringCommands::set_with_options) command
+/// Condition option for the [`set_with_options`](StringCommands::set_with_options) command
 pub enum SetCondition {
     /// No condition
     None,

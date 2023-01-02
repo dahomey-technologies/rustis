@@ -1,14 +1,14 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, BulkString, CommandArgs, FromSingleValueArray, FromValue, HashMapExt, IntoArgs,
-        SingleArgOrCollection, Value,
+        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        SingleArg, SingleArgCollection, Value,
     },
-    PreparedCommand, Result,
+    Result,
 };
 use std::{collections::HashMap, future};
 
-/// A group of Redis commands related to [`RedisBloom`](https://redis.io/docs/stack/bloom/)
+/// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
 ///
 /// # See Also
 /// [Bloom Filter Commands](https://redis.io/commands/?group=bf)
@@ -26,11 +26,7 @@ pub trait BloomCommands {
     /// # See Also
     /// * [<https://redis.io/commands/bf.add/>](https://redis.io/commands/bf.add/)
     #[must_use]
-    fn bf_add(
-        &mut self,
-        key: impl Into<CommandArg>,
-        item: impl Into<CommandArg>,
-    ) -> PreparedCommand<Self, bool>
+    fn bf_add(&mut self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
     {
@@ -52,8 +48,8 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_exists(
         &mut self,
-        key: impl Into<CommandArg>,
-        item: impl Into<CommandArg>,
+        key: impl SingleArg,
+        item: impl SingleArg,
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
@@ -72,7 +68,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info_all(&mut self, key: impl Into<CommandArg>) -> PreparedCommand<Self, BfInfoResult>
+    fn bf_info_all(&mut self, key: impl SingleArg) -> PreparedCommand<Self, BfInfoResult>
     where
         Self: Sized,
     {
@@ -93,7 +89,7 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_info(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         param: BfInfoParameter,
     ) -> PreparedCommand<Self, usize>
     where
@@ -124,10 +120,10 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
-    fn bf_insert<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
+    fn bf_insert<I: SingleArg, R: FromValueArray<bool>>(
         &mut self,
-        key: impl Into<CommandArg>,
-        items: impl SingleArgOrCollection<I>,
+        key: impl SingleArg,
+        items: impl SingleArgCollection<I>,
         options: BfInsertOptions,
     ) -> PreparedCommand<Self, R>
     where
@@ -160,9 +156,9 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_loadchunk(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         iterator: i64,
-        data: impl Into<CommandArg>,
+        data: impl SingleArg,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
@@ -185,10 +181,10 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
-    fn bf_madd<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
+    fn bf_madd<I: SingleArg, R: FromValueArray<bool>>(
         &mut self,
-        key: impl Into<CommandArg>,
-        items: impl SingleArgOrCollection<I>,
+        key: impl SingleArg,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -209,10 +205,10 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
-    fn bf_mexists<I: Into<CommandArg>, R: FromSingleValueArray<bool>>(
+    fn bf_mexists<I: SingleArg, R: FromValueArray<bool>>(
         &mut self,
-        key: impl Into<CommandArg>,
-        items: impl SingleArgOrCollection<I>,
+        key: impl SingleArg,
+        items: impl SingleArgCollection<I>,
     ) -> PreparedCommand<Self, R>
     where
         Self: Sized,
@@ -249,11 +245,11 @@ pub trait BloomCommands {
     /// * `options` - See [`BfReserveOptions`](BfReserveOptions)
     ///
     /// # See Also
-    /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
+    /// [<https://redis.io/commands/bf.reserve/>](https://redis.io/commands/bf.reserve/)
     #[must_use]
     fn bf_reserve(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         error_rate: f64,
         capacity: usize,
         options: BfReserveOptions,
@@ -272,8 +268,8 @@ pub trait BloomCommands {
     }
 
     /// Begins an incremental save of the bloom filter.
-    /// This is useful for large bloom filters which cannot fit into the normal [`dump`](crate::GenericCommands::dump)
-    /// and [`restore`](crate::GenericCommands::restore) model.
+    /// This is useful for large bloom filters which cannot fit into the normal [`dump`](crate::commands::GenericCommands::dump)
+    /// and [`restore`](crate::commands::GenericCommands::restore) model.
     ///
     /// # Arguments
     /// * `key` - Name of the filter
@@ -288,22 +284,13 @@ pub trait BloomCommands {
     #[must_use]
     fn bf_scandump(
         &mut self,
-        key: impl Into<CommandArg>,
+        key: impl SingleArg,
         iterator: i64,
     ) -> PreparedCommand<Self, (i64, Vec<u8>)>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator)).post_process(Box::new(
-            |value, _command, _client| {
-                let result = match value.into::<(i64, BulkString)>() {
-                    Ok((iterator, BulkString(data))) => Ok((iterator, data)),
-                    Err(e) => Err(e),
-                };
-
-                Box::pin(future::ready(result))
-            },
-        ))
+        prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator))
     }
 }
 
@@ -353,7 +340,7 @@ impl FromValue for BfInfoResult {
     }
 }
 
-/// Options for the [`bf_insert`](crate::BloomCommands::bf_insert) command.
+/// Options for the [`bf_insert`](BloomCommands::bf_insert) command.
 #[derive(Default)]
 pub struct BfInsertOptions {
     command_args: CommandArgs,
@@ -427,7 +414,7 @@ impl IntoArgs for BfInsertOptions {
     }
 }
 
-/// Options for the [`bf_reserve`](crate::BloomCommands::bf_reserve) command.
+/// Options for the [`bf_reserve`](BloomCommands::bf_reserve) command.
 #[derive(Default)]
 pub struct BfReserveOptions {
     command_args: CommandArgs,

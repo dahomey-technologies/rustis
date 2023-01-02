@@ -1,6 +1,7 @@
 use crate::{
-    resp::{cmd, CommandArg, Command},
-    BeginSearch, CommandInfo, StandaloneConnection, Error, FindKeys, Result, ServerCommands,
+    commands::{BeginSearch, CommandInfo, FindKeys, ServerCommands},
+    resp::{cmd, Command, CommandArg},
+    Error, Result, StandaloneConnection,
 };
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -44,7 +45,11 @@ impl CommandInfoManager {
         let command_info = self.command_info_map.get(command.name);
         if let Some(command_info) = command_info {
             if command_info.arity == -2 && !command_info.sub_commands.is_empty() {
-                let command_name = format!("{}|{}", command.name, command.args[0].to_string());
+                let command_name = format!(
+                    "{}|{}",
+                    command.name,
+                    std::ops::Deref::deref(&command.args[0])
+                );
                 return self.command_info_map.get(&command_name);
             }
         }
@@ -243,8 +248,8 @@ impl CommandInfoManager {
 
     fn prepare_command_getkeys_args(command: &Command) -> SmallVec<[CommandArg; 10]> {
         let mut args = SmallVec::new();
-        args.push(command.name.into());
-        args.extend(command.args.into_iter().cloned());
+        args.push(CommandArg::Str(command.name));
+        args.extend((&command.args).into_iter().cloned());
         args
     }
 }

@@ -1,6 +1,9 @@
 use crate::{
-    resp::cmd, tests::get_test_client, Error, FlushingMode, ListCommands, PipelinePreparedCommand,
-    Result, ServerCommands, StringCommands, TransactionCommands, RedisError, RedisErrorKind,
+    client::BatchPreparedCommand,
+    commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
+    resp::cmd,
+    tests::get_test_client,
+    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 
@@ -14,7 +17,7 @@ async fn transaction_exec() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, String>("key1").queue();
+    transaction.get::<_, ()>("key1").queue();
     let value: String = transaction.execute().await?;
 
     assert_eq!("value1", value);
@@ -45,7 +48,7 @@ async fn transaction_error() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     transaction.set("key1", "abc").forget();
-    transaction.lpop::<_, String, Vec<_>>("key1", 1).queue();
+    transaction.lpop::<_, (), ()>("key1", 1).queue();
     let result: Result<String> = transaction.execute().await;
 
     assert!(matches!(
@@ -137,7 +140,7 @@ async fn transaction_discard() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, String>("key1").queue();
+    transaction.get::<_, ()>("key1").queue();
 
     std::mem::drop(transaction);
 

@@ -1,10 +1,16 @@
 use crate::{
-    network::sleep, resp::CommandArg, tests::get_redis_stack_test_client, Client, ClientReplyMode,
-    ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions, FtFieldSchema,
-    FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtProfileQueryType, FtQueryResult,
-    FtReducer, FtSearchOptions, FtSortBy, FtSpellCheckOptions, FtTermType, FtWithCursorOptions,
-    HashCommands, JsonCommands, PipelinePreparedCommand, Result, SearchCommands, ServerCommands,
-    SetCondition, SortOrder,
+    client::{BatchPreparedCommand, Client},
+    commands::{
+        ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
+        FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute,
+        FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
+        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtWithCursorOptions,
+        HashCommands, JsonCommands, SearchCommands, ServerCommands, SetCondition, SortOrder,
+    },
+    network::sleep,
+    resp::{CommandArg, SingleArg},
+    tests::get_redis_stack_test_client,
+    Result,
 };
 use rand::{seq::SliceRandom, Rng};
 use serial_test::serial;
@@ -14,8 +20,8 @@ use std::{
     time::Duration,
 };
 
-async fn wait_for_index_scanned(client: &mut Client, index: impl Into<CommandArg>) -> Result<()> {
-    let index: CommandArg = index.into();
+async fn wait_for_index_scanned(client: &mut Client, index: impl SingleArg) -> Result<()> {
+    let index: CommandArg = index.into_command_arg();
 
     loop {
         let result = client.ft_info(index.clone()).await?;
@@ -280,7 +286,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "idx1").await?; 
+    wait_for_index_scanned(&mut client, "idx1").await?;
 
     client
         .ft_create(
@@ -289,7 +295,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "idx2").await?; 
+    wait_for_index_scanned(&mut client, "idx2").await?;
 
     client.ft_aliasadd("alias", "idx1").await?;
     client.ft_aliasupdate("alias", "idx2").await?;
@@ -517,7 +523,7 @@ async fn ft_cursor() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     let result = client
         .ft_aggregate(
@@ -625,7 +631,7 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     client.ft_dropindex("index", false).await?;
     let exists = client.hexists("log:1", "url").await?;
@@ -875,7 +881,7 @@ async fn ft_profile() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     let result = client
         .ft_profile(
@@ -959,7 +965,7 @@ async fn ft_search() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     let result = client
         .ft_search("index", "wizard", FtSearchOptions::default())
@@ -1030,7 +1036,7 @@ async fn ft_spellcheck() -> Result<()> {
             FtFieldSchema::identifier("text").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     let result = client
         .ft_spellcheck("index", "held", FtSpellCheckOptions::default().distance(2))
@@ -1039,8 +1045,14 @@ async fn ft_spellcheck() -> Result<()> {
     assert_eq!(1, result.misspelled_terms.len());
     assert_eq!("held", result.misspelled_terms[0].misspelled_term);
     assert_eq!(2, result.misspelled_terms[0].suggestions.len());
-    assert!(result.misspelled_terms[0].suggestions.iter().any(|(_score, suggestion)| suggestion == "hello"));
-    assert!(result.misspelled_terms[0].suggestions.iter().any(|(_score, suggestion)| suggestion == "help"));
+    assert!(result.misspelled_terms[0]
+        .suggestions
+        .iter()
+        .any(|(_score, suggestion)| suggestion == "hello"));
+    assert!(result.misspelled_terms[0]
+        .suggestions
+        .iter()
+        .any(|(_score, suggestion)| suggestion == "help"));
 
     client.ft_dictadd("dict", "store").await?;
 
@@ -1082,7 +1094,7 @@ async fn ft_syn() -> Result<()> {
             FtFieldSchema::identifier("t").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     // search => only foo is matched
     let result = client
@@ -1146,12 +1158,118 @@ async fn ft_tagvals() -> Result<()> {
             FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?; 
+    wait_for_index_scanned(&mut client, "index").await?;
 
     // Get Tags
     let tags: HashSet<String> = client.ft_tagvals("index", "tag").await?;
     assert!(tags.contains("hello"));
     assert!(tags.contains("world"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_sugadd() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_sugadd(
+            "key",
+            "hello world",
+            1.,
+            FtSugAddOptions::default().incr().payload("foo"),
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_sugdel() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_sugadd("key", "hello world", 1., FtSugAddOptions::default())
+        .await?;
+
+    let deleted = client.ft_sugdel("key", "hello world").await?;
+    assert!(deleted);
+
+    let deleted = client.ft_sugdel("key", "hello world").await?;
+    assert!(!deleted);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_sugget() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_sugadd(
+            "key",
+            "hello",
+            1.,
+            FtSugAddOptions::default().payload("world"),
+        )
+        .await?;
+    client
+        .ft_sugadd("key", "hell", 1., FtSugAddOptions::default().payload("42"))
+        .await?;
+
+    let suggestions = client
+        .ft_sugget("key", "hell", FtSugGetOptions::default().withpayload())
+        .await?;
+    assert_eq!("hell".to_owned(), suggestions[0].suggestion);
+    assert_eq!("42".to_owned(), suggestions[0].payload);
+    assert_eq!(0.0, suggestions[0].score);
+    assert_eq!("hello".to_owned(), suggestions[1].suggestion);
+    assert_eq!("world".to_owned(), suggestions[1].payload);
+    assert_eq!(0.0, suggestions[1].score);
+
+    let suggestions = client
+        .ft_sugget(
+            "key",
+            "hell",
+            FtSugGetOptions::default().withpayload().withscores(),
+        )
+        .await?;
+    assert_eq!("hell".to_owned(), suggestions[0].suggestion);
+    assert_eq!("42".to_owned(), suggestions[0].payload);
+    assert!(suggestions[0].score > 0.);
+    assert_eq!("hello".to_owned(), suggestions[1].suggestion);
+    assert_eq!("world".to_owned(), suggestions[1].payload);
+    assert!(suggestions[1].score > 0.);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_suglen() -> Result<()> {
+    let mut client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_sugadd("key", "hello", 1., FtSugAddOptions::default())
+        .await?;
+
+    client
+        .ft_sugadd("key", "hell", 1., FtSugAddOptions::default())
+        .await?;
+
+    let len = client.ft_suglen("key").await?;
+    assert_eq!(2, len);
 
     Ok(())
 }

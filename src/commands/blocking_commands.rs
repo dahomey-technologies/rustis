@@ -1,14 +1,17 @@
 use crate::{
-    prepare_command,
-    resp::{cmd, CommandArg, FromValue, SingleArgOrCollection},
-    Future, LMoveWhere, MonitorStream, PreparedCommand, ZMPopResult, ZWhere,
+    client::{prepare_command, MonitorStream, PreparedCommand},
+    commands::{LMoveWhere, ZMPopResult, ZWhere},
+    resp::{cmd, FromSingleValue, SingleArgCollection, SingleArg},
+    Future,
 };
 
+/// Result for the [`bzpopmin`](BlockingCommands::bzpopmin)
+/// and [`bzpopmax`](BlockingCommands::bzpopmax) commands
 pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
 
 /// A group of blocking commands
 pub trait BlockingCommands {
-    /// This command is the blocking variant of [`lmove`](crate::ListCommands::lmove).
+    /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
     ///
     /// # Return
     /// the element being popped from `source` and pushed to `destination`.
@@ -27,9 +30,9 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, E>
     where
         Self: Sized,
-        S: Into<CommandArg>,
-        D: Into<CommandArg>,
-        E: FromValue,
+        S: SingleArg,
+        D: SingleArg,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -42,7 +45,7 @@ pub trait BlockingCommands {
         )
     }
 
-    /// This command is the blocking variant of [`lmpop`](crate::ListCommands::lmpop).
+    /// This command is the blocking variant of [`lmpop`](crate::commands::ListCommands::lmpop).
     ///
     /// # Return
     /// - None when no element could be popped, and timeout is reached.
@@ -51,18 +54,18 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
-    fn blmpop<K, E, C>(
+    fn blmpop<K, KK, E>(
         &mut self,
         timeout: f64,
-        keys: C,
+        keys: KK,
         where_: LMoveWhere,
         count: usize,
     ) -> PreparedCommand<Self, Option<(String, Vec<E>)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        E: FromValue,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -78,7 +81,7 @@ pub trait BlockingCommands {
 
     /// This command is a blocking list pop primitive.
     ///
-    /// It is the blocking version of [`lpop`](crate::ListCommands::lpop) because it
+    /// It is the blocking version of [`lpop`](crate::commands::ListCommands::lpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
     /// An element is popped from the head of the first list that is non-empty,
@@ -99,17 +102,17 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        K1: FromValue,
-        V: FromValue,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        K1: FromSingleValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
 
     /// This command is a blocking list pop primitive.
     ///
-    /// It is the blocking version of [`rpop`](crate::ListCommands::rpop) because it
+    /// It is the blocking version of [`rpop`](crate::commands::ListCommands::rpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
     /// An element is popped from the tail of the first list that is non-empty,
@@ -130,15 +133,15 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, Option<(K1, V)>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        K1: FromValue,
-        V: FromValue,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        K1: FromSingleValue,
+        V: FromSingleValue,
     {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
 
-    /// This command is the blocking variant of [`zmpop`](crate::SortedSetCommands::zmpop).
+    /// This command is the blocking variant of [`zmpop`](crate::commands::SortedSetCommands::zmpop).
     ///
     /// # Return
     /// * `None` if no element could be popped
@@ -149,18 +152,18 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
-    fn bzmpop<K, C, E>(
+    fn bzmpop<K, KK, E>(
         &mut self,
         timeout: f64,
-        keys: C,
+        keys: KK,
         where_: ZWhere,
         count: usize,
     ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
-        E: FromValue,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        E: FromSingleValue,
     {
         prepare_command(
             self,
@@ -174,7 +177,7 @@ pub trait BlockingCommands {
         )
     }
 
-    /// This command is the blocking variant of [`zpopmax`](crate::SortedSetCommands::zpopmax).
+    /// This command is the blocking variant of [`zpopmax`](crate::commands::SortedSetCommands::zpopmax).
     ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.
@@ -193,15 +196,15 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        K1: FromValue,
-        E: FromValue,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        K1: FromSingleValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
 
-    /// This command is the blocking variant of [`zpopmin`](crate::SortedSetCommands::zpopmin).
+    /// This command is the blocking variant of [`zpopmin`](crate::commands::SortedSetCommands::zpopmin).
     ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.
@@ -220,10 +223,10 @@ pub trait BlockingCommands {
     ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        KK: SingleArgOrCollection<K>,
-        K1: FromValue,
-        E: FromValue,
+        K: SingleArg,
+        KK: SingleArgCollection<K>,
+        K1: FromSingleValue,
+        E: FromSingleValue,
     {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }

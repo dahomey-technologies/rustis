@@ -1,8 +1,12 @@
 use crate::{
+    client::IntoConfig,
+    commands::{
+        GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands,
+        StringCommands, XReadOptions, ZAggregate,
+    },
+    network::StandaloneConnection,
     tests::{get_default_addr, get_default_host, get_default_port, get_test_client},
-    CommandInfoManager, GenericCommands, IntoConfig, MigrateOptions, Result, SortOptions,
-    SortOrder, SortedSetCommands, StandaloneConnection, StreamCommands, StringCommands,
-    XReadOptions, ZAggregate,
+    CommandInfoManager, Result,
 };
 use serial_test::serial;
 

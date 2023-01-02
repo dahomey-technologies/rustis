@@ -1,7 +1,11 @@
 use crate::{
-    resp::CommandArg, tests::get_test_client, BitFieldGetSubCommand, BitFieldOverflow,
-    BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
-    Result, StringCommands,
+    commands::{
+        BitFieldGetSubCommand, BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange,
+        BitUnit, BitmapCommands, StringCommands,
+    },
+    resp::CommandArg,
+    tests::get_test_client,
+    Result,
 };
 use serial_test::serial;
 
@@ -31,6 +35,8 @@ async fn bitcount() -> Result<()> {
         .bitcount("mykey", BitRange::range(5, 30).unit(BitUnit::Bit))
         .await?;
     assert_eq!(17, count);
+
+    client.close().await?;
 
     Ok(())
 }
@@ -91,6 +97,8 @@ async fn bitfield() -> Result<()> {
         .await?;
     assert_eq!(0, results.len());
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -128,6 +136,8 @@ async fn bitop() -> Result<()> {
     let value: String = client.get("dest").await?;
     assert_eq!("`bc`ab", value);
 
+    client.close().await?;
+    
     Ok(())
 }
 
@@ -182,6 +192,8 @@ async fn getbit() -> Result<()> {
     let value = client.getbit("mykey", 6).await?;
     assert_eq!(1, value);
 
+    client.close().await?;
+
     Ok(())
 }
 
@@ -201,6 +213,8 @@ async fn setbit() -> Result<()> {
 
     let value = client.getbit("mykey", 7).await?;
     assert_eq!(0, value);
+
+    client.close().await?;
 
     Ok(())
 }

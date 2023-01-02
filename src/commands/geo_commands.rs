@@ -1,10 +1,10 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, ArgsOrCollection, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
+        MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 
 /// A group of Redis commands related to [`Geospatial`](https://redis.io/docs/data-types/geospatial/) indices
@@ -30,9 +30,9 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        I: ArgsOrCollection<(f64, f64, M)>,
+        K: SingleArg,
+        M: SingleArg,
+        I: MultipleArgsCollection<(f64, f64, M)>,
     {
         prepare_command(
             self,
@@ -62,8 +62,8 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Option<f64>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
     {
         prepare_command(
             self,
@@ -72,7 +72,7 @@ pub trait GeoCommands {
     }
 
     /// Return valid [Geohash](https://en.wikipedia.org/wiki/Geohash) strings representing the position of one or more elements
-    /// in a sorted set value representing a geospatial index (where elements were added using [geoadd](crate::GeoCommands::geoadd)).
+    /// in a sorted set value representing a geospatial index (where elements were added using [geoadd](GeoCommands::geoadd)).
     ///
     /// # Return
     /// An array where each element is the Geohash corresponding to each member name passed as argument to the command.
@@ -83,9 +83,9 @@ pub trait GeoCommands {
     fn geohash<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<String>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        C: SingleArgOrCollection<M>,
+        K: SingleArg,
+        M: SingleArg,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
     }
@@ -108,14 +108,14 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, Vec<Option<(f64, f64)>>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        C: SingleArgOrCollection<M>,
+        K: SingleArg,
+        M: SingleArg,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }
 
-    /// Return the members of a sorted set populated with geospatial information using [geoadd](crate::GeoCommands::geoadd),
+    /// Return the members of a sorted set populated with geospatial information using [geoadd](GeoCommands::geoadd),
     /// which are within the borders of the area specified by a given shape.
     ///
     /// # Return
@@ -134,10 +134,10 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M1: Into<CommandArg>,
-        M2: FromValue,
-        A: FromSingleValueArray<GeoSearchResult<M2>>,
+        K: SingleArg,
+        M1: SingleArg,
+        M2: FromSingleValue,
+        A: FromValueArray<GeoSearchResult<M2>>,
     {
         prepare_command(
             self,
@@ -145,7 +145,7 @@ pub trait GeoCommands {
         )
     }
 
-    /// This command is like [geosearch](crate::GeoCommands::geosearch), but stores the result in destination key.
+    /// This command is like [geosearch](GeoCommands::geosearch), but stores the result in destination key.
     ///
     /// # Return
     /// the number of elements in the resulting set.
@@ -163,9 +163,9 @@ pub trait GeoCommands {
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        S: Into<CommandArg>,
-        M: Into<CommandArg>,
+        D: SingleArg,
+        S: SingleArg,
+        M: SingleArg,
     {
         prepare_command(
             self,
@@ -179,7 +179,7 @@ pub trait GeoCommands {
     }
 }
 
-/// Condition for the [`geoadd`](crate::GeoCommands::geoadd) command
+/// Condition for the [`geoadd`](GeoCommands::geoadd) command
 pub enum GeoAddCondition {
     /// No option
     None,
@@ -227,7 +227,7 @@ impl IntoArgs for GeoUnit {
 /// The query's center point is provided by one of these mandatory options:
 pub enum GeoSearchFrom<M>
 where
-    M: Into<CommandArg>,
+    M: SingleArg,
 {
     /// Use the position of the given existing `member` in the sorted set.
     FromMember { member: M },
@@ -237,7 +237,7 @@ where
 
 impl<M> IntoArgs for GeoSearchFrom<M>
 where
-    M: Into<CommandArg>,
+    M: SingleArg,
 {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
@@ -293,7 +293,7 @@ impl IntoArgs for GeoSearchOrder {
     }
 }
 
-/// Options for the [`geosearch`](crate::GeoCommands::geosearch) command
+/// Options for the [`geosearch`](GeoCommands::geosearch) command
 #[derive(Default)]
 pub struct GeoSearchOptions {
     command_args: CommandArgs,
@@ -342,11 +342,11 @@ impl IntoArgs for GeoSearchOptions {
     }
 }
 
-/// Result of the [`geosearch`](crate::GeoCommands::geosearch) command.
+/// Result of the [`geosearch`](GeoCommands::geosearch) command.
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
-    M: FromValue,
+    M: FromSingleValue,
 {
     /// The matched member.
     pub member: M,
@@ -363,7 +363,7 @@ where
 
 impl<M> FromValue for GeoSearchResult<M>
 where
-    M: FromValue,
+    M: FromSingleValue,
 {
     fn from_value(value: Value) -> Result<Self> {
         match value {
@@ -389,7 +389,7 @@ where
 
                 for value in it {
                     match value {
-                        Value::BulkString(Some(_)) => distance = Some(value.into()?),
+                        Value::BulkString(_) => distance = Some(value.into()?),
                         Value::Integer(h) => geo_hash = Some(h),
                         Value::Array(_) => coordinates = Some(value.into()?),
                         _ => return Err(Error::Client("Unexpected geo search result".to_owned())),
@@ -408,7 +408,7 @@ where
     }
 }
 
-/// Options for the [`geosearchstore`](crate::GeoCommands::geosearchstore) command
+/// Options for the [`geosearchstore`](GeoCommands::geosearchstore) command
 #[derive(Default)]
 pub struct GeoSearchStoreOptions {
     command_args: CommandArgs,

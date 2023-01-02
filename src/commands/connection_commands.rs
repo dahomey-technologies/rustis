@@ -1,9 +1,11 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
+    commands::ModuleInfo,
     resp::{
-        cmd, CommandArg, CommandArgs, FromValue, IntoArgs, SingleArgOrCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValue, HashMapExt, IntoArgs, SingleArg,
+        SingleArgCollection, Value,
     },
-    Error, PreparedCommand, Result,
+    Error, Result,
 };
 use std::collections::HashMap;
 
@@ -23,8 +25,8 @@ pub trait ConnectionCommands {
     fn auth<U, P>(&mut self, username: Option<U>, password: P) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        U: Into<CommandArg>,
-        P: Into<CommandArg>,
+        U: SingleArg,
+        P: SingleArg,
     {
         prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
@@ -53,7 +55,7 @@ pub trait ConnectionCommands {
     fn client_getname<CN>(&mut self) -> PreparedCommand<Self, Option<CN>>
     where
         Self: Sized,
-        CN: FromValue,
+        CN: FromSingleValue,
     {
         prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
@@ -186,7 +188,7 @@ pub trait ConnectionCommands {
     fn client_setname<CN>(&mut self, connection_name: CN) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
-        CN: Into<CommandArg>,
+        CN: SingleArg,
     {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
@@ -244,7 +246,7 @@ pub trait ConnectionCommands {
     }
 
     /// Used to resume command processing for all clients that were
-    /// paused by [`client_pause`](crate::ConnectionCommands::client_pause).
+    /// paused by [`client_pause`](ConnectionCommands::client_pause).
     ///
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
@@ -264,8 +266,8 @@ pub trait ConnectionCommands {
     fn echo<M, R>(&mut self, message: M) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        M: Into<CommandArg>,
-        R: FromValue,
+        M: SingleArg,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("ECHO").arg(message))
     }
@@ -292,7 +294,7 @@ pub trait ConnectionCommands {
     fn ping<R>(&mut self, options: PingOptions) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromValue,
+        R: FromSingleValue,
     {
         prepare_command(self, cmd("PING").arg(options))
     }
@@ -335,7 +337,7 @@ pub trait ConnectionCommands {
     }
 }
 
-/// Client caching mode for the [`client_caching`](crate::ConnectionCommands::client_caching) command.
+/// Client caching mode for the [`client_caching`](ConnectionCommands::client_caching) command.
 pub enum ClientCachingMode {
     Yes,
     No,
@@ -350,8 +352,8 @@ impl IntoArgs for ClientCachingMode {
     }
 }
 
-/// Client info results for the [`client_info`](crate::ConnectionCommands::client_info)
-/// & [`client_list`](crate::ConnectionCommands::client_list) commands.
+/// Client info results for the [`client_info`](ConnectionCommands::client_info)
+/// & [`client_list`](ConnectionCommands::client_list) commands.
 #[derive(Debug)]
 pub struct ClientInfo {
     /// a unique 64-bit client ID
@@ -366,7 +368,7 @@ pub struct ClientInfo {
     /// file descriptor corresponding to the socket
     pub fd: u32,
 
-    /// the name set by the client with [`client_setname`](crate::ConnectionCommands::client_setname)
+    /// the name set by the client with [`client_setname`](ConnectionCommands::client_setname)
     pub name: String,
 
     /// total duration of the connection in seconds
@@ -547,7 +549,7 @@ impl FromValue for ClientInfo {
     }
 }
 
-/// Client type options for the [`client_list`](crate::ConnectionCommands::client_list) command.
+/// Client type options for the [`client_list`](ConnectionCommands::client_list) command.
 pub enum ClientType {
     Normal,
     Master,
@@ -566,7 +568,7 @@ impl IntoArgs for ClientType {
     }
 }
 
-/// Options for the [client_list](crate::ConnectionCommands::client_list) command.
+/// Options for the [client_list](ConnectionCommands::client_list) command.
 #[derive(Default)]
 pub struct ClientListOptions {
     command_args: CommandArgs,
@@ -588,7 +590,7 @@ impl ClientListOptions {
 
     pub fn client_ids<II>(self, client_ids: II) -> Self
     where
-        II: SingleArgOrCollection<i64>,
+        II: SingleArgCollection<i64>,
     {
         Self {
             command_args: self.command_args.arg("ID").arg(client_ids),
@@ -596,7 +598,7 @@ impl ClientListOptions {
     }
 }
 
-/// Result for the [`client_list`](crate::ConnectionCommands::client_list) command.
+/// Result for the [`client_list`](ConnectionCommands::client_list) command.
 #[derive(Debug)]
 pub struct ClientListResult {
     pub client_infos: Vec<ClientInfo>,
@@ -615,7 +617,7 @@ impl FromValue for ClientListResult {
     }
 }
 
-/// Options for the [`client-kill`](crate::ConnectionCommands::client-kill) command.
+/// Options for the [`client-kill`](ConnectionCommands::client-kill) command.
 #[derive(Default)]
 pub struct ClientKillOptions {
     command_args: CommandArgs,
@@ -637,7 +639,7 @@ impl ClientKillOptions {
     }
 
     #[must_use]
-    pub fn user<U: Into<CommandArg>>(self, username: U) -> Self {
+    pub fn user<U: SingleArg>(self, username: U) -> Self {
         Self {
             command_args: self.command_args.arg("USER").arg(username),
         }
@@ -646,9 +648,9 @@ impl ClientKillOptions {
     /// Address in the format of `ip:port`
     ///
     /// The ip:port should match a line returned by the
-    /// [`client_list`](crate::ConnectionCommands::client_list) command (addr field).
+    /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr<A: Into<CommandArg>>(self, addr: A) -> Self {
+    pub fn addr<A: SingleArg>(self, addr: A) -> Self {
         Self {
             command_args: self.command_args.arg("ADDR").arg(addr),
         }
@@ -656,7 +658,7 @@ impl ClientKillOptions {
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr<A: Into<CommandArg>>(self, laddr: A) -> Self {
+    pub fn laddr<A: SingleArg>(self, laddr: A) -> Self {
         Self {
             command_args: self.command_args.arg("LADDR").arg(laddr),
         }
@@ -681,7 +683,7 @@ impl IntoArgs for ClientKillOptions {
     }
 }
 
-/// Mode options for the [`client_pause`](crate::ConnectionCommands::client_pause) command.
+/// Mode options for the [`client_pause`](ConnectionCommands::client_pause) command.
 pub enum ClientPauseMode {
     /// Clients are only blocked if they attempt to execute a write command.
     Write,
@@ -704,7 +706,7 @@ impl Default for ClientPauseMode {
     }
 }
 
-/// Mode options for the [`client_reply`](crate::ConnectionCommands::client_reply) command.
+/// Mode options for the [`client_reply`](ConnectionCommands::client_reply) command.
 pub enum ClientReplyMode {
     On,
     Off,
@@ -721,7 +723,7 @@ impl IntoArgs for ClientReplyMode {
     }
 }
 
-/// Status options for the [`client_tracking`](crate::ConnectionCommands::client_tracking) command.
+/// Status options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
 pub enum ClientTrackingStatus {
     On,
     Off,
@@ -736,7 +738,7 @@ impl IntoArgs for ClientTrackingStatus {
     }
 }
 
-/// Options for the [`client_tracking`](crate::ConnectionCommands::client_tracking) command.
+/// Options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
 #[derive(Default)]
 pub struct ClientTrackingOptions {
     command_args: CommandArgs,
@@ -762,7 +764,7 @@ impl ClientTrackingOptions {
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix<P: Into<CommandArg>>(self, prefix: P) -> Self {
+    pub fn prefix<P: SingleArg>(self, prefix: P) -> Self {
         Self {
             command_args: self.command_args.arg("PREFIX").arg(prefix),
         }
@@ -798,7 +800,7 @@ impl IntoArgs for ClientTrackingOptions {
     }
 }
 
-/// Result for the [`client_trackinginfo`](crate::ConnectionCommands::client_trackinginfo) command.
+/// Result for the [`client_trackinginfo`](ConnectionCommands::client_trackinginfo) command.
 pub struct ClientTrackingInfo {
     /// A list of tracking flags used by the connection.
     pub flags: Vec<String>,
@@ -830,7 +832,7 @@ impl FromValue for ClientTrackingInfo {
     }
 }
 
-/// Mode options for the [`client_unblock`](crate::ConnectionCommands::client_unblock) command.
+/// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
 pub enum ClientUnblockMode {
     /// By default the client is unblocked as if the timeout of the command was reached,
     Timeout,
@@ -853,7 +855,7 @@ impl Default for ClientUnblockMode {
     }
 }
 
-/// Options for the [`hello`](crate::ConnectionCommands::hello) command.
+/// Options for the [`hello`](ConnectionCommands::hello) command.
 #[derive(Default)]
 pub struct HelloOptions {
     command_args: CommandArgs,
@@ -870,8 +872,8 @@ impl HelloOptions {
     #[must_use]
     pub fn auth<U, P>(self, username: U, password: P) -> Self
     where
-        U: Into<CommandArg>,
-        P: Into<CommandArg>,
+        U: SingleArg,
+        P: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("AUTH").arg(username).arg(password),
@@ -881,7 +883,7 @@ impl HelloOptions {
     #[must_use]
     pub fn set_name<C>(self, client_name: C) -> Self
     where
-        C: Into<CommandArg>,
+        C: SingleArg,
     {
         Self {
             command_args: self.command_args.arg("SETNAME").arg(client_name),
@@ -895,6 +897,7 @@ impl IntoArgs for HelloOptions {
     }
 }
 
+/// Result for the [`hello`](ConnectionCommands::hello) command
 pub struct HelloResult {
     pub server: String,
     pub version: String,
@@ -902,34 +905,26 @@ pub struct HelloResult {
     pub id: i64,
     pub mode: String,
     pub role: String,
-    pub modules: Vec<String>,
+    pub modules: Vec<ModuleInfo>,
 }
 
 impl FromValue for HelloResult {
     fn from_value(value: Value) -> Result<Self> {
-        match &value {
-            Value::Array(Some(v)) if v.len() == 14 => {
-                fn into_result(values: &mut HashMap<String, Value>) -> Option<HelloResult> {
-                    Some(HelloResult {
-                        server: values.remove("server")?.into().ok()?,
-                        version: values.remove("version")?.into().ok()?,
-                        proto: values.remove("proto")?.into().ok()?,
-                        id: values.remove("id")?.into().ok()?,
-                        mode: values.remove("mode")?.into().ok()?,
-                        role: values.remove("role")?.into().ok()?,
-                        modules: values.remove("modules")?.into().ok()?,
-                    })
-                }
+        let mut values: HashMap<String, Value> = value.into()?;
 
-                into_result(&mut value.into()?)
-                    .ok_or_else(|| Error::Client("Cannot parse HelloResult".to_owned()))
-            }
-            _ => Err(Error::Client("Cannot parse HelloResult".to_owned())),
-        }
+        Ok(Self {
+            server: values.remove_or_default("server").into()?,
+            version: values.remove_or_default("version").into()?,
+            proto: values.remove_or_default("proto").into()?,
+            id: values.remove_or_default("id").into()?,
+            mode: values.remove_or_default("mode").into()?,
+            role: values.remove_or_default("role").into()?,
+            modules: values.remove_or_default("modules").into()?,
+        })
     }
 }
 
-/// Options for the [`ping`](crate::ConnectionCommands::ping) command.
+/// Options for the [`ping`](ConnectionCommands::ping) command.
 #[derive(Default)]
 pub struct PingOptions {
     command_args: CommandArgs,
@@ -937,7 +932,7 @@ pub struct PingOptions {
 
 impl PingOptions {
     #[must_use]
-    pub fn message<M: Into<CommandArg>>(self, message: M) -> Self {
+    pub fn message<M: SingleArg>(self, message: M) -> Self {
         Self {
             command_args: self.command_args.arg(message),
         }

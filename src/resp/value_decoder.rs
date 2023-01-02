@@ -1,10 +1,7 @@
-use crate::{
-    resp::{Value},
-    Error, RedisError, Result,
-};
+use crate::{resp::Value, Error, RedisError, Result};
 use bytes::{Buf, BytesMut};
 use log::trace;
-use std::str::FromStr;
+use std::{str::{self, FromStr}, collections::{HashMap}};
 use tokio_util::codec::Decoder;
 
 pub(crate) struct ValueDecoder;
@@ -35,22 +32,40 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
 
     // cf. https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
     match first_byte {
-        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
-        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
-        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Array(v), pos))),
-        b':' => Ok(decode_integer(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
-        b',' => Ok(decode_double(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
+        b'$' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
+            Some(bs) => (Value::BulkString(bs), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'*' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Array(v), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'%' => Ok(decode_map(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Map(v), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'~' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Set(v), pos),
+            None => (Value::Nil, pos),
+        })),
+        b':' => Ok(decode_number::<i64>(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
+        b',' => Ok(decode_number::<f64>(buf, idx)?.map(|(d, pos)| (Value::Double(d), pos))),
         b'+' => {
             Ok(decode_string(buf, idx)?.map(|(s, pos)| (Value::SimpleString(s.to_owned()), pos)))
         }
         b'-' => decode_string(buf, idx)?
             .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
             .transpose(),
-        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::BulkString(None), pos))),
-        b'#' => Ok(decode_boolean(buf, idx)?.map(|(i, pos)| (Value::Integer(i), pos))),
-        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
-        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
+        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::Nil, pos))),
+        b'#' => Ok(decode_boolean(buf, idx)?.map(|(b, pos)| (Value::Boolean(b), pos))),
+        b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| match bs {
+            Some(bs) => (Value::BulkString(bs), pos),
+            None => (Value::Nil, pos),
+        })),
+        b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| match v {
+            Some(v) => (Value::Push(v), pos),
+            None => (Value::Nil, pos),
+        })),
         _ => Err(Error::Client(format!(
             "Unknown data type '{}' (0x{:02x})",
             first_byte as char, first_byte
@@ -58,41 +73,44 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
     }
 }
 
+fn decode_line(buf: &mut BytesMut, idx: usize) -> Result<Option<(&[u8], usize)>> {
+    match buf[idx..].iter().position(|b| *b == b'\r') {
+        Some(pos) if buf.len() > idx + pos + 1 && buf[idx + pos + 1] == b'\n' => {
+            let slice = &buf[idx..idx + pos];
+            Ok(Some((slice, pos + idx + 2)))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn decode_bulk_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<u8>>, usize)>> {
-    match decode_integer(buf, idx)? {
+    match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, pos)) => {
-            let len = usize::try_from(len)
-                .map_err(|_| Error::Client("Malformed bulk string len".to_owned()))?;
+        Some((len, pos)) if len >= 0 => {
+            let len = len as usize;
             if buf.len() - pos < len + 2 {
-                Ok(None) // EOF
+                if buf.len() - pos == len + 1 && buf[pos + len] != b'\r' {
+                    Err(Error::Client("Cannot parse bulk string".to_owned()))
+                } else {
+                    Ok(None) // EOF
+                }
             } else if buf[pos + len] != b'\r' || buf[pos + len + 1] != b'\n' {
-                Err(Error::Client(format!(
-                    "Expected \\r\\n after bulk string. Got '{}''{}'",
-                    buf[pos + len] as char,
-                    buf[pos + len + 1] as char
-                )))
+                Err(Error::Client("Cannot parse bulk string".to_owned()))
             } else {
-                Ok(Some((
-                    Some(buf[pos..(pos + len)].to_vec()),
-                    pos + len + 2,
-                )))
+                Ok(Some((Some(buf[pos..(pos + len)].to_vec()), pos + len + 2)))
             }
         }
+        _ => Err(Error::Client("Cannot parse bulk string".to_owned())),
     }
 }
 
 fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
-    match decode_integer(buf, idx)? {
+    match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, pos)) => {
-            let mut values = Vec::with_capacity(
-                usize::try_from(len)
-                    .map_err(|_| Error::Client("Malformed array len".to_owned()))?,
-            );
-            let mut pos = pos;
+        Some((len, mut pos)) => {
+            let mut values = Vec::with_capacity(len as usize);
             for _ in 0..len {
                 match decode(buf, pos)? {
                     None => return Ok(None),
@@ -107,24 +125,31 @@ fn decode_array(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Val
     }
 }
 
-fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value>>, usize)>> {
-    match decode_integer(buf, idx)? {
+#[allow(clippy::complexity)]
+fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<HashMap<Value, Value>>, usize)>> {
+    match decode_number::<isize>(buf, idx)? {
         None => Ok(None),
         Some((-1, pos)) => Ok(Some((None, pos))),
-        Some((len, pos)) => {
-            let len = len * 2;
-            let mut values = Vec::with_capacity(
-                usize::try_from(len).map_err(|_| Error::Client("Malformed map len".to_owned()))?,
-            );
-            let mut pos = pos;
+        Some((len, mut pos)) => {
+            let mut values = HashMap::with_capacity(len as usize);
             for _ in 0..len {
-                match decode(buf, pos)? {
+                let key = match decode(buf, pos)? {
+                    None => return Ok(None),
+                    Some((key, new_pos)) => {
+                        pos = new_pos;
+                        key
+                    }
+                };
+
+                let value = match decode(buf, pos)? {
                     None => return Ok(None),
                     Some((value, new_pos)) => {
-                        values.push(value);
                         pos = new_pos;
+                        value
                     }
-                }
+                };
+
+                values.insert(key, value);
             }
             Ok(Some((Some(values), pos)))
         }
@@ -132,90 +157,44 @@ fn decode_map(buf: &mut BytesMut, idx: usize) -> Result<Option<(Option<Vec<Value
 }
 
 fn decode_string(buf: &mut BytesMut, idx: usize) -> Result<Option<(&str, usize)>> {
-    let len = buf.len();
-    let mut pos = idx;
-    let mut cr = false;
-
-    while pos < len {
-        let byte = buf[pos];
-
-        match (cr, byte) {
-            (false, b'\r') => cr = true,
-            (true, b'\n') => return Ok(Some((std::str::from_utf8(&buf[idx..pos - 1])?, pos + 1))),
-            (false, _) => (),
-            _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
-        } 
-
-        pos += 1;
+    match decode_line(buf, idx)? {
+        Some((slice, pos)) => Ok(Some((str::from_utf8(slice)?, pos))),
+        None => Ok(None),
     }
-
-    Ok(None)
 }
 
-fn decode_integer(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>> {
-    let len = buf.len();
-    let mut is_negative = false;
-    let mut i = 0i64;
-    let mut pos = idx;
-    let mut cr = false;
-
-    while pos < len {
-        let byte = buf[pos];
-
-        match (cr, is_negative, byte) {
-            (false, false, b'-') => is_negative = true,
-            (false, false, b'0'..=b'9') => i = i * 10 + i64::from(byte - b'0'),
-            (false, true, b'0'..=b'9') => i = i * 10 - i64::from(byte - b'0'),
-            (false, _, b'\r') => cr = true,
-            (true, _, b'\n') => return Ok(Some((i, pos + 1))),
-            _ => return Err(Error::Client(format!("Unexpected byte {}", byte))),
+fn decode_number<T>(buf: &mut BytesMut, idx: usize) -> Result<Option<(T, usize)>>
+where
+    T: FromStr,
+{
+    match decode_line(buf, idx)? {
+        Some((slice, pos)) => {
+            let str = str::from_utf8(slice)?;
+            match str.parse::<T>() {
+                Ok(d) => Ok(Some((d, pos))),
+                Err(_) => Err(Error::Client("Cannot parse number".to_owned())),
+            }
         }
-
-        pos += 1;
-    }
-
-    Ok(None)
-}
-
-fn decode_double(buf: &mut BytesMut, idx: usize) -> Result<Option<(f64, usize)>> {
-    match buf[idx..].iter().position(|b| *b == b'\r') {
-        Some(pos) if buf[idx + pos + 1] == b'\n' => {
-            let slice = &buf[idx..idx + pos];
-            let str = std::str::from_utf8(slice)?;
-            let d = str.parse::<f64>()?;
-            Ok(Some((d, idx + pos + 2)))
-        }
-        _ => Err(Error::Client("malformed double".to_owned())),
+        None => Ok(None),
     }
 }
 
 fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
-    if buf[idx] != b'\r' || buf[idx + 1] != b'\n' {
-        Err(Error::Client(format!(
-            "Expected \\r\\n after null. Got '{}''{}'",
-            buf[idx] as char,
-            buf[idx + 1] as char
-        )))
-    } else {
-        Ok(Some(idx + 2))
+    match decode_line(buf, idx)? {
+        Some((slice, pos)) if slice.is_empty() => Ok(Some(pos)),
+        None => Ok(None),
+        _ => Err(Error::Client("Cannot parse null".to_owned())),
     }
 }
 
-fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(i64, usize)>> {
-    if buf[idx + 1] != b'\r' || buf[idx + 2] != b'\n' {
-        Err(Error::Client(format!(
-            "Expected \\r\\n after bulk string. Got '{}''{}'",
-            buf[idx + 1] as char,
-            buf[idx + 2] as char
-        )))
-    } else {
-        match buf[idx] {
-            b't' => Ok(Some((1, idx + 2))),
-            b'f' => Ok(Some((0, idx + 2))),
-            _ => Err(Error::Client(format!(
-                "Unexpected boolean character '{}'",
-                buf[idx] as char,
-            ))),
-        }
+fn decode_boolean(buf: &mut BytesMut, idx: usize) -> Result<Option<(bool, usize)>> {
+    match decode_line(buf, idx)? {
+        Some((slice, pos)) if slice.len() == 1 => match slice[0] {
+            b't' => Ok(Some((true, pos))),
+            b'f' => Ok(Some((false, pos))),
+            _ => Err(Error::Client("Cannot parse boolean".to_owned())),
+        },
+        None => Ok(None),
+        _ => Err(Error::Client("Cannot parse boolean".to_owned())),
     }
 }

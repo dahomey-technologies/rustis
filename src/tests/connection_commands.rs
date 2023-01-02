@@ -1,9 +1,15 @@
 use crate::{
-    network::spawn, sleep, tests::get_test_client, ClientCachingMode, ClientKillOptions,
-    ClientListOptions, ClientPauseMode, ClientPreparedCommand, ClientReplyMode,
-    ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands, Error,
-    FlushingMode, GenericCommands, HelloOptions, PingOptions, PubSubCommands, RedisError,
-    RedisErrorKind, Result, ServerCommands, StringCommands, PipelinePreparedCommand,
+    client::{BatchPreparedCommand, Client, ClientPreparedCommand},
+    commands::{
+        ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
+        ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
+        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands,
+        StringCommands,
+    },
+    network::spawn,
+    sleep,
+    tests::{get_test_client, log_try_init},
+    Error, RedisError, RedisErrorKind, Result,
 };
 use futures::StreamExt;
 use serial_test::serial;
@@ -187,15 +193,16 @@ async fn client_setname_getname() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_tracking() -> Result<()> {
-    let mut client1 = get_test_client().await?;
-    let mut client1_invalidations = get_test_client().await?;
-    let mut client2 = get_test_client().await?;
+    log_try_init();
+    let mut client1 = Client::connect("redis://127.0.0.1?connection_name=client1").await?;
+    let mut client1_invalidations =
+        Client::connect("redis://127.0.0.1?connection_name=client1_invalidations").await?;
+    let mut client2 = Client::connect("redis://127.0.0.1?connection_name=client2").await?;
 
     // prepare invalidations
     let invalidation_id = client1_invalidations.client_id().await?;
-    let mut invalidation_stream = client1_invalidations
-        .subscribe("__redis__:invalidate")
-        .await?;
+    let mut invalidation_stream =
+        client1_invalidations.create_client_tracking_invalidation_stream()?;
 
     client1.set("key", "value").await?;
 
@@ -211,8 +218,7 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 
@@ -241,8 +247,7 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value3").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 
@@ -261,18 +266,12 @@ async fn client_tracking() -> Result<()> {
         )
         .await?;
 
-    invalidation_stream.close().await?;
-    let mut invalidation_stream = client1_invalidations
-        .subscribe("__redis__:invalidate")
-        .await?;
-
     // Redis will track our local caching because key is in the prefix pattern we just set
     let _value: String = client1.get("key").await?;
 
     client2.set("key", "new_value4").await?;
 
-    let (_channel, keys_to_invalidate): (String, Vec<String>) =
-        invalidation_stream.next().await.unwrap()?.into()?;
+    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
     assert_eq!("key", keys_to_invalidate[0]);
 
@@ -429,7 +428,7 @@ async fn reset() -> Result<()> {
 #[serial]
 async fn select() -> Result<()> {
     let mut client = get_test_client().await?;
-    client.flushall(crate::FlushingMode::Sync).await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
     client.move_("key", 1).await?;

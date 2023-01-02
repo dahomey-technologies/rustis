@@ -1,8 +1,11 @@
 use crate::{
-    resp::{Value},
+    commands::{
+        ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands,
+        RestoreOptions, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
+    },
+    resp::Value,
     tests::get_test_client,
-    ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands, RestoreOptions,
-    Result, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
+    Result,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -506,7 +509,7 @@ async fn rename() -> Result<()> {
 
     client.rename("key1", "key2").await?;
     let value: Value = client.get("key1").await?;
-    assert!(matches!(value, Value::BulkString(None)));
+    assert!(matches!(value, Value::Nil));
     let value: String = client.get("key2").await?;
     assert_eq!("value1", value);
 

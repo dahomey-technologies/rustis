@@ -1,10 +1,9 @@
 use crate::{
-    prepare_command,
+    client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValueArray, FromValue, IntoArgs,
-        SingleArgOrCollection,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
-    PreparedCommand,
 };
 use std::hash::Hash;
 
@@ -20,9 +19,9 @@ pub trait SetCommands {
     fn sadd<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        C: SingleArgOrCollection<M>,
+        K: SingleArg,
+        M: SingleArg,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
     }
@@ -38,7 +37,7 @@ pub trait SetCommands {
     fn scard<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
+        K: SingleArg,
     {
         prepare_command(self, cmd("SCARD").arg(key))
     }
@@ -55,15 +54,15 @@ pub trait SetCommands {
     fn sdiff<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        C: SingleArgCollection<K>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
 
-    /// This command is equal to [sdiff](crate::SetCommands::sdiff), but instead of returning the resulting set,
+    /// This command is equal to [sdiff](SetCommands::sdiff), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -75,9 +74,9 @@ pub trait SetCommands {
     fn sdiffstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        D: SingleArg,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
     }
@@ -93,15 +92,15 @@ pub trait SetCommands {
     fn sinter<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        C: SingleArgCollection<K>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
 
-    /// This command is similar to [sinter](crate::SetCommands::sinter), but instead of returning the result set,
+    /// This command is similar to [sinter](SetCommands::sinter), but instead of returning the result set,
     /// it returns just the cardinality of the result.
     ///
     /// limit: if the intersection cardinality reaches limit partway through the computation,
@@ -116,8 +115,8 @@ pub trait SetCommands {
     fn sintercard<K, C>(&mut self, keys: C, limit: usize) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(
             self,
@@ -129,7 +128,7 @@ pub trait SetCommands {
         )
     }
 
-    /// This command is equal to [sinter](crate::SetCommands::sinter), but instead of returning the resulting set,
+    /// This command is equal to [sinter](SetCommands::sinter), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -141,9 +140,9 @@ pub trait SetCommands {
     fn sinterstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        D: SingleArg,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
     }
@@ -160,8 +159,8 @@ pub trait SetCommands {
     fn sismember<K, M>(&mut self, key: K, member: M) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
+        K: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("SISMEMBER").arg(key).arg(member))
     }
@@ -174,9 +173,9 @@ pub trait SetCommands {
     fn smembers<K, M, A>(&mut self, key: K) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SMEMBERS").arg(key))
     }
@@ -192,9 +191,9 @@ pub trait SetCommands {
     fn smismember<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<bool>>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        C: SingleArgOrCollection<M>,
+        K: SingleArg,
+        M: SingleArg,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
     }
@@ -216,9 +215,9 @@ pub trait SetCommands {
     ) -> PreparedCommand<Self, bool>
     where
         Self: Sized,
-        S: Into<CommandArg>,
-        D: Into<CommandArg>,
-        M: Into<CommandArg>,
+        S: SingleArg,
+        D: SingleArg,
+        M: SingleArg,
     {
         prepare_command(self, cmd("SMOVE").arg(source).arg(destination).arg(member))
     }
@@ -234,9 +233,9 @@ pub trait SetCommands {
     fn spop<K, M, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SPOP").arg(key).arg(count))
     }
@@ -252,9 +251,9 @@ pub trait SetCommands {
     fn srandmember<K, M, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
     }
@@ -270,9 +269,9 @@ pub trait SetCommands {
     fn srem<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: Into<CommandArg>,
-        C: SingleArgOrCollection<M>,
+        K: SingleArg,
+        M: SingleArg,
+        C: SingleArgCollection<M>,
     {
         prepare_command(self, cmd("SREM").arg(key).arg(members))
     }
@@ -293,8 +292,8 @@ pub trait SetCommands {
     ) -> PreparedCommand<Self, (u64, Vec<M>)>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue,
+        K: SingleArg,
+        M: FromSingleValue,
     {
         prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -310,15 +309,15 @@ pub trait SetCommands {
     fn sunion<K, M, C, A>(&mut self, keys: C) -> PreparedCommand<Self, A>
     where
         Self: Sized,
-        K: Into<CommandArg>,
-        M: FromValue + Eq + Hash,
-        C: SingleArgOrCollection<K>,
-        A: FromSingleValueArray<M>,
+        K: SingleArg,
+        M: FromSingleValue + Eq + Hash,
+        C: SingleArgCollection<K>,
+        A: FromValueArray<M>,
     {
         prepare_command(self, cmd("SUNION").arg(keys))
     }
 
-    /// This command is equal to [sunion](crate::SetCommands::sunion), but instead of returning the resulting set,
+    /// This command is equal to [sunion](SetCommands::sunion), but instead of returning the resulting set,
     /// it is stored in destination.
     ///
     /// # Return
@@ -330,15 +329,15 @@ pub trait SetCommands {
     fn sunionstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
-        D: Into<CommandArg>,
-        K: Into<CommandArg>,
-        C: SingleArgOrCollection<K>,
+        D: SingleArg,
+        K: SingleArg,
+        C: SingleArgCollection<K>,
     {
         prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
     }
 }
 
-/// Options for the [`sscan`](crate::SetCommands::sscan) command
+/// Options for the [`sscan`](SetCommands::sscan) command
 #[derive(Default)]
 pub struct SScanOptions {
     command_args: CommandArgs,
@@ -346,7 +345,7 @@ pub struct SScanOptions {
 
 impl SScanOptions {
     #[must_use]
-    pub fn match_pattern<P: Into<CommandArg>>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern),
         }

@@ -47,7 +47,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
         b'-' => decode_string(buf, idx)?
             .map(|(s, pos)| RedisError::from_str(s).map(|e| (Value::Error(e), pos)))
             .transpose(),
-        b'_' => Ok(decode_null(buf, idx)?.map(|pos| (Value::Nil, pos))),
+        b'_' => Ok(decode_nil(buf, idx)?.map(|pos| (Value::Nil, pos))),
         b'#' => Ok(decode_boolean(buf, idx)?.map(|(b, pos)| (Value::Boolean(b), pos))),
         b'=' => Ok(decode_bulk_string(buf, idx)?.map(|(bs, pos)| (Value::BulkString(bs), pos))),
         b'>' => Ok(decode_array(buf, idx)?.map(|(v, pos)| (Value::Push(v), pos))),
@@ -162,11 +162,11 @@ where
     }
 }
 
-fn decode_null(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
+fn decode_nil(buf: &mut BytesMut, idx: usize) -> Result<Option<usize>> {
     match decode_line(buf, idx)? {
         Some((slice, pos)) if slice.is_empty() => Ok(Some(pos)),
         None => Ok(None),
-        _ => Err(Error::Client("Cannot parse null".to_owned())),
+        _ => Err(Error::Client("Cannot parse nil".to_owned())),
     }
 }
 

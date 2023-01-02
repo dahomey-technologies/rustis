@@ -41,6 +41,7 @@ impl Value {
     ///
     /// # Errors
     /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
+    #[inline]
     pub fn into<T>(self) -> Result<T>
     where
         T: FromValue,
@@ -48,6 +49,7 @@ impl Value {
         T::from_value(self)
     }
 
+    #[inline]
     pub fn into_with_command<T>(self, command: &Command) -> Result<T>
     where
         T: FromValue,
@@ -57,6 +59,7 @@ impl Value {
 }
 
 impl Default for Value {
+    #[inline]
     fn default() -> Self {
         Value::Nil
     }
@@ -221,6 +224,7 @@ pub(crate) trait IntoValueIterator<I: Iterator<Item = Value>>: Sized {
 }
 
 impl IntoValueIterator<std::vec::IntoIter<Value>> for Vec<Value> {
+    #[inline]
     fn into_value_iter<T>(self) -> ValueIterator<T, std::vec::IntoIter<Value>>
     where
         T: FromValue,
@@ -245,6 +249,7 @@ where
     T: FromValue,
     I: Iterator<Item = Value>,
 {
+    #[inline]
     pub fn new(iter: I) -> Self {
         Self {
             iter,
@@ -261,6 +266,7 @@ where
 {
     type Item = Result<T>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         (self.next_functor)(&mut self.iter)
     }

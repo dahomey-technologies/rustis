@@ -51,7 +51,7 @@ jobs:
       - name: Create Redis containers
         run: |
           cd /home/runner/work/rustis/rustis/redis/
-          ./docker_up.sh
+          sh ./docker_up.sh
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1

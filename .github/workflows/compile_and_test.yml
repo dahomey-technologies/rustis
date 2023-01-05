@@ -50,10 +50,8 @@ jobs:
         
       - name: Create Redis containers
         run: |
-          IP=`ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
-          echo IP=$IP
-          echo "HOST_IP=$IP" > /home/runner/work/rustis/rustis/redis/.env
-          docker compose -f /home/runner/work/rustis/rustis/redis/docker-compose.yml up -d
+          cd /home/runner/work/rustis/rustis/redis/
+          ./docker_up.sh
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1

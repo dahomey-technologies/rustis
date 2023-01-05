@@ -187,7 +187,7 @@ services:
 
 # RedisStack
   redis-stack:
-    image: redis/redis-stack-server:7.0.6-RC2
+    image: redis/redis-stack-server:7.0.6-RC3
     container_name: redis-stack
     ports:
       - "8000:6379"

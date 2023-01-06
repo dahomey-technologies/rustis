@@ -6,8 +6,8 @@ use futures::channel::{
 use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
-    num::ParseFloatError,
-    str::{FromStr, Utf8Error},
+    num::{ParseFloatError, ParseIntError},
+    str::{FromStr, Utf8Error}, string::FromUtf8Error,
 };
 
 /// `Internal Use`
@@ -51,7 +51,7 @@ pub enum Error {
     #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
     /// The I/O operation’s timeout expired
-    Timeout(String)
+    Timeout(String),
 }
 
 impl std::fmt::Display for Error {
@@ -76,7 +76,7 @@ impl serde::de::Error for Error {
     where
         T: Display,
     {
-        Error::Client(format!("{msg}"))
+        Error::Client(msg.to_string())
     }
 }
 
@@ -112,8 +112,20 @@ impl From<Utf8Error> for Error {
     }
 }
 
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
 impl From<ParseFloatError> for Error {
     fn from(e: ParseFloatError) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(e: ParseIntError) -> Self {
         Error::Client(e.to_string())
     }
 }

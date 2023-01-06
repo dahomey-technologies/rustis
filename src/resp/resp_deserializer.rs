@@ -38,24 +38,29 @@ impl<'de> RespDeserializer<'de> {
         RespDeserializer { buf, pos: 0 }
     }
 
+    #[inline]
+    pub fn get_pos(&self) -> usize {
+        self.pos
+    }
+
     // Look at the first byte in the input without consuming it.
     fn peek(&mut self) -> Result<u8> {
         if self.pos < self.buf.len() {
             let byte = self.buf[self.pos];
-            
+
             match byte {
                 ERROR_TAG => {
                     self.advance();
                     let str = self.parse_string()?;
                     Err(Error::Redis(RedisError::from_str(str)?))
-                },
+                }
                 BLOB_ERROR_TAG => {
                     self.advance();
                     let bs = self.parse_bulk_string()?;
                     let str = str::from_utf8(bs)?;
                     Err(Error::Redis(RedisError::from_str(str)?))
                 }
-                _ => Ok(byte)
+                _ => Ok(byte),
             }
         } else {
             eof()
@@ -414,14 +419,12 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        match self.peek()? {
-            BULK_STRING_TAG => visitor.visit_some(self),
-            NIL_TAG => {
-                self.advance();
-                self.parse_nil()?;
-                visitor.visit_none()
-            }
-            _ => visitor.visit_some(self),
+        if let NIL_TAG = self.peek()? {
+            self.advance();
+            self.parse_nil()?;
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
         }
     }
 
@@ -433,7 +436,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
             self.parse_nil()?;
             visitor.visit_unit()
         } else {
-            Err(Error::Client("Expected null".to_owned()))
+            Err(Error::Client("Expected nil".to_owned()))
         }
     }
 
@@ -462,10 +465,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
         if let ARRAY_TAG | SET_TAG | PUSH_TAG = self.next()? {
             let len = self.parse_number()?;
 
-            visitor.visit_seq(SeqMapAccess {
-                de: self,
-                len,
-            })
+            visitor.visit_seq(SeqMapAccess { de: self, len })
         } else {
             Err(Error::Client("Cannot parse to Sequence".to_owned()))
         }
@@ -505,9 +505,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                     ));
                 }
             }
-            MAP_TAG => {
-                self.parse_number()?
-            }
+            MAP_TAG => self.parse_number()?,
             _ => return Err(Error::Client("Cannot parse map".to_owned())),
         };
 

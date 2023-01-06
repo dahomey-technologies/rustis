@@ -52,6 +52,7 @@ mod transaction;
 mod util;
 mod value;
 mod value_deserialize;
+mod value_deserializer;
 mod value_decoder;
 
 pub(crate) use util::*;

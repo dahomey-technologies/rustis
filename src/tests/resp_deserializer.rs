@@ -429,7 +429,7 @@ fn _struct() -> Result<()> {
 }
 
 #[test]
-fn enum_variant() -> Result<()> {
+fn _enum() -> Result<()> {
     log_try_init();
 
     #[derive(Debug, Deserialize, PartialEq)]

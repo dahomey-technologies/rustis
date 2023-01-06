@@ -1,37 +1,50 @@
-use std::collections::HashMap;
-
 use bytes::BytesMut;
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 use rustis::resp::{
-    BufferDecoder, HashMapExt, RawValueDecoder, RespDeserializer, RespDeserializer2, Value,
-    ValueDecoder,
+    BufferDecoder, HashMapExt, RawValueDecoder, RespDecoder, RespDeserializer2, Value, ValueDecoder,
 };
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
+use std::collections::HashMap;
 use tokio_util::codec::Decoder;
 
+#[inline]
 fn decode_value(buf: &[u8]) -> Value {
     let mut bytes = BytesMut::from(buf);
     let mut value_decoder = ValueDecoder;
     value_decoder.decode(&mut bytes).unwrap().unwrap()
 }
 
-fn deserialize<'de, 'a: 'de, T>(buf: &'a [u8]) -> T
+#[inline]
+fn deserialize<T>(buf: &[u8]) -> T
 where
-    T: serde::Deserialize<'de>,
+    T: DeserializeOwned,
 {
-    let mut deserializer = RespDeserializer::from_bytes(buf);
+    let mut bytes = BytesMut::from(buf);
+    let mut resp_decoder = RespDecoder::<T>::default();
+    resp_decoder.decode(&mut bytes).unwrap().unwrap()
+
+    // let buf = buf.to_vec();
+    // let mut deserializer = rustis::resp::RespDeserializer::from_bytes(&buf);
+    // T::deserialize(&mut deserializer).unwrap()
+}
+
+#[inline]
+fn deserialize2<T>(buf: &[u8]) -> T
+where
+    T: DeserializeOwned,
+{
+    let mut bytes = BytesMut::from(buf);
+    let mut buffer_decoder = BufferDecoder;
+    let buf = buffer_decoder.decode(&mut bytes).unwrap().unwrap();
+
+    let mut deserializer = rustis::resp::RespDeserializer::from_bytes(&buf);
     T::deserialize(&mut deserializer).unwrap()
 }
 
-fn decode_buffer(buf: &[u8]) -> Vec<u8> {
-    let mut bytes = BytesMut::from(buf);
-    let mut buffer_decoder = BufferDecoder;
-    buffer_decoder.decode(&mut bytes).unwrap().unwrap()
-}
-
-fn deserialize3<'de, 'a: 'de, T>(buf: &'a [u8]) -> T
+#[inline]
+fn deserialize3<T>(buf: &[u8]) -> T
 where
-    T: serde::Deserialize<'de>,
+    T: DeserializeOwned,
 {
     let mut decoder = RawValueDecoder;
     let mut bytes: BytesMut = buf.into();
@@ -41,10 +54,25 @@ where
     T::deserialize(&mut deserializer).unwrap()
 }
 
+#[inline]
+fn deserialize4<T>(buf: &[u8]) -> T
+where
+    T: DeserializeOwned,
+{
+    let value = decode_value(buf);
+    T::deserialize(value).unwrap()
+}
+
 fn deserialize_string_from_value(b: &mut Bencher) {
     b.iter(|| {
         let value = decode_value(b"$5\r\nhello\r\n");
         let _: String = value.into().unwrap();
+    });
+}
+
+fn deserialize_string_from_value_serde(b: &mut Bencher) {
+    b.iter(|| {
+        let _: String = deserialize4(b"$5\r\nhello\r\n");
     });
 }
 
@@ -56,8 +84,7 @@ fn deserialize_string_from_serde(b: &mut Bencher) {
 
 fn deserialize_string_from_serde_with_copy(b: &mut Bencher) {
     b.iter(|| {
-        let buffer = decode_buffer(b"$5\r\nhello\r\n");
-        let _: String = deserialize(&buffer);
+        let _: String = deserialize2(b"$5\r\nhello\r\n");
     });
 }
 
@@ -74,6 +101,12 @@ fn deserialize_int_from_value(b: &mut Bencher) {
     });
 }
 
+fn deserialize_int_from_value_serde(b: &mut Bencher) {
+    b.iter(|| {
+        let _: i64 = deserialize4(b":12\r\n");
+    });
+}
+
 fn deserialize_int_from_serde(b: &mut Bencher) {
     b.iter(|| {
         let _: i64 = deserialize(b":12\r\n");
@@ -82,8 +115,7 @@ fn deserialize_int_from_serde(b: &mut Bencher) {
 
 fn deserialize_int_from_serde_with_copy(b: &mut Bencher) {
     b.iter(|| {
-        let buffer = decode_buffer(b":12\r\n");
-        let _: i64 = deserialize(&buffer);
+        let _: i64 = deserialize2(b":12\r\n");
     });
 }
 
@@ -94,7 +126,7 @@ fn deserialize_int_from_serde_with_copy2(b: &mut Bencher) {
 }
 
 #[derive(Debug, Deserialize)]
-struct Person {
+pub struct Person {
     pub id: u64,
     pub name: String,
 }
@@ -111,6 +143,12 @@ fn deserialize_struct_from_value(b: &mut Bencher) {
     });
 }
 
+fn deserialize_struct_from_value_serde(b: &mut Bencher) {
+    b.iter(|| {
+        let _: Person = deserialize4(b"*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n");
+    });
+}
+
 fn deserialize_struct_from_serde(b: &mut Bencher) {
     b.iter(|| {
         let _: Person = deserialize(b"*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n");
@@ -119,8 +157,7 @@ fn deserialize_struct_from_serde(b: &mut Bencher) {
 
 fn deserialize_struct_from_serde_with_copy(b: &mut Bencher) {
     b.iter(|| {
-        let buffer = decode_buffer(b"*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n");
-        let _: Person = deserialize(&buffer);
+        let _: Person = deserialize2(b"*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n");
     });
 }
 
@@ -136,6 +173,10 @@ fn bench_deserialize_string(c: &mut Criterion) {
         .bench_function(
             "deserialize_string_from_value",
             deserialize_string_from_value,
+        )
+        .bench_function(
+            "deserialize_string_from_value_serde",
+            deserialize_string_from_value_serde,
         )
         .bench_function(
             "deserialize_string_from_serde",
@@ -155,14 +196,12 @@ fn bench_deserialize_string(c: &mut Criterion) {
 fn bench_deserialize_int(c: &mut Criterion) {
     let mut group = c.benchmark_group("deserialize_int");
     group
+        .bench_function("deserialize_int_from_value", deserialize_int_from_value)
         .bench_function(
-            "deserialize_int_from_value",
-            deserialize_int_from_value,
+            "deserialize_int_from_value_serde",
+            deserialize_int_from_value_serde,
         )
-        .bench_function(
-            "deserialize_int_from_serde",
-            deserialize_int_from_serde,
-        )
+        .bench_function("deserialize_int_from_serde", deserialize_int_from_serde)
         .bench_function(
             "deserialize_int_from_serde_with_copy",
             deserialize_int_from_serde_with_copy,
@@ -182,6 +221,10 @@ fn bench_deserialize_struct(c: &mut Criterion) {
             deserialize_struct_from_value,
         )
         .bench_function(
+            "deserialize_struct_from_value_serde",
+            deserialize_struct_from_value_serde,
+        )
+        .bench_function(
             "deserialize_struct_from_serde",
             deserialize_struct_from_serde,
         )
@@ -196,5 +239,10 @@ fn bench_deserialize_struct(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(bench, bench_deserialize_string, bench_deserialize_int, bench_deserialize_struct);
+criterion_group!(
+    bench,
+    // bench_deserialize_string,
+    // bench_deserialize_int,
+    bench_deserialize_struct
+);
 criterion_main!(bench);

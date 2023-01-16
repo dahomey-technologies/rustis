@@ -551,8 +551,8 @@ impl<'de> Deserialize<'de> for ClientInfo {
     where
         D: Deserializer<'de>,
     {
-        let line = String::deserialize(deserializer)?;
-        ClientInfo::from_line(&line).map_err(de::Error::custom)
+        let line = <&str>::deserialize(deserializer)?;
+        ClientInfo::from_line(line).map_err(de::Error::custom)
     }
 }
 
@@ -616,7 +616,7 @@ impl<'de> Deserialize<'de> for ClientListResult {
     where
         D: Deserializer<'de>,
     {
-        let lines = String::deserialize(deserializer)?;
+        let lines = <&str>::deserialize(deserializer)?;
         let client_infos: Result<Vec<ClientInfo>> =
             lines.split('\n').map(ClientInfo::from_line).collect();
 

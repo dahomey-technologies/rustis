@@ -393,7 +393,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         if self.next()? == BULK_STRING_TAG {
-            visitor.visit_bytes(self.parse_bulk_string()?)
+            visitor.visit_borrowed_bytes(self.parse_bulk_string()?)
         } else {
             Err(Error::Client("Cannot parse to bytes".to_owned()))
         }

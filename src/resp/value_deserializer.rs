@@ -5,11 +5,10 @@ use serde::{
 };
 use std::{
     collections::{hash_map, HashMap},
-    fmt::{Display, Formatter},
-    str, vec,
+    slice, str, vec,
 };
 
-impl<'de> Deserializer<'de> for Value {
+impl<'de, 'a: 'de> Deserializer<'de> for &'a Value {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
@@ -17,16 +16,16 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         match self {
-            Value::SimpleString(s) => visitor.visit_string(s),
-            Value::Integer(i) => visitor.visit_i64(i),
-            Value::Double(d) => visitor.visit_f64(d),
-            Value::BulkString(bs) => visitor.visit_byte_buf(bs),
-            Value::Boolean(b) => visitor.visit_bool(b),
+            Value::SimpleString(s) => visitor.visit_borrowed_str(s),
+            Value::Integer(i) => visitor.visit_i64(*i),
+            Value::Double(d) => visitor.visit_f64(*d),
+            Value::BulkString(bs) => visitor.visit_borrowed_bytes(bs),
+            Value::Boolean(b) => visitor.visit_bool(*b),
             Value::Array(values) => visitor.visit_seq(SeqAccess::new(values)),
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
             Value::Set(values) => visitor.visit_seq(SeqAccess::new(values)),
             Value::Push(values) => visitor.visit_seq(SeqAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             Value::Nil => visitor.visit_none(),
         }
     }
@@ -37,14 +36,14 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i != 0,
-            Value::Double(d) => d != 0.,
+            Value::Integer(i) => *i != 0,
+            Value::Double(d) => *d != 0.,
             Value::SimpleString(s) if s == "OK" => true,
             Value::Nil => false,
             Value::BulkString(s) if s == b"0" || s == b"false" => false,
             Value::BulkString(s) if s == b"1" || s == b"true" => true,
-            Value::Boolean(b) => b,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Boolean(b) => *b,
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to bool",
@@ -61,12 +60,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as i8,
-            Value::Double(d) => d as i8,
+            Value::Integer(i) => *i as i8,
+            Value::Double(d) => *d as i8,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i8",
@@ -83,12 +82,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as i16,
-            Value::Double(d) => d as i16,
+            Value::Integer(i) => *i as i16,
+            Value::Double(d) => *d as i16,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i16",
@@ -105,12 +104,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as i32,
-            Value::Double(d) => d as i32,
+            Value::Integer(i) => *i as i32,
+            Value::Double(d) => *d as i32,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i32",
@@ -128,12 +127,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i,
-            Value::Double(d) => d as i64,
+            Value::Integer(i) => *i,
+            Value::Double(d) => *d as i64,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i64",
@@ -150,12 +149,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as u8,
-            Value::Double(d) => d as u8,
+            Value::Integer(i) => *i as u8,
+            Value::Double(d) => *d as u8,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u8",
@@ -172,12 +171,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as u16,
-            Value::Double(d) => d as u16,
+            Value::Integer(i) => *i as u16,
+            Value::Double(d) => *d as u16,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u16",
@@ -194,12 +193,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as u32,
-            Value::Double(d) => d as u32,
+            Value::Integer(i) => *i as u32,
+            Value::Double(d) => *d as u32,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u32",
@@ -216,12 +215,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as u64,
-            Value::Double(d) => d as u64,
+            Value::Integer(i) => *i as u64,
+            Value::Double(d) => *d as u64,
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u64",
@@ -238,12 +237,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as f32,
-            Value::Double(d) => d as f32,
+            Value::Integer(i) => *i as f32,
+            Value::Double(d) => *d as f32,
             Value::BulkString(bs) => str::from_utf8(&bs)?.parse::<f32>()?,
             Value::Nil => 0.,
             Value::SimpleString(s) => s.parse::<f32>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse result {:?} to f32",
@@ -260,12 +259,12 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => i as f64,
-            Value::Double(d) => d,
+            Value::Integer(i) => *i as f64,
+            Value::Double(d) => *d,
             Value::BulkString(bs) => str::from_utf8(&bs)?.parse::<f64>()?,
             Value::Nil => 0.,
             Value::SimpleString(s) => s.parse::<f64>()?,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse result {:?} to f64",
@@ -298,7 +297,7 @@ impl<'de> Deserializer<'de> for Value {
                 }
             }
             Value::Nil => '\0',
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => return Err(Error::Client("Cannot parse to char".to_owned())),
         };
 
@@ -309,7 +308,20 @@ impl<'de> Deserializer<'de> for Value {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_string(visitor)
+        let result = match self {
+            Value::BulkString(s) => str::from_utf8(s)?,
+            Value::Nil => "",
+            Value::SimpleString(s) => s.as_str(),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            _ => {
+                return Err(Error::Client(format!(
+                    "Cannot parse value {:?} to str",
+                    self
+                )))
+            }
+        };
+
+        visitor.visit_borrowed_str(result)
     }
 
     #[inline]
@@ -319,10 +331,10 @@ impl<'de> Deserializer<'de> for Value {
     {
         let result = match self {
             Value::Double(d) => d.to_string(),
-            Value::BulkString(s) => String::from_utf8(s)?,
+            Value::BulkString(s) => str::from_utf8(s)?.to_owned(),
             Value::Nil => String::from(""),
-            Value::SimpleString(s) => s,
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::SimpleString(s) => s.clone(),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to String",
@@ -338,7 +350,20 @@ impl<'de> Deserializer<'de> for Value {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_byte_buf(visitor)
+        let result = match self {
+            Value::BulkString(s) => s.as_slice(),
+            Value::Nil => &[],
+            Value::SimpleString(s) => s.as_bytes(),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            _ => {
+                return Err(Error::Client(format!(
+                    "Cannot parse value {:?} to byte buffer",
+                    self
+                )))
+            }
+        };
+
+        visitor.visit_borrowed_bytes(result)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
@@ -346,10 +371,10 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::BulkString(s) => s,
+            Value::BulkString(s) => s.clone(),
             Value::Nil => vec![],
             Value::SimpleString(s) => s.as_bytes().to_vec(),
-            Value::Error(e) => return Err(Error::Redis(e)),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to byte buffer",
@@ -369,7 +394,7 @@ impl<'de> Deserializer<'de> for Value {
         match self {
             Value::Nil => visitor.visit_none(),
             Value::Array(values) if values.is_empty() => visitor.visit_none(),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => visitor.visit_some(self),
         }
     }
@@ -386,7 +411,7 @@ impl<'de> Deserializer<'de> for Value {
             Value::Array(a) if a.is_empty() => visitor.visit_unit(),
             Value::Set(s) if s.is_empty() => visitor.visit_unit(),
             Value::Map(m) if m.is_empty() => visitor.visit_unit(),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => Err(Error::Client("Expected nil".to_owned())),
         }
     }
@@ -421,7 +446,7 @@ impl<'de> Deserializer<'de> for Value {
                 visitor.visit_seq(SeqAccess::new(values))
             }
             Value::Map(values) => visitor.visit_seq(MapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => Err(Error::Client(format!(
                 "Cannot parse sequence from value `{self}`"
             ))),
@@ -456,7 +481,7 @@ impl<'de> Deserializer<'de> for Value {
         match self {
             Value::Array(values) => visitor.visit_map(SeqAccess::new(values)),
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => Err(Error::Client("Cannot parse map".to_owned())),
         }
     }
@@ -488,8 +513,8 @@ impl<'de> Deserializer<'de> for Value {
                     visitor.visit_seq(SeqAccess::new(values))
                 }
             }
-            Value::Map(values) => visitor.visit_map(RefMapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => Err(Error::Client("Cannot parse map".to_owned())),
         }
     }
@@ -511,7 +536,7 @@ impl<'de> Deserializer<'de> for Value {
             }
             Value::SimpleString(str) => {
                 // Visit a unit variant.
-                visitor.visit_enum(str.into_deserializer())
+                visitor.visit_enum(str.as_str().into_deserializer())
             }
             Value::Array(a) => {
                 // Visit a newtype variant, tuple variant, or struct variant
@@ -535,80 +560,11 @@ impl<'de> Deserializer<'de> for Value {
                     )))
                 }
             }
-            Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client(format!("Cannot parse enum `{name}` from `{self}`"))),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
+            _ => Err(Error::Client(format!(
+                "Cannot parse enum `{name}` from `{self}`"
+            ))),
         }
-    }
-
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
-    }
-
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-}
-
-impl<'de, 'a> Deserializer<'de> for &'a Value {
-    type Error = Error;
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char string
-        byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum ignored_any
-    }
-
-    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        let result = match self {
-            Value::BulkString(s) => s.as_slice(),
-            Value::Nil => &[],
-            Value::SimpleString(s) => s.as_bytes(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
-            _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {:?} to bytes",
-                    self
-                )))
-            }
-        };
-
-        visitor.visit_bytes(result)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        let result = match self {
-            Value::BulkString(s) => str::from_utf8(s)?,
-            Value::Nil => "",
-            Value::SimpleString(s) => s.as_str(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
-            _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {:?} to str",
-                    self
-                )))
-            }
-        };
-
-        visitor.visit_str(result)
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
@@ -617,154 +573,12 @@ impl<'de, 'a> Deserializer<'de> for &'a Value {
     {
         self.deserialize_str(visitor)
     }
-}
 
-#[derive(Debug)]
-enum VecIntoIterDeserializerError {
-    Error(Error),
-    None,
-}
-
-impl serde::de::Error for VecIntoIterDeserializerError {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: Display,
-    {
-        Self::Error(Error::custom(msg))
-    }
-}
-
-impl std::error::Error for VecIntoIterDeserializerError {}
-
-impl Display for VecIntoIterDeserializerError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VecIntoIterDeserializerError::Error(e) => e.fmt(f),
-            VecIntoIterDeserializerError::None => f.write_str("None"),
-        }
-    }
-}
-
-impl From<Error> for VecIntoIterDeserializerError {
-    fn from(e: Error) -> Self {
-        Self::Error(e)
-    }
-}
-
-#[derive(Debug)]
-struct VecIntoIterDeserializer<'a, I: Iterator<Item = Value>>(&'a mut I);
-
-impl<'de, 'a, I: Iterator<Item = Value> + std::fmt::Debug> Deserializer<'de>
-    for VecIntoIterDeserializer<'a, I>
-{
-    type Error = VecIntoIterDeserializerError;
-
-    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let VecIntoIterDeserializer(iter) = self;
-        match iter.next() {
-            Some(value) => Ok(value.deserialize_any(visitor)?),
-            None => Err(VecIntoIterDeserializerError::None),
-        }
-    }
-
-    fn deserialize_tuple<V>(
-        self,
-        len: usize,
-        visitor: V,
-    ) -> std::result::Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        log::debug!("VecIntoIterDeserializer::deserialize_tuple self={:?}", self);
-
-        let VecIntoIterDeserializer(iter) = self;
-
-        let mut peekable = iter.peekable();
-        let Some(first) = peekable.peek() else {
-            return Err(VecIntoIterDeserializerError::None);
-        };
-
-        log::debug!(
-            "VecIntoIterDeserializer::deserialize_tuple len={}, first={:?}",
-            len,
-            first
-        );
-
-        if let Value::Push(_) | Value::Array(_) | Value::Set(_) = first {
-            log::debug!("Value::Push(_) | Value::Array(_) | Value::Set(_) ");
-            return Ok(iter.next().unwrap().deserialize_any(visitor)?);
-        }
-
-        log::debug!(
-            "VecIntoIterDeserializer::deserialize_tuple peekable={:?}",
-            peekable
-        );
-        Ok(visitor.visit_seq(RefIterSeqAccess::new(&mut peekable, len))?)
-    }
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq
-        tuple_struct map struct enum identifier ignored_any
-    }
-}
-
-pub struct RefIterSeqAccess<'a, I: Iterator<Item = Value>> {
-    iter: &'a mut I,
-    len: usize,
-}
-
-impl<'a, I: Iterator<Item = Value>> RefIterSeqAccess<'a, I> {
-    pub fn new(iter: &'a mut I, len: usize) -> Self {
-        Self { iter, len }
-    }
-}
-
-impl<'a, 'de, I: Iterator<Item = Value> + std::fmt::Debug> serde::de::SeqAccess<'de>
-    for RefIterSeqAccess<'a, I>
-{
-    type Error = Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        if self.len == 0 {
-            return Ok(None);
-        }
-
-        log::debug!(
-            "RefIterSeqAccess::next_element_seed self.len={}, self.iter={:?}",
-            self.len,
-            self.iter
-        );
-
-        let deserializer = VecIntoIterDeserializer(self.iter);
-        match seed.deserialize(deserializer) {
-            Ok(v) => {
-                self.len -= 1;
-                Ok(Some(v))
-            }
-            Err(e) => match e {
-                VecIntoIterDeserializerError::Error(e) => Err(e),
-                VecIntoIterDeserializerError::None => Ok(None),
-            },
-        }
-
-        // match self.iter.next() {
-        //     Some(value) => {
-        //         self.len -= 1;
-        //         seed.deserialize(value).map(Some)
-        //     }
-        //     None => Ok(None),
-        // }
-    }
-
-    fn size_hint(&self) -> Option<usize> {
-        Some(self.len)
+        self.deserialize_any(visitor)
     }
 }
 
@@ -784,14 +598,14 @@ impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
     }
 }
 
-pub struct SeqAccess {
-    iter: vec::IntoIter<Value>,
+pub struct SeqAccess<'a> {
+    iter: slice::Iter<'a, Value>,
     len: usize,
-    value: Option<Value>,
+    value: Option<&'a Value>,
 }
 
-impl SeqAccess {
-    pub fn new(values: Vec<Value>) -> Self {
+impl<'a> SeqAccess<'a> {
+    pub fn new(values: &'a Vec<Value>) -> Self {
         Self {
             len: values.len(),
             iter: values.into_iter(),
@@ -800,30 +614,13 @@ impl SeqAccess {
     }
 }
 
-impl<'de> serde::de::SeqAccess<'de> for SeqAccess {
+impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for SeqAccess<'a> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
     {
-        // if self.len == 0 {
-        //     return Ok(None);
-        // }
-
-        // log::debug!("SeqAccess::next_element_seed self.len={}, self.iter={:?}", self.len, self.iter);
-
-        // match seed.deserialize(VecIntoIterDeserializer(&mut self.iter)) {
-        //     Ok(v) => {
-        //         self.len -= 1;
-        //         Ok(Some(v))
-        //     },
-        //     Err(e) => match e {
-        //         VecIntoIterDeserializerError::Error(e) => Err(e),
-        //         VecIntoIterDeserializerError::None => Ok(None),
-        //     },
-        // }
-
         match self.iter.next() {
             Some(value) => {
                 self.len -= 1;
@@ -839,7 +636,7 @@ impl<'de> serde::de::SeqAccess<'de> for SeqAccess {
 }
 
 /// in RESP, arrays can be seen as maps with a succession of keys and their values
-impl<'de> serde::de::MapAccess<'de> for SeqAccess {
+impl<'de, 'a: 'de> serde::de::MapAccess<'de> for SeqAccess<'a> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -848,9 +645,10 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess {
     {
         match self.iter.next() {
             Some(key) => match key {
-                Value::Array(mut values) if values.len() == 2 => {
-                    self.value = values.pop();
-                    seed.deserialize(values.pop().unwrap()).map(Some)
+                Value::Array(values) if values.len() == 2 => {
+                    let key = &values[0];
+                    self.value = Some(&values[1]);
+                    seed.deserialize(key).map(Some)
                 }
                 _ => seed.deserialize(key).map(Some),
             },
@@ -878,14 +676,14 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess {
     }
 }
 
-pub struct MapAccess {
+pub struct MapAccess<'a> {
     len: usize,
-    iter: hash_map::IntoIter<Value, Value>,
-    value: Option<Value>,
+    iter: hash_map::Iter<'a, Value, Value>,
+    value: Option<&'a Value>,
 }
 
-impl MapAccess {
-    pub fn new(values: HashMap<Value, Value>) -> Self {
+impl<'a> MapAccess<'a> {
+    pub fn new(values: &'a HashMap<Value, Value>) -> Self {
         Self {
             len: values.len(),
             iter: values.into_iter(),
@@ -894,7 +692,7 @@ impl MapAccess {
     }
 }
 
-impl<'de> serde::de::MapAccess<'de> for MapAccess {
+impl<'de, 'a: 'de> serde::de::MapAccess<'de> for MapAccess<'a> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -925,7 +723,7 @@ impl<'de> serde::de::MapAccess<'de> for MapAccess {
     }
 }
 
-impl<'de> serde::de::SeqAccess<'de> for MapAccess {
+impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for MapAccess<'a> {
     type Error = Error;
 
     fn next_element_seed<T>(
@@ -942,9 +740,9 @@ impl<'de> serde::de::SeqAccess<'de> for MapAccess {
     }
 }
 
-pub struct ValuePair(Value, Value);
+pub struct ValuePair<'a>(&'a Value, &'a Value);
 
-impl<'de> Deserializer<'de> for ValuePair {
+impl<'de, 'a: 'de> Deserializer<'de> for ValuePair<'a> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
@@ -968,12 +766,12 @@ impl<'de> Deserializer<'de> for ValuePair {
     where
         V: Visitor<'de>,
     {
-        pub struct ValuePairSeqAccess {
-            first: Option<Value>,
-            second: Option<Value>,
+        pub struct ValuePairSeqAccess<'a> {
+            first: Option<&'a Value>,
+            second: Option<&'a Value>,
         }
 
-        impl<'de> serde::de::SeqAccess<'de> for ValuePairSeqAccess {
+        impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for ValuePairSeqAccess<'a> {
             type Error = Error;
 
             fn next_element_seed<T>(
@@ -1000,103 +798,13 @@ impl<'de> Deserializer<'de> for ValuePair {
     }
 }
 
-pub struct RefSeqAccess {
-    len: usize,
-    iter: vec::IntoIter<Value>,
+struct Enum<'a> {
+    variant_identifier: &'a Value,
+    variant_value: &'a Value,
 }
 
-impl RefSeqAccess {
-    pub fn new(values: Vec<Value>) -> Self {
-        Self {
-            len: values.len(),
-            iter: values.into_iter(),
-        }
-    }
-}
-
-/// in RESP, arrays can be seen as maps with a succession of keys and their values
-impl<'de> serde::de::MapAccess<'de> for RefSeqAccess {
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-    where
-        K: DeserializeSeed<'de>,
-    {
-        match self.iter.next() {
-            Some(key) => seed.deserialize(&key).map(Some),
-            None => Ok(None),
-        }
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-    where
-        V: DeserializeSeed<'de>,
-    {
-        match self.iter.next() {
-            Some(value) => seed.deserialize(value),
-            None => Err(serde::de::Error::custom("value is missing")),
-        }
-    }
-
-    fn size_hint(&self) -> Option<usize> {
-        Some(self.len / 2)
-    }
-}
-
-pub struct RefMapAccess {
-    len: usize,
-    iter: hash_map::IntoIter<Value, Value>,
-    value: Option<Value>,
-}
-
-impl RefMapAccess {
-    pub fn new(values: HashMap<Value, Value>) -> Self {
-        Self {
-            len: values.len(),
-            iter: values.into_iter(),
-            value: None,
-        }
-    }
-}
-
-impl<'de> serde::de::MapAccess<'de> for RefMapAccess {
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-    where
-        K: DeserializeSeed<'de>,
-    {
-        match self.iter.next() {
-            Some((key, value)) => {
-                self.value = Some(value);
-                seed.deserialize(&key).map(Some)
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-    where
-        V: DeserializeSeed<'de>,
-    {
-        match self.value.take() {
-            Some(value) => seed.deserialize(value),
-            None => Err(serde::de::Error::custom("value is missing")),
-        }
-    }
-
-    fn size_hint(&self) -> Option<usize> {
-        Some(self.len)
-    }
-}
-
-struct Enum {
-    variant_identifier: Value,
-    variant_value: Value,
-}
-
-impl Enum {
-    fn from_array(values: Vec<Value>) -> Self {
+impl<'a> Enum<'a> {
+    fn from_array(values: &'a Vec<Value>) -> Self {
         let mut iter = values.into_iter();
         Self {
             variant_identifier: iter
@@ -1108,7 +816,7 @@ impl Enum {
         }
     }
 
-    fn from_map(values: HashMap<Value, Value>) -> Self {
+    fn from_map(values: &'a HashMap<Value, Value>) -> Self {
         let mut iter = values.into_iter();
         let (variant_identifier, variant_value) = iter
             .next()
@@ -1120,9 +828,9 @@ impl Enum {
     }
 }
 
-impl<'de> EnumAccess<'de> for Enum {
+impl<'de, 'a: 'de> EnumAccess<'de> for Enum<'a> {
     type Error = Error;
-    type Variant = Value;
+    type Variant = &'a Value;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
     where
@@ -1133,7 +841,7 @@ impl<'de> EnumAccess<'de> for Enum {
     }
 }
 
-impl<'de> VariantAccess<'de> for Value {
+impl<'de, 'a: 'de> VariantAccess<'de> for &'a Value {
     type Error = Error;
 
     // If the `Visitor` expected this variant to be a unit variant, the input

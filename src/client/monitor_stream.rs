@@ -89,7 +89,7 @@ impl<'de> Deserialize<'de> for MonitoredCommandInfo {
     where
         D: Deserializer<'de>,
     {
-        let line = String::deserialize(deserializer)?;
+        let line = <&str>::deserialize(deserializer)?;
         let mut parts = line.split(' ');
 
         let info = match (parts.next(), parts.next(), parts.next(), parts.next()) {

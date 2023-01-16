@@ -40,7 +40,7 @@ where
     T: DeserializeOwned,
 {
     fn from_value(value: Value) -> Result<Self> {
-        T::deserialize(value)
+        T::deserialize(&value)
     }
 }
 

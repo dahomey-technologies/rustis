@@ -1979,7 +1979,7 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                 formatter.write_str("RowField")
             }
 
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> std::result::Result<Self::Value, E>
+            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> std::result::Result<Self::Value, E>
             where
                 E: de::Error,
             {
@@ -1989,7 +1989,7 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                             self.state = RowSeedState::AfterDocumentId(1);
                         }
                         Ok(RowField::DocumentId(
-                            String::from_utf8(v).map_err(de::Error::custom)?,
+                            std::str::from_utf8(v).map_err(de::Error::custom)?.to_owned(),
                         ))
                     }
                     RowSeedState::AfterDocumentId(field_index) => {
@@ -2002,10 +2002,10 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                         // sortkeys begin by a '$' char
                         if let Some(b'$') = v.first() {
                             Ok(RowField::Sortkey(
-                                String::from_utf8(v).map_err(de::Error::custom)?,
+                                std::str::from_utf8(v).map_err(de::Error::custom)?.to_owned(),
                             ))
                         } else {
-                            Ok(RowField::Payload(v))
+                            Ok(RowField::Payload(v.to_vec()))
                         }
                     }
                 }
@@ -2209,8 +2209,8 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
             {
                 let mut attribute = FtIndexAttribute::default();
 
-                while let Some(field_name) = seq.next_element::<String>()? {
-                    match field_name.as_str() {
+                while let Some(field_name) = seq.next_element::<&str>()? {
+                    match field_name {
                         "identifier" => {
                             if let Some(identifier) = seq.next_element::<String>()? {
                                 attribute.identifier = identifier;
@@ -2352,11 +2352,11 @@ impl<'de> Deserialize<'de> for FtProfileDetails {
             where
                 A: de::SeqAccess<'de>,
             {
-                let Some(field) = seq.next_element::<String>()? else {
+                let Some(field) = seq.next_element::<&str>()? else {
                     return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
                 };
 
-                match field.as_str() {
+                match field {
                     "Total profile time" => {
                         let Some(value) = seq.next_element()? else {
                             return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
@@ -2394,7 +2394,7 @@ impl<'de> Deserialize<'de> for FtProfileDetails {
 
                         Ok(FtProfileDetailsField::ResultProcessorsProfile(results))
                     }
-                    _ => Err(de::Error::unknown_field(field.as_str(), &[])),
+                    _ => Err(de::Error::unknown_field(field, &[])),
                 }
             }
         }

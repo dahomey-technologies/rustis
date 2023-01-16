@@ -12,6 +12,7 @@ use std::{
 };
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
+#[derive(Debug)]
 pub struct PubSubMessage {
     pub pattern: Value,
     pub channel: Value,

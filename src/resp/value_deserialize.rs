@@ -1,4 +1,4 @@
-use crate::resp::{Value};
+use crate::resp::Value;
 use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer,
@@ -43,13 +43,31 @@ impl<'de> Visitor<'de> for ValueVisitor {
     }
 
     #[inline]
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Value, E> {
+        Ok(Value::SimpleString(v.to_owned()))
+    }
+
+    #[inline]
     fn visit_str<E>(self, v: &str) -> Result<Value, E> {
         Ok(Value::SimpleString(v.to_owned()))
     }
 
     #[inline]
+    fn visit_string<E>(self, v: String) -> Result<Value, E> {
+        Ok(Value::SimpleString(v))
+    }
+
+    #[inline]
     fn visit_none<E>(self) -> std::result::Result<Value, E> {
         Ok(Value::Nil)
+    }
+
+    fn visit_borrowed_bytes<E>(self, v: &[u8]) -> Result<Value, E> {
+        Ok(Value::BulkString(v.to_vec()))
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Value, E> {
+        Ok(Value::BulkString(v.to_vec()))
     }
 
     #[inline]
@@ -97,7 +115,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                         } else {
                             return Ok(Value::Push(values));
                         }
-                    },
+                    }
                     Some(PushOrKey::Key(value)) => values.push(value),
                 };
 
@@ -152,6 +170,16 @@ impl<'de> Visitor<'de> for PushOrKeyVisitor {
     }
 
     #[inline]
+    fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<PushOrKey, E> {
+        if v == PUSH_FAKE_FIELD {
+            Ok(PushOrKey::Push)
+        } else {
+            let value_visitor = ValueVisitor;
+            value_visitor.visit_borrowed_str(v).map(PushOrKey::Key)
+        }
+    }
+
+    #[inline]
     fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<PushOrKey, E> {
         if v == PUSH_FAKE_FIELD {
             Ok(PushOrKey::Push)
@@ -169,9 +197,21 @@ impl<'de> Visitor<'de> for PushOrKeyVisitor {
     }
 
     #[inline]
-    fn visit_byte_buf<E: serde::de::Error>(self, v: Vec<u8>) -> Result<PushOrKey, E> {
+    fn visit_borrowed_bytes<E: serde::de::Error>(
+        self,
+        v: &'de [u8],
+    ) -> std::result::Result<PushOrKey, E> {
         let value_visitor = ValueVisitor;
-        value_visitor.visit_byte_buf(v).map(PushOrKey::Key)
+        value_visitor.visit_borrowed_bytes(v).map(PushOrKey::Key)
+    }
+
+    #[inline]
+    fn visit_bytes<E: serde::de::Error>(
+        self,
+        v: &[u8],
+    ) -> std::result::Result<PushOrKey, E> {
+        let value_visitor = ValueVisitor;
+        value_visitor.visit_bytes(v).map(PushOrKey::Key)
     }
 
     #[inline]

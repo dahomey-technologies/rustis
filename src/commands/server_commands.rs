@@ -1024,8 +1024,8 @@ impl<'de> Deserialize<'de> for CommandTip {
     where
         D: Deserializer<'de>,
     {
-        let tip = String::deserialize(deserializer)?;
-        match tip.as_str() {
+        let tip = <&str>::deserialize(deserializer)?;
+        match tip {
             "nondeterministic_output" => Ok(CommandTip::NonDeterministricOutput),
             "nondeterministic_output_order" => Ok(CommandTip::NonDeterministricOutputOrder),
             _ => {
@@ -1050,7 +1050,7 @@ impl<'de> Deserialize<'de> for CommandTip {
                         }
                     }
                     _ => Err(de::Error::invalid_value(
-                        de::Unexpected::Str(tip.as_str()),
+                        de::Unexpected::Str(tip),
                         &"a valid CommandTip value",
                     )),
                 }
@@ -1915,11 +1915,11 @@ impl<'de> Deserialize<'de> for RoleResult {
             where
                 A: SeqAccess<'de>,
             {
-                let Some(role): Option<String> = seq.next_element()? else {
+                let Some(role): Option<&str> = seq.next_element()? else {
                     return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
                 };
 
-                match role.as_str() {
+                match role {
                     "master" => {
                         let Some(master_replication_offset): Option<usize> = seq.next_element()? else {
                             return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));

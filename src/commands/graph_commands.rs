@@ -364,7 +364,7 @@ impl GraphResultSet {
 
                     let rows = rows
                         .into_iter()
-                        .map(|v| GraphResultRowSeed { cache }.deserialize(v))
+                        .map(|v| GraphResultRowSeed { cache }.deserialize(&v))
                         .collect::<Result<Vec<GraphResultRow>>>()?;
 
                     Ok(Self {

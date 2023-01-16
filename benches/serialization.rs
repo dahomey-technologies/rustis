@@ -60,7 +60,7 @@ where
     T: DeserializeOwned,
 {
     let value = decode_value(buf);
-    T::deserialize(value).unwrap()
+    T::deserialize(&value).unwrap()
 }
 
 fn deserialize_string_from_value(b: &mut Bencher) {
@@ -241,8 +241,8 @@ fn bench_deserialize_struct(c: &mut Criterion) {
 
 criterion_group!(
     bench,
-    // bench_deserialize_string,
-    // bench_deserialize_int,
+    bench_deserialize_string,
+    bench_deserialize_int,
     bench_deserialize_struct
 );
 criterion_main!(bench);

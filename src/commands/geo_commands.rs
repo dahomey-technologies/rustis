@@ -404,9 +404,14 @@ where
 
                 while let Some(value) = seq.next_element::<Value>().map_err(de::Error::custom)? {
                     match value {
-                        Value::BulkString(_) => distance = Some(f64::deserialize(value).map_err(de::Error::custom)?),
+                        Value::BulkString(_) => {
+                            distance = Some(f64::deserialize(&value).map_err(de::Error::custom)?)
+                        }
                         Value::Integer(h) => geo_hash = Some(h),
-                        Value::Array(_) => coordinates = Some(<(f64, f64)>::deserialize(value).map_err(de::Error::custom)?),
+                        Value::Array(_) => {
+                            coordinates =
+                                Some(<(f64, f64)>::deserialize(&value).map_err(de::Error::custom)?)
+                        }
                         _ => return Err(de::Error::custom("Unexpected geo search result")),
                     }
                 }
@@ -419,11 +424,11 @@ where
                 })
             }
 
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+            fn visit_borrowed_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
-                E: serde::de::Error,
+                E: de::Error,
             {
-                let member = M::deserialize(Value::BulkString(v)).map_err(E::custom)?;
+                let member = M::deserialize(&Value::BulkString(v.to_vec())).map_err(E::custom)?;
 
                 Ok(GeoSearchResult {
                     member,

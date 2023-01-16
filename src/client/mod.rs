@@ -278,12 +278,10 @@ async fn main() -> Result<()> {
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
-    pipeline.queue(cmd("UNKNOWN"));
     pipeline.get::<_, ()>("key1").queue();
     pipeline.get::<_, ()>("key2").queue();
 
-    let (result, value1, value2): (Value, String, String) = pipeline.execute().await?;
-    assert!(matches!(result, Value::Error(_)));
+    let (value1, value2): (String, String) = pipeline.execute().await?;
     assert_eq!("value1", value1);
     assert_eq!("value2", value2);
 

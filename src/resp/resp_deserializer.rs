@@ -225,7 +225,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
             INTEGER_TAG => self.deserialize_i64(visitor),
             DOUBLE_TAG => self.deserialize_f64(visitor),
             SIMPLE_STRING_TAG => self.deserialize_str(visitor),
-            NIL_TAG => self.deserialize_unit(visitor),
+            NIL_TAG => self.deserialize_option(visitor),
             BOOL_TAG => self.deserialize_bool(visitor),
             VERBATIM_STRING_TAG => self.deserialize_byte_buf(visitor),
             PUSH_TAG => visitor.visit_map(PushMapAccess::new(self)),
@@ -526,7 +526,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
 
     fn deserialize_enum<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
@@ -569,7 +569,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                     ))
                 }
             }
-            _ => Err(Error::Client("Cannot parse enum".to_owned())),
+            _ => Err(Error::Client(format!("Cannot parse enum `{name}`"))),
         }
     }
 

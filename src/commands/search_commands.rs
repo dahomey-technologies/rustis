@@ -1,14 +1,18 @@
-use std::{collections::HashMap, future};
-
 use crate::{
     client::{prepare_command, PreparedCommand},
+    commands::{GeoUnit, SortOrder},
     resp::{
-        cmd, MultipleArgsCollection, CommandArg, CommandArgs, FromKeyValueArray,
-        FromValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs, IntoValueIterator,
-        SingleArgCollection, Value, Command, SingleArg,
+        cmd, deserialize_vec_of_pairs, Command, CommandArgs, FromKeyValueArray, FromSingleValue,
+        FromValueArray, IntoArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
+        VecOfPairsSeed,
     },
-    Error, Result, commands::{SortOrder, GeoUnit},
+    Error, Result,
 };
+use serde::{
+    de::{self, value::SeqAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{collections::HashMap, fmt, future};
 
 /// A group of Redis commands related to [`RedisSearch`](https://redis.io/docs/stack/search/)
 ///
@@ -27,6 +31,9 @@ pub trait SearchCommands {
     ///  including filters, unions, not, optional, and so on.
     /// * `options` - See [`FtAggregateOptions`](FtAggregateOptions)
     ///
+    /// # Returns
+    /// An instance of [`FtAggregateResult`](FtAggregateResult)
+    ///
     /// # See Also
     /// * [<https://redis.io/commands/ft.aggregate/>](https://redis.io/commands/ft.aggregate/)
     /// * [`RedisSeach Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
@@ -36,7 +43,7 @@ pub trait SearchCommands {
         index: I,
         query: Q,
         options: FtAggregateOptions,
-    ) -> PreparedCommand<Self, FtQueryResult>
+    ) -> PreparedCommand<Self, FtAggregateResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -229,6 +236,9 @@ pub trait SearchCommands {
     /// * `read_size` - number of results to read. This parameter overrides
     /// [`count`](FtWithCursorOptions::count) specified in [`ft_aggregate`](SearchCommands::ft_aggregate).
     ///
+    /// # Returns
+    /// an instance of [`FtAggregateResult`](FtAggregateResult)
+    ///
     /// # See Also
     /// [<https://redis.io/commands/ft.cursor-read/>](https://redis.io/commands/ft.cursor-read/)
     #[must_use]
@@ -236,7 +246,7 @@ pub trait SearchCommands {
         &mut self,
         index: I,
         cursor_id: u64,
-    ) -> PreparedCommand<Self, FtQueryResult>
+    ) -> PreparedCommand<Self, FtAggregateResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -289,7 +299,7 @@ pub trait SearchCommands {
     }
 
     /// Dump all terms in the given dictionary
-    /// 
+    ///
     /// # Arguments
     /// * `dict` - dictionary name.
     ///
@@ -303,7 +313,7 @@ pub trait SearchCommands {
     where
         Self: Sized,
         D: SingleArg,
-        T: FromSingleValue,
+        T: FromSingleValue + DeserializeOwned,
         TT: FromValueArray<T>,
     {
         prepare_command(self, cmd("FT.DICTDUMP").arg(dict))
@@ -403,7 +413,7 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: FromSingleValue,
+        R: FromSingleValue + DeserializeOwned,
         RR: FromValueArray<R>,
     {
         prepare_command(
@@ -444,49 +454,86 @@ pub trait SearchCommands {
     fn ft_list<R, RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: FromSingleValue + DeserializeOwned,
         RR: FromValueArray<R>,
     {
         prepare_command(self, cmd("FT._LIST"))
     }
 
-    /// Perform a [`ft_search`](SearchCommands::ft_search)
-    /// or [`ft_aggregate`](SearchCommands::ft_aggregate) command and collects performance information
+    /// Perform a [`ft_search`](SearchCommands::ft_search) command and collects performance information
     ///
     /// # Arguments
     /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
-    /// * `query_type` - SEARCH or AGGREGATE query type
     /// * `limited` - if set, removes details of reader iterator.
     /// * `query` - collection of query parameters (non including the index name)
-    /// 
+    ///
     /// # Note
-    /// To reduce the size of the output, use [`nocontent`](FtSearchOptions::nocontent) or [`limit(0,0)`](FtSearchOptions::limit) to reduce results reply 
+    /// To reduce the size of the output, use [`nocontent`](FtSearchOptions::nocontent) or [`limit(0,0)`](FtSearchOptions::limit) to reduce results reply
     /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
     ///
     /// # Return
-    /// An instance of [`FtProfileQueryType`](FtProfileQueryType)
+    /// An instance of [`FtProfileSearchResult`](FtProfileSearchResult)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
     #[must_use]
-    fn ft_profile<I, Q, QQ>(
+    fn ft_profile_search<I, Q, QQ>(
         &mut self,
         index: I,
-        query_type: FtProfileQueryType,
         limited: bool,
         query: QQ,
-    ) -> PreparedCommand<Self, FtProfileResult>
+    ) -> PreparedCommand<Self, FtProfileSearchResult>
     where
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        QQ: SingleArgCollection<Q>
+        QQ: SingleArgCollection<Q>,
     {
         prepare_command(
             self,
             cmd("FT.PROFILE")
                 .arg(index)
-                .arg(query_type)
+                .arg("SEARCH")
+                .arg_if(limited, "LIMITED")
+                .arg("QUERY")
+                .arg(query),
+        )
+    }
+
+    /// Perform a [`ft_aggregate`](SearchCommands::ft_aggregate) command and collects performance information
+    ///
+    /// # Arguments
+    /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
+    /// * `limited` - if set, removes details of reader iterator.
+    /// * `query` - collection of query parameters (non including the index name)
+    ///
+    /// # Note
+    /// To reduce the size of the output, use [`nocontent`](FtSearchOptions::nocontent) or [`limit(0,0)`](FtSearchOptions::limit) to reduce results reply
+    /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
+    ///
+    /// # Return
+    /// An instance of [`FtProfileAggregateResult`](FtProfileAggregateResult)
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
+    #[must_use]
+    fn ft_profile_aggregate<I, Q, QQ>(
+        &mut self,
+        index: I,
+        limited: bool,
+        query: QQ,
+    ) -> PreparedCommand<Self, FtProfileAggregateResult>
+    where
+        Self: Sized,
+        I: SingleArg,
+        Q: SingleArg,
+        QQ: SingleArgCollection<Q>,
+    {
+        prepare_command(
+            self,
+            cmd("FT.PROFILE")
+                .arg(index)
+                .arg("AGGREGATE")
                 .arg_if(limited, "LIMITED")
                 .arg("QUERY")
                 .arg(query),
@@ -501,7 +548,7 @@ pub trait SearchCommands {
     /// * `options` - See [`FtSearchOptions`](FtSearchOptions)
     ///
     /// # Return
-    /// An instance of [`FtQueryResult`](FtQueryResult)
+    /// An instance of [`FtSearchResult`](FtSearchResult)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.search/>](https://redis.io/commands/ft.search/)
@@ -511,19 +558,13 @@ pub trait SearchCommands {
         index: I,
         query: Q,
         options: FtSearchOptions,
-    ) -> PreparedCommand<Self, FtQueryResult>
+    ) -> PreparedCommand<Self, FtSearchResult>
     where
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
     {
-        prepare_command(
-            self,
-            cmd("FT.SEARCH")
-                .arg(index)
-                .arg(query)
-                .arg(options),
-        ).keep_command_for_result()
+        prepare_command(self, cmd("FT.SEARCH").arg(index).arg(query).arg(options))
     }
 
     /// Perform spelling correction on a query, returning suggestions for misspelled terms
@@ -552,10 +593,7 @@ pub trait SearchCommands {
     {
         prepare_command(
             self,
-            cmd("FT.SPELLCHECK")
-                .arg(index)
-                .arg(query)
-                .arg(options)
+            cmd("FT.SPELLCHECK").arg(index).arg(query).arg(options),
         )
     }
 
@@ -571,23 +609,19 @@ pub trait SearchCommands {
     /// * [<https://redis.io/commands/ft.syndump/>](https://redis.io/commands/ft.syndump/)
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
-    fn ft_syndump<I, R>(
-        &mut self,
-        index: I,
-    ) -> PreparedCommand<Self, R>
+    fn ft_syndump<I, R>(&mut self, index: I) -> PreparedCommand<Self, R>
     where
         Self: Sized,
         I: SingleArg,
-        R: FromKeyValueArray<String, Vec<String>> 
+        R: FromKeyValueArray<String, Vec<String>>,
     {
-        prepare_command(self, cmd("FT.SYNDUMP").arg(index)
-        )
+        prepare_command(self, cmd("FT.SYNDUMP").arg(index))
     }
 
     /// Update a synonym group
-    /// 
-    /// Use this command to create or update a synonym group with additional terms. 
-    /// The command triggers a scan of all documents.    /// 
+    ///
+    /// Use this command to create or update a synonym group with additional terms.
+    /// The command triggers a scan of all documents.    ///
     ///
     /// # Arguments
     /// * `index` - index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
@@ -607,21 +641,23 @@ pub trait SearchCommands {
         index: impl SingleArg,
         synonym_group_id: impl SingleArg,
         skip_initial_scan: bool,
-        terms: impl SingleArgCollection<T>
+        terms: impl SingleArgCollection<T>,
     ) -> PreparedCommand<Self, ()>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SYNUPDATE")
-            .arg(index)
-            .arg(synonym_group_id)
-            .arg_if(skip_initial_scan, "SKIPINITIALSCAN")
-            .arg(terms)
+        prepare_command(
+            self,
+            cmd("FT.SYNUPDATE")
+                .arg(index)
+                .arg(synonym_group_id)
+                .arg_if(skip_initial_scan, "SKIPINITIALSCAN")
+                .arg(terms),
         )
     }
 
     /// Return a distinct set of values indexed in a Tag field
-    /// 
+    ///
     /// Use this command if your tag indexes things like cities, categories, and so on.
     ///
     /// # Arguments
@@ -634,7 +670,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
-    fn ft_tagvals<R: FromSingleValue, RR: FromValueArray<R>>(
+    fn ft_tagvals<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
         &mut self,
         index: impl SingleArg,
         field_name: impl SingleArg,
@@ -642,15 +678,12 @@ pub trait SearchCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.TAGVALS")
-            .arg(index)
-            .arg(field_name)
-        )
+        prepare_command(self, cmd("FT.TAGVALS").arg(index).arg(field_name))
     }
 
     /// Add a suggestion string to an auto-complete suggestion dictionary
-    /// 
-    /// The auto-complete suggestion dictionary is disconnected from the index definitions 
+    ///
+    /// The auto-complete suggestion dictionary is disconnected from the index definitions
     /// and leaves creating and updating suggestions dictionaries to the user.
     ///
     /// # Arguments
@@ -670,16 +703,18 @@ pub trait SearchCommands {
         key: impl SingleArg,
         string: impl SingleArg,
         score: f64,
-        options: FtSugAddOptions
+        options: FtSugAddOptions,
     ) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SUGADD")
-            .arg(key)
-            .arg(string)
-            .arg(score)
-            .arg(options)
+        prepare_command(
+            self,
+            cmd("FT.SUGADD")
+                .arg(key)
+                .arg(string)
+                .arg(score)
+                .arg(options),
         )
     }
 
@@ -703,10 +738,7 @@ pub trait SearchCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SUGDEL")
-            .arg(key)
-            .arg(string)
-        )
+        prepare_command(self, cmd("FT.SUGDEL").arg(key).arg(string))
     }
 
     /// Get completion suggestions for a prefix
@@ -718,7 +750,7 @@ pub trait SearchCommands {
     ///
     /// # Return
     /// A collection of the top suggestions matching the prefix
-    /// 
+    ///
     /// # See Also
     /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
     #[must_use]
@@ -726,17 +758,13 @@ pub trait SearchCommands {
         &mut self,
         key: impl SingleArg,
         prefix: impl SingleArg,
-        options: FtSugGetOptions
+        options: FtSugGetOptions,
     ) -> PreparedCommand<Self, Vec<FtSuggestion>>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SUGGET")
-            .arg(key)
-            .arg(prefix)
-            .arg(options)
-        ).post_process(Box::new(
-            |value, command, _client| {
+        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options)).post_process(
+            Box::new(|value, command, _client| {
                 fn from_value(command: Command, value: Value) -> Result<Vec<FtSuggestion>> {
                     let with_scores = command.args.iter().any(|a| *a == "WITHSCORES");
                     let with_payloads = command.args.iter().any(|a| *a == "WITHPAYLOADS");
@@ -763,20 +791,24 @@ pub trait SearchCommands {
                                 return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
                             };
 
-                            value.into()?                        
+                            value.into()?
                         } else {
                             String::from("")
                         };
 
-                        suggestions.push(FtSuggestion { suggestion, score, payload });
+                        suggestions.push(FtSuggestion {
+                            suggestion,
+                            score,
+                            payload,
+                        });
                     }
 
                     Ok(suggestions)
                 }
 
                 Box::pin(future::ready(from_value(command, value)))
-            },
-        ))
+            }),
+        )
     }
 
     /// Get the size of an auto-complete suggestion dictionary
@@ -786,26 +818,22 @@ pub trait SearchCommands {
     ///
     /// # Return
     /// The the current size of the suggestion dictionary.
-    /// 
+    ///
     /// # See Also
     /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
     #[must_use]
-    fn ft_suglen(
-        &mut self,
-        key: impl SingleArg,
-    ) -> PreparedCommand<Self, usize>
+    fn ft_suglen(&mut self, key: impl SingleArg) -> PreparedCommand<Self, usize>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SUGLEN")
-            .arg(key)
-        )
+        prepare_command(self, cmd("FT.SUGLEN").arg(key))
     }
 }
 
 /// Field type used to declare an index schema
 /// for the [`ft_create`](SearchCommands::ft_create) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum FtFieldType {
     /// Allows full-text search queries against the value in this attribute.
     Text,
@@ -842,30 +870,28 @@ impl IntoArgs for FtFieldType {
     }
 }
 
-impl FromValue for FtFieldType {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "TEXT" => Ok(FtFieldType::Text),
-            "TAG" => Ok(FtFieldType::Tag),
-            "NUMERIC" => Ok(FtFieldType::Numeric),
-            "GEO" => Ok(FtFieldType::Geo),
-            "VECTOR" => Ok(FtFieldType::Vector),
-            s => Err(Error::Client(format!("Cannot parse {s} to FtFieldType"))),
-        }
+impl Default for FtFieldType {
+    fn default() -> Self {
+        FtFieldType::Text
     }
 }
 
 /// Phonetic algorithm and language used for the [`FtFieldSchema::phonetic`](FtFieldSchema::phonetic) associated function
 ///
 /// For more information, see [`Phonetic Matching`](https://redis.io/docs/stack/search/reference/phonetic_matching).
+#[derive(Debug, Deserialize)]
 pub enum FtPhoneticMatcher {
     /// Double metaphone for English
+    #[serde(rename = "dm:en")]
     DmEn,
     /// Double metaphone for French
+    #[serde(rename = "dm:fr")]
     DmFr,
     /// Double metaphone for Portuguese
+    #[serde(rename = "dm:pt")]
     DmPt,
     /// Double metaphone for Spanish
+    #[serde(rename = "dm:es")]
     DmEs,
 }
 
@@ -959,11 +985,9 @@ impl FtFieldSchema {
         }
     }
 
-    /// Attributes can have the `NOINDEX` option, which means they will not be indexed.
+    /// Declaring a text attribute as `PHONETIC` will perform phonetic matching on it in searches by default.
     ///
-    /// This is useful in conjunction with `SORTABLE`,
-    /// to create attributes whose update using PARTIAL will not cause full reindexing of the document.
-    /// If an attribute has NOINDEX and doesn't have SORTABLE, it will just be ignored by the index.
+    /// The obligatory `matcher` argument specifies the phonetic algorithm and language used.
     #[must_use]
     pub fn phonetic(self, matcher: FtPhoneticMatcher) -> Self {
         Self {
@@ -1020,7 +1044,8 @@ impl IntoArgs for FtFieldSchema {
 }
 
 /// Redis Data type of an index defined in [`FtCreateOptions`](FtCreateOptions) struct
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum FtIndexDataType {
     /// [`hash`](https://redis.io/docs/data-types/hashes/) (default)
     Hash,
@@ -1034,18 +1059,6 @@ impl IntoArgs for FtIndexDataType {
             FtIndexDataType::Hash => "HASH",
             FtIndexDataType::Json => "JSON",
         })
-    }
-}
-
-impl FromValue for FtIndexDataType {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "HASH" => Ok(FtIndexDataType::Hash),
-            "JSON" => Ok(FtIndexDataType::Json),
-            s => Err(Error::Client(format!(
-                "Cannot parse {s} to FtIndexDataType"
-            ))),
-        }
     }
 }
 
@@ -1105,7 +1118,7 @@ impl FtCreateOptions {
     /// When adding Chinese language documents, set `LANGUAGE` chinese for the indexer
     /// to properly tokenize the terms. If you use the default language,
     /// then search terms are extracted based on punctuation characters and whitespace.
-    /// The Chinese language tokenizer makes use of a segmentation algorithm 
+    /// The Chinese language tokenizer makes use of a segmentation algorithm
     /// (via [`Friso`](https://github.com/lionsoul2014/friso)),
     /// which segments text and checks it against a predefined dictionary.
     /// See [`Stemming`](https://redis.io/docs/stack/search/reference/stemming) for more information.
@@ -1644,10 +1657,7 @@ impl FtReducer {
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
-    pub fn first_value_by<P: SingleArg, BP: SingleArg>(
-        property: P,
-        by_property: BP,
-    ) -> FtReducer {
+    pub fn first_value_by<P: SingleArg, BP: SingleArg>(property: P, by_property: BP) -> FtReducer {
         Self {
             command_args: CommandArgs::Empty
                 .arg("REDUCE")
@@ -1784,19 +1794,127 @@ impl IntoArgs for FtWithCursorOptions {
     }
 }
 
-/// Result for the [`ft_aggregate`](SearchCommands::ft_aggregate) 
-/// & [`ft_search`](SearchCommands::ft_search) commands
+/// Result for the [`ft_aggregate`](SearchCommands::ft_aggregate) command
 #[derive(Debug)]
-pub struct FtQueryResult {
+pub struct FtAggregateResult {
     pub total_results: usize,
-    pub results: Vec<FtQueryResultRow>,
+    pub results: Vec<Vec<(String, String)>>,
     pub cursor_id: Option<u64>,
 }
 
-/// A row in a [`FtQueryResult`](FtQueryResult)
+impl<'de> Deserialize<'de> for FtAggregateResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        enum TotalResultsOrResult {
+            TotalResults(usize),
+            Result(FtAggregateResult),
+        }
+
+        struct TotalResultsOrResultSeed;
+
+        impl<'de> DeserializeSeed<'de> for TotalResultsOrResultSeed {
+            type Value = TotalResultsOrResult;
+
+            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                struct TotalResultsOrResultVisitor;
+
+                impl<'de> Visitor<'de> for TotalResultsOrResultVisitor {
+                    type Value = TotalResultsOrResult;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("TotalResultsOrResults")
+                    }
+
+                    fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+                    where
+                        E: de::Error,
+                    {
+                        Ok(TotalResultsOrResult::TotalResults(v as usize))
+                    }
+
+                    fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
+                    where
+                        A: de::SeqAccess<'de>,
+                    {
+                        let result =
+                            FtAggregateResult::deserialize(SeqAccessDeserializer::new(seq))?;
+                        Ok(TotalResultsOrResult::Result(result))
+                    }
+                }
+
+                deserializer.deserialize_any(TotalResultsOrResultVisitor)
+            }
+        }
+
+        struct FtAggregateResultVisitor;
+
+        impl<'de> Visitor<'de> for FtAggregateResultVisitor {
+            type Value = FtAggregateResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("FtAggregateResult")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let Some(first) = seq.next_element_seed(TotalResultsOrResultSeed)? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                };
+
+                match first {
+                    TotalResultsOrResult::TotalResults(total_results) => {
+                        let mut results = if let Some(size) = seq.size_hint() {
+                            Vec::<Vec<(String, String)>>::with_capacity(size - 1)
+                        } else {
+                            Vec::<Vec<(String, String)>>::new()
+                        };
+
+                        while let Some(sub_results) =
+                            seq.next_element_seed(VecOfPairsSeed::<String, String>::new())?
+                        {
+                            results.push(sub_results);
+                        }
+
+                        Ok(FtAggregateResult {
+                            total_results,
+                            results,
+                            cursor_id: None,
+                        })
+                    }
+                    TotalResultsOrResult::Result(mut result) => {
+                        let Some(cursor_id) = seq.next_element::<u64>()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+
+                        result.cursor_id = Some(cursor_id);
+                        Ok(result)
+                    }
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(FtAggregateResultVisitor)
+    }
+}
+
+/// Result for the [`ft_search`](SearchCommands::ft_search) command
+#[derive(Debug)]
+pub struct FtSearchResult {
+    pub total_results: usize,
+    pub results: Vec<FtSearchResultRow>,
+}
+
+/// A row in a [`FtSearchResult`](FtSearchResult)
 #[derive(Debug, Default)]
-pub struct FtQueryResultRow {
-    /// Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate) 
+pub struct FtSearchResultRow {
+    /// Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate)
     pub document_id: String,
     /// relative internal score of each document. only if [`withscores`](FtSearchOptions::withscores) is set
     pub score: f64,
@@ -1808,170 +1926,196 @@ pub struct FtQueryResultRow {
     pub values: Vec<(String, String)>,
 }
 
-impl FtQueryResult {
-    fn from_value(value: Value, is_search: bool, nocontent: bool, withscores: bool, withpayloads: bool, withsortkeys: bool) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
+impl<'de> Deserialize<'de> for FtSearchResult {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        enum RowField {
+            DocumentId(String),
+            Score(f64),
+            Payload(Vec<u8>),
+            Sortkey(String),
+            Values(Vec<(String, String)>),
+        }
 
-        match &values[0] {
-            // regular results
-            Value::Integer(_) => {
-                let mut iter = values.into_iter();
+        enum RowSeedState {
+            Start,
+            AfterDocumentId(usize),
+        }
 
-                let total_results = if let Some(total_results) = iter.next() {
-                    total_results.into()?
-                } else {
-                    return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
+        struct RowSeed {
+            row_num_fields: usize,
+            state: RowSeedState,
+        }
+
+        impl RowSeed {
+            pub fn new(row_num_fields: usize) -> Self {
+                Self {
+                    row_num_fields,
+                    state: RowSeedState::Start,
+                }
+            }
+        }
+
+        impl<'de> DeserializeSeed<'de> for &mut RowSeed {
+            type Value = RowField;
+
+            #[inline]
+            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize_any(self)
+            }
+        }
+
+        impl<'de> Visitor<'de> for &mut RowSeed {
+            type Value = RowField;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("RowField")
+            }
+
+            fn visit_byte_buf<E>(self, v: Vec<u8>) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match self.state {
+                    RowSeedState::Start => {
+                        if self.row_num_fields > 1 {
+                            self.state = RowSeedState::AfterDocumentId(1);
+                        }
+                        Ok(RowField::DocumentId(
+                            String::from_utf8(v).map_err(de::Error::custom)?,
+                        ))
+                    }
+                    RowSeedState::AfterDocumentId(field_index) => {
+                        if field_index == self.row_num_fields - 1 {
+                            self.state = RowSeedState::Start;
+                        } else {
+                            self.state = RowSeedState::AfterDocumentId(field_index + 1);
+                        }
+
+                        // sortkeys begin by a '$' char
+                        if let Some(b'$') = v.first() {
+                            Ok(RowField::Sortkey(
+                                String::from_utf8(v).map_err(de::Error::custom)?,
+                            ))
+                        } else {
+                            Ok(RowField::Payload(v))
+                        }
+                    }
+                }
+            }
+
+            fn visit_f64<E>(self, v: f64) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match self.state {
+                    RowSeedState::Start => unreachable!(),
+                    RowSeedState::AfterDocumentId(field_index) => {
+                        if field_index == self.row_num_fields - 1 {
+                            self.state = RowSeedState::Start;
+                        } else {
+                            self.state = RowSeedState::AfterDocumentId(field_index + 1);
+                        }
+
+                        Ok(RowField::Score(v))
+                    }
+                }
+            }
+
+            fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                self.state = RowSeedState::Start;
+                let values = deserialize_vec_of_pairs(SeqAccessDeserializer::new(seq))?;
+                Ok(RowField::Values(values))
+            }
+        }
+
+        struct FtSearchResultVisitor;
+
+        impl<'de> Visitor<'de> for FtSearchResultVisitor {
+            type Value = FtSearchResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("FtSearchResult")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(total_results) = seq.next_element()? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
                 };
 
-                if is_search {
-                    // search
-                    let mut results = Vec::<FtQueryResultRow>::new();
+                let Some(seq_size) = seq.size_hint() else {
+                    return Err(de::Error::custom("sequence `size_hint` is expected for FtSearchResult"));
+                };
 
-                    while let Some(value) = iter.next() {
-                        let document_id = value.into()?;
+                let row_num_fields = (seq_size - 1) / total_results;
+                let mut results = Vec::with_capacity(total_results);
+                let mut row: Option<FtSearchResultRow> = None;
+                let mut row_seed = RowSeed::new(row_num_fields);
 
-                        let score = if withscores {
-                            if let Some(score) = iter.next() {
-                                score.into()?
-                            } else {
-                                return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
+                while let Some(item) = seq.next_element_seed(&mut row_seed)? {
+                    match item {
+                        RowField::DocumentId(document_id) => {
+                            if let Some(row) = row.take() {
+                                results.push(row);
                             }
-                        } else {
-                            Default::default()
-                        };
-
-                        let payload = if withpayloads {
-                            if let Some(Value::BulkString(payload)) = iter.next() {
-                                payload
-                            } else {
-                                return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
-                            }
-                        } else {
-                            Default::default()
-                        };
-
-                        let sortkey = if withsortkeys {
-                            if let Some(sortkey) = iter.next() {
-                                sortkey.into()?
-                            } else {
-                                return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
-                            }
-                        } else {
-                            Default::default()
-                        };
-
-                        let values = if !nocontent {
-                            if let Some(sortkey) = iter.next() {
-                                sortkey.into()?
-                            } else {
-                                return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
-                            }
-                        } else {
-                            Default::default()
-                        };
-
-                        results.push(FtQueryResultRow {
-                            document_id,
-                            score,
-                            payload,
-                            sortkey,
-                            values
-                        });
-                    }
-
-                    Ok(Self {
-                        total_results,
-                        results,
-                        cursor_id: None,
-                    }) 
-                } else {
-                    // regular aggregate
-                    Ok(Self {
-                        total_results,
-                        results: iter.map(|v| Ok(FtQueryResultRow {
-                            document_id: "".to_owned(),
-                            values: v.into()?,
-                            ..Default::default()
-                        })).collect::<Result<Vec<FtQueryResultRow>>>()?,
-                        cursor_id: None,
-                    }) 
-                }
-            }
-            // aggregate WITHCURSOR
-            Value::Array(_) => {
-                let mut iter = values.into_iter();
-
-                match (iter.next(), iter.next(), iter.next()) {
-                    (Some(results), Some(cursor_id), None) => {
-                        let results: Vec<Value> = results.into()?;
-
-                        let mut iter = results.into_iter();
-
-                        let total_results = if let Some(total_results) = iter.next() {
-                            total_results.into()?
-                        } else {
-                            return Err(Error::Client("Cannot parse FtQueryResult from result".to_owned()));
-                        };
-
-                        Ok(Self {
-                            total_results,
-                            results: iter.map(|v| Ok(FtQueryResultRow {
-                                document_id: "".to_owned(),
-                                values: v.into()?,
+                            row = Some(FtSearchResultRow {
+                                document_id,
                                 ..Default::default()
-                            })).collect::<Result<Vec<FtQueryResultRow>>>()?,
-                            cursor_id: Some(cursor_id.into()?),
-                        }) 
+                            })
+                        }
+                        RowField::Score(score) => {
+                            if let Some(row) = &mut row {
+                                row.score = score;
+                            }
+                        }
+                        RowField::Payload(payload) => {
+                            if let Some(row) = &mut row {
+                                row.payload = payload;
+                            }
+                        }
+                        RowField::Sortkey(sortkey) => {
+                            if let Some(row) = &mut row {
+                                row.sortkey = sortkey;
+                            }
+                        }
+                        RowField::Values(values) => {
+                            if let Some(row) = &mut row {
+                                row.values = values;
+                            }
+                        }
                     }
-                    _ => Err(Error::Client(
-                        "Cannot parse FtQueryResult from result".to_owned(),
-                    )),
                 }
-            }
-            _ => Err(Error::Client(
-                "Cannot parse FtQueryResult from result".to_owned(),
-            )),
-        }
-    }  
-}
 
-impl FromValue for FtQueryResult {
-    fn from_value(value: Value) -> Result<Self> {
-        log::debug!("value: {:?}", value);
-        let is_search = if let Value::Array(ref values) = &value {
-            log::debug!("&values[0..2]: {:?}", &values[0..2]);
-            matches!(&values[0..2], [Value::Integer(_total_results), Value::BulkString(_doc_id)])
-        } else {
-            false
-        };
+                if let Some(row) = row.take() {
+                    results.push(row);
+                }
 
-        Self::from_value(value, is_search, false, false, false, false)
-    }
-
-    fn from_value_with_command(value: Value, command: &Command) -> Result<Self> {
-        let is_search = command.name == "FT.SEARCH";
-        let mut nocontent = false;
-        let mut withscores = false;
-        let mut withpayloads = false;
-        let mut withsortkeys = false;
-
-        for arg in (&command.args).into_iter() {
-            match arg {
-                CommandArg::Str("NOCONTENT") => nocontent = true,
-                CommandArg::Str("WITHSCORES") => withscores = true,
-                CommandArg::Str("WITHPAYLOADS") => withpayloads = true,
-                CommandArg::Str("WITHSORTKEYS") => withsortkeys = true,
-                _ => ()
+                Ok(FtSearchResult {
+                    total_results,
+                    results,
+                })
             }
         }
 
-        Self::from_value(value, is_search, nocontent, withscores, withpayloads, withsortkeys)
+        deserializer.deserialize_seq(FtSearchResultVisitor)
     }
-
 }
 
 /// Result for the [`ft_info`](SearchCommands::ft_info) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtInfoResult {
     /// Name of the index
     pub index_name: String,
@@ -2007,54 +2151,17 @@ pub struct FtInfoResult {
     /// progress of background indexing (1 if complete).
     pub percent_indexed: f64,
     pub number_of_uses: usize,
-    pub gc_stats: FtGcStats,
-    pub cursor_stats: FtCursorStats,
+    #[serde(default)]
+    pub gc_stats: Option<FtGcStats>,
+    #[serde(default)]
+    pub cursor_stats: Option<FtCursorStats>,
     /// if a custom stopword list is used.
+    #[serde(default)]
     pub stopwords_list: Vec<String>,
 }
 
-impl FromValue for FtInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            index_name: values.remove_with_result("index_name")?.into()?,
-            index_options: values.remove_with_result("index_options")?.into()?,
-            index_definition: values.remove_with_result("index_definition")?.into()?,
-            attributes: values.remove_with_result("attributes")?.into()?,
-            num_docs: values.remove_or_default("num_docs").into()?,
-            max_doc_id: values.remove_or_default("max_doc_id").into()?,
-            num_terms: values.remove_or_default("num_terms").into()?,
-            num_records: values.remove_or_default("num_records").into()?,
-            inverted_sz_mb: values.remove_or_default("inverted_sz_mb").into()?,
-            vector_index_sz_mb: values.remove_or_default("vector_index_sz_mb").into()?,
-            total_inverted_index_blocks: values
-                .remove_or_default("total_inverted_index_blocks")
-                .into()?,
-            offset_vectors_sz_mb: values.remove_or_default("offset_vectors_sz_mb").into()?,
-            doc_table_size_mb: values.remove_or_default("doc_table_size_mb").into()?,
-            sortable_values_size_mb: values.remove_or_default("sortable_values_size_mb").into()?,
-            key_table_size_mb: values.remove_or_default("key_table_size_mb").into()?,
-            records_per_doc_avg: values.remove_or_default("records_per_doc_avg").into()?,
-            bytes_per_record_avg: values.remove_or_default("bytes_per_record_avg").into()?,
-            offsets_per_term_avg: values.remove_or_default("offsets_per_term_avg").into()?,
-            offset_bits_per_record_avg: values
-                .remove_or_default("offset_bits_per_record_avg")
-                .into()?,
-            hash_indexing_failures: values.remove_or_default("hash_indexing_failures").into()?,
-            total_indexing_time: values.remove_or_default("total_indexing_time").into()?,
-            indexing: values.remove_or_default("indexing").into()?,
-            percent_indexed: values.remove_or_default("percent_indexed").into()?,
-            number_of_uses: values.remove_or_default("number_of_uses").into()?,
-            gc_stats: values.remove_or_default("gc_stats").into()?,
-            cursor_stats: values.remove_or_default("cursor_stats").into()?,
-            stopwords_list: values.remove_or_default("stopwords_list").into()?,
-        })
-    }
-}
-
 /// Index attribute info
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FtIndexAttribute {
     /// field identifier
     pub identifier: String,
@@ -2066,36 +2173,88 @@ pub struct FtIndexAttribute {
     pub weight: f64,
     /// true if the field is sortable
     pub sortable: bool,
+    /// true if the field has un-normalized form
+    pub unf: bool,
+    /// true if stemming is disable for this fied
+    pub no_stem: bool,
+    /// true if this field is not indexed
+    pub no_index: bool,
+    /// Phoentic matcher
+    pub phonetic: Option<FtPhoneticMatcher>,
+    /// tag separator
+    pub separator: Option<char>,
+    /// case sensitivity for tags
+    pub case_sensitive: bool,
+    /// suffixe trie
+    pub with_suffixe_trie: bool,
 }
 
-impl FromValue for FtIndexAttribute {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: Vec<Value> = value.into()?;
-        let mut sortable = false;
+impl<'de> Deserialize<'de> for FtIndexAttribute {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct FtIndexAttributeVisitor;
 
-        if let Some(Value::SimpleString(s)) = values.last() {
-            if s == "SORTABLE" {
-                values.pop();
-                sortable = true;
+        impl<'de> Visitor<'de> for FtIndexAttributeVisitor {
+            type Value = FtIndexAttribute;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("FtIndexAttribute")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut attribute = FtIndexAttribute::default();
+
+                while let Some(field_name) = seq.next_element::<String>()? {
+                    match field_name.as_str() {
+                        "identifier" => {
+                            if let Some(identifier) = seq.next_element::<String>()? {
+                                attribute.identifier = identifier;
+                            }
+                        }
+                        "attribute" => {
+                            if let Some(alias) = seq.next_element::<String>()? {
+                                attribute.attribute = alias;
+                            }
+                        }
+                        "type" => {
+                            if let Some(field_type) = seq.next_element::<FtFieldType>()? {
+                                attribute.field_type = field_type;
+                            }
+                        }
+                        "WEIGHT" => {
+                            if let Some(weight) = seq.next_element::<f64>()? {
+                                attribute.weight = weight;
+                            }
+                        }
+                        "SORTABLE" => attribute.sortable = true,
+                        "UNF" => attribute.unf = true,
+                        "NOSTEM" => attribute.no_stem = true,
+                        "NOINDEX" => attribute.no_index = true,
+                        "PHONETIC" => {
+                            attribute.phonetic = seq.next_element::<FtPhoneticMatcher>()?
+                        }
+                        "SEPARATOR" => attribute.separator = seq.next_element::<char>()?,
+                        "CASESENSITIVE" => attribute.case_sensitive = true,
+                        "WITHSUFFIXTRIE" => attribute.with_suffixe_trie = true,
+                        _ => (),
+                    }
+                }
+
+                Ok(attribute)
             }
         }
 
-        let mut values: HashMap<String, Value> = values
-            .into_value_iter()
-            .collect::<Result<HashMap<String, Value>>>()?;
-
-        Ok(Self {
-            identifier: values.remove_with_result("identifier")?.into()?,
-            attribute: values.remove_with_result("attribute")?.into()?,
-            field_type: values.remove_with_result("type")?.into()?,
-            weight: values.remove_or_default("WEIGHT").into()?,
-            sortable,
-        })
+        deserializer.deserialize_seq(FtIndexAttributeVisitor)
     }
 }
 
 /// Garbage collector stats for the [`ft_info`](SearchCommands::ft_info) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtGcStats {
     pub bytes_collected: usize,
     pub total_ms_run: usize,
@@ -2106,24 +2265,8 @@ pub struct FtGcStats {
     pub gc_blocks_denied: usize,
 }
 
-impl FromValue for FtGcStats {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            bytes_collected: values.remove_or_default("bytes_collected").into()?,
-            total_ms_run: values.remove_or_default("total_ms_run").into()?,
-            total_cycles: values.remove_or_default("total_cycles").into()?,
-            average_cycle_time_ms: values.remove_or_default("average_cycle_time_ms").into()?,
-            last_run_time_ms: values.remove_or_default("last_run_time_ms").into()?,
-            gc_numeric_trees_missed: values.remove_or_default("gc_numeric_trees_missed").into()?,
-            gc_blocks_denied: values.remove_or_default("gc_blocks_denied").into()?,
-        })
-    }
-}
-
 /// Cursor stats for the [`ft_info`](SearchCommands::ft_info) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtCursorStats {
     pub global_idle: usize,
     pub global_total: usize,
@@ -2131,87 +2274,36 @@ pub struct FtCursorStats {
     pub index_total: usize,
 }
 
-impl FromValue for FtCursorStats {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            global_idle: values.remove_or_default("global_idle").into()?,
-            global_total: values.remove_or_default("global_total").into()?,
-            index_capacity: values.remove_or_default("index_capacity").into()?,
-            index_total: values.remove_or_default("index_total").into()?,
-        })
-    }
-}
-
 /// Index definitin for the [`ft_info`](SearchCommands::ft_info) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtIndexDefinition {
     pub key_type: FtIndexDataType,
     pub prefixes: Vec<String>,
+    #[serde(default)]
     pub filter: String,
+    #[serde(default)]
     pub default_language: String,
+    #[serde(default)]
     pub language_field: String,
     pub default_score: f64,
+    #[serde(default)]
     pub score_field: String,
+    #[serde(default)]
     pub payload_field: String,
 }
 
-impl FromValue for FtIndexDefinition {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            key_type: values.remove_with_result("key_type")?.into()?,
-            prefixes: values.remove_with_result("prefixes")?.into()?,
-            default_score: values.remove_or_default("default_score").into()?,
-            score_field: values.remove_or_default("score_field").into()?,
-            filter: values.remove_or_default("filter").into()?,
-            default_language: values.remove_or_default("default_language").into()?,
-            language_field: values.remove_or_default("language_field").into()?,
-            payload_field: values.remove_or_default("payload_field").into()?,
-        })
-    }
-}
-
-/// Type of query for the [`ft_profile`](SearchCommands::ft_profile) command
-pub enum FtProfileQueryType {
-    /// [`ft_search`](SearchCommands::ft_search) query type
-    Search,
-    /// [`ft_aggregate`](SearchCommands::ft_aggregate) query type
-    Aggregate,
-}
-
-impl IntoArgs for FtProfileQueryType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(match self {
-            FtProfileQueryType::Search => "SEARCH",
-            FtProfileQueryType::Aggregate => "AGGREGATE",
-        })
-    }
-}
-
-/// Result for the [`ft_profile`](SearchCommands::ft_profile) command.
-#[derive(Debug)]
-pub struct FtProfileResult {
-    pub results: FtQueryResult,
+/// Result for the [`ft_profile_search`](SearchCommands::ft_profile_search) command.
+#[derive(Debug, Deserialize)]
+pub struct FtProfileSearchResult {
+    pub results: FtSearchResult,
     pub profile_details: FtProfileDetails,
 }
 
-impl FromValue for FtProfileResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut iter = values.into_iter();
-
-        let (Some(results), Some(profile_details), None) = (iter.next(), iter.next(), iter.next()) else {
-            return Err(Error::Client("Cannot parse FtProfileResult".to_owned()));
-        };
-
-        Ok(Self {
-            results: results.into()?,
-            profile_details: profile_details.into()?,
-        })
-    }
+/// Result for the [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
+#[derive(Debug, Deserialize)]
+pub struct FtProfileAggregateResult {
+    pub results: FtAggregateResult,
+    pub profile_details: FtProfileDetails,
 }
 
 /// Details of a [`ft_profile`](SearchCommands::ft_profile) command.
@@ -2223,64 +2315,171 @@ pub struct FtProfileDetails {
     pub parsing_time: f64,
     /// Creation time of execution plan including iterators, result processors and reducers creation.
     pub pipeline_creation_time: f64,
-    ///  Index iterators information including their type, term, count, and time data. 
-    /// 
-    /// Inverted-index iterators have in addition the number of elements they contain. 
-    /// Hybrid vector iterators returning the top results from the vector index in batches, 
+    ///  Index iterators information including their type, term, count, and time data.
+    ///
+    /// Inverted-index iterators have in addition the number of elements they contain.
+    /// Hybrid vector iterators returning the top results from the vector index in batches,
     /// include the number of batches.
     pub iterators_profile: HashMap<String, Value>,
     /// Result processors chain with type, count and time data.
-    pub result_processors_profile: Vec<FtResultProcessorsProfile>    
+    pub result_processors_profile: Vec<FtResultProcessorsProfile>,
 }
 
-impl FromValue for FtProfileDetails {
-    fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut iter = values.into_iter();
-
-        let (Some(total_profile_time), Some(parsing_time), Some(pipeline_creation_time), Some(iterators_profile), Some(result_processors_profile)) 
-            = (iter.next(), iter.next(), iter.next(), iter.next(), iter.next()) else {
-            return Err(Error::Client("Cannot parse FtProfileResult".to_owned()));
-        };
-
-        let values: Vec<Value> = result_processors_profile.into()?;
-        let mut iter = values.into_iter();
- 
-        match iter.next() {
-            Some(Value::SimpleString(s)) if s == "Result processors profile" => (),
-            _ => return Err(Error::Client("Cannot parse FtProfileResult".to_owned())),
+impl<'de> Deserialize<'de> for FtProfileDetails {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        enum FtProfileDetailsField {
+            TotalProfileTime(f64),
+            ParsingTime(f64),
+            PipelineCreationTime(f64),
+            IteratorsProfile(HashMap<String, Value>),
+            ResultProcessorsProfile(Vec<FtResultProcessorsProfile>),
         }
 
-        let result_processors_profile = Value::Array(iter.collect());
+        struct FtProfileDetailsFieldVisitor;
 
-        Ok(Self {
-            total_profile_time: total_profile_time.into::<HashMap<String, Value>>()?.remove_or_default("Total profile time").into()?,
-            parsing_time: parsing_time.into::<HashMap<String, Value>>()?.remove_or_default("Parsing time").into()?,
-            pipeline_creation_time: pipeline_creation_time.into::<HashMap<String, Value>>()?.remove_or_default("Pipeline creation time").into()?,
-            iterators_profile: iterators_profile.into::<HashMap<String, Value>>()?.remove_or_default("Iterators profile").into()?,
-            result_processors_profile: result_processors_profile.into()?,
-        })
+        impl<'de> Visitor<'de> for FtProfileDetailsFieldVisitor {
+            type Value = FtProfileDetailsField;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("FtProfileDetailsField")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(field) = seq.next_element::<String>()? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                };
+
+                match field.as_str() {
+                    "Total profile time" => {
+                        let Some(value) = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        Ok(FtProfileDetailsField::TotalProfileTime(value))
+                    }
+                    "Parsing time" => {
+                        let Some(value) = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        Ok(FtProfileDetailsField::ParsingTime(value))
+                    }
+                    "Pipeline creation time" => {
+                        let Some(value) = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        Ok(FtProfileDetailsField::PipelineCreationTime(value))
+                    }
+                    "Iterators profile" => {
+                        let Some(value) = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        Ok(FtProfileDetailsField::IteratorsProfile(value))
+                    }
+                    "Result processors profile" => {
+                        let mut results = if let Some(size_hint) = seq.size_hint() {
+                            Vec::with_capacity(size_hint)
+                        } else {
+                            Vec::new()
+                        };
+
+                        while let Some(result) = seq.next_element()? {
+                            results.push(result);
+                        }
+
+                        Ok(FtProfileDetailsField::ResultProcessorsProfile(results))
+                    }
+                    _ => Err(de::Error::unknown_field(field.as_str(), &[])),
+                }
+            }
+        }
+
+        struct FtProfileDetailsFieldSeed;
+
+        impl<'de> DeserializeSeed<'de> for FtProfileDetailsFieldSeed {
+            type Value = FtProfileDetailsField;
+
+            #[inline]
+            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize_seq(FtProfileDetailsFieldVisitor)
+            }
+        }
+
+        struct FtProfileDetailsVisitor;
+
+        impl<'de> Visitor<'de> for FtProfileDetailsVisitor {
+            type Value = FtProfileDetails;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("FtProfileDetails")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let mut total_profile_time = None;
+                let mut parsing_time = None;
+                let mut pipeline_creation_time = None;
+                let mut iterators_profile = None;
+                let mut result_processors_profile = None;
+
+                while let Some(field) = seq.next_element_seed(FtProfileDetailsFieldSeed)? {
+                    match field {
+                        FtProfileDetailsField::TotalProfileTime(v) => total_profile_time = Some(v),
+                        FtProfileDetailsField::ParsingTime(v) => parsing_time = Some(v),
+                        FtProfileDetailsField::PipelineCreationTime(v) => {
+                            pipeline_creation_time = Some(v)
+                        }
+                        FtProfileDetailsField::IteratorsProfile(v) => iterators_profile = Some(v),
+                        FtProfileDetailsField::ResultProcessorsProfile(v) => {
+                            result_processors_profile = Some(v)
+                        }
+                    }
+                }
+
+                let total_profile_time = total_profile_time
+                    .ok_or_else(|| de::Error::missing_field("total_profile_time"))?;
+                let parsing_time =
+                    parsing_time.ok_or_else(|| de::Error::missing_field("parsing_time"))?;
+                let pipeline_creation_time = pipeline_creation_time
+                    .ok_or_else(|| de::Error::missing_field("pipeline_creation_time"))?;
+                let iterators_profile = iterators_profile
+                    .ok_or_else(|| de::Error::missing_field("iterators_profile"))?;
+                let result_processors_profile = result_processors_profile
+                    .ok_or_else(|| de::Error::missing_field("result_processors_profile"))?;
+
+                Ok(FtProfileDetails {
+                    total_profile_time,
+                    parsing_time,
+                    pipeline_creation_time,
+                    iterators_profile,
+                    result_processors_profile,
+                })
+            }
+        }
+
+        deserializer.deserialize_seq(FtProfileDetailsVisitor)
     }
 }
 
 /// Result processors profile for the [`ft_profile`](SearchCommands::ft_profile) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtResultProcessorsProfile {
+    #[serde(rename = "Type")]
     pub _type: String,
+    #[serde(rename = "Time")]
     pub time: f64,
-    pub counter: usize,    
-}
-
-impl FromValue for FtResultProcessorsProfile {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            _type: values.remove_or_default("Type").into()?,
-            time: values.remove_or_default("Time").into()?,
-            counter: values.remove_or_default("Counter").into()?,
-        })
-    }
+    #[serde(rename = "Counter")]
+    pub counter: usize,
 }
 
 /// Options for the [`ft_search`](SearchCommands::ft_search) command.
@@ -2290,7 +2489,7 @@ pub struct FtSearchOptions {
 }
 
 impl FtSearchOptions {
-    /// returns the document ids and not the content. 
+    /// returns the document ids and not the content.
     /// This is useful if RediSearch is only an index on an external document collection.
     #[must_use]
     pub fn nocontent(self) -> Self {
@@ -2307,8 +2506,8 @@ impl FtSearchOptions {
         }
     }
 
-    /// also returns the relative internal score of each document. 
-    /// 
+    /// also returns the relative internal score of each document.
+    ///
     /// This can be used to merge results from multiple instances.
     #[must_use]
     pub fn withscores(self) -> Self {
@@ -2317,8 +2516,8 @@ impl FtSearchOptions {
         }
     }
 
-    /// retrieves optional document payloads. 
-    /// 
+    /// retrieves optional document payloads.
+    ///
     /// See [`ft_create`](SearchCommands::ft_create)
     /// The payloads follow the document id and, if [`withscores`](FtSearchOptions::withscores) is set, the scores.
     #[must_use]
@@ -2328,9 +2527,9 @@ impl FtSearchOptions {
         }
     }
 
-    /// returns the value of the sorting key, right after the id and score and/or payload, if requested. 
-    /// 
-    /// This is usually not needed, and exists for distributed search coordination purposes. 
+    /// returns the value of the sorting key, right after the id and score and/or payload, if requested.
+    ///
+    /// This is usually not needed, and exists for distributed search coordination purposes.
     /// This option is relevant only if used in conjunction with [`sortby`](FtSearchOptions::sortby).
     #[must_use]
     pub fn withsortkeys(self) -> Self {
@@ -2339,187 +2538,211 @@ impl FtSearchOptions {
         }
     }
 
-    /// limits results to those having numeric values ranging between min and max, 
-    /// if numeric_field is defined as a numeric field in [`ft_create`](SearchCommands::ft_create). 
-    /// 
-    /// `min` and `max` follow [`zrange`](crate::commands::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`, 
+    /// limits results to those having numeric values ranging between min and max,
+    /// if numeric_field is defined as a numeric field in [`ft_create`](SearchCommands::ft_create).
+    ///
+    /// `min` and `max` follow [`zrange`](crate::commands::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`,
     /// and use `(` for exclusive ranges. Multiple numeric filters for different attributes are supported in one query.
     #[must_use]
-    pub fn filter(self, numeric_field: impl SingleArg, min: impl SingleArg, max: impl SingleArg) -> Self {
+    pub fn filter(
+        self,
+        numeric_field: impl SingleArg,
+        min: impl SingleArg,
+        max: impl SingleArg,
+    ) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER").arg(numeric_field).arg(min).arg(max),
+            command_args: self
+                .command_args
+                .arg("FILTER")
+                .arg(numeric_field)
+                .arg(min)
+                .arg(max),
         }
     }
 
-    /// filter the results to a given `radius` from `lon` and `lat`. 
-    /// 
-    /// `radius` is given as a number and units. 
+    /// filter the results to a given `radius` from `lon` and `lat`.
+    ///
+    /// `radius` is given as a number and units.
     /// See [`geosearch`](crate::commands::GeoCommands::geosearch) for more details.
     #[must_use]
-    pub fn geo_filter(self, geo_field: impl SingleArg, lon: f64, lat: f64, radius: f64, unit: GeoUnit) -> Self {
+    pub fn geo_filter(
+        self,
+        geo_field: impl SingleArg,
+        lon: f64,
+        lat: f64,
+        radius: f64,
+        unit: GeoUnit,
+    ) -> Self {
         Self {
-            command_args: self.command_args.arg("GEOFILTER").arg(geo_field).arg(lon).arg(lat).arg(radius).arg(unit),
+            command_args: self
+                .command_args
+                .arg("GEOFILTER")
+                .arg(geo_field)
+                .arg(lon)
+                .arg(lat)
+                .arg(radius)
+                .arg(unit),
         }
     }
 
-    /// limits the result to a given set of keys specified in the list. 
-    /// 
+    /// limits the result to a given set of keys specified in the list.
+    ///
     /// Non-existent keys are ignored, unless all the keys are non-existent.
     #[must_use]
     pub fn inkeys<A>(self, keys: impl SingleArgCollection<A>) -> Self
-    where 
-        A: SingleArg
+    where
+        A: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("INKEYS").arg(keys.num_args()).arg(keys),
+            command_args: self
+                .command_args
+                .arg("INKEYS")
+                .arg(keys.num_args())
+                .arg(keys),
         }
     }
 
-    /// filters the results to those appearing only in specific attributes of the document, like `title` or `URL`. 
+    /// filters the results to those appearing only in specific attributes of the document, like `title` or `URL`.
     #[must_use]
     pub fn infields<A>(self, attributes: impl SingleArgCollection<A>) -> Self
-    where 
-        A: SingleArg
+    where
+        A: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("INFIELDS").arg(attributes.num_args()).arg(attributes),
+            command_args: self
+                .command_args
+                .arg("INFIELDS")
+                .arg(attributes.num_args())
+                .arg(attributes),
         }
     }
 
     /// limits the attributes returned from the document.
-    /// 
-    /// If attributes is empty, it acts like [`nocontent`](FtSearchOptions::nocontent). 
+    ///
+    /// If attributes is empty, it acts like [`nocontent`](FtSearchOptions::nocontent).
     #[must_use]
-    pub fn _return(self, attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>) -> Self
-    {
+    pub fn _return(self, attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>) -> Self {
         Self {
-            command_args: self.command_args.arg("RETURN").arg(attributes.num_args()).arg(attributes),
+            command_args: self
+                .command_args
+                .arg("RETURN")
+                .arg(attributes.num_args())
+                .arg(attributes),
         }
     }
 
-    /// returns only the sections of the attribute that contain the matched text. 
-    /// 
+    /// returns only the sections of the attribute that contain the matched text.
+    ///
     /// See [`Highlighting`](https://redis.io/docs/stack/search/reference/highlight) for more information.
     #[must_use]
-    pub fn summarize(self, options: FtSearchSummarizeOptions) -> Self
-    {
+    pub fn summarize(self, options: FtSearchSummarizeOptions) -> Self {
         Self {
             command_args: self.command_args.arg("SUMMARIZE").arg(options),
         }
     }
 
     /// formats occurrences of matched text.
-    /// 
+    ///
     /// See [`Highlighting`](https://redis.io/docs/stack/search/reference/highlight) for more information.
     #[must_use]
-    pub fn highlight(self, options: FtSearchHighlightOptions) -> Self
-    {
+    pub fn highlight(self, options: FtSearchHighlightOptions) -> Self {
         Self {
             command_args: self.command_args.arg("HIGHLIGHT").arg(options),
         }
     }
 
-    /// allows a maximum of N intervening number of unmatched offsets between phrase terms. 
-    /// 
+    /// allows a maximum of N intervening number of unmatched offsets between phrase terms.
+    ///
     /// In other words, the slop for exact phrases is 0.
     #[must_use]
-    pub fn slop(self, slop: usize) -> Self
-    {
+    pub fn slop(self, slop: usize) -> Self {
         Self {
             command_args: self.command_args.arg("SLOP").arg(slop),
         }
     }
 
-    /// puts the query terms in the same order in the document as in the query, 
-    /// regardless of the offsets between them. 
-    /// 
+    /// puts the query terms in the same order in the document as in the query,
+    /// regardless of the offsets between them.
+    ///
     /// Typically used in conjunction with [`slop`](FtSearchOptions::slop).
     #[must_use]
-    pub fn inorder(self) -> Self
-    {
+    pub fn inorder(self) -> Self {
         Self {
             command_args: self.command_args.arg("INORDER"),
         }
     }
 
-    /// use a stemmer for the supplied language during search for query expansion. 
-    /// 
-    /// If querying documents in Chinese, set to chinese to properly tokenize the query terms. 
-    /// Defaults to English. 
-    /// If an unsupported language is sent, the command returns an error. 
+    /// use a stemmer for the supplied language during search for query expansion.
+    ///
+    /// If querying documents in Chinese, set to chinese to properly tokenize the query terms.
+    /// Defaults to English.
+    /// If an unsupported language is sent, the command returns an error.
     /// See FT.CREATE for the list of languages.
     #[must_use]
-    pub fn language(self, language: FtLanguage) -> Self
-    {
+    pub fn language(self, language: FtLanguage) -> Self {
         Self {
             command_args: self.command_args.arg("LANGUAGE").arg(language),
         }
     }
 
-    /// uses a custom query `expander` instead of the stemmer. 
-    /// 
+    /// uses a custom query `expander` instead of the stemmer.
+    ///
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn expander(self, expander: impl SingleArg) -> Self
-    {
+    pub fn expander(self, expander: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("EXPANDER").arg(expander),
         }
     }
 
-    /// uses a custom scoring function you define. 
-    /// 
+    /// uses a custom scoring function you define.
+    ///
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn scorer(self, scorer: impl SingleArg) -> Self
-    {
+    pub fn scorer(self, scorer: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("SCORER").arg(scorer),
         }
     }
 
-    /// returns a textual description of how the scores were calculated. 
-    /// 
+    /// returns a textual description of how the scores were calculated.
+    ///
     /// Using this options requires the [`withscores`](FtSearchOptions::withscores) option.
     #[must_use]
-    pub fn explainscore(self) -> Self
-    {
+    pub fn explainscore(self) -> Self {
         Self {
             command_args: self.command_args.arg("EXPLAINSCORE"),
         }
     }
 
     /// adds an arbitrary, binary safe `payload` that is exposed to custom scoring functions.
-    /// 
-     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
+    ///
+    /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn payload(self, payload: impl SingleArg) -> Self
-    {
+    pub fn payload(self, payload: impl SingleArg) -> Self {
         Self {
             command_args: self.command_args.arg("PAYLOAD").arg(payload),
         }
     }
 
-    /// orders the results by the value of this attribute. 
-    /// 
-    /// This applies to both text and numeric attributes. 
-    /// Attributes needed for `sortby` should be declared as [`SORTABLE`](FtFieldSchema::sortable) in the index, 
+    /// orders the results by the value of this attribute.
+    ///
+    /// This applies to both text and numeric attributes.
+    /// Attributes needed for `sortby` should be declared as [`SORTABLE`](FtFieldSchema::sortable) in the index,
     /// in order to be available with very low latency. Note that this adds memory overhead.
     #[must_use]
-    pub fn sortby(self, attribute: impl SingleArg, order: SortOrder) -> Self
-    {
+    pub fn sortby(self, attribute: impl SingleArg, order: SortOrder) -> Self {
         Self {
             command_args: self.command_args.arg("SORTBY").arg(attribute).arg(order),
         }
     }
 
-    /// limits the results to the offset and number of results given. 
-    /// 
-    /// Note that the offset is zero-indexed. The default is `0 10`, which returns 10 items starting from the first result. 
+    /// limits the results to the offset and number of results given.
+    ///
+    /// Note that the offset is zero-indexed. The default is `0 10`, which returns 10 items starting from the first result.
     /// You can use `LIMIT 0 0` to count the number of documents in the result set without actually returning them.
     #[must_use]
-    pub fn limit(self, first: usize, num: usize) -> Self
-    {
+    pub fn limit(self, first: usize, num: usize) -> Self {
         Self {
             command_args: self.command_args.arg("LIMIT").arg(first).arg(num),
         }
@@ -2527,8 +2750,7 @@ impl FtSearchOptions {
 
     /// overrides the timeout parameter of the module.
     #[must_use]
-    pub fn timeout(self, milliseconds: u64) -> Self
-    {
+    pub fn timeout(self, milliseconds: u64) -> Self {
         Self {
             command_args: self.command_args.arg("TIMEOUT").arg(milliseconds),
         }
@@ -2552,7 +2774,11 @@ impl FtSearchOptions {
         P: MultipleArgsCollection<(N, V)>,
     {
         Self {
-            command_args: self.command_args.arg("PARAMS").arg(params.num_args()).arg(params),
+            command_args: self
+                .command_args
+                .arg("PARAMS")
+                .arg(params.num_args())
+                .arg(params),
         }
     }
 
@@ -2588,8 +2814,8 @@ impl FtSearchReturnAttribute {
         }
     }
 
-    /// `property`is an optional name used in the result. 
-    /// 
+    /// `property`is an optional name used in the result.
+    ///
     /// If not provided, the `identifier` is used in the result.
     #[must_use]
     pub fn as_property(self, property: impl SingleArg) -> Self {
@@ -2613,12 +2839,16 @@ pub struct FtSearchSummarizeOptions {
 
 impl FtSearchSummarizeOptions {
     /// If present, must be the first argument.
-    /// Each field present is summarized. 
+    /// Each field present is summarized.
     /// If no `FIELDS` directive is passed, then all fields returned are summarized.
     #[must_use]
     pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
-            command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
+            command_args: self
+                .command_args
+                .arg("FIELDS")
+                .arg(fields.num_args())
+                .arg(fields),
         }
     }
 
@@ -2630,10 +2860,10 @@ impl FtSearchSummarizeOptions {
         }
     }
 
-    /// The number of context words each fragment should contain. 
-    /// 
-    /// Context words surround the found term. 
-    /// A higher value will return a larger block of text. 
+    /// The number of context words each fragment should contain.
+    ///
+    /// Context words surround the found term.
+    /// A higher value will return a larger block of text.
     /// If not specified, the default value is 20.
     #[must_use]
     pub fn len(self, frag_len: usize) -> Self {
@@ -2642,11 +2872,11 @@ impl FtSearchSummarizeOptions {
         }
     }
 
-    /// The string used to divide between individual summary snippets. 
-    /// 
-    /// The default is `...` which is common among search engines; 
-    /// but you may override this with any other string if you desire to programmatically divide them later on. 
-    /// You may use a newline sequence, as newlines are stripped from the result body anyway 
+    /// The string used to divide between individual summary snippets.
+    ///
+    /// The default is `...` which is common among search engines;
+    /// but you may override this with any other string if you desire to programmatically divide them later on.
+    /// You may use a newline sequence, as newlines are stripped from the result body anyway
     /// (thus, it will not be conflated with an embedded newline in the text)
     #[must_use]
     pub fn separator(self, separator: impl SingleArg) -> Self {
@@ -2670,12 +2900,16 @@ pub struct FtSearchHighlightOptions {
 
 impl FtSearchHighlightOptions {
     /// If present, must be the first argument.
-    /// Each field present is highlighted. 
+    /// Each field present is highlighted.
     /// If no `FIELDS` directive is passed, then all fields returned are highlighted.
     #[must_use]
     pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
-            command_args: self.command_args.arg("FIELDS").arg(fields.num_args()).arg(fields),
+            command_args: self
+                .command_args
+                .arg("FIELDS")
+                .arg(fields.num_args())
+                .arg(fields),
         }
     }
 
@@ -2726,7 +2960,7 @@ pub enum FtLanguage {
     Swedish,
     Tamil,
     Turkish,
-    Yiddish
+    Yiddish,
 }
 
 impl Default for FtLanguage {
@@ -2737,38 +2971,36 @@ impl Default for FtLanguage {
 
 impl IntoArgs for FtLanguage {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(
-            match self {
-                FtLanguage::Arabic => "arabic",
-                FtLanguage::Armenian => "armenian",
-                FtLanguage::Basque => "basque",
-                FtLanguage::Catalan => "catalan",
-                FtLanguage::Chinese => "chinese",
-                FtLanguage::Danish => "danish",
-                FtLanguage::Dutch => "dutch",
-                FtLanguage::English => "english",
-                FtLanguage::Finnish => "finnish",
-                FtLanguage::French => "french",
-                FtLanguage::German => "german",
-                FtLanguage::Greek => "greek",
-                FtLanguage::Hungarian => "hungarian",
-                FtLanguage::Indonesian => "indonesian",
-                FtLanguage::Irish => "irish",
-                FtLanguage::Italian => "italian",
-                FtLanguage::Lithuanian => "lithuanian",
-                FtLanguage::Nepali => "nepali",
-                FtLanguage::Norwegian => "norwegian",
-                FtLanguage::Portuguese => "portuguese",
-                FtLanguage::Romanian => "romanian",
-                FtLanguage::Russian => "russian",
-                FtLanguage::Serbian => "serbian",
-                FtLanguage::Spanish => "spanish",
-                FtLanguage::Swedish => "swedish",
-                FtLanguage::Tamil => "tamil",
-                FtLanguage::Turkish => "turkish",
-                FtLanguage::Yiddish => "yiddish",
-            }
-        )
+        args.arg(match self {
+            FtLanguage::Arabic => "arabic",
+            FtLanguage::Armenian => "armenian",
+            FtLanguage::Basque => "basque",
+            FtLanguage::Catalan => "catalan",
+            FtLanguage::Chinese => "chinese",
+            FtLanguage::Danish => "danish",
+            FtLanguage::Dutch => "dutch",
+            FtLanguage::English => "english",
+            FtLanguage::Finnish => "finnish",
+            FtLanguage::French => "french",
+            FtLanguage::German => "german",
+            FtLanguage::Greek => "greek",
+            FtLanguage::Hungarian => "hungarian",
+            FtLanguage::Indonesian => "indonesian",
+            FtLanguage::Irish => "irish",
+            FtLanguage::Italian => "italian",
+            FtLanguage::Lithuanian => "lithuanian",
+            FtLanguage::Nepali => "nepali",
+            FtLanguage::Norwegian => "norwegian",
+            FtLanguage::Portuguese => "portuguese",
+            FtLanguage::Romanian => "romanian",
+            FtLanguage::Russian => "russian",
+            FtLanguage::Serbian => "serbian",
+            FtLanguage::Spanish => "spanish",
+            FtLanguage::Swedish => "swedish",
+            FtLanguage::Tamil => "tamil",
+            FtLanguage::Turkish => "turkish",
+            FtLanguage::Yiddish => "yiddish",
+        })
     }
 }
 
@@ -2788,18 +3020,22 @@ impl FtSpellCheckOptions {
     }
 
     /// specifies an inclusion (`FtTermType::Include`) or exclusion (`FtTermType::Exclude`) of a custom dictionary named `dictionary`
-    /// 
+    ///
     /// Refer to [`ft_dictadd`](SearchCommands::ft_dictadd), [`ft_dictdel`](SearchCommands::ft_dictdel)
     /// and [`ft_dictdump`](SearchCommands::ft_dictdump) about managing custom dictionaries.
     #[must_use]
     pub fn terms(self, term_type: FtTermType, dictionary: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("TERMS").arg(term_type).arg(dictionary),
+            command_args: self
+                .command_args
+                .arg("TERMS")
+                .arg(term_type)
+                .arg(dictionary),
         }
     }
 
-    /// selects the dialect version under which to execute the query. 
-    /// 
+    /// selects the dialect version under which to execute the query.
+    ///
     /// If not specified, the query will execute under the default dialect version
     /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
@@ -2832,22 +3068,27 @@ impl IntoArgs for FtTermType {
 }
 
 /// Result for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
+#[derive(Debug)]
 pub struct FtSpellCheckResult {
     /// a collection where each element represents a misspelled term from the query + suggestions for this term
-    /// 
+    ///
     /// The misspelled terms are ordered by their order of appearance in the query.
-    pub misspelled_terms: Vec<FtMisspelledTerm>
+    pub misspelled_terms: Vec<FtMisspelledTerm>,
 }
 
-impl FromValue for FtSpellCheckResult {
-    fn from_value(value: Value) -> Result<Self> {
-        Ok(Self {
-            misspelled_terms: value.into()?
+impl<'de> Deserialize<'de> for FtSpellCheckResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(FtSpellCheckResult {
+            misspelled_terms: Vec::<FtMisspelledTerm>::deserialize(deserializer)?,
         })
     }
 }
 
 /// Misspelled term + suggestions for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
+#[derive(Debug)]
 pub struct FtMisspelledTerm {
     /// Misspelled term
     pub misspelled_term: String,
@@ -2857,21 +3098,21 @@ pub struct FtMisspelledTerm {
     pub suggestions: Vec<(f64, String)>,
 }
 
-impl FromValue for FtMisspelledTerm {
-    fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut iter = values.into_iter();
-
-        match (iter.next(), iter.next(), iter.next(), iter.next()) {
-            (Some(Value::BulkString(term)), Some(misspelled_term), Some(suggestions), None) 
-            if term == b"TERM" => {
-                Ok(Self {
-                    misspelled_term: misspelled_term.into()?,
-                    suggestions: suggestions.into()?,
-                })
-            },
-            _ => Err(Error::Client("Cannot parse result to FtMisspelledTerm".to_owned()))
+impl<'de> Deserialize<'de> for FtMisspelledTerm {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (field_name, misspelled_term, suggestions) =
+            <(String, String, Vec<(f64, String)>)>::deserialize(deserializer)?;
+        if field_name != "TERM" {
+            return Err(de::Error::unknown_field(field_name.as_str(), &["TERM"]));
         }
+
+        Ok(FtMisspelledTerm {
+            misspelled_term,
+            suggestions,
+        })
     }
 }
 
@@ -2882,8 +3123,8 @@ pub struct FtSugAddOptions {
 }
 
 impl FtSugAddOptions {
-    /// increments the existing entry of the suggestion by the given score, instead of replacing the score. 
-    /// 
+    /// increments the existing entry of the suggestion by the given score, instead of replacing the score.
+    ///
     /// This is useful for updating the dictionary based on user queries in real time.
     #[must_use]
     pub fn incr(self) -> Self {
@@ -2930,8 +3171,8 @@ impl FtSugGetOptions {
         }
     }
 
-    /// returns the score of each suggestion. 
-    /// 
+    /// returns the score of each suggestion.
+    ///
     /// This can be used to merge results from multiple instances.
     #[must_use]
     pub fn withscores(self) -> Self {
@@ -2940,8 +3181,8 @@ impl FtSugGetOptions {
         }
     }
 
-    /// returns optional payloads saved along with the suggestions. 
-    /// 
+    /// returns optional payloads saved along with the suggestions.
+    ///
     /// If no payload is present for an entry, it returns a null reply.
     #[must_use]
     pub fn withpayload(self) -> Self {
@@ -2958,14 +3199,9 @@ impl IntoArgs for FtSugGetOptions {
 }
 
 /// Sugestion for the [`ft_sugget`](SearchCommands::ft_sugget) command.
+#[derive(Deserialize)]
 pub struct FtSuggestion {
     pub suggestion: String,
     pub score: f64,
     pub payload: String,
-}
-
-impl FromValue for FtSuggestion {
-    fn from_value(_: Value) -> Result<Self> {
-        unimplemented!()
-    }
 }

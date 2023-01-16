@@ -10,8 +10,8 @@ type PostProcessFunc<'a, R> = dyn Fn(Value, Command, &'a mut Client) -> Future<'
 /// Wrapper around a command about to be send with a marker for the result type
 /// and a few options to decide how the result send back by Redis
 pub struct PreparedCommand<'a, T, R = ()>
-where
-    R: FromValue,
+// where
+//     R: FromValue,
 {
     /// Marker of the type in which the command result will be transformed 
     /// with the help of the [`FromValue`](crate::resp::FromValue) trait.
@@ -33,8 +33,8 @@ where
 }
 
 impl<'a, T, R> PreparedCommand<'a, T, R>
-where
-    R: FromValue,
+// where
+//     R: FromValue,
 {
     /// Create a new prepared command. 
     #[must_use]

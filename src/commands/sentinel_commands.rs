@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, IntoArgs,
         KeyValueArgsCollection, MultipleArgsCollection, SingleArg, Value,
     },
-    Result,
 };
+use serde::Deserialize;
 
 /// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
 /// # See Also
@@ -281,7 +279,8 @@ pub trait SentinelCommands {
 }
 
 /// Result for the [`sentinel_master`](SentinelCommands::sentinel_master) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SentinelMasterInfo {
     pub name: String,
     pub ip: String,
@@ -305,37 +304,9 @@ pub struct SentinelMasterInfo {
     pub parallel_syncs: usize,
 }
 
-impl FromValue for SentinelMasterInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            ip: values.remove_or_default("ip").into()?,
-            port: values.remove_or_default("port").into()?,
-            runid: values.remove_or_default("runid").into()?,
-            flags: values.remove_or_default("flags").into()?,
-            link_pending_commands: values.remove_or_default("link-pending-commands").into()?,
-            link_refcount: values.remove_or_default("link-refcount").into()?,
-            last_ping_sent: values.remove_or_default("last-ping-sent").into()?,
-            last_ok_ping_reply: values.remove_or_default("last-ok-ping-reply").into()?,
-            last_ping_reply: values.remove_or_default("last-ping-reply").into()?,
-            down_after_milliseconds: values.remove_or_default("down-after-milliseconds").into()?,
-            info_refresh: values.remove_or_default("info-refresh").into()?,
-            role_reported: values.remove_or_default("role-reported").into()?,
-            role_reported_time: values.remove_or_default("role-reported-time").into()?,
-            config_epoch: values.remove_or_default("config-epoch").into()?,
-            num_slaves: values.remove_or_default("num-slaves").into()?,
-            num_other_sentinels: values.remove_or_default("num-other-sentinels").into()?,
-            quorum: values.remove_or_default("quorum").into()?,
-            failover_timeout: values.remove_or_default("failover-timeout").into()?,
-            parallel_syncs: values.remove_or_default("parallel-syncs").into()?,
-        })
-    }
-}
-
 /// /// Result for the [`sentinel_replicas`](SentinelCommands::sentinel_replicas) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SentinelReplicaInfo {
     pub name: String,
     pub ip: String,
@@ -356,41 +327,13 @@ pub struct SentinelReplicaInfo {
     pub master_host: String,
     pub master_port: u16,
     pub slave_priority: u64,
-    pub slave_replica_offset: u64,
-    pub replica_announed: usize,
-}
-
-impl FromValue for SentinelReplicaInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            ip: values.remove_or_default("ip").into()?,
-            port: values.remove_or_default("port").into()?,
-            runid: values.remove_or_default("runid").into()?,
-            flags: values.remove_or_default("flags").into()?,
-            link_pending_commands: values.remove_or_default("link-pending-commands").into()?,
-            link_refcount: values.remove_or_default("link-refcount").into()?,
-            last_ping_sent: values.remove_or_default("last-ping-sent").into()?,
-            last_ok_ping_reply: values.remove_or_default("last-ok-ping-reply").into()?,
-            last_ping_reply: values.remove_or_default("last-ping-reply").into()?,
-            down_after_milliseconds: values.remove_or_default("down-after-milliseconds").into()?,
-            info_refresh: values.remove_or_default("info-refresh").into()?,
-            role_reported: values.remove_or_default("role-reported").into()?,
-            role_reported_time: values.remove_or_default("role-reported-time").into()?,
-            master_link_down_time: values.remove_or_default("master-link-down-time").into()?,
-            master_link_status: values.remove_or_default("master-link-status").into()?,
-            master_host: values.remove_or_default("master-host").into()?,
-            master_port: values.remove_or_default("master-port").into()?,
-            slave_priority: values.remove_or_default("slave-priority").into()?,
-            slave_replica_offset: values.remove_or_default("slave-replica-offset").into()?,
-            replica_announed: values.remove_or_default("replica-announed").into()?,
-        })
-    }
+    pub slave_repl_offset: u64,
+    pub replica_announced: usize,
 }
 
 /// Result for the [`sentinel_sentinels`](SentinelCommands::sentinel_sentinels) command.
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SentinelInfo {
     pub name: String,
     pub ip: String,
@@ -406,29 +349,6 @@ pub struct SentinelInfo {
     pub last_hello_message: u64,
     pub voted_leader: String,
     pub voted_leader_epoch: usize,
-}
-
-impl FromValue for SentinelInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            ip: values.remove_or_default("ip").into()?,
-            port: values.remove_or_default("port").into()?,
-            runid: values.remove_or_default("runid").into()?,
-            flags: values.remove_or_default("flags").into()?,
-            link_pending_commands: values.remove_or_default("link-pending-commands").into()?,
-            link_refcount: values.remove_or_default("link-refcount").into()?,
-            last_ping_sent: values.remove_or_default("last-ping-sent").into()?,
-            last_ok_ping_reply: values.remove_or_default("last-ok-ping-reply").into()?,
-            last_ping_reply: values.remove_or_default("last-ping-reply").into()?,
-            down_after_milliseconds: values.remove_or_default("down-after-milliseconds").into()?,
-            last_hello_message: values.remove_or_default("last-hello-message").into()?,
-            voted_leader: values.remove_or_default("voted-leader").into()?,
-            voted_leader_epoch: values.remove_or_default("voted-leader-epoch").into()?,
-        })
-    }
 }
 
 /// Different crash simulation scenario modes for

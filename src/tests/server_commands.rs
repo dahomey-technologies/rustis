@@ -9,7 +9,7 @@ use crate::{
     },
     resp::{cmd, Value},
     spawn,
-    tests::get_test_client,
+    tests::{get_sentinel_test_client, get_test_client},
     Error, RedisError, RedisErrorKind, Result,
 };
 use futures::StreamExt;
@@ -109,6 +109,7 @@ async fn acl_getuser() -> Result<()> {
 
     client.acl_setuser("foo", Vec::<String>::new()).await?;
     let rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
+    log::debug!("rules: {rules:?}");
     // default `commands` rule
     assert!(matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all"));
 
@@ -287,7 +288,7 @@ async fn command() -> Result<()> {
 async fn command_info() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    let _command_infos = client.command_info("MGET").await?;
+    let _command_infos = client.command_info("SORT").await?;
 
     Ok(())
 }
@@ -642,9 +643,15 @@ async fn latency_graph() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
 
     let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -692,9 +699,15 @@ async fn latency_history() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -715,9 +728,15 @@ async fn latency_latest() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.1), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
-    client.send(cmd("DEBUG").arg("SLEEP").arg(0.2), None).await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
+    client
+        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
+        .await?;
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
     assert!(!report.is_empty());
@@ -802,6 +821,7 @@ async fn memory_stats() -> Result<()> {
     let mut client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
+    client.set("key", "value").await?;
     let _memory_stats = client.memory_stats().await?;
 
     Ok(())
@@ -923,7 +943,6 @@ async fn monitor() -> Result<()> {
             .next()
             .await
             .ok_or_else(|| Error::Client("fail".to_owned()))?;
-
         assert!(result.unix_timestamp_millis > 0.0);
         assert_eq!(2, result.database);
         assert_eq!("SET", result.command);
@@ -1019,6 +1038,7 @@ async fn role() -> Result<()> {
     let mut client = get_test_client().await?;
 
     let role_result = client.role().await?;
+    log::debug!("role_result: {role_result:?}");
     assert!(matches!(
         role_result,
         RoleResult::Master {
@@ -1032,6 +1052,7 @@ async fn role() -> Result<()> {
         .await?;
 
     let role_result = client.role().await?;
+    log::debug!("role_result: {role_result:?}");
     assert!(matches!(
         role_result,
         RoleResult::Replica {
@@ -1043,6 +1064,16 @@ async fn role() -> Result<()> {
     ));
 
     client.replicaof(ReplicaOfOptions::no_one()).await?;
+
+    let mut sentinel_client = get_sentinel_test_client().await?;
+    let role_result = sentinel_client.role().await?;
+    log::debug!("role_result: {role_result:?}");
+    assert!(matches!(
+        role_result,
+        RoleResult::Sentinel {
+            master_names
+        } if master_names == vec!["myservice".to_owned()]
+    ));
 
     Ok(())
 }

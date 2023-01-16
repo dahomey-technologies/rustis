@@ -5,6 +5,7 @@ use serde::{
 };
 use std::{
     collections::{hash_map, HashMap},
+    fmt::{Display, Formatter},
     str, vec,
 };
 
@@ -19,14 +20,14 @@ impl<'de> Deserializer<'de> for Value {
             Value::SimpleString(s) => visitor.visit_string(s),
             Value::Integer(i) => visitor.visit_i64(i),
             Value::Double(d) => visitor.visit_f64(d),
-            Value::BulkString(bs) => visitor.visit_string(String::from_utf8(bs)?),
+            Value::BulkString(bs) => visitor.visit_byte_buf(bs),
             Value::Boolean(b) => visitor.visit_bool(b),
-            Value::Array(_) => todo!(),
-            Value::Map(_) => todo!(),
-            Value::Set(_) => todo!(),
-            Value::Push(_) => todo!(),
-            Value::Error(_) => todo!(),
-            Value::Nil => todo!(),
+            Value::Array(values) => visitor.visit_seq(SeqAccess::new(values)),
+            Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
+            Value::Set(values) => visitor.visit_seq(SeqAccess::new(values)),
+            Value::Push(values) => visitor.visit_seq(SeqAccess::new(values)),
+            Value::Error(e) => Err(Error::Redis(e)),
+            Value::Nil => visitor.visit_none(),
         }
     }
 
@@ -367,6 +368,7 @@ impl<'de> Deserializer<'de> for Value {
     {
         match self {
             Value::Nil => visitor.visit_none(),
+            Value::Array(values) if values.is_empty() => visitor.visit_none(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => visitor.visit_some(self),
         }
@@ -379,6 +381,11 @@ impl<'de> Deserializer<'de> for Value {
     {
         match self {
             Value::Nil => visitor.visit_unit(),
+            Value::SimpleString(_) => visitor.visit_unit(),
+            Value::BulkString(bs) if bs.is_empty() => visitor.visit_unit(),
+            Value::Array(a) if a.is_empty() => visitor.visit_unit(),
+            Value::Set(s) if s.is_empty() => visitor.visit_unit(),
+            Value::Map(m) if m.is_empty() => visitor.visit_unit(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Expected nil".to_owned())),
         }
@@ -409,9 +416,15 @@ impl<'de> Deserializer<'de> for Value {
         V: Visitor<'de>,
     {
         match self {
-            Value::Array(values) => visitor.visit_seq(SeqAccess::new(values)),
+            Value::Nil => visitor.visit_seq(NilSeqAccess),
+            Value::Array(values) | Value::Set(values) | Value::Push(values) => {
+                visitor.visit_seq(SeqAccess::new(values))
+            }
+            Value::Map(values) => visitor.visit_seq(MapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Cannot parse sequence".to_owned())),
+            _ => Err(Error::Client(format!(
+                "Cannot parse sequence from value `{self}`"
+            ))),
         }
     }
 
@@ -451,14 +464,30 @@ impl<'de> Deserializer<'de> for Value {
     fn deserialize_struct<V>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
+        fn check_resp2_array(values: &Vec<Value>, fields: &'static [&'static str]) -> bool {
+            if values.len() > fields.len() {
+                true
+            } else if let Some(Value::SimpleString(s)) = values.first() {
+                fields.iter().any(|f| s == f)
+            } else {
+                false
+            }
+        }
+
         match self {
-            Value::Array(values) => visitor.visit_map(RefSeqAccess::new(values)),
+            Value::Array(values) => {
+                if check_resp2_array(&values, fields) {
+                    visitor.visit_map(SeqAccess::new(values))
+                } else {
+                    visitor.visit_seq(SeqAccess::new(values))
+                }
+            }
             Value::Map(values) => visitor.visit_map(RefMapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Err(Error::Client("Cannot parse map".to_owned())),
@@ -467,7 +496,7 @@ impl<'de> Deserializer<'de> for Value {
 
     fn deserialize_enum<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
@@ -501,13 +530,13 @@ impl<'de> Deserializer<'de> for Value {
                 if m.len() == 1 {
                     visitor.visit_enum(Enum::from_map(m))
                 } else {
-                    Err(Error::Client(
-                        "Map len must be 1 to parse an enum".to_owned(),
-                    ))
+                    Err(Error::Client(format!(
+                        "Map len must be 1 to parse enum {name} from {m:?}"
+                    )))
                 }
             }
             Value::Error(e) => Err(Error::Redis(e)),
-            _ => Err(Error::Client("Cannot parse enum".to_owned())),
+            _ => Err(Error::Client(format!("Cannot parse enum `{name}` from `{self}`"))),
         }
     }
 
@@ -590,9 +619,175 @@ impl<'de, 'a> Deserializer<'de> for &'a Value {
     }
 }
 
-pub struct SeqAccess {
+#[derive(Debug)]
+enum VecIntoIterDeserializerError {
+    Error(Error),
+    None,
+}
+
+impl serde::de::Error for VecIntoIterDeserializerError {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
+        Self::Error(Error::custom(msg))
+    }
+}
+
+impl std::error::Error for VecIntoIterDeserializerError {}
+
+impl Display for VecIntoIterDeserializerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VecIntoIterDeserializerError::Error(e) => e.fmt(f),
+            VecIntoIterDeserializerError::None => f.write_str("None"),
+        }
+    }
+}
+
+impl From<Error> for VecIntoIterDeserializerError {
+    fn from(e: Error) -> Self {
+        Self::Error(e)
+    }
+}
+
+#[derive(Debug)]
+struct VecIntoIterDeserializer<'a, I: Iterator<Item = Value>>(&'a mut I);
+
+impl<'de, 'a, I: Iterator<Item = Value> + std::fmt::Debug> Deserializer<'de>
+    for VecIntoIterDeserializer<'a, I>
+{
+    type Error = VecIntoIterDeserializerError;
+
+    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let VecIntoIterDeserializer(iter) = self;
+        match iter.next() {
+            Some(value) => Ok(value.deserialize_any(visitor)?),
+            None => Err(VecIntoIterDeserializerError::None),
+        }
+    }
+
+    fn deserialize_tuple<V>(
+        self,
+        len: usize,
+        visitor: V,
+    ) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        log::debug!("VecIntoIterDeserializer::deserialize_tuple self={:?}", self);
+
+        let VecIntoIterDeserializer(iter) = self;
+
+        let mut peekable = iter.peekable();
+        let Some(first) = peekable.peek() else {
+            return Err(VecIntoIterDeserializerError::None);
+        };
+
+        log::debug!(
+            "VecIntoIterDeserializer::deserialize_tuple len={}, first={:?}",
+            len,
+            first
+        );
+
+        if let Value::Push(_) | Value::Array(_) | Value::Set(_) = first {
+            log::debug!("Value::Push(_) | Value::Array(_) | Value::Set(_) ");
+            return Ok(iter.next().unwrap().deserialize_any(visitor)?);
+        }
+
+        log::debug!(
+            "VecIntoIterDeserializer::deserialize_tuple peekable={:?}",
+            peekable
+        );
+        Ok(visitor.visit_seq(RefIterSeqAccess::new(&mut peekable, len))?)
+    }
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bytes byte_buf option unit unit_struct newtype_struct seq
+        tuple_struct map struct enum identifier ignored_any
+    }
+}
+
+pub struct RefIterSeqAccess<'a, I: Iterator<Item = Value>> {
+    iter: &'a mut I,
     len: usize,
+}
+
+impl<'a, I: Iterator<Item = Value>> RefIterSeqAccess<'a, I> {
+    pub fn new(iter: &'a mut I, len: usize) -> Self {
+        Self { iter, len }
+    }
+}
+
+impl<'a, 'de, I: Iterator<Item = Value> + std::fmt::Debug> serde::de::SeqAccess<'de>
+    for RefIterSeqAccess<'a, I>
+{
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if self.len == 0 {
+            return Ok(None);
+        }
+
+        log::debug!(
+            "RefIterSeqAccess::next_element_seed self.len={}, self.iter={:?}",
+            self.len,
+            self.iter
+        );
+
+        let deserializer = VecIntoIterDeserializer(self.iter);
+        match seed.deserialize(deserializer) {
+            Ok(v) => {
+                self.len -= 1;
+                Ok(Some(v))
+            }
+            Err(e) => match e {
+                VecIntoIterDeserializerError::Error(e) => Err(e),
+                VecIntoIterDeserializerError::None => Ok(None),
+            },
+        }
+
+        // match self.iter.next() {
+        //     Some(value) => {
+        //         self.len -= 1;
+        //         seed.deserialize(value).map(Some)
+        //     }
+        //     None => Ok(None),
+        // }
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.len)
+    }
+}
+
+pub struct NilSeqAccess;
+
+impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
+    type Error = Error;
+
+    fn next_element_seed<T>(
+        &mut self,
+        _seed: T,
+    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        Ok(None)
+    }
+}
+
+pub struct SeqAccess {
     iter: vec::IntoIter<Value>,
+    len: usize,
+    value: Option<Value>,
 }
 
 impl SeqAccess {
@@ -600,6 +795,7 @@ impl SeqAccess {
         Self {
             len: values.len(),
             iter: values.into_iter(),
+            value: None,
         }
     }
 }
@@ -611,8 +807,28 @@ impl<'de> serde::de::SeqAccess<'de> for SeqAccess {
     where
         T: DeserializeSeed<'de>,
     {
+        // if self.len == 0 {
+        //     return Ok(None);
+        // }
+
+        // log::debug!("SeqAccess::next_element_seed self.len={}, self.iter={:?}", self.len, self.iter);
+
+        // match seed.deserialize(VecIntoIterDeserializer(&mut self.iter)) {
+        //     Ok(v) => {
+        //         self.len -= 1;
+        //         Ok(Some(v))
+        //     },
+        //     Err(e) => match e {
+        //         VecIntoIterDeserializerError::Error(e) => Err(e),
+        //         VecIntoIterDeserializerError::None => Ok(None),
+        //     },
+        // }
+
         match self.iter.next() {
-            Some(value) => seed.deserialize(value).map(Some),
+            Some(value) => {
+                self.len -= 1;
+                seed.deserialize(value).map(Some)
+            }
             None => Ok(None),
         }
     }
@@ -631,7 +847,13 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess {
         K: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(key) => seed.deserialize(key).map(Some),
+            Some(key) => match key {
+                Value::Array(mut values) if values.len() == 2 => {
+                    self.value = values.pop();
+                    seed.deserialize(values.pop().unwrap()).map(Some)
+                }
+                _ => seed.deserialize(key).map(Some),
+            },
             None => Ok(None),
         }
     }
@@ -640,9 +862,14 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess {
     where
         V: DeserializeSeed<'de>,
     {
-        match self.iter.next() {
+        match self.value.take() {
             Some(value) => seed.deserialize(value),
-            None => Err(serde::de::Error::custom("value is missing")),
+            None => match self.iter.next() {
+                Some(value) => seed.deserialize(value),
+                None => Err(serde::de::Error::custom(
+                    "SeqAccess::next_value_seed: value is missing",
+                )),
+            },
         }
     }
 
@@ -689,12 +916,87 @@ impl<'de> serde::de::MapAccess<'de> for MapAccess {
     {
         match self.value.take() {
             Some(value) => seed.deserialize(value),
-            None => Err(serde::de::Error::custom("value is missing")),
+            None => Err(serde::de::Error::custom("value is missing in map")),
         }
     }
 
     fn size_hint(&self) -> Option<usize> {
         Some(self.len)
+    }
+}
+
+impl<'de> serde::de::SeqAccess<'de> for MapAccess {
+    type Error = Error;
+
+    fn next_element_seed<T>(
+        &mut self,
+        seed: T,
+    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some((key, value)) => seed.deserialize(ValuePair(key, value)).map(Some),
+            None => Ok(None),
+        }
+    }
+}
+
+pub struct ValuePair(Value, Value);
+
+impl<'de> Deserializer<'de> for ValuePair {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(2, visitor)
+    }
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bytes byte_buf option unit unit_struct newtype_struct seq
+        tuple_struct map struct enum identifier ignored_any
+    }
+
+    fn deserialize_tuple<V>(
+        self,
+        _len: usize,
+        visitor: V,
+    ) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        pub struct ValuePairSeqAccess {
+            first: Option<Value>,
+            second: Option<Value>,
+        }
+
+        impl<'de> serde::de::SeqAccess<'de> for ValuePairSeqAccess {
+            type Error = Error;
+
+            fn next_element_seed<T>(
+                &mut self,
+                seed: T,
+            ) -> std::result::Result<Option<T::Value>, Self::Error>
+            where
+                T: DeserializeSeed<'de>,
+            {
+                if let Some(first) = self.first.take() {
+                    seed.deserialize(first).map(Some)
+                } else if let Some(second) = self.second.take() {
+                    seed.deserialize(second).map(Some)
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+
+        visitor.visit_seq(ValuePairSeqAccess {
+            first: Some(self.0),
+            second: Some(self.1),
+        })
     }
 }
 

@@ -404,6 +404,51 @@ fn map() -> Result<()> {
     assert_eq!(Some(&13), result.get(&12));
     assert_eq!(Some(&15), result.get(&14));
 
+    let result = HashMap::<i32, i32>::deserialize(Value::Array(vec![
+        Value::Integer(12),
+        Value::Integer(13),
+        Value::Integer(14),
+        Value::Integer(15),
+    ]))?;
+    assert_eq!(Some(&13), result.get(&12));
+    assert_eq!(Some(&15), result.get(&14));
+
+    let result = HashMap::<i32, i32>::deserialize(Value::Array(vec![
+        Value::Array(vec![Value::Integer(12), Value::Integer(13)]),
+        Value::Array(vec![Value::Integer(14), Value::Integer(15)]),
+    ]))?;
+    assert_eq!(Some(&13), result.get(&12));
+    assert_eq!(Some(&15), result.get(&14));
+
+    let result = HashMap::<String, Vec<String>>::deserialize(Value::Array(vec![
+        Value::Array(vec![
+            Value::BulkString(b"a".to_vec()),
+            Value::Set(vec![
+                Value::SimpleString("OW".to_owned()),
+                Value::SimpleString("update".to_owned()),
+            ]),
+        ]),
+        Value::Array(vec![
+            Value::BulkString(b"b".to_vec()),
+            Value::Set(vec![
+                Value::SimpleString("OW".to_owned()),
+                Value::SimpleString("update".to_owned()),
+            ]),
+        ]),
+    ]))?;
+    assert_eq!(Some(&vec!["OW".to_owned(), "update".to_owned()]), result.get("a"));
+    assert_eq!(Some(&vec!["OW".to_owned(), "update".to_owned()]), result.get("a"));
+
+    let result = HashMap::<String, usize>::deserialize(Value::Array(vec![
+        Value::BulkString(b"mychannel1".to_vec()),
+        Value::Integer(1),
+        Value::BulkString(b"mychannel2".to_vec()),
+        Value::Integer(2),
+    ]))?;
+    assert_eq!(2, result.len());
+    assert_eq!(Some(&1usize), result.get("mychannel1"));
+    assert_eq!(Some(&2usize), result.get("mychannel2"));
+    
     Ok(())
 }
 
@@ -428,9 +473,7 @@ fn _struct() -> Result<()> {
     assert_eq!("foo", result.name);
 
     let value = Value::Array(vec![
-        Value::BulkString(b"id".to_vec()),
         Value::Integer(12),
-        Value::BulkString(b"name".to_vec()),
         Value::BulkString(b"foo".to_vec()),
     ]);
 

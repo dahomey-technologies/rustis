@@ -1,10 +1,11 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, IntoArgs, MultipleArgsCollection, SingleArg,
-        SingleArgCollection, FromValue,
+        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, FromValue, IntoArgs,
+        MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
 };
+use serde::{de::DeserializeOwned, Deserialize};
 
 /// A group of Redis commands related to [`Sorted Sets`](https://redis.io/docs/data-types/sorted-sets/)
 ///
@@ -121,7 +122,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
     }
@@ -140,7 +141,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -213,7 +214,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -245,7 +246,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -359,7 +360,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -404,7 +405,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue,
+        M: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("ZPOPMAX").arg(key).arg(count))
     }
@@ -421,7 +422,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue,
+        M: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("ZPOPMIN").arg(key).arg(count))
     }
@@ -459,7 +460,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key).arg(count))
     }
@@ -484,7 +485,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue,
+        E: FromValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -511,7 +512,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -538,7 +539,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -713,11 +714,11 @@ pub trait SortedSetCommands {
         key: K,
         cursor: usize,
         options: ZScanOptions,
-    ) -> PreparedCommand<Self, (u64, Vec<(M, f64)>)>
+    ) -> PreparedCommand<Self, ZScanResult<M>>
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue,
+        M: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("ZSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -759,7 +760,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -791,7 +792,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -1076,4 +1077,15 @@ impl IntoArgs for ZScanOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }
+}
+
+/// Result for the [`zscan`](SortedSetCommands::zscan) command.
+#[derive(Debug, Deserialize)]
+pub struct ZScanResult<M>
+where
+    M: FromSingleValue + DeserializeOwned,
+{
+    pub cursor: u64,
+    #[serde(deserialize_with = "deserialize_vec_of_pairs")]
+    pub elements: Vec<(M, f64)>,
 }

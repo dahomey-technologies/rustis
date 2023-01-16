@@ -1,11 +1,11 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
+        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
         KeyValueArgsCollection, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    Error, Result,
 };
+use serde::{de::DeserializeOwned, Deserialize};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Time Series`](https://redis.io/docs/stack/timeseries/)
@@ -413,7 +413,7 @@ pub trait TimeSeriesCommands {
     /// * `groupby_options` - See [`TsGroupByOptions`](TsGroupByOptions)
     ///
     /// # Return
-    /// A collection of [`TsSample`](TsSample)
+    /// A collection of [`TsRangeSample`](TsRangeSample)
     ///
     /// # Notes
     /// * The `ts_mrange` command cannot be part of transaction when running on a Redis cluster.
@@ -421,7 +421,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
-    fn ts_mrange<F: SingleArg, R: FromValueArray<TsSample>>(
+    fn ts_mrange<F: SingleArg, R: FromValueArray<TsRangeSample>>(
         &mut self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -462,7 +462,7 @@ pub trait TimeSeriesCommands {
     /// * `groupby_options` - See [`TsGroupByOptions`](TsGroupByOptions)
     ///
     /// # Return
-    /// A collection of [`TsSample`](TsSample)
+    /// A collection of [`TsRangeSample`](TsRangeSample)
     ///
     /// # Notes
     /// * The `ts_mrevrange` command cannot be part of transaction when running on a Redis cluster.
@@ -470,7 +470,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
-    fn ts_mrevrange<F: SingleArg, R: FromValueArray<TsSample>>(
+    fn ts_mrevrange<F: SingleArg, R: FromValueArray<TsRangeSample>>(
         &mut self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -516,7 +516,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<F: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
+    fn ts_queryindex<F: SingleArg, R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
         &mut self,
         filters: impl SingleArgCollection<F>,
     ) -> PreparedCommand<Self, RR>
@@ -725,7 +725,8 @@ impl IntoArgs for TsEncoding {
 /// for handling samples with identical timestamps
 ///
 ///  It is used with one of the following values:
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TsDuplicatePolicy {
     /// ignore any newly reported value and reply with an error
     Block,
@@ -752,20 +753,6 @@ impl IntoArgs for TsDuplicatePolicy {
             TsDuplicatePolicy::Max => "MAX",
             TsDuplicatePolicy::Sum => "SUM",
         })
-    }
-}
-
-impl FromValue for TsDuplicatePolicy {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "block" => Ok(TsDuplicatePolicy::Block),
-            "first" => Ok(TsDuplicatePolicy::First),
-            "last" => Ok(TsDuplicatePolicy::Last),
-            "min" => Ok(TsDuplicatePolicy::Min),
-            "max" => Ok(TsDuplicatePolicy::Max),
-            "sum" => Ok(TsDuplicatePolicy::Sum),
-            _ => Err(Error::Client("Cannot parse TsDuplicatePolicy".to_owned())),
-        }
     }
 }
 
@@ -864,7 +851,8 @@ impl IntoArgs for TsCreateOptions {
 
 /// Aggregation type for the [`ts_createrule`](TimeSeriesCommands::ts_createrule)
 /// and [`ts_mrange`](TimeSeriesCommands::ts_mrange) commands.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum TsAggregationType {
     /// Arithmetic mean of all values
     Avg,
@@ -883,12 +871,16 @@ pub enum TsAggregationType {
     /// Value with highest timestamp in the bucket
     Last,
     /// Population standard deviation of the values
+    #[serde(rename = "STD.P")]
     StdP,
     /// Sample standard deviation of the values
+    #[serde(rename = "STD.S")]
     StdS,
     /// Population variance of the values
+    #[serde(rename = "VAR.P")]
     VarP,
     /// Sample variance of the values
+    #[serde(rename = "VAR.P")]
     VarS,
     /// Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8)
     Twa,
@@ -911,29 +903,6 @@ impl IntoArgs for TsAggregationType {
             TsAggregationType::VarS => "var.s",
             TsAggregationType::Twa => "twa",
         })
-    }
-}
-
-impl FromValue for TsAggregationType {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "AVG" => Ok(TsAggregationType::Avg),
-            "SUM" => Ok(TsAggregationType::Sum),
-            "MIN" => Ok(TsAggregationType::Min),
-            "MAX" => Ok(TsAggregationType::Max),
-            "RANGE" => Ok(TsAggregationType::Range),
-            "COUNT" => Ok(TsAggregationType::Count),
-            "FIRST" => Ok(TsAggregationType::First),
-            "LAST" => Ok(TsAggregationType::Last),
-            "STD.P" => Ok(TsAggregationType::StdP),
-            "STD.S" => Ok(TsAggregationType::StdS),
-            "VAR.P" => Ok(TsAggregationType::VarP),
-            "VAR.S" => Ok(TsAggregationType::VarS),
-            "TWA" => Ok(TsAggregationType::Twa),
-            _ => Err(Error::Client(
-                "Cannot parse TsRuleAggregationType".to_owned(),
-            )),
-        }
     }
 }
 
@@ -1090,7 +1059,8 @@ impl IntoArgs for TsGetOptions {
 }
 
 /// Result for the [`ts_info`](TimeSeriesCommands::ts_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TsInfoResult {
     /// key name
     pub key_self_name: String,
@@ -1130,6 +1100,18 @@ pub struct TsInfoResult {
     /// * The aggregator
     /// * The alignment (since RedisTimeSeries v1.8)
     pub rules: Vec<TsCompactionRule>,
+    /// Additional chunk information when the `debug` flag is specified in [`ts_info`](TimeSeriesCommands::ts_info)
+    #[serde(rename = "Chunks")]
+    pub chunks: Option<Vec<TsInfoChunkResult>>,
+    /// Additional values for future versions of the command
+    #[serde(flatten)]
+    pub additional_values: HashMap<String, Value>,
+}
+
+/// Additional debug result for the [`ts_info`](TimeSeriesCommands::ts_info) command.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TsInfoChunkResult {
     /// First timestamp present in the chunk
     pub start_timestamp: i64,
     /// Last timestamp present in the chunk
@@ -1142,68 +1124,11 @@ pub struct TsInfoResult {
     pub size: usize,
     /// Ratio of `size` and `samples`
     pub bytes_per_sample: f64,
-    pub additional_values: HashMap<String, Value>,
-}
-
-impl FromValue for TsInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-        let mut debug_values = values
-            .remove("Chunks")
-            .map(|v| match v.into::<Vec<Value>>()?.into_iter().next() {
-                Some(chunks) => chunks.into::<HashMap<String, Value>>(),
-                None => Ok(HashMap::<String, Value>::new()),
-            })
-            .transpose()?;
-
-        Ok(Self {
-            key_self_name: values.remove_or_default("keySelfName").into()?,
-            total_samples: values.remove_or_default("totalSamples").into()?,
-            memory_usage: values.remove_or_default("memoryUsage").into()?,
-            first_timestamp: values.remove_or_default("firstTimestamp").into()?,
-            last_timestamp: values.remove_or_default("lastTimestamp").into()?,
-            retention_time: values.remove_or_default("retentionTime").into()?,
-            chunk_count: values.remove_or_default("chunkCount").into()?,
-            chunk_size: values.remove_or_default("chunkSize").into()?,
-            chunk_type: values.remove_or_default("chunkType").into()?,
-            duplicate_policy: values.remove_or_default("duplicatePolicy").into()?,
-            labels: values.remove_or_default("labels").into()?,
-            source_key: values.remove_or_default("sourceKey").into()?,
-            rules: values.remove_or_default("rules").into()?,
-            start_timestamp: match debug_values {
-                Some(ref mut debug_values) => {
-                    debug_values.remove_or_default("startTimestamp").into()?
-                }
-                None => Default::default(),
-            },
-            end_timestamp: match debug_values {
-                Some(ref mut debug_values) => {
-                    debug_values.remove_or_default("endTimestamp").into()?
-                }
-                None => Default::default(),
-            },
-            samples: match debug_values {
-                Some(ref mut debug_values) => debug_values.remove_or_default("samples").into()?,
-                None => Default::default(),
-            },
-            size: match debug_values {
-                Some(ref mut debug_values) => debug_values.remove_or_default("size").into()?,
-                None => Default::default(),
-            },
-            bytes_per_sample: match debug_values {
-                Some(ref mut debug_values) => {
-                    debug_values.remove_or_default("bytesPerSample").into()?
-                }
-                None => Default::default(),
-            },
-            additional_values: values,
-        })
-    }
 }
 
 /// information about the [`compaction rules`](https://redis.io/commands/ts.createrule/)
 /// of a time series collection, in the context of the [`ts_info`](TimeSeriesCommands::ts_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct TsCompactionRule {
     /// The compaction key
     pub compaction_key: String,
@@ -1213,24 +1138,6 @@ pub struct TsCompactionRule {
     pub aggregator: TsAggregationType,
     /// The alignment (since RedisTimeSeries v1.8)
     pub alignment: u64,
-}
-
-impl FromValue for TsCompactionRule {
-    fn from_value(value: Value) -> Result<Self> {
-        let (compaction_key, bucket_duration, aggregator, alignment): (
-            String,
-            u64,
-            TsAggregationType,
-            u64,
-        ) = value.into()?;
-
-        Ok(Self {
-            compaction_key,
-            bucket_duration,
-            aggregator,
-            alignment,
-        })
-    }
 }
 
 /// Options for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
@@ -1289,7 +1196,7 @@ impl IntoArgs for TsMGetOptions {
 }
 
 /// Result for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct TsSample {
     /// The key name
     pub key: String,
@@ -1300,20 +1207,7 @@ pub struct TsSample {
     /// * If [`selected_labels`](TsMGetOptions::selected_labels) is specified, the selected labels are reported
     pub labels: HashMap<String, String>,
     /// Timestamp-value pairs for all samples/aggregations matching the range
-    pub values: Vec<(u64, f64)>,
-}
-
-impl FromValue for TsSample {
-    fn from_value(value: Value) -> Result<Self> {
-        let (key, labels, values): (String, HashMap<String, String>, Vec<(u64, f64)>) =
-            value.into()?;
-
-        Ok(Self {
-            key,
-            labels,
-            values,
-        })
-    }
+    pub timestamp_value: (u64, f64),
 }
 
 /// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
@@ -1321,6 +1215,22 @@ impl FromValue for TsSample {
 #[derive(Default)]
 pub struct TsMRangeOptions {
     command_args: CommandArgs,
+}
+
+/// Result for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
+/// [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands.
+#[derive(Debug, Deserialize)]
+pub struct TsRangeSample {
+    /// The key name
+    pub key: String,
+    /// Label-value pairs
+    ///
+    /// * By default, an empty list is reported
+    /// * If [`withlabels`](TsMGetOptions::withlabels) is specified, all labels associated with this time series are reported
+    /// * If [`selected_labels`](TsMGetOptions::selected_labels) is specified, the selected labels are reported
+    pub labels: HashMap<String, String>,
+    /// Timestamp-value pairs for all samples/aggregations matching the range
+    pub values: Vec<(u64, f64)>,
 }
 
 impl TsMRangeOptions {

@@ -2,10 +2,13 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::ModuleInfo,
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValue, HashMapExt, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, FromSingleValue, IntoArgs, SingleArg, SingleArgCollection,
     },
-    Error, Result,
+    Result,
+};
+use serde::{
+    de::{self, DeserializeOwned},
+    Deserialize, Deserializer,
 };
 use std::collections::HashMap;
 
@@ -55,7 +58,7 @@ pub trait ConnectionCommands {
     fn client_getname<CN>(&mut self) -> PreparedCommand<Self, Option<CN>>
     where
         Self: Sized,
-        CN: FromSingleValue,
+        CN: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
@@ -543,9 +546,13 @@ impl ClientInfo {
     }
 }
 
-impl FromValue for ClientInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        ClientInfo::from_line(&value.into::<String>()?)
+impl<'de> Deserialize<'de> for ClientInfo {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let line = String::deserialize(deserializer)?;
+        ClientInfo::from_line(&line).map_err(de::Error::custom)
     }
 }
 
@@ -604,15 +611,17 @@ pub struct ClientListResult {
     pub client_infos: Vec<ClientInfo>,
 }
 
-impl FromValue for ClientListResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let lines: String = value.into()?;
-
+impl<'de> Deserialize<'de> for ClientListResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let lines = String::deserialize(deserializer)?;
         let client_infos: Result<Vec<ClientInfo>> =
             lines.split('\n').map(ClientInfo::from_line).collect();
 
         Ok(Self {
-            client_infos: client_infos?,
+            client_infos: client_infos.map_err(de::Error::custom)?,
         })
     }
 }
@@ -801,6 +810,7 @@ impl IntoArgs for ClientTrackingOptions {
 }
 
 /// Result for the [`client_trackinginfo`](ConnectionCommands::client_trackinginfo) command.
+#[derive(Deserialize)]
 pub struct ClientTrackingInfo {
     /// A list of tracking flags used by the connection.
     pub flags: Vec<String>,
@@ -810,26 +820,6 @@ pub struct ClientTrackingInfo {
 
     /// A list of key prefixes for which notifications are sent to the client.
     pub prefixes: Vec<String>,
-}
-
-impl FromValue for ClientTrackingInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        fn into_result(values: &mut HashMap<String, Value>) -> Option<ClientTrackingInfo> {
-            Some(ClientTrackingInfo {
-                flags: values.remove("flags")?.into().ok()?,
-                redirect: values.remove("redirect")?.into().ok()?,
-                prefixes: values.remove("prefixes")?.into().ok()?,
-            })
-        }
-
-        into_result(&mut value.into()?).ok_or_else(|| {
-            Error::Client(
-                "Cannot parse 
-            "
-                .to_owned(),
-            )
-        })
-    }
 }
 
 /// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
@@ -898,30 +888,16 @@ impl IntoArgs for HelloOptions {
 }
 
 /// Result for the [`hello`](ConnectionCommands::hello) command
+#[derive(Deserialize)]
 pub struct HelloResult {
     pub server: String,
     pub version: String,
     pub proto: usize,
     pub id: i64,
     pub mode: String,
+    #[serde(default)]
     pub role: String,
     pub modules: Vec<ModuleInfo>,
-}
-
-impl FromValue for HelloResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            server: values.remove_or_default("server").into()?,
-            version: values.remove_or_default("version").into()?,
-            proto: values.remove_or_default("proto").into()?,
-            id: values.remove_or_default("id").into()?,
-            mode: values.remove_or_default("mode").into()?,
-            role: values.remove_or_default("role").into()?,
-            modules: values.remove_or_default("modules").into()?,
-        })
-    }
 }
 
 /// Options for the [`ping`](ConnectionCommands::ping) command.

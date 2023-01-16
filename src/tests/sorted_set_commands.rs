@@ -1,7 +1,8 @@
 use crate::{
     commands::{
-        BlockingCommands, FlushingMode, GenericCommands, ServerCommands, SortedSetCommands,
-        ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZWhere,
+        BZpopMinMaxResult, BlockingCommands, FlushingMode, GenericCommands, ServerCommands,
+        SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZScanResult,
+        ZWhere,
     },
     sleep, spawn,
     tests::get_test_client,
@@ -139,10 +140,10 @@ async fn bzpopmax() -> Result<()> {
         .zadd("key", (1.0, "one"), ZAddOptions::default())
         .await?;
 
-    let result: Option<Vec<(String, String, f64)>> =
+    let result: BZpopMinMaxResult<String, String> =
         client.bzpopmax(["key", "unknown"], 0.0).await?;
 
-    match result {
+    match result.0 {
         Some(result) => {
             assert_eq!(1, result.len());
             assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
@@ -150,17 +151,17 @@ async fn bzpopmax() -> Result<()> {
         None => unreachable!(),
     }
 
-    let result: Option<Vec<(String, String, f64)>> = client.bzpopmax("unknown", 0.01).await?;
-    assert_eq!(None, result);
+    let result: BZpopMinMaxResult<String, String> = client.bzpopmax("unknown", 0.01).await?;
+    assert_eq!(None, result.0);
 
     spawn(async move {
         async fn calls() -> Result<()> {
             let mut client = get_test_client().await?;
 
-            let result: Option<Vec<(String, String, f64)>> =
+            let result: BZpopMinMaxResult<String, String> =
                 client.bzpopmax(["key", "unknown"], 0.0).await?;
 
-            match result {
+            match result.0 {
                 Some(result) => {
                     assert_eq!(1, result.len());
                     assert_eq!(("key".to_owned(), "two".to_owned(), 2.0), result[0]);
@@ -194,10 +195,10 @@ async fn bzpopmin() -> Result<()> {
         .zadd("key", (1.0, "one"), ZAddOptions::default())
         .await?;
 
-    let result: Option<Vec<(String, String, f64)>> =
+    let result: BZpopMinMaxResult<String, String> =
         client.bzpopmin(["key", "unknown"], 0.0).await?;
 
-    match result {
+    match result.0 {
         Some(result) => {
             assert_eq!(1, result.len());
             assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
@@ -205,17 +206,17 @@ async fn bzpopmin() -> Result<()> {
         None => unreachable!(),
     }
 
-    let result: Option<Vec<(String, String, f64)>> = client.bzpopmin("unknown", 0.01).await?;
-    assert_eq!(None, result);
+    let result: BZpopMinMaxResult<String, String> = client.bzpopmin("unknown", 0.01).await?;
+    assert_eq!(None, result.0);
 
     spawn(async move {
         async fn calls() -> Result<()> {
             let mut client = get_test_client().await?;
 
-            let result: Option<Vec<(String, String, f64)>> =
+            let result: BZpopMinMaxResult<String, String> =
                 client.bzpopmin(["key", "unknown"], 0.0).await?;
 
-            match result {
+            match result.0 {
                 Some(result) => {
                     assert_eq!(1, result.len());
                     assert_eq!(("key".to_owned(), "one".to_owned(), 1.0), result[0]);
@@ -977,12 +978,12 @@ async fn zscan() -> Result<()> {
         )
         .await?;
 
-    let result = client.zscan("key", 0, ZScanOptions::default()).await?;
-    assert_eq!(0, result.0);
-    assert_eq!(3, result.1.len());
-    assert_eq!(("one".to_owned(), 1.0), result.1[0]);
-    assert_eq!(("two".to_owned(), 2.0), result.1[1]);
-    assert_eq!(("three".to_owned(), 3.0), result.1[2]);
+    let result: ZScanResult<String> = client.zscan("key", 0, ZScanOptions::default()).await?;
+    assert_eq!(0, result.cursor);
+    assert_eq!(3, result.elements.len());
+    assert_eq!(("one".to_owned(), 1.0), result.elements[0]);
+    assert_eq!(("two".to_owned(), 2.0), result.elements[1]);
+    assert_eq!(("three".to_owned(), 3.0), result.elements[2]);
 
     Ok(())
 }

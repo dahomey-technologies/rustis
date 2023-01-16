@@ -1,10 +1,11 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CommandArgs, FromKeyValueArray, FromSingleValue,
+        FromValueArray, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
+use serde::{de::DeserializeOwned, Deserialize};
 
 /// A group of Redis commands related to [`Hashes`](https://redis.io/docs/data-types/hashes/)
 ///
@@ -131,8 +132,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
-        A: FromValueArray<F>,
+        F: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<F> + DeserializeOwned,
     {
         prepare_command(self, cmd("HKEYS").arg(key))
     }
@@ -167,8 +168,8 @@ pub trait HashCommands {
         K: SingleArg,
         F: SingleArg,
         C: SingleArgCollection<F>,
-        V: FromSingleValue,
-        A: FromValueArray<V>,
+        V: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<V> + DeserializeOwned,
     {
         prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
@@ -205,8 +206,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
-        A: FromValueArray<F>,
+        F: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<F> + DeserializeOwned,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
     }
@@ -255,12 +256,12 @@ pub trait HashCommands {
         key: K,
         cursor: u64,
         options: HScanOptions,
-    ) -> PreparedCommand<Self, (u64, Vec<(F, V)>)>
+    ) -> PreparedCommand<Self, HScanResult<F, V>>
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
-        V: FromSingleValue,
+        F: FromSingleValue + DeserializeOwned,
+        V: FromSingleValue + DeserializeOwned,
     {
         prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -333,8 +334,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
-        A: FromValueArray<V>,
+        V: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<V> + DeserializeOwned,
     {
         prepare_command(self, cmd("HVALS").arg(key))
     }
@@ -366,4 +367,16 @@ impl IntoArgs for HScanOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }
+}
+
+/// Result for the [`hscan`](HashCommands::hscan) command.
+#[derive(Debug, Deserialize)]
+pub struct HScanResult<F, V>
+where
+    F: FromSingleValue + DeserializeOwned,
+    V: FromSingleValue + DeserializeOwned,
+{
+    pub cursor: u64,
+    #[serde(deserialize_with = "deserialize_vec_of_pairs")]
+    pub elements: Vec<(F, V)>,
 }

@@ -122,6 +122,16 @@ fn array() -> Result<()> {
 }
 
 #[test]
+fn nil() -> Result<()> {
+    log_try_init();
+
+    let result = deserialize_value("_\r\n")?;
+    assert_eq!(Value::Nil, result);
+
+    Ok(())
+}
+
+#[test]
 fn map() -> Result<()> {
     log_try_init();
 

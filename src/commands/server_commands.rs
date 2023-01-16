@@ -1,14 +1,16 @@
-use std::{collections::HashMap, str::FromStr};
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray,
-        FromValue, HashMapExt, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
-        Value,
+        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
 };
+use serde::{
+    de::{self, DeserializeOwned, SeqAccess, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{collections::HashMap, fmt, str::FromStr};
 
 /// A group of Redis commands related to Server Management
 /// # See Also
@@ -29,7 +31,7 @@ pub trait ServerCommands {
     fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue,
+        C: FromSingleValue + DeserializeOwned,
         CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
@@ -171,7 +173,7 @@ pub trait ServerCommands {
     fn acl_log<EE>(&mut self, options: AclLogOptions) -> PreparedCommand<Self, Vec<EE>>
     where
         Self: Sized,
-        EE: FromKeyValueArray<String, Value>,
+        EE: FromKeyValueArray<String, Value> + DeserializeOwned,
     {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
@@ -220,7 +222,7 @@ pub trait ServerCommands {
     fn acl_users<U, UU>(&mut self) -> PreparedCommand<Self, UU>
     where
         Self: Sized,
-        U: FromSingleValue,
+        U: FromSingleValue + DeserializeOwned,
         UU: FromValueArray<U>,
     {
         prepare_command(self, cmd("ACL").arg("USERS"))
@@ -977,7 +979,7 @@ impl IntoArgs for AclLogOptions {
 }
 
 /// Command info result for the [`command`](ServerCommands::command) command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CommandInfo {
     /// This is the command's name in lowercase.
     pub name: String,
@@ -1006,101 +1008,6 @@ pub struct CommandInfo {
     pub sub_commands: Vec<CommandInfo>,
 }
 
-impl FromValue for CommandInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut iter = values.into_iter();
-
-        match (
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-        ) {
-            (
-                Some(name),
-                Some(arity),
-                Some(flags),
-                Some(first_key),
-                Some(last_key),
-                Some(step),
-                Some(acl_categories),
-                Some(command_tips),
-                Some(key_specifications),
-                Some(sub_commands),
-            ) => Ok(Self {
-                name: name.into()?,
-                arity: arity.into()?,
-                flags: flags.into()?,
-                first_key: first_key.into()?,
-                last_key: last_key.into()?,
-                step: step.into()?,
-                acl_categories: acl_categories.into()?,
-                command_tips: command_tips.into()?,
-                key_specifications: key_specifications.into()?,
-                sub_commands: sub_commands.into()?,
-            }),
-            (
-                Some(name),
-                Some(arity),
-                Some(flags),
-                Some(first_key),
-                Some(last_key),
-                Some(step),
-                Some(acl_categories),
-                None,
-                None,
-                None,
-            ) => Ok(Self {
-                name: name.into()?,
-                arity: arity.into()?,
-                flags: flags.into()?,
-                first_key: first_key.into()?,
-                last_key: last_key.into()?,
-                step: step.into()?,
-                acl_categories: acl_categories.into()?,
-                command_tips: Vec::new(),
-                key_specifications: Vec::new(),
-                sub_commands: Vec::new(),
-            }),
-            (
-                Some(name),
-                Some(arity),
-                Some(flags),
-                Some(first_key),
-                Some(last_key),
-                Some(step),
-                None,
-                None,
-                None,
-                None,
-            ) => Ok(Self {
-                name: name.into()?,
-                arity: arity.into()?,
-                flags: flags.into()?,
-                first_key: first_key.into()?,
-                last_key: last_key.into()?,
-                step: step.into()?,
-                acl_categories: Vec::new(),
-                command_tips: Vec::new(),
-                key_specifications: Vec::new(),
-                sub_commands: Vec::new(),
-            }),
-            _ => Err(Error::Client(
-                "Cannot parse CommandInfo from result".to_owned(),
-            )),
-        }
-
-        //let (name, arity, flags, first_key, last_key, step, acl_categories, command_tips, key_specifications, sub_commands)
-    }
-}
-
 /// Get additional information about a command
 ///
 /// See <https://redis.io/docs/reference/command-tips/>
@@ -1112,9 +1019,12 @@ pub enum CommandTip {
     ResponsePolicy(ResponsePolicy),
 }
 
-impl FromValue for CommandTip {
-    fn from_value(value: Value) -> Result<Self> {
-        let tip: String = value.into()?;
+impl<'de> Deserialize<'de> for CommandTip {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let tip = String::deserialize(deserializer)?;
         match tip.as_str() {
             "nondeterministic_output" => Ok(CommandTip::NonDeterministricOutput),
             "nondeterministic_output_order" => Ok(CommandTip::NonDeterministricOutputOrder),
@@ -1122,13 +1032,26 @@ impl FromValue for CommandTip {
                 let mut parts = tip.split(':');
                 match (parts.next(), parts.next(), parts.next()) {
                     (Some("request_policy"), Some(policy), None) => {
-                        Ok(CommandTip::RequestPolicy(RequestPolicy::from_str(policy)?))
+                        match RequestPolicy::from_str(policy) {
+                            Ok(request_policy) => Ok(CommandTip::RequestPolicy(request_policy)),
+                            Err(_) => Err(de::Error::invalid_value(
+                                de::Unexpected::Str(policy),
+                                &"a valid RequestPolicy value",
+                            )),
+                        }
                     }
-                    (Some("response_policy"), Some(policy), None) => Ok(
-                        CommandTip::ResponsePolicy(ResponsePolicy::from_str(policy)?),
-                    ),
-                    _ => Err(Error::Client(
-                        "Cannot parse CommandTip from result".to_owned(),
+                    (Some("response_policy"), Some(policy), None) => {
+                        match ResponsePolicy::from_str(policy) {
+                            Ok(response_policy) => Ok(CommandTip::ResponsePolicy(response_policy)),
+                            Err(_) => Err(de::Error::invalid_value(
+                                de::Unexpected::Str(policy),
+                                &"a valid ResponsePolicy value",
+                            )),
+                        }
+                    }
+                    _ => Err(de::Error::invalid_value(
+                        de::Unexpected::Str(tip.as_str()),
+                        &"a valid CommandTip value",
                     )),
                 }
             }
@@ -1142,7 +1065,7 @@ impl FromValue for CommandTip {
 /// 1. The command doesn't accept key name arguments: the client can execute the command on an arbitrary shard.
 /// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard,
 /// as determined by the hash slot of the input keys.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum RequestPolicy {
     /// the client should execute the command on all nodes - masters and replicas alike.
     ///
@@ -1191,7 +1114,7 @@ impl FromStr for RequestPolicy {
 /// These should be packed in a single in no particular order.
 /// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names.
 /// For example, [`mget`](crate::commands::StringCommands::mget)'s aggregated reply.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum ResponsePolicy {
     /// the clients should return success if at least one shard didn't reply with an error.
     ///
@@ -1257,117 +1180,78 @@ impl FromStr for ResponsePolicy {
 }
 
 /// Key specifications of a command for the [`command`](ServerCommands::command) command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct KeySpecification {
     pub begin_search: BeginSearch,
     pub find_keys: FindKeys,
     pub flags: Vec<String>,
+    #[serde(default)]
     pub notes: String,
-}
-
-impl FromValue for KeySpecification {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        let notes: String = match values.remove("notes") {
-            Some(notes) => notes.into()?,
-            None => "".to_owned(),
-        };
-
-        Ok(Self {
-            begin_search: values.remove_with_result("begin_search")?.into()?,
-            find_keys: values.remove_with_result("find_keys")?.into()?,
-            flags: values.remove_with_result("flags")?.into()?,
-            notes,
-        })
-    }
 }
 
 /// The BeginSearch value of a specification informs
 /// the client of the extraction's beginning
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", content = "spec")]
+#[serde(rename_all = "lowercase")]
 pub enum BeginSearch {
+    #[serde(deserialize_with = "deserialize_begin_search_idx")]
     Index(usize),
-    Keyword { keyword: String, start_from: isize },
+    Keyword {
+        keyword: String,
+        #[serde(rename = "startfrom")]
+        start_from: isize,
+    },
+    #[serde(deserialize_with = "deserialize_begin_search_unknown")]
     Unknown,
 }
 
-impl FromValue for BeginSearch {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
+fn deserialize_begin_search_idx<'de, D>(deserializer: D) -> std::result::Result<usize, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map = HashMap::<String, usize>::deserialize(deserializer)?;
+    let index = map
+        .get("index")
+        .ok_or_else(|| de::Error::custom("Cannot parse BeginSearch index"))?;
+    Ok(*index)
+}
 
-        let type_: String = values.remove_with_result("type")?.into()?;
-        match type_.as_str() {
-            "index" => {
-                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
-                Ok(BeginSearch::Index(
-                    spec.remove_with_result("index")?.into()?,
-                ))
-            }
-            "keyword" => {
-                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
-                Ok(BeginSearch::Keyword {
-                    keyword: spec.remove_with_result("keyword")?.into()?,
-                    start_from: spec.remove_with_result("startfrom")?.into()?,
-                })
-            }
-            "unknown" => Ok(BeginSearch::Unknown),
-            _ => Err(Error::Client(
-                "Cannot parse BeginSearch from result".to_owned(),
-            )),
-        }
-    }
+fn deserialize_begin_search_unknown<'de, D>(deserializer: D) -> std::result::Result<(), D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let map = HashMap::<String, ()>::deserialize(deserializer)?;
+    assert!(map.is_empty());
+    Ok(())
 }
 
 /// The FindKeys value of a key specification tells the client
 /// how to continue the search for key names.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", content = "spec")]
+#[serde(rename_all = "lowercase")]
 pub enum FindKeys {
     Range {
+        #[serde(rename = "lastkey")]
         last_key: isize,
+        #[serde(rename = "keystep")]
         key_step: usize,
         limit: usize,
     },
-    KeyEnum {
+    KeyNum {
+        #[serde(rename = "keynumidx")]
         key_num_idx: usize,
+        #[serde(rename = "firstkey")]
         first_key: usize,
+        #[serde(rename = "keystep")]
         key_step: usize,
     },
-    Unknown,
-}
-
-impl FromValue for FindKeys {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        let type_: String = values.remove_with_result("type")?.into()?;
-        match type_.as_str() {
-            "range" => {
-                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
-                Ok(FindKeys::Range {
-                    last_key: spec.remove_with_result("lastkey")?.into()?,
-                    key_step: spec.remove_with_result("keystep")?.into()?,
-                    limit: spec.remove_with_result("limit")?.into()?,
-                })
-            }
-            "keynum" => {
-                let mut spec: HashMap<String, Value> = values.remove_with_result("spec")?.into()?;
-                Ok(FindKeys::KeyEnum {
-                    key_num_idx: spec.remove_with_result("keynumidx")?.into()?,
-                    first_key: spec.remove_with_result("firstkey")?.into()?,
-                    key_step: spec.remove_with_result("keystep")?.into()?,
-                })
-            }
-            "unknown" => Ok(FindKeys::Unknown),
-            _ => Err(Error::Client(
-                "Cannot parse BeginSearch from result".to_owned(),
-            )),
-        }
-    }
+    Unknown {},
 }
 
 /// Command doc result for the [`command_docs`](ServerCommands::command_docs) command
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize)]
 pub struct CommandDoc {
     /// short command description.
     pub summary: String,
@@ -1380,37 +1264,23 @@ pub struct CommandDoc {
     /// an array of documentation flags. Possible values are:
     /// - `deprecated`: the command is deprecated.
     /// - `syscmd`: a system command that isn't meant to be called by users.
+    #[serde(default)]
     pub doc_flags: Vec<CommandDocFlag>,
     /// the Redis version that deprecated the command (or for module commands, the module version).
+    #[serde(default)]
     pub deprecated_since: String,
     /// the alternative for a deprecated command.
+    #[serde(default)]
     pub replaced_by: String,
     /// an array of historical notes describing changes to the command's behavior or arguments.
+    #[serde(default)]
     pub history: Vec<HistoricalNote>,
     /// an array of [`command arguments`](https://redis.io/docs/reference/command-arguments/)
     pub arguments: Vec<CommandArgument>,
 }
 
-impl FromValue for CommandDoc {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            summary: values.remove_with_result("summary")?.into()?,
-            since: values.remove_with_result("since")?.into()?,
-            group: values.remove_with_result("group")?.into()?,
-            complexity: values.remove_with_result("complexity")?.into()?,
-            doc_flags: values.remove_or_default("doc_flags").into()?,
-            deprecated_since: values.remove_or_default("deprecated_since").into()?,
-            replaced_by: values.remove_or_default("replaced_by").into()?,
-            history: values.remove_or_default("history").into()?,
-            arguments: values.remove_with_result("arguments")?.into()?,
-        })
-    }
-}
-
 /// Command documenation flag
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub enum CommandDocFlag {
     /// the command is deprecated.
     Deprecated,
@@ -1418,95 +1288,52 @@ pub enum CommandDocFlag {
     SystemCommand,
 }
 
-impl FromValue for CommandDocFlag {
-    fn from_value(value: Value) -> Result<Self> {
-        let f: String = value.into()?;
-
-        match f.as_str() {
-            "deprecated" => Ok(CommandDocFlag::Deprecated),
-            "syscmd" => Ok(CommandDocFlag::SystemCommand),
-            _ => Err(Error::Client(
-                "Cannot parse CommandDocFlag from result".to_owned(),
-            )),
-        }
-    }
-}
-
 /// Sub-result for the [`command_docs`](ServerCommands::command_docs) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct HistoricalNote {
     pub version: String,
     pub description: String,
 }
 
-impl FromValue for HistoricalNote {
-    fn from_value(value: Value) -> Result<Self> {
-        let (version, description): (String, String) = value.into()?;
-
-        Ok(Self {
-            version,
-            description,
-        })
-    }
-}
-
 /// [`command argument`](https://redis.io/docs/reference/command-arguments/)
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct CommandArgument {
     ///  the argument's name, always present.
     pub name: String,
     /// the argument's display string, present in arguments that have a displayable representation
+    #[serde(default)]
     pub display_text: String,
     ///  the argument's type, always present.
+    #[serde(rename = "type")]
     pub type_: CommandArgumentType,
     /// this value is available for every argument of the `key` type.
     /// t is a 0-based index of the specification in the command's [`key specifications`](https://redis.io/topics/key-specs)
     /// that corresponds to the argument.
+    #[serde(default)]
     pub key_spec_index: usize,
     /// a constant literal that precedes the argument (user input) itself.
+    #[serde(default)]
     pub token: String,
     /// a short description of the argument.
+    #[serde(default)]
     pub summary: String,
     /// the debut Redis version of the argument (or for module commands, the module version).
+    #[serde(default)]
     pub since: String,
     /// the Redis version that deprecated the command (or for module commands, the module version).
+    #[serde(default)]
     pub deprecated_since: String,
     /// an array of argument flags.
+    #[serde(default)]
     pub flags: Vec<ArgumentFlag>,
     /// the argument's value.
+    #[serde(default)]
     pub value: Vec<String>,
 }
 
-impl FromValue for CommandArgument {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_with_result("name")?.into()?,
-            display_text: values.remove_or_default("display_text").into()?,
-            type_: values.remove_with_result("type")?.into()?,
-            key_spec_index: values.remove_or_default("key_spec_index").into()?,
-            token: values.remove_or_default("token").into()?,
-            summary: values.remove_or_default("summary").into()?,
-            since: values.remove_or_default("since").into()?,
-            deprecated_since: values.remove_or_default("deprecated_since").into()?,
-            flags: values.remove_or_default("flags").into()?,
-            value: match values.remove_or_default("value") {
-                value @ Value::BulkString(_) => vec![value.into()?],
-                value @ Value::Array(_) => value.into()?,
-                Value::Nil => vec![],
-                value => {
-                    return Err(Error::Client(format!(
-                        "Cannot parse CommandArgument from result: {value:?}"
-                    )))
-                }
-            },
-        })
-    }
-}
-
 /// An argument must have one of the following types:
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum CommandArgumentType {
     /// a string argument.
     String,
@@ -1525,35 +1352,15 @@ pub enum CommandArgumentType {
     PureToken,
     /// the argument is a container for nested arguments.
     /// This type enables choice among several nested arguments
-    OneOf,
+    Oneof,
     /// the argument is a container for nested arguments.
     /// This type enables grouping arguments and applying a property (such as optional) to all
     Block,
 }
 
-impl FromValue for CommandArgumentType {
-    fn from_value(value: Value) -> Result<Self> {
-        let t: String = value.into()?;
-
-        match t.as_str() {
-            "string" => Ok(CommandArgumentType::String),
-            "integer" => Ok(CommandArgumentType::Integer),
-            "double" => Ok(CommandArgumentType::Double),
-            "key" => Ok(CommandArgumentType::Key),
-            "pattern" => Ok(CommandArgumentType::Pattern),
-            "unix-time" => Ok(CommandArgumentType::UnixTime),
-            "pure-token" => Ok(CommandArgumentType::PureToken),
-            "oneof" => Ok(CommandArgumentType::OneOf),
-            "block" => Ok(CommandArgumentType::Block),
-            _ => Err(Error::Client(
-                "Cannot parse CommandArgumentType from result".to_owned(),
-            )),
-        }
-    }
-}
-
 /// Flag for a command argument
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum ArgumentFlag {
     /// denotes that the argument is optional (for example, the GET clause of the SET command).
     Optional,
@@ -1561,21 +1368,6 @@ pub enum ArgumentFlag {
     Multiple,
     ///  denotes the possible repetition of the argument with its preceding token (see SORT's GET pattern clause).
     MultipleToken,
-}
-
-impl FromValue for ArgumentFlag {
-    fn from_value(value: Value) -> Result<Self> {
-        let f: String = value.into()?;
-
-        match f.as_str() {
-            "optional" => Ok(ArgumentFlag::Optional),
-            "multiple" => Ok(ArgumentFlag::Multiple),
-            "multiple-token" => Ok(ArgumentFlag::MultipleToken),
-            _ => Err(Error::Client(
-                "Cannot parse ArgumentFlag from result".to_owned(),
-            )),
-        }
-    }
 }
 
 /// Options for the [`command_list`](ServerCommands::command_list) command.
@@ -1769,7 +1561,7 @@ impl IntoArgs for LatencyHistoryEvent {
 }
 
 /// Command Histogram for the [`latency_histogram`](ServerCommands::latency_histogram) commands.
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub struct CommandHistogram {
     /// The total calls for that command.
     pub calls: usize,
@@ -1782,17 +1574,6 @@ pub struct CommandHistogram {
     /// - Everything above 1 sec is considered +Inf.
     /// - At max there will be log2(1000000000)=30 buckets.
     pub histogram_usec: HashMap<u32, u32>,
-}
-
-impl FromValue for CommandHistogram {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            calls: values.remove_with_result("calls")?.into()?,
-            histogram_usec: values.remove_with_result("histogram_usec")?.into()?,
-        })
-    }
 }
 
 /// Options for the [`lolwut`](ServerCommands::lolwut) command
@@ -1824,167 +1605,148 @@ impl IntoArgs for LolWutOptions {
 }
 
 /// Result for the [`memory_stats`](ServerCommands::memory_stats) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct MemoryStats {
     /// Peak memory consumed by Redis in bytes
     /// (see [`INFO`](https://redis.io/commands/info)'s used_memory_peak)
+    #[serde(rename = "peak.allocated")]
     pub peak_allocated: usize,
 
     /// Total number of bytes allocated by Redis using its allocator
     /// (see [`INFO`](https://redis.io/commands/info)'s used_memory)
+    #[serde(rename = "total.allocated")]
     pub total_allocated: usize,
 
     /// Initial amount of memory consumed by Redis at startup in bytes
     /// (see [`INFO`](https://redis.io/commands/info)'s used_memory_startup)
+    #[serde(rename = "startup.allocated")]
+    #[serde(default)]
     pub startup_allocated: usize,
 
     /// Size in bytes of the replication backlog
     /// (see [`INFO`](https://redis.io/commands/info)'s repl_backlog_active)
+    #[serde(rename = "replication.backlog")]
+    #[serde(default)]
     pub replication_backlog: usize,
 
     /// The total size in bytes of all replicas overheads
     /// (output and query buffers, connection contexts)
+    #[serde(rename = "clients.slaves")]
+    #[serde(default)]
     pub clients_slaves: usize,
 
     /// The total size in bytes of all clients overheads
     /// (output and query buffers, connection contexts)
+    #[serde(rename = "clients.normal")]
+    #[serde(default)]
     pub clients_normal: usize,
 
     /// Memory usage by cluster links
     /// (Added in Redis 7.0, see [`INFO`](https://redis.io/commands/info)'s mem_cluster_links).
+    #[serde(rename = "cluster.links")]
+    #[serde(default)]
     pub cluster_links: usize,
 
     /// The summed size in bytes of AOF related buffers.
+    #[serde(rename = "aof.buffer")]
+    #[serde(default)]
     pub aof_buffer: usize,
 
     /// the summed size in bytes of the overheads of the Lua scripts' caches
+    #[serde(rename = "lua.caches")]
+    #[serde(default)]
     pub lua_caches: usize,
 
     /// the summed size in bytes of the overheads of the functions' caches
+    #[serde(rename = "functions.caches")]
+    #[serde(default)]
     pub functions_caches: usize,
-
-    /// For each of the server's databases (key = db index),
-    /// the overheads of the main and expiry dictionaries are reported in bytes
-    pub databases: HashMap<usize, DatabaseOverhead>,
 
     /// The sum of all overheads, i.e. `startup.allocated`, `replication.backlog`,
     /// `clients.slaves`, `clients.normal`, `aof.buffer` and those of the internal data structures
     /// that are used in managing the Redis keyspace (see [`INFO`](https://redis.io/commands/info)'s used_memory_overhead)
+    #[serde(rename = "overhead.total")]
+    #[serde(default)]
     pub overhead_total: usize,
 
     /// The total number of keys stored across all databases in the server
+    #[serde(rename = "keys.count")]
+    #[serde(default)]
     pub keys_count: usize,
 
     /// The ratio between net memory usage (`total.allocated` minus `startup.allocated`) and `keys.count`
+    #[serde(rename = "keys.bytes-per-key")]
+    #[serde(default)]
     pub keys_bytes_per_key: usize,
 
     /// The size in bytes of the dataset, i.e. `overhead.total` subtracted from `total.allocated`
     ///  (see [`INFO`](https://redis.io/commands/info)'s used_memory_dataset)
+    #[serde(rename = "dataset.bytes")]
+    #[serde(default)]
     pub dataset_bytes: usize,
 
     /// The percentage of `dataset.bytes` out of the net memory usage
+    #[serde(rename = "dataset.percentage")]
+    #[serde(default)]
     pub dataset_percentage: f64,
 
     /// The percentage of `peak.allocated` out of `total.allocated`
+    #[serde(rename = "peak.percentage")]
+    #[serde(default)]
     pub peak_percentage: f64,
 
+    #[serde(rename = "allocator.allocated")]
+    #[serde(default)]
     pub allocator_allocated: usize,
 
+    #[serde(rename = "allocator.active")]
+    #[serde(default)]
     pub allocator_active: usize,
 
+    #[serde(rename = "allocator.resident")]
+    #[serde(default)]
     pub allocator_resident: usize,
 
+    #[serde(rename = "allocator-fragmentation.ratio")]
+    #[serde(default)]
     pub allocator_fragmentation_ratio: f64,
 
+    #[serde(rename = "allocator-fragmentation.bytes")]
+    #[serde(default)]
     pub allocator_fragmentation_bytes: usize,
 
+    #[serde(rename = "allocator-rss.ratio")]
+    #[serde(default)]
     pub allocator_rss_ratio: f64,
 
+    #[serde(rename = "allocator-rss.bytes")]
+    #[serde(default)]
     pub allocator_rss_bytes: usize,
 
+    #[serde(rename = "rss-overhead.ratio")]
+    #[serde(default)]
     pub rss_overhead_ratio: f64,
 
+    #[serde(rename = "rss-overhead.bytes")]
+    #[serde(default)]
     pub rss_overhead_bytes: usize,
 
     /// See [`INFO`](https://redis.io/commands/info)'s mem_fragmentation_ratio
+    #[serde(rename = "fragmentation")]
+    #[serde(default)]
     pub fragmentation: f64,
 
+    #[serde(rename = "fragmentation.bytes")]
+    #[serde(default)]
     pub fragmentation_bytes: usize,
-
-    pub additional_stats: HashMap<String, Value>,
-}
-
-impl FromValue for MemoryStats {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            peak_allocated: values.remove_or_default("peak.allocated").into()?,
-            total_allocated: values.remove_or_default("total.allocated").into()?,
-            startup_allocated: values.remove_or_default("startup.allocated").into()?,
-            replication_backlog: values.remove_or_default("replication.backlog").into()?,
-            clients_slaves: values.remove_or_default("clients.slaves").into()?,
-            clients_normal: values.remove_or_default("clients.normal").into()?,
-            cluster_links: values.remove_or_default("cluster.links").into()?,
-            aof_buffer: values.remove_or_default("aof.buffer").into()?,
-            lua_caches: values.remove_or_default("lua.caches").into()?,
-            functions_caches: values.remove_or_default("functions.caches").into()?,
-            databases: (0..16)
-                .into_iter()
-                .filter_map(|i| {
-                    values
-                        .remove(&format!("db.{i}"))
-                        .map(|v| DatabaseOverhead::from_value(v).map(|o| (i, o)))
-                })
-                .collect::<Result<HashMap<usize, DatabaseOverhead>>>()?,
-            overhead_total: values.remove_or_default("overhead.total").into()?,
-            keys_count: values.remove_or_default("keys.count").into()?,
-            keys_bytes_per_key: values.remove_or_default("keys.bytes-per-key").into()?,
-            dataset_bytes: values.remove_or_default("dataset.bytes").into()?,
-            dataset_percentage: values.remove_or_default("dataset.percentage").into()?,
-            peak_percentage: values.remove_or_default("peak.percentage").into()?,
-            allocator_allocated: values.remove_or_default("allocator.allocated").into()?,
-            allocator_active: values.remove_or_default("allocator.active").into()?,
-            allocator_resident: values.remove_or_default("allocator.resident").into()?,
-            allocator_fragmentation_ratio: values
-                .remove_or_default("allocator-fragmentation.ratio")
-                .into()?,
-            allocator_fragmentation_bytes: values
-                .remove_or_default("allocator-fragmentation.bytes")
-                .into()?,
-            allocator_rss_ratio: values.remove_or_default("allocator-rss.ratio").into()?,
-            allocator_rss_bytes: values.remove_or_default("allocator-rss.bytes").into()?,
-            rss_overhead_ratio: values.remove_or_default("rss-overhead.ratio").into()?,
-            rss_overhead_bytes: values.remove_or_default("rss-overhead.bytes").into()?,
-            fragmentation: values.remove_or_default("fragmentation").into()?,
-            fragmentation_bytes: values.remove_or_default("fragmentation.bytes").into()?,
-            additional_stats: values,
-        })
-    }
 }
 
 /// Sub-result for the [`memory_stats`](ServerCommands::memory_stats) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct DatabaseOverhead {
     pub overhead_hashtable_main: usize,
     pub overhead_hashtable_expires: usize,
     pub overhead_hashtable_slot_to_keys: usize,
-}
-
-impl FromValue for DatabaseOverhead {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            overhead_hashtable_main: values.remove_or_default("overhead.hashtable.main").into()?,
-            overhead_hashtable_expires: values
-                .remove_or_default("overhead.hashtable.expires")
-                .into()?,
-            overhead_hashtable_slot_to_keys: values
-                .remove_or_default("overhead.hashtable.slot-to-keys")
-                .into()?,
-        })
-    }
 }
 
 /// Options for the [`memory_usage`](ServerCommands::memory_usage) command
@@ -2013,22 +1775,13 @@ impl IntoArgs for MemoryUsageOptions {
 }
 
 /// Module information result for the [`module_list`](ServerCommands::module_list) command.
+#[derive(Deserialize)]
 pub struct ModuleInfo {
     /// Name of the module
     pub name: String,
     /// Version of the module
+    #[serde(default)]
     pub version: u64,
-}
-
-impl FromValue for ModuleInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            version: values.remove_or_default("ver").into()?,
-        })
-    }
 }
 
 /// Options for the [`module_load`](ServerCommands::module_load) command
@@ -2116,6 +1869,7 @@ impl IntoArgs for ReplicaOfOptions {
 }
 
 /// Result for the [`role`](ServerCommands::role) command.
+#[derive(Debug)]
 pub enum RoleResult {
     Master {
         /// The current master replication offset,
@@ -2143,60 +1897,83 @@ pub enum RoleResult {
     },
 }
 
-impl FromValue for RoleResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let values: Vec<Value> = value.into()?;
-        let mut iter = values.into_iter();
+impl<'de> Deserialize<'de> for RoleResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct RoleResultVisitor;
 
-        match (
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-            iter.next(),
-        ) {
-            (
-                Some(Value::BulkString(s)),
-                Some(master_replication_offset),
-                Some(replica_infos),
-                None,
-                None,
-                None,
-            ) if s == b"master" => Ok(Self::Master {
-                master_replication_offset: master_replication_offset.into()?,
-                replica_infos: replica_infos.into()?,
-            }),
-            (
-                Some(Value::BulkString(s)),
-                Some(master_ip),
-                Some(master_port),
-                Some(state),
-                Some(amount_data_received),
-                None,
-            ) if s == b"slave" => Ok(Self::Replica {
-                master_ip: master_ip.into()?,
-                master_port: master_port.into()?,
-                state: state.into()?,
-                amount_data_received: amount_data_received.into()?,
-            }),
-            (Some(Value::BulkString(s)), Some(master_names), None, None, None, None)
-                if s == b"sentinel" =>
-            {
-                Ok(Self::Sentinel {
-                    master_names: master_names.into()?,
-                })
+        impl<'de> Visitor<'de> for RoleResultVisitor {
+            type Value = RoleResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("RoleResult")
             }
-            _ => Err(Error::Client(
-                "Cannot parse RoleResult from result".to_string(),
-            )),
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let Some(role): Option<String> = seq.next_element()? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                };
+
+                match role.as_str() {
+                    "master" => {
+                        let Some(master_replication_offset): Option<usize> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                        };
+                        Ok(RoleResult::Master {
+                            master_replication_offset,
+                            replica_infos,
+                        })
+                    }
+                    "slave" => {
+                        let Some(master_ip): Option<String> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        let Some(master_port): Option<u16> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                        };
+                        let Some(state): Option<ReplicationState> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(3, &"fewer elements in sequence"));
+                        };
+                        let Some(amount_data_received): Option<isize> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(4, &"fewer elements in sequence"));
+                        };
+                        Ok(RoleResult::Replica {
+                            master_ip,
+                            master_port,
+                            state,
+                            amount_data_received,
+                        })
+                    }
+                    "sentinel" => {
+                        let Some(master_names): Option<Vec<String>> = seq.next_element()? else {
+                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        };
+                        Ok(RoleResult::Sentinel { master_names })
+                    }
+                    _ => Err(de::Error::invalid_value(
+                        de::Unexpected::Str(&role),
+                        &"expected `master`, `slave` or `sentinel`",
+                    )),
+                }
+            }
         }
+
+        deserializer.deserialize_seq(RoleResultVisitor)
     }
 }
 
 /// Represents a connected replicas to a master
 ///
 /// returned by the [`role`](ServerCommands::role) command.
+#[derive(Debug, Deserialize)]
 pub struct ReplicaInfo {
     /// the replica IP
     pub ip: String,
@@ -2206,20 +1983,11 @@ pub struct ReplicaInfo {
     pub last_ack_offset: usize,
 }
 
-impl FromValue for ReplicaInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let (ip, port, last_ack_offset) = value.into()?;
-        Ok(Self {
-            ip,
-            port,
-            last_ack_offset,
-        })
-    }
-}
-
 /// The state of the replication from the point of view of the master,
 ///
 /// returned by the [`role`](ServerCommands::role) command.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
 pub enum ReplicationState {
     /// the instance needs to connect to its master
     Connect,
@@ -2229,22 +1997,6 @@ pub enum ReplicationState {
     Sync,
     /// the replica is online
     Connected,
-}
-
-impl FromValue for ReplicationState {
-    fn from_value(value: Value) -> Result<Self> {
-        let str: String = value.into()?;
-
-        match str.as_str() {
-            "connect" => Ok(Self::Connect),
-            "connecting" => Ok(Self::Connecting),
-            "sync" => Ok(Self::Sync),
-            "connected" => Ok(Self::Connected),
-            _ => Err(Error::Client(format!(
-                "Cannot parse {str} to ReplicationState"
-            ))),
-        }
-    }
 }
 
 /// options for the [`shutdown`](ServerCommands::shutdown) command.
@@ -2317,6 +2069,7 @@ impl IntoArgs for SlowLogOptions {
 }
 
 /// Result [`slowlog_get`](ServerCommands::slowlog_get) for the command.
+#[derive(Deserialize)]
 pub struct SlowLogEntry {
     /// A unique progressive identifier for every slow log entry.
     pub id: i64,
@@ -2330,20 +2083,4 @@ pub struct SlowLogEntry {
     pub client_address: String,
     /// Client name if set via the CLIENT SETNAME command.
     pub client_name: String,
-}
-
-impl FromValue for SlowLogEntry {
-    fn from_value(value: Value) -> Result<Self> {
-        let (id, unix_timestamp, execution_time_micros, command, client_address, client_name) =
-            value.into()?;
-
-        Ok(Self {
-            id,
-            unix_timestamp,
-            execution_time_micros,
-            command,
-            client_address,
-            client_name,
-        })
-    }
 }

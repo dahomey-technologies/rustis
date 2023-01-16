@@ -4,7 +4,8 @@ use crate::{
     commands::{
         FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
         TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsGetOptions, TsGroupByOptions,
-        TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsSample,
+        TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsRangeSample,
+        TsSample,
     },
     tests::get_redis_stack_test_client,
     Result,
@@ -370,7 +371,7 @@ async fn ts_mget() -> Result<()> {
         ]),
         results[0].labels
     );
-    assert_eq!(vec![(1035, 40.)], results[0].values);
+    assert_eq!((1035, 40.), results[0].timestamp_value);
 
     assert_eq!("temp:TLV", results[1].key);
     assert_eq!(
@@ -380,7 +381,7 @@ async fn ts_mget() -> Result<()> {
         ]),
         results[1].labels
     );
-    assert_eq!(vec![(1030, 40.)], results[1].values);
+    assert_eq!((1030, 40.), results[1].timestamp_value);
 
     Ok(())
 }
@@ -422,7 +423,7 @@ async fn ts_mrange() -> Result<()> {
         ])
         .await?;
 
-    let results: Vec<TsSample> = client
+    let results: Vec<TsRangeSample> = client
         .ts_mrange(
             "-",
             "+",
@@ -467,7 +468,7 @@ async fn ts_mrange() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<TsSample> = client
+    let results: Vec<TsRangeSample> = client
         .ts_mrange(
             "-",
             "+",
@@ -523,7 +524,7 @@ async fn ts_mrevrange() -> Result<()> {
         ])
         .await?;
 
-    let results: Vec<TsSample> = client
+    let results: Vec<TsRangeSample> = client
         .ts_mrevrange(
             "-",
             "+",
@@ -568,7 +569,7 @@ async fn ts_mrevrange() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<TsSample> = client
+    let results: Vec<TsRangeSample> = client
         .ts_mrevrange(
             "-",
             "+",

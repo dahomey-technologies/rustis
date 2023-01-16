@@ -1,13 +1,9 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{
-        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
-    },
-    Result,
+    resp::{cmd, CommandArgs, FromValueArray, IntoArgs, SingleArg, SingleArgCollection, Value},
 };
+use serde::Deserialize;
+use std::collections::HashMap;
 
 /// A group of Redis commands related to [`T-Digest`](https://redis.io/docs/stack/bloom/)
 ///
@@ -392,47 +388,38 @@ pub trait TDigestCommands {
 }
 
 /// Result for the [`tdigest_info`](TDigestCommands::tdigest_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct TDigestInfoResult {
     /// The compression (controllable trade-off between accuracy and memory consumption) of the sketch
+    #[serde(rename = "Compression")]
     pub compression: usize,
     /// Size of the buffer used for storing the centroids and for the incoming unmerged observations
+    #[serde(rename = "Capacity")]
     pub capacity: usize,
     /// Number of merged observations
+    #[serde(rename = "Merged nodes")]
     pub merged_nodes: usize,
     /// Number of buffered nodes (uncompressed observations)
+    #[serde(rename = "Unmerged nodes")]
     pub unmerged_nodes: usize,
     /// Weight of values of the merged nodes
+    #[serde(rename = "Merged weight")]
     pub merged_weight: usize,
     /// Weight of values of the unmerged nodes (uncompressed observations)
+    #[serde(rename = "Unmerged weight")]
     pub unmerged_weight: usize,
     /// Number of observations added to the sketch
+    #[serde(rename = "Observations")]
     pub observations: usize,
     /// Number of times this sketch compressed data together
+    #[serde(rename = "Total compressions")]
     pub total_compressions: usize,
     /// Number of bytes allocated for the sketch
+    #[serde(rename = "Memory usage")]
     pub memory_usage: usize,
     /// Additional information
+    #[serde(flatten)]
     pub additional_info: HashMap<String, Value>,
-}
-
-impl FromValue for TDigestInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            compression: values.remove_or_default("Compression").into()?,
-            capacity: values.remove_or_default("Capacity").into()?,
-            merged_nodes: values.remove_or_default("Merged nodes").into()?,
-            unmerged_nodes: values.remove_or_default("Unmerged nodes").into()?,
-            merged_weight: values.remove_or_default("Merged weight").into()?,
-            unmerged_weight: values.remove_or_default("Unmerged weight").into()?,
-            observations: values.remove_or_default("Observations").into()?,
-            total_compressions: values.remove_or_default("Total compressions").into()?,
-            memory_usage: values.remove_or_default("Memory usage").into()?,
-            additional_info: values,
-        })
-    }
 }
 
 /// Options for the [`tdigest_merge`](TDigestCommands::tdigest_merge) command.

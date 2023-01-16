@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValue, HashMapExt, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
+        cmd, deserialize_byte_buf, CommandArgs, FromSingleValue, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
-    Result,
 };
+use serde::Deserialize;
+use std::collections::HashMap;
 
 /// A group of Redis commands related to Scripting and Functions
 /// # See Also
@@ -137,10 +136,9 @@ pub trait ScriptingCommands {
     /// # See Also
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
-    fn function_dump<P>(&mut self) -> PreparedCommand<Self, P>
+    fn function_dump(&mut self) -> PreparedCommand<Self, FunctionDumpResult>
     where
         Self: Sized,
-        P: FromSingleValue,
     {
         prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
@@ -435,7 +433,7 @@ impl IntoArgs for FunctionRestorePolicy {
 }
 
 /// Result for the [`function_list`](ScriptingCommands::function_list) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct LibraryInfo {
     /// the name of the library.
     pub library_name: String,
@@ -448,21 +446,8 @@ pub struct LibraryInfo {
     pub library_code: Option<String>,
 }
 
-impl FromValue for LibraryInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            library_name: values.remove_or_default("library_name").into()?,
-            engine: values.remove_or_default("engine").into()?,
-            functions: values.remove_or_default("functions").into()?,
-            library_code: values.remove_or_default("library_code").into()?,
-        })
-    }
-}
-
 /// Sub-result for the [`function_list`](ScriptingCommands::function_list) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FunctionInfo {
     /// the name of the function.
     pub name: String,
@@ -472,20 +457,8 @@ pub struct FunctionInfo {
     pub flags: Vec<String>,
 }
 
-impl FromValue for FunctionInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            description: values.remove_or_default("description").into()?,
-            flags: values.remove_or_default("flags").into()?,
-        })
-    }
-}
-
 /// Result for the [`function_stats`](ScriptingCommands::function_stats) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FunctionStats {
     /// information about the running script. If there's no in-flight function, the server replies with `None`.
     pub running_script: Option<RunningScript>,
@@ -494,19 +467,8 @@ pub struct FunctionStats {
     pub engines: HashMap<String, EngineStats>,
 }
 
-impl FromValue for FunctionStats {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            running_script: values.remove_or_default("running_script").into()?,
-            engines: values.remove_or_default("engines").into()?,
-        })
-    }
-}
-
 /// Sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct RunningScript {
     /// the name of the function.
     pub name: String,
@@ -516,36 +478,13 @@ pub struct RunningScript {
     pub duration_ms: u64,
 }
 
-impl FromValue for RunningScript {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_or_default("name").into()?,
-            command: values.remove_or_default("command").into()?,
-            duration_ms: values.remove_or_default("duration_ms").into()?,
-        })
-    }
-}
-
 /// sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize)]
 pub struct EngineStats {
     /// Number of libraries of functions
     pub libraries_count: usize,
     /// Number of functions
     pub functions_count: usize,
-}
-
-impl FromValue for EngineStats {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            libraries_count: values.remove_or_default("libraries_count").into()?,
-            functions_count: values.remove_or_default("functions_count").into()?,
-        })
-    }
 }
 
 /// Options for the [`script_debug`](ScriptingCommands::script_debug) command.
@@ -600,3 +539,7 @@ impl IntoArgs for FunctionListOptions {
         args.arg(self.command_args)
     }
 }
+
+/// Result for the [`function_dump`](ScriptingCommands::function_dump) command.
+#[derive(Deserialize)]
+pub struct FunctionDumpResult(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);

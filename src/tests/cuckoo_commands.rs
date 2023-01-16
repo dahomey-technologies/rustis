@@ -1,7 +1,7 @@
 use crate::{
     commands::{
         CfInsertOptions, CfReserveOptions, CuckooCommands, FlushingMode, ServerCommands,
-        StringCommands,
+        StringCommands, CfScanDumpResult,
     },
     tests::get_redis_stack_test_client,
     Error, RedisError, RedisErrorKind, Result,
@@ -200,24 +200,24 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
     client.cf_add("cf", "item1").await?;
 
     let mut iterator: i64 = 0;
-    let mut chunks: VecDeque<(i64, Vec<u8>)> = VecDeque::new();
+    let mut chunks: VecDeque<CfScanDumpResult> = VecDeque::new();
 
     loop {
         let result = client.cf_scandump("cf", iterator).await?;
 
-        if result.0 == 0 {
+        if result.iterator == 0 {
             break;
         } else {
-            iterator = result.0;
+            iterator = result.iterator;
             chunks.push_back(result);
         }
     }
 
     client.flushall(FlushingMode::Sync).await?;
 
-    while let Some((iterator, chunk)) = chunks.pop_front() {
+    while let Some(dump) = chunks.pop_front() {
         client
-            .cf_loadchunk("cf", iterator, chunk)
+            .cf_loadchunk("cf", dump.iterator, dump.data)
             .await?;
     }
 

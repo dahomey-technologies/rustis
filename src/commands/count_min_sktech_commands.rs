@@ -1,12 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{
-        cmd, FromValueArray, FromValue, HashMapExt, KeyValueArgsCollection, SingleArg,
-        SingleArgCollection, Value,
-    },
-    Result,
+    resp::{cmd, FromValueArray, KeyValueArgsCollection, SingleArg, SingleArgCollection},
 };
-use std::collections::HashMap;
+use serde::Deserialize;
 
 /// A group of Redis commands related to [`Count-min Sketch`](https://redis.io/docs/stack/bloom/)
 ///
@@ -172,24 +168,13 @@ pub trait CountMinSketchCommands {
 }
 
 /// Result for the [`cms_info`](CountMinSketchCommands::cms_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct CmsInfoResult {
     /// Width of the sketch
     pub width: usize,
     /// Depth of the sketch
     pub depth: usize,
     /// Total count of the sketch
+    #[serde(rename = "count")]
     pub total_count: usize,
-}
-
-impl FromValue for CmsInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            width: values.remove_or_default("width").into()?,
-            depth: values.remove_or_default("depth").into()?,
-            total_count: values.remove_or_default("count").into()?,
-        })
-    }
 }

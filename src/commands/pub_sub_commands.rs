@@ -1,11 +1,12 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
-        SingleArg, SingleArgCollection,
+        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
     Future,
 };
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
@@ -89,7 +90,7 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue,
+        C: FromSingleValue + DeserializeOwned,
         CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
@@ -142,7 +143,7 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue,
+        C: FromSingleValue + DeserializeOwned,
         CC: FromValueArray<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))

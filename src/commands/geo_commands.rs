@@ -1,11 +1,15 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
+        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
         MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
     },
-    Error, Result,
 };
+use serde::{
+    de::{self, DeserializeOwned, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{fmt, marker::PhantomData};
 
 /// A group of Redis commands related to [`Geospatial`](https://redis.io/docs/data-types/geospatial/) indices
 ///
@@ -136,8 +140,8 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M1: SingleArg,
-        M2: FromSingleValue,
-        A: FromValueArray<GeoSearchResult<M2>>,
+        M2: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<GeoSearchResult<M2>> + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -361,38 +365,49 @@ where
     pub coordinates: Option<(f64, f64)>,
 }
 
-impl<M> FromValue for GeoSearchResult<M>
+impl<'de, M> Deserialize<'de> for GeoSearchResult<M>
 where
-    M: FromSingleValue,
+    M: FromSingleValue + DeserializeOwned,
 {
-    fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::BulkString(_) => Ok(GeoSearchResult {
-                member: value.into()?,
-                distance: None,
-                geo_hash: None,
-                coordinates: None,
-            }),
-            Value::Array(_) => {
-                let values: Vec<Value> = value.into()?;
-                let mut it = values.into_iter();
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        pub struct GeoSearchResultVisitor<M>
+        where
+            M: FromSingleValue,
+        {
+            phantom: PhantomData<M>,
+        }
+
+        impl<'de, M> Visitor<'de> for GeoSearchResultVisitor<M>
+        where
+            M: FromSingleValue + DeserializeOwned,
+        {
+            type Value = GeoSearchResult<M>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("GeoSearchResult<M>")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(member) = seq.next_element::<M>().map_err(de::Error::custom)? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                };
+
                 let mut distance: Option<f64> = None;
                 let mut geo_hash: Option<i64> = None;
                 let mut coordinates: Option<(f64, f64)> = None;
 
-                let member = match it.next() {
-                    Some(value) => value.into()?,
-                    None => {
-                        return Err(Error::Client("Unexpected geo search result".to_owned()));
-                    }
-                };
-
-                for value in it {
+                while let Some(value) = seq.next_element::<Value>().map_err(de::Error::custom)? {
                     match value {
-                        Value::BulkString(_) => distance = Some(value.into()?),
+                        Value::BulkString(_) => distance = Some(f64::deserialize(value).map_err(de::Error::custom)?),
                         Value::Integer(h) => geo_hash = Some(h),
-                        Value::Array(_) => coordinates = Some(value.into()?),
-                        _ => return Err(Error::Client("Unexpected geo search result".to_owned())),
+                        Value::Array(_) => coordinates = Some(<(f64, f64)>::deserialize(value).map_err(de::Error::custom)?),
+                        _ => return Err(de::Error::custom("Unexpected geo search result")),
                     }
                 }
 
@@ -403,10 +418,74 @@ where
                     coordinates,
                 })
             }
-            _ => Err(Error::Client("Unexpected geo search result".to_owned())),
+
+            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                let member = M::deserialize(Value::BulkString(v)).map_err(E::custom)?;
+
+                Ok(GeoSearchResult {
+                    member,
+                    distance: None,
+                    geo_hash: None,
+                    coordinates: None,
+                })
+            }
         }
+
+        deserializer.deserialize_any(GeoSearchResultVisitor::<M> {
+            phantom: PhantomData,
+        })
     }
 }
+
+// impl<M> FromValue for GeoSearchResult<M>
+// where
+//     M: FromSingleValue,
+// {
+//     fn from_value(value: Value) -> Result<Self> {
+//         match value {
+//             Value::BulkString(_) => Ok(GeoSearchResult {
+//                 member: value.into()?,
+//                 distance: None,
+//                 geo_hash: None,
+//                 coordinates: None,
+//             }),
+//             Value::Array(_) => {
+//                 let values: Vec<Value> = value.into()?;
+//                 let mut it = values.into_iter();
+//                 let mut distance: Option<f64> = None;
+//                 let mut geo_hash: Option<i64> = None;
+//                 let mut coordinates: Option<(f64, f64)> = None;
+
+//                 let member = match it.next() {
+//                     Some(value) => value.into()?,
+//                     None => {
+//                         return Err(Error::Client("Unexpected geo search result".to_owned()));
+//                     }
+//                 };
+
+//                 for value in it {
+//                     match value {
+//                         Value::BulkString(_) => distance = Some(value.into()?),
+//                         Value::Integer(h) => geo_hash = Some(h),
+//                         Value::Array(_) => coordinates = Some(value.into()?),
+//                         _ => return Err(Error::Client("Unexpected geo search result".to_owned())),
+//                     }
+//                 }
+
+//                 Ok(GeoSearchResult {
+//                     member,
+//                     distance,
+//                     geo_hash,
+//                     coordinates,
+//                 })
+//             }
+//             _ => Err(Error::Client("Unexpected geo search result".to_owned())),
+//         }
+//     }
+// }
 
 /// Options for the [`geosearchstore`](GeoCommands::geosearchstore) command
 #[derive(Default)]

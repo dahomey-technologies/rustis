@@ -5,6 +5,7 @@ use crate::{
         SingleArgCollection,
     },
 };
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
 ///
@@ -120,7 +121,7 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: FromSingleValue + DeserializeOwned,
         C: SingleArgCollection<K>,
     {
         prepare_command(
@@ -146,8 +147,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        A: FromValueArray<E>,
+        E: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("LPOP").arg(key).arg(count))
     }
@@ -266,8 +267,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        A: FromValueArray<E>,
+        E: FromSingleValue + DeserializeOwned,
+        A: FromValueArray<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
@@ -328,8 +329,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        C: FromValueArray<E>,
+        E: FromSingleValue + DeserializeOwned,
+        C: FromValueArray<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("RPOP").arg(key).arg(count))
     }

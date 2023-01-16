@@ -1,12 +1,12 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
-        SingleArg, SingleArgCollection, Value,
+        cmd, deserialize_byte_buf, CommandArgs, FromValueArray, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
-    Result,
 };
-use std::{collections::HashMap, future};
+use serde::Deserialize;
+use std::future;
 
 /// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
 ///
@@ -286,7 +286,7 @@ pub trait BloomCommands {
         &mut self,
         key: impl SingleArg,
         iterator: i64,
-    ) -> PreparedCommand<Self, (i64, Vec<u8>)>
+    ) -> PreparedCommand<Self, BfScanDumpResult>
     where
         Self: Sized,
     {
@@ -318,26 +318,18 @@ impl IntoArgs for BfInfoParameter {
 }
 
 /// Result for the [`bf_info`](BloomCommands::bf_info) command.
+#[derive(Debug, Deserialize)]
 pub struct BfInfoResult {
+    #[serde(rename = "Capacity")]
     pub capacity: usize,
+    #[serde(rename = "Size")]
     pub size: usize,
+    #[serde(rename = "Number of filters")]
     pub num_filters: usize,
+    #[serde(rename = "Number of items inserted")]
     pub num_items_inserted: usize,
+    #[serde(rename = "Expansion rate")]
     pub expansion_rate: usize,
-}
-
-impl FromValue for BfInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, usize> = value.into()?;
-
-        Ok(Self {
-            capacity: values.remove_with_result("Capacity")?,
-            size: values.remove_with_result("Size")?,
-            num_filters: values.remove_with_result("Number of filters")?,
-            num_items_inserted: values.remove_with_result("Number of items inserted")?,
-            expansion_rate: values.remove_with_result("Expansion rate")?,
-        })
-    }
 }
 
 /// Options for the [`bf_insert`](BloomCommands::bf_insert) command.
@@ -450,4 +442,12 @@ impl IntoArgs for BfReserveOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }
+}
+
+/// Result for the [`bf_scandump`](BloomCommands::bf_scandump) command.
+#[derive(Debug, Deserialize)]
+pub struct BfScanDumpResult {
+    pub iterator: i64,
+    #[serde(deserialize_with = "deserialize_byte_buf")]
+    pub data: Vec<u8>,
 }

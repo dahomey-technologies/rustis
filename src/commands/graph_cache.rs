@@ -216,4 +216,6 @@ mod tests {
         assert_eq!(vec!["prop1".to_owned(), "prop2".to_owned(), "prop3".to_owned(), "prop4".to_owned(), "prop5".to_owned()], cache.property_keys);
         assert_eq!(vec!["rel1".to_owned()], cache.relationship_types);
     }
+
+
 }

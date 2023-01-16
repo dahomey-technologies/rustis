@@ -289,9 +289,10 @@ Current implementation provides the following conversions from [`Value`](Value):
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{FromSingleValue, FromValue, Value},
+    resp::{FromSingleValue, FromValue, Value, deserialize_byte_buf},
     Result,
 };
+use serde::Deserialize;
 
 pub struct MyI32(i32);
 
@@ -303,6 +304,10 @@ impl FromValue for MyI32 {
 }
 
 impl FromSingleValue for MyI32 {}
+
+#[derive(Deserialize)]
+pub struct Buffer(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);
+impl FromSingleValue for Buffer {}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -325,7 +330,7 @@ async fn main() -> Result<()> {
 
     client.set("key", "value").await?;
     let _result: String = client.get("key").await?;
-    let _result: Vec<u8> = client.get("key").await?;
+    let _result: Buffer = client.get("key").await?;
 
     Ok(())
 }
@@ -430,7 +435,6 @@ mod command_arg;
 mod command_args;
 mod command_encoder;
 mod from_value;
-mod from_value_tuple;
 mod into_args;
 mod raw_value;
 mod raw_value_decoder;
@@ -438,6 +442,7 @@ mod resp_decoder;
 mod resp_deserializer;
 mod resp_deserializer2;
 mod response;
+mod util;
 mod value;
 mod value_decoder;
 mod value_deserialize;
@@ -449,7 +454,6 @@ pub use command_arg::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
 pub use from_value::*;
-pub use from_value_tuple::*;
 pub use into_args::*;
 pub use raw_value::*;
 pub use raw_value_decoder::*;
@@ -457,6 +461,7 @@ pub use resp_decoder::*;
 pub use resp_deserializer::*;
 pub use resp_deserializer2::*;
 pub use response::*;
+pub use util::*;
 pub use value::*;
 pub use value_decoder::*;
 pub use value_deserialize::*;

@@ -1,7 +1,7 @@
 use crate::{
     commands::{
         BfInfoParameter, BfInsertOptions, BfReserveOptions, BloomCommands, FlushingMode,
-        ServerCommands,
+        ServerCommands, BfScanDumpResult,
     },
     resp::CommandArg,
     tests::get_redis_stack_test_client,
@@ -146,24 +146,24 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     assert!(result);
 
     let mut iterator: i64 = 0;
-    let mut chunks: VecDeque<(i64, Vec<u8>)> = VecDeque::new();
+    let mut chunks: VecDeque<BfScanDumpResult> = VecDeque::new();
 
     loop {
         let result = client.bf_scandump("bf", iterator).await?;
 
-        if result.0 == 0 {
+        if result.iterator == 0 {
             break;
         } else {
-            iterator = result.0;
+            iterator = result.iterator;
             chunks.push_back(result);
         }
     }
 
     client.flushall(FlushingMode::Sync).await?;
 
-    while let Some((iterator, chunk)) = chunks.pop_front() {
+    while let Some(dump_result) = chunks.pop_front() {
         client
-            .bf_loadchunk("bf", iterator, CommandArg::Binary(chunk))
+            .bf_loadchunk("bf", dump_result.iterator, CommandArg::Binary(dump_result.data))
             .await?;
     }
 

@@ -100,7 +100,7 @@ impl Deref for CommandArg {
             CommandArg::Str(s) => s,
             CommandArg::String(s) => s,
             CommandArg::Nil => "",
-            _ => unimplemented!(),
+            _ => unimplemented!("Cannot deref `CommandArg::{self:?}`"),
         }
     }
 }

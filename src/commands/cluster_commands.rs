@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
-    Error, Result,
 };
+use serde::{de::DeserializeOwned, Deserialize};
 
 /// A group of Redis commands related to [`Cluster Management`](https://redis.io/docs/management/scaling/)
 /// # See Also
@@ -255,7 +253,7 @@ pub trait ClusterCommands {
     fn cluster_links<I>(&mut self) -> PreparedCommand<Self, Vec<I>>
     where
         Self: Sized,
-        I: FromValueArray<ClusterLinkInfo>,
+        I: FromValueArray<ClusterLinkInfo> + DeserializeOwned,
     {
         prepare_command(self, cmd("CLUSTER").arg("LINKS"))
     }
@@ -459,24 +457,13 @@ pub trait ClusterCommands {
 }
 
 /// Result for the [`cluster_bumpepoch`](ClusterCommands::cluster_bumpepoch) command
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ClusterBumpEpochResult {
     /// if the epoch was incremented
     Bumped,
     /// if the node already has the greatest config epoch in the cluster.
     Still,
-}
-
-impl FromValue for ClusterBumpEpochResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let result: String = value.into()?;
-        match result.as_str() {
-            "BUMPED" => Ok(Self::Bumped),
-            "STILL" => Ok(Self::Still),
-            _ => Err(Error::Client(
-                "Unexpected result for command 'CLUSTER BUMPEPOCH'".to_owned(),
-            )),
-        }
-    }
 }
 
 /// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command
@@ -506,6 +493,8 @@ impl IntoArgs for ClusterFailoverOption {
 }
 
 /// Cluster state used in the `cluster_state` field of [`ClusterInfo`](ClusterInfo)
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ClusterState {
     /// State is `ok` if the node is able to receive queries.
     Ok,
@@ -515,17 +504,8 @@ pub enum ClusterState {
     Fail,
 }
 
-impl FromValue for ClusterState {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "ok" => Ok(ClusterState::Ok),
-            "fail" => Ok(ClusterState::Fail),
-            _ => Err(Error::Client("Unexpected ClusterState result".to_owned())),
-        }
-    }
-}
-
 /// Result for the [`cluster_info`](ClusterCommands::cluster_info) command
+#[derive(Deserialize)]
 pub struct ClusterInfo {
     /// State is ok if the node is able to receive queries.
     /// fail if there is at least one hash slot which is unbound (no node associated),
@@ -644,133 +624,17 @@ pub struct ClusterInfo {
     pub cluster_stats_messages_publishshard_received: usize,
 }
 
-impl FromValue for ClusterInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let lines: String = value.into()?;
-        let mut values = lines
-            .split("\r\n")
-            .filter(|line| line.is_empty() || line.starts_with('#'))
-            .map(|line| {
-                let mut parts = line.split(':');
-                match (parts.next(), parts.next(), parts.next()) {
-                    (Some(key), Some(value), None) => {
-                        Ok((key.to_owned(), Value::BulkString(value.as_bytes().to_vec())))
-                    }
-                    _ => Err(Error::Client(
-                        "Unexpected result for cluster_info".to_owned(),
-                    )),
-                }
-            })
-            .collect::<Result<HashMap<String, Value>>>()?;
-
-        Ok(Self {
-            cluster_state: values.remove_or_default("cluster_state").into()?,
-            cluster_slots_assigned: values.remove_or_default("cluster_slots_assigned").into()?,
-            cluster_slots_ok: values.remove_or_default("cluster_slots_ok").into()?,
-            cluster_slots_pfail: values.remove_or_default("cluster_slots_pfail").into()?,
-            cluster_slots_fail: values.remove_or_default("cluster_slots_fail").into()?,
-            cluster_known_nodes: values.remove_or_default("cluster_known_nodes").into()?,
-            cluster_size: values.remove_or_default("cluster_size").into()?,
-            cluster_current_epoch: values.remove_or_default("cluster_current_epoch").into()?,
-            cluster_my_epoch: values.remove_or_default("cluster_my_epoch").into()?,
-            cluster_stats_messages_sent: values
-                .remove_or_default("cluster_stats_messages_sent")
-                .into()?,
-            cluster_stats_messages_received: values
-                .remove_or_default("cluster_stats_messages_received")
-                .into()?,
-            total_cluster_links_buffer_limit_exceeded: values
-                .remove_or_default("total_cluster_links_buffer_limit_exceeded")
-                .into()?,
-            cluster_stats_messages_ping_sent: values
-                .remove_or_default("cluster_stats_messages_ping_sent")
-                .into()?,
-            cluster_stats_messages_ping_received: values
-                .remove_or_default("cluster_stats_messages_ping_received")
-                .into()?,
-            cluster_stats_messages_pong_sent: values
-                .remove_or_default("cluster_stats_messages_pong_sent")
-                .into()?,
-            cluster_stats_messages_pong_received: values
-                .remove_or_default("cluster_stats_messages_pong_received")
-                .into()?,
-            cluster_stats_messages_meet_sent: values
-                .remove_or_default("cluster_stats_messages_meet_sent")
-                .into()?,
-            cluster_stats_messages_meet_received: values
-                .remove_or_default("cluster_stats_messages_meet_received")
-                .into()?,
-            cluster_stats_messages_fail_sent: values
-                .remove_or_default("cluster_stats_messages_fail_sent")
-                .into()?,
-            cluster_stats_messages_fail_received: values
-                .remove_or_default("cluster_stats_messages_fail_received")
-                .into()?,
-            cluster_stats_messages_publish_sent: values
-                .remove_or_default("cluster_stats_messages_publish_sent")
-                .into()?,
-            cluster_stats_messages_publish_received: values
-                .remove_or_default("cluster_stats_messages_publish_received")
-                .into()?,
-            cluster_stats_messages_auth_req_sent: values
-                .remove_or_default("cluster_stats_messages_auth-req_sent")
-                .into()?,
-            cluster_stats_messages_auth_req_received: values
-                .remove_or_default("cluster_stats_messages_auth-req_received")
-                .into()?,
-            cluster_stats_messages_auth_ack_sent: values
-                .remove_or_default("cluster_stats_messages_auth-ack_sent")
-                .into()?,
-            cluster_stats_messages_auth_ack_received: values
-                .remove_or_default("cluster_stats_messages_auth-ack_received")
-                .into()?,
-            cluster_stats_messages_update_sent: values
-                .remove_or_default("cluster_stats_messages_update_sent")
-                .into()?,
-            cluster_stats_messages_update_received: values
-                .remove_or_default("cluster_stats_messages_update_received")
-                .into()?,
-            cluster_stats_messages_mfstart_sent: values
-                .remove_or_default("cluster_stats_messages_mfstart_sent")
-                .into()?,
-            cluster_stats_messages_mfstart_received: values
-                .remove_or_default("cluster_stats_messages_mfstart_received")
-                .into()?,
-            cluster_stats_messages_module_sent: values
-                .remove_or_default("cluster_stats_messages_mfstart_received")
-                .into()?,
-            cluster_stats_messages_module_received: values
-                .remove_or_default("cluster_stats_messages_module_received")
-                .into()?,
-            cluster_stats_messages_publishshard_sent: values
-                .remove_or_default("cluster_stats_messages_publishshard_sent")
-                .into()?,
-            cluster_stats_messages_publishshard_received: values
-                .remove_or_default("cluster_stats_messages_publishshard_received")
-                .into()?,
-        })
-    }
-}
-
 /// This link is established by the local node to the peer, or accepted by the local node from the peer.
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ClusterLinkDirection {
     To,
     From,
 }
 
-impl FromValue for ClusterLinkDirection {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "to" => Ok(ClusterLinkDirection::To),
-            "from" => Ok(ClusterLinkDirection::From),
-            _ => Err(Error::Client(
-                "Unexpected ClusterLinkDirection result".to_owned(),
-            )),
-        }
-    }
-}
-
 /// Result for the [`cluster_links`](ClusterCommands::cluster_links) command
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ClusterLinkInfo {
     /// This link is established by the local node to the peer,
     /// or accepted by the local node from the peer.
@@ -788,21 +652,6 @@ pub struct ClusterLinkInfo {
     pub send_buffer_allocated: usize,
     /// Size of the portion of the link's send buffer that is currently holding data(messages).
     pub send_buffer_used: usize,
-}
-
-impl FromValue for ClusterLinkInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            direction: values.remove_or_default("direction").into()?,
-            node: values.remove_or_default("node").into()?,
-            create_time: values.remove_or_default("create-time").into()?,
-            events: values.remove_or_default("events").into()?,
-            send_buffer_allocated: values.remove_or_default("send-buffer-allocated").into()?,
-            send_buffer_used: values.remove_or_default("send-buffer-used").into()?,
-        })
-    }
 }
 
 /// Type of [`cluster reset`](ClusterCommands::cluster_reset)
@@ -844,25 +693,16 @@ impl IntoArgs for ClusterSetSlotSubCommand {
 }
 
 /// Result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct ClusterShardResult {
+    #[serde(deserialize_with = "deserialize_vec_of_pairs")]
     pub slots: Vec<(u16, u16)>,
     pub nodes: Vec<ClusterNodeResult>,
 }
 
-impl FromValue for ClusterShardResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            slots: values.remove_with_result("slots")?.into()?,
-            nodes: values.remove_with_result("nodes")?.into()?,
-        })
-    }
-}
-
 /// Cluster node result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ClusterNodeResult {
     /// The unique node id for this particular node.
     pub id: String,
@@ -896,41 +736,11 @@ pub struct ClusterNodeResult {
     pub health: ClusterHealthStatus,
 }
 
-impl FromValue for ClusterNodeResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            id: values.remove_with_result("id")?.into()?,
-            endpoint: values.remove_with_result("endpoint")?.into()?,
-            ip: values.remove_with_result("ip")?.into()?,
-            port: values.remove_or_default("port").into()?,
-            hostname: values.remove_or_default("hostname").into()?,
-            tls_port: values.remove_or_default("tls-port").into()?,
-            role: values.remove_with_result("role")?.into()?,
-            replication_offset: values.remove_with_result("replication-offset")?.into()?,
-            health: values.remove_with_result("health")?.into()?,
-        })
-    }
-}
-
 /// Cluster health status for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ClusterHealthStatus {
     Online,
     Failed,
     Loading,
-}
-
-impl FromValue for ClusterHealthStatus {
-    fn from_value(value: Value) -> Result<Self> {
-        match value.into::<String>()?.as_str() {
-            "online" => Ok(Self::Online),
-            "failed" => Ok(Self::Failed),
-            "loading" => Ok(Self::Loading),
-            _ => Err(Error::Client(
-                "Unexpected result for ClusterHealthStatus".to_owned(),
-            )),
-        }
-    }
 }

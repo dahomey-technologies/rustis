@@ -1,5 +1,5 @@
 use crate::{
-    commands::{FlushingMode, ServerCommands, TopKCommands},
+    commands::{FlushingMode, ServerCommands, TopKCommands, TopKListWithCountResult},
     tests::get_redis_stack_test_client,
     Result,
 };
@@ -80,14 +80,14 @@ async fn tdigest_list() -> Result<()> {
         items
     );
 
-    let items: Vec<(String, usize)> = client.topk_list_with_count("key").await?;
+    let result: TopKListWithCountResult<String> = client.topk_list_with_count("key").await?;
     assert_eq!(
         vec![
             ("42".to_owned(), 31),
             ("foo".to_owned(), 4),
             ("bar".to_owned(), 3)
         ],
-        items
+        result.items
     );
 
     Ok(())

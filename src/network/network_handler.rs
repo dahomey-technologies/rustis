@@ -135,11 +135,9 @@ impl NetworkHandler {
         loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => {
-                    debug!("self.msg_receiver.next().fuse()");
                     if !self.handle_message(msg).await { break; }
                 } ,
                 value = self.connection.read().fuse() => {
-                    debug!("self.connection.read().fuse()");
                     self.handle_result(value).await;
                 }
             }
@@ -656,7 +654,9 @@ impl NetworkHandler {
         }
 
         while let Some(message_to_receive) = self.messages_to_receive.front() {
-            if !message_to_receive.message.retry_on_error || message_to_receive.attempts >= self.max_command_attempts {
+            if !message_to_receive.message.retry_on_error
+                || message_to_receive.attempts >= self.max_command_attempts
+            {
                 debug!(
                     "{:?}, max attempts reached",
                     message_to_receive.message.commands
@@ -689,7 +689,9 @@ impl NetworkHandler {
         }
 
         while let Some(message_to_send) = self.messages_to_send.front() {
-            if !message_to_send.message.retry_on_error || message_to_send.attempts >= self.max_command_attempts {
+            if !message_to_send.message.retry_on_error
+                || message_to_send.attempts >= self.max_command_attempts
+            {
                 debug!(
                     "{:?}, max attempts reached",
                     message_to_send.message.commands

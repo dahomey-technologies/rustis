@@ -41,10 +41,8 @@ async fn error() -> Result<()> {
     pipeline.get::<_, ()>("key1").queue();
     pipeline.get::<_, ()>("key2").queue();
 
-    let (result, value1, value2): (Value, String, String) = pipeline.execute().await?;
-    assert!(matches!(result, Value::Error(_)));
-    assert_eq!("value1", value1);
-    assert_eq!("value2", value2);
+    let result: Result<(Value, String, String)> = pipeline.execute().await;
+    assert!(result.is_err());
 
     Ok(())
 }

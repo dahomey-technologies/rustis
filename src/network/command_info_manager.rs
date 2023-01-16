@@ -130,7 +130,7 @@ impl CommandInfoManager {
                     slice = &slice[..stop_index + 1];
                     *key_step
                 }
-                FindKeys::KeyEnum {
+                FindKeys::KeyNum {
                     key_num_idx,
                     first_key,
                     key_step,
@@ -140,7 +140,7 @@ impl CommandInfoManager {
                     slice = &slice[*first_key..num_keys + 1];
                     *key_step
                 }
-                FindKeys::Unknown => {
+                FindKeys::Unknown{} => {
                     let args = Self::prepare_command_getkeys_args(command);
                     let keys: SmallVec<[String; 10]> = connection.command_getkeys(args).await?;
                     return Ok(keys);
@@ -207,12 +207,12 @@ impl CommandInfoManager {
 
                     (keys_end_index, key_step)
                 }
-                FindKeys::KeyEnum {
+                FindKeys::KeyNum {
                     key_num_idx: _,
                     first_key: _,
                     key_step: _,
                 } => todo!("Command not yet supported, ask for it !"),
-                FindKeys::Unknown => todo!("Command not yet supported, ask for it !"),
+                FindKeys::Unknown{} => todo!("Command not yet supported, ask for it !"),
             };
 
             if keys_start_index > 0 {

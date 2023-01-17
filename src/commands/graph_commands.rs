@@ -12,11 +12,7 @@ use serde::{
     Deserialize, Deserializer,
 };
 use smallvec::SmallVec;
-use std::{
-    collections::HashMap,
-    fmt, future,
-    str::{from_utf8, FromStr},
-};
+use std::{collections::HashMap, fmt, future, str::FromStr};
 
 /// A group of Redis commands related to [`RedisGraph`](https://redis.io/docs/stack/graph/)
 ///
@@ -347,35 +343,76 @@ impl GraphResultSet {
                 log::debug!("graph cache created");
             }
 
-            let values: Vec<Value> = value.into()?;
-            let mut iter = values.into_iter();
+            Self::deserialize(&value, client, &cache_key)
+        })
+    }
 
-            match (iter.next(), iter.next(), iter.next(), iter.next()) {
-                (Some(statistics), None, None, None) => Ok(Self {
-                    header: Default::default(),
-                    rows: Default::default(),
-                    statistics: statistics.into()?,
-                }),
-                (Some(header), Some(Value::Array(rows)), Some(statistics), None) => {
-                    let client_state = client.get_client_state();
-                    let Some(cache) = client_state.get_state::<GraphCache>(&cache_key)? else {
-                        return Err(Error::Client("Cannot find graph cache".to_owned()));
+    fn deserialize<'de, D>(
+        deserializer: D,
+        client: &mut Client,
+        cache_key: &str,
+    ) -> std::result::Result<GraphResultSet, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct GraphResultSetVisitor<'a, 'b> {
+            client: &'a mut Client,
+            cache_key: &'b str,
+        }
+
+        impl<'a, 'b, 'de> Visitor<'de> for GraphResultSetVisitor<'a, 'b> {
+            type Value = GraphResultSet;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("GraphResultSet")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(size) = seq.size_hint() else {
+                    return Err(de::Error::custom("size hint is mandatory for GraphResultSet"));
+                };
+
+                if size == 1 {
+                    let Some(statistics) = seq.next_element::<GraphQueryStatistics>()? else {
+                        return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
                     };
 
-                    let rows = rows
-                        .into_iter()
-                        .map(|v| GraphResultRowSeed { cache }.deserialize(&v))
-                        .collect::<Result<Vec<GraphResultRow>>>()?;
+                    Ok(GraphResultSet {
+                        header: Default::default(),
+                        rows: Default::default(),
+                        statistics,
+                    })
+                } else {
+                    let Some(header) = seq.next_element::<GraphHeader>()? else {
+                        return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    };
 
-                    Ok(Self {
-                        header: header.into()?,
+                    let client_state = self.client.get_client_state();
+                    let Ok(Some(cache)) = client_state.get_state::<GraphCache>(self.cache_key) else {
+                        return Err(de::Error::custom("Cannot find graph cache"));
+                    };
+
+                    let Some(rows) = seq.next_element_seed(GraphResultRowsSeed { cache })? else {
+                        return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                    };
+
+                    let Some(statistics) = seq.next_element::<GraphQueryStatistics>()? else {
+                        return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                    };
+
+                    Ok(GraphResultSet {
+                        header,
                         rows,
-                        statistics: statistics.into()?,
+                        statistics,
                     })
                 }
-                _ => Err(Error::Client("Cannot parse GraphStatistics".to_owned())),
             }
-        })
+        }
+
+        deserializer.deserialize_seq(GraphResultSetVisitor { client, cache_key })
     }
 
     async fn load_missing_ids(
@@ -593,8 +630,49 @@ impl<'de, 'a> DeserializeSeed<'de> for GraphResultRowSeed<'a> {
     }
 }
 
+struct GraphResultRowsSeed<'a> {
+    cache: &'a GraphCache,
+}
+
+impl<'de, 'a> Visitor<'de> for GraphResultRowsSeed<'a> {
+    type Value = Vec<GraphResultRow>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Vec<GraphResultRow>")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        let mut rows = if let Some(size) = seq.size_hint() {
+            Vec::with_capacity(size)
+        } else {
+            Vec::new()
+        };
+
+        while let Some(row) = seq.next_element_seed(GraphResultRowSeed { cache: self.cache })? {
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
+}
+
+impl<'de, 'a> DeserializeSeed<'de> for GraphResultRowsSeed<'a> {
+    type Value = Vec<GraphResultRow>;
+
+    #[inline]
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(self)
+    }
+}
+
 /// Statistics part of a graph ['result set`](GraphResultSet)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GraphQueryStatistics {
     pub labels_added: usize,
     pub labels_removed: usize,
@@ -611,73 +689,91 @@ pub struct GraphQueryStatistics {
     pub additional_statistics: HashMap<String, String>,
 }
 
-impl FromValue for GraphQueryStatistics {
-    fn from_value(value: Value) -> Result<Self> {
-        fn remove_and_parse<F: FromStr + Default>(
-            map: &mut HashMap<String, String>,
-            key: &str,
-        ) -> Result<F> {
-            match map.remove(key) {
-                Some(value) => match value.parse::<F>() {
-                    Ok(value) => Ok(value),
-                    Err(_) => Err(Error::Client(
-                        "Cannot parse GraphQueryStatistics".to_owned(),
-                    )),
-                },
-                None => Ok(F::default()),
-            }
-        }
+impl<'de> Deserialize<'de> for GraphQueryStatistics {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct GraphQueryStatisticsVisitor;
 
-        fn remove_and_parse_query_execution_time(map: &mut HashMap<String, String>) -> Result<f64> {
-            match map.remove("Query internal execution time") {
-                Some(value) => {
+        impl<'de> Visitor<'de> for GraphQueryStatisticsVisitor {
+            type Value = GraphQueryStatistics;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("GraphQueryStatistics")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                fn parse<'de, A, F>(value: &str) -> std::result::Result<F, A::Error>
+                where
+                    A: de::SeqAccess<'de>,
+                    F: FromStr,
+                {
+                    match value.parse::<F>() {
+                        Ok(value) => Ok(value),
+                        Err(_) => Err(de::Error::custom(format!("Cannot parse GraphQueryStatistics: {value}"))),
+                    }
+                }
+
+                fn parse_query_execution_time<'de, A>(
+                    value: &str,
+                ) -> std::result::Result<f64, A::Error>
+                where
+                    A: de::SeqAccess<'de>,
+                {
                     let Some((value, _milliseconds))= value.split_once(' ') else {
-                        return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
+                        return Err(de::Error::custom("Cannot parse GraphQueryStatistics (query exuction time)"));
                     };
 
                     match value.parse::<f64>() {
                         Ok(value) => Ok(value),
-                        Err(_) => Err(Error::Client(
-                            "Cannot parse GraphQueryStatistics".to_owned(),
-                        )),
+                        Err(_) => Err(de::Error::custom("Cannot parse GraphQueryStatistics (query exuction time)")),
                     }
                 }
-                None => Ok(0f64),
+
+                let mut stats = GraphQueryStatistics::default();
+
+                while let Some(str) = seq.next_element::<&str>()? {
+                    let Some((name, value))= str.split_once(": ") else {
+                        return Err(de::Error::custom("Cannot parse GraphQueryStatistics"));
+                    };
+
+                    match name {
+                        "Labels added" => stats.labels_added = parse::<A, _>(value)?,
+                        "Labels removed" => stats.labels_removed = parse::<A, _>(value)?,
+                        "Nodes created" => stats.nodes_created = parse::<A, _>(value)?,
+                        "Nodes deleted:" => stats.nodes_deleted = parse::<A, _>(value)?,
+                        "Properties set" => stats.properties_set = parse::<A, _>(value)?,
+                        "Properties removed" => stats.properties_removed = parse::<A, _>(value)?,
+                        "Relationships created" => {
+                            stats.relationships_created = parse::<A, _>(value)?
+                        }
+                        "Relationships deleted" => {
+                            stats.relationships_deleted = parse::<A, _>(value)?
+                        }
+                        "Indices created" => stats.indices_created = parse::<A, _>(value)?,
+                        "Indices deleted" => stats.indices_deleted = parse::<A, _>(value)?,
+                        "Cached execution" => stats.cached_execution = parse::<A, u8>(value)? != 0,
+                        "Query internal execution time" => {
+                            stats.query_internal_execution_time =
+                                parse_query_execution_time::<A>(value)?
+                        }
+                        _ => {
+                            stats
+                                .additional_statistics
+                                .insert(name.to_owned(), value.to_owned());
+                        }
+                    }
+                }
+
+                Ok(stats)
             }
         }
 
-        let values: Vec<Value> = value.into()?;
-        let mut statistics: HashMap<String, String> = values
-            .into_iter()
-            .map(|v| {
-                let Value::BulkString(s) = v else {
-                    return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
-                };
-
-                let str = from_utf8(&s)?;
-                let Some((name, value))= str.split_once(": ") else {
-                    return Err(Error::Client("Cannot parse GraphQueryStatistics".to_owned()));
-                };
-
-                Ok((name.to_owned(), value.to_owned()))
-            })
-            .collect::<Result<HashMap<String, String>>>()?;
-
-        Ok(Self {
-            labels_added: remove_and_parse(&mut statistics, "Labels added")?,
-            labels_removed: remove_and_parse(&mut statistics, "Labels removed")?,
-            nodes_created: remove_and_parse(&mut statistics, "Nodes created")?,
-            nodes_deleted: remove_and_parse(&mut statistics, "Nodes deleted:")?,
-            properties_set: remove_and_parse(&mut statistics, "Properties set")?,
-            properties_removed: remove_and_parse(&mut statistics, "Properties removed")?,
-            relationships_created: remove_and_parse(&mut statistics, "Relationships created")?,
-            relationships_deleted: remove_and_parse(&mut statistics, "Relationships deleted")?,
-            indices_created: remove_and_parse(&mut statistics, "Indices created")?,
-            indices_deleted: remove_and_parse(&mut statistics, "Indices deleted")?,
-            cached_execution: remove_and_parse::<u8>(&mut statistics, "Cached execution")? != 0,
-            query_internal_execution_time: remove_and_parse_query_execution_time(&mut statistics)?,
-            additional_statistics: statistics,
-        })
+        deserializer.deserialize_seq(GraphQueryStatisticsVisitor)
     }
 }
 

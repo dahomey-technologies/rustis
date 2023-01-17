@@ -436,8 +436,14 @@ fn map() -> Result<()> {
             ]),
         ]),
     ]))?;
-    assert_eq!(Some(&vec!["OW".to_owned(), "update".to_owned()]), result.get("a"));
-    assert_eq!(Some(&vec!["OW".to_owned(), "update".to_owned()]), result.get("a"));
+    assert_eq!(
+        Some(&vec!["OW".to_owned(), "update".to_owned()]),
+        result.get("a")
+    );
+    assert_eq!(
+        Some(&vec!["OW".to_owned(), "update".to_owned()]),
+        result.get("a")
+    );
 
     let result = HashMap::<String, usize>::deserialize(&Value::Array(vec![
         Value::BulkString(b"mychannel1".to_vec()),
@@ -448,7 +454,7 @@ fn map() -> Result<()> {
     assert_eq!(2, result.len());
     assert_eq!(Some(&1usize), result.get("mychannel1"));
     assert_eq!(Some(&2usize), result.get("mychannel2"));
-    
+
     Ok(())
 }
 
@@ -462,20 +468,30 @@ fn _struct() -> Result<()> {
 
     log_try_init();
 
-    let result = Person::deserialize(&Value::Map(HashMap::from([
+    let value = Value::Map(HashMap::from([
         (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
         (
             Value::BulkString(b"name".to_vec()),
             Value::BulkString(b"foo".to_vec()),
         ),
-    ])))?;
+    ]));
+
+    let result = Person::deserialize(&value)?;
     assert_eq!(12, result.id);
     assert_eq!("foo", result.name);
 
     let value = Value::Array(vec![
+        Value::BulkString(b"id".to_vec()),
         Value::Integer(12),
+        Value::BulkString(b"name".to_vec()),
         Value::BulkString(b"foo".to_vec()),
     ]);
+
+    let result = Person::deserialize(&value)?;
+    assert_eq!(12, result.id);
+    assert_eq!("foo", result.name);
+
+    let value = Value::Array(vec![Value::Integer(12), Value::BulkString(b"foo".to_vec())]);
 
     let result = Person::deserialize(&value)?;
     assert_eq!(12, result.id);

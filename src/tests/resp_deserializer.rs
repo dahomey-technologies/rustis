@@ -425,6 +425,15 @@ fn _struct() -> Result<()> {
         result
     );
 
+    let result: Person = deserialize("*2\r\n:12\r\n$4\r\nMike\r\n")?; // [12, b"Mike"]
+    assert_eq!(
+        Person {
+            id: 12,
+            name: "Mike".to_owned()
+        },
+        result
+    );
+
     Ok(())
 }
 

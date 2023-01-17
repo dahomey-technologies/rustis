@@ -8,7 +8,7 @@ use std::{
     slice, str, vec,
 };
 
-impl<'de, 'a: 'de> Deserializer<'de> for &'a Value {
+impl<'de> Deserializer<'de> for &'de Value {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
@@ -393,7 +393,6 @@ impl<'de, 'a: 'de> Deserializer<'de> for &'a Value {
     {
         match self {
             Value::Nil => visitor.visit_none(),
-            Value::Array(values) if values.is_empty() => visitor.visit_none(),
             Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => visitor.visit_some(self),
         }
@@ -515,7 +514,7 @@ impl<'de, 'a: 'de> Deserializer<'de> for &'a Value {
             }
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client("Cannot parse map".to_owned())),
+            _ => Err(Error::Client("Cannot parse struct".to_owned())),
         }
     }
 
@@ -598,14 +597,14 @@ impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
     }
 }
 
-pub struct SeqAccess<'a> {
-    iter: slice::Iter<'a, Value>,
+pub struct SeqAccess<'de> {
+    iter: slice::Iter<'de, Value>,
     len: usize,
-    value: Option<&'a Value>,
+    value: Option<&'de Value>,
 }
 
-impl<'a> SeqAccess<'a> {
-    pub fn new(values: &'a Vec<Value>) -> Self {
+impl<'de> SeqAccess<'de> {
+    pub fn new(values: &'de Vec<Value>) -> Self {
         Self {
             len: values.len(),
             iter: values.into_iter(),
@@ -614,7 +613,7 @@ impl<'a> SeqAccess<'a> {
     }
 }
 
-impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for SeqAccess<'a> {
+impl<'de> serde::de::SeqAccess<'de> for SeqAccess<'de> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -636,7 +635,7 @@ impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for SeqAccess<'a> {
 }
 
 /// in RESP, arrays can be seen as maps with a succession of keys and their values
-impl<'de, 'a: 'de> serde::de::MapAccess<'de> for SeqAccess<'a> {
+impl<'de> serde::de::MapAccess<'de> for SeqAccess<'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -676,14 +675,14 @@ impl<'de, 'a: 'de> serde::de::MapAccess<'de> for SeqAccess<'a> {
     }
 }
 
-pub struct MapAccess<'a> {
+pub struct MapAccess<'de> {
     len: usize,
-    iter: hash_map::Iter<'a, Value, Value>,
-    value: Option<&'a Value>,
+    iter: hash_map::Iter<'de, Value, Value>,
+    value: Option<&'de Value>,
 }
 
-impl<'a> MapAccess<'a> {
-    pub fn new(values: &'a HashMap<Value, Value>) -> Self {
+impl<'de> MapAccess<'de> {
+    pub fn new(values: &'de HashMap<Value, Value>) -> Self {
         Self {
             len: values.len(),
             iter: values.into_iter(),
@@ -692,7 +691,7 @@ impl<'a> MapAccess<'a> {
     }
 }
 
-impl<'de, 'a: 'de> serde::de::MapAccess<'de> for MapAccess<'a> {
+impl<'de> serde::de::MapAccess<'de> for MapAccess<'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -723,7 +722,7 @@ impl<'de, 'a: 'de> serde::de::MapAccess<'de> for MapAccess<'a> {
     }
 }
 
-impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for MapAccess<'a> {
+impl<'de> serde::de::SeqAccess<'de> for MapAccess<'de> {
     type Error = Error;
 
     fn next_element_seed<T>(
@@ -740,9 +739,9 @@ impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for MapAccess<'a> {
     }
 }
 
-pub struct ValuePair<'a>(&'a Value, &'a Value);
+pub struct ValuePair<'de>(&'de Value, &'de Value);
 
-impl<'de, 'a: 'de> Deserializer<'de> for ValuePair<'a> {
+impl<'de> Deserializer<'de> for ValuePair<'de> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
@@ -766,12 +765,12 @@ impl<'de, 'a: 'de> Deserializer<'de> for ValuePair<'a> {
     where
         V: Visitor<'de>,
     {
-        pub struct ValuePairSeqAccess<'a> {
-            first: Option<&'a Value>,
-            second: Option<&'a Value>,
+        pub struct ValuePairSeqAccess<'de> {
+            first: Option<&'de Value>,
+            second: Option<&'de Value>,
         }
 
-        impl<'de, 'a: 'de> serde::de::SeqAccess<'de> for ValuePairSeqAccess<'a> {
+        impl<'de> serde::de::SeqAccess<'de> for ValuePairSeqAccess<'de> {
             type Error = Error;
 
             fn next_element_seed<T>(
@@ -798,13 +797,13 @@ impl<'de, 'a: 'de> Deserializer<'de> for ValuePair<'a> {
     }
 }
 
-struct Enum<'a> {
-    variant_identifier: &'a Value,
-    variant_value: &'a Value,
+struct Enum<'de> {
+    variant_identifier: &'de Value,
+    variant_value: &'de Value,
 }
 
-impl<'a> Enum<'a> {
-    fn from_array(values: &'a Vec<Value>) -> Self {
+impl<'de> Enum<'de> {
+    fn from_array(values: &'de Vec<Value>) -> Self {
         let mut iter = values.into_iter();
         Self {
             variant_identifier: iter
@@ -816,7 +815,7 @@ impl<'a> Enum<'a> {
         }
     }
 
-    fn from_map(values: &'a HashMap<Value, Value>) -> Self {
+    fn from_map(values: &'de HashMap<Value, Value>) -> Self {
         let mut iter = values.into_iter();
         let (variant_identifier, variant_value) = iter
             .next()
@@ -828,9 +827,9 @@ impl<'a> Enum<'a> {
     }
 }
 
-impl<'de, 'a: 'de> EnumAccess<'de> for Enum<'a> {
+impl<'de> EnumAccess<'de> for Enum<'de> {
     type Error = Error;
-    type Variant = &'a Value;
+    type Variant = &'de Value;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
     where
@@ -841,7 +840,7 @@ impl<'de, 'a: 'de> EnumAccess<'de> for Enum<'a> {
     }
 }
 
-impl<'de, 'a: 'de> VariantAccess<'de> for &'a Value {
+impl<'de> VariantAccess<'de> for &'de Value {
     type Error = Error;
 
     // If the `Visitor` expected this variant to be a unit variant, the input

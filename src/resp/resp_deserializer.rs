@@ -1,9 +1,7 @@
 use crate::{resp::PUSH_FAKE_FIELD, Error, RedisError, Result};
 use serde::{
-    de::{
-        DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor,
-    },
-    Deserializer,
+    de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
+    forward_to_deserialize_any, Deserializer,
 };
 use std::str::{self, FromStr};
 
@@ -93,6 +91,18 @@ impl<'de> RespDeserializer<'de> {
         }
     }
 
+    fn peek_line(&mut self) -> Result<&'de [u8]> {
+        match self.buf[self.pos..].iter().position(|b| *b == b'\r') {
+            Some(idx)
+                if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
+            {
+                let slice = &self.buf[self.pos..self.pos + idx];
+                Ok(slice)
+            }
+            _ => eof(),
+        }
+    }
+
     fn parse_number<T>(&mut self) -> Result<T>
     where
         T: FromStr,
@@ -127,6 +137,17 @@ impl<'de> RespDeserializer<'de> {
         Ok(str)
     }
 
+    #[inline(always)]
+    fn peek_string(&mut self) -> Result<Option<&'de str>> {
+        let next_line = self.peek_line()?;
+        if let Some(&SIMPLE_STRING_TAG) = next_line.first() {
+            let str = str::from_utf8(&next_line[1..])?;
+            Ok(Some(str))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn parse_nil(&mut self) -> Result<()> {
         let next_line = self.next_line()?;
         if next_line.is_empty() {
@@ -157,6 +178,7 @@ impl<'de> RespDeserializer<'de> {
     {
         match self.next()? {
             INTEGER_TAG => self.parse_number::<T>(),
+            DOUBLE_TAG => self.parse_number::<T>(),
             NIL_TAG => {
                 self.parse_nil()?;
                 Ok(Default::default())
@@ -242,6 +264,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     {
         let result: bool = match self.next()? {
             INTEGER_TAG => self.parse_number::<i64>()? != 0,
+            DOUBLE_TAG => self.parse_number::<f64>()? != 0.,
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
                 match bs {
@@ -252,6 +275,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
             }
             SIMPLE_STRING_TAG => self.parse_string()? == "OK",
             BOOL_TAG => self.parse_boolean()?,
+            NIL_TAG => false,
             _ => return Err(Error::Client("Cannot parse to bool".to_owned())),
         };
 
@@ -350,6 +374,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                     return Err(Error::Client("Cannot parse to char".to_owned()));
                 }
             }
+            NIL_TAG => '\0',
             _ => return Err(Error::Client("Cannot parse to char".to_owned())),
         };
 
@@ -366,6 +391,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                 str::from_utf8(bs)?
             }
             SIMPLE_STRING_TAG => self.parse_string()?,
+            NIL_TAG => "",
             _ => return Err(Error::Client("Cannot parse to str".to_owned())),
         };
 
@@ -377,54 +403,58 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.next()? {
+            DOUBLE_TAG => self.parse_number::<f64>()?.to_string(),
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
-                str::from_utf8(bs)?
+                str::from_utf8(bs)?.to_owned()
             }
-            SIMPLE_STRING_TAG => self.parse_string()?,
+            NIL_TAG => String::from(""),
+            SIMPLE_STRING_TAG => self.parse_string()?.to_owned(),
             _ => return Err(Error::Client("Cannot parse to String".to_owned())),
         };
 
-        visitor.visit_string(result.to_owned())
+        visitor.visit_string(result)
     }
 
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        if self.next()? == BULK_STRING_TAG {
-            visitor.visit_borrowed_bytes(self.parse_bulk_string()?)
-        } else {
-            Err(Error::Client("Cannot parse to bytes".to_owned()))
-        }
+        let result = match self.next()? {
+            BULK_STRING_TAG => self.parse_bulk_string()?,
+            NIL_TAG => &[],
+            SIMPLE_STRING_TAG => self.parse_string()?.as_bytes(),
+            _ => return Err(Error::Client("Cannot parse to bytes".to_owned())),
+        };
+
+        visitor.visit_borrowed_bytes(result)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        if self.next()? == BULK_STRING_TAG {
-            let value = self.parse_bulk_string()?;
-            if value.is_empty() {
-                visitor.visit_none()
-            } else {
-                visitor.visit_byte_buf(value.to_vec())
-            }
-        } else {
-            Err(Error::Client("Cannot parse to byte buffer".to_owned()))
-        }
+        let result = match self.next()? {
+            BULK_STRING_TAG => self.parse_bulk_string()?.to_vec(),
+            NIL_TAG => vec![],
+            SIMPLE_STRING_TAG => self.parse_string()?.as_bytes().to_vec(),
+            _ => return Err(Error::Client("Cannot parse to byte buffer".to_owned())),
+        };
+
+        visitor.visit_byte_buf(result)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        if let NIL_TAG = self.peek()? {
-            self.advance();
-            self.parse_nil()?;
-            visitor.visit_none()
-        } else {
-            visitor.visit_some(self)
+        match self.peek()? {
+            NIL_TAG => {
+                self.advance();
+                self.parse_nil()?;
+                visitor.visit_none()
+            }
+            _ => visitor.visit_some(self),
         }
     }
 
@@ -432,11 +462,32 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if let NIL_TAG = self.next()? {
-            self.parse_nil()?;
-            visitor.visit_unit()
-        } else {
-            Err(Error::Client("Expected nil".to_owned()))
+        match self.next()? {
+            NIL_TAG => {
+                self.parse_nil()?;
+                visitor.visit_unit()
+            }
+            SIMPLE_STRING_TAG => {
+                self.parse_string()?;
+                visitor.visit_unit()
+            }
+            BULK_STRING_TAG => {
+                let bs = self.parse_bulk_string()?;
+                if bs.len() == 0 {
+                    visitor.visit_unit()
+                } else {
+                    return Err(Error::Client("Expected nil".to_owned()));
+                }
+            }
+            ARRAY_TAG | SET_TAG | PUSH_TAG => {
+                let len = self.parse_number::<usize>()?;
+                if len == 0 {
+                    visitor.visit_unit()
+                } else {
+                    return Err(Error::Client("Expected nil".to_owned()));
+                }
+            }
+            _ => Err(Error::Client("Expected nil".to_owned())),
         }
     }
 
@@ -462,12 +513,17 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        if let ARRAY_TAG | SET_TAG | PUSH_TAG = self.next()? {
-            let len = self.parse_number()?;
-
-            visitor.visit_seq(SeqMapAccess { de: self, len })
-        } else {
-            Err(Error::Client("Cannot parse to Sequence".to_owned()))
+        match self.next()? {
+            NIL_TAG => visitor.visit_seq(NilSeqAccess),
+            ARRAY_TAG | SET_TAG | PUSH_TAG => {
+                let len = self.parse_number()?;
+                visitor.visit_seq(SeqAccess { de: self, len })
+            }
+            MAP_TAG => {
+                let len = self.parse_number()?;
+                visitor.visit_seq(MapAccess { de: self, len })
+            }
+            _ => Err(Error::Client("Cannot parse to Sequence".to_owned())),
         }
     }
 
@@ -494,34 +550,62 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let len = match self.next()? {
+        match self.next()? {
             ARRAY_TAG => {
                 let len: usize = self.parse_number()?;
-                if len % 2 == 0 {
-                    len / 2
-                } else {
+                if len % 2 != 0 {
                     return Err(Error::Client(
                         "Array len must be even to be able to parse a map".to_owned(),
                     ));
                 }
+                visitor.visit_map(SeqAccess { de: self, len })
             }
-            MAP_TAG => self.parse_number()?,
-            _ => return Err(Error::Client("Cannot parse map".to_owned())),
-        };
-
-        visitor.visit_map(SeqMapAccess { de: self, len })
+            MAP_TAG => {
+                let len = self.parse_number()?;
+                visitor.visit_map(MapAccess { de: self, len })
+            }
+            _ => Err(Error::Client("Cannot parse map".to_owned())),
+        }
     }
 
     fn deserialize_struct<V>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_map(visitor)
+        fn check_resp2_array(
+            de: &mut RespDeserializer,
+            array_len: usize,
+            fields: &'static [&'static str],
+        ) -> Result<bool> {
+            Ok(if array_len > fields.len() {
+                true
+            } else if let Some(s) = de.peek_string()? {
+                fields.iter().any(|f| s == *f)
+            } else {
+                false
+            })
+        }
+
+        match self.next()? {
+            ARRAY_TAG => {
+                let len: usize = self.parse_number()?;
+                if check_resp2_array(self, len, fields)? {
+                    visitor.visit_map(SeqAccess { de: self, len })
+                } else {
+                    visitor.visit_seq(SeqAccess { de: self, len })
+                }
+            }
+            MAP_TAG => {
+                let len = self.parse_number()?;
+                visitor.visit_map(MapAccess { de: self, len })
+            }
+            _ => Err(Error::Client("Cannot parse struct".to_owned())),
+        }
     }
 
     fn deserialize_enum<V>(
@@ -588,12 +672,28 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     }
 }
 
-pub struct SeqMapAccess<'a, 'de: 'a> {
+pub struct NilSeqAccess;
+
+impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
+    type Error = Error;
+
+    fn next_element_seed<T>(
+        &mut self,
+        _seed: T,
+    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        Ok(None)
+    }
+}
+
+struct SeqAccess<'a, 'de: 'a> {
     de: &'a mut RespDeserializer<'de>,
     len: usize,
 }
 
-impl<'de, 'a> SeqAccess<'de> for SeqMapAccess<'a, 'de> {
+impl<'de, 'a> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -613,7 +713,40 @@ impl<'de, 'a> SeqAccess<'de> for SeqMapAccess<'a, 'de> {
     }
 }
 
-impl<'de, 'a> MapAccess<'de> for SeqMapAccess<'a, 'de> {
+impl<'de, 'a> serde::de::MapAccess<'de> for SeqAccess<'a, 'de> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: DeserializeSeed<'de>,
+    {
+        if self.len > 0 {
+            self.len -= 1;
+            seed.deserialize(&mut *self.de).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        self.len -= 1;
+        seed.deserialize(&mut *self.de)
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.len)
+    }
+}
+
+struct MapAccess<'a, 'de: 'a> {
+    de: &'a mut RespDeserializer<'de>,
+    len: usize,
+}
+
+impl<'de, 'a> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -637,6 +770,81 @@ impl<'de, 'a> MapAccess<'de> for SeqMapAccess<'a, 'de> {
 
     fn size_hint(&self) -> Option<usize> {
         Some(self.len)
+    }
+}
+
+impl<'de, 'a> serde::de::SeqAccess<'de> for MapAccess<'a, 'de> {
+    type Error = Error;
+
+    fn next_element_seed<T>(
+        &mut self,
+        seed: T,
+    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if self.len > 0 {
+            self.len -= 1;
+            seed.deserialize(PairDeserializer { de: self.de }).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+struct PairDeserializer<'a, 'de: 'a> {
+    de: &'a mut RespDeserializer<'de>,
+}
+
+impl<'de, 'a> Deserializer<'de> for PairDeserializer<'a, 'de> {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(2, visitor)
+    }
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bytes byte_buf option unit unit_struct newtype_struct seq
+        tuple_struct map struct enum identifier ignored_any
+    }
+
+    fn deserialize_tuple<V>(
+        self,
+        len: usize,
+        visitor: V,
+    ) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        pub struct PairSeqAccess<'a, 'de: 'a> {
+            de: &'a mut RespDeserializer<'de>,
+            len: usize,
+        }
+
+        impl<'de, 'a> serde::de::SeqAccess<'de> for PairSeqAccess<'a, 'de> {
+            type Error = Error;
+
+            fn next_element_seed<T>(
+                &mut self,
+                seed: T,
+            ) -> std::result::Result<Option<T::Value>, Self::Error>
+            where
+                T: DeserializeSeed<'de>,
+            {
+                if self.len > 0 {
+                    self.len -= 1;
+                    seed.deserialize(&mut *self.de).map(Some)
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+
+        visitor.visit_seq(PairSeqAccess { de: self.de, len })
     }
 }
 
@@ -705,7 +913,7 @@ impl<'de, 'a> PushMapAccess<'de, 'a> {
     }
 }
 
-impl<'de, 'a> MapAccess<'de> for PushMapAccess<'de, 'a> {
+impl<'de, 'a> serde::de::MapAccess<'de> for PushMapAccess<'de, 'a> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>

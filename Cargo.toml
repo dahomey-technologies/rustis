@@ -66,6 +66,7 @@ log = "0.4"
 crc16 = "0.4"
 rand = "0.8"
 socket2 = "0.4"
+memchr = "2.5"
 
 [dev-dependencies]
 serial_test = "0.10"

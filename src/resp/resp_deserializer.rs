@@ -1,4 +1,5 @@
 use crate::{resp::PUSH_FAKE_FIELD, Error, RedisError, Result};
+use memchr::memchr;
 use serde::{
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
     forward_to_deserialize_any, Deserializer,
@@ -79,7 +80,7 @@ impl<'de> RespDeserializer<'de> {
     }
 
     fn next_line(&mut self) -> Result<&'de [u8]> {
-        match self.buf[self.pos..].iter().position(|b| *b == b'\r') {
+        match memchr(b'\r', &self.buf[self.pos..]) {
             Some(idx)
                 if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
             {
@@ -92,7 +93,7 @@ impl<'de> RespDeserializer<'de> {
     }
 
     fn peek_line(&mut self) -> Result<&'de [u8]> {
-        match self.buf[self.pos..].iter().position(|b| *b == b'\r') {
+        match memchr(b'\r', &self.buf[self.pos..]) {
             Some(idx)
                 if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
             {

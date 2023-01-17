@@ -1,5 +1,6 @@
 use crate::{Error, Result};
-use bytes::{BytesMut, Buf};
+use bytes::{Buf, BytesMut};
+use memchr::memchr;
 use tokio_util::codec::Decoder;
 
 pub struct BufferDecoder;
@@ -48,7 +49,7 @@ fn decode(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
 }
 
 fn next_crlf(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
-    match &buf[pos..].iter().position(|b| *b == b'\r') {
+    match memchr(b'\r', &buf[pos..]) {
         Some(new_pos) if buf.len() > pos + new_pos + 1 && buf[pos + new_pos + 1] == b'\n' => {
             Ok(Some(pos + new_pos + 2))
         }
@@ -85,10 +86,10 @@ fn map(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
                 let Some(p) = decode(buf, new_pos)? else {
                     return Ok(None);
                 };
-        
+
                 new_pos = p;
             }
-        
+
             Ok(Some(new_pos))
         }
     }
@@ -102,10 +103,10 @@ fn array(buf: &mut BytesMut, pos: usize) -> Result<Option<usize>> {
                 let Some(p) = decode(buf, new_pos)? else {
                     return Ok(None);
                 };
-        
+
                 new_pos = p;
             }
-        
+
             Ok(Some(new_pos))
         }
     }

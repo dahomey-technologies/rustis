@@ -92,7 +92,7 @@ impl<'de> RespDeserializer<'de> {
         }
     }
 
-    fn peek_line(&mut self) -> Result<&'de [u8]> {
+    fn peek_line(&self) -> Result<&'de [u8]> {
         match memchr(b'\r', &self.buf[self.pos..]) {
             Some(idx)
                 if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
@@ -112,6 +112,16 @@ impl<'de> RespDeserializer<'de> {
         let str = str::from_utf8(next_line)?;
         str.parse::<T>()
             .map_err(|_| Error::Client("Cannot parse number".to_owned()))
+    }
+
+    fn peek_number<T>(&self) -> Result<T>
+    where
+        T: FromStr,
+    {
+        let next_line = self.peek_line()?;
+        let str = str::from_utf8(&next_line[1..])?;
+        str.parse::<T>()
+            .map_err(|_| Error::Client(format!("Cannot parse number from {str}")))
     }
 
     fn parse_bulk_string(&mut self) -> Result<&'de [u8]> {
@@ -139,7 +149,7 @@ impl<'de> RespDeserializer<'de> {
     }
 
     #[inline(always)]
-    fn peek_string(&mut self) -> Result<Option<&'de str>> {
+    fn peek_string(&self) -> Result<Option<&'de str>> {
         let next_line = self.peek_line()?;
         if let Some(&SIMPLE_STRING_TAG) = next_line.first() {
             let str = str::from_utf8(&next_line[1..])?;
@@ -454,6 +464,14 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                 self.advance();
                 self.parse_nil()?;
                 visitor.visit_none()
+            },
+            ARRAY_TAG => {
+                let len = self.peek_number::<usize>()?;
+                if len == 0 {
+                    visitor.visit_none()
+                } else {
+                    visitor.visit_some(self)
+                }
             }
             _ => visitor.visit_some(self),
         }

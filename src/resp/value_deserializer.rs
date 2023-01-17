@@ -393,6 +393,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         match self {
             Value::Nil => visitor.visit_none(),
+            Value::Array(values) if values.is_empty() => visitor.visit_none(),
             Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => visitor.visit_some(self),
         }

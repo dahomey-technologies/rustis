@@ -216,6 +216,12 @@ fn option() -> Result<()> {
     let result = Option::<i64>::deserialize(&Value::Nil)?;
     assert_eq!(None, result);
 
+    let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
+    assert_eq!(Some(vec![12]), result);
+
+    let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![]))?;
+    assert_eq!(None, result);
+
     Ok(())
 }
 

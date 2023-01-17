@@ -213,6 +213,12 @@ fn option() -> Result<()> {
     let result: Option<i64> = deserialize("_\r\n")?; // null
     assert_eq!(None, result);
 
+    let result: Option::<Vec<i32>> = deserialize("*1\r\n:12\r\n")?; // [12]
+    assert_eq!(Some(vec![12]), result);
+
+    let result: Option::<Vec<i32>> = deserialize("*0\r\n")?; // []
+    assert_eq!(None, result);
+
     Ok(())
 }
 

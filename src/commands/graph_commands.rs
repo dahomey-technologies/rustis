@@ -293,7 +293,7 @@ impl GraphResultSet {
                 let client_state = client.get_client_state();
                 match client_state.get_state::<GraphCache>(&cache_key)? {
                     Some(cache) => {
-                        if cache.check_for_result(&value) {
+                        if cache.check_for_result(&value)? {
                             (true, 0, 0, 0)
                         } else {
                             (
@@ -307,7 +307,7 @@ impl GraphResultSet {
                     None => {
                         let cache = GraphCache::default();
 
-                        if cache.check_for_result(&value) {
+                        if cache.check_for_result(&value)? {
                             (true, 0, 0, 0)
                         } else {
                             (false, 0, 0, 0)

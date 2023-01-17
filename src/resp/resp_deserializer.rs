@@ -241,7 +241,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
         let first_byte = self.peek()?;
 
         match first_byte {
-            BULK_STRING_TAG => self.deserialize_byte_buf(visitor),
+            BULK_STRING_TAG => self.deserialize_bytes(visitor),
             ARRAY_TAG => self.deserialize_seq(visitor),
             MAP_TAG => self.deserialize_map(visitor),
             SET_TAG => self.deserialize_seq(visitor),

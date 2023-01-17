@@ -67,6 +67,7 @@ crc16 = "0.4"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 socket2 = "0.4"
+memchr = "2.5"
 
 [dev-dependencies]
 serial_test = "0.10"

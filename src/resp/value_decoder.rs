@@ -1,6 +1,7 @@
 use crate::{resp::Value, Error, RedisError, Result};
 use bytes::{Buf, BytesMut};
 use log::trace;
+use memchr::memchr;
 use std::{
     collections::HashMap,
     str::{self, FromStr},
@@ -64,7 +65,7 @@ fn decode(buf: &mut BytesMut, idx: usize) -> Result<Option<(Value, usize)>> {
 }
 
 fn decode_line(buf: &mut BytesMut, idx: usize) -> Result<Option<(&[u8], usize)>> {
-    match buf[idx..].iter().position(|b| *b == b'\r') {
+    match memchr(b'\r', &buf[idx..]) {
         Some(pos) if buf.len() > idx + pos + 1 && buf[idx + pos + 1] == b'\n' => {
             let slice = &buf[idx..idx + pos];
             Ok(Some((slice, pos + idx + 2)))

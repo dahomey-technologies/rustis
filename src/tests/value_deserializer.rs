@@ -66,6 +66,9 @@ fn i64() -> Result<()> {
     let result = i64::deserialize(&Value::Nil)?;
     assert_eq!(0, result);
 
+    let result = i64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
+    assert_eq!(12, result);
+
     Ok(())
 }
 
@@ -87,6 +90,9 @@ fn u64() -> Result<()> {
 
     let result = u64::deserialize(&Value::Nil)?;
     assert_eq!(0, result);
+
+    let result = u64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
+    assert_eq!(12, result);
 
     Ok(())
 }
@@ -246,6 +252,9 @@ fn unit() -> Result<()> {
 
     let result = <()>::deserialize(&Value::BulkString(b"hello".to_vec()));
     assert!(result.is_err());
+
+    let result = <()>::deserialize(&Value::Integer(1));
+    assert!(result.is_ok());
 
     Ok(())
 }

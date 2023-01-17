@@ -79,6 +79,12 @@ fn integer() -> Result<()> {
     let result: i64 = deserialize("+12\r\n")?; // "12"
     assert_eq!(12, result);
 
+    let result: i64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    assert_eq!(12, result);
+
+    let result: u64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    assert_eq!(12, result);
+
     Ok(())
 }
 
@@ -240,6 +246,9 @@ fn unit() -> Result<()> {
 
     let result: Result<()> = deserialize("$5\r\nhello\r\n"); // "hello"
     assert!(result.is_err());
+
+    let result: Result<()> = deserialize(":1\r\n"); // 1
+    assert!(result.is_ok(), "{result:?}");
 
     Ok(())
 }

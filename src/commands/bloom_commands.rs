@@ -6,7 +6,6 @@ use crate::{
     },
 };
 use serde::Deserialize;
-use std::future;
 
 /// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
 ///
@@ -95,11 +94,7 @@ pub trait BloomCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("BF.INFO").arg(key).arg(param)).post_process(Box::new(
-            |value, _command, _client| {
-                Box::pin(future::ready(value.into::<Vec<usize>>().map(|v| v[0])))
-            },
-        ))
+        prepare_command(self, cmd("BF.INFO").arg(key).arg(param))
     }
 
     /// `bf_insert` is a sugarcoated combination of [`bf_reserve`](BloomCommands::bf_reserve) and [`bf_add`](BloomCommands::bf_add).

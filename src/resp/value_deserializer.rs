@@ -1,7 +1,7 @@
 use crate::{resp::Value, Error, Result};
 use serde::{
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
-    forward_to_deserialize_any, Deserializer,
+    forward_to_deserialize_any, Deserialize, Deserializer,
 };
 use std::{
     collections::{hash_map, HashMap},
@@ -132,6 +132,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
+            Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
@@ -220,6 +221,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Nil => 0,
             Value::BulkString(s) => str::from_utf8(&s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
+            Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(format!(
@@ -406,6 +408,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         match self {
             Value::Nil => visitor.visit_unit(),
+            Value::Integer(_) => visitor.visit_unit(),
             Value::SimpleString(_) => visitor.visit_unit(),
             Value::BulkString(bs) if bs.is_empty() => visitor.visit_unit(),
             Value::Array(a) if a.is_empty() => visitor.visit_unit(),

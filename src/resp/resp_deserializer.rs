@@ -208,6 +208,14 @@ impl<'de> RespDeserializer<'de> {
                 .parse_string()?
                 .parse::<T>()
                 .map_err(|_| Error::Client("Cannot number".to_owned())),
+            ARRAY_TAG => {
+                let len = self.parse_number::<usize>()?;
+                if len == 1 && self.next()? == INTEGER_TAG {
+                    self.parse_number::<T>()
+                } else {
+                    Err(Error::Client("Cannot parse number".to_owned()))
+                }
+            }
             _ => Err(Error::Client("Cannot parse number".to_owned())),
         }
     }
@@ -485,7 +493,11 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
             NIL_TAG => {
                 self.parse_nil()?;
                 visitor.visit_unit()
-            }
+            },
+            INTEGER_TAG => {
+                self.parse_number::<i64>()?;
+                visitor.visit_unit()
+            },
             SIMPLE_STRING_TAG => {
                 self.parse_string()?;
                 visitor.visit_unit()

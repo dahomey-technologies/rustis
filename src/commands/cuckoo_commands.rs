@@ -30,9 +30,7 @@ pub trait CuckooCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("CF.ADD").arg(key).arg(item)).post_process(Box::new(
-            |_value, _command, _client| Box::pin(futures::future::ready(Ok(()))),
-        ))
+        prepare_command(self, cmd("CF.ADD").arg(key).arg(item))
     }
 
     /// Adds an item to a cuckoo filter if the item did not exist previously.
@@ -179,7 +177,7 @@ pub trait CuckooCommands {
         key: impl SingleArg,
         options: CfInsertOptions,
         item: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<Self, Vec<usize>>
     where
         Self: Sized,
     {
@@ -191,9 +189,6 @@ pub trait CuckooCommands {
                 .arg("ITEMS")
                 .arg(item),
         )
-        .post_process(Box::new(|_value, _command, _client| {
-            Box::pin(futures::future::ready(Ok(())))
-        }))
     }
 
     /// Adds one or more items to a cuckoo filter, allowing the filter to be created with a custom capacity if it does not exist yet.

@@ -1,6 +1,6 @@
-use crate::{commands::GraphValueType, resp::Value};
+use crate::{commands::GraphValueType};
 use serde::{
-    de::{self, DeserializeSeed, Visitor},
+    de::{self, DeserializeSeed, Visitor, IgnoredAny},
     Deserializer, Deserialize
 };
 use std::{fmt, marker::PhantomData};
@@ -44,7 +44,6 @@ impl GraphCache {
             );
         }
     }
-
 
     // returns true if we can parse this result without any cache miss
     pub fn check_for_result<'de, D: Deserializer<'de>>(&self, result: D) -> Result<bool, D::Error> {
@@ -159,7 +158,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForResultSetSeed<'a> {
             return Ok(true);
         }
 
-        let Some(_header) = seq.next_element::<Value>()? else {
+        // header
+        if seq.next_element::<IgnoredAny>()?.is_none() {
             return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
         };
 
@@ -279,7 +279,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForMapSeed<'a> {
     where
         A: serde::de::SeqAccess<'de>,
     {
-        while let Some(_key) = seq.next_element::<&str>()? {
+        // ignore key
+        while seq.next_element::<IgnoredAny>()?.is_some() {
             let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
                 return Err(de::Error::custom(&"Cannot parse GraphValue::Map value"));
             };
@@ -311,7 +312,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForNodeSeed<'a> {
     where
         A: serde::de::SeqAccess<'de>,
     {
-        let Some(_id) = seq.next_element::<i64>()? else {
+        // id
+        if seq.next_element::<IgnoredAny>()?.is_none() {
             return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
         };
 
@@ -350,7 +352,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
     where
         A: serde::de::SeqAccess<'de>,
     {
-        let Some(_id) = seq.next_element::<i64>()? else {
+        // id
+        if seq.next_element::<IgnoredAny>()?.is_none() {
             return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
         };
 
@@ -362,11 +365,13 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
             return Ok(false);
         }
 
-        let Some(_src_node_id) = seq.next_element::<i64>()? else {
+        // src_node_id
+        if seq.next_element::<IgnoredAny>()?.is_none() {
             return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
         };
 
-        let Some(_dst_node_id) = seq.next_element::<i64>()? else {
+        // dst_node_id
+        if seq.next_element::<IgnoredAny>()?.is_none() {
             return Err(de::Error::invalid_length(3, &"fewer elements in sequence"));
         };
 

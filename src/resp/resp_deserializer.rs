@@ -247,6 +247,27 @@ impl<'de> RespDeserializer<'de> {
             _ => Err(Error::Client("Cannot parse number".to_owned())),
         }
     }
+
+    fn ignore_value(&mut self) -> Result<()> {
+        match self.next()? {
+            SIMPLE_STRING_TAG | ERROR_TAG | INTEGER_TAG | DOUBLE_TAG | NIL_TAG | BOOL_TAG => {
+                self.next_line()?;
+                Ok(())
+            }
+            BULK_STRING_TAG | BLOB_ERROR_TAG | VERBATIM_STRING_TAG => {
+                self.parse_bulk_string()?;
+                Ok(())
+            }
+            ARRAY_TAG | MAP_TAG | SET_TAG | PUSH_TAG => {
+                let len = self.parse_number::<usize>()?;
+                for _ in 0..len {
+                    self.ignore_value()?;
+                }
+                Ok(())
+            }
+            _ => Err(Error::Client("Cannot parse tag".to_owned())),
+        }
+    }
 }
 
 impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
@@ -472,7 +493,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                 self.advance();
                 self.parse_nil()?;
                 visitor.visit_none()
-            },
+            }
             ARRAY_TAG => {
                 let len = self.peek_number::<usize>()?;
                 if len == 0 {
@@ -493,11 +514,11 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
             NIL_TAG => {
                 self.parse_nil()?;
                 visitor.visit_unit()
-            },
+            }
             INTEGER_TAG => {
                 self.parse_number::<i64>()?;
                 visitor.visit_unit()
-            },
+            }
             SIMPLE_STRING_TAG => {
                 self.parse_string()?;
                 visitor.visit_unit()
@@ -699,7 +720,8 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        self.ignore_value()?;
+        visitor.visit_unit()
     }
 }
 

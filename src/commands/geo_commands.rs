@@ -2,11 +2,11 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
         cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
-        MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
+        MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
 };
 use serde::{
-    de::{self, value::SeqAccessDeserializer, DeserializeOwned, Unexpected, Visitor},
+    de::{self, value::{SeqAccessDeserializer, BytesDeserializer}, DeserializeOwned, Unexpected, Visitor},
     Deserialize, Deserializer,
 };
 use std::{fmt, marker::PhantomData};
@@ -479,7 +479,7 @@ where
             where
                 E: de::Error,
             {
-                let member = M::deserialize(&Value::BulkString(v.to_vec())).map_err(E::custom)?;
+                let member = M::deserialize(BytesDeserializer::new(v))?;
 
                 Ok(GeoSearchResult {
                     member,

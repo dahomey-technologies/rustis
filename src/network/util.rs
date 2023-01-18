@@ -29,6 +29,10 @@ pub fn is_monitor_message(value: &Value) -> bool {
     }
 }
 
+pub fn is_push_message(value: &Value) -> bool {
+    matches!(value, Value::Push(_)) || is_monitor_message(value)
+}
+
 pub enum RefPubSubMessage<'a> {
     Subscribe(&'a [u8]),
     PSubscribe(&'a [u8]),

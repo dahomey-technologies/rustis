@@ -1,3 +1,4 @@
+use super::util::is_push_message;
 use crate::{
     client::{ClusterConfig, Config},
     commands::{
@@ -103,7 +104,11 @@ impl ClusterConnection {
         self.internal_write(command, &[]).await
     }
 
-    async fn internal_write(&mut self, command: &Command, ask_reasons: &[(u16, (String, u16))]) -> Result<()> {
+    async fn internal_write(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, (String, u16))],
+    ) -> Result<()> {
         debug!("Analyzing command {command:?}");
 
         let command_info = self.command_info_manager.get_command_info(command);
@@ -163,7 +168,6 @@ impl ClusterConnection {
         }
 
         Ok(())
-
     }
 
     pub async fn write_batch(
@@ -423,7 +427,7 @@ impl ClusterConnection {
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
-            if let Some(value) = &result {
+            if let Some(Ok(value)) = &result {
                 if is_push_message(value) {
                     return result;
                 }
@@ -980,39 +984,5 @@ impl ClusterConnection {
 
     fn crc16(str: &str) -> u16 {
         crc16::State::<crc16::XMODEM>::calculate(str.as_bytes())
-    }
-}
-
-fn is_push_message(value: &Result<Value>) -> bool {
-    match value {
-        // RESP2 pub/sub messages
-        Ok(Value::Array(ref items)) => match &items[..] {
-            [Value::BulkString(command), Value::BulkString(_channel), Value::BulkString(_payload)] =>
-            {
-                matches!(command.as_slice(), b"message" | b"smessage")
-            }
-            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] => {
-                matches!(
-                    command.as_slice(),
-                    b"subscribe"
-                        | b"psubscribe"
-                        | b"ssubscribe"
-                        | b"unsubscribe"
-                        | b"punsubscribe"
-                        | b"sunsubscribe"
-                )
-            }
-            [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
-                command.as_slice() == b"pmessage"
-            }
-            _ => false,
-        },
-        // RESP2 monitor events are a SimpleString beginning by a numeric (unix timestamp)
-        Ok(Value::SimpleString(monitor_event)) if monitor_event.starts_with(char::is_numeric) => {
-            true
-        }
-        // RESP3
-        Ok(Value::Push(_)) => true,
-        _ => false,
     }
 }

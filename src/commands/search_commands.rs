@@ -6,7 +6,6 @@ use crate::{
         FromValueArray, IntoArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
         VecOfPairsSeed,
     },
-    Error, Result,
 };
 use serde::{
     de::{self, value::SeqAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
@@ -765,48 +764,7 @@ pub trait SearchCommands {
     {
         prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options)).post_process(
             Box::new(|value, command, _client| {
-                fn from_value(command: Command, value: Value) -> Result<Vec<FtSuggestion>> {
-                    let with_scores = command.args.iter().any(|a| *a == "WITHSCORES");
-                    let with_payloads = command.args.iter().any(|a| *a == "WITHPAYLOADS");
-
-                    let values: Vec<Value> = value.into()?;
-                    let mut iter = values.into_iter();
-                    let mut suggestions = Vec::<FtSuggestion>::new();
-
-                    while let Some(suggestion) = iter.next() {
-                        let suggestion: String = suggestion.into()?;
-
-                        let score = if with_scores {
-                            let Some(value) = iter.next() else {
-                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
-                            };
-
-                            value.into()?
-                        } else {
-                            0.
-                        };
-
-                        let payload = if with_payloads {
-                            let Some(value) = iter.next() else {
-                                return Err(Error::Client("Cannot parse FtSuggestion".to_owned()));
-                            };
-
-                            value.into()?
-                        } else {
-                            String::from("")
-                        };
-
-                        suggestions.push(FtSuggestion {
-                            suggestion,
-                            score,
-                            payload,
-                        });
-                    }
-
-                    Ok(suggestions)
-                }
-
-                Box::pin(future::ready(from_value(command, value)))
+                Box::pin(future::ready(FtSuggestion::deserialize(&value, command)))
             }),
         )
     }
@@ -1989,7 +1947,9 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                             self.state = RowSeedState::AfterDocumentId(1);
                         }
                         Ok(RowField::DocumentId(
-                            std::str::from_utf8(v).map_err(de::Error::custom)?.to_owned(),
+                            std::str::from_utf8(v)
+                                .map_err(de::Error::custom)?
+                                .to_owned(),
                         ))
                     }
                     RowSeedState::AfterDocumentId(field_index) => {
@@ -2002,7 +1962,9 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                         // sortkeys begin by a '$' char
                         if let Some(b'$') = v.first() {
                             Ok(RowField::Sortkey(
-                                std::str::from_utf8(v).map_err(de::Error::custom)?.to_owned(),
+                                std::str::from_utf8(v)
+                                    .map_err(de::Error::custom)?
+                                    .to_owned(),
                             ))
                         } else {
                             Ok(RowField::Payload(v.to_vec()))
@@ -3204,4 +3166,70 @@ pub struct FtSuggestion {
     pub suggestion: String,
     pub score: f64,
     pub payload: String,
+}
+
+impl FtSuggestion {
+    pub fn deserialize<'de, D>(
+        deserializer: D,
+        command: Command,
+    ) -> std::result::Result<Vec<FtSuggestion>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct FtSuggestionVecVisitor {
+            command: Command,
+        }
+
+        impl<'de> Visitor<'de> for FtSuggestionVecVisitor {
+            type Value = Vec<FtSuggestion>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("Vec<FtSuggestion>")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let with_scores = self.command.args.iter().any(|a| *a == "WITHSCORES");
+                let with_payloads = self.command.args.iter().any(|a| *a == "WITHPAYLOADS");
+
+                let mut suggestions = if let Some(size) = seq.size_hint() {
+                    Vec::with_capacity(size)
+                } else {
+                    Vec::new()
+                };
+
+                while let Some(suggestion) = seq.next_element()? {
+                    let score = if with_scores {
+                        let Some(score) = seq.next_element()? else {
+                            return Err(de::Error::custom("Cannot parse FtSuggestion"));
+                        };
+                        score
+                    } else {
+                        0.
+                    };
+
+                    let payload = if with_payloads {
+                        let Some(payload) = seq.next_element()? else {
+                            return Err(de::Error::custom("Cannot parse FtSuggestion"));
+                        };
+                        payload
+                    } else {
+                        String::from("")
+                    };
+
+                    suggestions.push(FtSuggestion {
+                        suggestion,
+                        score,
+                        payload,
+                    });
+                }
+
+                Ok(suggestions)
+            }
+        }
+
+        deserializer.deserialize_seq(FtSuggestionVecVisitor { command })
+    }
 }

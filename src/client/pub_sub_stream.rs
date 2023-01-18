@@ -62,11 +62,8 @@ impl PubSubMessage {
 ///     regular_client.publish("mychannel", "mymessage").await?;
 ///
 ///     let mut message = pub_sub_stream.next().await.unwrap()?;
-///     let channel: String = message.get_channel()?;
-///     let payload: String = message.get_payload()?;
-///
-///     assert_eq!("mychannel", channel);
-///     assert_eq!("mymessage", payload);
+///     assert_eq!(b"mychannel".to_vec(), message.channel);
+///     assert_eq!(b"mymessage".to_vec(), message.payload);
 ///
 ///     pub_sub_stream.close().await?;
 ///

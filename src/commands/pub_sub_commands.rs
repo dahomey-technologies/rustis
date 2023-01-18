@@ -36,14 +36,10 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel1", "mymessage").await?;
     ///
-    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
-    ///     let pattern: String = message.get_pattern()?;
-    ///     let channel: String = message.get_channel()?;
-    ///     let payload: String = message.get_payload()?;
-    ///
-    ///     assert_eq!("mychannel*", pattern);
-    ///     assert_eq!("mychannel1", channel);
-    ///     assert_eq!("mymessage", payload);
+    ///     let message = pub_sub_stream.next().await.unwrap()?;
+    ///     assert_eq!(b"mychannel*".to_vec(), message.pattern);
+    ///     assert_eq!(b"mychannel1".to_vec(), message.channel);
+    ///     assert_eq!(b"mymessage".to_vec(), message.payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///
@@ -216,13 +212,9 @@ pub trait PubSubCommands {
     ///
     ///     regular_client.publish("mychannel", "mymessage").await?;
     ///
-    ///     let mut message = pub_sub_stream.next().await.unwrap()?;
-    ///     let pattern: String = message.get_pattern()?;
-    ///     let channel: String = message.get_channel()?;
-    ///     let payload: String = message.get_payload()?;
-    ///
-    ///     assert_eq!("mychannel", channel);
-    ///     assert_eq!("mymessage", payload);
+    ///     let message = pub_sub_stream.next().await.unwrap()?;
+    ///     assert_eq!(b"mychannel".to_vec(), message.channel);
+    ///     assert_eq!(b"mymessage".to_vec(), message.payload);
     ///
     ///     pub_sub_stream.close().await?;
     ///

@@ -399,13 +399,9 @@ async fn main() -> Result<()> {
     regular_client.publish("mychannel", "mymessage").await?;
 
     // subscribing_client wait for the next message
-    if let Some(message) = pub_sub_stream.next().await {
-        let mut message = message?;
-        let channel: String = message.get_channel()?;
-        let payload: String = message.get_payload()?;
-
-        assert_eq!("mychannel", channel);
-        assert_eq!("mymessage", payload);
+    if let Some(Ok(message)) = pub_sub_stream.next().await {
+        assert_eq!(b"mychannel".to_vec(), message.channel);
+        assert_eq!(b"mymessage".to_vec(), message.payload);
     }
 
     pub_sub_stream.close().await?;

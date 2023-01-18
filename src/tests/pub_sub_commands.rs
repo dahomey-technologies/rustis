@@ -33,11 +33,8 @@ async fn pubsub() -> Result<()> {
     regular_client.publish("mychannel", "mymessage").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
-
-    assert_eq!("mychannel", channel);
-    assert_eq!("mymessage", payload);
+    assert_eq!(b"mychannel".to_vec(), message.channel);
+    assert_eq!(b"mymessage".to_vec(), message.payload);
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;

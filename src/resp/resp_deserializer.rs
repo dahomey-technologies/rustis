@@ -30,12 +30,13 @@ fn eof<T>() -> Result<T> {
 pub struct RespDeserializer<'de> {
     buf: &'de [u8],
     pos: usize,
+    eat_error: bool
 }
 
 impl<'de> RespDeserializer<'de> {
     #[inline]
     pub fn from_bytes(buf: &'de [u8]) -> Self {
-        RespDeserializer { buf, pos: 0 }
+        RespDeserializer { buf, pos: 0, eat_error: true }
     }
 
     #[inline]
@@ -58,19 +59,23 @@ impl<'de> RespDeserializer<'de> {
         if self.pos < self.buf.len() {
             let byte = self.buf[self.pos];
 
-            match byte {
-                ERROR_TAG => {
-                    self.advance();
-                    let str = self.parse_string()?;
-                    Err(Error::Redis(RedisError::from_str(str)?))
+            if self.eat_error {
+                match byte {
+                    ERROR_TAG => {
+                        self.advance();
+                        let str = self.parse_string()?;
+                        Err(Error::Redis(RedisError::from_str(str)?))
+                    }
+                    BLOB_ERROR_TAG => {
+                        self.advance();
+                        let bs = self.parse_bulk_string()?;
+                        let str = str::from_utf8(bs)?;
+                        Err(Error::Redis(RedisError::from_str(str)?))
+                    }
+                    _ => Ok(byte),
                 }
-                BLOB_ERROR_TAG => {
-                    self.advance();
-                    let bs = self.parse_bulk_string()?;
-                    let str = str::from_utf8(bs)?;
-                    Err(Error::Redis(RedisError::from_str(str)?))
-                }
-                _ => Ok(byte),
+            } else {
+                Ok(byte)
             }
         } else {
             eof()
@@ -260,6 +265,7 @@ impl<'de> RespDeserializer<'de> {
     }
 
     fn ignore_value(&mut self) -> Result<()> {
+        self.eat_error = false;
         match self.next()? {
             SIMPLE_STRING_TAG | ERROR_TAG | INTEGER_TAG | DOUBLE_TAG | NIL_TAG | BOOL_TAG => {
                 self.next_line()?;

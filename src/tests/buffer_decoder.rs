@@ -41,19 +41,19 @@ fn string() -> Result<()> {
     Ok(())
 }
 
-// #[test]
-// fn error() -> Result<()> {
-//     let result = decode("-ERR error\r\n")?;
-//     assert_eq!(Some("-ERR error\r\n".as_bytes().to_vec()), result);
+#[test]
+fn error() -> Result<()> {
+    let result = decode("-ERR error\r\n")?;
+    assert_eq!(Some("-ERR error\r\n".as_bytes().to_vec()), result);
 
-//     let result = decode("-ERR error\r")?;
-//     assert_eq!(None, result);
+    let result = decode("-ERR error\r")?;
+    assert_eq!(None, result);
 
-//     let result = decode("-ERR error")?;
-//     assert_eq!(None, result);
+    let result = decode("-ERR error")?;
+    assert_eq!(None, result);
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 #[test]
 fn double() -> Result<()> {

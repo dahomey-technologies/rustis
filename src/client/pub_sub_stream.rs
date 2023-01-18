@@ -1,8 +1,8 @@
 use crate::{
-    client::{ClientPreparedCommand, Client},
+    client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
-    resp::{CommandArgs, FromValue, SingleArg, SingleArgCollection, Value},
+    resp::{CommandArgs, SingleArg, SingleArgCollection, Value},
     Error, PubSubReceiver, Result,
 };
 use futures::{Stream, StreamExt};
@@ -13,50 +13,26 @@ use std::{
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
 pub struct PubSubMessage {
-    pub pattern: Value,
-    pub channel: Value,
-    pub payload: Value,
+    pub pattern: Vec<u8>,
+    pub channel: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 impl PubSubMessage {
-    pub(crate) fn from_message(channel: Value, payload: Value) -> Self {
+    pub(crate) fn from_message(channel: Vec<u8>, payload: Vec<u8>) -> Self {
         Self {
-            pattern: Value::Nil,
+            pattern: vec![],
             channel,
             payload,
         }
     }
 
-    pub(crate) fn from_pmessage(pattern: Value, channel: Value, payload: Value) -> Self {
+    pub(crate) fn from_pmessage(pattern: Vec<u8>, channel: Vec<u8>, payload: Vec<u8>) -> Self {
         Self {
             pattern,
             channel,
             payload,
         }
-    }
-
-    /// Convert and consumes the message's pattern
-    ///
-    /// For subscriptions with no pattern ([`PubSubCommands::subscribe`](crate::commands::PubSubCommands::subscribe)),
-    /// the message's pattern is internally stored as [`Value::Nil`](Value::Nil).
-    pub fn get_pattern<P: FromValue>(&mut self) -> Result<P> {
-        let mut pattern = Value::Nil;
-        std::mem::swap(&mut pattern, &mut self.pattern);
-        pattern.into()
-    }
-
-    /// Convert and consumes the message's channel
-    pub fn get_channel<P: FromValue>(&mut self) -> Result<P> {
-        let mut channel = Value::Nil;
-        std::mem::swap(&mut channel, &mut self.channel);
-        channel.into()
-    }
-
-    /// Convert and consumes the message's payload
-    pub fn get_payload<P: FromValue>(&mut self) -> Result<P> {
-        let mut payload = Value::Nil;
-        std::mem::swap(&mut payload, &mut self.payload);
-        payload.into()
     }
 }
 
@@ -251,14 +227,32 @@ impl Stream for PubSubStream {
             let parts: Vec<Value> = message.into()?;
             let mut iter = parts.into_iter();
 
-            match (iter.next(), iter.next(), iter.next(), iter.next()) {
-                (Some(pattern), Some(channel), Some(payload), None) => {
+            match (
+                iter.next(),
+                iter.next(),
+                iter.next(),
+                iter.next(),
+                iter.next(),
+            ) {
+                (
+                    Some(Value::BulkString(command)),
+                    Some(Value::BulkString(pattern)),
+                    Some(Value::BulkString(channel)),
+                    Some(Value::BulkString(payload)),
+                    None,
+                ) if command.as_slice() == b"pmessage" => {
                     Ok(PubSubMessage::from_pmessage(pattern, channel, payload))
                 }
-                (Some(channel), Some(payload), None, None) => {
+                (
+                    Some(Value::BulkString(command)),
+                    Some(Value::BulkString(channel)),
+                    Some(Value::BulkString(payload)),
+                    None,
+                    None,
+                ) if command.as_slice() == b"message" || command.as_slice() == b"smessage" => {
                     Ok(PubSubMessage::from_message(channel, payload))
                 }
-                _ => Err(Error::Client("Cannot parse PubSubMessage".to_owned())),
+                message => Err(Error::Client(format!("Cannot parse PubSubMessage: {message:?}"))),
             }
         }
 

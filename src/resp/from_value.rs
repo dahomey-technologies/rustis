@@ -87,7 +87,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(Vec::new()),
-            Value::Array(v) => v.into_value_iter().collect(),
+            Value::Array(v) | Value::Push(v) => v.into_value_iter().collect(),
             Value::Set(v) => v.into_iter().map(Value::into).collect(),
             Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
@@ -105,7 +105,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(SmallVec::new()),
-            Value::Array(v) => v.into_value_iter().collect(),
+            Value::Array(v) | Value::Push(v) => v.into_value_iter().collect(),
             Value::Set(v) => v.into_iter().map(Value::into).collect(),
             Value::Map(v) => ValueIterator::new(v.into_iter().flat_map(|(k, v)| [k, v])).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
@@ -122,7 +122,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(HashSet::default()),
-            Value::Array(v) => v.into_iter().map(Value::into).collect(),
+            Value::Array(v) | Value::Push(v) => v.into_iter().map(Value::into).collect(),
             Value::Set(v) => v.into_iter().map(Value::into).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => {
@@ -142,7 +142,7 @@ where
     fn from_value(value: Value) -> Result<Self> {
         match value {
             Value::Nil => Ok(BTreeSet::new()),
-            Value::Array(v) => v.into_iter().map(Value::into).collect(),
+            Value::Array(v) | Value::Push(v) => v.into_iter().map(Value::into).collect(),
             Value::Set(v) => v.into_iter().map(Value::into).collect(),
             Value::Error(e) => Err(Error::Redis(e)),
             _ => Ok(BTreeSet::from([value.into()?])),

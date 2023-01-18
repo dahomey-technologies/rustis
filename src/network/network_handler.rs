@@ -500,12 +500,28 @@ impl NetworkHandler {
 
     async fn try_match_pubsub_message(&mut self, value: Result<Value>) -> Option<Result<Value>> {
         // first pass check if received value if a PubSub message with matching on references
-        let is_pub_sub_message = match value {
-            Ok(Value::Array(ref items)) | Ok(Value::Push(ref items)) => {
+        match &value {
+            Ok(Value::Array(items)) | Ok(Value::Push(items)) => {
                 match &items[..] {
                     [Value::BulkString(command), Value::BulkString(channel_or_pattern), _] => {
                         match command.as_slice() {
-                            b"message" | b"smessage" => true,
+                            b"message" | b"smessage" => {
+                                match self.subscriptions.get_mut(channel_or_pattern) {
+                                    Some((_subscription_type, pub_sub_sender)) => {
+                                        if let Err(e) = pub_sub_sender.send(value).await {
+                                            warn!("Cannot send pub/sub message to caller: {e}");
+                                        }
+                                        None
+                                    }
+                                    None => {
+                                        error!(
+                                            "Unexpected message on channel '{:?}'",
+                                            String::from_utf8_lossy(channel_or_pattern)
+                                        );
+                                        None
+                                    }
+                                }
+                            }
                             b"subscribe" | b"psubscribe" | b"ssubscribe" => {
                                 if let Some(pub_sub_sender) =
                                     self.pending_subscriptions.remove(channel_or_pattern)
@@ -516,7 +532,7 @@ impl NetworkHandler {
                                 if !self.pending_subscriptions.is_empty() {
                                     return None;
                                 }
-                                false
+                                Some(value)
                             }
                             b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
                                 self.subscriptions.remove(channel_or_pattern);
@@ -528,7 +544,7 @@ impl NetworkHandler {
                                                 String::from_utf8_lossy(channel_or_pattern)
                                             );
                                         }
-                                        return None;
+                                        None
                                     } else {
                                         // last unsubscription notification received
                                         let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
@@ -545,99 +561,40 @@ impl NetworkHandler {
                                             );
                                             return None;
                                         }
-                                        return Some(Ok(Value::SimpleString("OK".to_owned())));
+                                        Some(Ok(Value::SimpleString("OK".to_owned())))
                                     }
+                                } else {
+                                    Some(value)
                                 }
-                                false
                             }
-                            _ => false,
+                            _ => Some(value),
                         }
                     }
-                    [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
-                        command.as_slice() == b"pmessage"
+                    [Value::BulkString(command), Value::BulkString(pattern), Value::BulkString(channel), Value::BulkString(_payload)]
+                        if command.as_slice() == b"pmessage" =>
+                    {
+                        match self.subscriptions.get_mut(pattern) {
+                            Some((_subscription_type, pub_sub_sender)) => {
+                                if let Err(e) = pub_sub_sender.send(value).await {
+                                    warn!("Cannot send pub/sub message to caller: {e}");
+                                }
+                                None
+                            }
+                            None => {
+                                error!(
+                                    "Unexpected message on channel '{:?}' for pattern '{:?}'",
+                                    String::from_utf8_lossy(&channel),
+                                    String::from_utf8_lossy(&pattern)
+                                );
+                                None
+                            }
+                        }
                     }
-                    _ => false,
+                    _ => Some(value),
                 }
             }
-            _ => false,
-        };
-
-        // because value is not consumed we can send it back to the caller
-        // if it is not a PubSub message
-        if !is_pub_sub_message {
-            return Some(value);
+            _ => Some(value),
         }
-
-        // second pass, move payload into pub_sub_sender by consuming received value
-        if let Ok(Value::Array(items)) | Ok(Value::Push(items)) = value {
-            let mut iter = items.into_iter();
-            match (
-                iter.next(),
-                iter.next(),
-                iter.next(),
-                iter.next(),
-                iter.next(),
-            ) {
-                // message or smessage
-                (
-                    Some(Value::BulkString(_command)),
-                    Some(Value::BulkString(channel)),
-                    Some(payload),
-                    None,
-                    None,
-                ) => match self.subscriptions.get_mut(&channel) {
-                    Some((_subscription_type, pub_sub_sender)) => {
-                        if let Err(e) = pub_sub_sender
-                            .send(Ok(Value::Array(vec![Value::BulkString(channel), payload])))
-                            .await
-                        {
-                            warn!("Cannot send pub/sub message to caller: {e}");
-                        }
-                        return None;
-                    }
-                    None => {
-                        error!(
-                            "Unexpected message on channel '{:?}'",
-                            String::from_utf8_lossy(&channel)
-                        );
-                        return None;
-                    }
-                },
-                // pmessage
-                (
-                    Some(Value::BulkString(_command)),
-                    Some(Value::BulkString(pattern)),
-                    Some(Value::BulkString(channel)),
-                    Some(payload),
-                    None,
-                ) => match self.subscriptions.get_mut(&pattern) {
-                    Some((_subscription_type, pub_sub_sender)) => {
-                        if let Err(e) = pub_sub_sender
-                            .send(Ok(Value::Array(vec![
-                                Value::BulkString(pattern),
-                                Value::BulkString(channel),
-                                payload,
-                            ])))
-                            .await
-                        {
-                            warn!("Cannot send pub/sub message to caller: {e}");
-                        }
-                        return None;
-                    }
-                    None => {
-                        error!(
-                            "Unexpected message on channel '{:?}' for pattern '{:?}'",
-                            String::from_utf8_lossy(&channel),
-                            String::from_utf8_lossy(&pattern)
-                        );
-                        return None;
-                    }
-                },
-                _ => (),
-            }
-        }
-
-        unreachable!();
     }
 
     async fn reconnect(&mut self) {
@@ -656,7 +613,9 @@ impl NetworkHandler {
         }
 
         while let Some(message_to_receive) = self.messages_to_receive.front() {
-            if !message_to_receive.message.retry_on_error || message_to_receive.attempts >= self.max_command_attempts {
+            if !message_to_receive.message.retry_on_error
+                || message_to_receive.attempts >= self.max_command_attempts
+            {
                 debug!(
                     "{:?}, max attempts reached",
                     message_to_receive.message.commands
@@ -689,7 +648,9 @@ impl NetworkHandler {
         }
 
         while let Some(message_to_send) = self.messages_to_send.front() {
-            if !message_to_send.message.retry_on_error || message_to_send.attempts >= self.max_command_attempts {
+            if !message_to_send.message.retry_on_error
+                || message_to_send.attempts >= self.max_command_attempts
+            {
                 debug!(
                     "{:?}, max attempts reached",
                     message_to_send.message.commands

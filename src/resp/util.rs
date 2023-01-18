@@ -1,5 +1,5 @@
 use serde::{
-    de::{self, DeserializeOwned, Visitor, DeserializeSeed},
+    de::{self, DeserializeOwned, DeserializeSeed, Visitor},
     Deserializer,
 };
 use std::{fmt, marker::PhantomData};
@@ -153,6 +153,43 @@ impl<'de> DeserializeSeed<'de> for ByteBufSeed {
         D: Deserializer<'de>,
     {
         deserialize_byte_buf(deserializer)
+    }
+}
+
+pub fn deserialize_bytes<'de, D>(deserializer: D) -> std::result::Result<&'de [u8], D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct ByteBufVisitor;
+
+    impl<'de> Visitor<'de> for ByteBufVisitor {
+        type Value = &'de [u8];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("&'de [u8]")
+        }
+
+        fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(v)
+        }
+    }
+
+    deserializer.deserialize_bytes(ByteBufVisitor)
+}
+
+pub struct BytesSeed;
+
+impl<'de> DeserializeSeed<'de> for BytesSeed {
+    type Value =  &'de [u8];
+
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserialize_bytes(deserializer)
     }
 }
 

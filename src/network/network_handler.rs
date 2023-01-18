@@ -1,3 +1,4 @@
+use super::util::{is_monitor_message, RefPubSubMessage};
 use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
@@ -373,10 +374,7 @@ impl NetworkHandler {
                     self.status = Status::Monitor;
                 }
                 Status::Monitor => match &value {
-                    // monitor events are a SimpleString beginning by a numeric (unix timestamp)
-                    Ok(Value::SimpleString(monitor_event))
-                        if monitor_event.starts_with(char::is_numeric) =>
-                    {
+                    Ok(ref_value) if is_monitor_message(ref_value) => {
                         if let Some(push_sender) = &mut self.push_sender {
                             if let Err(e) = push_sender.send(value).await {
                                 warn!("Cannot send monitor result to caller: {e}");
@@ -386,10 +384,7 @@ impl NetworkHandler {
                     _ => self.receive_result(value),
                 },
                 Status::LeavingMonitor => match &value {
-                    // monitor events are a SimpleString beginning by a numeric (unix timestamp)
-                    Ok(Value::SimpleString(monitor_event))
-                        if monitor_event.starts_with(char::is_numeric) =>
-                    {
+                    Ok(ref_value) if is_monitor_message(ref_value) => {
                         if let Some(push_sender) = &mut self.push_sender {
                             if let Err(e) = push_sender.send(value).await {
                                 warn!("Cannot send monitor result to caller: {e}");
@@ -497,86 +492,81 @@ impl NetworkHandler {
     }
 
     async fn try_match_pubsub_message(&mut self, value: Result<Value>) -> Option<Result<Value>> {
-        // first pass check if received value if a PubSub message with matching on references
-        match &value {
-            Ok(Value::Array(items)) | Ok(Value::Push(items)) => {
-                match &items[..] {
-                    [Value::BulkString(command), Value::BulkString(channel_or_pattern), _] => {
-                        match command.as_slice() {
-                            b"message" | b"smessage" => {
-                                match self.subscriptions.get_mut(channel_or_pattern) {
-                                    Some((_subscription_type, pub_sub_sender)) => {
-                                        if let Err(e) = pub_sub_sender.send(value).await {
-                                            warn!("Cannot send pub/sub message to caller: {e}");
-                                        }
-                                        None
-                                    }
-                                    None => {
-                                        error!(
-                                            "Unexpected message on channel '{:?}'",
-                                            String::from_utf8_lossy(channel_or_pattern)
-                                        );
-                                        None
-                                    }
+        if let Ok(ref_value) = &value {
+            if let Some(pub_sub_message) = RefPubSubMessage::from_resp(ref_value) {
+                match pub_sub_message {
+                    RefPubSubMessage::Message(channel_or_pattern, _)
+                    | RefPubSubMessage::SMessage(channel_or_pattern, _) => {
+                        match self.subscriptions.get_mut(channel_or_pattern) {
+                            Some((_subscription_type, pub_sub_sender)) => {
+                                if let Err(e) = pub_sub_sender.send(value).await {
+                                    warn!("Cannot send pub/sub message to caller: {e}");
                                 }
                             }
-                            b"subscribe" | b"psubscribe" | b"ssubscribe" => {
-                                if let Some(pub_sub_sender) =
-                                    self.pending_subscriptions.remove(channel_or_pattern)
-                                {
-                                    self.subscriptions
-                                        .insert(channel_or_pattern.clone(), pub_sub_sender);
+                            None => {
+                                error!(
+                                    "Unexpected message on channel '{:?}'",
+                                    String::from_utf8_lossy(channel_or_pattern)
+                                );
+                            }
+                        }
+                        None
+                    }
+                    RefPubSubMessage::Subscribe(channel_or_pattern)
+                    | RefPubSubMessage::PSubscribe(channel_or_pattern)
+                    | RefPubSubMessage::SSubscribe(channel_or_pattern) => {
+                        if let Some(pub_sub_sender) =
+                            self.pending_subscriptions.remove(channel_or_pattern)
+                        {
+                            self.subscriptions
+                                .insert(channel_or_pattern.to_vec(), pub_sub_sender);
+                        }
+                        if !self.pending_subscriptions.is_empty() {
+                            return None;
+                        }
+                        Some(value)
+                    }
+                    RefPubSubMessage::Unsubscribe(channel_or_pattern)
+                    | RefPubSubMessage::PUnsubscribe(channel_or_pattern)
+                    | RefPubSubMessage::SUnsubscribe(channel_or_pattern) => {
+                        self.subscriptions.remove(channel_or_pattern);
+                        if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
+                            if remaining.len() > 1 {
+                                if remaining.remove(channel_or_pattern).is_none() {
+                                    error!(
+                                        "Cannot find channel or pattern to remove: {}",
+                                        String::from_utf8_lossy(channel_or_pattern)
+                                    );
                                 }
-                                if !self.pending_subscriptions.is_empty() {
+                                None
+                            } else {
+                                // last unsubscription notification received
+                                let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
+                                    error!(
+                                        "Cannot find channel or pattern to remove: {}", 
+                                        String::from_utf8_lossy(channel_or_pattern)
+                                    );
+                                    return None;
+                                };
+                                if remaining.remove(channel_or_pattern).is_none() {
+                                    error!(
+                                        "Cannot find channel or pattern to remove: {}",
+                                        String::from_utf8_lossy(channel_or_pattern)
+                                    );
                                     return None;
                                 }
-                                Some(value)
+                                Some(Ok(Value::SimpleString("OK".to_owned())))
                             }
-                            b"unsubscribe" | b"punsubscribe" | b"sunsubscribe" => {
-                                self.subscriptions.remove(channel_or_pattern);
-                                if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
-                                    if remaining.len() > 1 {
-                                        if remaining.remove(channel_or_pattern).is_none() {
-                                            error!(
-                                                "Cannot find channel or pattern to remove: {}",
-                                                String::from_utf8_lossy(channel_or_pattern)
-                                            );
-                                        }
-                                        None
-                                    } else {
-                                        // last unsubscription notification received
-                                        let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
-                                            error!(
-                                                "Cannot find channel or pattern to remove: {}", 
-                                                String::from_utf8_lossy(channel_or_pattern)
-                                            );
-                                            return None;
-                                        };
-                                        if remaining.remove(channel_or_pattern).is_none() {
-                                            error!(
-                                                "Cannot find channel or pattern to remove: {}",
-                                                String::from_utf8_lossy(channel_or_pattern)
-                                            );
-                                            return None;
-                                        }
-                                        Some(Ok(Value::SimpleString("OK".to_owned())))
-                                    }
-                                } else {
-                                    Some(value)
-                                }
-                            }
-                            _ => Some(value),
+                        } else {
+                            Some(value)
                         }
                     }
-                    [Value::BulkString(command), Value::BulkString(pattern), Value::BulkString(channel), Value::BulkString(_payload)]
-                        if command.as_slice() == b"pmessage" =>
-                    {
+                    RefPubSubMessage::PMessage(pattern, channel, _) => {
                         match self.subscriptions.get_mut(pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
                                 if let Err(e) = pub_sub_sender.send(value).await {
                                     warn!("Cannot send pub/sub message to caller: {e}");
                                 }
-                                None
                             }
                             None => {
                                 error!(
@@ -584,14 +574,16 @@ impl NetworkHandler {
                                     String::from_utf8_lossy(&channel),
                                     String::from_utf8_lossy(&pattern)
                                 );
-                                None
                             }
                         }
+                        None
                     }
-                    _ => Some(value),
                 }
+            } else {
+                Some(value)
             }
-            _ => Some(value),
+        } else {
+            Some(value)
         }
     }
 

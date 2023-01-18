@@ -258,8 +258,15 @@ impl<'de> RespDeserializer<'de> {
                 self.parse_bulk_string()?;
                 Ok(())
             }
-            ARRAY_TAG | MAP_TAG | SET_TAG | PUSH_TAG => {
+            ARRAY_TAG | SET_TAG | PUSH_TAG => {
                 let len = self.parse_number::<usize>()?;
+                for _ in 0..len {
+                    self.ignore_value()?;
+                }
+                Ok(())
+            }
+            MAP_TAG => {
+                let len = self.parse_number::<usize>()? * 2;
                 for _ in 0..len {
                     self.ignore_value()?;
                 }

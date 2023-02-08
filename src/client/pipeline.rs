@@ -1,3 +1,5 @@
+use serde::de::DeserializeOwned;
+
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -17,7 +19,7 @@ use crate::{
         HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
         SetCommands, SortedSetCommands, StreamCommands, StringCommands,
     },
-    resp::{Command, FromValue, ResultValueExt, Value},
+    resp::{Command, RespBatchDeserializer},
     Result,
 };
 use std::iter::zip;
@@ -94,29 +96,27 @@ impl Pipeline {
     ///     Ok(())
     /// }
     /// ```    
-    pub async fn execute<T: FromValue>(mut self) -> Result<T> {
+    pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
         let num_commands = self.commands.len();
-        let result = self
+        let results = self
             .client
             .send_batch(self.commands, self.retry_on_error)
             .await?;
 
-        match result {
-            Value::Array(results) if num_commands > 1 => {
-                let mut filtered_results = zip(results, self.forget_flags.iter())
-                    .filter_map(
-                        |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
-                    )
-                    .collect::<Vec<_>>();
+        if num_commands > 1 {
+            let mut filtered_results = zip(results, self.forget_flags.iter())
+                .filter_map(|(value, forget_flag)| if *forget_flag { None } else { Some(value) })
+                .collect::<Vec<_>>();
 
-                if filtered_results.len() == 1 {
-                    let value = filtered_results.pop().unwrap();
-                    Ok(value).into_result()?.into()
-                } else {
-                    Value::Array(filtered_results).into()
-                }
+            if filtered_results.len() == 1 {
+                let result = filtered_results.pop().unwrap();
+                result.to()
+            } else {
+                let deserializer = RespBatchDeserializer::new(&filtered_results);
+                T::deserialize(&deserializer)
             }
-            _ => Ok(result).into_result()?.into(),
+        } else {
+            results[0].to()
         }
     }
 }
@@ -125,8 +125,6 @@ impl Pipeline {
 /// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
 /// the [`Transaction`](crate::client::Transaction) executors
 pub trait BatchPreparedCommand<R = ()>
-where
-    R: FromValue,
 {
     /// Queue a command.
     fn queue(self);
@@ -135,7 +133,7 @@ where
     fn forget(self);
 }
 
-impl<R: FromValue> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
+impl<R> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
     /// Queue a command.
     #[inline]
     fn queue(self) {

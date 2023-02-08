@@ -1916,16 +1916,16 @@ impl<'de> Deserialize<'de> for RoleResult {
                 A: SeqAccess<'de>,
             {
                 let Some(role): Option<&str> = seq.next_element()? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 match role {
                     "master" => {
                         let Some(master_replication_offset): Option<usize> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                         };
                         Ok(RoleResult::Master {
                             master_replication_offset,
@@ -1934,16 +1934,16 @@ impl<'de> Deserialize<'de> for RoleResult {
                     }
                     "slave" => {
                         let Some(master_ip): Option<String> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         let Some(master_port): Option<u16> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                         };
                         let Some(state): Option<ReplicationState> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(3, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(3, &"more elements in sequence"));
                         };
                         let Some(amount_data_received): Option<isize> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(4, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(4, &"more elements in sequence"));
                         };
                         Ok(RoleResult::Replica {
                             master_ip,
@@ -1954,12 +1954,12 @@ impl<'de> Deserialize<'de> for RoleResult {
                     }
                     "sentinel" => {
                         let Some(master_names): Option<Vec<String>> = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         Ok(RoleResult::Sentinel { master_names })
                     }
                     _ => Err(de::Error::invalid_value(
-                        de::Unexpected::Str(&role),
+                        de::Unexpected::Str(role),
                         &"expected `master`, `slave` or `sentinel`",
                     )),
                 }

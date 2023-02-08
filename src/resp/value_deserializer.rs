@@ -63,7 +63,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as i8,
             Value::Double(d) => *d as i8,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<i8>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -85,7 +85,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as i16,
             Value::Double(d) => *d as i16,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<i16>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -107,7 +107,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as i32,
             Value::Double(d) => *d as i32,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<i32>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -130,7 +130,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i,
             Value::Double(d) => *d as i64,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<i64>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
             Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
@@ -153,7 +153,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as u8,
             Value::Double(d) => *d as u8,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<u8>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -175,7 +175,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as u16,
             Value::Double(d) => *d as u16,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<u16>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -197,7 +197,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as u32,
             Value::Double(d) => *d as u32,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<u32>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -219,7 +219,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as u64,
             Value::Double(d) => *d as u64,
             Value::Nil => 0,
-            Value::BulkString(s) => str::from_utf8(&s)?.parse::<u64>()?,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
             Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
@@ -241,7 +241,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as f32,
             Value::Double(d) => *d as f32,
-            Value::BulkString(bs) => str::from_utf8(&bs)?.parse::<f32>()?,
+            Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f32>()?,
             Value::Nil => 0.,
             Value::SimpleString(s) => s.parse::<f32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
@@ -263,7 +263,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as f64,
             Value::Double(d) => *d,
-            Value::BulkString(bs) => str::from_utf8(&bs)?.parse::<f64>()?,
+            Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f64>()?,
             Value::Nil => 0.,
             Value::SimpleString(s) => s.parse::<f64>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
@@ -284,7 +284,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result: char = match self {
             Value::BulkString(bs) => {
-                let str = str::from_utf8(&bs)?;
+                let str = str::from_utf8(bs)?;
                 if str.len() == 1 {
                     str.chars().next().unwrap()
                 } else {
@@ -510,7 +510,7 @@ impl<'de> Deserializer<'de> for &'de Value {
 
         match self {
             Value::Array(values) => {
-                if check_resp2_array(&values, fields) {
+                if check_resp2_array(values, fields) {
                     visitor.visit_map(SeqAccess::new(values))
                 } else {
                     visitor.visit_seq(SeqAccess::new(values))
@@ -534,7 +534,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         match self {
             Value::BulkString(bs) => {
                 // Visit a unit variant.
-                let str = str::from_utf8(&bs)?;
+                let str = str::from_utf8(bs)?;
                 visitor.visit_enum(str.into_deserializer())
             }
             Value::SimpleString(str) => {
@@ -611,7 +611,7 @@ impl<'de> SeqAccess<'de> {
     pub fn new(values: &'de Vec<Value>) -> Self {
         Self {
             len: values.len(),
-            iter: values.into_iter(),
+            iter: values.iter(),
             value: None,
         }
     }
@@ -689,7 +689,7 @@ impl<'de> MapAccess<'de> {
     pub fn new(values: &'de HashMap<Value, Value>) -> Self {
         Self {
             len: values.len(),
-            iter: values.into_iter(),
+            iter: values.iter(),
             value: None,
         }
     }
@@ -807,8 +807,8 @@ struct Enum<'de> {
 }
 
 impl<'de> Enum<'de> {
-    fn from_array(values: &'de Vec<Value>) -> Self {
-        let mut iter = values.into_iter();
+    fn from_array(values: &'de [Value]) -> Self {
+        let mut iter = values.iter();
         Self {
             variant_identifier: iter
                 .next()
@@ -820,7 +820,7 @@ impl<'de> Enum<'de> {
     }
 
     fn from_map(values: &'de HashMap<Value, Value>) -> Self {
-        let mut iter = values.into_iter();
+        let mut iter = values.iter();
         let (variant_identifier, variant_value) = iter
             .next()
             .expect("map should have been tested as a 1-element map");

@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 fn deserialize_value(str: &str) -> Result<Value> {
     let buf = str.as_bytes();
-    let mut deserializer = RespDeserializer::from_bytes(buf);
+    let mut deserializer = RespDeserializer::new(buf);
     Value::deserialize(&mut deserializer)
 }
 

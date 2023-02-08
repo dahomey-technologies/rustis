@@ -10,6 +10,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn default_database() -> Result<()> {
+    log_try_init();
     let database = 1;
     let uri = format!(
         "redis://{}:{}/{}",
@@ -47,13 +48,8 @@ async fn password() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn reconnection() -> Result<()> {
-    let mut client = get_test_client().await?;
-
-    // set password
-    client.config_set(("requirepass", "pwd")).await?;
-
     let uri = format!(
-        "redis://:pwd@{}:{}/1",
+        "redis://{}:{}/1",
         get_default_host(),
         get_default_port()
     );
@@ -68,9 +64,6 @@ async fn reconnection() -> Result<()> {
 
     let client_info = client.client_info().await?;
     assert_eq!(1, client_info.db);
-
-    // reset password
-    client.config_set(("requirepass", "")).await?;
 
     Ok(())
 }

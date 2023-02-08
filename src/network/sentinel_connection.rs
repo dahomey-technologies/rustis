@@ -1,7 +1,7 @@
 use crate::{
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
-    resp::{Command, Value},
+    resp::{Command, RespBuf},
     sleep, Error, Result, RetryReason, StandaloneConnection,
 };
 use log::debug;
@@ -28,7 +28,7 @@ impl SentinelConnection {
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<Value>> {
+    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         self.inner_connection.read().await
     }
 

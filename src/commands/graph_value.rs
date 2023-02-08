@@ -100,7 +100,7 @@ where
         }
 
         let Some(obj) = seq.next_element_seed(T::into_seed(self.cache))? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(obj)
@@ -197,7 +197,7 @@ where
         }
 
         let Some(vec) = seq.next_element_seed(SubVecSeed { phantom: PhantomData, cache: self.cache, value_type: self.value_type })? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(vec)
@@ -262,7 +262,7 @@ impl<'de> Deserialize<'de> for GraphValueType {
 }
 
 /// Object model for the different [`RedisGraph Data Types`](https://redis.io/docs/stack/graph/datatypes/)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub enum GraphValue {
     /// In RedisGraph, null is used to stand in for an unknown or missing value.
     Null,
@@ -342,11 +342,11 @@ impl<'de, 'a> DeserializeSeed<'de> for GraphValueSeed<'a> {
                 A: de::SeqAccess<'de>,
             {
                 let Some(value_type) = seq.next_element::<GraphValueType>()? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 let Some(value) = seq.next_element_seed(GraphValueSeed::new(value_type, self.cache))? else {
-                    return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                 };
 
                 Ok(value)
@@ -357,7 +357,10 @@ impl<'de, 'a> DeserializeSeed<'de> for GraphValueSeed<'a> {
             GraphValueType::Unknown => {
                 deserializer.deserialize_seq(GraphValueVisitor { cache: self.cache })?
             }
-            GraphValueType::Null => GraphValue::Null,
+            GraphValueType::Null => {
+                <()>::deserialize(deserializer)?;
+                GraphValue::Null
+            }
             GraphValueType::String => GraphValue::String(deserialize_byte_buf(deserializer)?),
             GraphValueType::Integer => GraphValue::Integer(i64::deserialize(deserializer)?),
             GraphValueType::Boolean => GraphValue::Boolean(bool::deserialize(deserializer)?),
@@ -472,7 +475,7 @@ impl<'de, 'a> DeserializeSeed<'de> for GraphValueMapSeed<'a> {
 /// Nodes are persistent graph elements that can be connected to each other via relationships.
 ///
 /// See [`Nodes`](https://redis.io/docs/stack/graph/datatypes/#nodes)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct GraphNode {
     pub id: i64,
     pub labels: Vec<String>,
@@ -485,17 +488,17 @@ impl<'de> GraphObjectVisitor<'de> for GraphNode {
         A: de::SeqAccess<'de>,
     {
         let Some(id) = seq.next_element::<i64>()? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         log::debug!("GraphNode::visit_seq, id={id}");
 
         let Some(label_ids) = seq.next_element::<Vec<usize>>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         let Some(properties) = seq.next_element_seed(GraphProperties::into_seed(cache))? else {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         let labels = label_ids
@@ -514,7 +517,7 @@ impl<'de> GraphObjectVisitor<'de> for GraphNode {
 /// Edges (or Relationships) are persistent graph elements that connect one node to another.
 ///
 /// See [`Relationships`](https://redis.io/docs/stack/graph/datatypes/#relationships)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct GraphEdge {
     pub id: i64,
     pub relationship_type: String,
@@ -529,23 +532,23 @@ impl<'de> GraphObjectVisitor<'de> for GraphEdge {
         A: de::SeqAccess<'de>,
     {
         let Some(id) = seq.next_element::<i64>()? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(rel_type_id) = seq.next_element::<i64>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         let Some(src_node_id) = seq.next_element::<i64>()? else {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         let Some(dst_node_id) = seq.next_element::<i64>()? else {
-            return Err(de::Error::invalid_length(3, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(3, &"more elements in sequence"));
         };
 
         let Some(properties) = seq.next_element_seed(GraphProperties::into_seed(cache))? else {
-            return Err(de::Error::invalid_length(4, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(4, &"more elements in sequence"));
         };
 
         let relationship_type = cache.relationship_types[rel_type_id as usize].clone();
@@ -563,7 +566,7 @@ impl<'de> GraphObjectVisitor<'de> for GraphEdge {
 /// Paths are alternating sequences of nodes and edges, starting and ending with a node.
 ///
 /// See [`Paths`](https://redis.io/docs/stack/graph/datatypes/#paths)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct GraphPath {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
@@ -574,11 +577,11 @@ impl<'de> GraphObjectVisitor<'de> for GraphPath {
         A: de::SeqAccess<'de>,
     {
         let Some(nodes) = seq.next_element_seed(GraphNode::into_vec_seed(cache, GraphValueType::Node))? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(edges) = seq.next_element_seed(GraphEdge::into_vec_seed(cache, GraphValueType::Edge))? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(GraphPath { nodes, edges })
@@ -586,7 +589,7 @@ impl<'de> GraphObjectVisitor<'de> for GraphPath {
 }
 
 /// Properties for a [`Node`](GraphNode) or an [`Edge`](GraphEdge)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct GraphProperties {
     pub properties: HashMap<String, GraphValue>,
 }
@@ -606,17 +609,17 @@ impl<'de> GraphObjectVisitor<'de> for (String, GraphValue) {
         A: de::SeqAccess<'de>,
     {
         let Some(property_key_id) = seq.next_element::<usize>()? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let property_key = cache.property_keys[property_key_id].clone();
 
         let Some(value_type) = seq.next_element::<GraphValueType>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         let Some(value) = seq.next_element_seed(GraphValueSeed::new(value_type, cache))? else {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         Ok((property_key, value))

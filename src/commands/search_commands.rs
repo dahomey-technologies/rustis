@@ -3,8 +3,8 @@ use crate::{
     commands::{GeoUnit, SortOrder},
     resp::{
         cmd, deserialize_vec_of_pairs, Command, CommandArgs, FromKeyValueArray, FromSingleValue,
-        FromValueArray, IntoArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
-        VecOfPairsSeed,
+        FromValueArray, IntoArgs, MultipleArgsCollection, RespDeserializer, SingleArg,
+        SingleArgCollection, Value, VecOfPairsSeed,
     },
 };
 use serde::{
@@ -762,9 +762,13 @@ pub trait SearchCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options)).post_process(
-            Box::new(|value, command, _client| {
-                Box::pin(future::ready(FtSuggestion::deserialize(&value, command)))
+        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options)).custom_converter(
+            Box::new(|resp_buffer, command, _client| {
+                let mut deserializer = RespDeserializer::new(&resp_buffer);
+                Box::pin(future::ready(FtSuggestion::deserialize(
+                    &mut deserializer,
+                    command,
+                )))
             }),
         )
     }
@@ -1823,7 +1827,7 @@ impl<'de> Deserialize<'de> for FtAggregateResult {
                 A: serde::de::SeqAccess<'de>,
             {
                 let Some(first) = seq.next_element_seed(TotalResultsOrResultSeed)? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 match first {
@@ -1848,7 +1852,7 @@ impl<'de> Deserialize<'de> for FtAggregateResult {
                     }
                     TotalResultsOrResult::Result(mut result) => {
                         let Some(cursor_id) = seq.next_element::<u64>()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
 
                         result.cursor_id = Some(cursor_id);
@@ -2015,7 +2019,7 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                 A: de::SeqAccess<'de>,
             {
                 let Some(total_results) = seq.next_element()? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 let Some(seq_size) = seq.size_hint() else {
@@ -2315,31 +2319,31 @@ impl<'de> Deserialize<'de> for FtProfileDetails {
                 A: de::SeqAccess<'de>,
             {
                 let Some(field) = seq.next_element::<&str>()? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 match field {
                     "Total profile time" => {
                         let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         Ok(FtProfileDetailsField::TotalProfileTime(value))
                     }
                     "Parsing time" => {
                         let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         Ok(FtProfileDetailsField::ParsingTime(value))
                     }
                     "Pipeline creation time" => {
                         let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         Ok(FtProfileDetailsField::PipelineCreationTime(value))
                     }
                     "Iterators profile" => {
                         let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
                         Ok(FtProfileDetailsField::IteratorsProfile(value))
                     }

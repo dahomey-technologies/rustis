@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, FromValue, IntoArgs,
+        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, IntoArgs,
         MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -485,7 +485,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromValue + DeserializeOwned,
+        E: DeserializeOwned,
     {
         prepare_command(
             self,

@@ -19,14 +19,7 @@ pub trait FromValue: Sized {
     /// # Errors
     ///
     /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
-    fn from_value(_value: Value) -> Result<Self> {
-        unimplemented!()
-    }
-
-    #[inline]
-    fn from_value_with_command(value: Value, _command: &Command) -> Result<Self> {
-        Self::from_value(value)
-    }
+    fn from_value(_value: Value) -> Result<Self>;
 }
 
 pub trait DeserializeWithCommand<'de>: Sized {

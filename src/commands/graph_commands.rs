@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, Client, PreparedCommand},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue,
-        FromValueArray, IntoArgs, SingleArg, Value,
+        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray,
+        IntoArgs, RespBuf, RespDeserializer, SingleArg,
     },
     Error, Future, Result,
 };
@@ -178,7 +178,7 @@ pub trait GraphCommands {
                 .arg(options)
                 .arg("--compact"),
         )
-        .post_process(Box::new(GraphResultSet::post_process))
+        .custom_converter(Box::new(GraphResultSet::custom_conversion))
     }
 
     /// Executes a given read only query against a specified graph
@@ -211,7 +211,7 @@ pub trait GraphCommands {
                 .arg(options)
                 .arg("--compact"),
         )
-        .post_process(Box::new(GraphResultSet::post_process))
+        .custom_converter(Box::new(GraphResultSet::custom_conversion))
     }
 
     /// Returns a list containing up to 10 of the slowest queries issued against the given graph ID.
@@ -259,7 +259,7 @@ impl IntoArgs for GraphQueryOptions {
 }
 
 /// Result set for the [`graph_query`](GraphCommands::graph_query) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct GraphResultSet {
     pub header: GraphHeader,
     pub rows: Vec<GraphResultRow>,
@@ -267,29 +267,25 @@ pub struct GraphResultSet {
 }
 
 impl GraphResultSet {
-    pub(crate) fn post_process(
-        value: Value,
+    pub(crate) fn custom_conversion(
+        resp_buffer: RespBuf,
         command: Command,
         client: &mut Client,
     ) -> Future<Self> {
         let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
         };
-        Self::from_value_async(value, graph_name, client)
-    }
 
-    pub(crate) fn from_value_async<'a, 'b: 'a>(
-        value: Value,
-        graph_name: &'b str,
-        client: &'a mut Client,
-    ) -> Future<'a, Self> {
+        let graph_name = *graph_name;
+
         Box::pin(async move {
             let cache_key = format!("graph:{graph_name}");
             let (cache_hit, num_node_labels, num_prop_keys, num_rel_types) = {
                 let client_state = client.get_client_state();
                 match client_state.get_state::<GraphCache>(&cache_key)? {
                     Some(cache) => {
-                        if cache.check_for_result(&value)? {
+                        let mut deserializer = RespDeserializer::new(&resp_buffer);
+                        if cache.check_for_result(&mut deserializer)? {
                             (true, 0, 0, 0)
                         } else {
                             (
@@ -302,8 +298,8 @@ impl GraphResultSet {
                     }
                     None => {
                         let cache = GraphCache::default();
-
-                        if cache.check_for_result(&value)? {
+                        let mut deserializer = RespDeserializer::new(&resp_buffer);
+                        if cache.check_for_result(&mut deserializer)? {
                             (true, 0, 0, 0)
                         } else {
                             (false, 0, 0, 0)
@@ -343,7 +339,8 @@ impl GraphResultSet {
                 log::debug!("graph cache created");
             }
 
-            Self::deserialize(&value, client, &cache_key)
+            let mut deserializer = RespDeserializer::new(&resp_buffer);
+            Self::deserialize(&mut deserializer, client, &cache_key)
         })
     }
 
@@ -377,7 +374,7 @@ impl GraphResultSet {
 
                 if size == 1 {
                     let Some(statistics) = seq.next_element::<GraphQueryStatistics>()? else {
-                        return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                        return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                     };
 
                     Ok(GraphResultSet {
@@ -387,7 +384,7 @@ impl GraphResultSet {
                     })
                 } else {
                     let Some(header) = seq.next_element::<GraphHeader>()? else {
-                        return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                        return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                     };
 
                     let client_state = self.client.get_client_state();
@@ -396,11 +393,11 @@ impl GraphResultSet {
                     };
 
                     let Some(rows) = seq.next_element_seed(GraphResultRowsSeed { cache })? else {
-                        return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                        return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                     };
 
                     let Some(statistics) = seq.next_element::<GraphQueryStatistics>()? else {
-                        return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                        return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                     };
 
                     Ok(GraphResultSet {
@@ -448,12 +445,6 @@ impl GraphResultSet {
                 .await?;
 
         Ok((node_labels, prop_keys, rel_types))
-    }
-}
-
-impl FromValue for GraphResultSet {
-    fn from_value(_value: Value) -> Result<Self> {
-        unimplemented!();
     }
 }
 
@@ -507,7 +498,7 @@ impl<'de> Deserialize<'de> for MappingsResult {
                                 A: de::SeqAccess<'de>,
                             {
                                 let Some(mapping) = seq.next_element::<String>()? else {
-                                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                                 };
 
                                 Ok(mapping)
@@ -563,15 +554,15 @@ impl<'de> Deserialize<'de> for MappingsResult {
                 A: serde::de::SeqAccess<'de>,
             {
                 let Some(_header) = seq.next_element::<Vec::<String>>()? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 let Some(mappings) = seq.next_element_seed(MappingsSeed)? else {
-                    return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                 };
 
                 let Some(_stats) = seq.next_element::<Vec::<String>>()? else {
-                    return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                 };
 
                 Ok(MappingsResult(mappings))
@@ -604,7 +595,7 @@ impl<'de> Deserialize<'de> for GraphHeader {
 }
 
 /// Result row for the [`graph_query`](GraphCommands::graph_query) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct GraphResultRow {
     /// collection of values
     ///
@@ -714,7 +705,9 @@ impl<'de> Deserialize<'de> for GraphQueryStatistics {
                 {
                     match value.parse::<F>() {
                         Ok(value) => Ok(value),
-                        Err(_) => Err(de::Error::custom(format!("Cannot parse GraphQueryStatistics: {value}"))),
+                        Err(_) => Err(de::Error::custom(format!(
+                            "Cannot parse GraphQueryStatistics: {value}"
+                        ))),
                     }
                 }
 
@@ -730,7 +723,9 @@ impl<'de> Deserialize<'de> for GraphQueryStatistics {
 
                     match value.parse::<f64>() {
                         Ok(value) => Ok(value),
-                        Err(_) => Err(de::Error::custom("Cannot parse GraphQueryStatistics (query exuction time)")),
+                        Err(_) => Err(de::Error::custom(
+                            "Cannot parse GraphQueryStatistics (query exuction time)",
+                        )),
                     }
                 }
 

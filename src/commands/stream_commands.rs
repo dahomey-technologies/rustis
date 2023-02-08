@@ -683,7 +683,7 @@ impl IntoArgs for XAutoClaimOptions {
 #[derive(Deserialize)]
 pub struct StreamEntry<V>
 where
-    V: FromSingleValue,
+    V: FromSingleValue
 {
     /// The stream Id
     pub stream_id: String,
@@ -708,21 +708,6 @@ where
     /// and were deleted from the PEL in which they were found.
     pub deleted_ids: Vec<String>,
 }
-
-// impl<V> FromValue for XAutoClaimResult<V>
-// where
-//     V: FromSingleValue,
-// {
-//     fn from_value(value: Value) -> Result<Self> {
-//         let (start_stream_id, entries, deleted_ids): (String, Vec<StreamEntry<V>>, Vec<String>) =
-//             value.into()?;
-//         Ok(Self {
-//             start_stream_id,
-//             entries,
-//             deleted_ids,
-//         })
-//     }
-// }
 
 /// Options for the [`xclaim`](StreamCommands::xclaim) command
 #[derive(Default)]

@@ -47,7 +47,7 @@ impl GraphCache {
 
     // returns true if we can parse this result without any cache miss
     pub fn check_for_result<'de, D: Deserializer<'de>>(&self, result: D) -> Result<bool, D::Error> {
-        CheckCacheForResultSetSeed::new(&self).deserialize(result)
+        CheckCacheForResultSetSeed::new(self).deserialize(result)
     }
 
 }
@@ -160,12 +160,12 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForResultSetSeed<'a> {
 
         // header
         if seq.next_element::<IgnoredAny>()?.is_none() {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(check_rows) = 
             seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheIteratorSeed::<CheckCacheForValueSeed>>::new(self.cache))? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(check_rows)
@@ -209,11 +209,11 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForValueSeed<'a> {
         A: serde::de::SeqAccess<'de>,
     {
         let Some(value_type) = seq.next_element::<GraphValueType>()? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(value_type, self.cache))? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(check_value)
@@ -230,8 +230,11 @@ impl<'de, 'a> DeserializeSeed<'de> for CheckCacheForValueSeed<'a> {
         match self.value_type {
             GraphValueType::Unknown => {
                 deserializer.deserialize_seq(self)
-            }
-            GraphValueType::Null => Ok(true),
+            },
+            GraphValueType::Null => {
+                <()>::deserialize(deserializer)?;
+                Ok(true)
+            },
             GraphValueType::String => {
                 let _string = <&str>::deserialize(deserializer)?;
                 Ok(true)
@@ -282,7 +285,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForMapSeed<'a> {
         // ignore key
         while seq.next_element::<IgnoredAny>()?.is_some() {
             let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
-                return Err(de::Error::custom(&"Cannot parse GraphValue::Map value"));
+                return Err(de::Error::custom("Cannot parse GraphValue::Map value"));
             };
 
             if !check_value {
@@ -314,11 +317,11 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForNodeSeed<'a> {
     {
         // id
         if seq.next_element::<IgnoredAny>()?.is_none() {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(label_ids) = seq.next_element::<Vec<usize>>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         let num_labels = self.cache.node_labels.len();
@@ -327,7 +330,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForNodeSeed<'a> {
         }
 
         let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheForPropertySeed>::new(self.cache))? else {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         Ok(check_properties)
@@ -354,11 +357,11 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
     {
         // id
         if seq.next_element::<IgnoredAny>()?.is_none() {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         let Some(rel_type_id) = seq.next_element::<usize>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         if rel_type_id >= self.cache.relationship_types.len() {
@@ -367,16 +370,16 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
 
         // src_node_id
         if seq.next_element::<IgnoredAny>()?.is_none() {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         // dst_node_id
         if seq.next_element::<IgnoredAny>()?.is_none() {
-            return Err(de::Error::invalid_length(3, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(3, &"more elements in sequence"));
         };
 
         let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheForPropertySeed>::new(self.cache))? else {
-            return Err(de::Error::invalid_length(4, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(4, &"more elements in sequence"));
         };
 
         Ok(check_properties)
@@ -402,7 +405,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPathSeed<'a> {
         A: serde::de::SeqAccess<'de>,
     {
         let Some(check_nodes) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         if !check_nodes {
@@ -410,7 +413,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPathSeed<'a> {
         }
 
         let Some(check_edges) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         Ok(check_edges)
@@ -436,7 +439,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPropertySeed<'a> {
         A: serde::de::SeqAccess<'de>,
     {
         let Some(property_key_id) = seq.next_element::<usize>()? else {
-            return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
         if property_key_id >= self.cache.property_keys.len() {
@@ -444,11 +447,11 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPropertySeed<'a> {
         }
 
         let Some(value_type) = seq.next_element::<GraphValueType>()? else {
-            return Err(de::Error::invalid_length(1, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
         let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(value_type, self.cache))? else {
-            return Err(de::Error::invalid_length(2, &"fewer elements in sequence"));
+            return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
         Ok(check_value)

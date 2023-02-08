@@ -1,7 +1,4 @@
-use crate::{
-    resp::{Command, FromValue},
-    Error, RedisError, Result,
-};
+use crate::{resp::FromValue, Error, RedisError, Result};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter, Write},
@@ -47,14 +44,6 @@ impl Value {
         T: FromValue,
     {
         T::from_value(self)
-    }
-
-    #[inline]
-    pub fn into_with_command<T>(self, command: &Command) -> Result<T>
-    where
-        T: FromValue,
-    {
-        T::from_value_with_command(self, command)
     }
 }
 

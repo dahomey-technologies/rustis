@@ -452,7 +452,7 @@ where
                 A: de::SeqAccess<'de>,
             {
                 let Some(member) = seq.next_element::<M>().map_err(de::Error::custom)? else {
-                    return Err(de::Error::invalid_length(0, &"fewer elements in sequence"));
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
                 let mut distance: Option<f64> = None;

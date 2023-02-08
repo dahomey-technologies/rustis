@@ -10,7 +10,7 @@ where
     T: serde::Deserialize<'a>,
 {
     let buf = str.as_bytes();
-    let mut deserializer = RespDeserializer::from_bytes(buf);
+    let mut deserializer = RespDeserializer::new(buf);
     T::deserialize(&mut deserializer)
 }
 
@@ -49,6 +49,9 @@ fn bool() -> Result<()> {
     assert!(result);
 
     let result: bool = deserialize("+KO\r\n")?; // "KO"
+    assert!(!result);
+
+    let result: bool = deserialize("_\r\n")?; // nil
     assert!(!result);
 
     Ok(())
@@ -400,6 +403,10 @@ fn map() -> Result<()> {
     assert_eq!(Some(&13), result.get(&12));
     assert_eq!(Some(&15), result.get(&14));
 
+    let result: HashMap<i32, i32> = deserialize("*2\r\n*2\r\n:12\r\n:13\r\n*2\r\n:14\r\n:15\r\n")?; // [[12, 13], [14, 15]]
+    assert_eq!(Some(&13), result.get(&12));
+    assert_eq!(Some(&15), result.get(&14));
+
     Ok(())
 }
 
@@ -530,6 +537,17 @@ fn _enum() -> Result<()> {
         },
         result
     );
+
+    Ok(())
+}
+
+#[test]
+fn array_chunks() -> Result<()> {
+    let resp = "*3\r\n:1\r\n:12\r\n:123\r\n";
+    let mut deserializer = RespDeserializer::new(resp.as_bytes());
+    let chunks = deserializer.array_chunks()?.collect::<Vec<_>>();
+
+    assert_eq!(vec![":1\r\n".as_bytes(), ":12\r\n".as_bytes(), ":123\r\n".as_bytes()], chunks);
 
     Ok(())
 }

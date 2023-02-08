@@ -7,7 +7,8 @@ use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
     num::{ParseFloatError, ParseIntError},
-    str::{FromStr, Utf8Error}, string::FromUtf8Error,
+    str::{FromStr, Utf8Error},
+    string::FromUtf8Error,
 };
 
 /// `Internal Use`
@@ -72,6 +73,15 @@ impl std::fmt::Display for Error {
 }
 
 impl serde::de::Error for Error {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
+        Error::Client(msg.to_string())
+    }
+}
+
+impl serde::ser::Error for Error {
     fn custom<T>(msg: T) -> Self
     where
         T: Display,

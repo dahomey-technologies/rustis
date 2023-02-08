@@ -123,11 +123,31 @@ use rustis::{client::Client, resp::cmd, Result};
 async fn main() -> Result<()> {
     let mut client = Client::connect("127.0.0.1:6379").await?;
 
-    let values: Vec<String> = client
-        .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), None)
+    client
+        .send(
+            cmd("MSET")
+                .arg("key1")
+                .arg("value1")
+                .arg("key2")
+                .arg("value2")
+                .arg("key3")
+                .arg("value3")
+                .arg("key4")
+                .arg("value4"),
+            None,
+        )
         .await?
-        .into()?;
-    println!("{:?}", values);
+        .to::<()>()?;
+
+    let values: Vec<String> = client
+        .send(
+            cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
+            None,
+        )
+        .await?
+        .to()?;
+
+    assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
 
     Ok(())
 }

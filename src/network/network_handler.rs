@@ -1,8 +1,8 @@
-use super::util::{is_monitor_message, RefPubSubMessage};
+use super::util::RefPubSubMessage;
 use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{cmd, Command, CommandArgs, Value},
+    resp::{cmd, Command, CommandArgs, RespBuf},
     spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
 use futures::{
@@ -16,12 +16,14 @@ use tokio::sync::broadcast;
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
-pub(crate) type ValueSender = oneshot::Sender<Result<Value>>;
-pub(crate) type ValueReceiver = oneshot::Receiver<Result<Value>>;
-pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<Value>>;
-pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<Value>>;
-pub(crate) type PushSender = mpsc::UnboundedSender<Result<Value>>;
-pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<Value>>;
+pub(crate) type ResultSender = oneshot::Sender<Result<RespBuf>>;
+pub(crate) type ResultReceiver = oneshot::Receiver<Result<RespBuf>>;
+pub(crate) type ResultsSender = oneshot::Sender<Result<Vec<RespBuf>>>;
+pub(crate) type ResultsReceiver = oneshot::Receiver<Result<Vec<RespBuf>>>;
+pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<RespBuf>>;
+pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<RespBuf>>;
+pub(crate) type PushSender = mpsc::UnboundedSender<Result<RespBuf>>;
+pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<RespBuf>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
@@ -86,7 +88,7 @@ pub(crate) struct NetworkHandler {
     subscriptions: HashMap<Vec<u8>, (SubcriptionType, PubSubSender)>,
     is_reply_on: bool,
     push_sender: Option<PushSender>,
-    pending_replies: Option<Vec<Value>>,
+    pending_replies: Option<Vec<RespBuf>>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
@@ -156,7 +158,7 @@ impl NetworkHandler {
                 let pub_sub_senders = msg.pub_sub_senders.take();
                 if let Some(pub_sub_senders) = pub_sub_senders {
                     let subscription_type = match &msg.commands {
-                        Commands::Single(command) => match command.name {
+                        Commands::Single(command, _) => match command.name {
                             "SUBSCRIBE" => SubcriptionType::Channel,
                             "PSUBSCRIBE" => SubcriptionType::Pattern,
                             "SSUBSCRIBE" => SubcriptionType::ShardChannel,
@@ -333,66 +335,65 @@ impl NetworkHandler {
         }
     }
 
-    async fn handle_result(&mut self, result: Option<Result<Value>>) {
+    async fn handle_result(&mut self, result: Option<Result<RespBuf>>) {
         match result {
-            Some(value) => match self.status {
+            Some(result) => match self.status {
                 Status::Disconnected => (),
-                Status::Connected => {
-                    if let Ok(Value::Push(_)) = &value {
-                        match &mut self.push_sender {
-                            Some(push_sender) => {
-                                if let Err(e) = push_sender.send(value).await {
-                                    warn!("Cannot send monitor result to caller: {e}");
-                                }
+                Status::Connected => match &result {
+                    Ok(resp_buf) if resp_buf.is_push_message() => match &mut self.push_sender {
+                        Some(push_sender) => {
+                            if let Err(e) = push_sender.send(result).await {
+                                warn!("Cannot send monitor result to caller: {e}");
                             }
-                            None => warn!(
-                                "Received a push message with no sender configured: {value:?}"
-                            ),
                         }
-                    } else {
-                        self.receive_result(value);
+                        None => {
+                            warn!("Received a push message with no sender configured: {resp_buf}",)
+                        }
+                    },
+                    _ => {
+                        self.receive_result(result);
                     }
-                }
+                },
                 Status::Subscribing => {
-                    if value.is_ok() {
+                    if result.is_ok() {
                         self.status = Status::Subscribed;
                     } else {
                         self.status = Status::Connected;
                     }
 
-                    if let Some(value) = self.try_match_pubsub_message(value).await {
-                        self.receive_result(value);
+                    if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
+                        self.receive_result(resp_buf);
                     }
                 }
                 Status::Subscribed => {
-                    if let Some(value) = self.try_match_pubsub_message(value).await {
-                        self.receive_result(value);
+                    if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
+                        self.receive_result(resp_buf);
                     }
                 }
                 Status::EnteringMonitor => {
-                    self.receive_result(value);
+                    self.receive_result(result);
                     self.status = Status::Monitor;
                 }
-                Status::Monitor => match &value {
-                    Ok(ref_value) if is_monitor_message(ref_value) => {
+                Status::Monitor => match &result {
+                    Ok(resp_buf) if resp_buf.is_monitor_message() => {
                         if let Some(push_sender) = &mut self.push_sender {
-                            if let Err(e) = push_sender.send(value).await {
+                            if let Err(e) = push_sender.send(result).await {
                                 warn!("Cannot send monitor result to caller: {e}");
                             }
                         }
                     }
-                    _ => self.receive_result(value),
+                    _ => self.receive_result(result),
                 },
-                Status::LeavingMonitor => match &value {
-                    Ok(ref_value) if is_monitor_message(ref_value) => {
+                Status::LeavingMonitor => match &result {
+                    Ok(resp_buf) if resp_buf.is_monitor_message() => {
                         if let Some(push_sender) = &mut self.push_sender {
-                            if let Err(e) = push_sender.send(value).await {
+                            if let Err(e) = push_sender.send(result).await {
                                 warn!("Cannot send monitor result to caller: {e}");
                             }
                         }
                     }
                     _ => {
-                        self.receive_result(value);
+                        self.receive_result(result);
                         self.status = Status::Connected;
                     }
                 },
@@ -402,21 +403,21 @@ impl NetworkHandler {
         }
     }
 
-    fn receive_result(&mut self, value: Result<Value>) {
+    fn receive_result(&mut self, result: Result<RespBuf>) {
         match self.messages_to_receive.front_mut() {
             Some(message_to_receive) => {
-                if message_to_receive.num_commands == 1 || value.is_err() {
+                if message_to_receive.num_commands == 1 || result.is_err() {
                     if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
                         let mut should_retry = false;
 
-                        if let Err(Error::Retry(_)) = &value {
+                        if let Err(Error::Retry(_)) = &result {
                             should_retry = true;
                         } else if message_to_receive.message.retry_reasons.is_some() {
                             should_retry = true;
                         }
 
                         if should_retry {
-                            if let Err(Error::Retry(reasons)) = value {
+                            if let Err(Error::Retry(reasons)) = result {
                                 if let Some(retry_reasons) =
                                     &mut message_to_receive.message.retry_reasons
                                 {
@@ -432,30 +433,38 @@ impl NetworkHandler {
                             if let Err(e) = result {
                                 error!("Cannot retry message: {e}");
                             }
-                        } else if let Some(value_sender) = message_to_receive.message.value_sender {
-                            match value {
-                                Ok(value) => {
-                                    let pending_replies = self.pending_replies.take();
+                        } else {
+                            match message_to_receive.message.commands {
+                                Commands::Single(_, Some(result_sender)) => {
+                                    if let Err(e) = result_sender.send(result) {
+                                        warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                    }
+                                }
+                                Commands::Batch(_, results_sender) => match result {
+                                    Ok(resp_buf) => {
+                                        let pending_replies = self.pending_replies.take();
 
-                                    if let Some(mut pending_replies) = pending_replies {
-                                        pending_replies.push(value);
-                                        if let Err(e) =
-                                            value_sender.send(Ok(Value::Array(pending_replies)))
+                                        if let Some(mut pending_replies) = pending_replies {
+                                            pending_replies.push(resp_buf);
+                                            if let Err(e) = results_sender.send(Ok(pending_replies))
+                                            {
+                                                warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                            }
+                                        } else if let Err(e) = results_sender.send(Ok(vec![resp_buf]))
                                         {
                                             warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
                                         }
-                                    } else if let Err(e) = value_sender.send(Ok(value)) {
-                                        warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
                                     }
-                                }
-                                Err(_) => {
-                                    if let Err(e) = value_sender.send(value) {
-                                        warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                    Err(e) => {
+                                        if let Err(e) = results_sender.send(Err(e)) {
+                                            warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
+                                        }
                                     }
+                                },
+                                Commands::None | Commands::Single(_, None) => {
+                                    debug!("forget value {result:?}") // fire & forget
                                 }
                             }
-                        } else {
-                            debug!("forget value {value:?}"); // fire & forget
                         }
                     }
                 } else {
@@ -464,7 +473,7 @@ impl NetworkHandler {
                     }
 
                     if let Some(pending_replies) = &mut self.pending_replies {
-                        match value {
+                        match result {
                             Ok(value) => {
                                 pending_replies.push(value);
                                 message_to_receive.num_commands -= 1;
@@ -486,12 +495,12 @@ impl NetworkHandler {
             }
             None => {
                 // disconnection errors could end here but ok values should match a value_sender instance
-                assert!(value.is_err(), "Received unexpected message: {value:?}",);
+                assert!(result.is_err(), "Received unexpected message: {result:?}",);
             }
         }
     }
 
-    async fn try_match_pubsub_message(&mut self, value: Result<Value>) -> Option<Result<Value>> {
+    async fn try_match_pubsub_message(&mut self, value: Result<RespBuf>) -> Option<Result<RespBuf>> {
         if let Ok(ref_value) = &value {
             if let Some(pub_sub_message) = RefPubSubMessage::from_resp(ref_value) {
                 match pub_sub_message {
@@ -523,8 +532,8 @@ impl NetworkHandler {
                         }
                         if !self.pending_subscriptions.is_empty() {
                             return None;
-                        }
-                        Some(value)
+                        }   
+                        Some(Ok(RespBuf::ok()))
                     }
                     RefPubSubMessage::Unsubscribe(channel_or_pattern)
                     | RefPubSubMessage::PUnsubscribe(channel_or_pattern)
@@ -555,7 +564,7 @@ impl NetworkHandler {
                                     );
                                     return None;
                                 }
-                                Some(Ok(Value::SimpleString("OK".to_owned())))
+                                Some(Ok(RespBuf::ok()))
                             }
                         } else {
                             Some(value)
@@ -571,8 +580,8 @@ impl NetworkHandler {
                             None => {
                                 error!(
                                     "Unexpected message on channel '{:?}' for pattern '{:?}'",
-                                    String::from_utf8_lossy(&channel),
-                                    String::from_utf8_lossy(&pattern)
+                                    String::from_utf8_lossy(channel),
+                                    String::from_utf8_lossy(pattern)
                                 );
                             }
                         }
@@ -611,15 +620,28 @@ impl NetworkHandler {
                     message_to_receive.message.commands
                 );
                 if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    if let Some(value_sender) = message_to_receive.message.value_sender {
-                        if let Err(e) = value_sender
-                            .send(Err(Error::Client("Disconnected from server".to_string())))
-                        {
-                            warn!(
+                    match message_to_receive.message.commands {
+                        Commands::Single(_, Some(result_sender)) => {
+                            if let Err(e) = result_sender
+                                .send(Err(Error::Client("Disconnected from server".to_string())))
+                            {
+                                warn!(
                                 "Cannot send value to caller because receiver is not there anymore: {:?}",
                                 e
                             );
+                            }
                         }
+                        Commands::Batch(_, results_sender) => {
+                            if let Err(e) = results_sender
+                                .send(Err(Error::Client("Disconnected from server".to_string())))
+                            {
+                                warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                            }
+                        }
+                        _ => (),
                     }
                 }
             } else {
@@ -646,15 +668,28 @@ impl NetworkHandler {
                     message_to_send.message.commands
                 );
                 if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    if let Some(value_sender) = message_to_send.message.value_sender {
-                        if let Err(e) = value_sender
-                            .send(Err(Error::Client("Disconnected from server".to_string())))
-                        {
-                            warn!(
+                    match message_to_send.message.commands {
+                        Commands::Single(_, Some(result_sender)) => {
+                            if let Err(e) = result_sender
+                                .send(Err(Error::Client("Disconnected from server".to_string())))
+                            {
+                                warn!(
                                 "Cannot send value to caller because receiver is not there anymore: {:?}",
                                 e
                             );
+                            }
                         }
+                        Commands::Batch(_, results_sender) => {
+                            if let Err(e) = results_sender
+                                .send(Err(Error::Client("Disconnected from server".to_string())))
+                            {
+                                warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                            }
+                        }
+                        _ => (),
                     }
                 }
             } else {

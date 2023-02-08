@@ -1,7 +1,9 @@
 use crate::{
     client::{Config, PreparedCommand},
-    commands::{ClusterCommands, ConnectionCommands, SentinelCommands, ServerCommands, HelloOptions},
-    resp::{Command, CommandEncoder, FromValue, ResultValueExt, Value, ValueDecoder},
+    commands::{
+        ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
+    },
+    resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
     tcp_connect, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
 };
 #[cfg(feature = "tls")]
@@ -9,18 +11,19 @@ use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
+use serde::de::DeserializeOwned;
 use std::future::IntoFuture;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
 pub(crate) enum Streams {
     Tcp(
-        FramedRead<TcpStreamReader, ValueDecoder>,
+        FramedRead<TcpStreamReader, BufferDecoder>,
         FramedWrite<TcpStreamWriter, CommandEncoder>,
     ),
     #[cfg(feature = "tls")]
     TcpTls(
-        FramedRead<TcpTlsStreamReader, ValueDecoder>,
+        FramedRead<TcpTlsStreamReader, BufferDecoder>,
         FramedWrite<TcpTlsStreamWriter, CommandEncoder>,
     ),
 }
@@ -31,7 +34,7 @@ impl Streams {
         if let Some(tls_config) = &config.tls_config {
             let (reader, writer) =
                 tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
-            let framed_read = FramedRead::new(reader, ValueDecoder);
+            let framed_read = FramedRead::new(reader, BufferDecoder);
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))
         } else {
@@ -44,7 +47,7 @@ impl Streams {
 
     pub async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
-        let framed_read = FramedRead::new(reader, ValueDecoder);
+        let framed_read = FramedRead::new(reader, BufferDecoder);
         let framed_write = FramedWrite::new(writer, CommandEncoder);
         Ok(Streams::Tcp(framed_read, framed_write))
     }
@@ -129,8 +132,11 @@ impl StandaloneConnection {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
             config.connection_name = "killer".to_owned();
-            let mut connection = StandaloneConnection::connect(&self.host, self.port, &config).await?;
-            connection.client_kill(crate::commands::ClientKillOptions::default().id(client_id)).await?;
+            let mut connection =
+                StandaloneConnection::connect(&self.host, self.port, &config).await?;
+            connection
+                .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
+                .await?;
         }
 
         match &mut self.streams {
@@ -144,8 +150,8 @@ impl StandaloneConnection {
         Ok(())
     }
 
-    pub async fn read(&mut self) -> Option<Result<Value>> {
-        if let Some(value) = match &mut self.streams {
+    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
+        if let Some(result) = match &mut self.streams {
             Streams::Tcp(framed_read, _) => framed_read.next().await,
             #[cfg(feature = "tls")]
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
@@ -156,20 +162,12 @@ impl StandaloneConnection {
                 } else {
                     self.config.connection_name.clone()
                 };
-                match &value {
-                    Ok(Value::Array(array)) => {
-                        if array.len() > 100 {
-                            debug!(
-                                "[{connection_name}] Received result Array(Vec([...]))",
-                            );
-                        } else {
-                            debug!("[{connection_name}] Received result {value:?}");
-                        }
-                    }
-                    _ => debug!("[{connection_name}] Received result {value:?}"),
+                match &result {
+                    Ok(bytes) => debug!("[{connection_name}] Received result {bytes}"),
+                    Err(_) => debug!("[{connection_name}] Received result {result:?}"),
                 }
             }
-            Some(value)
+            Some(result)
         } else {
             None
         }
@@ -190,10 +188,13 @@ impl StandaloneConnection {
 
         // authentication
         if let Some(ref password) = self.config.password {
-            hello_options = hello_options.auth(match &self.config.username {
-                Some(username) => username.clone(),
-                None => "default".to_owned(),
-            }, password.clone());
+            hello_options = hello_options.auth(
+                match &self.config.username {
+                    Some(username) => username.clone(),
+                    None => "default".to_owned(),
+                },
+                password.clone(),
+            );
         }
 
         // connection name
@@ -214,7 +215,7 @@ impl StandaloneConnection {
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, StandaloneConnection, R>
 where
-    R: FromValue + Send + 'a,
+    R: DeserializeOwned + Send + 'a,
 {
     type Output = Result<R>;
     type IntoFuture = Future<'a, R>;
@@ -223,12 +224,13 @@ where
         Box::pin(async move {
             self.executor.write(&self.command).await?;
 
-            self.executor
+            let resp_buf = self
+                .executor
                 .read()
                 .await
-                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
-                .into_result()?
-                .into()
+                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))??;
+
+                resp_buf.to()
         })
     }
 }

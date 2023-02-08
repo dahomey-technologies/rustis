@@ -6,7 +6,7 @@ use crate::{
 };
 use futures::{Stream, StreamExt};
 use log::error;
-use serde::{Deserialize, Deserializer, de};
+use serde::{de, Deserialize, Deserializer};
 use std::{
     net::SocketAddr,
     pin::Pin,
@@ -45,10 +45,10 @@ impl Stream for MonitorStream {
             Poll::Ready(None)
         } else {
             match self.get_mut().receiver.poll_next_unpin(cx) {
-                Poll::Ready(value) => match value {
-                    Some(value) => match value {
-                        Ok(value) => match value.into() {
-                            Ok(str) => Poll::Ready(Some(str)),
+                Poll::Ready(bytes) => match bytes {
+                    Some(bytes) => match bytes {
+                        Ok(resp_buf) => match resp_buf.to() {
+                            Ok(info) => Poll::Ready(Some(info)),
                             Err(e) => {
                                 error!("Error will receiving data in monitor stream: {e}");
                                 Poll::Ready(None)
@@ -114,6 +114,8 @@ impl<'de> Deserialize<'de> for MonitoredCommandInfo {
             _ => None,
         };
 
-        info.ok_or_else(|| de::Error::custom(format!("Cannot parse result from MONITOR event: {line}")))
+        info.ok_or_else(|| {
+            de::Error::custom(format!("Cannot parse result from MONITOR event: {line}"))
+        })
     }
 }

@@ -69,10 +69,13 @@ impl<'de> Deserialize<'de> for PubSubMessage {
                         Ok(PubSubMessage {
                             pattern: channel_or_pattern,
                             channel: channel_or_payload,
-                            payload: payload,
+                            payload,
                         })
-                    },
-                    _ => Err(de::Error::invalid_value(de::Unexpected::Str(kind), &"message, smessage or pmessage"))
+                    }
+                    _ => Err(de::Error::invalid_value(
+                        de::Unexpected::Str(kind),
+                        &"message, smessage or pmessage",
+                    )),
                 }
             }
         }
@@ -269,9 +272,7 @@ impl Stream for PubSubStream {
             Poll::Ready(None)
         } else {
             match self.get_mut().receiver.poll_next_unpin(cx) {
-                Poll::Ready(Some(Ok(message))) => {
-                    Poll::Ready(Some(PubSubMessage::deserialize(&message)))
-                }
+                Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(message.to())),
                 Poll::Ready(None) => Poll::Ready(None),
                 Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
                 Poll::Pending => Poll::Pending,

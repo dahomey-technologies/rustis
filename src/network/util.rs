@@ -1,37 +1,6 @@
-use crate::resp::{BytesSeed, Value};
+use crate::resp::{BytesSeed, RespBuf, RespDeserializer};
 use serde::{de::Visitor, Deserializer};
 use std::fmt;
-
-pub fn is_monitor_message(value: &Value) -> bool {
-    struct MonitorMessageVisitor;
-
-    impl<'de> Visitor<'de> for MonitorMessageVisitor {
-        type Value = bool;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("bool")
-        }
-
-        fn visit_borrowed_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Ok(v.starts_with(char::is_numeric))
-        }
-    }
-
-    if let Value::SimpleString(_) = value {
-        value
-            .deserialize_str(MonitorMessageVisitor)
-            .unwrap_or_default()
-    } else {
-        false
-    }
-}
-
-pub fn is_push_message(value: &Value) -> bool {
-    matches!(value, Value::Push(_)) || is_monitor_message(value)
-}
 
 pub enum RefPubSubMessage<'a> {
     Subscribe(&'a [u8]),
@@ -93,7 +62,7 @@ impl<'a> std::fmt::Debug for RefPubSubMessage<'a> {
 }
 
 impl<'a> RefPubSubMessage<'a> {
-    pub fn from_resp(value: &'a Value) -> Option<RefPubSubMessage<'a>> {
+    pub fn from_resp(resp_buffer: &'a RespBuf) -> Option<RefPubSubMessage<'a>> {
         struct RefPubSubMessageVisitor;
 
         impl<'de> Visitor<'de> for RefPubSubMessageVisitor {
@@ -128,7 +97,7 @@ impl<'a> RefPubSubMessage<'a> {
                         };
 
                         Ok(Some(RefPubSubMessage::Message(channel_or_pattern, payload)))
-                    },
+                    }
                     "pmessage" => {
                         let Ok(Some(channel)) = seq.next_element_seed(BytesSeed) else {
                             return Ok(None);
@@ -138,24 +107,30 @@ impl<'a> RefPubSubMessage<'a> {
                             return Ok(None);
                         };
 
-                        Ok(Some(RefPubSubMessage::PMessage(channel_or_pattern, channel, payload)))
-                    },
+                        Ok(Some(RefPubSubMessage::PMessage(
+                            channel_or_pattern,
+                            channel,
+                            payload,
+                        )))
+                    }
                     "smessage" => {
                         let Ok(Some(payload)) = seq.next_element_seed(BytesSeed) else {
                             return Ok(None);
                         };
 
-                        Ok(Some(RefPubSubMessage::SMessage(channel_or_pattern, payload)))
-                    },
+                        Ok(Some(RefPubSubMessage::SMessage(
+                            channel_or_pattern,
+                            payload,
+                        )))
+                    }
                     _ => Ok(None),
                 }
             }
         }
 
-        if let Value::Push(_) = value {
-            value
-                .deserialize_seq(RefPubSubMessageVisitor)
-                .unwrap_or_default()
+        if resp_buffer.is_push_message() {
+            let mut deserializer = RespDeserializer::new(resp_buffer);
+            deserializer.deserialize_seq(RefPubSubMessageVisitor).unwrap_or_default()
         } else {
             None
         }

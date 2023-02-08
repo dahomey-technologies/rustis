@@ -85,7 +85,9 @@ async fn client_id() -> Result<()> {
 async fn client_info() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    let _client_info = client.client_info().await?;
+    let client_info = client.client_info().await?;
+    log::debug!("client_info: {client_info:?}");
+    assert!(client_info.id != 0);
 
     Ok(())
 }

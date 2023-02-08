@@ -294,15 +294,8 @@ use rustis::{
 };
 use serde::Deserialize;
 
+#[derive(Deserialize)]
 pub struct MyI32(i32);
-
-impl FromValue for MyI32 {
-    #[inline]
-    fn from_value(value: Value) -> Result<Self> {
-        Ok(MyI32(value.into()?))
-    }
-}
-
 impl FromSingleValue for MyI32 {}
 
 #[derive(Deserialize)]
@@ -436,17 +429,16 @@ mod command_args;
 mod command_encoder;
 mod from_value;
 mod into_args;
-mod raw_value;
-mod raw_value_decoder;
-mod resp_decoder;
+mod resp_batch_deserializer;
+mod resp_buf;
 mod resp_deserializer;
-mod resp_deserializer2;
+mod resp_serializer;
 mod response;
 mod util;
 mod value;
-mod value_decoder;
 mod value_deserialize;
 mod value_deserializer;
+mod value_serialize;
 
 pub use buffer_decoder::*;
 pub use command::*;
@@ -455,14 +447,13 @@ pub use command_args::*;
 pub(crate) use command_encoder::*;
 pub use from_value::*;
 pub use into_args::*;
-pub use raw_value::*;
-pub use raw_value_decoder::*;
-pub use resp_decoder::*;
+pub use resp_batch_deserializer::*;
+pub use resp_buf::*;
 pub use resp_deserializer::*;
-pub use resp_deserializer2::*;
+pub use resp_serializer::*;
 pub use response::*;
 pub use util::*;
 pub use value::*;
-pub use value_decoder::*;
 pub use value_deserialize::*;
 pub use value_deserializer::*;
+pub use value_serialize::*;

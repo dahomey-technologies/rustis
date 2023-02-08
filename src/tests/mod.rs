@@ -1,6 +1,7 @@
 mod bitmap_commands;
 #[cfg(feature = "redis-bloom")]
 mod bloom_commands;
+mod buffer_decoder;
 mod client;
 mod cluster;
 mod cluster_commands;
@@ -29,6 +30,7 @@ mod pipeline;
 mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
+mod resp_deserializer;
 mod scripting_commands;
 #[cfg(feature = "redis-search")]
 mod search_commands;
@@ -48,6 +50,8 @@ mod top_k_commands;
 mod transaction;
 mod util;
 mod value;
-mod value_decoder;
+mod value_deserialize;
+mod value_deserializer;
+mod value_serialize;
 
 pub(crate) use util::*;

@@ -1,11 +1,11 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
-        SingleArg, SingleArgCollection, Value,
+        cmd, deserialize_byte_buf, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse,
+        IntoArgs, SingleArg, SingleArgCollection,
     },
-    Error, Result,
 };
+use serde::{de::DeserializeOwned, Deserialize};
 
 /// A group of generic Redis commands
 ///
@@ -173,8 +173,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         P: SingleArg,
-        K: FromSingleValue,
-        A: FromValueArray<K>,
+        K: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<K> + DeserializeOwned,
     {
         prepare_command(self, cmd("KEYS").arg(pattern))
     }
@@ -243,7 +243,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").arg(key))
     }
@@ -414,7 +414,7 @@ pub trait GenericCommands {
     fn randomkey<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("RANDOMKEY"))
     }
@@ -492,8 +492,8 @@ pub trait GenericCommands {
     fn scan<K, A>(&mut self, cursor: u64, options: ScanOptions) -> PreparedCommand<Self, (u64, A)>
     where
         Self: Sized,
-        K: FromSingleValue,
-        A: FromValueArray<K>,
+        K: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<K> + DeserializeOwned,
     {
         prepare_command(self, cmd("SCAN").arg(cursor).arg(options))
     }
@@ -510,8 +510,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue,
-        A: FromValueArray<M>,
+        M: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SORT").arg(key).arg(options))
     }
@@ -560,8 +560,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue,
-        A: FromValueArray<M>,
+        M: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SORT_RO").arg(key).arg(options))
     }
@@ -841,20 +841,8 @@ impl IntoArgs for SortOptions {
 }
 
 /// Result for the [`dump`](GenericCommands::dump) command.
-pub struct DumpResult {
-    pub serialized_value: Vec<u8>,
-}
-
-impl FromValue for DumpResult {
-    fn from_value(value: Value) -> crate::Result<Self> {
-        match value {
-            Value::BulkString(b) => Ok(DumpResult {
-                serialized_value: b,
-            }),
-            _ => Err(Error::Client("Unexpected dump format".to_owned())),
-        }
-    }
-}
+#[derive(Deserialize)]
+pub struct DumpResult(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);
 
 /// Options for the [`scan`](GenericCommands::scan) command
 #[derive(Default)]
@@ -892,22 +880,11 @@ impl IntoArgs for ScanOptions {
 }
 
 /// Result for the [`migrate`](GenericCommands::migrate) command
+#[derive(Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum MigrateResult {
     /// key(s) successfully migrated
     Ok,
     /// no keys were found in the source instance.
     NoKey,
-}
-
-impl FromValue for MigrateResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let result: String = value.into()?;
-        match result.as_str() {
-            "OK" => Ok(Self::Ok),
-            "NOKEY" => Ok(Self::NoKey),
-            _ => Err(Error::Client(
-                "Unexpected result for command 'MIGRATE'".to_owned(),
-            )),
-        }
-    }
 }

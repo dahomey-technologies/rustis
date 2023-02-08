@@ -5,17 +5,21 @@ use crate::{
         ResponsePolicy,
     },
     network::CommandInfoManager,
-    resp::{Command, Value},
+    resp::{Command, RespBuf, RespDeserializer, RespSerializer},
     Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
 use futures::{future, FutureExt};
 use log::{debug, info, trace, warn};
 use rand::Rng;
+use serde::{
+    de::{self, value::SeqAccessDeserializer},
+    Deserialize, Deserializer, Serialize,
+};
 use smallvec::{smallvec, SmallVec};
 use std::{
     cmp::Ordering,
     collections::VecDeque,
-    fmt::{Debug, Formatter},
+    fmt::{self, Debug, Formatter},
     iter::zip,
 };
 
@@ -48,7 +52,7 @@ struct SlotRange {
 struct SubRequest {
     pub node_id: String,
     pub keys: SmallVec<[String; 10]>,
-    pub result: Option<Option<Result<Value>>>,
+    pub result: Option<Option<Result<RespBuf>>>,
 }
 
 #[derive(Debug)]
@@ -103,7 +107,11 @@ impl ClusterConnection {
         self.internal_write(command, &[]).await
     }
 
-    async fn internal_write(&mut self, command: &Command, ask_reasons: &[(u16, (String, u16))]) -> Result<()> {
+    async fn internal_write(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, (String, u16))],
+    ) -> Result<()> {
         debug!("Analyzing command {command:?}");
 
         let command_info = self.command_info_manager.get_command_info(command);
@@ -163,7 +171,6 @@ impl ClusterConnection {
         }
 
         Ok(())
-
     }
 
     pub async fn write_batch(
@@ -416,15 +423,15 @@ impl ClusterConnection {
         todo!("Command not yet supported in cluster mode")
     }
 
-    pub async fn read(&mut self) -> Option<Result<Value>> {
+    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         let mut request_info: RequestInfo;
 
         loop {
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
-            if let Some(value) = &result {
-                if is_push_message(value) {
+            if let Some(Ok(bytes)) = &result {
+                if bytes.is_push_message() {
                     return result;
                 }
             }
@@ -452,7 +459,8 @@ impl ClusterConnection {
             }
         }
 
-        let mut sub_results = Vec::<Result<Value>>::with_capacity(request_info.sub_requests.len());
+        let mut sub_results =
+            Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
         for sub_request in request_info.sub_requests.iter_mut() {
@@ -460,20 +468,23 @@ impl ClusterConnection {
 
             if let Some(result) = result {
                 match &result {
-                    Ok(Value::Error(RedisError {
-                        kind: RedisErrorKind::Ask { hash_slot, address },
-                        description: _,
-                    })) => retry_reasons.push(RetryReason::Ask {
-                        hash_slot: *hash_slot,
-                        address: address.clone(),
-                    }),
-                    Ok(Value::Error(RedisError {
-                        kind: RedisErrorKind::Moved { hash_slot, address },
-                        description: _,
-                    })) => retry_reasons.push(RetryReason::Moved {
-                        hash_slot: *hash_slot,
-                        address: address.clone(),
-                    }),
+                    Ok(resp_buf) if resp_buf.is_error() => match resp_buf.to::<()>() {
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Ask { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Ask {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Moved { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Moved {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        _ => sub_results.push(result),
+                    },
                     _ => sub_results.push(result),
                 }
             } else {
@@ -523,18 +534,16 @@ impl ClusterConnection {
                 }
                 ResponsePolicy::AggLogicalAnd => {
                     self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
-                        .await
                 }
                 ResponsePolicy::AggLogicalOr => {
                     self.response_policy_agg(
                         sub_results,
                         |a, b| if a == 0 && b == 0 { 0 } else { 1 },
                     )
-                    .await
                 }
-                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min).await,
-                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max).await,
-                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b).await,
+                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
+                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
+                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
                 ResponsePolicy::Special => self.response_policy_special(sub_results).await,
             }
         } else {
@@ -544,15 +553,15 @@ impl ClusterConnection {
 
     async fn response_policy_one_succeeded(
         &mut self,
-        sub_results: Vec<Result<Value>>,
-    ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::Nil);
+        sub_results: Vec<Result<RespBuf>>,
+    ) -> Option<Result<RespBuf>> {
+        let mut result: Result<RespBuf> = Ok(RespBuf::nil());
 
         for sub_result in sub_results {
-            if let Err(_) | Ok(Value::Error(_)) = sub_result {
-                result = sub_result;
-            } else {
-                return Some(sub_result);
+            match &sub_result {
+                Err(_) => result = sub_result,
+                Ok(resp_buf) if resp_buf.is_error() => result = sub_result,
+                _ => return Some(sub_result),
             }
         }
 
@@ -561,78 +570,138 @@ impl ClusterConnection {
 
     async fn response_policy_all_succeeded(
         &mut self,
-        sub_results: Vec<Result<Value>>,
-    ) -> Option<Result<Value>> {
-        let mut result: Result<Value> = Ok(Value::Nil);
+        sub_results: Vec<Result<RespBuf>>,
+    ) -> Option<Result<RespBuf>> {
+        let mut result: Result<RespBuf> = Ok(RespBuf::nil());
 
         for sub_result in sub_results {
-            if let Err(_) | Ok(Value::Error(_)) = sub_result {
-                return Some(sub_result);
-            } else {
-                result = sub_result;
+            match &sub_result {
+                Err(_) => return Some(sub_result),
+                Ok(resp_buf) if resp_buf.is_error() => return Some(sub_result),
+                _ => result = sub_result,
             }
         }
 
         Some(result)
     }
 
-    async fn response_policy_agg<F>(
+    fn response_policy_agg<F>(
         &mut self,
-        sub_results: Vec<Result<Value>>,
+        sub_results: Vec<Result<RespBuf>>,
         f: F,
-    ) -> Option<Result<Value>>
+    ) -> Option<Result<RespBuf>>
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut result = Value::Nil;
-
-        for sub_result in sub_results {
-            result = match sub_result {
-                Ok(Value::Error(_)) => {
-                    return Some(sub_result);
-                }
-                Ok(value) => match (value, result) {
-                    (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
-                    (Value::Integer(v), Value::Nil) => Value::Integer(v),
-                    (Value::Array(v), Value::Array(mut r)) if v.len() == r.len() => {
-                        for i in 0..v.len() {
-                            match (&v[i], &r[i]) {
-                                (Value::Integer(vi), Value::Integer(ri)) => {
-                                    r[i] = Value::Integer(f(*vi, *ri));
-                                }
-                                _ => {
-                                    return Some(Err(Error::Client("Unexpected value".to_owned())));
-                                }
-                            }
-                        }
-                        Value::Array(r)
-                    }
-                    (Value::Array(v), Value::Nil) => Value::Array(v),
-                    _ => {
-                        return Some(Err(Error::Client("Unexpected value".to_owned())));
-                    }
-                },
-                Err(_) => {
-                    return Some(sub_result);
-                }
-            };
+        enum Integer {
+            Single(i64),
+            Array(Vec<i64>),
+            Nil,
         }
 
-        Some(Ok(result))
+        struct Visitor<F: Fn(i64, i64) -> i64> {
+            integer: Integer,
+            f: F,
+        }
+
+        impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut Visitor<F> {
+            type Value = ();
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("()")
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match &self.integer {
+                    Integer::Nil => self.integer = Integer::Single(v),
+                    Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
+                    _ => {
+                        return Err(de::Error::custom("Unexpected value".to_owned()));
+                    }
+                }
+
+                Ok(())
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                match &mut self.integer {
+                    Integer::Nil => {
+                        self.integer = Integer::Array(Vec::<i64>::deserialize(
+                            SeqAccessDeserializer::new(seq),
+                        )?)
+                    }
+                    Integer::Array(a) => {
+                        for i in a {
+                            let Some(next_i) = seq.next_element()? else {
+                                return Err(de::Error::custom("Unexpected value".to_owned()));
+                            };
+
+                            *i = (self.f)(*i, next_i);
+                        }
+                    }
+                    _ => {
+                        return Err(de::Error::custom("Unexpected value".to_owned()));
+                    }
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = Visitor {
+            integer: Integer::Nil,
+            f,
+        };
+
+        for sub_result in sub_results {
+            let Ok(sub_result) = sub_result else {
+                return Some(sub_result);
+            };
+
+            let mut deserializer = RespDeserializer::new(&sub_result);
+            if let Err(e) = deserializer.deserialize_any(&mut visitor) {
+                return Some(Err(e));
+            }
+        }
+
+        match visitor.integer {
+            Integer::Single(i) => {
+                let mut serializer = RespSerializer::new();
+                if let Err(e) = i.serialize(&mut serializer) {
+                    return Some(Err(e));
+                }
+                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
+            }
+            Integer::Array(vec) => {
+                let mut serializer = RespSerializer::new();
+                if let Err(e) = vec.serialize(&mut serializer) {
+                    return Some(Err(e));
+                }
+                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
+            }
+            Integer::Nil => Some(Ok(RespBuf::nil())),
+        }
     }
 
     async fn response_policy_special(
         &mut self,
-        _sub_results: Vec<Result<Value>>,
-    ) -> Option<Result<Value>> {
+        _sub_results: Vec<Result<RespBuf>>,
+    ) -> Option<Result<RespBuf>> {
         todo!("Command not yet supported in cluster mode");
     }
 
     async fn no_response_policy(
         &mut self,
-        sub_results: Vec<Result<Value>>,
+        sub_results: Vec<Result<RespBuf>>,
         request_info: &RequestInfo,
-    ) -> Option<Result<Value>> {
+    ) -> Option<Result<RespBuf>> {
+        log::debug!("no_response_policy");
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
@@ -641,42 +710,55 @@ impl ClusterConnection {
             // The command doesn't accept key name arguments:
             // the client can aggregate all replies within a single nested data structure.
             // For example, the array replies we get from calling KEYS against all shards.
-            // These should be packed in a single in no particular order.
-            let mut values = Vec::<Value>::new();
-            for sub_result in sub_results {
+            // These should be packed in a single array in no particular order.
+            let mut results = Vec::<&[u8]>::new();
+            for sub_result in &sub_results {
                 match sub_result {
-                    Ok(Value::Array(v)) => {
-                        values.extend(v);
-                    }
-                    Err(_) | Ok(Value::Error(_)) => {
-                        return Some(sub_result);
+                    Ok(resp_buf) if !resp_buf.is_error() => {
+                        let mut deserializer = RespDeserializer::new(resp_buf);
+                        let Ok(chunks) = deserializer.array_chunks() else {
+                            return Some(Err(Error::Client(format!(
+                                "Unexpected result {sub_result:?}"
+                            ))));
+                        };
+
+                        for chunk in chunks {
+                            results.push(chunk);
+                        }
                     }
                     _ => {
-                        return Some(Err(Error::Client(format!(
-                            "Unexpected result {sub_result:?}"
-                        ))));
+                        return Some(sub_result.clone());
                     }
                 }
             }
 
-            Some(Ok(Value::Array(values)))
+            Some(Ok(RespBuf::from_chunks(&results)))
         } else {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
             // For example, MGET's aggregated reply.
-            let mut results = SmallVec::<[(&String, Value); 10]>::new();
+            let mut results = SmallVec::<[(&String, &[u8]); 10]>::new();
 
-            for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
+            for (sub_result, sub_request) in zip(&sub_results, &request_info.sub_requests) {
                 match sub_result {
-                    Ok(Value::Array(values)) if sub_request.keys.len() == values.len() => {
-                        results.extend(zip(&sub_request.keys, values))
+                    Ok(resp_buf) if !resp_buf.is_error() => {
+                        let mut deserializer = RespDeserializer::new(resp_buf);
+                        let Ok(chunks) = deserializer.array_chunks() else {
+                            return Some(Err(Error::Client(format!(
+                                "Unexpected result {sub_result:?}"
+                            ))));
+                        };
+
+                        if sub_request.keys.len() == chunks.len() {
+                            results.extend(zip(&sub_request.keys, chunks));
+                        } else {
+                            return Some(Err(Error::Client(format!(
+                                "Unexpected result {sub_result:?}"
+                            ))));
+                        }
                     }
-                    Err(_) | Ok(Value::Error(_)) => return Some(sub_result),
                     _ => {
-                        return Some(Err(Error::Client(format!(
-                            "Unexpected result {:?}",
-                            sub_result
-                        ))))
+                        return Some(sub_result.clone());
                     }
                 }
             }
@@ -689,8 +771,8 @@ impl ClusterConnection {
                     .cmp(&request_info.keys.iter().position(|k| k == *k2))
             });
 
-            let values = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(Value::Array(values)))
+            let results = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
+            Some(Ok(RespBuf::from_chunks(&results)))
         }
     }
 
@@ -980,39 +1062,5 @@ impl ClusterConnection {
 
     fn crc16(str: &str) -> u16 {
         crc16::State::<crc16::XMODEM>::calculate(str.as_bytes())
-    }
-}
-
-fn is_push_message(value: &Result<Value>) -> bool {
-    match value {
-        // RESP2 pub/sub messages
-        Ok(Value::Array(ref items)) => match &items[..] {
-            [Value::BulkString(command), Value::BulkString(_channel), Value::BulkString(_payload)] =>
-            {
-                matches!(command.as_slice(), b"message" | b"smessage")
-            }
-            [Value::BulkString(command), Value::BulkString(_channel), Value::Integer(_)] => {
-                matches!(
-                    command.as_slice(),
-                    b"subscribe"
-                        | b"psubscribe"
-                        | b"ssubscribe"
-                        | b"unsubscribe"
-                        | b"punsubscribe"
-                        | b"sunsubscribe"
-                )
-            }
-            [Value::BulkString(command), Value::BulkString(_pattern), Value::BulkString(_channel), Value::BulkString(_payload)] => {
-                command.as_slice() == b"pmessage"
-            }
-            _ => false,
-        },
-        // RESP2 monitor events are a SimpleString beginning by a numeric (unix timestamp)
-        Ok(Value::SimpleString(monitor_event)) if monitor_event.starts_with(char::is_numeric) => {
-            true
-        }
-        // RESP3
-        Ok(Value::Push(_)) => true,
-        _ => false,
     }
 }

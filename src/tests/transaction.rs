@@ -18,9 +18,19 @@ async fn transaction_exec() -> Result<()> {
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
     transaction.get::<_, ()>("key1").queue();
+    transaction.get::<_, ()>("key2").queue();
+    let (value1, value2): (String, String) = transaction.execute().await?;
+
+    assert_eq!("value1", value1);
+    assert_eq!("value2", value2);
+
+    let mut transaction = client.create_transaction();
+
+    transaction.set("key", "value").forget();
+    transaction.get::<_, ()>("key").queue();
     let value: String = transaction.execute().await?;
 
-    assert_eq!("value1", value);
+    assert_eq!("value", value);
 
     Ok(())
 }

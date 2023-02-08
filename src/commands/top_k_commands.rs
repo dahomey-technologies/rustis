@@ -1,12 +1,13 @@
+use std::marker::PhantomData;
+
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, FromSingleValue, FromValueArray, FromValue, HashMapExt, KeyValueArgsCollection,
-        SingleArg, SingleArgCollection, Value,
+        cmd, deserialize_vec_of_pairs, PrimitiveResponse, CollectionResponse, KeyValueArgsCollection,
+        SingleArg, SingleArgCollection,
     },
-    Result,
 };
-use std::collections::HashMap;
+use serde::{de::DeserializeOwned, Deserialize};
 
 /// A group of Redis commands related to [`Top-K`](https://redis.io/docs/stack/bloom/)
 ///
@@ -29,7 +30,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<I: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
+    fn topk_add<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -59,7 +60,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<I: SingleArg, R: FromSingleValue, RR: FromValueArray<R>>(
+    fn topk_incrby<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, i64>,
@@ -99,7 +100,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: FromSingleValue, RR: FromValueArray<R>>(
+    fn topk_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
@@ -122,10 +123,10 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list_with_count<R: FromSingleValue, RR: FromValueArray<(R, usize)>>(
+    fn topk_list_with_count<N: PrimitiveResponse + DeserializeOwned>(
         &mut self,
         key: impl SingleArg,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<Self, TopKListWithCountResult<N>>
     where
         Self: Sized,
     {
@@ -146,7 +147,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<I: SingleArg, R: FromValueArray<bool>>(
+    fn topk_query<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -192,7 +193,7 @@ pub trait TopKCommands {
 }
 
 /// Result for the [`topk_info`](TopKCommands::topk_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct TopKInfoResult {
     /// The number of required items
     pub k: usize,
@@ -207,15 +208,23 @@ pub struct TopKInfoResult {
     pub decay: f64,
 }
 
-impl FromValue for TopKInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
+#[derive(Debug)]
+pub struct TopKListWithCountResult<N: PrimitiveResponse + DeserializeOwned> {
+    phantom: PhantomData<N>,
+    pub items: Vec<(N, usize)>,
+}
 
-        Ok(Self {
-            k: values.remove_or_default("k").into()?,
-            width: values.remove_or_default("width").into()?,
-            depth: values.remove_or_default("depth").into()?,
-            decay: values.remove_or_default("decay").into()?,
+impl<'de, N> Deserialize<'de> for TopKListWithCountResult<N>
+where
+    N: PrimitiveResponse + DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(TopKListWithCountResult {
+            phantom: PhantomData,
+            items: deserialize_vec_of_pairs(deserializer)?
         })
     }
 }

@@ -1,11 +1,15 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, FromValue, IntoArgs,
-        MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
+        MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
-    Error, Result,
 };
+use serde::{
+    de::{self, value::{SeqAccessDeserializer, BytesDeserializer}, DeserializeOwned, Unexpected, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{fmt, marker::PhantomData};
 
 /// A group of Redis commands related to [`Geospatial`](https://redis.io/docs/data-types/geospatial/) indices
 ///
@@ -136,8 +140,8 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M1: SingleArg,
-        M2: FromSingleValue,
-        A: FromValueArray<GeoSearchResult<M2>>,
+        M2: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<GeoSearchResult<M2>> + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -346,7 +350,7 @@ impl IntoArgs for GeoSearchOptions {
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
-    M: FromSingleValue,
+    M: PrimitiveResponse,
 {
     /// The matched member.
     pub member: M,
@@ -361,38 +365,105 @@ where
     pub coordinates: Option<(f64, f64)>,
 }
 
-impl<M> FromValue for GeoSearchResult<M>
+impl<'de, M> Deserialize<'de> for GeoSearchResult<M>
 where
-    M: FromSingleValue,
+    M: PrimitiveResponse + DeserializeOwned,
 {
-    fn from_value(value: Value) -> Result<Self> {
-        match value {
-            Value::BulkString(_) => Ok(GeoSearchResult {
-                member: value.into()?,
-                distance: None,
-                geo_hash: None,
-                coordinates: None,
-            }),
-            Value::Array(_) => {
-                let values: Vec<Value> = value.into()?;
-                let mut it = values.into_iter();
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        pub enum GeoSearchResultField {
+            Distance(f64),
+            GeoHash(i64),
+            Coordinates((f64, f64)),
+        }
+
+        impl<'de> Deserialize<'de> for GeoSearchResultField {
+            #[inline]
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                struct GeoSearchResultFieldVisitor;
+
+                impl<'de> Visitor<'de> for GeoSearchResultFieldVisitor {
+                    type Value = GeoSearchResultField;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("GeoSearchResultField")
+                    }
+
+                    fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
+                    where
+                        E: de::Error,
+                    {
+                        let Ok(distance) = std::str::from_utf8(v) else {
+                            return Err(de::Error::invalid_value(Unexpected::Bytes(v), &"A valid f64 encoded in an UTF8 string"));
+                        };
+
+                        let Ok(distance) = distance.parse::<f64>() else {
+                            return Err(de::Error::invalid_value(Unexpected::Bytes(v), &"A valid f64 encoded in an UTF8 string"));
+                        };
+
+                        Ok(GeoSearchResultField::Distance(distance))
+                    }
+
+                    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+                    where
+                        E: de::Error,
+                    {
+                        Ok(GeoSearchResultField::GeoHash(v))
+                    }
+
+                    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: de::SeqAccess<'de>,
+                    {
+                        let coordinates =
+                            <(f64, f64)>::deserialize(SeqAccessDeserializer::new(seq))?;
+                        Ok(GeoSearchResultField::Coordinates(coordinates))
+                    }
+                }
+
+                deserializer.deserialize_any(GeoSearchResultFieldVisitor)
+            }
+        }
+
+        pub struct GeoSearchResultVisitor<M>
+        where
+            M: PrimitiveResponse,
+        {
+            phantom: PhantomData<M>,
+        }
+
+        impl<'de, M> Visitor<'de> for GeoSearchResultVisitor<M>
+        where
+            M: PrimitiveResponse + DeserializeOwned,
+        {
+            type Value = GeoSearchResult<M>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("GeoSearchResult<M>")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(member) = seq.next_element::<M>().map_err(de::Error::custom)? else {
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                };
+
                 let mut distance: Option<f64> = None;
                 let mut geo_hash: Option<i64> = None;
                 let mut coordinates: Option<(f64, f64)> = None;
 
-                let member = match it.next() {
-                    Some(value) => value.into()?,
-                    None => {
-                        return Err(Error::Client("Unexpected geo search result".to_owned()));
-                    }
-                };
-
-                for value in it {
-                    match value {
-                        Value::BulkString(_) => distance = Some(value.into()?),
-                        Value::Integer(h) => geo_hash = Some(h),
-                        Value::Array(_) => coordinates = Some(value.into()?),
-                        _ => return Err(Error::Client("Unexpected geo search result".to_owned())),
+                while let Some(field) = seq.next_element::<GeoSearchResultField>()? {
+                    match field {
+                        GeoSearchResultField::Distance(d) => distance = Some(d),
+                        GeoSearchResultField::GeoHash(gh) => geo_hash = Some(gh),
+                        GeoSearchResultField::Coordinates(c) => coordinates = Some(c),
                     }
                 }
 
@@ -403,8 +474,25 @@ where
                     coordinates,
                 })
             }
-            _ => Err(Error::Client("Unexpected geo search result".to_owned())),
+
+            fn visit_borrowed_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let member = M::deserialize(BytesDeserializer::new(v))?;
+
+                Ok(GeoSearchResult {
+                    member,
+                    distance: None,
+                    geo_hash: None,
+                    coordinates: None,
+                })
+            }
         }
+
+        deserializer.deserialize_any(GeoSearchResultVisitor::<M> {
+            phantom: PhantomData,
+        })
     }
 }
 

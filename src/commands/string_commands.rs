@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValueArray, FromValue, HashMapExt, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, KeyValueArgsCollection,
+        SingleArg, SingleArgCollection,
     },
-    Error, Result,
 };
+use serde::{
+    de::{self, SeqAccess, Visitor},
+    Deserialize, Deserializer,
+};
+use std::fmt;
 
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
 /// # See Also
@@ -125,7 +127,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
         Self: Sized,
     {
         prepare_command(self, cmd("GET").arg(key))
@@ -146,7 +148,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
@@ -195,7 +197,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
@@ -214,7 +216,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
@@ -234,7 +236,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V: SingleArg,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
@@ -335,7 +337,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
@@ -404,8 +406,8 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        V: FromSingleValue,
-        VV: FromValueArray<V>,
+        V: PrimitiveResponse + serde::de::DeserializeOwned,
+        VV: CollectionResponse<V>,
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }
@@ -543,7 +545,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V1: SingleArg,
-        V2: FromSingleValue,
+        V2: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -659,72 +661,51 @@ impl IntoArgs for GetExOptions {
 }
 
 /// Part of the result for the [`lcs`](StringCommands::lcs) command
-pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
+///pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
+#[derive(Debug, PartialEq, Eq)]
+pub struct LcsMatch(pub (usize, usize), pub (usize, usize), pub Option<usize>);
+
+impl<'de> Deserialize<'de> for LcsMatch {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct LcsMatchVisitor;
+
+        impl<'de> Visitor<'de> for LcsMatchVisitor {
+            type Value = LcsMatch;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("LcsMatch")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let Some(first): Option<(usize, usize)> = seq.next_element()? else {
+                    return Err(de::Error::invalid_length(0, &"fewer elements in tuple"));
+                };
+
+                let Some(second): Option<(usize, usize)> = seq.next_element()? else {
+                    return Err(de::Error::invalid_length(1, &"fewer elements in tuple"));
+                };
+
+                let match_len: Option<usize> = seq.next_element()?;
+
+                Ok(LcsMatch(first, second, match_len))
+            }
+        }
+
+        deserializer.deserialize_seq(LcsMatchVisitor)
+    }
+}
 
 /// Result for the [`lcs`](StringCommands::lcs) command
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,
     pub len: usize,
-}
-
-impl FromValue for LcsResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        let matches: Result<Vec<LcsMatch>> = values
-            .remove_with_result("matches")?
-            .into::<Vec<Value>>()?
-            .into_iter()
-            .map(|m| {
-                let mut match_: Vec<Value> = m.into()?;
-
-                match (match_.pop(), match_.pop(), match_.pop(), match_.pop()) {
-                    (Some(len), Some(pos2), Some(pos1), None) => {
-                        let mut pos1: Vec<usize> = pos1.into()?;
-                        let mut pos2: Vec<usize> = pos2.into()?;
-                        let len: usize = len.into()?;
-
-                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                            (Some(pos1_right), Some(pos1_left), None) => {
-                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                    (Some(pos2_right), Some(pos2_left), None) => Ok((
-                                        (pos1_left, pos1_right),
-                                        (pos2_left, pos2_right),
-                                        Some(len),
-                                    )),
-                                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
-                                }
-                            }
-                            _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
-                        }
-                    }
-                    (Some(pos2), Some(pos1), None, None) => {
-                        let mut pos1: Vec<usize> = pos1.into()?;
-                        let mut pos2: Vec<usize> = pos2.into()?;
-
-                        match (pos1.pop(), pos1.pop(), pos1.pop()) {
-                            (Some(pos1_right), Some(pos1_left), None) => {
-                                match (pos2.pop(), pos2.pop(), pos2.pop()) {
-                                    (Some(pos2_right), Some(pos2_left), None) => {
-                                        Ok(((pos1_left, pos1_right), (pos2_left, pos2_right), None))
-                                    }
-                                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
-                                }
-                            }
-                            _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
-                        }
-                    }
-                    _ => Err(Error::Client("Cannot parse LCS result".to_owned())),
-                }
-            })
-            .collect();
-
-        Ok(Self {
-            matches: matches?,
-            len: values.remove_with_result("len")?.into()?,
-        })
-    }
 }
 
 /// Expiration option for the [`set_with_options`](StringCommands::set_with_options) command

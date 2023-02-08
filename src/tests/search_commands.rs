@@ -2,10 +2,10 @@ use crate::{
     client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
-        FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute,
-        FtProfileQueryType, FtQueryResult, FtReducer, FtSearchOptions, FtSortBy,
-        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtWithCursorOptions,
-        HashCommands, JsonCommands, SearchCommands, ServerCommands, SetCondition, SortOrder,
+        FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtReducer,
+        FtSearchOptions, FtSearchResult, FtSortBy, FtSpellCheckOptions, FtSugAddOptions,
+        FtSugGetOptions, FtTermType, FtWithCursorOptions, HashCommands, JsonCommands,
+        SearchCommands, ServerCommands, SetCondition, SortOrder,
     },
     network::sleep,
     resp::{CommandArg, SingleArg},
@@ -247,26 +247,25 @@ async fn ft_aggregate() -> Result<()> {
         )
         .await?;
 
-    assert_eq!(None, result.cursor_id);
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
-    assert_eq!(2, result.results[0].values.len());
-    assert_eq!(2, result.results[1].values.len());
+    assert_eq!(2, result.results[0].len());
+    assert_eq!(2, result.results[1].len());
     assert_eq!(
         ("hour".to_owned(), "2022-11-16T22:00:00Z".to_owned()),
-        result.results[0].values[0]
+        result.results[0][0]
     );
     assert_eq!(
         ("num_users".to_owned(), "2".to_owned()),
-        result.results[0].values[1]
+        result.results[0][1]
     );
     assert_eq!(
         ("hour".to_owned(), "2022-11-17T03:00:00Z".to_owned()),
-        result.results[1].values[0]
+        result.results[1][0]
     );
     assert_eq!(
         ("num_users".to_owned(), "2".to_owned()),
-        result.results[1].values[1]
+        result.results[1][1]
     );
 
     Ok(())
@@ -884,9 +883,8 @@ async fn ft_profile() -> Result<()> {
     wait_for_index_scanned(&mut client, "index").await?;
 
     let result = client
-        .ft_profile(
+        .ft_profile_aggregate(
             "index",
-            FtProfileQueryType::Aggregate,
             false,
             [
                 "*",
@@ -972,12 +970,14 @@ async fn ft_search() -> Result<()> {
         .await?;
     log::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
+    assert_eq!(2, result.results.len());
 
     let result = client
         .ft_search("index", "@title:dogs", FtSearchOptions::default())
         .await?;
     log::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
+    assert_eq!(1, result.results.len());
 
     let result = client
         .ft_search(
@@ -988,12 +988,14 @@ async fn ft_search() -> Result<()> {
         .await?;
     log::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
+    assert_eq!(1, result.results.len());
 
     let result = client
         .ft_search("index", "*", FtSearchOptions::default().nocontent())
         .await?;
     log::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
+    assert_eq!(2, result.results.len());
 
     let result = client
         .ft_search(
@@ -1008,15 +1010,17 @@ async fn ft_search() -> Result<()> {
         .await?;
     log::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
+    assert_eq!(2, result.results.len());
 
     // with pipeline
     let mut pipeline = client.create_pipeline();
     pipeline
         .ft_search("index", "wizard", FtSearchOptions::default())
         .queue();
-    let result: FtQueryResult = pipeline.execute().await?;
+    let result: FtSearchResult = pipeline.execute().await?;
     log::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
+    assert_eq!(2, result.results.len());
 
     Ok(())
 }
@@ -1100,7 +1104,9 @@ async fn ft_syn() -> Result<()> {
     let result = client
         .ft_search("index", "hello", FtSearchOptions::default())
         .await?;
+    log::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
+    assert_eq!(1, result.results.len());
     assert_eq!("foo", result.results[0].document_id);
     assert_eq!(
         ("t".to_owned(), "hello".to_owned()),

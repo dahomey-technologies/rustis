@@ -1,6 +1,6 @@
 use crate::{resp::cmd, tests::get_test_client, Error, RedisError, RedisErrorKind, Result};
 use serial_test::serial;
-use std::{str::FromStr};
+use std::str::FromStr;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -8,7 +8,7 @@ use std::{str::FromStr};
 async fn unknown_command() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    let result = client.send(cmd("UNKNOWN").arg("arg"), None).await;
+    let result: Result<()> = client.send(cmd("UNKNOWN").arg("arg"), None).await?.to();
 
     assert!(matches!(
         result,
@@ -53,7 +53,7 @@ fn ask_error() {
 // #[serial]
 // async fn network_error() -> Result<()> {
 //     use crate::commands::StringCommands;
-    
+
 //     let mut client = get_test_client().await?;
 
 //     let items = (1..1000)
@@ -161,15 +161,39 @@ async fn kill_on_write() -> Result<()> {
     let mut client = get_test_client().await?;
 
     // 3 reconnections
-    let result = client.send(cmd("SET").arg("key1").arg("value1").kill_connection_on_write(3), Some(true)).await;
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key1")
+                .arg("value1")
+                .kill_connection_on_write(3),
+            Some(true),
+        )
+        .await;
     assert!(result.is_err());
 
     // 2 reconnections
-    let result = client.send(cmd("SET").arg("key2").arg("value2").kill_connection_on_write(2), Some(true)).await;
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key2")
+                .arg("value2")
+                .kill_connection_on_write(2),
+            Some(true),
+        )
+        .await;
     assert!(result.is_ok());
 
     // 2 reconnections / no retry
-    let result = client.send(cmd("SET").arg("key3").arg("value3").kill_connection_on_write(2), Some(false)).await;
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key3")
+                .arg("value3")
+                .kill_connection_on_write(2),
+            Some(false),
+        )
+        .await;
     assert!(result.is_err());
 
     Ok(())

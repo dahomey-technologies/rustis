@@ -12,8 +12,8 @@ use crate::commands::{
 };
 use crate::{
     client::{
-        ClientState, IntoConfig, Message, MonitorStream, Pipeline, PreparedCommand, PubSubStream,
-        Transaction,
+        ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
+        Pipeline, PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
         BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
@@ -23,24 +23,22 @@ use crate::{
     },
     network::{
         timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
-        PushSender, ReconnectReceiver, ReconnectSender,
+        PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
+        ResultsReceiver, ResultsSender,
     },
-    resp::{
-        cmd, Command, CommandArgs, FromValue, ResultValueExt, SingleArg, SingleArgCollection, Value,
-    },
-    Error, Future, Result, ValueReceiver, ValueSender,
+    resp::{cmd, Command, CommandArgs, RespBuf, SingleArg, SingleArgCollection, Response},
+    Error, Future, Result,
 };
 use futures::{
     channel::{mpsc, oneshot},
     Stream,
 };
+use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::Duration,
 };
-
-use super::ClientTrackingInvalidationStream;
 
 /// Client with a unique connection to a Redis server.
 #[derive(Clone)]
@@ -166,32 +164,56 @@ impl Client {
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
-    ///
-    ///     let values: Vec<String> = client
-    ///         .send(cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"), None)
+    /// 
+    ///     client
+    ///         .send(
+    ///             cmd("MSET")
+    ///                 .arg("key1")
+    ///                 .arg("value1")
+    ///                 .arg("key2")
+    ///                 .arg("value2")
+    ///                  .arg("key3")
+    ///                 .arg("value3")
+    ///                 .arg("key4")
+    ///                 .arg("value4"),
+    ///             None,
+    ///         )
     ///         .await?
-    ///         .into()?;
-    ///     println!("{:?}", values);
+    ///         .to::<()>()?;
+    /// 
+    ///     let values: Vec<String> = client
+    ///         .send(
+    ///             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
+    ///             None,
+    ///         )
+    ///         .await?
+    ///         .to()?;
+    /// 
+    ///     assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
     ///
     ///     Ok(())
     /// }
     /// ```
 
     #[inline]
-    pub async fn send(&mut self, command: Command, retry_on_error: Option<bool>) -> Result<Value> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+    pub async fn send(
+        &mut self,
+        command: Command,
+        retry_on_error: Option<bool>,
+    ) -> Result<RespBuf> {
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let message = Message::single(
             command,
-            value_sender,
+            result_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
         self.send_message(message)?;
-        let value = if self.command_timeout != Duration::ZERO {
-            timeout(self.command_timeout, value_receiver).await??
+        
+        if self.command_timeout != Duration::ZERO {
+            timeout(self.command_timeout, result_receiver).await??
         } else {
-            value_receiver.await?
-        };
-        value.into_result()
+            result_receiver.await?
+        }
     }
 
     /// Send command to the Redis server and forget its response.
@@ -233,20 +255,21 @@ impl Client {
         &mut self,
         commands: Vec<Command>,
         retry_on_error: Option<bool>,
-    ) -> Result<Value> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+    ) -> Result<Vec<RespBuf>> {
+        let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =
+            oneshot::channel();
         let message = Message::batch(
             commands,
-            value_sender,
+            results_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
         self.send_message(message)?;
-        let value = if self.command_timeout != Duration::ZERO {
-            timeout(self.command_timeout, value_receiver).await??
+        
+        if self.command_timeout != Duration::ZERO {
+            timeout(self.command_timeout, results_receiver).await??
         } else {
-            value_receiver.await?
-        };
-        value.into_result()
+            results_receiver.await?
+        }
     }
 
     #[inline]
@@ -287,7 +310,7 @@ impl Client {
         channels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = channels
             .iter()
@@ -296,14 +319,13 @@ impl Client {
 
         let message = Message::pub_sub(
             cmd("SUBSCRIBE").arg(channels.clone()),
-            value_sender,
+            result_sender,
             pub_sub_senders,
         );
 
         self.send_message(message)?;
 
-        let value = value_receiver.await?;
-        value.map_into_result(|_| ())
+        result_receiver.await??.to::<()>()
     }
 
     pub(crate) async fn psubscribe_from_pub_sub_sender(
@@ -311,7 +333,7 @@ impl Client {
         patterns: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = patterns
             .iter()
@@ -320,14 +342,13 @@ impl Client {
 
         let message = Message::pub_sub(
             cmd("PSUBSCRIBE").arg(patterns.clone()),
-            value_sender,
+            result_sender,
             pub_sub_senders,
         );
 
         self.send_message(message)?;
 
-        let value = value_receiver.await?;
-        value.map_into_result(|_| ())
+        result_receiver.await??.to::<()>()
     }
 
     pub(crate) async fn ssubscribe_from_pub_sub_sender(
@@ -335,7 +356,7 @@ impl Client {
         shardchannels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = shardchannels
             .iter()
@@ -344,22 +365,19 @@ impl Client {
 
         let message = Message::pub_sub(
             cmd("SSUBSCRIBE").arg(shardchannels.clone()),
-            value_sender,
+            result_sender,
             pub_sub_senders,
         );
 
         self.send_message(message)?;
 
-        let value = value_receiver.await?;
-        value.map_into_result(|_| ())
+        result_receiver.await??.to::<()>()
     }
 }
 
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Client`](crate::client::Client) executor
 pub trait ClientPreparedCommand<'a, R>
-where
-    R: FromValue,
 {
     /// Send command and forget its response
     ///
@@ -368,9 +386,7 @@ where
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
-where
-    R: FromValue + Send + 'a,
+impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
 {
     /// Send command and forget its response
     ///
@@ -384,31 +400,26 @@ where
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, Client, R>
 where
-    R: FromValue + Send + 'a,
+    R: DeserializeOwned + Send + 'a,
 {
     type Output = Result<R>;
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            if self.keep_command_for_result {
-                let command_for_result = self.command.clone();
-                self.executor
-                    .send(self.command, self.retry_on_error)
-                    .await?
-                    .into_with_command(&command_for_result)
-            } else if let Some(post_process) = self.post_process {
+            if let Some(custom_converter) = self.custom_converter {
                 let command_for_result = self.command.clone();
                 let result = self
                     .executor
                     .send(self.command, self.retry_on_error)
                     .await?;
-                post_process(result, command_for_result, self.executor).await
+                custom_converter(result, command_for_result, self.executor).await
             } else {
-                self.executor
+                let result = self
+                    .executor
                     .send(self.command, self.retry_on_error)
-                    .await?
-                    .into()
+                    .await?;
+                result.to()
             }
         })
     }
@@ -536,15 +547,16 @@ impl PubSubCommands for Client {
 impl BlockingCommands for Client {
     fn monitor(&mut self) -> Future<MonitorStream> {
         Box::pin(async move {
-            let (value_sender, value_receiver): (ValueSender, ValueReceiver) = oneshot::channel();
+            let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+                oneshot::channel();
             let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
 
-            let message = Message::monitor(cmd("MONITOR"), value_sender, push_sender);
+            let message = Message::monitor(cmd("MONITOR"), result_sender, push_sender);
 
             self.send_message(message)?;
 
-            let value = value_receiver.await?;
-            value.map_into_result(|_| MonitorStream::new(push_receiver, self.clone()))
+            let _bytes = result_receiver.await??;
+            Ok(MonitorStream::new(push_receiver, self.clone()))
         })
     }
 }

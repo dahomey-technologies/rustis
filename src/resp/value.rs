@@ -1,7 +1,5 @@
-use crate::{
-    resp::{Command, FromValue},
-    Error, RedisError, Result,
-};
+use crate::{RedisError, Result};
+use serde::de::DeserializeOwned;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter, Write},
@@ -44,17 +42,9 @@ impl Value {
     #[inline]
     pub fn into<T>(self) -> Result<T>
     where
-        T: FromValue,
+        T: DeserializeOwned,
     {
-        T::from_value(self)
-    }
-
-    #[inline]
-    pub fn into_with_command<T>(self, command: &Command) -> Result<T>
-    where
-        T: FromValue,
-    {
-        T::from_value_with_command(self, command)
+        T::deserialize(&self)
     }
 }
 
@@ -180,94 +170,5 @@ impl fmt::Debug for Value {
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
             Self::Nil => write!(f, "Nil"),
         }
-    }
-}
-
-pub(crate) trait ResultValueExt {
-    fn into_result(self) -> Result<Value>;
-    fn map_into_result<T, F>(self, op: F) -> Result<T>
-    where
-        F: FnOnce(Value) -> T;
-}
-
-impl ResultValueExt for Result<Value> {
-    #[inline]
-    fn into_result(self) -> Result<Value> {
-        match self {
-            Ok(value) => match value {
-                Value::Error(e) => Err(Error::Redis(e)),
-                _ => Ok(value),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    #[inline]
-    fn map_into_result<T, F>(self, op: F) -> Result<T>
-    where
-        F: FnOnce(Value) -> T,
-    {
-        match self {
-            Ok(value) => match value {
-                Value::Error(e) => Err(Error::Redis(e)),
-                _ => Ok(op(value)),
-            },
-            Err(e) => Err(e),
-        }
-    }
-}
-
-pub(crate) trait IntoValueIterator<I: Iterator<Item = Value>>: Sized {
-    fn into_value_iter<T>(self) -> ValueIterator<T, I>
-    where
-        T: FromValue;
-}
-
-impl IntoValueIterator<std::vec::IntoIter<Value>> for Vec<Value> {
-    #[inline]
-    fn into_value_iter<T>(self) -> ValueIterator<T, std::vec::IntoIter<Value>>
-    where
-        T: FromValue,
-    {
-        ValueIterator::new(self.into_iter())
-    }
-}
-
-pub(crate) struct ValueIterator<T, I>
-where
-    T: FromValue,
-    I: Iterator<Item = Value>,
-{
-    iter: I,
-    phantom: std::marker::PhantomData<T>,
-    #[allow(clippy::complexity)]
-    next_functor: Box<dyn FnMut(&mut I) -> Option<Result<T>>>,
-}
-
-impl<T, I> ValueIterator<T, I>
-where
-    T: FromValue,
-    I: Iterator<Item = Value>,
-{
-    #[inline]
-    pub fn new(iter: I) -> Self {
-        Self {
-            iter,
-            phantom: std::marker::PhantomData,
-            next_functor: T::next_functor(),
-        }
-    }
-}
-
-impl<T, I> Iterator for ValueIterator<T, I>
-where
-    T: FromValue,
-    I: Iterator<Item = Value>,
-{
-    type Item = Result<T>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        (self.next_functor)(&mut self.iter)
     }
 }

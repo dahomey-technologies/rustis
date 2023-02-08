@@ -9,9 +9,10 @@ and which matches perfectly the RESP protocol: the enum [`resp::Value`](Value).
 Each variant of this enum matches a [`RESP`](https://redis.io/docs/reference/protocol-spec/) type.
 
 Because, navigating through a [`resp::Value`](Value) instance can be verbose and requires a lot of pattern matching,
-**rustis** provides:
-* Rust type to [`Command`](Command) conversion, with the trait [`IntoArgs`](IntoArgs).
-* [`resp::Value`](Value) to Rust type conversion, with the trait [`FromValue`](FromValue).
+**rustis** provides a [`resp::Value`](Value) to Rust type conversion with a [serde](https://serde.rs/)
+deserializer implementation of a [`resp::Value`](Value) reference.
+
+This conversion is easily accessible through the associate function [`Value::into`](Value::into).
 
 # Command arguments
 
@@ -257,31 +258,38 @@ async fn main() -> Result<()> {
 
 # Command results
 
-**rustis** provides an idiomatic way to convert command results into Rust types.
+**rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)
 
-You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand)
-where `R` must implement the [`FromValue`](FromValue) trait.
+You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand) 
+struct where `R` represents the [`Response`](Response) of the command.
 
-This trait allows to convert the object model [`Value`](Value), freshly deserialized from RESP, into a Rust type.
+The different command traits implementations ([`Client`](crate::client::Client), [`Pipeline`](crate::client::Pipeline)
+ or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`: 
+ it must implement serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait.
 
-Some more advanced traits allow to constraint more which Rust types are allowed.
+ Indeed, **rustis** provides a serde implementation of a [`RESP deserializer`](RespDeserializer).
+ Each custom struct or enum defined as a response of a built-command implements
+ serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait, 
+ in order to deserialize it automatically from a RESP Buffer.
+
+Some more advanced traits allow to constraint more which Rust types are allowed for specific commands.
 
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### FromSingleValue
+### PrimitiveResponse
 
-Several Redis commands return a single value.
+Several Redis commands return a simple primitive response.
 
-**rustis** uses the trait [`FromSingleValue`](FromSingleValue) to implement this behavior.
+**rustis** uses the trait [`PrimitiveResponse`](PrimitiveResponse) to implement this behavior.
 
-Current implementation provides the following conversions from [`Value`](Value):
+Current implementation provides the following deserializations from a RESP Buffer:
 * [`Value`](Value)
 * ()
-* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
+* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `Vec<u8>`,
+* `String`,
 * `Option<T>`
 
 #### Example
@@ -289,20 +297,18 @@ Current implementation provides the following conversions from [`Value`](Value):
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{FromSingleValue, FromValue, Value},
+    resp::{PrimitiveResponse, deserialize_byte_buf},
     Result,
 };
+use serde::Deserialize;
 
+#[derive(Deserialize)]
 pub struct MyI32(i32);
+impl PrimitiveResponse for MyI32 {}
 
-impl FromValue for MyI32 {
-    #[inline]
-    fn from_value(value: Value) -> Result<Self> {
-        Ok(MyI32(value.into()?))
-    }
-}
-
-impl FromSingleValue for MyI32 {}
+#[derive(Deserialize)]
+pub struct Buffer(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);
+impl PrimitiveResponse for Buffer {}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -325,25 +331,25 @@ async fn main() -> Result<()> {
 
     client.set("key", "value").await?;
     let _result: String = client.get("key").await?;
-    let _result: Vec<u8> = client.get("key").await?;
+    let _result: Buffer = client.get("key").await?;
 
     Ok(())
 }
 ```
 
-### FromValueArray
+### CollectionResponse
 
 Several Redis commands return a collection of items.
-**rustis** uses the trait [`FromValueArray`](FromValueArray) to implement this behavior.
+**rustis** uses the trait [`CollectionResponse`](CollectionResponse) to implement this behavior.
 
-Current implementation provides the following conversions from [`Value`](Value):
+Current implementation provides the following deserializations from a RESP Buffer:
 * `Vec<T>`
 * `[T;N]`
 * `SmallVec<A>`
 * `BTreeSet<T>`
 * `HashSet<T, S>`
 
-where each of theses implementations must also implement [`FromValue`](FromValue)
+where each of theses implementations must also implement [`Response`](Response)
 
 #### Example
 ```
@@ -380,18 +386,18 @@ async fn main() -> Result<()> {
 }
 ```
 
-### FromKeyValueArray
+### KeyValueCollectionResponse
 
 Several Redis commands return a collection of key/value pairs
-**rustis** uses the trait [`FromKeyValueArray`](FromKeyValueArray) to implement this behavior.
+**rustis** uses the trait [`KeyValueCollectionResponse`](KeyValueCollectionResponse) to implement this behavior.
 
-Current implementation provides the following conversions from [`Value`](Value):
+Current implementation provides the following deserializations from a RESP Buffer:
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
 * `SmallVec<A>` where `A: Array<Item = (K, V)>`
 * `Vec<(K, V>)>`
 
-where each of theses implementations must also implement [`FromValue`](FromValue)
+where each of theses implementations must also implement [`Response`](Response)
 
 #### Example
 ```
@@ -424,22 +430,36 @@ async fn main() -> Result<()> {
 ```
 */
 
+mod buffer_decoder;
 mod command;
 mod command_arg;
 mod command_args;
 mod command_encoder;
-mod from_value;
-mod from_value_tuple;
 mod into_args;
+mod resp_batch_deserializer;
+mod resp_buf;
+mod resp_deserializer;
+mod resp_serializer;
+mod response;
+mod util;
 mod value;
-mod value_decoder;
+mod value_deserialize;
+mod value_deserializer;
+mod value_serialize;
 
+pub use buffer_decoder::*;
 pub use command::*;
 pub use command_arg::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
-pub use from_value::*;
-pub use from_value_tuple::*;
 pub use into_args::*;
+pub use resp_batch_deserializer::*;
+pub use resp_buf::*;
+pub use resp_deserializer::*;
+pub use resp_serializer::*;
+pub use response::*;
+pub use util::*;
 pub use value::*;
-pub(crate) use value_decoder::*;
+pub use value_deserialize::*;
+pub use value_deserializer::*;
+pub use value_serialize::*;

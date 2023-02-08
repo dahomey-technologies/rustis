@@ -56,7 +56,7 @@ tokio = { version = "1.23", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 itoa = "1.0"
 dtoa = "1.0"
-smallvec = { version = "1.10", features = ["union"] }
+smallvec = { version = "1.10", features = ["union", "serde"] }
 bb8 = { version = "0.8", optional = true }
 url = "2.3"
 native-tls = { version = "0.2", optional = true }
@@ -65,6 +65,7 @@ async-native-tls = { version = "0.4", optional = true }
 log = "0.4"
 crc16 = "0.4"
 rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 socket2 = "0.4"
 memchr = "2.5"
 
@@ -73,6 +74,7 @@ serial_test = "0.10"
 tokio = { version = "1.23", features = ["rt-multi-thread"] }
 rand = "0.8"
 env_logger = "0.10"
+smallvec = { version = "1.10", features = ["serde"] }
 criterion = "0.4"
 redis = { version = "0.22", features = ["aio", "tokio-comp"] }
 fred = "6.0.0-beta.2"

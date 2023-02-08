@@ -85,7 +85,9 @@ async fn client_id() -> Result<()> {
 async fn client_info() -> Result<()> {
     let mut client = get_test_client().await?;
 
-    let _client_info = client.client_info().await?;
+    let client_info = client.client_info().await?;
+    log::debug!("client_info: {client_info:?}");
+    assert!(client_info.id != 0);
 
     Ok(())
 }
@@ -345,24 +347,6 @@ async fn echo() -> Result<()> {
 
     let result: String = client.echo("hello").await?;
     assert_eq!("hello", result);
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn hello_v2() -> Result<()> {
-    let mut client = get_test_client().await?;
-
-    let result = client.hello(HelloOptions::new(2)).await?;
-    assert_eq!("redis", result.server);
-    assert!(result.version.starts_with('7'));
-    assert_eq!(2, result.proto);
-    assert!(result.id > 0);
-    assert_eq!("standalone", result.mode);
-    assert_eq!("master", result.role);
-    assert_eq!(0, result.modules.len());
 
     Ok(())
 }

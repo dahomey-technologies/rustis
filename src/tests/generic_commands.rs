@@ -79,7 +79,7 @@ async fn dump() -> Result<()> {
     client.set("key", "value").await?;
 
     let dump = client.dump("key").await?;
-    assert!(!dump.serialized_value.is_empty());
+    assert!(!dump.0.is_empty());
 
     Ok(())
 }
@@ -549,7 +549,7 @@ async fn restore() -> Result<()> {
     let dump = client.dump("key").await?;
     client.del("key").await?;
     client
-        .restore("key", 0, dump.serialized_value, RestoreOptions::default())
+        .restore("key", 0, dump.0, RestoreOptions::default())
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);

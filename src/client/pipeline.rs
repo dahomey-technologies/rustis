@@ -17,9 +17,10 @@ use crate::{
         HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
         SetCommands, SortedSetCommands, StreamCommands, StringCommands,
     },
-    resp::{Command, FromValue, ResultValueExt, Value},
+    resp::{Command, RespBatchDeserializer, Response},
     Result,
 };
+use serde::de::DeserializeOwned;
 use std::iter::zip;
 
 /// Represents a Redis command pipeline.
@@ -84,41 +85,37 @@ impl Pipeline {
     ///     let mut pipeline = client.create_pipeline();
     ///     pipeline.set("key1", "value1").forget();
     ///     pipeline.set("key2", "value2").forget();
-    ///     pipeline.queue(cmd("UNKNOWN"));
     ///     pipeline.get::<_, String>("key1").queue();
     ///     pipeline.get::<_, String>("key2").queue();
     ///
-    ///     let (result, value1, value2): (Value, String, String) = pipeline.execute().await?;
-    ///     assert!(matches!(result, Value::Error(_)));
+    ///     let (value1, value2): (String, String) = pipeline.execute().await?;
     ///     assert_eq!("value1", value1);
     ///     assert_eq!("value2", value2);
     ///
     ///     Ok(())
     /// }
     /// ```    
-    pub async fn execute<T: FromValue>(mut self) -> Result<T> {
+    pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
         let num_commands = self.commands.len();
-        let result = self
+        let results = self
             .client
             .send_batch(self.commands, self.retry_on_error)
             .await?;
 
-        match result {
-            Value::Array(results) if num_commands > 1 => {
-                let mut filtered_results = zip(results, self.forget_flags.iter())
-                    .filter_map(
-                        |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
-                    )
-                    .collect::<Vec<_>>();
+        if num_commands > 1 {
+            let mut filtered_results = zip(results, self.forget_flags.iter())
+                .filter_map(|(value, forget_flag)| if *forget_flag { None } else { Some(value) })
+                .collect::<Vec<_>>();
 
-                if filtered_results.len() == 1 {
-                    let value = filtered_results.pop().unwrap();
-                    Ok(value).into_result()?.into()
-                } else {
-                    Value::Array(filtered_results).into()
-                }
+            if filtered_results.len() == 1 {
+                let result = filtered_results.pop().unwrap();
+                result.to()
+            } else {
+                let deserializer = RespBatchDeserializer::new(&filtered_results);
+                T::deserialize(&deserializer)
             }
-            _ => Ok(result).into_result()?.into(),
+        } else {
+            results[0].to()
         }
     }
 }
@@ -126,10 +123,7 @@ impl Pipeline {
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
 /// the [`Transaction`](crate::client::Transaction) executors
-pub trait BatchPreparedCommand<R = ()>
-where
-    R: FromValue,
-{
+pub trait BatchPreparedCommand<R = ()> {
     /// Queue a command.
     fn queue(self);
 
@@ -137,7 +131,7 @@ where
     fn forget(self);
 }
 
-impl<R: FromValue> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
+impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
     /// Queue a command.
     #[inline]
     fn queue(self) {

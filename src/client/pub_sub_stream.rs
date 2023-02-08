@@ -2,37 +2,85 @@ use crate::{
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
-    resp::{CommandArgs, SingleArg, SingleArgCollection, Value},
-    Error, PubSubReceiver, Result,
+    resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection},
+    PubSubReceiver, Result,
 };
 use futures::{Stream, StreamExt};
+use serde::{
+    de::{self, Visitor},
+    Deserialize,
+};
 use std::{
+    fmt,
     pin::Pin,
     task::{Context, Poll},
 };
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
+#[derive(Debug)]
 pub struct PubSubMessage {
     pub pattern: Vec<u8>,
     pub channel: Vec<u8>,
     pub payload: Vec<u8>,
 }
 
-impl PubSubMessage {
-    pub(crate) fn from_message(channel: Vec<u8>, payload: Vec<u8>) -> Self {
-        Self {
-            pattern: vec![],
-            channel,
-            payload,
-        }
-    }
+impl<'de> Deserialize<'de> for PubSubMessage {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct PubSubMessageVisitor;
 
-    pub(crate) fn from_pmessage(pattern: Vec<u8>, channel: Vec<u8>, payload: Vec<u8>) -> Self {
-        Self {
-            pattern,
-            channel,
-            payload,
+        impl<'de> Visitor<'de> for PubSubMessageVisitor {
+            type Value = PubSubMessage;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("PubSubMessage")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let Some(kind) = seq.next_element::<&str>()? else {
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                };
+
+                let Ok(Some(channel_or_pattern)) = seq.next_element_seed(ByteBufSeed) else {
+                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
+                };
+
+                let Ok(Some(channel_or_payload)) = seq.next_element_seed(ByteBufSeed) else {
+                    return Err(de::Error::invalid_length(2, &"more elements in sequence"));
+                };
+
+                match kind {
+                    "message" | "smessage" => Ok(PubSubMessage {
+                        pattern: vec![],
+                        channel: channel_or_pattern,
+                        payload: channel_or_payload,
+                    }),
+                    "pmessage" => {
+                        let Ok(Some(payload)) = seq.next_element_seed(ByteBufSeed) else {
+                            return Err(de::Error::invalid_length(3, &"more elements in sequence"));
+                        };
+
+                        Ok(PubSubMessage {
+                            pattern: channel_or_pattern,
+                            channel: channel_or_payload,
+                            payload,
+                        })
+                    }
+                    _ => Err(de::Error::invalid_value(
+                        de::Unexpected::Str(kind),
+                        &"message, smessage or pmessage",
+                    )),
+                }
+            }
         }
+
+        deserializer.deserialize_seq(PubSubMessageVisitor)
     }
 }
 
@@ -220,44 +268,11 @@ impl Stream for PubSubStream {
     type Item = Result<PubSubMessage>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        fn extract_message(message: Value) -> Result<PubSubMessage> {
-            let parts: Vec<Value> = message.into()?;
-            let mut iter = parts.into_iter();
-
-            match (
-                iter.next(),
-                iter.next(),
-                iter.next(),
-                iter.next(),
-                iter.next(),
-            ) {
-                (
-                    Some(Value::BulkString(command)),
-                    Some(Value::BulkString(pattern)),
-                    Some(Value::BulkString(channel)),
-                    Some(Value::BulkString(payload)),
-                    None,
-                ) if command.as_slice() == b"pmessage" => {
-                    Ok(PubSubMessage::from_pmessage(pattern, channel, payload))
-                }
-                (
-                    Some(Value::BulkString(command)),
-                    Some(Value::BulkString(channel)),
-                    Some(Value::BulkString(payload)),
-                    None,
-                    None,
-                ) if command.as_slice() == b"message" || command.as_slice() == b"smessage" => {
-                    Ok(PubSubMessage::from_message(channel, payload))
-                }
-                message => Err(Error::Client(format!("Cannot parse PubSubMessage: {message:?}"))),
-            }
-        }
-
         if self.closed {
             Poll::Ready(None)
         } else {
             match self.get_mut().receiver.poll_next_unpin(cx) {
-                Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(extract_message(message))),
+                Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(message.to())),
                 Poll::Ready(None) => Poll::Ready(None),
                 Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
                 Poll::Pending => Poll::Pending,

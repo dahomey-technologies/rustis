@@ -1,3 +1,8 @@
+use serde::{
+    de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
+    forward_to_deserialize_any, Deserializer,
+};
+
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -17,10 +22,10 @@ use crate::{
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
         StreamCommands, StringCommands,
     },
-    resp::{cmd, Command, FromValue, ResultValueExt, Value},
+    resp::{cmd, Command, RespDeserializer, Response},
     Error, Result,
 };
-use std::iter::zip;
+use std::{fmt, marker::PhantomData};
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
@@ -31,16 +36,13 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub(crate) fn new(client: Client) -> Transaction {
-        let mut transaction = Transaction {
+    pub(crate) fn new(client: Client) -> Self {
+        Self {
             client,
-            commands: Vec::new(),
+            commands: vec![cmd("MULTI")],
             forget_flags: Vec::new(),
             retry_on_error: None,
-        };
-
-        transaction.queue(cmd("MULTI"));
-        transaction
+        }
     }
 
     /// Set a flag to override default `retry_on_error` behavior.
@@ -97,44 +99,32 @@ impl Transaction {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn execute<T: FromValue>(mut self) -> Result<T> {
-        self.queue(cmd("EXEC"));
+    pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
+        self.commands.push(cmd("EXEC"));
 
         let num_commands = self.commands.len();
 
-        let values: Vec<Value> = self
+        let results = self
             .client
             .send_batch(self.commands, self.retry_on_error)
-            .await?
-            .into()?;
-        let mut iter = values.into_iter();
+            .await?;
+
+        let mut iter = results.into_iter();
 
         // MULTI + QUEUED commands
         for _ in 0..num_commands - 1 {
-            if let Some(Value::Error(e)) = iter.next() {
-                return Err(Error::Redis(e));
+            if let Some(resp_buf) = iter.next() {
+                resp_buf.to::<()>()?;
             }
         }
 
         // EXEC
         if let Some(result) = iter.next() {
-            match result {
-                Value::Array(results) => {
-                    let mut filtered_results = zip(results, self.forget_flags.iter().skip(1))
-                        .filter_map(
-                            |(value, forget_flag)| if *forget_flag { None } else { Some(value) },
-                        )
-                        .collect::<Vec<_>>();
-
-                    if filtered_results.len() == 1 {
-                        let value = filtered_results.pop().unwrap();
-                        Ok(value).into_result()?.into()
-                    } else {
-                        Value::Array(filtered_results).into()
-                    }
-                }
-                Value::Nil => Err(Error::Aborted),
-                _ => Err(Error::Client("Unexpected transaction reply".to_owned())),
+            let mut deserializer = RespDeserializer::new(&result);
+            match TransactionResultSeed::new(self.forget_flags).deserialize(&mut deserializer) {
+                Ok(Some(t)) => Ok(t),
+                Ok(None) => Err(Error::Aborted),
+                Err(e) => Err(e),
             }
         } else {
             Err(Error::Client(
@@ -144,7 +134,135 @@ impl Transaction {
     }
 }
 
-impl<R: FromValue> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
+struct TransactionResultSeed<T: DeserializeOwned> {
+    phantom: PhantomData<T>,
+    forget_flags: Vec<bool>,
+}
+
+impl<T: DeserializeOwned> TransactionResultSeed<T> {
+    pub fn new(forget_flags: Vec<bool>) -> Self {
+        Self {
+            phantom: PhantomData,
+            forget_flags,
+        }
+    }
+}
+
+impl<'de, T: DeserializeOwned> DeserializeSeed<'de> for TransactionResultSeed<T> {
+    type Value = Option<T>;
+
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+}
+
+impl<'de, T: DeserializeOwned> Visitor<'de> for TransactionResultSeed<T> {
+    type Value = Option<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Option<T>")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>,
+    {
+        if self
+            .forget_flags
+            .iter()
+            .fold(0, |acc, flag| if *flag { acc } else { acc + 1 })
+            == 1
+        {
+            for forget in &self.forget_flags {
+                if *forget {
+                    seq.next_element::<IgnoredAny>()?;
+                } else {
+                    return seq.next_element::<T>();
+                }
+            }
+            Ok(None)
+        } else {
+            let deserializer = SeqAccessDeserializer {
+                forget_flags: self.forget_flags.into_iter(),
+                seq_access: seq,
+            };
+
+            T::deserialize(deserializer)
+                .map(Some)
+                .map_err(de::Error::custom)
+        }
+    }
+
+    fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(None)
+    }
+}
+
+struct SeqAccessDeserializer<A> {
+    forget_flags: std::vec::IntoIter<bool>,
+    seq_access: A,
+}
+
+impl<'de, A> Deserializer<'de> for SeqAccessDeserializer<A>
+where
+    A: serde::de::SeqAccess<'de>,
+{
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_seq(self)
+    }
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+        bytes byte_buf unit_struct newtype_struct string tuple
+        tuple_struct map struct enum identifier ignored_any unit option
+    }
+}
+
+impl<'de, A> SeqAccess<'de> for SeqAccessDeserializer<A>
+where
+    A: serde::de::SeqAccess<'de>,
+{
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        for forget in self.forget_flags.by_ref() {
+            if forget {
+                self.seq_access
+                    .next_element::<IgnoredAny>()
+                    .map_err::<Error, _>(de::Error::custom)?;
+            } else {
+                return self
+                    .seq_access
+                    .next_element_seed(seed)
+                    .map_err(de::Error::custom);
+            }
+        }
+        Ok(None)
+    }
+}
+
+impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
         self.executor.queue(self.command)

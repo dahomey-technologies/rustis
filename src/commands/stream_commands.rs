@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValue, HashMapExt,
-        IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, IntoArgs,
+        KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
-    Result,
 };
+use serde::{de::DeserializeOwned, Deserialize};
+use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
 /// # See Also
@@ -61,7 +60,7 @@ pub trait StreamCommands {
         F: SingleArg,
         V: SingleArg,
         FFVV: KeyValueArgsCollection<F, V>,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -91,7 +90,7 @@ pub trait StreamCommands {
         G: SingleArg,
         C: SingleArg,
         I: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -134,7 +133,7 @@ pub trait StreamCommands {
         C: SingleArg,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -426,7 +425,7 @@ pub trait StreamCommands {
         K: SingleArg,
         S: SingleArg,
         E: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -458,8 +457,8 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue,
-        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
+        V: PrimitiveResponse + DeserializeOwned,
+        R: KeyValueCollectionResponse<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -491,8 +490,8 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue,
-        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
+        V: PrimitiveResponse + DeserializeOwned,
+        R: KeyValueCollectionResponse<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -528,7 +527,7 @@ pub trait StreamCommands {
         K: SingleArg,
         E: SingleArg,
         S: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -681,9 +680,10 @@ impl IntoArgs for XAutoClaimOptions {
 }
 
 /// Result for the [`xrange`](StreamCommands::xrange) and other associated commands.
+#[derive(Deserialize)]
 pub struct StreamEntry<V>
 where
-    V: FromSingleValue,
+    V: PrimitiveResponse
 {
     /// The stream Id
     pub stream_id: String,
@@ -692,20 +692,11 @@ where
     pub items: HashMap<String, V>,
 }
 
-impl<V> FromValue for StreamEntry<V>
-where
-    V: FromSingleValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let (stream_id, items): (String, HashMap<String, V>) = value.into()?;
-        Ok(Self { stream_id, items })
-    }
-}
-
 /// Result for the [`xautoclaim`](StreamCommands::xautoclaim) command.
+#[derive(Deserialize)]
 pub struct XAutoClaimResult<V>
 where
-    V: FromSingleValue,
+    V: PrimitiveResponse,
 {
     /// A stream ID to be used as the <start> argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
@@ -716,21 +707,6 @@ where
     /// An array containing message IDs that no longer exist in the stream,
     /// and were deleted from the PEL in which they were found.
     pub deleted_ids: Vec<String>,
-}
-
-impl<V> FromValue for XAutoClaimResult<V>
-where
-    V: FromSingleValue,
-{
-    fn from_value(value: Value) -> Result<Self> {
-        let (start_stream_id, entries, deleted_ids): (String, Vec<StreamEntry<V>>, Vec<String>) =
-            value.into()?;
-        Ok(Self {
-            start_stream_id,
-            entries,
-            deleted_ids,
-        })
-    }
 }
 
 /// Options for the [`xclaim`](StreamCommands::xclaim) command
@@ -827,6 +803,7 @@ impl IntoArgs for XGroupCreateOptions {
 }
 
 /// Result entry for the [`xinfo_consumers`](StreamCommands::xinfo_consumers) command.
+#[derive(Deserialize)]
 pub struct XConsumerInfo {
     /// the consumer's name
     pub name: String,
@@ -837,22 +814,13 @@ pub struct XConsumerInfo {
 
     /// the number of milliseconds that have passed
     /// since the consumer last interacted with the server
+    #[serde(rename = "idle")]
     pub idle_millis: u64,
 }
 
-impl FromValue for XConsumerInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_with_result("name")?.into()?,
-            pending: values.remove_with_result("pending")?.into()?,
-            idle_millis: values.remove_with_result("idle")?.into()?,
-        })
-    }
-}
-
 /// Result entry for the [`xinfo_groups`](StreamCommands::xinfo_groups) command.
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct XGroupInfo {
     /// the consumer group's name
     pub name: String,
@@ -873,21 +841,6 @@ pub struct XGroupInfo {
     /// the number of entries in the stream that are still waiting to be delivered to the group's consumers,
     /// or a NULL when that number can't be determined.
     pub lag: Option<usize>,
-}
-
-impl FromValue for XGroupInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            name: values.remove_with_result("name")?.into()?,
-            consumers: values.remove_with_result("consumers")?.into()?,
-            pending: values.remove_with_result("pending")?.into()?,
-            last_delivered_id: values.remove_with_result("last-delivered-id")?.into()?,
-            entries_read: values.remove_with_result("entries-read")?.into()?,
-            lag: values.remove_with_result("lag")?.into()?,
-        })
-    }
 }
 
 /// Options for the [`xinfo_stream`](StreamCommands::xinfo_stream) command
@@ -922,6 +875,8 @@ impl IntoArgs for XInfoStreamOptions {
 }
 
 /// Stream info returned by the [`xinfo_stream`](StreamCommands::xinfo_stream) command.
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct XStreamInfo {
     /// the number of entries in the stream (see [`xlen`](StreamCommands::xlen))
     pub length: usize,
@@ -951,27 +906,6 @@ pub struct XStreamInfo {
     pub last_entry: StreamEntry<String>,
 
     pub recorded_first_entry_id: String,
-}
-
-impl FromValue for XStreamInfo {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            length: values.remove_with_result("length")?.into()?,
-            radix_tree_keys: values.remove_with_result("radix-tree-keys")?.into()?,
-            radix_tree_nodes: values.remove_with_result("radix-tree-nodes")?.into()?,
-            groups: values.remove_with_result("groups")?.into()?,
-            last_generated_id: values.remove_with_result("last-generated-id")?.into()?,
-            max_deleted_entry_id: values.remove_with_result("max-deleted-entry-id")?.into()?,
-            entries_added: values.remove_with_result("entries-added")?.into()?,
-            first_entry: values.remove_with_result("first-entry")?.into()?,
-            last_entry: values.remove_with_result("last-entry")?.into()?,
-            recorded_first_entry_id: values
-                .remove_with_result("recorded-first-entry-id")?
-                .into()?,
-        })
-    }
 }
 
 /// Options for the [`xread`](StreamCommands::xread) command
@@ -1087,6 +1021,7 @@ impl IntoArgs for XPendingOptions {
 }
 
 /// Result for the [`xpending`](StreamCommands::xpending) command
+#[derive(Deserialize)]
 pub struct XPendingResult {
     pub num_pending_messages: usize,
     pub smallest_id: String,
@@ -1094,56 +1029,18 @@ pub struct XPendingResult {
     pub consumers: Vec<XPendingConsumer>,
 }
 
-impl FromValue for XPendingResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let (num_pending_messages, smallest_id, greatest_id, consumers): (
-            usize,
-            String,
-            String,
-            Vec<XPendingConsumer>,
-        ) = value.into()?;
-        Ok(Self {
-            num_pending_messages,
-            smallest_id,
-            greatest_id,
-            consumers,
-        })
-    }
-}
-
 /// Customer info result for the [`xpending`](StreamCommands::xpending) command
+#[derive(Deserialize)]
 pub struct XPendingConsumer {
     pub consumer: String,
     pub num_messages: usize,
 }
 
-impl FromValue for XPendingConsumer {
-    fn from_value(value: Value) -> Result<Self> {
-        let (consumer, num_messages): (String, usize) = value.into()?;
-        Ok(Self {
-            consumer,
-            num_messages,
-        })
-    }
-}
-
 /// Message result for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
+#[derive(Deserialize)]
 pub struct XPendingMessageResult {
     pub message_id: String,
     pub consumer: String,
     pub elapsed_millis: u64,
     pub times_delivered: usize,
-}
-
-impl FromValue for XPendingMessageResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let (message_id, consumer, elapsed_millis, times_delivered): (String, String, u64, usize) =
-            value.into()?;
-        Ok(Self {
-            message_id,
-            consumer,
-            elapsed_millis,
-            times_delivered,
-        })
-    }
 }

@@ -5,6 +5,7 @@ mod connection;
 mod network_handler;
 mod sentinel_connection;
 mod standalone_connection;
+mod util;
 
 pub(crate) use async_excutor_strategy::*;
 pub(crate) use cluster_connection::*;

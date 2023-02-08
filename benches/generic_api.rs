@@ -75,13 +75,19 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
                 let key = "test_key";
 
                 let args: Vec<RedisValue> = vec![key.into(), 42.423456.into()];
-                client.custom(CustomCommand::new_static("SET", None, false), args).await?;
+                client
+                    .custom(CustomCommand::new_static("SET", None, false), args)
+                    .await?;
 
                 let args: Vec<RedisValue> = vec![key.into()];
-                let _: f64 = client.custom(CustomCommand::new_static("GET", None, false), args).await?;
+                let _: f64 = client
+                    .custom(CustomCommand::new_static("GET", None, false), args)
+                    .await?;
 
                 let args: Vec<RedisValue> = vec![key.into()];
-                client.custom(CustomCommand::new_static("DEL", None, false), args).await?;
+                client
+                    .custom(CustomCommand::new_static("DEL", None, false), args)
+                    .await?;
 
                 Ok::<_, RedisError>(())
             })
@@ -104,7 +110,7 @@ fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
                 client
                     .send(cmd("SET").arg(key).arg(42.423456), None)
                     .await?;
-                let _: f64 = client.send(cmd("GET").arg(key), None).await?.into()?;
+                let _: f64 = client.send(cmd("GET").arg(key), None).await?.to()?;
                 client.send(cmd("DEL").arg(key), None).await?;
 
                 Ok::<_, Error>(())
@@ -128,7 +134,7 @@ fn bench_generic_api(c: &mut Criterion) {
         .bench_function(
             "rustis_simple_getsetdel_async",
             bench_rustis_simple_getsetdel_async,
-        );        
+        );
     group.finish();
 }
 

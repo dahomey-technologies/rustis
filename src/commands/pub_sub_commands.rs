@@ -1,11 +1,12 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
-        SingleArg, SingleArgCollection,
+        cmd, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
+        SingleArgCollection,
     },
     Future,
 };
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
@@ -85,8 +86,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue,
-        CC: FromValueArray<C>,
+        C: PrimitiveResponse + DeserializeOwned,
+        CC: CollectionResponse<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
@@ -119,8 +120,8 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromSingleValue,
-        RR: FromKeyValueArray<R, usize>,
+        R: PrimitiveResponse,
+        RR: KeyValueCollectionResponse<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
@@ -138,8 +139,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue,
-        CC: FromValueArray<C>,
+        C: PrimitiveResponse + DeserializeOwned,
+        CC: CollectionResponse<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
     }
@@ -156,8 +157,8 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromSingleValue,
-        RR: FromKeyValueArray<R, usize>,
+        R: PrimitiveResponse,
+        RR: KeyValueCollectionResponse<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }

@@ -241,12 +241,12 @@ async fn pub_sub_numsub() -> Result<()> {
     let mut pub_sub_client = get_test_client().await?;
     let mut regular_client = get_test_client().await?;
 
-    let num_sub: Vec<(String, usize)> = regular_client
+    let num_sub: HashMap<String, usize> = regular_client
         .pub_sub_numsub(["mychannel1", "mychannel2"])
         .await?;
     assert_eq!(2, num_sub.len());
-    assert_eq!(("mychannel1".to_string(), 0), num_sub[0]);
-    assert_eq!(("mychannel2".to_string(), 0), num_sub[1]);
+    assert_eq!(Some(&0usize), num_sub.get("mychannel1"));
+    assert_eq!(Some(&0usize), num_sub.get("mychannel2"));
 
     let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2"])
@@ -426,12 +426,12 @@ async fn pub_sub_shardnumsub() -> Result<()> {
     let mut master_client =
         Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
-    let num_sub: Vec<(String, usize)> = master_client
+    let num_sub: HashMap<String, usize> = master_client
         .pub_sub_shardnumsub(["mychannel1{1}", "mychannel2{1}"])
         .await?;
     assert_eq!(2, num_sub.len());
-    assert_eq!(("mychannel1{1}".to_string(), 0), num_sub[0]);
-    assert_eq!(("mychannel2{1}".to_string(), 0), num_sub[1]);
+    assert_eq!(Some(&0usize), num_sub.get("mychannel1{1}"));
+    assert_eq!(Some(&0usize), num_sub.get("mychannel2{1}"));
 
     let pub_sub_stream = pub_sub_client
         .ssubscribe(["mychannel1{1}", "mychannel2{1}"])

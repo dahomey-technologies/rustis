@@ -85,10 +85,10 @@ async fn command_timeout() -> Result<()> {
     client.lpush("key", "value").await?;
     let _result: Vec<String> = client.lpop("key", 1).await?;
 
-    // block for 1 second
+    // block for 5 seconds
     // since the timeout is configured to 10ms, we should have a timeout error
     let result: Result<Option<(String, Vec<String>)>> =
-    client.blmpop(1., "key", LMoveWhere::Left, 1).await;
+        client.blmpop(5., "key", LMoveWhere::Left, 1).await;
     assert!(matches!(result, Err(Error::Timeout(_))));
 
     client.close().await?;
@@ -113,6 +113,41 @@ async fn connection_name() -> Result<()> {
     assert_eq!(Some("myconnection".to_owned()), connection_name);
 
     client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn mget_mset() -> Result<()> {
+    let mut client = Client::connect("127.0.0.1:6379").await?;
+
+    client
+        .send(
+            cmd("MSET")
+                .arg("key1")
+                .arg("value1")
+                .arg("key2")
+                .arg("value2")
+                .arg("key3")
+                .arg("value3")
+                .arg("key4")
+                .arg("value4"),
+            None,
+        )
+        .await?
+        .to::<()>()?;
+
+    let values: Vec<String> = client
+        .send(
+            cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
+            None,
+        )
+        .await?
+        .to()?;
+
+    assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
 
     Ok(())
 }

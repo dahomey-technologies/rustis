@@ -1,10 +1,11 @@
 use crate::{
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
-    resp::{Command, FromValue, ResultValueExt, Value},
+    resp::{Command, RespBuf},
     ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
     StandaloneConnection,
 };
+use serde::de::DeserializeOwned;
 use std::future::IntoFuture;
 
 pub enum Connection {
@@ -58,7 +59,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<Value>> {
+    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,
             Connection::Sentinel(connection) => connection.read().await,
@@ -76,25 +77,27 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn send(&mut self, command: &Command) -> Result<Value> {
+    pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
         self.write(command).await?;
         self.read()
             .await
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
-            .into_result()
     }
 }
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
 where
-    R: FromValue + Send + 'a,
+    R: DeserializeOwned + Send + 'a,
 {
     type Output = Result<R>;
     type IntoFuture = Future<'a, R>;
 
     #[inline]
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { self.executor.send(&self.command).await?.into() })
+        Box::pin(async move {
+            let result = self.executor.send(&self.command).await?;
+            result.to()
+        })
     }
 }
 

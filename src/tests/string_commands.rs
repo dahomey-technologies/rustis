@@ -1,5 +1,7 @@
 use crate::{
-    commands::{GenericCommands, GetExOptions, SetCondition, SetExpiration, StringCommands},
+    commands::{
+        GenericCommands, GetExOptions, LcsMatch, SetCondition, SetExpiration, StringCommands,
+    },
     resp::Value,
     tests::get_test_client,
     Error, RedisError, RedisErrorKind, Result,
@@ -87,7 +89,7 @@ async fn decrby() -> Result<()> {
         }))
     ));
 
-    client.close().await?;    
+    client.close().await?;
 
     Ok(())
 }
@@ -374,19 +376,19 @@ async fn lcs() -> Result<()> {
     let result = client.lcs_idx("key1", "key2", None, false).await?;
     assert_eq!(6, result.len);
     assert_eq!(2, result.matches.len());
-    assert_eq!(((4, 7), (5, 8), None), result.matches[0]);
-    assert_eq!(((2, 3), (0, 1), None), result.matches[1]);
+    assert_eq!(LcsMatch((4, 7), (5, 8), None), result.matches[0]);
+    assert_eq!(LcsMatch((2, 3), (0, 1), None), result.matches[1]);
 
     let result = client.lcs_idx("key1", "key2", Some(4), false).await?;
     assert_eq!(6, result.len);
     assert_eq!(1, result.matches.len());
-    assert_eq!(((4, 7), (5, 8), None), result.matches[0]);
+    assert_eq!(LcsMatch((4, 7), (5, 8), None), result.matches[0]);
 
     let result = client.lcs_idx("key1", "key2", None, true).await?;
     assert_eq!(6, result.len);
     assert_eq!(2, result.matches.len());
-    assert_eq!(((4, 7), (5, 8), Some(4)), result.matches[0]);
-    assert_eq!(((2, 3), (0, 1), Some(2)), result.matches[1]);
+    assert_eq!(LcsMatch((4, 7), (5, 8), Some(4)), result.matches[0]);
+    assert_eq!(LcsMatch((2, 3), (0, 1), Some(2)), result.matches[1]);
 
     client.close().await?;
 

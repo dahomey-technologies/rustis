@@ -6,12 +6,13 @@ use futures::channel::{
 use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
-    num::ParseFloatError,
+    num::{ParseFloatError, ParseIntError},
     str::{FromStr, Utf8Error},
+    string::FromUtf8Error,
 };
 
 /// `Internal Use`
-/// 
+///
 /// Gives a reason to retry sending a command to the Redis Server
 #[doc(hidden)]
 #[derive(Debug, Clone)]
@@ -51,7 +52,7 @@ pub enum Error {
     #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
     /// The I/O operation’s timeout expired
-    Timeout(String)
+    Timeout(String),
 }
 
 impl std::fmt::Display for Error {
@@ -70,6 +71,26 @@ impl std::fmt::Display for Error {
         }
     }
 }
+
+impl serde::de::Error for Error {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
+        Error::Client(msg.to_string())
+    }
+}
+
+impl serde::ser::Error for Error {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: Display,
+    {
+        Error::Client(msg.to_string())
+    }
+}
+
+impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
@@ -101,8 +122,20 @@ impl From<Utf8Error> for Error {
     }
 }
 
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
 impl From<ParseFloatError> for Error {
     fn from(e: ParseFloatError) -> Self {
+        Error::Client(e.to_string())
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(e: ParseIntError) -> Self {
         Error::Client(e.to_string())
     }
 }
@@ -276,7 +309,7 @@ impl FromStr for RedisError {
             }),
             Some((kind, description)) => {
                 let kind = RedisErrorKind::from_str(kind)?;
-                
+
                 let description = if let RedisErrorKind::Other = kind {
                     error.to_owned()
                 } else {

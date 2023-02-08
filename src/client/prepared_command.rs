@@ -1,68 +1,56 @@
 use crate::{
     client::Client,
-    resp::{Command, FromValue, Value},
+    resp::{Command, RespBuf, Response},
     Future,
 };
 use std::marker::PhantomData;
 
-type PostProcessFunc<'a, R> = dyn Fn(Value, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
+type CustomConverter<'a, R> =
+    dyn Fn(RespBuf, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
 
-/// Wrapper around a command about to be send with a marker for the result type
-/// and a few options to decide how the result send back by Redis
-pub struct PreparedCommand<'a, T, R = ()>
+/// Wrapper around a command about to be send with a marker for the response type
+/// and a few options to decide how the response send back by Redis should be processed.
+pub struct PreparedCommand<'a, E, R = ()>
 where
-    R: FromValue,
+    R: Response,
 {
-    /// Marker of the type in which the command result will be transformed 
-    /// with the help of the [`FromValue`](crate::resp::FromValue) trait.
-    pub phantom: PhantomData<R>,
-    /// Client, Transaction or Pipeline that will actually 
+    /// Marker of the type in which the command response will be transformed
+    phantom: PhantomData<R>,
+    /// Client, Transaction or Pipeline that will actually
     /// send the command to the Redis server.
-    pub executor: &'a mut T,
+    pub executor: &'a mut E,
     /// Command to send
     pub command: Command,
-    /// Flag to know if the result will be transformed by 
-    /// [`FromValue::from_value_with_command`](crate::resp::FromValue::from_value_with_command)
-    /// instead of [`FromValue::from_value`](crate::resp::FromValue::from_value)
-    pub keep_command_for_result: bool,
-    /// Post process functor te be called instead of 
-    /// the [`FromValue`](crate::resp::FromValue) trait.
-    pub post_process: Option<Box<PostProcessFunc<'a, R>>>,
+    /// Custom converter to transform a RESP Buffer in to `R` type
+    pub custom_converter: Option<Box<CustomConverter<'a, R>>>,
     /// Flag to retry sending the command on network error.
     pub retry_on_error: Option<bool>,
 }
 
 impl<'a, T, R> PreparedCommand<'a, T, R>
 where
-    R: FromValue,
+    R: Response,
 {
-    /// Create a new prepared command. 
+    /// Create a new prepared command.
     #[must_use]
     pub fn new(executor: &'a mut T, command: Command) -> Self {
         PreparedCommand {
             phantom: PhantomData,
             executor,
             command,
-            keep_command_for_result: false,
-            post_process: None,
+            custom_converter: None,
             retry_on_error: None,
         }
     }
 
-    /// Set the flag [`self.keep_command_for_result`]
-    pub fn keep_command_for_result(mut self) -> Self {
-        self.keep_command_for_result = true;
-        self
-    }
-
-    /// Set the functor [`self.post_process`]
-    pub fn post_process(mut self, post_process: Box<PostProcessFunc<'a, R>>) -> Self {
-        self.post_process = Some(post_process);
+    /// Set the functor [`self.custom_converter`]
+    pub fn custom_converter(mut self, custom_converter: Box<CustomConverter<'a, R>>) -> Self {
+        self.custom_converter = Some(custom_converter);
         self
     }
 
     /// Set a flag to override default `retry_on_error` behavior.
-    /// 
+    ///
     /// See [Config::retry_on_error](crate::client::Config::retry_on_error)
     pub fn retry_on_error(mut self, retry_on_error: bool) -> Self {
         self.retry_on_error = Some(retry_on_error);
@@ -76,9 +64,6 @@ where
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
-pub(crate) fn prepare_command<T, R: FromValue>(
-    executor: &mut T,
-    command: Command,
-) -> PreparedCommand<T, R> {
+pub(crate) fn prepare_command<T, R: Response>(executor: &mut T, command: Command) -> PreparedCommand<T, R> {
     PreparedCommand::new(executor, command)
 }

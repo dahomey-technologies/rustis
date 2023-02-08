@@ -1,12 +1,12 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromValueArray, FromValue, HashMapExt, IntoArgs,
-        SingleArg, SingleArgCollection, Value,
+        cmd, deserialize_byte_buf, CommandArgs, CollectionResponse, IntoArgs, SingleArg,
+        SingleArgCollection, Value,
     },
-    Result,
 };
-use std::{collections::HashMap};
+use serde::Deserialize;
+use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Cuckoo filters`](https://redis.io/docs/stack/bloom/)
 ///
@@ -30,9 +30,7 @@ pub trait CuckooCommands {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("CF.ADD").arg(key).arg(item)).post_process(Box::new(
-            |_value, _command, _client| Box::pin(futures::future::ready(Ok(()))),
-        ))
+        prepare_command(self, cmd("CF.ADD").arg(key).arg(item))
     }
 
     /// Adds an item to a cuckoo filter if the item did not exist previously.
@@ -179,7 +177,7 @@ pub trait CuckooCommands {
         key: impl SingleArg,
         options: CfInsertOptions,
         item: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<Self, Vec<usize>>
     where
         Self: Sized,
     {
@@ -191,9 +189,6 @@ pub trait CuckooCommands {
                 .arg("ITEMS")
                 .arg(item),
         )
-        .post_process(Box::new(|_value, _command, _client| {
-            Box::pin(futures::future::ready(Ok(())))
-        }))
     }
 
     /// Adds one or more items to a cuckoo filter, allowing the filter to be created with a custom capacity if it does not exist yet.
@@ -225,7 +220,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
-    fn cf_insertnx<I: SingleArg, R: FromValueArray<i64>>(
+    fn cf_insertnx<I: SingleArg, R: CollectionResponse<i64>>(
         &mut self,
         key: impl SingleArg,
         options: CfInsertOptions,
@@ -284,7 +279,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// [<https://redis.io/commands/cf.mexists/>](https://redis.io/commands/cf.mexists/)
     #[must_use]
-    fn cf_mexists<I: SingleArg, R: FromValueArray<bool>>(
+    fn cf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -354,7 +349,7 @@ pub trait CuckooCommands {
         &mut self,
         key: impl SingleArg,
         iterator: i64,
-    ) -> PreparedCommand<Self, (i64, Vec<u8>)>
+    ) -> PreparedCommand<Self, CfScanDumpResult>
     where
         Self: Sized,
     {
@@ -363,46 +358,35 @@ pub trait CuckooCommands {
 }
 
 /// Result for the [`cf_info`](CuckooCommands::cf_info) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct CfInfoResult {
     /// Size
+    #[serde(rename = "Size")]
     pub size: usize,
     /// Number of buckets
+    #[serde(rename = "Number of buckets")]
     pub num_buckets: usize,
     /// Number of filters
+    #[serde(rename = "Number of filters")]
     pub num_filters: usize,
     /// Number of items inserted
+    #[serde(rename = "Number of items inserted")]
     pub num_items_inserted: usize,
     /// Number of items deleted
+    #[serde(rename = "Number of items deleted")]
     pub num_items_deleted: usize,
     /// Bucket size
+    #[serde(rename = "Bucket size")]
     pub bucket_size: usize,
     /// Expansion rate
+    #[serde(rename = "Expansion rate")]
     pub expansion_rate: usize,
     /// Max iteration
+    #[serde(rename = "Max iterations")]
     pub max_iteration: usize,
     /// Additional information
+    #[serde(flatten)]
     pub additional_info: HashMap<String, Value>,
-}
-
-impl FromValue for CfInfoResult {
-    fn from_value(value: Value) -> Result<Self> {
-        let mut values: HashMap<String, Value> = value.into()?;
-
-        Ok(Self {
-            size: values.remove_or_default("Size").into()?,
-            num_buckets: values.remove_or_default("Number of buckets").into()?,
-            num_filters: values.remove_or_default("Number of filter").into()?,
-            num_items_inserted: values
-                .remove_or_default("Number of items inserted")
-                .into()?,
-            num_items_deleted: values.remove_or_default("Number of items deleted").into()?,
-            bucket_size: values.remove_or_default("Bucket size").into()?,
-            expansion_rate: values.remove_or_default("Expansion rate").into()?,
-            max_iteration: values.remove_or_default("Max iteration").into()?,
-            additional_info: values,
-        })
-    }
 }
 
 /// Options for the [`cf_insert`](CuckooCommands::cf_insert) command.
@@ -486,4 +470,12 @@ impl IntoArgs for CfReserveOptions {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         args.arg(self.command_args)
     }
+}
+
+/// Result for the [`cf_scandump`](CuckooCommands::cf_scandump) command.
+#[derive(Debug, Deserialize)]
+pub struct CfScanDumpResult {
+    pub iterator: i64,
+    #[serde(deserialize_with = "deserialize_byte_buf")]
+    pub data: Vec<u8>,
 }

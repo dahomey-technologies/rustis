@@ -1,10 +1,11 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
+        cmd, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
         SingleArgCollection,
     },
 };
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
 ///
@@ -23,7 +24,7 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(self, cmd("LINDEX").arg(key).arg(index))
     }
@@ -91,7 +92,7 @@ pub trait ListCommands {
         Self: Sized,
         S: SingleArg,
         D: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -120,7 +121,7 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse + DeserializeOwned,
         C: SingleArgCollection<K>,
     {
         prepare_command(
@@ -146,8 +147,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        A: FromValueArray<E>,
+        E: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("LPOP").arg(key).arg(count))
     }
@@ -203,7 +204,7 @@ pub trait ListCommands {
         Self: Sized,
         K: SingleArg,
         E: SingleArg,
-        A: FromValueArray<usize>,
+        A: CollectionResponse<usize>,
     {
         prepare_command(
             self,
@@ -266,8 +267,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        A: FromValueArray<E>,
+        E: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("LRANGE").arg(key).arg(start).arg(stop))
     }
@@ -328,8 +329,8 @@ pub trait ListCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
-        C: FromValueArray<E>,
+        E: PrimitiveResponse + DeserializeOwned,
+        C: CollectionResponse<E> + DeserializeOwned,
     {
         prepare_command(self, cmd("RPOP").arg(key).arg(count))
     }

@@ -1,13 +1,68 @@
 use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, FromSingleValue, SingleArgCollection, SingleArg},
+    resp::{cmd, deserialize_vec_of_triplets, PrimitiveResponse, SingleArg, SingleArgCollection},
     Future,
 };
+use serde::{
+    de::{DeserializeOwned, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{fmt, marker::PhantomData};
 
 /// Result for the [`bzpopmin`](BlockingCommands::bzpopmin)
 /// and [`bzpopmax`](BlockingCommands::bzpopmax) commands
-pub type BZpopMinMaxResult<K, E> = Option<Vec<(K, E, f64)>>;
+#[derive(Deserialize)]
+pub struct BZpopMinMaxResult<K, E>(
+    #[serde(deserialize_with = "deserialize_bzop_min_max_result")] pub Option<Vec<(K, E, f64)>>,
+)
+where
+    K: DeserializeOwned,
+    E: DeserializeOwned;
+
+#[allow(clippy::complexity)]
+pub fn deserialize_bzop_min_max_result<'de, D, K, V>(
+    deserializer: D,
+) -> std::result::Result<Option<Vec<(K, V, f64)>>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: DeserializeOwned,
+    V: DeserializeOwned,
+{
+    struct OptionVisitor<K, V> {
+        phantom: PhantomData<(K, V)>,
+    }
+
+    impl<'de, K, V> Visitor<'de> for OptionVisitor<K, V>
+    where
+        K: DeserializeOwned,
+        V: DeserializeOwned,
+    {
+        type Value = Option<Vec<(K, V, f64)>>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("Option<Vec<(K, V, f64)>>")
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserialize_vec_of_triplets(deserializer).map(Some)
+        }
+    }
+
+    deserializer.deserialize_option(OptionVisitor {
+        phantom: PhantomData,
+    })
+}
 
 /// A group of blocking commands
 pub trait BlockingCommands {
@@ -32,7 +87,7 @@ pub trait BlockingCommands {
         Self: Sized,
         S: SingleArg,
         D: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -65,7 +120,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromSingleValue,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -104,8 +159,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue,
-        V: FromSingleValue,
+        K1: PrimitiveResponse + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
@@ -135,8 +190,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue,
-        V: FromSingleValue,
+        K1: PrimitiveResponse + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
@@ -163,7 +218,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromSingleValue,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -198,8 +253,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue,
-        E: FromSingleValue,
+        K1: PrimitiveResponse + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
@@ -225,8 +280,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue,
-        E: FromSingleValue,
+        K1: PrimitiveResponse + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }

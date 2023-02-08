@@ -33,6 +33,7 @@ pub struct RespDeserializer<'de> {
 }
 
 impl<'de> RespDeserializer<'de> {
+    /// Creates a new `RespDeserializer`
     #[inline]
     pub fn new(buf: &'de [u8]) -> Self {
         RespDeserializer {
@@ -42,6 +43,7 @@ impl<'de> RespDeserializer<'de> {
         }
     }
 
+    /// Get current position in the input byte buffer
     #[inline]
     pub fn get_pos(&self) -> usize {
         self.pos
@@ -312,8 +314,9 @@ impl<'de> RespDeserializer<'de> {
         }
     }
 
+    /// Returns an iterator over a RESP Array in byte slices
     pub fn array_chunks<'a>(&'a mut self) -> Result<RespArrayChunks<'de, 'a>> {
-        log::debug!("array_chunks {}", crate::resp::RespBuf::copy_from_slice(self.buf));
+        log::debug!("array_chunks {}", crate::resp::RespBuf::from_slice(self.buf));
         match self.next()? {
             ARRAY_TAG | SET_TAG | PUSH_TAG => {
                 let len = self.parse_number::<usize>()?;
@@ -1192,6 +1195,10 @@ impl<'de, 'a> Deserializer<'de> for PushDeserializer<'de, 'a> {
     }
 }
 
+/// An iterator over a RESP Array in byte slices
+/// 
+/// # See 
+/// [`RespDeserializer::array_chunks`](RespDeserializer::array_chunks)
 pub struct RespArrayChunks<'de, 'a> {
     de: &'a mut RespDeserializer<'de>,
     len: usize,
@@ -1199,7 +1206,7 @@ pub struct RespArrayChunks<'de, 'a> {
 }
 
 impl<'de, 'a> RespArrayChunks<'de, 'a> {
-    pub fn new(de: &'a mut RespDeserializer<'de>, len: usize) -> Self {
+    pub(crate) fn new(de: &'a mut RespDeserializer<'de>, len: usize) -> Self {
         let pos = de.get_pos();
         Self { de, len, pos }
     }

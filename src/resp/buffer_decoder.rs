@@ -4,7 +4,7 @@ use bytes::BytesMut;
 use serde::{de::IgnoredAny, Deserialize};
 use tokio_util::codec::Decoder;
 
-pub struct BufferDecoder;
+pub(crate) struct BufferDecoder;
 
 impl Decoder for BufferDecoder {
     type Item = RespBuf;

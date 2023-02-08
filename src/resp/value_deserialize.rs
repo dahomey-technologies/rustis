@@ -126,7 +126,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     }
 }
 
-pub enum PushOrKey {
+enum PushOrKey {
     Push,
     Key(Value),
 }

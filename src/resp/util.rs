@@ -4,6 +4,7 @@ use serde::{
 };
 use std::{fmt, marker::PhantomData};
 
+/// Deserialize a Vec of pairs from a sequence
 pub fn deserialize_vec_of_pairs<'de, D, T1, T2>(
     deserializer: D,
 ) -> std::result::Result<Vec<(T1, T2)>, D::Error>
@@ -58,6 +59,7 @@ where
     })
 }
 
+/// Deserialize a Vec of triplets from a sequence
 pub fn deserialize_vec_of_triplets<'de, D, T1, T2, T3>(
     deserializer: D,
 ) -> std::result::Result<Vec<(T1, T2, T3)>, D::Error>
@@ -119,6 +121,7 @@ where
     })
 }
 
+/// Deserialize a byte buffer (Vec\<u8\>)
 pub fn deserialize_byte_buf<'de, D>(deserializer: D) -> std::result::Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
@@ -143,7 +146,7 @@ where
     deserializer.deserialize_byte_buf(ByteBufVisitor)
 }
 
-pub struct ByteBufSeed;
+pub(crate) struct ByteBufSeed;
 
 impl<'de> DeserializeSeed<'de> for ByteBufSeed {
     type Value = Vec<u8>;
@@ -156,6 +159,7 @@ impl<'de> DeserializeSeed<'de> for ByteBufSeed {
     }
 }
 
+/// Deserialize a byte slice (&\[u8\])
 pub fn deserialize_bytes<'de, D>(deserializer: D) -> std::result::Result<&'de [u8], D::Error>
 where
     D: Deserializer<'de>,
@@ -180,7 +184,7 @@ where
     deserializer.deserialize_bytes(ByteBufVisitor)
 }
 
-pub struct BytesSeed;
+pub(crate) struct BytesSeed;
 
 impl<'de> DeserializeSeed<'de> for BytesSeed {
     type Value =  &'de [u8];
@@ -194,7 +198,7 @@ impl<'de> DeserializeSeed<'de> for BytesSeed {
 }
 
 #[derive(Default)]
-pub struct VecOfPairsSeed<T1, T2>
+pub(crate) struct VecOfPairsSeed<T1, T2>
 where
     T1: DeserializeOwned,
     T2: DeserializeOwned,
@@ -207,6 +211,7 @@ where
     T1: DeserializeOwned,
     T2: DeserializeOwned,
 {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             phatom: PhantomData,

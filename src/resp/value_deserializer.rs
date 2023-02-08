@@ -601,7 +601,7 @@ impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
     }
 }
 
-pub struct SeqAccess<'de> {
+struct SeqAccess<'de> {
     iter: slice::Iter<'de, Value>,
     len: usize,
     value: Option<&'de Value>,
@@ -679,7 +679,7 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess<'de> {
     }
 }
 
-pub struct MapAccess<'de> {
+struct MapAccess<'de> {
     len: usize,
     iter: hash_map::Iter<'de, Value, Value>,
     value: Option<&'de Value>,
@@ -743,7 +743,7 @@ impl<'de> serde::de::SeqAccess<'de> for MapAccess<'de> {
     }
 }
 
-pub struct ValuePair<'de>(&'de Value, &'de Value);
+struct ValuePair<'de>(&'de Value, &'de Value);
 
 impl<'de> Deserializer<'de> for ValuePair<'de> {
     type Error = Error;

@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, SingleArg, SingleArgCollection,
+        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg, SingleArgCollection,
     },
 };
 use serde::de::DeserializeOwned;
@@ -55,9 +55,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
         C: SingleArgCollection<K>,
-        A: FromValueArray<M> + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
@@ -93,9 +93,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
         C: SingleArgCollection<K>,
-        A: FromValueArray<M> + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
@@ -174,8 +174,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
-        A: FromValueArray<M> + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SMEMBERS").arg(key))
     }
@@ -234,8 +234,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
-        A: FromValueArray<M> + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SPOP").arg(key).arg(count))
     }
@@ -252,8 +252,8 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
-        A: FromValueArray<M> + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
     }
@@ -293,7 +293,7 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -310,9 +310,9 @@ pub trait SetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + Eq + Hash + DeserializeOwned,
+        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
         C: SingleArgCollection<K>,
-        A: FromValueArray<M> + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SUNION").arg(keys))
     }

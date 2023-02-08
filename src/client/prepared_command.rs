@@ -1,17 +1,20 @@
 use crate::{
     client::Client,
-    resp::{Command, RespBuf},
+    resp::{Command, RespBuf, Response},
     Future,
 };
 use std::marker::PhantomData;
 
-type CustomConverter<'a, R> = dyn Fn(RespBuf, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
+type CustomConverter<'a, R> =
+    dyn Fn(RespBuf, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
 
-/// Wrapper around a command about to be send with a marker for the result type
-/// and a few options to decide how the result send back by Redis
+/// Wrapper around a command about to be send with a marker for the response type
+/// and a few options to decide how the response send back by Redis should be processed.
 pub struct PreparedCommand<'a, E, R = ()>
+where
+    R: Response,
 {
-    /// Marker of the type in which the command result will be transformed
+    /// Marker of the type in which the command response will be transformed
     phantom: PhantomData<R>,
     /// Client, Transaction or Pipeline that will actually
     /// send the command to the Redis server.
@@ -25,6 +28,8 @@ pub struct PreparedCommand<'a, E, R = ()>
 }
 
 impl<'a, T, R> PreparedCommand<'a, T, R>
+where
+    R: Response,
 {
     /// Create a new prepared command.
     #[must_use]
@@ -59,9 +64,6 @@ impl<'a, T, R> PreparedCommand<'a, T, R>
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
-pub(crate) fn prepare_command<T, R>(
-    executor: &mut T,
-    command: Command,
-) -> PreparedCommand<T, R> {
+pub(crate) fn prepare_command<T, R: Response>(executor: &mut T, command: Command) -> PreparedCommand<T, R> {
     PreparedCommand::new(executor, command)
 }

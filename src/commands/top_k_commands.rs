@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, FromSingleValue, FromValueArray, KeyValueArgsCollection,
+        cmd, deserialize_vec_of_pairs, PrimitiveResponse, CollectionResponse, KeyValueArgsCollection,
         SingleArg, SingleArgCollection,
     },
 };
@@ -30,7 +30,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<I: SingleArg, R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn topk_add<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -60,7 +60,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<I: SingleArg, R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn topk_incrby<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, i64>,
@@ -100,7 +100,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn topk_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         key: impl SingleArg,
     ) -> PreparedCommand<Self, RR>
@@ -123,7 +123,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list_with_count<N: FromSingleValue + DeserializeOwned>(
+    fn topk_list_with_count<N: PrimitiveResponse + DeserializeOwned>(
         &mut self,
         key: impl SingleArg,
     ) -> PreparedCommand<Self, TopKListWithCountResult<N>>
@@ -147,7 +147,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<I: SingleArg, R: FromValueArray<bool>>(
+    fn topk_query<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -209,14 +209,14 @@ pub struct TopKInfoResult {
 }
 
 #[derive(Debug)]
-pub struct TopKListWithCountResult<N: FromSingleValue + DeserializeOwned> {
+pub struct TopKListWithCountResult<N: PrimitiveResponse + DeserializeOwned> {
     phantom: PhantomData<N>,
     pub items: Vec<(N, usize)>,
 }
 
 impl<'de, N> Deserialize<'de> for TopKListWithCountResult<N>
 where
-    N: FromSingleValue + DeserializeOwned,
+    N: PrimitiveResponse + DeserializeOwned,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, IntoArgs,
+        cmd, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -60,7 +60,7 @@ pub trait StreamCommands {
         F: SingleArg,
         V: SingleArg,
         FFVV: KeyValueArgsCollection<F, V>,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -90,7 +90,7 @@ pub trait StreamCommands {
         G: SingleArg,
         C: SingleArg,
         I: SingleArg,
-        V: FromSingleValue + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -133,7 +133,7 @@ pub trait StreamCommands {
         C: SingleArg,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -425,7 +425,7 @@ pub trait StreamCommands {
         K: SingleArg,
         S: SingleArg,
         E: SingleArg,
-        V: FromSingleValue + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -457,8 +457,8 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue + DeserializeOwned,
-        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
+        V: PrimitiveResponse + DeserializeOwned,
+        R: KeyValueCollectionResponse<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -490,8 +490,8 @@ pub trait StreamCommands {
         KK: SingleArgCollection<K>,
         I: SingleArg,
         II: SingleArgCollection<I>,
-        V: FromSingleValue + DeserializeOwned,
-        R: FromKeyValueArray<String, Vec<StreamEntry<V>>>,
+        V: PrimitiveResponse + DeserializeOwned,
+        R: KeyValueCollectionResponse<String, Vec<StreamEntry<V>>>,
     {
         prepare_command(
             self,
@@ -527,7 +527,7 @@ pub trait StreamCommands {
         K: SingleArg,
         E: SingleArg,
         S: SingleArg,
-        V: FromSingleValue + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -683,7 +683,7 @@ impl IntoArgs for XAutoClaimOptions {
 #[derive(Deserialize)]
 pub struct StreamEntry<V>
 where
-    V: FromSingleValue
+    V: PrimitiveResponse
 {
     /// The stream Id
     pub stream_id: String,
@@ -696,7 +696,7 @@ where
 #[derive(Deserialize)]
 pub struct XAutoClaimResult<V>
 where
-    V: FromSingleValue,
+    V: PrimitiveResponse,
 {
     /// A stream ID to be used as the <start> argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).

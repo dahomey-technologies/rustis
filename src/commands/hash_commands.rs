@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, FromKeyValueArray, FromSingleValue,
-        FromValueArray, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
+        CollectionResponse, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -61,7 +61,7 @@ pub trait HashCommands {
         Self: Sized,
         K: SingleArg,
         F: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("HGET").arg(key).arg(field))
     }
@@ -78,9 +78,9 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
-        V: FromSingleValue,
-        A: FromKeyValueArray<F, V>,
+        F: PrimitiveResponse,
+        V: PrimitiveResponse,
+        A: KeyValueCollectionResponse<F, V>,
     {
         prepare_command(self, cmd("HGETALL").arg(key))
     }
@@ -132,8 +132,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<F> + DeserializeOwned,
+        F: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<F> + DeserializeOwned,
     {
         prepare_command(self, cmd("HKEYS").arg(key))
     }
@@ -168,8 +168,8 @@ pub trait HashCommands {
         K: SingleArg,
         F: SingleArg,
         C: SingleArgCollection<F>,
-        V: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<V> + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<V> + DeserializeOwned,
     {
         prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
@@ -186,7 +186,7 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
+        F: PrimitiveResponse,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key))
     }
@@ -206,8 +206,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<F> + DeserializeOwned,
+        F: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<F> + DeserializeOwned,
     {
         prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
     }
@@ -232,9 +232,9 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue,
-        V: FromSingleValue,
-        A: FromKeyValueArray<F, V>,
+        F: PrimitiveResponse,
+        V: PrimitiveResponse,
+        A: KeyValueCollectionResponse<F, V>,
     {
         prepare_command(
             self,
@@ -260,8 +260,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        F: FromSingleValue + DeserializeOwned,
-        V: FromSingleValue + DeserializeOwned,
+        F: PrimitiveResponse + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -334,8 +334,8 @@ pub trait HashCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<V> + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<V> + DeserializeOwned,
     {
         prepare_command(self, cmd("HVALS").arg(key))
     }
@@ -373,8 +373,8 @@ impl IntoArgs for HScanOptions {
 #[derive(Debug, Deserialize)]
 pub struct HScanResult<F, V>
 where
-    F: FromSingleValue + DeserializeOwned,
-    V: FromSingleValue + DeserializeOwned,
+    F: PrimitiveResponse + DeserializeOwned,
+    V: PrimitiveResponse + DeserializeOwned,
 {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]

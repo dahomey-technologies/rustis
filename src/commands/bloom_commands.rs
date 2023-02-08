@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, FromValueArray, IntoArgs, SingleArg,
+        cmd, deserialize_byte_buf, CommandArgs, CollectionResponse, IntoArgs, SingleArg,
         SingleArgCollection,
     },
 };
@@ -115,7 +115,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
-    fn bf_insert<I: SingleArg, R: FromValueArray<bool>>(
+    fn bf_insert<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -176,7 +176,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
-    fn bf_madd<I: SingleArg, R: FromValueArray<bool>>(
+    fn bf_madd<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
@@ -200,7 +200,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
-    fn bf_mexists<I: SingleArg, R: FromValueArray<bool>>(
+    fn bf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

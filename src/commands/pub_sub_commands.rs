@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs, SingleArg,
+        cmd, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
         SingleArgCollection,
     },
     Future,
@@ -86,8 +86,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue + DeserializeOwned,
-        CC: FromValueArray<C>,
+        C: PrimitiveResponse + DeserializeOwned,
+        CC: CollectionResponse<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
@@ -120,8 +120,8 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromSingleValue,
-        RR: FromKeyValueArray<R, usize>,
+        R: PrimitiveResponse,
+        RR: KeyValueCollectionResponse<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
@@ -139,8 +139,8 @@ pub trait PubSubCommands {
     ) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue + DeserializeOwned,
-        CC: FromValueArray<C>,
+        C: PrimitiveResponse + DeserializeOwned,
+        CC: CollectionResponse<C>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
     }
@@ -157,8 +157,8 @@ pub trait PubSubCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        R: FromSingleValue,
-        RR: FromKeyValueArray<R, usize>,
+        R: PrimitiveResponse,
+        RR: KeyValueCollectionResponse<R, usize>,
     {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }

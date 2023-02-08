@@ -26,7 +26,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender,
     },
-    resp::{cmd, Command, CommandArgs, RespBuf, SingleArg, SingleArgCollection},
+    resp::{cmd, Command, CommandArgs, RespBuf, SingleArg, SingleArgCollection, Response},
     Error, Future, Result,
 };
 use futures::{
@@ -386,7 +386,7 @@ pub trait ClientPreparedCommand<'a, R>
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
+impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
 {
     /// Send command and forget its response
     ///

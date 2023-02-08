@@ -1,5 +1,3 @@
-use serde::de::DeserializeOwned;
-
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -19,9 +17,10 @@ use crate::{
         HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
         SetCommands, SortedSetCommands, StreamCommands, StringCommands,
     },
-    resp::{Command, RespBatchDeserializer},
+    resp::{Command, RespBatchDeserializer, Response},
     Result,
 };
+use serde::de::DeserializeOwned;
 use std::iter::zip;
 
 /// Represents a Redis command pipeline.
@@ -124,8 +123,7 @@ impl Pipeline {
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Pipeline`](crate::client::Pipeline) &
 /// the [`Transaction`](crate::client::Transaction) executors
-pub trait BatchPreparedCommand<R = ()>
-{
+pub trait BatchPreparedCommand<R = ()> {
     /// Queue a command.
     fn queue(self);
 
@@ -133,7 +131,7 @@ pub trait BatchPreparedCommand<R = ()>
     fn forget(self);
 }
 
-impl<R> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
+impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
     /// Queue a command.
     #[inline]
     fn queue(self) {

@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromKeyValueArray, FromSingleValue, IntoArgs,
+        cmd, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, IntoArgs,
         KeyValueArgsCollection, MultipleArgsCollection, SingleArg, Value,
     },
 };
@@ -20,9 +20,9 @@ pub trait SentinelCommands {
     where
         Self: Sized,
         N: SingleArg,
-        RN: FromSingleValue,
-        RV: FromSingleValue,
-        R: FromKeyValueArray<RN, RV>,
+        RN: PrimitiveResponse,
+        RV: PrimitiveResponse,
+        R: KeyValueCollectionResponse<RN, RV>,
     {
         prepare_command(self, cmd("SENTINEL").arg("CONFIG").arg("GET").arg(name))
     }
@@ -121,7 +121,7 @@ pub trait SentinelCommands {
         Self: Sized,
         N: SingleArg,
         NN: MultipleArgsCollection<N>,
-        R: FromKeyValueArray<String, Vec<(u64, String)>>,
+        R: KeyValueCollectionResponse<String, Vec<(u64, String)>>,
     {
         prepare_command(self, cmd("SENTINEL").arg("INFO-CACHE").arg(master_names))
     }

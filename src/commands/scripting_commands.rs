@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, FromSingleValue, IntoArgs, SingleArg,
+        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, IntoArgs, SingleArg,
         SingleArgCollection,
     },
 };
@@ -26,7 +26,7 @@ pub trait ScriptingCommands {
     fn eval<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("EVAL").arg(builder))
     }
@@ -43,7 +43,7 @@ pub trait ScriptingCommands {
     fn eval_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("EVAL_RO").arg(builder))
     }
@@ -59,7 +59,7 @@ pub trait ScriptingCommands {
     fn evalsha<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("EVALSHA").arg(builder))
     }
@@ -76,7 +76,7 @@ pub trait ScriptingCommands {
     fn evalsha_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("EVALSHA_RO").arg(builder))
     }
@@ -92,7 +92,7 @@ pub trait ScriptingCommands {
     fn fcall<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("FCALL").arg(builder))
     }
@@ -108,7 +108,7 @@ pub trait ScriptingCommands {
     fn fcall_readonly<R>(&mut self, builder: CallBuilder) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("FCALL_RO").arg(builder))
     }
@@ -194,7 +194,7 @@ pub trait ScriptingCommands {
     where
         Self: Sized,
         F: SingleArg,
-        L: FromSingleValue,
+        L: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -306,7 +306,7 @@ pub trait ScriptingCommands {
     where
         Self: Sized,
         S: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
     }

@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArg, CommandArgs, FromSingleValue, FromValueArray,
+        cmd, deserialize_byte_buf, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse,
         IntoArgs, SingleArg, SingleArgCollection,
     },
 };
@@ -173,8 +173,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         P: SingleArg,
-        K: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<K> + DeserializeOwned,
+        K: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<K> + DeserializeOwned,
     {
         prepare_command(self, cmd("KEYS").arg(pattern))
     }
@@ -243,7 +243,7 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").arg(key))
     }
@@ -414,7 +414,7 @@ pub trait GenericCommands {
     fn randomkey<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("RANDOMKEY"))
     }
@@ -492,8 +492,8 @@ pub trait GenericCommands {
     fn scan<K, A>(&mut self, cursor: u64, options: ScanOptions) -> PreparedCommand<Self, (u64, A)>
     where
         Self: Sized,
-        K: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<K> + DeserializeOwned,
+        K: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<K> + DeserializeOwned,
     {
         prepare_command(self, cmd("SCAN").arg(cursor).arg(options))
     }
@@ -510,8 +510,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<M> + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SORT").arg(key).arg(options))
     }
@@ -560,8 +560,8 @@ pub trait GenericCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<M> + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SORT_RO").arg(key).arg(options))
     }

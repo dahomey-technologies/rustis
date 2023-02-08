@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
+        cmd, deserialize_vec_of_pairs, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -253,7 +253,7 @@ pub trait ClusterCommands {
     fn cluster_links<I>(&mut self) -> PreparedCommand<Self, Vec<I>>
     where
         Self: Sized,
-        I: FromValueArray<ClusterLinkInfo> + DeserializeOwned,
+        I: CollectionResponse<ClusterLinkInfo> + DeserializeOwned,
     {
         prepare_command(self, cmd("CLUSTER").arg("LINKS"))
     }
@@ -297,7 +297,7 @@ pub trait ClusterCommands {
     fn cluster_myid<N>(&mut self) -> PreparedCommand<Self, N>
     where
         Self: Sized,
-        N: FromSingleValue,
+        N: PrimitiveResponse,
     {
         prepare_command(self, cmd("CLUSTER").arg("MYID"))
     }
@@ -320,7 +320,7 @@ pub trait ClusterCommands {
     fn cluster_nodes<R>(&mut self) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("CLUSTER").arg("NODES"))
     }
@@ -337,7 +337,7 @@ pub trait ClusterCommands {
     where
         Self: Sized,
         I: SingleArg,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
     }
@@ -426,7 +426,7 @@ pub trait ClusterCommands {
     fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
     where
         Self: Sized,
-        S: FromValueArray<ClusterShardResult>,
+        S: CollectionResponse<ClusterShardResult>,
     {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }

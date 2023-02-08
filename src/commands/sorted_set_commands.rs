@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, FromSingleValue, IntoArgs,
+        cmd, deserialize_vec_of_pairs, CommandArgs, PrimitiveResponse, IntoArgs,
         MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -122,7 +122,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
     }
@@ -141,7 +141,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -214,7 +214,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -246,7 +246,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -360,7 +360,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         C: SingleArgCollection<K>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -405,7 +405,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("ZPOPMAX").arg(key).arg(count))
     }
@@ -422,7 +422,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("ZPOPMIN").arg(key).arg(count))
     }
@@ -439,7 +439,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key))
     }
@@ -460,7 +460,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key).arg(count))
     }
@@ -512,7 +512,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -539,7 +539,7 @@ pub trait SortedSetCommands {
         Self: Sized,
         K: SingleArg,
         S: SingleArg,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -718,7 +718,7 @@ pub trait SortedSetCommands {
     where
         Self: Sized,
         K: SingleArg,
-        M: FromSingleValue + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("ZSCAN").arg(key).arg(cursor).arg(options))
     }
@@ -760,7 +760,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -792,7 +792,7 @@ pub trait SortedSetCommands {
         K: SingleArg,
         C: SingleArgCollection<K>,
         W: SingleArgCollection<f64>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -1083,7 +1083,7 @@ impl IntoArgs for ZScanOptions {
 #[derive(Debug, Deserialize)]
 pub struct ZScanResult<M>
 where
-    M: FromSingleValue + DeserializeOwned,
+    M: PrimitiveResponse + DeserializeOwned,
 {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]

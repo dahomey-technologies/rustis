@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromSingleValue, FromValueArray, IntoArgs,
+        cmd, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
         MultipleArgsCollection, SingleArg, SingleArgCollection,
     },
 };
@@ -140,8 +140,8 @@ pub trait GeoCommands {
         Self: Sized,
         K: SingleArg,
         M1: SingleArg,
-        M2: FromSingleValue + DeserializeOwned,
-        A: FromValueArray<GeoSearchResult<M2>> + DeserializeOwned,
+        M2: PrimitiveResponse + DeserializeOwned,
+        A: CollectionResponse<GeoSearchResult<M2>> + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -350,7 +350,7 @@ impl IntoArgs for GeoSearchOptions {
 #[derive(Debug)]
 pub struct GeoSearchResult<M>
 where
-    M: FromSingleValue,
+    M: PrimitiveResponse,
 {
     /// The matched member.
     pub member: M,
@@ -367,7 +367,7 @@ where
 
 impl<'de, M> Deserialize<'de> for GeoSearchResult<M>
 where
-    M: FromSingleValue + DeserializeOwned,
+    M: PrimitiveResponse + DeserializeOwned,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -432,14 +432,14 @@ where
 
         pub struct GeoSearchResultVisitor<M>
         where
-            M: FromSingleValue,
+            M: PrimitiveResponse,
         {
             phantom: PhantomData<M>,
         }
 
         impl<'de, M> Visitor<'de> for GeoSearchResultVisitor<M>
         where
-            M: FromSingleValue + DeserializeOwned,
+            M: PrimitiveResponse + DeserializeOwned,
         {
             type Value = GeoSearchResult<M>;
 

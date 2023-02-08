@@ -1,4 +1,5 @@
-use crate::{resp::FromValue, Error, RedisError, Result};
+use crate::{RedisError, Result};
+use serde::de::DeserializeOwned;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter, Write},
@@ -41,9 +42,9 @@ impl Value {
     #[inline]
     pub fn into<T>(self) -> Result<T>
     where
-        T: FromValue,
+        T: DeserializeOwned,
     {
-        T::from_value(self)
+        T::deserialize(&self)
     }
 }
 
@@ -168,40 +169,6 @@ impl fmt::Debug for Value {
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
             Self::Nil => write!(f, "Nil"),
-        }
-    }
-}
-
-pub(crate) trait ResultValueExt {
-    fn into_result(self) -> Result<Value>;
-    fn map_into_result<T, F>(self, op: F) -> Result<T>
-    where
-        F: FnOnce(Value) -> T;
-}
-
-impl ResultValueExt for Result<Value> {
-    #[inline]
-    fn into_result(self) -> Result<Value> {
-        match self {
-            Ok(value) => match value {
-                Value::Error(e) => Err(Error::Redis(e)),
-                _ => Ok(value),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    #[inline]
-    fn map_into_result<T, F>(self, op: F) -> Result<T>
-    where
-        F: FnOnce(Value) -> T,
-    {
-        match self {
-            Ok(value) => match value {
-                Value::Error(e) => Err(Error::Redis(e)),
-                _ => Ok(op(value)),
-            },
-            Err(e) => Err(e),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, FromSingleValue, FromValueArray, IntoArgs, KeyValueArgsCollection,
+        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, KeyValueArgsCollection,
         SingleArg, SingleArgCollection,
     },
 };
@@ -127,7 +127,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
         Self: Sized,
     {
         prepare_command(self, cmd("GET").arg(key))
@@ -148,7 +148,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
@@ -197,7 +197,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
@@ -216,7 +216,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
@@ -236,7 +236,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V: SingleArg,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
@@ -337,7 +337,7 @@ pub trait StringCommands {
     where
         Self: Sized,
         K: SingleArg,
-        V: FromSingleValue,
+        V: PrimitiveResponse,
     {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
@@ -406,8 +406,8 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        V: FromSingleValue + serde::de::DeserializeOwned,
-        VV: FromValueArray<V>,
+        V: PrimitiveResponse + serde::de::DeserializeOwned,
+        VV: CollectionResponse<V>,
     {
         prepare_command(self, cmd("MGET").arg(keys))
     }
@@ -545,7 +545,7 @@ pub trait StringCommands {
         Self: Sized,
         K: SingleArg,
         V1: SingleArg,
-        V2: FromSingleValue,
+        V2: PrimitiveResponse,
     {
         prepare_command(
             self,

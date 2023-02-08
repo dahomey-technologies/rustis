@@ -25,8 +25,7 @@ fn eof<T>() -> Result<T> {
     Err(Error::Client("EOF".to_owned()))
 }
 
-/// Serde deserialize for [`RESP2`](https://redis.io/docs/reference/protocol-spec/) &
-/// [`RESP3`](https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md)
+/// Serde deserializer for [`RESP3`](https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md)
 pub struct RespDeserializer<'de> {
     buf: &'de [u8],
     pos: usize,

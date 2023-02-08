@@ -22,7 +22,7 @@ use crate::{
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
         StreamCommands, StringCommands,
     },
-    resp::{cmd, Command, RespDeserializer},
+    resp::{cmd, Command, RespDeserializer, Response},
     Error, Result,
 };
 use std::{fmt, marker::PhantomData};
@@ -262,7 +262,7 @@ where
     }
 }
 
-impl<R> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
+impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
         self.executor.queue(self.command)

@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::{GeoUnit, SortOrder},
     resp::{
-        cmd, deserialize_vec_of_pairs, Command, CommandArgs, FromKeyValueArray, FromSingleValue,
-        FromValueArray, IntoArgs, MultipleArgsCollection, RespDeserializer, SingleArg,
+        cmd, deserialize_vec_of_pairs, Command, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
+        CollectionResponse, IntoArgs, MultipleArgsCollection, RespDeserializer, SingleArg,
         SingleArgCollection, Value, VecOfPairsSeed,
     },
 };
@@ -155,9 +155,9 @@ pub trait SearchCommands {
     where
         Self: Sized,
         O: SingleArg,
-        N: FromSingleValue,
-        V: FromSingleValue,
-        R: FromKeyValueArray<N, V>,
+        N: PrimitiveResponse,
+        V: PrimitiveResponse,
+        R: KeyValueCollectionResponse<N, V>,
     {
         prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option))
     }
@@ -312,8 +312,8 @@ pub trait SearchCommands {
     where
         Self: Sized,
         D: SingleArg,
-        T: FromSingleValue + DeserializeOwned,
-        TT: FromValueArray<T>,
+        T: PrimitiveResponse + DeserializeOwned,
+        TT: CollectionResponse<T>,
     {
         prepare_command(self, cmd("FT.DICTDUMP").arg(dict))
     }
@@ -376,7 +376,7 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -412,8 +412,8 @@ pub trait SearchCommands {
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: FromSingleValue + DeserializeOwned,
-        RR: FromValueArray<R>,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
     {
         prepare_command(
             self,
@@ -453,8 +453,8 @@ pub trait SearchCommands {
     fn ft_list<R, RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        R: FromSingleValue + DeserializeOwned,
-        RR: FromValueArray<R>,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
     {
         prepare_command(self, cmd("FT._LIST"))
     }
@@ -612,7 +612,7 @@ pub trait SearchCommands {
     where
         Self: Sized,
         I: SingleArg,
-        R: FromKeyValueArray<String, Vec<String>>,
+        R: KeyValueCollectionResponse<String, Vec<String>>,
     {
         prepare_command(self, cmd("FT.SYNDUMP").arg(index))
     }
@@ -669,7 +669,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
-    fn ft_tagvals<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn ft_tagvals<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         index: impl SingleArg,
         field_name: impl SingleArg,
@@ -2272,7 +2272,8 @@ pub struct FtProfileAggregateResult {
     pub profile_details: FtProfileDetails,
 }
 
-/// Details of a [`ft_profile`](SearchCommands::ft_profile) command.
+/// Result details of a [`ft_profile_search`](SearchCommands::ft_profile_search) 
+/// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
 #[derive(Debug)]
 pub struct FtProfileDetails {
     /// The total runtime of the query.
@@ -2437,7 +2438,8 @@ impl<'de> Deserialize<'de> for FtProfileDetails {
     }
 }
 
-/// Result processors profile for the [`ft_profile`](SearchCommands::ft_profile) command.
+/// Result processors profile for the [`ft_profile_search`](SearchCommands::ft_profile_search) 
+/// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
 #[derive(Debug, Deserialize)]
 pub struct FtResultProcessorsProfile {
     #[serde(rename = "Type")]

@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, Client, PreparedCommand},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray,
+        cmd, Command, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse,
         IntoArgs, RespBuf, RespDeserializer, SingleArg,
     },
     Error, Future, Result,
@@ -34,9 +34,9 @@ pub trait GraphCommands {
     fn graph_config_get<N, V, R>(&mut self, name: impl SingleArg) -> PreparedCommand<Self, R>
     where
         Self: Sized,
-        N: FromSingleValue,
-        V: FromSingleValue,
-        R: FromKeyValueArray<N, V>,
+        N: PrimitiveResponse,
+        V: PrimitiveResponse,
+        R: KeyValueCollectionResponse<N, V>,
     {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
     }
@@ -94,7 +94,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.explain/>](https://redis.io/commands/graph.explain/)
     #[must_use]
-    fn graph_explain<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn graph_explain<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         graph: impl SingleArg,
         query: impl SingleArg,
@@ -113,7 +113,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_list<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn graph_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
     ) -> PreparedCommand<Self, RR>
     where
@@ -135,7 +135,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_profile<R: FromSingleValue + DeserializeOwned, RR: FromValueArray<R>>(
+    fn graph_profile<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
         &mut self,
         graph: impl SingleArg,
         query: impl SingleArg,
@@ -225,7 +225,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
-    fn graph_slowlog<R: FromValueArray<GraphSlowlogResult>>(
+    fn graph_slowlog<R: CollectionResponse<GraphSlowlogResult>>(
         &mut self,
         graph: impl SingleArg,
     ) -> PreparedCommand<Self, R>

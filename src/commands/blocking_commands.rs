@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, deserialize_vec_of_triplets, FromSingleValue, SingleArg, SingleArgCollection},
+    resp::{cmd, deserialize_vec_of_triplets, PrimitiveResponse, SingleArg, SingleArgCollection},
     Future,
 };
 use serde::{
@@ -87,7 +87,7 @@ pub trait BlockingCommands {
         Self: Sized,
         S: SingleArg,
         D: SingleArg,
-        E: FromSingleValue,
+        E: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -120,7 +120,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -159,8 +159,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue + DeserializeOwned,
-        V: FromSingleValue + DeserializeOwned,
+        K1: PrimitiveResponse + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
@@ -190,8 +190,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue + DeserializeOwned,
-        V: FromSingleValue + DeserializeOwned,
+        K1: PrimitiveResponse + DeserializeOwned,
+        V: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
@@ -218,7 +218,7 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        E: FromSingleValue + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(
             self,
@@ -253,8 +253,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue + DeserializeOwned,
-        E: FromSingleValue + DeserializeOwned,
+        K1: PrimitiveResponse + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
@@ -280,8 +280,8 @@ pub trait BlockingCommands {
         Self: Sized,
         K: SingleArg,
         KK: SingleArgCollection<K>,
-        K1: FromSingleValue + DeserializeOwned,
-        E: FromSingleValue + DeserializeOwned,
+        K1: PrimitiveResponse + DeserializeOwned,
+        E: PrimitiveResponse + DeserializeOwned,
     {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }

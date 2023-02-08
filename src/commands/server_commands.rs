@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, FromKeyValueArray, FromSingleValue, FromValueArray, IntoArgs,
+        cmd, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse, IntoArgs,
         KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
     },
     Error, Result,
@@ -31,8 +31,8 @@ pub trait ServerCommands {
     fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        C: FromSingleValue + DeserializeOwned,
-        CC: FromValueArray<C>,
+        C: PrimitiveResponse + DeserializeOwned,
+        CC: CollectionResponse<C>,
     {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
     }
@@ -73,7 +73,7 @@ pub trait ServerCommands {
         Self: Sized,
         U: SingleArg,
         C: SingleArg,
-        R: FromSingleValue,
+        R: PrimitiveResponse,
     {
         prepare_command(
             self,
@@ -96,7 +96,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: FromSingleValue>(
+    fn acl_genpass<R: PrimitiveResponse>(
         &mut self,
         options: AclGenPassOptions,
     ) -> PreparedCommand<Self, R>
@@ -117,7 +117,7 @@ pub trait ServerCommands {
     where
         Self: Sized,
         U: SingleArg,
-        RR: FromKeyValueArray<String, Value>,
+        RR: KeyValueCollectionResponse<String, Value>,
     {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
@@ -173,7 +173,7 @@ pub trait ServerCommands {
     fn acl_log<EE>(&mut self, options: AclLogOptions) -> PreparedCommand<Self, Vec<EE>>
     where
         Self: Sized,
-        EE: FromKeyValueArray<String, Value> + DeserializeOwned,
+        EE: KeyValueCollectionResponse<String, Value> + DeserializeOwned,
     {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
@@ -222,8 +222,8 @@ pub trait ServerCommands {
     fn acl_users<U, UU>(&mut self) -> PreparedCommand<Self, UU>
     where
         Self: Sized,
-        U: FromSingleValue + DeserializeOwned,
-        UU: FromValueArray<U>,
+        U: PrimitiveResponse + DeserializeOwned,
+        UU: CollectionResponse<U>,
     {
         prepare_command(self, cmd("ACL").arg("USERS"))
     }
@@ -235,7 +235,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: FromSingleValue>(&mut self) -> PreparedCommand<Self, U>
+    fn acl_whoami<U: PrimitiveResponse>(&mut self) -> PreparedCommand<Self, U>
     where
         Self: Sized,
     {
@@ -283,7 +283,7 @@ pub trait ServerCommands {
         Self: Sized,
         N: SingleArg,
         NN: SingleArgCollection<N>,
-        DD: FromKeyValueArray<String, CommandDoc>,
+        DD: KeyValueCollectionResponse<String, CommandDoc>,
     {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
     }
@@ -300,7 +300,7 @@ pub trait ServerCommands {
         Self: Sized,
         A: SingleArg,
         AA: SingleArgCollection<A>,
-        KK: FromValueArray<String>,
+        KK: CollectionResponse<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
@@ -317,7 +317,7 @@ pub trait ServerCommands {
         Self: Sized,
         A: SingleArg,
         AA: SingleArgCollection<A>,
-        KK: FromKeyValueArray<String, Vec<String>>,
+        KK: KeyValueCollectionResponse<String, Vec<String>>,
     {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
@@ -348,7 +348,7 @@ pub trait ServerCommands {
     fn command_list<CC>(&mut self, options: CommandListOptions) -> PreparedCommand<Self, CC>
     where
         Self: Sized,
-        CC: FromValueArray<String>,
+        CC: CollectionResponse<String>,
     {
         prepare_command(self, cmd("COMMAND").arg("LIST").arg(options))
     }
@@ -369,8 +369,8 @@ pub trait ServerCommands {
         Self: Sized,
         P: SingleArg,
         PP: SingleArgCollection<P>,
-        V: FromSingleValue,
-        VV: FromKeyValueArray<String, V>,
+        V: PrimitiveResponse,
+        VV: KeyValueCollectionResponse<String, V>,
     {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
@@ -536,7 +536,7 @@ pub trait ServerCommands {
         Self: Sized,
         C: SingleArg,
         CC: SingleArgCollection<C>,
-        RR: FromKeyValueArray<String, CommandHistogram>,
+        RR: KeyValueCollectionResponse<String, CommandHistogram>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
@@ -554,7 +554,7 @@ pub trait ServerCommands {
     fn latency_history<RR>(&mut self, event: LatencyHistoryEvent) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromValueArray<(u32, u32)>,
+        RR: CollectionResponse<(u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("HISTORY").arg(event))
     }
@@ -578,7 +578,7 @@ pub trait ServerCommands {
     fn latency_latest<RR>(&mut self) -> PreparedCommand<Self, RR>
     where
         Self: Sized,
-        RR: FromValueArray<(String, u32, u32, u32)>,
+        RR: CollectionResponse<(String, u32, u32, u32)>,
     {
         prepare_command(self, cmd("LATENCY").arg("LATEST"))
     }
@@ -705,7 +705,7 @@ pub trait ServerCommands {
     fn module_list<MM>(&mut self) -> PreparedCommand<Self, MM>
     where
         Self: Sized,
-        MM: FromValueArray<ModuleInfo>,
+        MM: CollectionResponse<ModuleInfo>,
     {
         prepare_command(self, cmd("MODULE").arg("LIST"))
     }

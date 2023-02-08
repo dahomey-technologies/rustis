@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, FromValueArray, IntoArgs, SingleArg,
+        cmd, deserialize_byte_buf, CommandArgs, CollectionResponse, IntoArgs, SingleArg,
         SingleArgCollection, Value,
     },
 };
@@ -220,7 +220,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
-    fn cf_insertnx<I: SingleArg, R: FromValueArray<i64>>(
+    fn cf_insertnx<I: SingleArg, R: CollectionResponse<i64>>(
         &mut self,
         key: impl SingleArg,
         options: CfInsertOptions,
@@ -279,7 +279,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// [<https://redis.io/commands/cf.mexists/>](https://redis.io/commands/cf.mexists/)
     #[must_use]
-    fn cf_mexists<I: SingleArg, R: FromValueArray<bool>>(
+    fn cf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

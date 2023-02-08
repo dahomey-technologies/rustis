@@ -1,6 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{cmd, FromValueArray, KeyValueArgsCollection, SingleArg, SingleArgCollection},
+    resp::{cmd, CollectionResponse, KeyValueArgsCollection, SingleArg, SingleArgCollection},
 };
 use serde::Deserialize;
 
@@ -25,7 +25,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
-    fn cms_incrby<I: SingleArg, R: FromValueArray<usize>>(
+    fn cms_incrby<I: SingleArg, R: CollectionResponse<usize>>(
         &mut self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, usize>,
@@ -155,7 +155,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
-    fn cms_query<I: SingleArg, C: FromValueArray<usize>>(
+    fn cms_query<I: SingleArg, C: CollectionResponse<usize>>(
         &mut self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,

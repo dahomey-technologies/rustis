@@ -316,7 +316,6 @@ impl<'de> RespDeserializer<'de> {
 
     /// Returns an iterator over a RESP Array in byte slices
     pub fn array_chunks<'a>(&'a mut self) -> Result<RespArrayChunks<'de, 'a>> {
-        log::debug!("array_chunks {}", crate::resp::RespBuf::from_slice(self.buf));
         match self.next()? {
             ARRAY_TAG | SET_TAG | PUSH_TAG => {
                 let len = self.parse_number::<usize>()?;

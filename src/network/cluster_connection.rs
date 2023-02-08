@@ -5,18 +5,21 @@ use crate::{
         ResponsePolicy,
     },
     network::CommandInfoManager,
-    resp::{Command, RespBuf, RespDeserializer, Value},
+    resp::{Command, RespBuf, RespDeserializer, RespSerializer},
     Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
-use bytes::{BytesMut, BufMut};
 use futures::{future, FutureExt};
 use log::{debug, info, trace, warn};
 use rand::Rng;
+use serde::{
+    de::{self, value::SeqAccessDeserializer},
+    Deserialize, Deserializer, Serialize,
+};
 use smallvec::{smallvec, SmallVec};
 use std::{
     cmp::Ordering,
     collections::VecDeque,
-    fmt::{Debug, Formatter},
+    fmt::{self, Debug, Formatter},
     iter::zip,
 };
 
@@ -456,7 +459,8 @@ impl ClusterConnection {
             }
         }
 
-        let mut sub_results = Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
+        let mut sub_results =
+            Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
         for sub_request in request_info.sub_requests.iter_mut() {
@@ -464,25 +468,23 @@ impl ClusterConnection {
 
             if let Some(result) = result {
                 match &result {
-                    Ok(resp_buf) if resp_buf.is_error() => {
-                        match resp_buf.to::<()>() {
-                            Err(Error::Redis(RedisError {
-                                kind: RedisErrorKind::Ask { hash_slot, address },
-                                description: _,
-                            })) => retry_reasons.push(RetryReason::Ask {
-                                hash_slot,
-                                address: address.clone(),
-                            }),
-                            Err(Error::Redis(RedisError {
-                                kind: RedisErrorKind::Moved { hash_slot, address },
-                                description: _,
-                            })) => retry_reasons.push(RetryReason::Moved {
-                                hash_slot,
-                                address: address.clone(),
-                            }),
-                            _ => sub_results.push(result),
-                        }
-                    }
+                    Ok(resp_buf) if resp_buf.is_error() => match resp_buf.to::<()>() {
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Ask { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Ask {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Moved { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Moved {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        _ => sub_results.push(result),
+                    },
                     _ => sub_results.push(result),
                 }
             } else {
@@ -532,18 +534,16 @@ impl ClusterConnection {
                 }
                 ResponsePolicy::AggLogicalAnd => {
                     self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
-                        .await
                 }
                 ResponsePolicy::AggLogicalOr => {
                     self.response_policy_agg(
                         sub_results,
                         |a, b| if a == 0 && b == 0 { 0 } else { 1 },
                     )
-                    .await
                 }
-                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min).await,
-                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max).await,
-                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b).await,
+                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
+                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
+                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
                 ResponsePolicy::Special => self.response_policy_special(sub_results).await,
             }
         } else {
@@ -585,7 +585,7 @@ impl ClusterConnection {
         Some(result)
     }
 
-    async fn response_policy_agg<F>(
+    fn response_policy_agg<F>(
         &mut self,
         sub_results: Vec<Result<RespBuf>>,
         f: F,
@@ -593,61 +593,99 @@ impl ClusterConnection {
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut result = Value::Nil;
+        enum Integer {
+            Single(i64),
+            Array(Vec<i64>),
+            Nil,
+        }
+
+        struct Visitor<F: Fn(i64, i64) -> i64> {
+            integer: Integer,
+            f: F,
+        }
+
+        impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut Visitor<F> {
+            type Value = ();
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("()")
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match &self.integer {
+                    Integer::Nil => self.integer = Integer::Single(v),
+                    Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
+                    _ => {
+                        return Err(de::Error::custom("Unexpected value".to_owned()));
+                    }
+                }
+
+                Ok(())
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                match &mut self.integer {
+                    Integer::Nil => {
+                        self.integer = Integer::Array(Vec::<i64>::deserialize(
+                            SeqAccessDeserializer::new(seq),
+                        )?)
+                    }
+                    Integer::Array(a) => {
+                        for i in a {
+                            let Some(next_i) = seq.next_element()? else {
+                                return Err(de::Error::custom("Unexpected value".to_owned()));
+                            };
+
+                            *i = (self.f)(*i, next_i);
+                        }
+                    }
+                    _ => {
+                        return Err(de::Error::custom("Unexpected value".to_owned()));
+                    }
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = Visitor {
+            integer: Integer::Nil,
+            f,
+        };
 
         for sub_result in sub_results {
             let Ok(sub_result) = sub_result else {
                 return Some(sub_result);
             };
 
-            let value = sub_result.to::<Value>();
-
-            result = match value {
-                Ok(Value::Error(_)) => {
-                    return Some(Ok(sub_result));
-                }
-                Ok(value) => match (value, result) {
-                    (Value::Integer(v), Value::Integer(r)) => Value::Integer(f(v, r)),
-                    (Value::Integer(v), Value::Nil) => Value::Integer(v),
-                    (Value::Array(v), Value::Array(mut r)) if v.len() == r.len() => {
-                        for i in 0..v.len() {
-                            match (&v[i], &r[i]) {
-                                (Value::Integer(vi), Value::Integer(ri)) => {
-                                    r[i] = Value::Integer(f(*vi, *ri));
-                                }
-                                _ => {
-                                    return Some(Err(Error::Client("Unexpected value".to_owned())));
-                                }
-                            }
-                        }
-                        Value::Array(r)
-                    }
-                    (Value::Array(v), Value::Nil) => Value::Array(v),
-                    _ => {
-                        return Some(Err(Error::Client("Unexpected value".to_owned())));
-                    }
-                },
-                Err(_) => {
-                    return Some(Ok(sub_result));
-                }
-            };
+            let mut deserializer = RespDeserializer::new(&sub_result);
+            if let Err(e) = deserializer.deserialize_any(&mut visitor) {
+                return Some(Err(e));
+            }
         }
 
-        match result {
-            Value::Integer(i) => Some(Ok(RespBuf::copy_from_slice(format!(":{i}\r\n").as_bytes()))),
-            Value::Array(vec) => {
-                let mut bytes = BytesMut::new();
-                bytes.put_slice(format!("*{}\r\n", vec.len()).as_bytes());
-                for value in vec {
-                    let Value::Integer(i) = value else {
-                        unreachable!()
-                    };
-                    bytes.put_slice(format!(":{i}\r\n").as_bytes());
+        match visitor.integer {
+            Integer::Single(i) => {
+                let mut serializer = RespSerializer::new();
+                if let Err(e) = i.serialize(&mut serializer) {
+                    return Some(Err(e));
                 }
-                Some(Ok(RespBuf(bytes.freeze())))
-            },
-            Value::Nil => Some(Ok(RespBuf::nil())),
-            _ => unreachable!()
+                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
+            }
+            Integer::Array(vec) => {
+                let mut serializer = RespSerializer::new();
+                if let Err(e) = vec.serialize(&mut serializer) {
+                    return Some(Err(e));
+                }
+                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
+            }
+            Integer::Nil => Some(Ok(RespBuf::nil())),
         }
     }
 
@@ -683,7 +721,7 @@ impl ClusterConnection {
                                 "Unexpected result {sub_result:?}"
                             ))));
                         };
-                        
+
                         for chunk in chunks {
                             results.push(chunk);
                         }

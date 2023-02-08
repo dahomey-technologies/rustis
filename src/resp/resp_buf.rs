@@ -10,6 +10,10 @@ use std::{fmt, ops::Deref};
 pub struct RespBuf(pub Bytes);
 
 impl RespBuf {
+    pub fn new(bytes: Bytes) -> Self {
+        Self(bytes)
+    }
+
     pub fn from_chunks(chunks: &Vec::<&[u8]>) -> Self {
         let mut bytes = BytesMut::new();
 
@@ -25,6 +29,11 @@ impl RespBuf {
         }
 
         Self(bytes.freeze())
+    }
+
+    #[inline]
+    pub fn copy_from_slice(data: &[u8]) -> RespBuf {
+        RespBuf(Bytes::copy_from_slice(data))
     }
 
     #[inline]
@@ -46,11 +55,6 @@ impl RespBuf {
     pub fn to<'de, T: Deserialize<'de>>(&'de self) -> Result<T> {
         let mut deserializer = RespDeserializer::new(&self.0);
         T::deserialize(&mut deserializer)
-    }
-
-    #[inline]
-    pub fn copy_from_slice(data: &[u8]) -> RespBuf {
-        RespBuf(Bytes::copy_from_slice(data))
     }
 
     #[inline]

@@ -5,7 +5,7 @@ use crate::{
 use serde::{de::DeserializeSeed, forward_to_deserialize_any, Deserializer};
 use std::slice;
 
-pub struct RespBatchDeserializer<'de> {
+pub(crate) struct RespBatchDeserializer<'de> {
     bufs: &'de Vec<RespBuf>,
 }
 

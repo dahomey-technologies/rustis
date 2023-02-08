@@ -9,7 +9,7 @@ fn serialize(value: Value) -> Result<RespBuf> {
     let mut serializer = RespSerializer::new();
     value.serialize(&mut serializer)?;
     let output = serializer.get_output();
-    Ok(RespBuf(output.freeze()))
+    Ok(RespBuf::new(output.freeze()))
 }
 
 #[test]

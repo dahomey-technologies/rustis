@@ -19,12 +19,14 @@ use serde::{
 pub(crate) const SET_FAKE_FIELD: &str = "~~~SET~~~";
 pub(crate) const ERROR_FAKE_FIELD: &str = "---ERROR---";
 
+/// Serde serializer for [`RESP3`](https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md)
 pub struct RespSerializer {
     output: BytesMut,
     is_error: bool,
 }
 
 impl RespSerializer {
+    /// Creates a new `RespSerializer`
     pub fn new() -> Self {
         Self {
             output: BytesMut::new(),
@@ -32,6 +34,7 @@ impl RespSerializer {
         }
     }
 
+    /// Get the serializer output as a `BytesMut`
     #[inline]
     pub fn get_output(self) -> BytesMut {
         self.output

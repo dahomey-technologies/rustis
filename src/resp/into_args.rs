@@ -51,98 +51,98 @@ impl IntoArgs for CommandArg {
 impl IntoArgs for i8 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Signed(i64::from(self)))
+        CommandArg::Signed(i64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for u16 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(u64::from(self)))
+        CommandArg::Unsigned(u64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for i16 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Signed(i64::from(self)))
+        CommandArg::Signed(i64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for u32 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(u64::from(self)))
+        CommandArg::Unsigned(u64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for i32 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Signed(i64::from(self)))
+        CommandArg::Signed(i64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for u64 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(self))
+        CommandArg::Unsigned(self).into_args(args)
     }
 }
 
 impl IntoArgs for i64 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Signed(self))
+        CommandArg::Signed(self).into_args(args)
     }
 }
 
 impl IntoArgs for usize {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(self as u64))
+        CommandArg::Unsigned(self as u64).into_args(args)
     }
 }
 
 impl IntoArgs for isize {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Signed(self as i64))
+        CommandArg::Signed(self as i64).into_args(args)
     }
 }
 
 impl IntoArgs for f32 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::F32(self))
+        CommandArg::F32(self).into_args(args)
     }
 }
 
 impl IntoArgs for f64 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::F64(self))
+        CommandArg::F64(self).into_args(args)
     }
 }
 
 impl IntoArgs for bool {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Unsigned(u64::from(self)))
+        CommandArg::Unsigned(u64::from(self)).into_args(args)
     }
 }
 
 impl IntoArgs for Vec<u8> {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Binary(self))
+        CommandArg::Binary(self).into_args(args)
     }
 }
 
 impl IntoArgs for &[u8] {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Binary(self.to_vec()))
+        CommandArg::Binary(self.to_vec()).into_args(args)
     }
 }
 
@@ -150,7 +150,7 @@ impl<const N: usize> IntoArgs for &[u8; N]
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Binary(self.to_vec()))
+        CommandArg::Binary(self.to_vec()).into_args(args)
     }
 }
 
@@ -158,28 +158,28 @@ impl<const N: usize> IntoArgs for [u8; N]
 {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Binary(self.to_vec()))
+        CommandArg::Binary(self.to_vec()).into_args(args)
     }
 }
 
 impl IntoArgs for &'static str {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::Str(self))
+        CommandArg::Str(self).into_args(args)
     }
 }
 
 impl IntoArgs for String {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::String(self))
+        CommandArg::String(self).into_args(args)
     }
 }
 
 impl IntoArgs for char {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(CommandArg::String(self.to_string()))
+        CommandArg::String(self.to_string()).into_args(args)
     }
 }
 
@@ -386,12 +386,12 @@ impl IntoArgs for CommandArgs {
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         match self {
             CommandArgs::Empty => args,
-            CommandArgs::Single(s) => args.arg(s),
-            CommandArgs::Array2(a) => args.arg(a),
-            CommandArgs::Array3(a) => args.arg(a),
-            CommandArgs::Array4(a) => args.arg(a),
-            CommandArgs::Array5(a) => args.arg(a),
-            CommandArgs::Vec(v) => args.arg(v),
+            CommandArgs::Single(s) => s.into_args(args),
+            CommandArgs::Array2(a) => a.into_args(args),
+            CommandArgs::Array3(a) => a.into_args(args),
+            CommandArgs::Array4(a) => a.into_args(args),
+            CommandArgs::Array5(a) => a.into_args(args),
+            CommandArgs::Vec(v) => v.into_args(args),
         }
     }
 }

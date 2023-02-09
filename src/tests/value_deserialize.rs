@@ -46,52 +46,28 @@ fn bulk_string() -> Result<()> {
     log_try_init();
 
     let result = deserialize_value("$5\r\nhello\r\n")?; // b"hello"
-    assert_eq!(
-        Value::BulkString(b"hello".to_vec()),
-        result
-    );
+    assert_eq!(Value::BulkString(b"hello".to_vec()), result);
 
     let result = deserialize_value("$7\r\nhel\r\nlo\r\n")?; // b"hel\r\nlo"
-    assert_eq!(
-        Value::BulkString(b"hel\r\nlo".to_vec()),
-        result
-    );
+    assert_eq!(Value::BulkString(b"hel\r\nlo".to_vec()), result);
 
     let result = deserialize_value("$5\r\nhello\r");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     let result = deserialize_value("$5\r\nhello");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     let result = deserialize_value("$5\r");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     let result = deserialize_value("$5");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     let result = deserialize_value("$");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     let result = deserialize_value("$6\r\nhello\r\n");
-    assert!(matches!(
-        result,
-        Err(Error::Client(description)) if description == "EOF"
-    ));
+    assert!(matches!(result, Err(Error::EOF)));
 
     Ok(())
 }

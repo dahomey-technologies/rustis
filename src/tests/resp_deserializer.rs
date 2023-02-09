@@ -27,6 +27,12 @@ fn bool() -> Result<()> {
         }))
     ));
 
+    let result: bool = deserialize("#t\r\n")?; // true
+    assert!(result);
+
+    let result: bool = deserialize("#f\r\n")?; // false
+    assert!(!result);
+
     let result: bool = deserialize("$1\r\n1\r\n")?; // b"1"
     assert!(result);
 
@@ -243,6 +249,9 @@ fn unit() -> Result<()> {
             description: _
         }))
     ));
+
+    let result: Result<()> = deserialize("+OK\r\n"); // "OK"
+    assert!(result.is_ok());
 
     let result: Result<()> = deserialize("_\r\n"); // null
     assert!(result.is_ok());

@@ -48,11 +48,14 @@ pub enum Error {
     #[cfg(feature = "tls")]
     /// Raised by the TLS library
     Tls(String),
+    /// The I/O operation’s timeout expired
+    Timeout(String),
     /// Internal error to trigger retry sending the command
     #[doc(hidden)]
     Retry(SmallVec<[RetryReason; 1]>),
-    /// The I/O operation’s timeout expired
-    Timeout(String),
+    /// Internal error for EOF in incoming response
+    #[doc(hidden)]
+    EOF,
 }
 
 impl std::fmt::Display for Error {
@@ -68,6 +71,7 @@ impl std::fmt::Display for Error {
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
             Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
             Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {}", e)),
+            Error::EOF => f.write_str("EOF error"),
         }
     }
 }

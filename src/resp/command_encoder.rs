@@ -10,6 +10,7 @@ pub(crate) struct CommandEncoder;
 impl Encoder<&Command> for CommandEncoder {
     type Error = Error;
 
+    #[inline]
     fn encode(&mut self, command: &Command, buf: &mut BytesMut) -> Result<()> {
         buf.put_u8(b'*');
         encode_integer(command.args.len() as i64 + 1, buf);
@@ -109,12 +110,14 @@ fn encode_command_args(command_args: &CommandArgs, buf: &mut BytesMut) {
     }
 }
 
+#[inline]
 fn encode_integer(i: i64, buf: &mut BytesMut) {
     let mut buffer = itoa::Buffer::new();
     let str = buffer.format(i);
     buf.put(str.as_bytes());
 }
 
+#[inline]
 fn encode_crlf(buf: &mut BytesMut) {
     buf.put(&b"\r\n"[..]);
 }

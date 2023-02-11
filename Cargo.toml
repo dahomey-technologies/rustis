@@ -104,8 +104,5 @@ harness = false
 [[example]]
 name = "simple"
 
-[[example]]
-name = "cbor"
-
 [profile.release]
 debug = true

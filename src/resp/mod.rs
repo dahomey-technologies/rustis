@@ -61,7 +61,7 @@ Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`, `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
+* `String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
 * `Option<T>` where `T: SingleArg`
 
 #### Example
@@ -290,6 +290,7 @@ Current implementation provides the following deserializations from a RESP Buffe
 * `f32`, `f64`,
 * `bool`,
 * `String`,
+* [`BulkString`],
 * `Option<T>`
 
 #### Example
@@ -431,6 +432,7 @@ async fn main() -> Result<()> {
 */
 
 mod buffer_decoder;
+mod bulk_string;
 mod command;
 mod command_arg;
 mod command_args;
@@ -448,6 +450,7 @@ mod value_deserializer;
 mod value_serialize;
 
 pub(crate) use buffer_decoder::*;
+pub use bulk_string::*;
 pub use command::*;
 pub use command_arg::*;
 pub use command_args::*;

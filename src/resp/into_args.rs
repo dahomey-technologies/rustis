@@ -1,4 +1,4 @@
-use crate::resp::{CommandArg, CommandArgs, CommandArgsIntoIter};
+use crate::resp::{BulkString, CommandArg, CommandArgs, CommandArgsIntoIter};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -129,6 +129,13 @@ impl IntoArgs for bool {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         CommandArg::Unsigned(u64::from(self)).into_args(args)
+    }
+}
+
+impl IntoArgs for BulkString {
+    #[inline]
+    fn into_args(self, args: CommandArgs) -> CommandArgs {
+        CommandArg::Binary(self.into()).into_args(args)
     }
 }
 
@@ -429,6 +436,7 @@ impl<const N: usize> SingleArg for &[u8; N] {}
 impl<const N: usize> SingleArg for [u8; N] {}
 impl SingleArg for &[u8] {}
 impl SingleArg for Vec<u8> {}
+impl SingleArg for BulkString {}
 impl<T: SingleArg> SingleArg for Option<T> {}
 
 /// Generic Marker for Collections of `IntoArgs`

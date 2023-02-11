@@ -1,4 +1,4 @@
-use crate::resp::Value;
+use crate::resp::{BulkString, Value};
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
 use std::{
@@ -29,7 +29,7 @@ impl PrimitiveResponse for f32 {}
 impl PrimitiveResponse for f64 {}
 impl PrimitiveResponse for bool {}
 impl PrimitiveResponse for String {}
-impl PrimitiveResponse for Vec<u8> {}
+impl PrimitiveResponse for BulkString {}
 impl<T: PrimitiveResponse + DeserializeOwned> PrimitiveResponse for Option<T> {}
 
 /// Marker for a collection response

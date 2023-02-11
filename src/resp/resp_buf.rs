@@ -87,12 +87,14 @@ impl RespBuf {
 impl Deref for RespBuf {
     type Target = [u8];
 
-    fn deref(&self) -> &Self::Target {
+    
+    #[inline]fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl fmt::Display for RespBuf {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let str = if self.0.len() > 1000 {
             format!(
@@ -108,6 +110,7 @@ impl fmt::Display for RespBuf {
 }
 
 impl fmt::Debug for RespBuf {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self, f)
     }

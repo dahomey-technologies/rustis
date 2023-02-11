@@ -52,7 +52,7 @@ impl<'de> RespDeserializer<'de> {
     // Look at the first byte in the input without consuming it.
     #[inline]
     fn peek(&mut self) -> Result<u8> {
-        if let Some(&byte)=  self.buf.get(self.pos) {
+        if let Some(&byte) = self.buf.get(self.pos) {
             if self.eat_error {
                 match byte {
                     ERROR_TAG => {
@@ -119,12 +119,15 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn parse_float<T>(&mut self) -> Result<T>
     where
-        T: FromStr,
+        T: fast_float::FastFloat,
     {
         let next_line = self.next_line()?;
-        let str = str::from_utf8(next_line)?;
-        str.parse::<T>()
-            .map_err(|_| Error::Client(format!("Cannot parse number from {str}")))
+        fast_float::parse(next_line).map_err(|_| {
+            Error::Client(format!(
+                "Cannot parse number from {}",
+                String::from_utf8_lossy(next_line)
+            ))
+        })
     }
 
     #[inline]
@@ -273,7 +276,7 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn parse_float_ex<T>(&mut self) -> Result<T>
     where
-        T: FromStr + Default,
+        T: fast_float::FastFloat + Default,
     {
         match self.next()? {
             INTEGER_TAG | DOUBLE_TAG => self.parse_float::<T>(),
@@ -283,18 +286,18 @@ impl<'de> RespDeserializer<'de> {
             }
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
-                let str = str::from_utf8(bs)?;
-                if str.is_empty() {
+                if bs.is_empty() {
                     Ok(Default::default())
                 } else {
-                    str.parse::<T>()
+                    fast_float::parse(bs)
                         .map_err(|_| Error::Client("Cannot parse number".to_owned()))
                 }
             }
-            SIMPLE_STRING_TAG => self
-                .parse_string()?
-                .parse::<T>()
-                .map_err(|_| Error::Client("Cannot number".to_owned())),
+            SIMPLE_STRING_TAG => {
+                let next_line = self.next_line()?;
+                fast_float::parse(next_line)
+                        .map_err(|_| Error::Client("Cannot parse number".to_owned()))
+            }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
             _ => Err(Error::Client("Cannot parse number".to_owned())),
@@ -1264,7 +1267,12 @@ pub struct RespArrayChunks<'de, 'a> {
 impl<'de, 'a> RespArrayChunks<'de, 'a> {
     pub(crate) fn new(de: &'a mut RespDeserializer<'de>, len: usize) -> Self {
         let pos = de.get_pos();
-        Self { de, len, idx: 0, pos }
+        Self {
+            de,
+            len,
+            idx: 0,
+            pos,
+        }
     }
 }
 

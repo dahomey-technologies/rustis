@@ -1,6 +1,6 @@
 use serde::{
     de::{self, DeserializeOwned, DeserializeSeed, Visitor},
-    Deserializer,
+    Deserializer, Serializer,
 };
 use std::{fmt, marker::PhantomData};
 
@@ -144,6 +144,14 @@ where
     }
 
     deserializer.deserialize_byte_buf(ByteBufVisitor)
+}
+
+/// Serialize a byte buffer (&\[u8\])
+pub fn serialize_byte_buf<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer
+{
+    serializer.serialize_bytes(bytes)
 }
 
 pub(crate) struct ByteBufSeed;

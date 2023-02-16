@@ -1,9 +1,9 @@
-use crate::resp::deserialize_byte_buf;
-use serde::Deserialize;
+use crate::resp::{deserialize_byte_buf, serialize_byte_buf};
+use serde::{Deserialize, Serialize};
 use std::{fmt, ops::Deref};
 
-#[derive(Deserialize)]
-pub struct BulkString(#[serde(deserialize_with = "deserialize_byte_buf")] Vec<u8>);
+#[derive(Deserialize, Serialize)]
+pub struct BulkString(#[serde(deserialize_with = "deserialize_byte_buf", serialize_with = "serialize_byte_buf")] Vec<u8>);
 
 impl BulkString {
     /// Constructs a new `BulkString` from a bytes buffer
@@ -32,6 +32,20 @@ impl From<BulkString> for Vec<u8> {
     #[inline]
     fn from(bs: BulkString) -> Self {
         bs.0
+    }
+}
+
+impl From<Vec<u8>> for BulkString {
+    #[inline]
+    fn from(bytes: Vec<u8>) -> Self {
+        BulkString(bytes)
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for BulkString {
+    #[inline]
+    fn from(bytes: &[u8; N]) -> Self {
+        BulkString(bytes.to_vec())
     }
 }
 

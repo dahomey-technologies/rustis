@@ -79,7 +79,7 @@ impl<'a> Serializer for &'a mut RespSerializer {
     type SerializeStructVariant = Self;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        self.output.put_slice(if v { b"#t" } else { b"#f" });
+        self.output.put_slice(if v { b"#t\r\n" } else { b"#f\r\n" });
         Ok(())
     }
 
@@ -213,7 +213,7 @@ impl<'a> Serializer for &'a mut RespSerializer {
         T: serde::Serialize,
     {
         self.output.put_u8(MAP_TAG);
-        self.output.put_u8(b'1');
+        self.output.put_slice(b"1\r\n");
         variant.serialize(&mut *self)?;
         value.serialize(&mut *self)?;
         Ok(())
@@ -261,7 +261,7 @@ impl<'a> Serializer for &'a mut RespSerializer {
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         self.output.put_u8(MAP_TAG);
-        self.output.put_u8(b'1');
+        self.output.put_slice(b"1\r\n");
         variant.serialize(&mut *self)?;
         self.output.put_u8(ARRAY_TAG);
         self.serialize_raw_integer(len);
@@ -294,7 +294,7 @@ impl<'a> Serializer for &'a mut RespSerializer {
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         self.output.put_u8(MAP_TAG);
-        self.output.put_u8(b'1');
+        self.output.put_slice(b"1\r\n");
         variant.serialize(&mut *self)?;
         self.output.put_u8(MAP_TAG);
         self.serialize_raw_integer(len);

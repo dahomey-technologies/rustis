@@ -138,21 +138,24 @@ impl<'de> RespDeserializer<'de> {
         let next_line = self.next_line()?;
         atoi::atoi(next_line).ok_or_else(|| {
             Error::Client(format!(
-                "Cannot parse number from {}",
+                "Cannot parse integer from {}",
                 String::from_utf8_lossy(next_line)
             ))
         })
     }
 
     #[inline]
-    fn peek_number<T>(&self) -> Result<T>
+    fn peek_integer<T>(&self) -> Result<T>
     where
-        T: FromStr,
+    T: atoi::FromRadix10SignedChecked,
     {
         let next_line = self.peek_line()?;
-        let str = str::from_utf8(&next_line[1..])?;
-        str.parse::<T>()
-            .map_err(|_| Error::Client(format!("Cannot parse number from {str}")))
+        atoi::atoi(&next_line[1..]).ok_or_else(|| {
+            Error::Client(format!(
+                "Cannot parse integer from {}",
+                String::from_utf8_lossy(next_line)
+            ))
+        })
     }
 
     #[inline]
@@ -672,7 +675,7 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
                 visitor.visit_none()
             }
             ARRAY_TAG => {
-                let len = self.peek_number::<usize>()?;
+                let len = self.peek_integer::<usize>()?;
                 if len == 0 {
                     visitor.visit_none()
                 } else {
@@ -978,7 +981,7 @@ impl<'de, 'a> serde::de::MapAccess<'de> for SeqAccess<'a, 'de> {
     {
         if self.len > 0 {
             if self.de.peek()? == ARRAY_TAG {
-                let tuple_len = self.de.peek_number::<usize>()?;
+                let tuple_len = self.de.peek_integer::<usize>()?;
                 if tuple_len == 2 {
                     self.de.next_line()?;
                 } else {

@@ -57,7 +57,7 @@ impl ClientState {
     ) -> Result<&mut S> {
         let cache_entry = match self.cache.entry(key.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => v.insert(Box::new(S::default())),
+            Entry::Vacant(v) => v.insert(Box::<S>::default()),
         };
 
         let cache_entry = cache_entry

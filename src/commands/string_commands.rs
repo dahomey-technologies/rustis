@@ -100,7 +100,7 @@ pub trait StringCommands<'a> {
     /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
-    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     // return value can be an Option<String>...
@@ -176,7 +176,7 @@ pub trait StringCommands<'a> {
     /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
-    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushdb(FlushingMode::Sync).await?;
     ///
     ///     client.set("key", "value").await?;

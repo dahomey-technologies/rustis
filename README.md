@@ -53,7 +53,7 @@ use rustis::{
 #[tokio::main]
 async fn main() -> Result<()> {
      // Connect the client to a Redis server from its IP and port
-     let mut client = Client::connect("127.0.0.1:6379").await?;
+     let client = Client::connect("127.0.0.1:6379").await?;
  
      // Flush all existing data in Redis
      client.flushdb(FlushingMode::Sync).await?;

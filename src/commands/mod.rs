@@ -59,7 +59,7 @@ use rustis::{
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Send & await ListCommands::lpush command
     let _size = client.lpush("mylist", ["element1", "element2"]).await?;

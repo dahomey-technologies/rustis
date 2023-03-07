@@ -32,7 +32,7 @@ use rustis::{
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
@@ -87,8 +87,8 @@ use rustis::{
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let config = "127.0.0.1:6379".into_config()?;
-    let mut regular_client1 = Client::connect(config.clone()).await?;
-    let mut pub_sub_client = Client::connect(config).await?;
+    let regular_client1 = Client::connect(config.clone()).await?;
+    let pub_sub_client = Client::connect(config).await?;
 
     regular_client1.flushdb(FlushingMode::Sync).await?;
 
@@ -97,12 +97,12 @@ async fn main() -> Result<()> {
     println!("value: {value:?}");
 
     // clone a second instance on the same underlying connection
-    let mut regular_client2 = regular_client1.clone();
+    let regular_client2 = regular_client1.clone();
     let value: String = regular_client2.get("key").await?;
     println!("value: {value:?}");
 
     // use 2nd connection to manager subscriptions
-    let mut pub_sub_stream = pub_sub_client.subscribe("my_channel").await?;
+    let pub_sub_stream = pub_sub_client.subscribe("my_channel").await?;
     pub_sub_stream.close().await?;
 
     Ok(())
@@ -137,12 +137,12 @@ async fn main() -> Result<()> {
             .max_size(10)
             .build(manager).await?;
 
-        let mut client1 = pool.get().await.unwrap();
+        let client1 = pool.get().await.unwrap();
         client1.set("key1", "value1").await?;
         let value: String = client1.get("key1").await?;
         println!("value: {value:?}");
 
-        let mut client2 = pool.get().await.unwrap();
+        let client2 = pool.get().await.unwrap();
         client2.set("key2", "value2").await?;
         let value: String = client2.get("key2").await?;
         println!("value: {value:?}");
@@ -229,7 +229,7 @@ use rustis::{client::Client, resp::cmd, Result};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // standalone, host=localhost, port=6379 (default), database=1
-    let mut client = Client::connect("redis://localhost/1").await?;
+    let client = Client::connect("redis://localhost/1").await?;
 
     Ok(())
 }
@@ -273,7 +273,7 @@ use rustis::{
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
@@ -329,7 +329,7 @@ use rustis::{
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     let mut transaction = client.create_transaction();
 
@@ -386,8 +386,8 @@ use futures::StreamExt;
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut subscribing_client = Client::connect("127.0.0.1:6379").await?;
-    let mut regular_client = Client::connect("127.0.0.1:6379").await?;
+    let subscribing_client = Client::connect("127.0.0.1:6379").await?;
+    let regular_client = Client::connect("127.0.0.1:6379").await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -429,7 +429,7 @@ use futures::StreamExt;
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut subscribing_client = Client::connect("127.0.0.1:6379").await?;
+    let subscribing_client = Client::connect("127.0.0.1:6379").await?;
 
     // 1st subscription
     let mut pub_sub_stream = subscribing_client.subscribe("mychannel1").await?;

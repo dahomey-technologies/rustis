@@ -59,7 +59,7 @@ use rustis::{
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -121,7 +121,7 @@ use rustis::{client::Client, resp::cmd, Result};
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     client
         .send(

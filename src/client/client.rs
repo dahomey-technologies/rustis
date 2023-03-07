@@ -163,7 +163,7 @@ impl Client {
     /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
-    ///     let mut client = Client::connect("127.0.0.1:6379").await?;
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///
     ///     client
     ///         .send(
@@ -279,13 +279,13 @@ impl Client {
     /// Create a new transaction
     #[inline]
     pub fn create_transaction(&self) -> Transaction {
-        Transaction::new(self.clone())
+        Transaction::new(self)
     }
 
     /// Create a new pipeline
     #[inline]
     pub fn create_pipeline(&self) -> Pipeline {
-        Pipeline::new(self.clone())
+        Pipeline::new(self)
     }
 
     pub fn create_client_tracking_invalidation_stream(

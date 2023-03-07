@@ -88,7 +88,7 @@ impl SingleArg for MyI32 {}
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -141,7 +141,7 @@ use std::collections::{HashSet, BTreeSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -191,7 +191,7 @@ use std::collections::{HashSet, BTreeSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -233,7 +233,7 @@ use std::collections::{HashMap, BTreeMap};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -315,7 +315,7 @@ impl PrimitiveResponse for Buffer {}
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -366,7 +366,7 @@ use std::collections::{HashSet, BTreeSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;
@@ -414,7 +414,7 @@ use std::collections::{HashMap, BTreeMap};
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
     client.flushdb(FlushingMode::Sync).await?;

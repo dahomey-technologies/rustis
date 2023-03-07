@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::get,
     Router,
 };
 use rustis::{
@@ -18,9 +18,7 @@ async fn main() {
 
     // build our application with a route
     let app = Router::new()
-        .route("/:key", get(read))
-        .route("/:key", post(update))
-        .route("/:key", delete(del))
+        .route("/:key", get(read).post(update).delete(del))
         .with_state(redis);
 
     // run it

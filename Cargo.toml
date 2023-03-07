@@ -81,6 +81,7 @@ criterion = "0.4"
 redis = { version = "0.22", features = ["aio", "tokio-comp"] }
 fred = "6.0.0-beta.2"
 axum = "0.6"
+actix-web = "4.3"
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-tls", "redis-stack", "pool"]

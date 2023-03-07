@@ -20,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-async fn wait_for_index_scanned(client: &mut Client, index: impl SingleArg) -> Result<()> {
+async fn wait_for_index_scanned(client: &Client, index: impl SingleArg) -> Result<()> {
     let index: CommandArg = index.into_command_arg();
 
     loop {
@@ -40,7 +40,7 @@ async fn wait_for_index_scanned(client: &mut Client, index: impl SingleArg) -> R
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_aggregate() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -68,7 +68,7 @@ async fn ft_aggregate() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "idx").await?;
+    wait_for_index_scanned(&client, "idx").await?;
 
     let _result = client
         .ft_aggregate(
@@ -230,7 +230,7 @@ async fn ft_aggregate() -> Result<()> {
         )
         .await?;
 
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     let result = client
         .ft_aggregate(
@@ -275,7 +275,7 @@ async fn ft_aggregate() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_alias() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -285,7 +285,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "idx1").await?;
+    wait_for_index_scanned(&client, "idx1").await?;
 
     client
         .ft_create(
@@ -294,7 +294,7 @@ async fn ft_alias() -> Result<()> {
             FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "idx2").await?;
+    wait_for_index_scanned(&client, "idx2").await?;
 
     client.ft_aliasadd("alias", "idx1").await?;
     client.ft_aliasupdate("alias", "idx2").await?;
@@ -307,7 +307,7 @@ async fn ft_alias() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_alter() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -333,7 +333,7 @@ async fn ft_alter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_config_get_set() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.ft_config_set("TIMEOUT", 42).await?;
@@ -351,7 +351,7 @@ async fn ft_config_get_set() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_create() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -465,7 +465,7 @@ async fn ft_create() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_cursor() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let mut pipeline = client.create_pipeline();
@@ -522,7 +522,7 @@ async fn ft_cursor() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     let result = client
         .ft_aggregate(
@@ -561,7 +561,7 @@ async fn ft_cursor() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_dict() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let num = client
@@ -589,7 +589,7 @@ async fn ft_dict() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_dropindex() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.ft_dropindex("index", false).await;
@@ -630,7 +630,7 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     client.ft_dropindex("index", false).await?;
     let exists = client.hexists("log:1", "url").await?;
@@ -659,7 +659,7 @@ async fn ft_dropindex() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     client.ft_dropindex("index", true).await?;
 
@@ -673,7 +673,7 @@ async fn ft_dropindex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_explain() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -707,7 +707,7 @@ async fn ft_explain() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_explaincli() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -741,7 +741,7 @@ async fn ft_explaincli() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_info() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -783,7 +783,7 @@ async fn ft_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_list() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -823,7 +823,7 @@ async fn ft_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_profile() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let mut pipeline = client.create_pipeline();
@@ -880,7 +880,7 @@ async fn ft_profile() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     let result = client
         .ft_profile_aggregate(
@@ -917,7 +917,7 @@ async fn ft_profile() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_search() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -963,7 +963,7 @@ async fn ft_search() -> Result<()> {
             ],
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     let result = client
         .ft_search("index", "wizard", FtSearchOptions::default())
@@ -1029,7 +1029,7 @@ async fn ft_search() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_spellcheck() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.hset("doc", ("text", "hello help")).await?;
@@ -1040,7 +1040,7 @@ async fn ft_spellcheck() -> Result<()> {
             FtFieldSchema::identifier("text").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     let result = client
         .ft_spellcheck("index", "held", FtSpellCheckOptions::default().distance(2))
@@ -1083,7 +1083,7 @@ async fn ft_spellcheck() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_syn() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     // Insert documents
@@ -1098,7 +1098,7 @@ async fn ft_syn() -> Result<()> {
             FtFieldSchema::identifier("t").field_type(FtFieldType::Text),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     // search => only foo is matched
     let result = client
@@ -1149,7 +1149,7 @@ async fn ft_syn() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_tagvals() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     // Insert documents
@@ -1164,7 +1164,7 @@ async fn ft_tagvals() -> Result<()> {
             FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag),
         )
         .await?;
-    wait_for_index_scanned(&mut client, "index").await?;
+    wait_for_index_scanned(&client, "index").await?;
 
     // Get Tags
     let tags: HashSet<String> = client.ft_tagvals("index", "tag").await?;
@@ -1178,7 +1178,7 @@ async fn ft_tagvals() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_sugadd() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -1197,7 +1197,7 @@ async fn ft_sugadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_sugdel() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -1217,7 +1217,7 @@ async fn ft_sugdel() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_sugget() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -1263,7 +1263,7 @@ async fn ft_sugget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ft_suglen() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client

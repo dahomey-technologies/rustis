@@ -33,7 +33,7 @@ async fn unknown_service() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn connection() -> Result<()> {
-    let mut client = get_sentinel_master_test_client().await?;
+    let client = get_sentinel_master_test_client().await?;
     client.hello(Default::default()).await?;
 
     Ok(())
@@ -44,7 +44,7 @@ async fn connection() -> Result<()> {
 #[serial]
 async fn connection_with_failures() -> Result<()> {
     log_try_init();
-    let mut client =
+    let client =
         Client::connect("redis+sentinel://127.0.0.1:1234,127.0.0.1:26379/myservice").await?;
     client.hello(Default::default()).await?;
 
@@ -56,7 +56,7 @@ async fn connection_with_failures() -> Result<()> {
 #[serial]
 async fn config_get_set() -> Result<()> {
     // connect to the sentinel instance directly for these commands
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     client.sentinel_config_set("sentinel-user", "user").await?;
     client.sentinel_config_set("sentinel-pass", "pwd").await?;
@@ -80,7 +80,7 @@ async fn config_get_set() -> Result<()> {
 #[serial]
 async fn sentinel_ckquorum() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     client.sentinel_ckquorum("myservice").await?;
 
@@ -92,7 +92,7 @@ async fn sentinel_ckquorum() -> Result<()> {
 #[serial]
 async fn sentinel_flushconfig() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     client.sentinel_flushconfig().await?;
 
@@ -104,7 +104,7 @@ async fn sentinel_flushconfig() -> Result<()> {
 #[serial]
 async fn sentinel_info_cache() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     let result: HashMap<String, Vec<(u64, String)>> =
         client.sentinel_info_cache("myservice").await?;
@@ -120,7 +120,7 @@ async fn sentinel_info_cache() -> Result<()> {
 #[serial]
 async fn sentinel_master() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     let result = client.sentinel_master("myservice").await?;
     assert_eq!("master", result.flags);
@@ -135,7 +135,7 @@ async fn sentinel_master() -> Result<()> {
 #[serial]
 async fn sentinel_masters() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     let result = client.sentinel_masters().await?;
     assert_eq!(1, result.len());
@@ -151,7 +151,7 @@ async fn sentinel_masters() -> Result<()> {
 // #[serial]
 // async fn sentinel_remove_and_monitor() -> Result<()> {
 //     // connect to the sentinel instance directly for these commands
-//     let mut client = get_sentinel_test_client().await?;
+//     let client = get_sentinel_test_client().await?;
 
 //     let master_info = client.sentinel_master("myservice").await?;
 
@@ -175,7 +175,7 @@ async fn sentinel_masters() -> Result<()> {
 #[serial]
 async fn sentinel_set() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     client
         .sentinel_set(
@@ -195,7 +195,7 @@ async fn sentinel_set() -> Result<()> {
 #[serial]
 async fn sentinel_myid() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     let id = client.sentinel_myid().await?;
     assert!(!id.is_empty());
@@ -208,7 +208,7 @@ async fn sentinel_myid() -> Result<()> {
 #[serial]
 async fn sentinel_pending_scripts() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut sentinel_client = get_sentinel_test_client().await?;
+    let sentinel_client = get_sentinel_test_client().await?;
 
     let result = sentinel_client.sentinel_pending_scripts().await?;
     assert!(result.is_empty());
@@ -221,7 +221,7 @@ async fn sentinel_pending_scripts() -> Result<()> {
 #[serial]
 async fn sentinel_replicas() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut sentinel_client = get_sentinel_test_client().await?;
+    let sentinel_client = get_sentinel_test_client().await?;
 
     let result = sentinel_client.sentinel_replicas("myservice").await?;
     assert_eq!(1, result.len());
@@ -237,7 +237,7 @@ async fn sentinel_replicas() -> Result<()> {
 #[serial]
 async fn sentinel_sentinels() -> Result<()> {
     // connect to the sentinel instance directly for this command
-    let mut client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await?;
 
     let result = client.sentinel_sentinels("myservice").await?;
     assert!(!result.is_empty());
@@ -252,7 +252,7 @@ async fn sentinel_sentinels() -> Result<()> {
 // #[serial]
 // async fn sentinel_reset() -> Result<()> {
 //     // connect to the sentinel instance directly for this command
-//     let mut client = get_sentinel_test_client().await?;
+//     let client = get_sentinel_test_client().await?;
 
 //     let num = client.sentinel_reset("myservice").await?;
 //     assert_eq!(1, num);

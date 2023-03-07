@@ -16,7 +16,7 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [Redis Connection Management Commands](https://redis.io/commands/?group=connection)
-pub trait ConnectionCommands {
+pub trait ConnectionCommands<'a> {
     /// Authenticates the current connection.
     ///
     /// # Errors
@@ -25,7 +25,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/auth/>](https://redis.io/commands/auth/)
     #[must_use]
-    fn auth<U, P>(&mut self, username: Option<U>, password: P) -> PreparedCommand<Self, ()>
+    fn auth<U, P>(self, username: Option<U>, password: P) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         U: SingleArg,
@@ -40,7 +40,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-caching/>](https://redis.io/commands/client-caching/)
     #[must_use]
-    fn client_caching(&mut self, mode: ClientCachingMode) -> PreparedCommand<Self, Option<()>>
+    fn client_caching(self, mode: ClientCachingMode) -> PreparedCommand<'a, Self, Option<()>>
     where
         Self: Sized,
     {
@@ -55,7 +55,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
     #[must_use]
-    fn client_getname<CN>(&mut self) -> PreparedCommand<Self, Option<CN>>
+    fn client_getname<CN>(self) -> PreparedCommand<'a, Self, Option<CN>>
     where
         Self: Sized,
         CN: PrimitiveResponse + DeserializeOwned,
@@ -73,7 +73,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-getredir/>](https://redis.io/commands/client-getredir/)
     #[must_use]
-    fn client_getredir(&mut self) -> PreparedCommand<Self, i64>
+    fn client_getredir(self) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
     {
@@ -88,7 +88,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-id/>](https://redis.io/commands/client-id/)
     #[must_use]
-    fn client_id(&mut self) -> PreparedCommand<Self, i64>
+    fn client_id(self) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
     {
@@ -104,7 +104,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-info/>](https://redis.io/commands/client-info/)
     #[must_use]
-    fn client_info(&mut self) -> PreparedCommand<Self, ClientInfo>
+    fn client_info(self) -> PreparedCommand<'a, Self, ClientInfo>
     where
         Self: Sized,
     {
@@ -119,7 +119,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-kill/>](https://redis.io/commands/client-kill/)
     #[must_use]
-    fn client_kill(&mut self, options: ClientKillOptions) -> PreparedCommand<Self, usize>
+    fn client_kill(self, options: ClientKillOptions) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -134,7 +134,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-list/>](https://redis.io/commands/client-list/)
     #[must_use]
-    fn client_list(&mut self, options: ClientListOptions) -> PreparedCommand<Self, ClientListResult>
+    fn client_list(self, options: ClientListOptions) -> PreparedCommand<'a, Self, ClientListResult>
     where
         Self: Sized,
     {
@@ -146,7 +146,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-no-evict/>](https://redis.io/commands/client-no-evict/)
     #[must_use]
-    fn client_no_evict(&mut self, no_evict: bool) -> PreparedCommand<Self, ()>
+    fn client_no_evict(self, no_evict: bool) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -164,7 +164,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-pause/>](https://redis.io/commands/client-pause/)
     #[must_use]
-    fn client_pause(&mut self, timeout: u64, mode: ClientPauseMode) -> PreparedCommand<Self, ()>
+    fn client_pause(self, timeout: u64, mode: ClientPauseMode) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -176,7 +176,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-reply/>](https://redis.io/commands/client-reply/)
     #[must_use]
-    fn client_reply(&mut self, mode: ClientReplyMode) -> PreparedCommand<Self, ()>
+    fn client_reply(self, mode: ClientReplyMode) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -188,7 +188,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
-    fn client_setname<CN>(&mut self, connection_name: CN) -> PreparedCommand<Self, ()>
+    fn client_setname<CN>(self, connection_name: CN) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         CN: SingleArg,
@@ -203,10 +203,10 @@ pub trait ConnectionCommands {
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
     fn client_tracking(
-        &mut self,
+        self,
         status: ClientTrackingStatus,
         options: ClientTrackingOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -219,7 +219,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
-    fn client_trackinginfo(&mut self) -> PreparedCommand<Self, ClientTrackingInfo>
+    fn client_trackinginfo(self) -> PreparedCommand<'a, Self, ClientTrackingInfo>
     where
         Self: Sized,
     {
@@ -238,10 +238,10 @@ pub trait ConnectionCommands {
     /// [<https://redis.io/commands/client-unblock/>](https://redis.io/commands/client-unblock/)
     #[must_use]
     fn client_unblock(
-        &mut self,
+        self,
         client_id: i64,
         mode: ClientUnblockMode,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -254,7 +254,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
     #[must_use]
-    fn client_unpause(&mut self) -> PreparedCommand<Self, bool>
+    fn client_unpause(self) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -266,7 +266,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<M, R>(&mut self, message: M) -> PreparedCommand<Self, R>
+    fn echo<M, R>(self, message: M) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         M: SingleArg,
@@ -282,7 +282,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
     #[must_use]
-    fn hello(&mut self, options: HelloOptions) -> PreparedCommand<Self, HelloResult>
+    fn hello(self, options: HelloOptions) -> PreparedCommand<'a, Self, HelloResult>
     where
         Self: Sized,
     {
@@ -294,7 +294,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R>(&mut self, options: PingOptions) -> PreparedCommand<Self, R>
+    fn ping<R>(self, options: PingOptions) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         R: PrimitiveResponse,
@@ -307,7 +307,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
     #[must_use]
-    fn quit(&mut self) -> PreparedCommand<Self, ()>
+    fn quit(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -320,7 +320,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn reset(&mut self) -> PreparedCommand<Self, ()>
+    fn reset(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -332,7 +332,7 @@ pub trait ConnectionCommands {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn select(&mut self, index: usize) -> PreparedCommand<Self, ()>
+    fn select(self, index: usize) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {

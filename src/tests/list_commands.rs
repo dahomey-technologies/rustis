@@ -15,7 +15,7 @@ use std::time::Duration;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn blmove() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -48,7 +48,7 @@ async fn blmove() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let element: String = client
                 .blmove("mylist", "myotherlist", Right, Left, 0.0)
@@ -72,7 +72,7 @@ async fn blmove() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn blmpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -99,7 +99,7 @@ async fn blmpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let (key, elements): (String, Vec<String>) =
                 client.blmpop(0.0, "mylist", Left, 1).await?.unwrap();
@@ -124,7 +124,7 @@ async fn blmpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn blpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result: Option<(String, String)> = client.blpop(["list", "other"], 0.01).await?;
@@ -136,7 +136,7 @@ async fn blpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let result: Option<(String, String)> = client.blpop("list", 0.0).await?;
             assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);
@@ -158,7 +158,7 @@ async fn blpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn brpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result: Option<(String, String)> = client.brpop(["list", "other"], 0.01).await?;
@@ -170,7 +170,7 @@ async fn brpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let result: Option<(String, String)> = client.brpop("list", 0.0).await?;
             assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);
@@ -192,7 +192,7 @@ async fn brpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lindex() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -217,7 +217,7 @@ async fn lindex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn linsert() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -242,7 +242,7 @@ async fn linsert() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn llen() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -261,7 +261,7 @@ async fn llen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lmove() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["mylist", "myotherlist"]).await?;
@@ -292,7 +292,7 @@ async fn lmove() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lmpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -316,7 +316,7 @@ async fn lmpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -344,7 +344,7 @@ async fn lpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lpos() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -377,7 +377,7 @@ async fn lpos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lpush() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -395,7 +395,7 @@ async fn lpush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lpushx() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -414,7 +414,7 @@ async fn lpushx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lrange() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -440,7 +440,7 @@ async fn lrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lrem() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -465,7 +465,7 @@ async fn lrem() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lset() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -490,7 +490,7 @@ async fn lset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ltrim() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -513,7 +513,7 @@ async fn ltrim() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn rpop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -541,7 +541,7 @@ async fn rpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn rpush() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -559,7 +559,7 @@ async fn rpush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn rpushx() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["mylist", "myotherlist"]).await?;

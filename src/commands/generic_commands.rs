@@ -11,7 +11,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=generic)
-pub trait GenericCommands {
+pub trait GenericCommands<'a> {
     /// This command copies the value stored at the source key to the destination key.
     ///
     /// # Return
@@ -21,12 +21,12 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/copy/>](https://redis.io/commands/copy/)
     #[must_use]
     fn copy<S, D>(
-        &mut self,
+        self,
         source: S,
         destination: D,
         destination_db: Option<usize>,
         replace: bool,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         S: SingleArg,
@@ -50,7 +50,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/del/>](https://redis.io/commands/del/)
     #[must_use]
-    fn del<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
+    fn del<K, C>(self, keys: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -67,7 +67,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/dump/>](https://redis.io/commands/dump/)
     #[must_use]
-    fn dump<K>(&mut self, key: K) -> PreparedCommand<Self, DumpResult>
+    fn dump<K>(self, key: K) -> PreparedCommand<'a, Self, DumpResult>
     where
         Self: Sized,
         K: SingleArg,
@@ -83,7 +83,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/exists/>](https://redis.io/commands/exists/)
     #[must_use]
-    fn exists<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
+    fn exists<K, C>(self, keys: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -102,11 +102,11 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/expire/>](https://redis.io/commands/expire/)
     #[must_use]
     fn expire<K>(
-        &mut self,
+        self,
         key: K,
         seconds: u64,
         option: ExpireOption,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -128,11 +128,11 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/expireat/>](https://redis.io/commands/expireat/)
     #[must_use]
     fn expireat<K>(
-        &mut self,
+        self,
         key: K,
         unix_time_seconds: u64,
         option: ExpireOption,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -153,7 +153,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/expiretime/>](https://redis.io/commands/expiretime/)
     #[must_use]
-    fn expiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn expiretime<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -169,7 +169,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/keys/>](https://redis.io/commands/keys/)
     #[must_use]
-    fn keys<P, K, A>(&mut self, pattern: P) -> PreparedCommand<Self, A>
+    fn keys<P, K, A>(self, pattern: P) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         P: SingleArg,
@@ -189,14 +189,14 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/migrate/>](https://redis.io/commands/migrate/)
     #[must_use]
     fn migrate<H, K>(
-        &mut self,
+        self,
         host: H,
         port: u16,
         key: K,
         destination_db: usize,
         timeout: u64,
         options: MigrateOptions,
-    ) -> PreparedCommand<Self, MigrateResult>
+    ) -> PreparedCommand<'a, Self, MigrateResult>
     where
         Self: Sized,
         H: SingleArg,
@@ -223,7 +223,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/move/>](https://redis.io/commands/move/)
     #[must_use]
-    fn move_<K>(&mut self, key: K, db: usize) -> PreparedCommand<Self, i64>
+    fn move_<K>(self, key: K, db: usize) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -239,7 +239,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/object-encoding/>](https://redis.io/commands/object-encoding/)
     #[must_use]
-    fn object_encoding<K, E>(&mut self, key: K) -> PreparedCommand<Self, E>
+    fn object_encoding<K, E>(self, key: K) -> PreparedCommand<'a, Self, E>
     where
         Self: Sized,
         K: SingleArg,
@@ -256,7 +256,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/object-freq/>](https://redis.io/commands/object-freq/)
     #[must_use]
-    fn object_freq<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn object_freq<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -272,7 +272,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/object-idletime/>](https://redis.io/commands/object-idletime/)
     #[must_use]
-    fn object_idle_time<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn object_idle_time<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -288,7 +288,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/object-refcount/>](https://redis.io/commands/object-refcount/)
     #[must_use]
-    fn object_refcount<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn object_refcount<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -307,7 +307,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/persist/>](https://redis.io/commands/persist/)
     #[must_use]
-    fn persist<K>(&mut self, key: K) -> PreparedCommand<Self, bool>
+    fn persist<K>(self, key: K) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -325,11 +325,11 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/pexpire/>](https://redis.io/commands/pexpire/)
     #[must_use]
     fn pexpire<K>(
-        &mut self,
+        self,
         key: K,
         milliseconds: u64,
         option: ExpireOption,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -348,11 +348,11 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/pexpireat/>](https://redis.io/commands/pexpireat/)
     #[must_use]
     fn pexpireat<K>(
-        &mut self,
+        self,
         key: K,
         unix_time_milliseconds: u64,
         option: ExpireOption,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -377,7 +377,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/pexpiretime/>](https://redis.io/commands/pexpiretime/)
     #[must_use]
-    fn pexpiretime<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn pexpiretime<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -395,7 +395,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/pttl/>](https://redis.io/commands/pttl/)
     #[must_use]
-    fn pttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn pttl<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -411,7 +411,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/randomkey/>](https://redis.io/commands/randomkey/)
     #[must_use]
-    fn randomkey<R>(&mut self) -> PreparedCommand<Self, R>
+    fn randomkey<R>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         R: PrimitiveResponse,
@@ -424,7 +424,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/rename/>](https://redis.io/commands/rename/)
     #[must_use]
-    fn rename<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, ()>
+    fn rename<K1, K2>(self, key: K1, new_key: K2) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K1: SingleArg,
@@ -442,7 +442,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/renamenx/>](https://redis.io/commands/renamenx/)
     #[must_use]
-    fn renamenx<K1, K2>(&mut self, key: K1, new_key: K2) -> PreparedCommand<Self, bool>
+    fn renamenx<K1, K2>(self, key: K1, new_key: K2) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K1: SingleArg,
@@ -461,12 +461,12 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/restore/>](https://redis.io/commands/restore/)
     #[must_use]
     fn restore<K>(
-        &mut self,
+        self,
         key: K,
         ttl: u64,
         serialized_value: Vec<u8>,
         options: RestoreOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -489,7 +489,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/scan/>](https://redis.io/commands/scan/)
     #[must_use]
-    fn scan<K, A>(&mut self, cursor: u64, options: ScanOptions) -> PreparedCommand<Self, (u64, A)>
+    fn scan<K, A>(self, cursor: u64, options: ScanOptions) -> PreparedCommand<'a, Self, (u64, A)>
     where
         Self: Sized,
         K: PrimitiveResponse + DeserializeOwned,
@@ -506,7 +506,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/sort/>](https://redis.io/commands/sort/)
     #[must_use]
-    fn sort<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
+    fn sort<K, M, A>(self, key: K, options: SortOptions) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -525,11 +525,11 @@ pub trait GenericCommands {
     /// [<https://redis.io/commands/sort/>](https://redis.io/commands/sort/)
     #[must_use]
     fn sort_and_store<K, D>(
-        &mut self,
+        self,
         key: K,
         destination: D,
         options: SortOptions,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -556,7 +556,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/sort_ro/>](https://redis.io/commands/sort_ro/)
     #[must_use]
-    fn sort_readonly<K, M, A>(&mut self, key: K, options: SortOptions) -> PreparedCommand<Self, A>
+    fn sort_readonly<K, M, A>(self, key: K, options: SortOptions) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -574,7 +574,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/touch/>](https://redis.io/commands/touch/)
     #[must_use]
-    fn touch<K, KK>(&mut self, keys: KK) -> PreparedCommand<Self, usize>
+    fn touch<K, KK>(self, keys: KK) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -593,7 +593,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/ttl/>](https://redis.io/commands/ttl/)
     #[must_use]
-    fn ttl<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn ttl<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -611,7 +611,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/type/>](https://redis.io/commands/type/)
     #[must_use]
-    fn type_<K>(&mut self, key: K) -> PreparedCommand<Self, String>
+    fn type_<K>(self, key: K) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
         K: SingleArg,
@@ -627,7 +627,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/unlink/>](https://redis.io/commands/unlink/)
     #[must_use]
-    fn unlink<K, C>(&mut self, keys: C) -> PreparedCommand<Self, usize>
+    fn unlink<K, C>(self, keys: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -645,7 +645,7 @@ pub trait GenericCommands {
     /// # See Also
     /// [<https://redis.io/commands/wait/>](https://redis.io/commands/wait/)
     #[must_use]
-    fn wait(&mut self, num_replicas: usize, timeout: u64) -> PreparedCommand<Self, usize>
+    fn wait(self, num_replicas: usize, timeout: u64) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {

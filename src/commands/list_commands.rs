@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 ///
 /// # See Also
 /// [Redis List Commands](https://redis.io/commands/?group=list)
-pub trait ListCommands {
+pub trait ListCommands<'a> {
     /// Returns the element at index index in the list stored at key.
     ///
     /// # Return
@@ -20,7 +20,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lindex/>](https://redis.io/commands/lindex/)
     #[must_use]
-    fn lindex<K, E>(&mut self, key: K, index: isize) -> PreparedCommand<Self, E>
+    fn lindex<K, E>(self, key: K, index: isize) -> PreparedCommand<'a, Self, E>
     where
         Self: Sized,
         K: SingleArg,
@@ -38,12 +38,12 @@ pub trait ListCommands {
     /// [<https://redis.io/commands/linsert/>](https://redis.io/commands/linsert/)
     #[must_use]
     fn linsert<K, E>(
-        &mut self,
+        self,
         key: K,
         where_: LInsertWhere,
         pivot: E,
         element: E,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -63,7 +63,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
-    fn llen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
+    fn llen<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -82,12 +82,12 @@ pub trait ListCommands {
     /// [<https://redis.io/commands/lmove/>](https://redis.io/commands/lmove/)
     #[must_use]
     fn lmove<S, D, E>(
-        &mut self,
+        self,
         source: S,
         destination: D,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
-    ) -> PreparedCommand<Self, E>
+    ) -> PreparedCommand<'a, Self, E>
     where
         Self: Sized,
         S: SingleArg,
@@ -113,11 +113,11 @@ pub trait ListCommands {
     /// [<https://redis.io/commands/lmpop/>](https://redis.io/commands/lmpop/)
     #[must_use]
     fn lmpop<K, E, C>(
-        &mut self,
+        self,
         keys: C,
         where_: LMoveWhere,
         count: usize,
-    ) -> PreparedCommand<Self, (String, Vec<E>)>
+    ) -> PreparedCommand<'a, Self, (String, Vec<E>)>
     where
         Self: Sized,
         K: SingleArg,
@@ -143,7 +143,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
-    fn lpop<K, E, A>(&mut self, key: K, count: usize) -> PreparedCommand<Self, A>
+    fn lpop<K, E, A>(self, key: K, count: usize) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -162,12 +162,12 @@ pub trait ListCommands {
     /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos<K, E>(
-        &mut self,
+        self,
         key: K,
         element: E,
         rank: Option<usize>,
         max_len: Option<usize>,
-    ) -> PreparedCommand<Self, Option<usize>>
+    ) -> PreparedCommand<'a, Self, Option<usize>>
     where
         Self: Sized,
         K: SingleArg,
@@ -193,13 +193,13 @@ pub trait ListCommands {
     /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
     fn lpos_with_count<K, E, A>(
-        &mut self,
+        self,
         key: K,
         element: E,
         num_matches: usize,
         rank: Option<usize>,
         max_len: Option<usize>,
-    ) -> PreparedCommand<Self, A>
+    ) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -226,7 +226,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lpush/>](https://redis.io/commands/lpush/)
     #[must_use]
-    fn lpush<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
+    fn lpush<K, E, C>(self, key: K, elements: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -245,7 +245,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lpushx/>](https://redis.io/commands/lpushx/)
     #[must_use]
-    fn lpushx<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
+    fn lpushx<K, E, C>(self, key: K, elements: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -263,7 +263,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lrange/>](https://redis.io/commands/lrange/)
     #[must_use]
-    fn lrange<K, E, A>(&mut self, key: K, start: isize, stop: isize) -> PreparedCommand<Self, A>
+    fn lrange<K, E, A>(self, key: K, start: isize, stop: isize) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -281,7 +281,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lrem/>](https://redis.io/commands/lrem/)
     #[must_use]
-    fn lrem<K, E>(&mut self, key: K, count: isize, element: E) -> PreparedCommand<Self, usize>
+    fn lrem<K, E>(self, key: K, count: isize, element: E) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -295,7 +295,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/lset/>](https://redis.io/commands/lset/)
     #[must_use]
-    fn lset<K, E>(&mut self, key: K, index: isize, element: E) -> PreparedCommand<Self, ()>
+    fn lset<K, E>(self, key: K, index: isize, element: E) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -309,7 +309,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/ltrim/>](https://redis.io/commands/ltrim/)
     #[must_use]
-    fn ltrim<K>(&mut self, key: K, start: isize, stop: isize) -> PreparedCommand<Self, ()>
+    fn ltrim<K>(self, key: K, start: isize, stop: isize) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -325,7 +325,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
-    fn rpop<K, E, C>(&mut self, key: K, count: usize) -> PreparedCommand<Self, C>
+    fn rpop<K, E, C>(self, key: K, count: usize) -> PreparedCommand<'a, Self, C>
     where
         Self: Sized,
         K: SingleArg,
@@ -343,7 +343,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/rpush/>](https://redis.io/commands/rpush/)
     #[must_use]
-    fn rpush<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
+    fn rpush<K, E, C>(self, key: K, elements: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -362,7 +362,7 @@ pub trait ListCommands {
     /// # See Also
     /// [<https://redis.io/commands/rpushx/>](https://redis.io/commands/rpushx/)
     #[must_use]
-    fn rpushx<K, E, C>(&mut self, key: K, elements: C) -> PreparedCommand<Self, usize>
+    fn rpushx<K, E, C>(self, key: K, elements: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,

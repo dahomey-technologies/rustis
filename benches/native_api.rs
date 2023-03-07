@@ -86,7 +86,7 @@ fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
 
     let runtime = current_thread_runtime();
 
-    let mut client = runtime.block_on(get_rustis_client());
+    let client = runtime.block_on(get_rustis_client());
 
     b.iter(|| {
         runtime

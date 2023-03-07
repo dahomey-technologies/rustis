@@ -16,7 +16,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn send() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.send(cmd("PING"), None).await?;
 
@@ -29,7 +29,7 @@ async fn send() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn forget() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.send_and_forget(cmd("PING"), None)?;
     client.send(cmd("PING"), None).await?;
@@ -43,8 +43,8 @@ async fn forget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn on_reconnect() -> Result<()> {
-    let mut client1 = get_test_client().await?;
-    let mut client2 = get_test_client().await?;
+    let client1 = get_test_client().await?;
+    let client2 = get_test_client().await?;
 
     let mut receiver = client1.on_reconnect();
 
@@ -77,7 +77,7 @@ async fn command_timeout() -> Result<()> {
     let mut config = get_default_addr().into_config()?;
     config.command_timeout = Duration::from_millis(10);
 
-    let mut client = Client::connect(config).await?;
+    let client = Client::connect(config).await?;
 
     client.flushall(FlushingMode::Sync).await?;
 
@@ -105,7 +105,7 @@ async fn connection_name() -> Result<()> {
     let mut config = get_default_addr().into_config()?;
     config.connection_name = "myconnection".to_owned();
 
-    let mut client = Client::connect(config).await?;
+    let client = Client::connect(config).await?;
 
     client.flushall(FlushingMode::Sync).await?;
 
@@ -121,7 +121,7 @@ async fn connection_name() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn mget_mset() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     client
         .send(

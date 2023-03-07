@@ -6,8 +6,8 @@ use crate::{
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
 /// [Redis Pub/Sub Commands](https://redis.io/commands/?group=pubsub)
-pub(crate) trait InternalPubSubCommands {
-    fn psubscribe<P, PP>(&mut self, patterns: PP) -> PreparedCommand<Self, Value>
+pub(crate) trait InternalPubSubCommands<'a> {
+    fn psubscribe<P, PP>(self, patterns: PP) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         P: SingleArg,
@@ -20,7 +20,7 @@ pub(crate) trait InternalPubSubCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/punsubscribe/>](https://redis.io/commands/punsubscribe/)            
-    fn punsubscribe<P, PP>(&mut self, patterns: PP) -> PreparedCommand<Self, ()>
+    fn punsubscribe<P, PP>(self, patterns: PP) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         P: SingleArg + Send,
@@ -29,7 +29,7 @@ pub(crate) trait InternalPubSubCommands {
         prepare_command(self, cmd("PUNSUBSCRIBE").arg(patterns))
     }
 
-    fn ssubscribe<C, CC>(&mut self, shardchannels: CC) -> PreparedCommand<Self, Value>
+    fn ssubscribe<C, CC>(self, shardchannels: CC) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         C: SingleArg,
@@ -38,7 +38,7 @@ pub(crate) trait InternalPubSubCommands {
         prepare_command(self, cmd("SSUBSCRIBE").arg(shardchannels))
     }
 
-    fn subscribe<C, CC>(&mut self, channels: CC) -> PreparedCommand<Self, Value>
+    fn subscribe<C, CC>(self, channels: CC) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         C: SingleArg,
@@ -51,7 +51,7 @@ pub(crate) trait InternalPubSubCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/sunsubscribe//>](https://redis.io/commands/sunsubscribe//)            
-    fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> PreparedCommand<Self, ()>
+    fn sunsubscribe<C, CC>(self, shardchannels: CC) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         C: SingleArg,
@@ -64,7 +64,7 @@ pub(crate) trait InternalPubSubCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/unsubscribe/>](https://redis.io/commands/unsubscribe/)            
-    fn unsubscribe<C, CC>(&mut self, channels: CC) -> PreparedCommand<Self, ()>
+    fn unsubscribe<C, CC>(self, channels: CC) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         C: SingleArg,

@@ -20,11 +20,11 @@ async fn pubsub() -> Result<()> {
 
     let mut config = get_default_addr().into_config()?;
     config.connection_name = "pub/sub".to_owned();
-    let mut pub_sub_client = Client::connect(config).await?;
+    let pub_sub_client = Client::connect(config).await?;
 
     let mut config = get_default_addr().into_config()?;
     config.connection_name = "regular".to_owned();
-    let mut regular_client = Client::connect(config).await?;
+    let regular_client = Client::connect(config).await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -59,7 +59,7 @@ async fn pubsub() -> Result<()> {
 // #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 // #[serial]
 // async fn forbidden_command() -> Result<()> {
-//     let mut client = get_test_client().await?;
+//     let client = get_test_client().await?;
 
 //     // cleanup
 //     client.flushdb(FlushingMode::Sync).await?;
@@ -89,8 +89,8 @@ async fn pubsub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn subscribe_to_multiple_channels() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -124,8 +124,8 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn subscribe_to_multiple_patterns() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -184,8 +184,8 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_channels() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     let stream = pub_sub_client
         .subscribe(["mychannel1", "mychannel2", "mychannel3", "otherchannel"])
@@ -218,8 +218,8 @@ async fn pub_sub_channels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_numpat() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     let num_patterns = regular_client.pub_sub_numpat().await?;
     assert_eq!(0, num_patterns);
@@ -238,8 +238,8 @@ async fn pub_sub_numpat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_numsub() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     let num_sub: HashMap<String, usize> = regular_client
         .pub_sub_numsub(["mychannel1", "mychannel2"])
@@ -268,8 +268,8 @@ async fn pub_sub_numsub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pubsub_shardchannels() -> Result<()> {
-    let mut pub_sub_client = get_cluster_test_client().await?;
-    let mut regular_client = get_cluster_test_client().await?;
+    let pub_sub_client = get_cluster_test_client().await?;
+    let regular_client = get_cluster_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -309,8 +309,8 @@ async fn pubsub_shardchannels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn subscribe_to_multiple_shardchannels() -> Result<()> {
-    let mut pub_sub_client = get_cluster_test_client().await?;
-    let mut regular_client = get_cluster_test_client().await?;
+    let pub_sub_client = get_cluster_test_client().await?;
+    let regular_client = get_cluster_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -348,7 +348,7 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_shardchannels() -> Result<()> {
-    let mut pub_sub_client = get_cluster_test_client().await?;
+    let pub_sub_client = get_cluster_test_client().await?;
 
     // find the master node matching the {1} hashtag
     let slot = pub_sub_client.cluster_keyslot("{1}").await?;
@@ -364,7 +364,7 @@ async fn pub_sub_shardchannels() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client =
+    let master_client =
         Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
     let pub_sub_stream = pub_sub_client
@@ -407,7 +407,7 @@ async fn pub_sub_shardchannels() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pub_sub_shardnumsub() -> Result<()> {
-    let mut pub_sub_client = get_cluster_test_client().await?;
+    let pub_sub_client = get_cluster_test_client().await?;
 
     // find the master node matching the {1} hashtag
     let slot = pub_sub_client.cluster_keyslot("{1}").await?;
@@ -423,7 +423,7 @@ async fn pub_sub_shardnumsub() -> Result<()> {
         .find(|n| n.role == "master")
         .unwrap();
 
-    let mut master_client =
+    let master_client =
         Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
 
     let num_sub: HashMap<String, usize> = master_client
@@ -453,8 +453,8 @@ async fn pub_sub_shardnumsub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn additional_sub() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
@@ -532,8 +532,8 @@ async fn additional_sub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn auto_resubscribe() -> Result<()> {
-    let mut pub_sub_client = get_test_client().await?;
-    let mut regular_client = get_test_client().await?;
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
 
     let pub_sub_client_id = pub_sub_client.client_id().await?;
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
@@ -581,11 +581,11 @@ async fn no_auto_resubscribe() -> Result<()> {
     let mut config = get_default_addr().into_config()?;
     config.connection_name = "pub/sub".to_owned();
     config.auto_resubscribe = false;
-    let mut pub_sub_client = Client::connect(config).await?;
+    let pub_sub_client = Client::connect(config).await?;
 
     let mut config = get_default_addr().into_config()?;
     config.connection_name = "regular".to_owned();
-    let mut regular_client = Client::connect(config).await?;
+    let regular_client = Client::connect(config).await?;
 
     let pub_sub_client_id = pub_sub_client.client_id().await?;
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;

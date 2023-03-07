@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn append() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -32,7 +32,7 @@ async fn append() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn decr() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -65,7 +65,7 @@ async fn decr() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn decrby() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -98,7 +98,7 @@ async fn decrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_and_set() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -116,7 +116,7 @@ async fn get_and_set() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_ex() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Ex(1)).await?;
@@ -134,7 +134,7 @@ async fn get_ex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_pex() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Px(1000)).await?;
@@ -152,7 +152,7 @@ async fn get_pex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_exat() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -178,7 +178,7 @@ async fn get_exat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_pxat() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -204,7 +204,7 @@ async fn get_pxat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn get_persist() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Ex(1)).await?;
@@ -225,7 +225,7 @@ async fn get_persist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getrange() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -244,7 +244,7 @@ async fn getrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getset() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "value").await?;
 
@@ -265,7 +265,7 @@ async fn getset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incr() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -298,7 +298,7 @@ async fn incr() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incrby() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -331,7 +331,7 @@ async fn incrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn incrbyfloat() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -358,7 +358,7 @@ async fn incrbyfloat() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn lcs() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2"]).await?;
@@ -399,7 +399,7 @@ async fn lcs() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn mget_mset() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
@@ -424,7 +424,7 @@ async fn mget_mset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn msetnx() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
@@ -460,7 +460,7 @@ async fn msetnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn psetex() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.psetex("key", 1000, "value").await?;
     let value: String = client.get("key").await?;
@@ -478,7 +478,7 @@ async fn psetex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn set_with_options() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // EX
     client
@@ -616,7 +616,7 @@ async fn set_with_options() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setex() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.setex("key", 1, "value").await?;
     let value: String = client.get("key").await?;
@@ -634,7 +634,7 @@ async fn setex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setnx() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -658,7 +658,7 @@ async fn setnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setrange() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -680,7 +680,7 @@ async fn setrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn strlen() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key", "Hello World").await?;
 

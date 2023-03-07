@@ -10,7 +10,7 @@ use crate::{
 ///
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=bitmap)
-pub trait BitmapCommands {
+pub trait BitmapCommands<'a> {
     /// Count the number of set bits (population counting) in a string.
     ///
     /// # Return
@@ -19,7 +19,7 @@ pub trait BitmapCommands {
     /// # See Also
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
-    fn bitcount<K>(&mut self, key: K, range: BitRange) -> PreparedCommand<Self, usize>
+    fn bitcount<K>(self, key: K, range: BitRange) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -38,7 +38,7 @@ pub trait BitmapCommands {
     /// # See Also
     /// [<https://redis.io/commands/bitfield/>](https://redis.io/commands/bitfield/)
     #[must_use]
-    fn bitfield<K, C, E, O>(&mut self, key: K, sub_commands: C) -> PreparedCommand<Self, Vec<u64>>
+    fn bitfield<K, C, E, O>(self, key: K, sub_commands: C) -> PreparedCommand<'a, Self, Vec<u64>>
     where
         Self: Sized,
         K: SingleArg,
@@ -61,10 +61,10 @@ pub trait BitmapCommands {
     /// [<https://redis.io/commands/bitfield_ro/>](https://redis.io/commands/bitfield_ro/)
     #[must_use]
     fn bitfield_readonly<K, C, E, O>(
-        &mut self,
+        self,
         key: K,
         get_commands: C,
-    ) -> PreparedCommand<Self, Vec<u64>>
+    ) -> PreparedCommand<'a, Self, Vec<u64>>
     where
         Self: Sized,
         K: SingleArg,
@@ -86,11 +86,11 @@ pub trait BitmapCommands {
     /// [<https://redis.io/commands/bitop/>](https://redis.io/commands/bitop/)
     #[must_use]
     fn bitop<D, K, KK>(
-        &mut self,
+        self,
         operation: BitOperation,
         dest_key: D,
         keys: KK,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -109,7 +109,7 @@ pub trait BitmapCommands {
     /// # See Also
     /// [<https://redis.io/commands/bitpos/>](https://redis.io/commands/bitpos/)
     #[must_use]
-    fn bitpos<K>(&mut self, key: K, bit: u64, range: BitRange) -> PreparedCommand<Self, usize>
+    fn bitpos<K>(self, key: K, bit: u64, range: BitRange) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -125,7 +125,7 @@ pub trait BitmapCommands {
     /// # See Also
     /// [<https://redis.io/commands/getbit/>](https://redis.io/commands/getbit/)
     #[must_use]
-    fn getbit<K>(&mut self, key: K, offset: u64) -> PreparedCommand<Self, u64>
+    fn getbit<K>(self, key: K, offset: u64) -> PreparedCommand<'a, Self, u64>
     where
         Self: Sized,
         K: SingleArg,
@@ -141,7 +141,7 @@ pub trait BitmapCommands {
     /// # See Also
     /// [<https://redis.io/commands/setbit/>](https://redis.io/commands/setbit/)
     #[must_use]
-    fn setbit<K>(&mut self, key: K, offset: u64, value: u64) -> PreparedCommand<Self, u64>
+    fn setbit<K>(self, key: K, offset: u64, value: u64) -> PreparedCommand<'a, Self, u64>
     where
         Self: Sized,
         K: SingleArg,

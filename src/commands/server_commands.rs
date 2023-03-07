@@ -16,7 +16,7 @@ use std::{collections::HashMap, fmt, str::FromStr};
 /// # See Also
 /// [Redis Server Management Commands](https://redis.io/commands/?group=server)
 /// [ACL guide](https://redis.io/docs/manual/security/acl/)
-pub trait ServerCommands {
+pub trait ServerCommands<'a> {
     /// The command shows the available ACL categories if called without arguments.
     /// If a category name is given, the command shows all the Redis commands in the specified category.
     ///
@@ -28,7 +28,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-cat/>](https://redis.io/commands/acl-cat/)
-    fn acl_cat<C, CC>(&mut self, options: AclCatOptions) -> PreparedCommand<Self, CC>
+    fn acl_cat<C, CC>(self, options: AclCatOptions) -> PreparedCommand<'a, Self, CC>
     where
         Self: Sized,
         C: PrimitiveResponse + DeserializeOwned,
@@ -46,7 +46,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-deluser/>](https://redis.io/commands/acl-deluser/)
-    fn acl_deluser<U, UU>(&mut self, usernames: UU) -> PreparedCommand<Self, usize>
+    fn acl_deluser<U, UU>(self, usernames: UU) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         U: SingleArg,
@@ -64,11 +64,11 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
     fn acl_dryrun<U, C, R>(
-        &mut self,
+        self,
         username: U,
         command: C,
         options: AclDryRunOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         U: SingleArg,
@@ -97,9 +97,9 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
     fn acl_genpass<R: PrimitiveResponse>(
-        &mut self,
+        self,
         options: AclGenPassOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -113,7 +113,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-getuser/>](https://redis.io/commands/acl-getuser/)
-    fn acl_getuser<U, RR>(&mut self, username: U) -> PreparedCommand<Self, RR>
+    fn acl_getuser<U, RR>(self, username: U) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         U: SingleArg,
@@ -131,7 +131,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-list/>](https://redis.io/commands/acl-list/)
-    fn acl_list(&mut self) -> PreparedCommand<Self, Vec<String>>
+    fn acl_list(self) -> PreparedCommand<'a, Self, Vec<String>>
     where
         Self: Sized,
     {
@@ -155,7 +155,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-load/>](https://redis.io/commands/acl-load/)
-    fn acl_load(&mut self) -> PreparedCommand<Self, ()>
+    fn acl_load(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -170,7 +170,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
-    fn acl_log<EE>(&mut self, options: AclLogOptions) -> PreparedCommand<Self, Vec<EE>>
+    fn acl_log<EE>(self, options: AclLogOptions) -> PreparedCommand<'a, Self, Vec<EE>>
     where
         Self: Sized,
         EE: KeyValueCollectionResponse<String, Value> + DeserializeOwned,
@@ -188,7 +188,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-save/>](https://redis.io/commands/acl-save/)
-    fn acl_save(&mut self) -> PreparedCommand<Self, ()>
+    fn acl_save(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -202,7 +202,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-setuser/>](https://redis.io/commands/acl-setuser/)
-    fn acl_setuser<U, R, RR>(&mut self, username: U, rules: RR) -> PreparedCommand<Self, ()>
+    fn acl_setuser<U, R, RR>(self, username: U, rules: RR) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         U: SingleArg,
@@ -219,7 +219,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-users/>](https://redis.io/commands/acl-users/)
-    fn acl_users<U, UU>(&mut self) -> PreparedCommand<Self, UU>
+    fn acl_users<U, UU>(self) -> PreparedCommand<'a, Self, UU>
     where
         Self: Sized,
         U: PrimitiveResponse + DeserializeOwned,
@@ -235,7 +235,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: PrimitiveResponse>(&mut self) -> PreparedCommand<Self, U>
+    fn acl_whoami<U: PrimitiveResponse>(self) -> PreparedCommand<'a, Self, U>
     where
         Self: Sized,
     {
@@ -250,7 +250,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command/>](https://redis.io/commands/command/)
-    fn command(&mut self) -> PreparedCommand<Self, Vec<CommandInfo>>
+    fn command(self) -> PreparedCommand<'a, Self, Vec<CommandInfo>>
     where
         Self: Sized,
     {
@@ -264,7 +264,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-count/>](https://redis.io/commands/command-count/)
-    fn command_count(&mut self) -> PreparedCommand<Self, usize>
+    fn command_count(self) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -278,7 +278,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
-    fn command_docs<N, NN, DD>(&mut self, command_names: NN) -> PreparedCommand<Self, DD>
+    fn command_docs<N, NN, DD>(self, command_names: NN) -> PreparedCommand<'a, Self, DD>
     where
         Self: Sized,
         N: SingleArg,
@@ -295,7 +295,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
-    fn command_getkeys<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
+    fn command_getkeys<A, AA, KK>(self, args: AA) -> PreparedCommand<'a, Self, KK>
     where
         Self: Sized,
         A: SingleArg,
@@ -312,7 +312,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<A, AA, KK>(&mut self, args: AA) -> PreparedCommand<Self, KK>
+    fn command_getkeysandflags<A, AA, KK>(self, args: AA) -> PreparedCommand<'a, Self, KK>
     where
         Self: Sized,
         A: SingleArg,
@@ -329,7 +329,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
-    fn command_info<N, NN>(&mut self, command_names: NN) -> PreparedCommand<Self, Vec<CommandInfo>>
+    fn command_info<N, NN>(self, command_names: NN) -> PreparedCommand<'a, Self, Vec<CommandInfo>>
     where
         Self: Sized,
         N: SingleArg,
@@ -345,7 +345,7 @@ pub trait ServerCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-list/>](https://redis.io/commands/command-list/)
-    fn command_list<CC>(&mut self, options: CommandListOptions) -> PreparedCommand<Self, CC>
+    fn command_list<CC>(self, options: CommandListOptions) -> PreparedCommand<'a, Self, CC>
     where
         Self: Sized,
         CC: CollectionResponse<String>,
@@ -364,7 +364,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
-    fn config_get<P, PP, V, VV>(&mut self, params: PP) -> PreparedCommand<Self, VV>
+    fn config_get<P, PP, V, VV>(self, params: PP) -> PreparedCommand<'a, Self, VV>
     where
         Self: Sized,
         P: SingleArg,
@@ -380,7 +380,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/config-resetstat/>](https://redis.io/commands/config-resetstat/)
     #[must_use]
-    fn config_resetstat(&mut self) -> PreparedCommand<Self, ()>
+    fn config_resetstat(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -395,7 +395,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/config-rewrite/>](https://redis.io/commands/config-rewrite/)
     #[must_use]
-    fn config_rewrite(&mut self) -> PreparedCommand<Self, ()>
+    fn config_rewrite(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -407,7 +407,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/config-set/>](https://redis.io/commands/config-set/)
     #[must_use]
-    fn config_set<P, V, C>(&mut self, configs: C) -> PreparedCommand<Self, ()>
+    fn config_set<P, V, C>(self, configs: C) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         P: SingleArg,
@@ -422,7 +422,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/dbsize/>](https://redis.io/commands/dbsize/)
     #[must_use]
-    fn dbsize(&mut self) -> PreparedCommand<Self, usize>
+    fn dbsize(self) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -435,7 +435,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/failover/>](https://redis.io/commands/failover/)
     #[must_use]
-    fn failover(&mut self, options: FailOverOptions) -> PreparedCommand<Self, ()>
+    fn failover(self, options: FailOverOptions) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -447,7 +447,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/flushdb/>](https://redis.io/commands/flushdb/)
     #[must_use]
-    fn flushdb(&mut self, flushing_mode: FlushingMode) -> PreparedCommand<Self, ()>
+    fn flushdb(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -459,7 +459,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/flushall/>](https://redis.io/commands/flushall/)
     #[must_use]
-    fn flushall(&mut self, flushing_mode: FlushingMode) -> PreparedCommand<Self, ()>
+    fn flushall(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -472,7 +472,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<SS>(&mut self, sections: SS) -> PreparedCommand<Self, String>
+    fn info<SS>(self, sections: SS) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
         SS: SingleArgCollection<InfoSection>,
@@ -485,7 +485,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/lastsave/>](https://redis.io/commands/lastsave/)
     #[must_use]
-    fn lastsave(&mut self) -> PreparedCommand<Self, u64>
+    fn lastsave(self) -> PreparedCommand<'a, Self, u64>
     where
         Self: Sized,
     {
@@ -500,7 +500,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-doctor/>](https://redis.io/commands/latency-doctor/)
     #[must_use]
-    fn latency_doctor(&mut self) -> PreparedCommand<Self, String>
+    fn latency_doctor(self) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -515,7 +515,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-graph/>](https://redis.io/commands/latency-graph/)
     #[must_use]
-    fn latency_graph(&mut self, event: LatencyHistoryEvent) -> PreparedCommand<Self, String>
+    fn latency_graph(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -531,7 +531,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<C, CC, RR>(&mut self, commands: CC) -> PreparedCommand<Self, RR>
+    fn latency_histogram<C, CC, RR>(self, commands: CC) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         C: SingleArg,
@@ -551,7 +551,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-history/>](https://redis.io/commands/latency-history/)
     #[must_use]
-    fn latency_history<RR>(&mut self, event: LatencyHistoryEvent) -> PreparedCommand<Self, RR>
+    fn latency_history<RR>(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         RR: CollectionResponse<(u32, u32)>,
@@ -575,7 +575,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_latest<RR>(&mut self) -> PreparedCommand<Self, RR>
+    fn latency_latest<RR>(self) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         RR: CollectionResponse<(String, u32, u32, u32)>,
@@ -591,7 +591,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_reset<EE>(&mut self, events: EE) -> PreparedCommand<Self, usize>
+    fn latency_reset<EE>(self, events: EE) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         EE: SingleArgCollection<LatencyHistoryEvent>,
@@ -608,7 +608,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/lolwut/>](https://redis.io/commands/lolwut/)
     #[must_use]
-    fn lolwut(&mut self, options: LolWutOptions) -> PreparedCommand<Self, String>
+    fn lolwut(self, options: LolWutOptions) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -624,7 +624,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/memory-doctor/>](https://redis.io/commands/memory-doctor/)
     #[must_use]
-    fn memory_doctor(&mut self) -> PreparedCommand<Self, String>
+    fn memory_doctor(self) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -639,7 +639,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/memory-malloc-stats/>](https://redis.io/commands/memory-malloc-stats/)
     #[must_use]
-    fn memory_malloc_stats(&mut self) -> PreparedCommand<Self, String>
+    fn memory_malloc_stats(self) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -651,7 +651,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/memory-purge/>](https://redis.io/commands/memory-purge/)
     #[must_use]
-    fn memory_purge(&mut self) -> PreparedCommand<Self, ()>
+    fn memory_purge(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -666,7 +666,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/memory-stats/>](https://redis.io/commands/memory-stats/)
     #[must_use]
-    fn memory_stats(&mut self) -> PreparedCommand<Self, MemoryStats>
+    fn memory_stats(self) -> PreparedCommand<'a, Self, MemoryStats>
     where
         Self: Sized,
     {
@@ -682,10 +682,10 @@ pub trait ServerCommands {
     /// [<https://redis.io/commands/memory-usage/>](https://redis.io/commands/memory-usage/)
     #[must_use]
     fn memory_usage<K>(
-        &mut self,
+        self,
         key: K,
         options: MemoryUsageOptions,
-    ) -> PreparedCommand<Self, Option<usize>>
+    ) -> PreparedCommand<'a, Self, Option<usize>>
     where
         Self: Sized,
         K: SingleArg,
@@ -702,7 +702,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
     #[must_use]
-    fn module_list<MM>(&mut self) -> PreparedCommand<Self, MM>
+    fn module_list<MM>(self) -> PreparedCommand<'a, Self, MM>
     where
         Self: Sized,
         MM: CollectionResponse<ModuleInfo>,
@@ -715,7 +715,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/module-load/>](https://redis.io/commands/module-load/)
     #[must_use]
-    fn module_load<P>(&mut self, path: P, options: ModuleLoadOptions) -> PreparedCommand<Self, ()>
+    fn module_load<P>(self, path: P, options: ModuleLoadOptions) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         P: SingleArg,
@@ -728,7 +728,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
     #[must_use]
-    fn module_unload<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
+    fn module_unload<N>(self, name: N) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -741,7 +741,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/replicaof/>](https://redis.io/commands/replicaof/)
     #[must_use]
-    fn replicaof(&mut self, options: ReplicaOfOptions) -> PreparedCommand<Self, ()>
+    fn replicaof(self, options: ReplicaOfOptions) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -754,7 +754,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/role/>](https://redis.io/commands/role/)
     #[must_use]
-    fn role(&mut self) -> PreparedCommand<Self, RoleResult>
+    fn role(self) -> PreparedCommand<'a, Self, RoleResult>
     where
         Self: Sized,
     {
@@ -767,7 +767,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/save/>](https://redis.io/commands/save/)
     #[must_use]
-    fn save(&mut self) -> PreparedCommand<Self, ()>
+    fn save(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -779,7 +779,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/shutdown/>](https://redis.io/commands/shutdown/)
     #[must_use]
-    fn shutdown(&mut self, options: ShutdownOptions) -> PreparedCommand<Self, ()>
+    fn shutdown(self, options: ShutdownOptions) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -791,7 +791,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-get/>](https://redis.io/commands/slowlog-get/)
     #[must_use]
-    fn slowlog_get(&mut self, options: SlowLogOptions) -> PreparedCommand<Self, Vec<SlowLogEntry>>
+    fn slowlog_get(self, options: SlowLogOptions) -> PreparedCommand<'a, Self, Vec<SlowLogEntry>>
     where
         Self: Sized,
     {
@@ -803,7 +803,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-len/>](https://redis.io/commands/slowlog-len/)
     #[must_use]
-    fn slowlog_len(&mut self) -> PreparedCommand<Self, usize>
+    fn slowlog_len(self) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -815,7 +815,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-reset/>](https://redis.io/commands/slowlog-reset/)
     #[must_use]
-    fn slowlog_reset(&mut self) -> PreparedCommand<Self, ()>
+    fn slowlog_reset(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -829,7 +829,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/swapdb/>](https://redis.io/commands/swapdb/)
     #[must_use]
-    fn swapdb(&mut self, index1: usize, index2: usize) -> PreparedCommand<Self, ()>
+    fn swapdb(self, index1: usize, index2: usize) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -842,7 +842,7 @@ pub trait ServerCommands {
     /// # See Also
     /// [<https://redis.io/commands/time/>](https://redis.io/commands/time/)
     #[must_use]
-    fn time(&mut self) -> PreparedCommand<Self, (u32, u32)>
+    fn time(self) -> PreparedCommand<'a, Self, (u32, u32)>
     where
         Self: Sized,
     {

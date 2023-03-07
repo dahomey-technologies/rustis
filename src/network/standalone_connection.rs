@@ -213,7 +213,7 @@ impl StandaloneConnection {
     }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, StandaloneConnection, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, &'a mut StandaloneConnection, R>
 where
     R: DeserializeOwned + Send + 'a,
 {
@@ -235,7 +235,7 @@ where
     }
 }
 
-impl ClusterCommands for StandaloneConnection {}
-impl ConnectionCommands for StandaloneConnection {}
-impl SentinelCommands for StandaloneConnection {}
-impl ServerCommands for StandaloneConnection {}
+impl<'a> ClusterCommands<'a> for &'a mut StandaloneConnection {}
+impl<'a> ConnectionCommands<'a> for &'a mut StandaloneConnection {}
+impl<'a> SentinelCommands<'a> for &'a mut StandaloneConnection {}
+impl<'a> ServerCommands<'a> for &'a mut StandaloneConnection {}

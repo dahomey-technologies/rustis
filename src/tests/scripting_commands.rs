@@ -14,7 +14,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn eval() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let result: String = client
         .eval(CallBuilder::script("return ARGV[1]").args("hello"))
@@ -44,7 +44,7 @@ async fn eval() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn evalsha() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let sha1: String = client.script_load("return ARGV[1]").await?;
 
@@ -60,7 +60,7 @@ async fn evalsha() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn fcall() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
@@ -77,7 +77,7 @@ async fn fcall() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_delete() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
@@ -101,7 +101,7 @@ async fn function_delete() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_dump() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.flushdb(FlushingMode::Sync).await?;
 
@@ -134,7 +134,7 @@ async fn function_dump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_flush() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
@@ -151,7 +151,7 @@ async fn function_flush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_list() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.function_flush(FlushingMode::Sync).await?;
 
@@ -190,7 +190,7 @@ async fn function_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn function_stats() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.function_kill().forget()?;
 
@@ -202,7 +202,7 @@ async fn function_stats() -> Result<()> {
 
     spawn(async move {
         async fn blocking_fcall() -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let _ = client
                 .fcall::<String>(CallBuilder::function("myfunc").args("hello"))
@@ -240,7 +240,7 @@ async fn function_stats() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_exists() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let sha11: String = client.script_load("return ARGV[1]").await?;
     let sha12: String = client
@@ -259,7 +259,7 @@ async fn script_exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_flush() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let sha11: String = client.script_load("return ARGV[1]").await?;
     let sha12: String = client
@@ -278,7 +278,7 @@ async fn script_flush() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn script_kill() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let _ = client.script_kill().await;
 
@@ -288,7 +288,7 @@ async fn script_kill() -> Result<()> {
 
     spawn(async move {
         async fn blocking_script(sha1: String) -> Result<()> {
-            let mut client = get_test_client().await?;
+            let client = get_test_client().await?;
 
             let _ = client
                 .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))

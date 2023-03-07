@@ -4,39 +4,20 @@ use rustis::{
     commands::{GenericCommands, StringCommands},
 };
 use std::{
-    cell::{RefCell, RefMut},
     fmt::{self, Display},
     net::SocketAddr,
 };
 
-#[derive(Clone)]
-struct ThreadLocalRedis {
-    client: RefCell<Client>
-}
-
-impl ThreadLocalRedis {
-    pub fn new(client: Client) -> Self {
-        Self {
-            client: RefCell::new(client)
-        }
-    }
-
-    pub fn get_client_mut(&self) -> RefMut<'_, Client> {
-        self.client.borrow_mut()
-    }
-}
-
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    // build rustis client
-    let client = Client::connect("redis://127.0.0.1:6379").await.unwrap();
-    let thread_local_redis = ThreadLocalRedis::new(client);
+    // build rustis client in multiplexer mode (a unique rustis instance for all actix workers)
+    let redis = web::Data::new(Client::connect("redis://127.0.0.1:6379").await.unwrap());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("listening on {}", addr);
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(thread_local_redis.clone()))
+            .app_data(redis.clone())
             .service(read)
             .service(update)
             .service(delete)
@@ -48,10 +29,10 @@ async fn main() -> std::io::Result<()> {
 
 #[get("/{key}")]
 async fn read(
-    redis: web::Data<ThreadLocalRedis>,
+    redis: web::Data<Client>,
     key: web::Path<String>,
 ) -> Result<String, ServiceError> {
-    let value: Option<String> = redis.get_client_mut().get(key.clone()).await?;
+    let value: Option<String> = redis.get(key.clone()).await?;
     value.ok_or_else(|| {
         ServiceError::new(
             StatusCode::NOT_FOUND,
@@ -62,7 +43,7 @@ async fn read(
 
 #[post("/{key}")]
 async fn update(
-    redis: web::Data<ThreadLocalRedis>,
+    redis: web::Data<Client>,
     key: web::Path<String>,
     value: Option<String>,
 ) -> Result<HttpResponseBuilder, ServiceError> {
@@ -72,16 +53,16 @@ async fn update(
             "Value not provided",
         ));
     }
-    redis.get_client_mut().set(key.into_inner(), value).await?;
+    redis.set(key.into_inner(), value).await?;
     Ok(HttpResponse::Ok())
 }
 
 #[delete("/{key}")]
 async fn delete(
-    redis: web::Data<ThreadLocalRedis>,
+    redis: web::Data<Client>,
     key: web::Path<String>,
 ) -> Result<HttpResponseBuilder, ServiceError> {
-    let deleted = redis.get_client_mut().del(key.clone()).await?;
+    let deleted = redis.del(key.clone()).await?;
     if deleted > 0 {
         Ok(HttpResponse::Ok())
     } else {

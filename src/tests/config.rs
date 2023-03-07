@@ -18,7 +18,7 @@ async fn default_database() -> Result<()> {
         get_default_port(),
         database
     );
-    let mut client = Client::connect(uri).await?;
+    let client = Client::connect(uri).await?;
 
     let client_info = client.client_info().await?;
     assert_eq!(1, client_info.db);
@@ -30,13 +30,13 @@ async fn default_database() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn password() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // set password
     client.config_set(("requirepass", "pwd")).await?;
 
     let uri = format!("redis://:pwd@{}:{}", get_default_host(), get_default_port());
-    let mut client = Client::connect(uri).await?;
+    let client = Client::connect(uri).await?;
 
     // reset password
     client.config_set(("requirepass", "")).await?;
@@ -53,10 +53,10 @@ async fn reconnection() -> Result<()> {
         get_default_host(),
         get_default_port()
     );
-    let mut client = Client::connect(uri.clone()).await?;
+    let client = Client::connect(uri.clone()).await?;
 
     // kill client connection from another client to force reconnection
-    let mut client2 = Client::connect(uri).await?;
+    let client2 = Client::connect(uri).await?;
     let client_id = client.client_id().await?;
     client2
         .client_kill(ClientKillOptions::default().id(client_id))
@@ -251,7 +251,7 @@ fn into_config() -> Result<()> {
 #[serial]
 async fn connect_timeout() -> Result<()> {
     log_try_init();
-    let mut client = Client::connect("redis://127.0.0.1:6379?connect_timeout=10000").await?;
+    let client = Client::connect("redis://127.0.0.1:6379?connect_timeout=10000").await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     Ok(())

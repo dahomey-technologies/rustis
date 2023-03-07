@@ -44,14 +44,14 @@ where
             formatter.write_str("Option<Vec<(K, V, f64)>>")
         }
 
-        fn visit_none<E>(self) -> Result<Self::Value, E>
+        fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
         where
             E: serde::de::Error,
         {
             Ok(None)
         }
 
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        fn visit_some<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
         where
             D: Deserializer<'de>,
         {
@@ -65,7 +65,7 @@ where
 }
 
 /// A group of blocking commands
-pub trait BlockingCommands {
+pub trait BlockingCommands<'a> {
     /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
     ///
     /// # Return
@@ -76,13 +76,13 @@ pub trait BlockingCommands {
     /// [<https://redis.io/commands/blmove/>](https://redis.io/commands/blmove/)
     #[must_use]
     fn blmove<S, D, E>(
-        &mut self,
+        self,
         source: S,
         destination: D,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
         timeout: f64,
-    ) -> PreparedCommand<Self, E>
+    ) -> PreparedCommand<'a, Self, E>
     where
         Self: Sized,
         S: SingleArg,
@@ -110,12 +110,12 @@ pub trait BlockingCommands {
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
     fn blmpop<K, KK, E>(
-        &mut self,
+        self,
         timeout: f64,
         keys: KK,
         where_: LMoveWhere,
         count: usize,
-    ) -> PreparedCommand<Self, Option<(String, Vec<E>)>>
+    ) -> PreparedCommand<'a, Self, Option<(String, Vec<E>)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -150,11 +150,7 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<K, KK, K1, V>(
-        &mut self,
-        keys: KK,
-        timeout: f64,
-    ) -> PreparedCommand<Self, Option<(K1, V)>>
+    fn blpop<K, KK, K1, V>(self, keys: KK, timeout: f64) -> PreparedCommand<'a, Self, Option<(K1, V)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -181,11 +177,7 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<K, KK, K1, V>(
-        &mut self,
-        keys: KK,
-        timeout: f64,
-    ) -> PreparedCommand<Self, Option<(K1, V)>>
+    fn brpop<K, KK, K1, V>(self, keys: KK, timeout: f64) -> PreparedCommand<'a, Self, Option<(K1, V)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -208,12 +200,12 @@ pub trait BlockingCommands {
     /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
     fn bzmpop<K, KK, E>(
-        &mut self,
+        self,
         timeout: f64,
         keys: KK,
         where_: ZWhere,
         count: usize,
-    ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
+    ) -> PreparedCommand<'a, Self, Option<ZMPopResult<E>>>
     where
         Self: Sized,
         K: SingleArg,
@@ -245,10 +237,10 @@ pub trait BlockingCommands {
     /// [<https://redis.io/commands/bzpopmax/>](https://redis.io/commands/bzpopmax/)
     #[must_use]
     fn bzpopmax<K, KK, E, K1>(
-        &mut self,
+        self,
         keys: KK,
         timeout: f64,
-    ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
+    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -272,10 +264,10 @@ pub trait BlockingCommands {
     /// [<https://redis.io/commands/bzpopmin/>](https://redis.io/commands/bzpopmin/)
     #[must_use]
     fn bzpopmin<K, KK, E, K1>(
-        &mut self,
+        self,
         keys: KK,
         timeout: f64,
-    ) -> PreparedCommand<Self, BZpopMinMaxResult<K1, E>>
+    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<K1, E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -291,5 +283,5 @@ pub trait BlockingCommands {
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
     #[must_use]
-    fn monitor(&mut self) -> Future<MonitorStream>;
+    fn monitor(self) -> Future<'a, MonitorStream>;
 }

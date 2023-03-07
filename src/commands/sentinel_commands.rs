@@ -10,13 +10,13 @@ use serde::Deserialize;
 /// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
 /// # See Also
 /// [Sentinel Commands](https://redis.io/docs/management/sentinel/#sentinel-commands)
-pub trait SentinelCommands {
+pub trait SentinelCommands<'a> {
     /// Get the current value of a global Sentinel configuration parameter.
     ///
     /// The specified name may be a wildcard.
     /// Similar to the Redis [`config_get`](crate::commands::ServerCommands::config_get) command.
     #[must_use]
-    fn sentinel_config_get<N, RN, RV, R>(&mut self, name: N) -> PreparedCommand<Self, R>
+    fn sentinel_config_get<N, RN, RV, R>(self, name: N) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         N: SingleArg,
@@ -29,7 +29,7 @@ pub trait SentinelCommands {
 
     /// Set the value of a global Sentinel configuration parameter.
     #[must_use]
-    fn sentinel_config_set<N, V>(&mut self, name: N, value: V) -> PreparedCommand<Self, ()>
+    fn sentinel_config_set<N, V>(self, name: N, value: V) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -50,7 +50,7 @@ pub trait SentinelCommands {
     ///
     /// This command should be used in monitoring systems to check if a Sentinel deployment is ok.
     #[must_use]
-    fn sentinel_ckquorum<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
+    fn sentinel_ckquorum<N>(self, master_name: N) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -63,7 +63,7 @@ pub trait SentinelCommands {
     /// (however a new version of the configuration will be published
     /// so that the other Sentinels will update their configurations).
     #[must_use]
-    fn sentinel_failover<N>(&mut self, master_name: N) -> PreparedCommand<Self, ()>
+    fn sentinel_failover<N>(self, master_name: N) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -80,7 +80,7 @@ pub trait SentinelCommands {
     /// In those cases a way to force Sentinel to rewrite the configuration file is handy.
     /// This command works even if the previous configuration file is completely missing.
     #[must_use]
-    fn sentinel_flushconfig(&mut self) -> PreparedCommand<Self, ()>
+    fn sentinel_flushconfig(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -99,9 +99,9 @@ pub trait SentinelCommands {
     ///     * The port of the master
     #[must_use]
     fn sentinel_get_master_addr_by_name<N>(
-        &mut self,
+        self,
         master_name: N,
-    ) -> PreparedCommand<Self, Option<(String, u16)>>
+    ) -> PreparedCommand<'a, Self, Option<(String, u16)>>
     where
         Self: Sized,
         N: SingleArg,
@@ -116,7 +116,7 @@ pub trait SentinelCommands {
 
     /// Return cached [`info`](crate::commands::ServerCommands::info) output from masters and replicas.
     #[must_use]
-    fn sentinel_info_cache<N, NN, R>(&mut self, master_names: NN) -> PreparedCommand<Self, R>
+    fn sentinel_info_cache<N, NN, R>(self, master_names: NN) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         N: SingleArg,
@@ -128,7 +128,7 @@ pub trait SentinelCommands {
 
     /// Show the state and info of the specified master.
     #[must_use]
-    fn sentinel_master<N>(&mut self, master_name: N) -> PreparedCommand<Self, SentinelMasterInfo>
+    fn sentinel_master<N>(self, master_name: N) -> PreparedCommand<'a, Self, SentinelMasterInfo>
     where
         Self: Sized,
         N: SingleArg,
@@ -138,7 +138,7 @@ pub trait SentinelCommands {
 
     /// Show a list of monitored masters and their state.
     #[must_use]
-    fn sentinel_masters(&mut self) -> PreparedCommand<Self, Vec<SentinelMasterInfo>>
+    fn sentinel_masters(self) -> PreparedCommand<'a, Self, Vec<SentinelMasterInfo>>
     where
         Self: Sized,
     {
@@ -153,12 +153,12 @@ pub trait SentinelCommands {
     /// but you need to provide an IPv4 or IPv6 address.
     #[must_use]
     fn sentinel_monitor<N, I>(
-        &mut self,
+        self,
         name: N,
         ip: I,
         port: u16,
         quorum: usize,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -181,7 +181,7 @@ pub trait SentinelCommands {
     /// and will totally be removed from the internal state of the Sentinel,
     /// so it will no longer listed by [`sentinel_masters`](SentinelCommands::sentinel_masters) and so forth.
     #[must_use]
-    fn sentinel_remove<N>(&mut self, name: N) -> PreparedCommand<Self, ()>
+    fn sentinel_remove<N>(self, name: N) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -196,7 +196,7 @@ pub trait SentinelCommands {
     /// All the configuration parameters that can be configured via `sentinel.conf`
     /// are also configurable using this command.
     #[must_use]
-    fn sentinel_set<N, O, V, C>(&mut self, name: N, configs: C) -> PreparedCommand<Self, ()>
+    fn sentinel_set<N, O, V, C>(self, name: N, configs: C) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         N: SingleArg,
@@ -209,7 +209,7 @@ pub trait SentinelCommands {
 
     /// Return the ID of the Sentinel instance.
     #[must_use]
-    fn sentinel_myid(&mut self) -> PreparedCommand<Self, String>
+    fn sentinel_myid(self) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -218,7 +218,7 @@ pub trait SentinelCommands {
 
     /// This command returns information about pending scripts.
     #[must_use]
-    fn sentinel_pending_scripts(&mut self) -> PreparedCommand<Self, Vec<Value>>
+    fn sentinel_pending_scripts(self) -> PreparedCommand<'a, Self, Vec<Value>>
     where
         Self: Sized,
     {
@@ -228,9 +228,9 @@ pub trait SentinelCommands {
     /// Show a list of replicas for this master, and their state.
     #[must_use]
     fn sentinel_replicas<N>(
-        &mut self,
+        self,
         master_name: N,
-    ) -> PreparedCommand<Self, Vec<SentinelReplicaInfo>>
+    ) -> PreparedCommand<'a, Self, Vec<SentinelReplicaInfo>>
     where
         Self: Sized,
         N: SingleArg,
@@ -247,7 +247,7 @@ pub trait SentinelCommands {
     /// # Return
     /// The number of reset masters
     #[must_use]
-    fn sentinel_reset<P>(&mut self, pattern: P) -> PreparedCommand<Self, usize>
+    fn sentinel_reset<P>(self, pattern: P) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         P: SingleArg,
@@ -257,7 +257,7 @@ pub trait SentinelCommands {
 
     ///  Show a list of sentinel instances for this master, and their state.
     #[must_use]
-    fn sentinel_sentinels<N>(&mut self, master_name: N) -> PreparedCommand<Self, Vec<SentinelInfo>>
+    fn sentinel_sentinels<N>(self, master_name: N) -> PreparedCommand<'a, Self, Vec<SentinelInfo>>
     where
         Self: Sized,
         N: SingleArg,
@@ -268,9 +268,9 @@ pub trait SentinelCommands {
     ///  This command simulates different Sentinel crash scenarios.
     #[must_use]
     fn sentinel_simulate_failure(
-        &mut self,
+        self,
         mode: SentinelSimulateFailureMode,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {

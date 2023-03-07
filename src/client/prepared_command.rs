@@ -6,7 +6,7 @@ use crate::{
 use std::marker::PhantomData;
 
 type CustomConverter<'a, R> =
-    dyn Fn(RespBuf, Command, &'a mut Client) -> Future<'a, R> + Send + Sync;
+    dyn Fn(RespBuf, Command, &'a Client) -> Future<'a, R> + Send + Sync;
 
 /// Wrapper around a command about to be send with a marker for the response type
 /// and a few options to decide how the response send back by Redis should be processed.
@@ -18,7 +18,7 @@ where
     phantom: PhantomData<R>,
     /// Client, Transaction or Pipeline that will actually
     /// send the command to the Redis server.
-    pub executor: &'a mut E,
+    pub executor: E,
     /// Command to send
     pub command: Command,
     /// Custom converter to transform a RESP Buffer in to `R` type
@@ -27,13 +27,13 @@ where
     pub retry_on_error: Option<bool>,
 }
 
-impl<'a, T, R> PreparedCommand<'a, T, R>
+impl<'a, E, R> PreparedCommand<'a, E, R>
 where
     R: Response,
 {
     /// Create a new prepared command.
     #[must_use]
-    pub fn new(executor: &'a mut T, command: Command) -> Self {
+    pub fn new(executor: E, command: Command) -> Self {
         PreparedCommand {
             phantom: PhantomData,
             executor,
@@ -64,6 +64,6 @@ where
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
-pub(crate) fn prepare_command<T, R: Response>(executor: &mut T, command: Command) -> PreparedCommand<T, R> {
+pub(crate) fn prepare_command<'a, E, R: Response>(executor: E, command: Command) -> PreparedCommand<'a, E, R> {
     PreparedCommand::new(executor, command)
 }

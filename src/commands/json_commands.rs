@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 ///
 /// # See Also
 /// [RedisJson Commands](https://redis.io/commands/?group=json)
-pub trait JsonCommands {
+pub trait JsonCommands<'a> {
     /// Append the json `values` into the array at `path` after the last element in it
     ///
     /// # Arguments
@@ -28,11 +28,11 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.arrappend/>](https://redis.io/commands/json.arrappend/)
     #[must_use]
     fn json_arrappend<K, P, V, VV, R>(
-        &mut self,
+        self,
         key: K,
         path: P,
         values: VV,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -61,12 +61,12 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.arrindex/>](https://redis.io/commands/json.arrindex/)
     #[must_use]
     fn json_arrindex<K, P, V, R>(
-        &mut self,
+        self,
         key: K,
         path: P,
         value: V,
         options: JsonArrIndexOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -104,12 +104,12 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.arrinsert/>](https://redis.io/commands/json.arrinsert/)
     #[must_use]
     fn json_arrinsert<K, P, V, VV, R>(
-        &mut self,
+        self,
         key: K,
         path: P,
         index: isize,
         values: VV,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -141,7 +141,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.arrlen/>](https://redis.io/commands/json.arrlen/)
     #[must_use]
-    fn json_arrlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
+    fn json_arrlen<K, P, R>(self, key: K, path: P) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -169,11 +169,11 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.arrpop/>](https://redis.io/commands/json.arrpop/)
     #[must_use]
     fn json_arrpop<K, P, R, RR>(
-        &mut self,
+        self,
         key: K,
         path: P,
         index: isize,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         K: SingleArg,
@@ -201,12 +201,12 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.arrtrim/>](https://redis.io/commands/json.arrtrim/)
     #[must_use]
     fn json_arrtrim<K, P, R>(
-        &mut self,
+        self,
         key: K,
         path: P,
         start: isize,
         stop: isize,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -231,7 +231,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.clear/>](https://redis.io/commands/json.clear/)
     #[must_use]
-    fn json_clear<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
+    fn json_clear<K, P>(self, key: K, path: P) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -252,7 +252,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.debug-memory/>](https://redis.io/commands/json.debug-memory/)
     #[must_use]
-    fn json_debug_memory<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
+    fn json_debug_memory<K, P, R>(self, key: K, path: P) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -274,7 +274,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.del/>](https://redis.io/commands/json.del/)
     #[must_use]
-    fn json_del<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
+    fn json_del<K, P>(self, key: K, path: P) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -295,7 +295,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.forget/>](https://redis.io/commands/json.forget/)
     #[must_use]
-    fn json_forget<K, P>(&mut self, key: K, path: P) -> PreparedCommand<Self, usize>
+    fn json_forget<K, P>(self, key: K, path: P) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -316,7 +316,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.get/>](https://redis.io/commands/json.get/)
     #[must_use]
-    fn json_get<K, V>(&mut self, key: K, options: JsonGetOptions) -> PreparedCommand<Self, V>
+    fn json_get<K, V>(self, key: K, options: JsonGetOptions) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -337,7 +337,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.mget/>](https://redis.io/commands/json.mget/)
     #[must_use]
-    fn json_mget<K, KK, P, V, VV>(&mut self, keys: KK, path: P) -> PreparedCommand<Self, VV>
+    fn json_mget<K, KK, P, V, VV>(self, keys: KK, path: P) -> PreparedCommand<'a, Self, VV>
     where
         Self: Sized,
         K: SingleArg,
@@ -363,7 +363,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.numincrby/>](https://redis.io/commands/json.numincrby/)
     #[must_use]
-    fn json_numincrby<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
+    fn json_numincrby<K, P, V, R>(self, key: K, path: P, value: V) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -388,7 +388,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.nummultby/>](https://redis.io/commands/json.nummultby/)
     #[must_use]
-    fn json_nummultby<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
+    fn json_nummultby<K, P, V, R>(self, key: K, path: P, value: V) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -413,7 +413,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.objkeys/>](https://redis.io/commands/json.objkeys/)
     #[must_use]
-    fn json_objkeys<K, P, R, RR>(&mut self, key: K, path: P) -> PreparedCommand<Self, RR>
+    fn json_objkeys<K, P, R, RR>(self, key: K, path: P) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         K: SingleArg,
@@ -437,7 +437,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.objlen/>](https://redis.io/commands/json.objlen/)
     #[must_use]
-    fn json_objlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
+    fn json_objlen<K, P, R>(self, key: K, path: P) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -469,7 +469,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.resp/>](https://redis.io/commands/json.resp/)
     #[must_use]
-    fn json_resp<K, P, VV>(&mut self, key: K, path: P) -> PreparedCommand<Self, VV>
+    fn json_resp<K, P, VV>(self, key: K, path: P) -> PreparedCommand<'a, Self, VV>
     where
         Self: Sized,
         K: SingleArg,
@@ -494,12 +494,12 @@ pub trait JsonCommands {
     /// [<https://redis.io/commands/json.set/>](https://redis.io/commands/json.set/)
     #[must_use]
     fn json_set<K, P, V>(
-        &mut self,
+        self,
         key: K,
         path: P,
         value: V,
         condition: SetCondition,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -525,7 +525,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.strappend/>](https://redis.io/commands/json.strappend/)
     #[must_use]
-    fn json_strappend<K, P, V, R>(&mut self, key: K, path: P, value: V) -> PreparedCommand<Self, R>
+    fn json_strappend<K, P, V, R>(self, key: K, path: P, value: V) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -549,7 +549,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.strlen/>](https://redis.io/commands/json.strlen/)
     #[must_use]
-    fn json_strlen<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
+    fn json_strlen<K, P, R>(self, key: K, path: P) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -572,7 +572,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.toggle/>](https://redis.io/commands/json.toggle/)
     #[must_use]
-    fn json_toggle<K, P, R>(&mut self, key: K, path: P) -> PreparedCommand<Self, R>
+    fn json_toggle<K, P, R>(self, key: K, path: P) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -594,7 +594,7 @@ pub trait JsonCommands {
     /// # See Also
     /// [<https://redis.io/commands/json.type/>](https://redis.io/commands/json.type/)
     #[must_use]
-    fn json_type<K, P, R, RR>(&mut self, key: K, path: P) -> PreparedCommand<Self, RR>
+    fn json_type<K, P, R, RR>(self, key: K, path: P) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         K: SingleArg,

@@ -7,7 +7,7 @@ use rustis::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     let key = "test_key";
     // {"foo": "bar"} in CBOR

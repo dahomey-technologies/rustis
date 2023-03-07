@@ -12,7 +12,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geoadd() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -82,7 +82,7 @@ async fn geoadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geodist() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("Sicily").await?;
@@ -127,7 +127,7 @@ async fn geodist() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geohash() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("Sicily").await?;
@@ -157,7 +157,7 @@ async fn geohash() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geopos() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("Sicily").await?;
@@ -190,7 +190,7 @@ async fn geopos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearch() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("Sicily").await?;
@@ -295,7 +295,7 @@ async fn geosearch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn geosearchstore() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["Sicily", "out"]).await?;

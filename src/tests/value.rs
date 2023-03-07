@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn from_single_value_array() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.del("key").await?;
 

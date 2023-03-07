@@ -9,7 +9,7 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [T-Digest Commands](https://redis.io/commands/?group=tdigest)
-pub trait TDigestCommands {
+pub trait TDigestCommands<'a> {
     /// Adds one or more observations to a t-digest sketch.
     ///
     /// # Arguments
@@ -20,10 +20,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.add/>](https://redis.io/commands/tdigest.add/)
     #[must_use]
     fn tdigest_add(
-        &mut self,
+        self,
         key: impl SingleArg,
         values: impl SingleArgCollection<f64>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -51,10 +51,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.byrank/>](https://redis.io/commands/tdigest.byrank/)
     #[must_use]
     fn tdigest_byrank<R: CollectionResponse<f64>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         ranks: impl SingleArgCollection<usize>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -82,10 +82,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.byrevrank/>](https://redis.io/commands/tdigest.byrevrank/)
     #[must_use]
     fn tdigest_byrevrank<R: CollectionResponse<f64>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         ranks: impl SingleArgCollection<usize>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -110,10 +110,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.cdf/>](https://redis.io/commands/tdigest.cdf/)
     #[must_use]
     fn tdigest_cdf<V: SingleArg, R: CollectionResponse<f64>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -134,10 +134,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.create/>](https://redis.io/commands/tdigest.create/)
     #[must_use]
     fn tdigest_create(
-        &mut self,
+        self,
         key: impl SingleArg,
         compression: Option<i64>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -160,7 +160,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.info/>](https://redis.io/commands/tdigest.info/)
     #[must_use]
-    fn tdigest_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, TDigestInfoResult>
+    fn tdigest_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, TDigestInfoResult>
     where
         Self: Sized,
     {
@@ -179,7 +179,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.max/>](https://redis.io/commands/tdigest.max/)
     #[must_use]
-    fn tdigest_max(&mut self, key: impl SingleArg) -> PreparedCommand<Self, f64>
+    fn tdigest_max(self, key: impl SingleArg) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
     {
@@ -199,11 +199,11 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.merge/>](https://redis.io/commands/tdigest.merge/)
     #[must_use]
     fn tdigest_merge<S: SingleArg>(
-        &mut self,
+        self,
         destination: impl SingleArg,
         sources: impl SingleArgCollection<S>,
         options: TDigestMergeOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -229,7 +229,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.min/>](https://redis.io/commands/tdigest.min/)
     #[must_use]
-    fn tdigest_min(&mut self, key: impl SingleArg) -> PreparedCommand<Self, f64>
+    fn tdigest_min(self, key: impl SingleArg) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
     {
@@ -256,10 +256,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.quantile/>](https://redis.io/commands/tdigest.quantile/)
     #[must_use]
     fn tdigest_quantile<Q: SingleArg, R: CollectionResponse<f64>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         quantiles: impl SingleArgCollection<Q>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -291,10 +291,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.rank/>](https://redis.io/commands/tdigest.rank/)
     #[must_use]
     fn tdigest_rank<V: SingleArg, R: CollectionResponse<isize>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -309,7 +309,7 @@ pub trait TDigestCommands {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.reset/>](https://redis.io/commands/tdigest.reset/)
     #[must_use]
-    fn tdigest_reset(&mut self, key: impl SingleArg) -> PreparedCommand<Self, ()>
+    fn tdigest_reset(self, key: impl SingleArg) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -341,10 +341,10 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.revrank/>](https://redis.io/commands/tdigest.revrank/)
     #[must_use]
     fn tdigest_revrank<V: SingleArg, R: CollectionResponse<isize>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         values: impl SingleArgCollection<V>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -369,11 +369,11 @@ pub trait TDigestCommands {
     /// * [<https://redis.io/commands/tdigest.trimmed_mean/>](https://redis.io/commands/tdigest.trimmed_mean/)
     #[must_use]
     fn tdigest_trimmed_mean(
-        &mut self,
+        self,
         key: impl SingleArg,
         low_cut_quantile: f64,
         high_cut_quantile: f64,
-    ) -> PreparedCommand<Self, f64>
+    ) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
     {

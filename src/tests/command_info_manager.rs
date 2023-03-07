@@ -14,7 +14,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn extract_keys() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     let mut connection = StandaloneConnection::connect(
         &get_default_host(),
         get_default_port(),

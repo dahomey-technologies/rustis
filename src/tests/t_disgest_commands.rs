@@ -9,7 +9,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_add() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.tdigest_add("key", [1., 2., 3.]).await;
@@ -25,7 +25,7 @@ async fn tdigest_add() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_create() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(100)).await?;
@@ -37,7 +37,7 @@ async fn tdigest_create() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_byrank() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -84,7 +84,7 @@ async fn tdigest_byrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_byrevrank() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -131,7 +131,7 @@ async fn tdigest_byrevrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_cdf() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -164,7 +164,7 @@ async fn tdigest_cdf() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_info() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -187,7 +187,7 @@ async fn tdigest_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_max() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -212,7 +212,7 @@ async fn tdigest_max() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_merge() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("s1", None).await?;
@@ -235,7 +235,7 @@ async fn tdigest_merge() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_min() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -260,7 +260,7 @@ async fn tdigest_min() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_quantile() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -284,7 +284,7 @@ async fn tdigest_quantile() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_rank_revrank() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -310,7 +310,7 @@ async fn tdigest_rank_revrank() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_reset() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;
@@ -334,7 +334,7 @@ async fn tdigest_reset() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn tdigest_trimmed_mean() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.tdigest_create("key", Some(1000)).await?;

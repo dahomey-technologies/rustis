@@ -14,7 +14,7 @@ use std::fmt;
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
-pub trait StringCommands {
+pub trait StringCommands<'a> {
     /// If key already exists and is a string,
     /// this command appends the value at the end of the string.
     /// If key does not exist it is created and set as an empty string,
@@ -26,7 +26,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, usize>
+    fn append<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -48,7 +48,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
-    fn decr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn decr<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -69,7 +69,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
-    fn decrby<K>(&mut self, key: K, decrement: i64) -> PreparedCommand<Self, i64>
+    fn decrby<K>(self, key: K, decrement: i64) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -123,7 +123,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
+    fn get<K, V>(self, key: K) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -144,7 +144,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<K, V>(&mut self, key: K) -> PreparedCommand<Self, V>
+    fn getdel<K, V>(self, key: K) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -193,7 +193,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
-    fn getex<K, V>(&mut self, key: K, options: GetExOptions) -> PreparedCommand<Self, V>
+    fn getex<K, V>(self, key: K, options: GetExOptions) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -212,7 +212,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<K, V>(&mut self, key: K, start: usize, end: isize) -> PreparedCommand<Self, V>
+    fn getrange<K, V>(self, key: K, start: usize, end: isize) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -231,7 +231,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<K, V, R>(&mut self, key: K, value: V) -> PreparedCommand<Self, R>
+    fn getset<K, V, R>(self, key: K, value: V) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         K: SingleArg,
@@ -260,7 +260,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
-    fn incr<K>(&mut self, key: K) -> PreparedCommand<Self, i64>
+    fn incr<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -283,7 +283,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
-    fn incrby<K>(&mut self, key: K, increment: i64) -> PreparedCommand<Self, i64>
+    fn incrby<K>(self, key: K, increment: i64) -> PreparedCommand<'a, Self, i64>
     where
         Self: Sized,
         K: SingleArg,
@@ -317,7 +317,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
-    fn incrbyfloat<K>(&mut self, key: K, increment: f64) -> PreparedCommand<Self, f64>
+    fn incrbyfloat<K>(self, key: K, increment: f64) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
         K: SingleArg,
@@ -333,7 +333,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<K, V>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, V>
+    fn lcs<K, V>(self, key1: K, key2: K) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,
@@ -350,7 +350,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len<K>(&mut self, key1: K, key2: K) -> PreparedCommand<Self, usize>
+    fn lcs_len<K>(self, key1: K, key2: K) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -369,12 +369,12 @@ pub trait StringCommands {
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
     fn lcs_idx<K>(
-        &mut self,
+        self,
         key1: K,
         key2: K,
         min_match_len: Option<usize>,
         with_match_len: bool,
-    ) -> PreparedCommand<Self, LcsResult>
+    ) -> PreparedCommand<'a, Self, LcsResult>
     where
         Self: Sized,
         K: SingleArg,
@@ -401,7 +401,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<K, KK, V, VV>(&mut self, keys: KK) -> PreparedCommand<Self, VV>
+    fn mget<K, KK, V, VV>(self, keys: KK) -> PreparedCommand<'a, Self, VV>
     where
         Self: Sized,
         K: SingleArg,
@@ -420,7 +420,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
-    fn mset<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, ()>
+    fn mset<K, V, C>(self, items: C) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         C: KeyValueArgsCollection<K, V>,
@@ -448,7 +448,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
-    fn msetnx<K, V, C>(&mut self, items: C) -> PreparedCommand<Self, bool>
+    fn msetnx<K, V, C>(self, items: C) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         C: KeyValueArgsCollection<K, V>,
@@ -467,7 +467,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
     #[must_use]
-    fn psetex<K, V>(&mut self, key: K, milliseconds: u64, value: V) -> PreparedCommand<Self, ()>
+    fn psetex<K, V>(self, key: K, milliseconds: u64, value: V) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -484,7 +484,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, ()>
+    fn set<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -505,13 +505,13 @@ pub trait StringCommands {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_with_options<K, V>(
-        &mut self,
+        self,
         key: K,
         value: V,
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -534,13 +534,13 @@ pub trait StringCommands {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set_get_with_options<K, V1, V2>(
-        &mut self,
+        self,
         key: K,
         value: V1,
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> PreparedCommand<Self, V2>
+    ) -> PreparedCommand<'a, Self, V2>
     where
         Self: Sized,
         K: SingleArg,
@@ -564,7 +564,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
     #[must_use]
-    fn setex<K, V>(&mut self, key: K, seconds: u64, value: V) -> PreparedCommand<Self, ()>
+    fn setex<K, V>(self, key: K, seconds: u64, value: V) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         K: SingleArg,
@@ -587,7 +587,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
-    fn setnx<K, V>(&mut self, key: K, value: V) -> PreparedCommand<Self, bool>
+    fn setnx<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -606,7 +606,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/setrange/>](https://redis.io/commands/setrange/)
     #[must_use]
-    fn setrange<K, V>(&mut self, key: K, offset: usize, value: V) -> PreparedCommand<Self, usize>
+    fn setrange<K, V>(self, key: K, offset: usize, value: V) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -625,7 +625,7 @@ pub trait StringCommands {
     /// # See Also
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
-    fn strlen<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
+    fn strlen<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,

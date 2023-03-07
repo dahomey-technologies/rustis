@@ -12,7 +12,7 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [Time Series Commands](https://redis.io/commands/?group=timeseries)
-pub trait TimeSeriesCommands {
+pub trait TimeSeriesCommands<'a> {
     /// Append a sample to a time series
     ///
     /// # Arguments
@@ -49,12 +49,12 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.add/>](https://redis.io/commands/ts.add/)
     #[must_use]
     fn ts_add(
-        &mut self,
+        self,
         key: impl SingleArg,
         timestamp: impl SingleArg,
         value: f64,
         options: TsAddOptions,
-    ) -> PreparedCommand<Self, u64>
+    ) -> PreparedCommand<'a, Self, u64>
     where
         Self: Sized,
     {
@@ -82,10 +82,10 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.alter/>](https://redis.io/commands/ts.alter/)
     #[must_use]
     fn ts_alter(
-        &mut self,
+        self,
         key: impl SingleArg,
         options: TsCreateOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -107,10 +107,10 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.create/>](https://redis.io/commands/ts.create/)
     #[must_use]
     fn ts_create(
-        &mut self,
+        self,
         key: impl SingleArg,
         options: TsCreateOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -141,13 +141,13 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.createrule/>](https://redis.io/commands/ts.createrule/)
     #[must_use]
     fn ts_createrule(
-        &mut self,
+        self,
         src_key: impl SingleArg,
         dst_key: impl SingleArg,
         aggregator: TsAggregationType,
         bucket_duration: u64,
         options: TsCreateRuleOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -183,11 +183,11 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.decrby/>](https://redis.io/commands/ts.decrby/)
     #[must_use]
     fn ts_decrby(
-        &mut self,
+        self,
         key: impl SingleArg,
         value: f64,
         options: TsIncrByDecrByOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -212,11 +212,11 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.del/>](https://redis.io/commands/ts.del/)
     #[must_use]
     fn ts_del(
-        &mut self,
+        self,
         key: impl SingleArg,
         from_timestamp: u64,
         to_timestamp: u64,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -239,10 +239,10 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.deleterule/>](https://redis.io/commands/ts.deleterule/)
     #[must_use]
     fn ts_deleterule(
-        &mut self,
+        self,
         src_key: impl SingleArg,
         dst_key: impl SingleArg,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -264,10 +264,10 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.get/>](https://redis.io/commands/ts.get/)
     #[must_use]
     fn ts_get(
-        &mut self,
+        self,
         key: impl SingleArg,
         options: TsGetOptions,
-    ) -> PreparedCommand<Self, Option<(u64, f64)>>
+    ) -> PreparedCommand<'a, Self, Option<(u64, f64)>>
     where
         Self: Sized,
     {
@@ -295,11 +295,11 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.incrby/>](https://redis.io/commands/ts.incrby/)
     #[must_use]
     fn ts_incrby(
-        &mut self,
+        self,
         key: impl SingleArg,
         value: f64,
         options: TsIncrByDecrByOptions,
-    ) -> PreparedCommand<Self, u64>
+    ) -> PreparedCommand<'a, Self, u64>
     where
         Self: Sized,
     {
@@ -318,7 +318,7 @@ pub trait TimeSeriesCommands {
     /// # See Also
     /// * [<https://redis.io/commands/ts.info/>](https://redis.io/commands/ts.info/)
     #[must_use]
-    fn ts_info(&mut self, key: impl SingleArg, debug: bool) -> PreparedCommand<Self, TsInfoResult>
+    fn ts_info(self, key: impl SingleArg, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult>
     where
         Self: Sized,
     {
@@ -351,9 +351,9 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
     fn ts_madd<K: SingleArg, T: SingleArg, R: CollectionResponse<u64>>(
-        &mut self,
+        self,
         items: impl MultipleArgsCollection<(K, T, f64)>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -385,10 +385,10 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.mget/>](https://redis.io/commands/ts.mget/)
     #[must_use]
     fn ts_mget<F: SingleArg, R: CollectionResponse<TsSample>>(
-        &mut self,
+        self,
         options: TsMGetOptions,
         filters: impl SingleArgCollection<F>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -422,13 +422,13 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
     fn ts_mrange<F: SingleArg, R: CollectionResponse<TsRangeSample>>(
-        &mut self,
+        self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsMRangeOptions,
         filters: impl SingleArgCollection<F>,
         groupby_options: TsGroupByOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -471,13 +471,13 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
     fn ts_mrevrange<F: SingleArg, R: CollectionResponse<TsRangeSample>>(
-        &mut self,
+        self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsMRangeOptions,
         filters: impl SingleArgCollection<F>,
         groupby_options: TsGroupByOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -517,9 +517,9 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
     fn ts_queryindex<F: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         filters: impl SingleArgCollection<F>,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -549,12 +549,12 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.range/>](https://redis.io/commands/ts.range/)
     #[must_use]
     fn ts_range<R: CollectionResponse<(u64, f64)>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsRangeOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -591,12 +591,12 @@ pub trait TimeSeriesCommands {
     /// * [<https://redis.io/commands/ts.revrange/>](https://redis.io/commands/ts.revrange/)
     #[must_use]
     fn ts_revrange<R: CollectionResponse<(u64, f64)>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
         options: TsRangeOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {

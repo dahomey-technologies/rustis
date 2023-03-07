@@ -2,7 +2,7 @@ use rustis::{client::Client, Result, commands::{StringCommands, GenericCommands}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = Client::connect("127.0.0.1:6379").await?;
+    let client = Client::connect("127.0.0.1:6379").await?;
 
     for _i in 0..1000 {
         let key = "test_key";

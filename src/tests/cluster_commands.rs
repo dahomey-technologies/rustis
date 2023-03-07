@@ -12,7 +12,7 @@ use serial_test::serial;
 #[serial]
 async fn asking() -> Result<()> {
     log_try_init();
-    let mut client = Client::connect("127.0.0.1:7000").await?;
+    let client = Client::connect("127.0.0.1:7000").await?;
 
     client.asking().await?;
 
@@ -24,7 +24,7 @@ async fn asking() -> Result<()> {
 #[serial]
 async fn cluster_shards() -> Result<()> {
     log_try_init();
-    let mut client = Client::connect("127.0.0.1:7000").await?;
+    let client = Client::connect("127.0.0.1:7000").await?;
 
     let shards: Vec<ClusterShardResult> = client.cluster_shards().await?;
     debug!("shards: {shards:?}");

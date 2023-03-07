@@ -26,7 +26,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender,
     },
-    resp::{cmd, Command, CommandArgs, RespBuf, SingleArg, SingleArgCollection, Response},
+    resp::{cmd, Command, CommandArgs, RespBuf, Response, SingleArg, SingleArgCollection},
     Error, Future, Result,
 };
 use futures::{
@@ -132,12 +132,12 @@ impl Client {
     }
 
     /// Give an immutable generic access to attach any state to a client instance
-    pub fn get_client_state(&mut self) -> RwLockReadGuard<ClientState> {
+    pub fn get_client_state(&self) -> RwLockReadGuard<ClientState> {
         self.client_state.read().unwrap()
     }
 
     /// Give a mutable generic access to attach any state to a client instance
-    pub fn get_client_state_mut(&mut self) -> RwLockWriteGuard<ClientState> {
+    pub fn get_client_state_mut(&self) -> RwLockWriteGuard<ClientState> {
         self.client_state.write().unwrap()
     }
 
@@ -164,7 +164,7 @@ impl Client {
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let mut client = Client::connect("127.0.0.1:6379").await?;
-    /// 
+    ///
     ///     client
     ///         .send(
     ///             cmd("MSET")
@@ -180,7 +180,7 @@ impl Client {
     ///         )
     ///         .await?
     ///         .to::<()>()?;
-    /// 
+    ///
     ///     let values: Vec<String> = client
     ///         .send(
     ///             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
@@ -188,7 +188,7 @@ impl Client {
     ///         )
     ///         .await?
     ///         .to()?;
-    /// 
+    ///
     ///     assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
     ///
     ///     Ok(())
@@ -196,11 +196,7 @@ impl Client {
     /// ```
 
     #[inline]
-    pub async fn send(
-        &mut self,
-        command: Command,
-        retry_on_error: Option<bool>,
-    ) -> Result<RespBuf> {
+    pub async fn send(&self, command: Command, retry_on_error: Option<bool>) -> Result<RespBuf> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let message = Message::single(
             command,
@@ -208,7 +204,7 @@ impl Client {
             retry_on_error.unwrap_or(self.retry_on_error),
         );
         self.send_message(message)?;
-        
+
         if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, result_receiver).await??
         } else {
@@ -228,11 +224,7 @@ impl Client {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub fn send_and_forget(
-        &mut self,
-        command: Command,
-        retry_on_error: Option<bool>,
-    ) -> Result<()> {
+    pub fn send_and_forget(&self, command: Command, retry_on_error: Option<bool>) -> Result<()> {
         let message =
             Message::single_forget(command, retry_on_error.unwrap_or(self.retry_on_error));
         self.send_message(message)?;
@@ -252,7 +244,7 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
     pub async fn send_batch(
-        &mut self,
+        &self,
         commands: Vec<Command>,
         retry_on_error: Option<bool>,
     ) -> Result<Vec<RespBuf>> {
@@ -264,7 +256,7 @@ impl Client {
             retry_on_error.unwrap_or(self.retry_on_error),
         );
         self.send_message(message)?;
-        
+
         if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, results_receiver).await??
         } else {
@@ -273,7 +265,7 @@ impl Client {
     }
 
     #[inline]
-    fn send_message(&mut self, message: Message) -> Result<()> {
+    fn send_message(&self, message: Message) -> Result<()> {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
             msg_sender.unbounded_send(message)?;
             Ok(())
@@ -286,18 +278,18 @@ impl Client {
 
     /// Create a new transaction
     #[inline]
-    pub fn create_transaction(&mut self) -> Transaction {
+    pub fn create_transaction(&self) -> Transaction {
         Transaction::new(self.clone())
     }
 
     /// Create a new pipeline
     #[inline]
-    pub fn create_pipeline(&mut self) -> Pipeline {
+    pub fn create_pipeline(&self) -> Pipeline {
         Pipeline::new(self.clone())
     }
 
     pub fn create_client_tracking_invalidation_stream(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = Vec<String>>> {
         let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
         let message = Message::client_tracking_invalidation(push_sender);
@@ -306,7 +298,7 @@ impl Client {
     }
 
     pub(crate) async fn subscribe_from_pub_sub_sender(
-        &mut self,
+        &self,
         channels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
@@ -329,7 +321,7 @@ impl Client {
     }
 
     pub(crate) async fn psubscribe_from_pub_sub_sender(
-        &mut self,
+        &self,
         patterns: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
@@ -352,7 +344,7 @@ impl Client {
     }
 
     pub(crate) async fn ssubscribe_from_pub_sub_sender(
-        &mut self,
+        &self,
         shardchannels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
@@ -377,8 +369,7 @@ impl Client {
 
 /// Extension trait dedicated to [`PreparedCommand`](crate::client::PreparedCommand)
 /// to add specific methods for the [`Client`](crate::client::Client) executor
-pub trait ClientPreparedCommand<'a, R>
-{
+pub trait ClientPreparedCommand<'a, R> {
     /// Send command and forget its response
     ///
     /// # Errors
@@ -386,8 +377,7 @@ pub trait ClientPreparedCommand<'a, R>
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Client, R>
-{
+impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a Client, R> {
     /// Send command and forget its response
     ///
     /// # Errors
@@ -398,7 +388,7 @@ impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, Clien
     }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, Client, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, &'a Client, R>
 where
     R: DeserializeOwned + Send + 'a,
 {
@@ -415,64 +405,64 @@ where
                     .await?;
                 custom_converter(result, command_for_result, self.executor).await
             } else {
-                let result = self
-                    .executor
-                    .send(self.command, self.retry_on_error)
-                    .await?;
-                result.to()
+            let result = self
+                .executor
+                .send(self.command, self.retry_on_error)
+                .await?;
+            result.to()
             }
         })
     }
 }
 
-impl BitmapCommands for Client {}
+impl<'a> BitmapCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl BloomCommands for Client {}
-impl ClusterCommands for Client {}
+impl<'a> BloomCommands<'a> for &'a Client {}
+impl<'a> ClusterCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for Client {}
+impl<'a> CountMinSketchCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CuckooCommands for Client {}
-impl ConnectionCommands for Client {}
-impl GenericCommands for Client {}
-impl GeoCommands for Client {}
+impl<'a> CuckooCommands<'a> for &'a Client {}
+impl<'a> ConnectionCommands<'a> for &'a Client {}
+impl<'a> GenericCommands<'a> for &'a Client {}
+impl<'a> GeoCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
-impl GraphCommands for Client {}
-impl HashCommands for Client {}
-impl HyperLogLogCommands for Client {}
-impl InternalPubSubCommands for Client {}
+impl<'a> GraphCommands<'a> for &'a Client {}
+impl<'a> HashCommands<'a> for &'a Client {}
+impl<'a> HyperLogLogCommands<'a> for &'a Client {}
+impl<'a> InternalPubSubCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
-impl JsonCommands for Client {}
-impl ListCommands for Client {}
-impl ScriptingCommands for Client {}
+impl<'a> JsonCommands<'a> for &'a Client {}
+impl<'a> ListCommands<'a> for &'a Client {}
+impl<'a> ScriptingCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
-impl SearchCommands for Client {}
-impl SentinelCommands for Client {}
-impl ServerCommands for Client {}
-impl SetCommands for Client {}
-impl SortedSetCommands for Client {}
-impl StreamCommands for Client {}
-impl StringCommands for Client {}
+impl<'a> SearchCommands<'a> for &'a Client {}
+impl<'a> SentinelCommands<'a> for &'a Client {}
+impl<'a> ServerCommands<'a> for &'a Client {}
+impl<'a> SetCommands<'a> for &'a Client {}
+impl<'a> SortedSetCommands<'a> for &'a Client {}
+impl<'a> StreamCommands<'a> for &'a Client {}
+impl<'a> StringCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TDigestCommands for Client {}
+impl<'a> TDigestCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
-impl TimeSeriesCommands for Client {}
-impl TransactionCommands for Client {}
+impl<'a> TimeSeriesCommands<'a> for &'a Client {}
+impl<'a> TransactionCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TopKCommands for Client {}
+impl<'a> TopKCommands<'a> for &'a Client {}
 
-impl PubSubCommands for Client {
+impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]
-    fn subscribe<'a, C, CC>(&'a mut self, channels: CC) -> Future<'a, PubSubStream>
+    fn subscribe<C, CC>(self, channels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
@@ -496,7 +486,7 @@ impl PubSubCommands for Client {
     }
 
     #[inline]
-    fn psubscribe<'a, P, PP>(&'a mut self, patterns: PP) -> Future<'a, PubSubStream>
+    fn psubscribe<P, PP>(self, patterns: PP) -> Future<'a, PubSubStream>
     where
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>,
@@ -520,7 +510,7 @@ impl PubSubCommands for Client {
     }
 
     #[inline]
-    fn ssubscribe<'a, C, CC>(&'a mut self, shardchannels: CC) -> Future<'a, PubSubStream>
+    fn ssubscribe<C, CC>(self, shardchannels: CC) -> Future<'a, PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
@@ -544,8 +534,8 @@ impl PubSubCommands for Client {
     }
 }
 
-impl BlockingCommands for Client {
-    fn monitor(&mut self) -> Future<MonitorStream> {
+impl<'a> BlockingCommands<'a> for &'a Client {
+    fn monitor(self) -> Future<'a, MonitorStream> {
         Box::pin(async move {
             let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
                 oneshot::channel();

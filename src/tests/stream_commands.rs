@@ -13,7 +13,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xadd() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -59,7 +59,7 @@ async fn xadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xdel() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -98,7 +98,7 @@ async fn xdel() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xgroup() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client
@@ -141,7 +141,7 @@ async fn xgroup() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xlen() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -178,7 +178,7 @@ async fn xlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xrange() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -222,7 +222,7 @@ async fn xrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xread() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -295,7 +295,7 @@ async fn xread() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xreadgroup() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client
@@ -476,7 +476,7 @@ async fn xreadgroup() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xclaim() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client
@@ -605,7 +605,7 @@ async fn xclaim() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xautoclaim() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result = client
@@ -748,7 +748,7 @@ async fn xautoclaim() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xrevrange() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let id1: String = client
@@ -792,7 +792,7 @@ async fn xrevrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn xtrim() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let _id1: String = client

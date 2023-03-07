@@ -11,7 +11,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 /// # See Also
 /// [Redis Cluster Management commands](https://redis.io/commands/?group=cluster)
 /// [Redis cluster specification](https://redis.io/docs/reference/cluster-spec/)
-pub trait ClusterCommands {
+pub trait ClusterCommands<'a> {
     /// When a cluster client receives an -ASK redirect,
     /// the ASKING command is sent to the target node followed by the command which was redirected.
     /// This is normally done automatically by cluster clients.
@@ -19,7 +19,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/asking/>](https://redis.io/commands/asking/)
     #[must_use]
-    fn asking(&mut self) -> PreparedCommand<Self, ()>
+    fn asking(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -35,7 +35,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslots/>](https://redis.io/commands/cluster-addslots/)
     #[must_use]
-    fn cluster_addslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
+    fn cluster_addslots<S>(self, slots: S) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         S: SingleArgCollection<u16>,
@@ -53,7 +53,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslotsrange/>](https://redis.io/commands/cluster-addslotsrange/)
     #[must_use]
-    fn cluster_addslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
+    fn cluster_addslotsrange<S>(self, slots: S) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         S: KeyValueArgsCollection<u16, u16>,
@@ -70,7 +70,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-bumpepoch/>](https://redis.io/commands/cluster-bumpepoch/)
     #[must_use]
-    fn cluster_bumpepoch(&mut self) -> PreparedCommand<Self, ClusterBumpEpochResult>
+    fn cluster_bumpepoch(self) -> PreparedCommand<'a, Self, ClusterBumpEpochResult>
     where
         Self: Sized,
     {
@@ -85,7 +85,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-count-failure-reports/>](https://redis.io/commands/cluster-count-failure-reports/)
     #[must_use]
-    fn cluster_count_failure_reports<I>(&mut self, node_id: I) -> PreparedCommand<Self, usize>
+    fn cluster_count_failure_reports<I>(self, node_id: I) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         I: SingleArg,
@@ -104,7 +104,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-countkeysinslot/>](https://redis.io/commands/cluster-countkeysinslot/)
     #[must_use]
-    fn cluster_countkeysinslot(&mut self, slot: usize) -> PreparedCommand<Self, usize>
+    fn cluster_countkeysinslot(self, slot: usize) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -118,7 +118,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslots/>](https://redis.io/commands/cluster-delslots/)
     #[must_use]
-    fn cluster_delslots<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
+    fn cluster_delslots<S>(self, slots: S) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         S: SingleArgCollection<u16>,
@@ -135,7 +135,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslotsrange/>](https://redis.io/commands/cluster-delslotsrange/)
     #[must_use]
-    fn cluster_delslotsrange<S>(&mut self, slots: S) -> PreparedCommand<Self, ()>
+    fn cluster_delslotsrange<S>(self, slots: S) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         S: KeyValueArgsCollection<u16, u16>,
@@ -153,7 +153,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-failover/>](https://redis.io/commands/cluster-failover/)
     #[must_use]
-    fn cluster_failover(&mut self, option: ClusterFailoverOption) -> PreparedCommand<Self, ()>
+    fn cluster_failover(self, option: ClusterFailoverOption) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -165,7 +165,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-flushslots/>](https://redis.io/commands/cluster-flushslots/)
     #[must_use]
-    fn cluster_flushslots(&mut self) -> PreparedCommand<Self, ()>
+    fn cluster_flushslots(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -179,7 +179,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-forget/>](https://redis.io/commands/cluster-forget/)
     #[must_use]
-    fn cluster_forget<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
+    fn cluster_forget<I>(self, node_id: I) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -196,7 +196,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-getkeysinslot/>](https://redis.io/commands/cluster-getkeysinslot/)
     #[must_use]
-    fn cluster_getkeysinslot(&mut self, slot: u16, count: usize) -> PreparedCommand<Self, ()>
+    fn cluster_getkeysinslot(self, slot: u16, count: usize) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -214,7 +214,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-info/>](https://redis.io/commands/cluster-info/)
     #[must_use]
-    fn cluster_info(&mut self, slot: u16, count: usize) -> PreparedCommand<Self, ClusterInfo>
+    fn cluster_info(self, slot: u16, count: usize) -> PreparedCommand<'a, Self, ClusterInfo>
     where
         Self: Sized,
     {
@@ -229,7 +229,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-keyslot/>](https://redis.io/commands/cluster-keyslot/)
     #[must_use]
-    fn cluster_keyslot<K>(&mut self, key: K) -> PreparedCommand<Self, u16>
+    fn cluster_keyslot<K>(self, key: K) -> PreparedCommand<'a, Self, u16>
     where
         Self: Sized,
         K: SingleArg,
@@ -250,7 +250,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-links/>](https://redis.io/commands/cluster-links/)
     #[must_use]
-    fn cluster_links<I>(&mut self) -> PreparedCommand<Self, Vec<I>>
+    fn cluster_links<I>(self) -> PreparedCommand<'a, Self, Vec<I>>
     where
         Self: Sized,
         I: CollectionResponse<ClusterLinkInfo> + DeserializeOwned,
@@ -267,11 +267,11 @@ pub trait ClusterCommands {
     /// [<https://redis.io/commands/cluster-meet/>](https://redis.io/commands/cluster-meet/)
     #[must_use]
     fn cluster_meet<IP>(
-        &mut self,
+        self,
         ip: IP,
         port: u16,
         cluster_bus_port: Option<u16>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         IP: SingleArg,
@@ -294,7 +294,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-myid/>](https://redis.io/commands/cluster-myid/)
     #[must_use]
-    fn cluster_myid<N>(&mut self) -> PreparedCommand<Self, N>
+    fn cluster_myid<N>(self) -> PreparedCommand<'a, Self, N>
     where
         Self: Sized,
         N: PrimitiveResponse,
@@ -317,7 +317,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-nodes/>](https://redis.io/commands/cluster-nodes/)
     #[must_use]
-    fn cluster_nodes<R>(&mut self) -> PreparedCommand<Self, R>
+    fn cluster_nodes<R>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         R: PrimitiveResponse,
@@ -333,7 +333,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicas/>](https://redis.io/commands/cluster-replicas/)
     #[must_use]
-    fn cluster_replicas<I, R>(&mut self, node_id: I) -> PreparedCommand<Self, R>
+    fn cluster_replicas<I, R>(self, node_id: I) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         I: SingleArg,
@@ -348,7 +348,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicate/>](https://redis.io/commands/cluster-replicate/)
     #[must_use]
-    fn cluster_replicate<I>(&mut self, node_id: I) -> PreparedCommand<Self, ()>
+    fn cluster_replicate<I>(self, node_id: I) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -361,7 +361,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-reset/>](https://redis.io/commands/cluster-reset/)
     #[must_use]
-    fn cluster_reset(&mut self, reset_type: ClusterResetType) -> PreparedCommand<Self, ()>
+    fn cluster_reset(self, reset_type: ClusterResetType) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -374,7 +374,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-saveconfig/>](https://redis.io/commands/cluster-saveconfig/)
     #[must_use]
-    fn cluster_saveconfig(&mut self) -> PreparedCommand<Self, ()>
+    fn cluster_saveconfig(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -386,7 +386,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-set-config-epoch/>](https://redis.io/commands/cluster-set-config-epoch/)
     #[must_use]
-    fn cluster_set_config_epoch(&mut self, config_epoch: u64) -> PreparedCommand<Self, ()>
+    fn cluster_set_config_epoch(self, config_epoch: u64) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -402,10 +402,10 @@ pub trait ClusterCommands {
     /// [<https://redis.io/commands/cluster-setslot/>](https://redis.io/commands/cluster-setslot/)
     #[must_use]
     fn cluster_setslot(
-        &mut self,
+        self,
         slot: u16,
         subcommand: ClusterSetSlotSubCommand,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -423,7 +423,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/cluster-shards/>](https://redis.io/commands/cluster-shards/)
     #[must_use]
-    fn cluster_shards<S>(&mut self) -> PreparedCommand<Self, S>
+    fn cluster_shards<S>(self) -> PreparedCommand<'a, Self, S>
     where
         Self: Sized,
         S: CollectionResponse<ClusterShardResult>,
@@ -436,7 +436,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/readonly/>](https://redis.io/commands/readonly/)
     #[must_use]
-    fn readonly(&mut self) -> PreparedCommand<Self, ()>
+    fn readonly(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -448,7 +448,7 @@ pub trait ClusterCommands {
     /// # See Also
     /// [<https://redis.io/commands/readwrite/>](https://redis.io/commands/readwrite/)
     #[must_use]
-    fn readwrite(&mut self) -> PreparedCommand<Self, ()>
+    fn readwrite(self) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {

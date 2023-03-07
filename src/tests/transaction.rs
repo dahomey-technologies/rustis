@@ -11,7 +11,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_exec() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let mut transaction = client.create_transaction();
 
@@ -39,7 +39,7 @@ async fn transaction_exec() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_error() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let mut transaction = client.create_transaction();
 
@@ -76,7 +76,7 @@ async fn transaction_error() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn watch() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;
@@ -99,7 +99,7 @@ async fn watch() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     // set key on another client during the transaction
-    let mut client2 = get_test_client().await?;
+    let client2 = get_test_client().await?;
     client2.set("key", value).await?;
 
     transaction.set("key", value).queue();
@@ -113,7 +113,7 @@ async fn watch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unwatch() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;
@@ -128,7 +128,7 @@ async fn unwatch() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     // set key on another client during the transaction
-    let mut client2 = get_test_client().await?;
+    let client2 = get_test_client().await?;
     client2.set("key", 3).await?;
 
     transaction.set("key", value).queue();
@@ -144,7 +144,7 @@ async fn unwatch() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn transaction_discard() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let mut transaction = client.create_transaction();
 

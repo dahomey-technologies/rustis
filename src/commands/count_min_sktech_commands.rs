@@ -8,7 +8,7 @@ use serde::Deserialize;
 ///
 /// # See Also
 /// [Count-min Sketch Commands](https://redis.io/commands/?group=cms)
-pub trait CountMinSketchCommands {
+pub trait CountMinSketchCommands<'a> {
     /// Increases the count of item by increment.
     ///
     /// Multiple items can be increased with one call.
@@ -26,10 +26,10 @@ pub trait CountMinSketchCommands {
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
     fn cms_incrby<I: SingleArg, R: CollectionResponse<usize>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, usize>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -44,7 +44,7 @@ pub trait CountMinSketchCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
-    fn cms_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, CmsInfoResult>
+    fn cms_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, CmsInfoResult>
     where
         Self: Sized,
     {
@@ -64,11 +64,11 @@ pub trait CountMinSketchCommands {
     /// * [<https://redis.io/commands/cms.initbydim/>](https://redis.io/commands/cms.initbydim/)
     #[must_use]
     fn cms_initbydim(
-        &mut self,
+        self,
         key: impl SingleArg,
         width: usize,
         depth: usize,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -92,11 +92,11 @@ pub trait CountMinSketchCommands {
     /// * [<https://redis.io/commands/cms.initbyprob/>](https://redis.io/commands/cms.initbyprob/)
     #[must_use]
     fn cms_initbyprob(
-        &mut self,
+        self,
         key: impl SingleArg,
         error: f64,
         probability: f64,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -121,11 +121,11 @@ pub trait CountMinSketchCommands {
     /// * [<https://redis.io/commands/cms.merge/>](https://redis.io/commands/cms.merge/)
     #[must_use]
     fn cms_merge<S: SingleArg, W: SingleArgCollection<usize>>(
-        &mut self,
+        self,
         destination: impl SingleArg,
         sources: impl SingleArgCollection<S>,
         weights: Option<W>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -156,10 +156,10 @@ pub trait CountMinSketchCommands {
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
     fn cms_query<I: SingleArg, C: CollectionResponse<usize>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, C>
+    ) -> PreparedCommand<'a, Self, C>
     where
         Self: Sized,
     {

@@ -11,7 +11,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn pipeline() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let mut pipeline = client.create_pipeline();
@@ -31,7 +31,7 @@ async fn pipeline() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn error() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let mut pipeline = client.create_pipeline();

@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_add() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -40,7 +40,7 @@ async fn cf_add() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_addnx() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.cf_addnx("key", "item").await?;
@@ -56,7 +56,7 @@ async fn cf_addnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_count() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -73,7 +73,7 @@ async fn cf_count() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_del() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -96,7 +96,7 @@ async fn cf_del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_exists() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let exists = client.cf_exists("key", "item1").await?;
@@ -114,7 +114,7 @@ async fn cf_exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_info() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -135,7 +135,7 @@ async fn cf_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_insert() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -162,7 +162,7 @@ async fn cf_insert() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_insertnx() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let results: Vec<i64> = client
@@ -190,7 +190,7 @@ async fn cf_insertnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_reserve_loadchunk_scandump() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -231,7 +231,7 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_mexists() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client

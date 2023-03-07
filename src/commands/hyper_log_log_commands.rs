@@ -7,7 +7,7 @@ use crate::{
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hyperloglog)
-pub trait HyperLogLogCommands {
+pub trait HyperLogLogCommands<'a> {
     /// Adds the specified elements to the specified HyperLogLog.
     ///
     /// # Return
@@ -16,7 +16,7 @@ pub trait HyperLogLogCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfadd/>](https://redis.io/commands/pfadd/)
-    fn pfadd<K, E, EE>(&mut self, key: K, elements: EE) -> PreparedCommand<Self, bool>
+    fn pfadd<K, E, EE>(self, key: K, elements: EE) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         K: SingleArg,
@@ -34,7 +34,7 @@ pub trait HyperLogLogCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
-    fn pfcount<K, KK>(&mut self, keys: KK) -> PreparedCommand<Self, usize>
+    fn pfcount<K, KK>(self, keys: KK) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -47,7 +47,7 @@ pub trait HyperLogLogCommands {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfmerge/>](https://redis.io/commands/pfmerge/)
-    fn pfmerge<D, S, SS>(&mut self, dest_key: D, source_keys: SS) -> PreparedCommand<Self, ()>
+    fn pfmerge<D, S, SS>(self, dest_key: D, source_keys: SS) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         D: SingleArg,

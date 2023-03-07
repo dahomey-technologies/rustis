@@ -262,7 +262,7 @@ where
     }
 }
 
-impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
+impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
         self.executor.queue(self.command)
@@ -274,42 +274,42 @@ impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Transaction, R> {
     }
 }
 
-impl BitmapCommands for Transaction {}
+impl<'a> BitmapCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl BloomCommands for Transaction {}
+impl<'a> BloomCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for Transaction {}
+impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CuckooCommands for Transaction {}
-impl GenericCommands for Transaction {}
-impl GeoCommands for Transaction {}
+impl<'a> CuckooCommands<'a> for &'a mut Transaction {}
+impl<'a> GenericCommands<'a> for &'a mut Transaction {}
+impl<'a> GeoCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
-impl GraphCommands for Transaction {}
-impl HashCommands for Transaction {}
-impl HyperLogLogCommands for Transaction {}
+impl<'a> GraphCommands<'a> for &'a mut Transaction {}
+impl<'a> HashCommands<'a> for &'a mut Transaction {}
+impl<'a> HyperLogLogCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
-impl JsonCommands for Transaction {}
-impl ListCommands for Transaction {}
+impl<'a> JsonCommands<'a> for &'a mut Transaction {}
+impl<'a> ListCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
-impl SearchCommands for Transaction {}
-impl SetCommands for Transaction {}
-impl ScriptingCommands for Transaction {}
-impl ServerCommands for Transaction {}
-impl SortedSetCommands for Transaction {}
-impl StreamCommands for Transaction {}
-impl StringCommands for Transaction {}
+impl<'a> SearchCommands<'a> for &'a mut Transaction {}
+impl<'a> SetCommands<'a> for &'a mut Transaction {}
+impl<'a> ScriptingCommands<'a> for &'a mut Transaction {}
+impl<'a> ServerCommands<'a> for &'a mut Transaction {}
+impl<'a> SortedSetCommands<'a> for &'a mut Transaction {}
+impl<'a> StreamCommands<'a> for &'a mut Transaction {}
+impl<'a> StringCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TDigestCommands for Transaction {}
+impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
-impl TimeSeriesCommands for Transaction {}
+impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TopKCommands for Transaction {}
+impl<'a> TopKCommands<'a> for &'a mut Transaction {}

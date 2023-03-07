@@ -17,7 +17,7 @@ use std::collections::HashSet;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn no_request_policy_no_response_policy() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
 
     client.set("key2", "value2").await?;
     let value: String = client.get("key2").await?;
@@ -30,7 +30,7 @@ async fn no_request_policy_no_response_policy() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn multi_shard_all_succeeded() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
 
     client
         .mset([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
@@ -61,7 +61,7 @@ async fn multi_shard_all_succeeded() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn all_shards_agg_sum() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.set("key1", "value1").await?;
@@ -77,7 +77,7 @@ async fn all_shards_agg_sum() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn all_shards_one_succeeded() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.script_kill().await;
@@ -95,7 +95,7 @@ async fn all_shards_one_succeeded() -> Result<()> {
 
     spawn(async move {
         async fn blocking_script(sha1: String) -> Result<()> {
-            let mut client = get_cluster_test_client().await?;
+            let client = get_cluster_test_client().await?;
 
             let _ = client
                 .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
@@ -118,7 +118,7 @@ async fn all_shards_one_succeeded() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn all_shard_agg_logical_and() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let exists = client.script_exists("123456").await?;
@@ -132,7 +132,7 @@ async fn all_shard_agg_logical_and() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn multi_shard_agg_min() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client
@@ -147,7 +147,7 @@ async fn multi_shard_agg_min() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn all_shards_no_response_policy() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.set("key1", "value1").await?;
@@ -167,7 +167,7 @@ async fn all_shards_no_response_policy() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn all_nodes_all_succeeded() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let sha1: String = client.script_load("return 12").await?;
@@ -183,7 +183,7 @@ async fn all_nodes_all_succeeded() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn moved() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let shard_info_list: Vec<ClusterShardResult> = client.cluster_shards().await?;
@@ -202,8 +202,8 @@ async fn moved() -> Result<()> {
         .nodes[0];
     let src_id = &src_node.id;
     let dst_id = &dst_node.id;
-    let mut src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
-    let mut dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
 
     // migrate
     dst_client
@@ -292,7 +292,7 @@ async fn moved() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ask() -> Result<()> {
-    let mut client = get_cluster_test_client().await?;
+    let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let shard_info_list: Vec<ClusterShardResult> = client.cluster_shards().await?;
@@ -311,8 +311,8 @@ async fn ask() -> Result<()> {
         .nodes[0];
     let src_id = &src_node.id;
     let dst_id = &dst_node.id;
-    let mut src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
-    let mut dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
 
     // set key
     client.set("key", "value").await?;

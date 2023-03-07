@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_config() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let all_configs: HashMap<String, Value> = client.graph_config_get("*").await?;
@@ -43,7 +43,7 @@ async fn graph_config() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_delete() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;
@@ -62,7 +62,7 @@ async fn graph_delete() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_explain() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;
@@ -88,7 +88,7 @@ async fn graph_explain() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_list() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;
@@ -113,7 +113,7 @@ async fn graph_list() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_profile() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;
@@ -143,7 +143,7 @@ async fn graph_profile() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_query() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client
@@ -290,7 +290,7 @@ async fn graph_query() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_query_ro() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;
@@ -328,7 +328,7 @@ async fn graph_query_ro() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn graph_slowlog() -> Result<()> {
-    let mut client = get_redis_stack_test_client().await?;
+    let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.graph_delete("graph").await;

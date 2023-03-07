@@ -15,7 +15,7 @@ use std::{fmt, marker::PhantomData};
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)
-pub trait GeoCommands {
+pub trait GeoCommands<'a> {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
@@ -26,12 +26,12 @@ pub trait GeoCommands {
     /// [<https://redis.io/commands/geoadd/>](https://redis.io/commands/geoadd/)
     #[must_use]
     fn geoadd<K, M, I>(
-        &mut self,
+        self,
         key: K,
         condition: GeoAddCondition,
         change: bool,
         items: I,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -58,12 +58,12 @@ pub trait GeoCommands {
     /// [<https://redis.io/commands/geodist/>](https://redis.io/commands/geodist/)
     #[must_use]
     fn geodist<K, M>(
-        &mut self,
+        self,
         key: K,
         member1: M,
         member2: M,
         unit: GeoUnit,
-    ) -> PreparedCommand<Self, Option<f64>>
+    ) -> PreparedCommand<'a, Self, Option<f64>>
     where
         Self: Sized,
         K: SingleArg,
@@ -84,7 +84,7 @@ pub trait GeoCommands {
     /// # See Also
     /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
-    fn geohash<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<String>>
+    fn geohash<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, Vec<String>>
     where
         Self: Sized,
         K: SingleArg,
@@ -106,10 +106,10 @@ pub trait GeoCommands {
     /// [<https://redis.io/commands/geopos/>](https://redis.io/commands/geopos/)
     #[must_use]
     fn geopos<K, M, C>(
-        &mut self,
+        self,
         key: K,
         members: C,
-    ) -> PreparedCommand<Self, Vec<Option<(f64, f64)>>>
+    ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>>
     where
         Self: Sized,
         K: SingleArg,
@@ -130,12 +130,12 @@ pub trait GeoCommands {
     /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
     fn geosearch<K, M1, M2, A>(
-        &mut self,
+        self,
         key: K,
         from: GeoSearchFrom<M1>,
         by: GeoSearchBy,
         options: GeoSearchOptions,
-    ) -> PreparedCommand<Self, A>
+    ) -> PreparedCommand<'a, Self, A>
     where
         Self: Sized,
         K: SingleArg,
@@ -158,13 +158,13 @@ pub trait GeoCommands {
     /// [<https://redis.io/commands/geosearchstore/>](https://redis.io/commands/geosearchstore/)
     #[must_use]
     fn geosearchstore<D, S, M>(
-        &mut self,
+        self,
         destination: D,
         source: S,
         from: GeoSearchFrom<M>,
         by: GeoSearchBy,
         options: GeoSearchStoreOptions,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,

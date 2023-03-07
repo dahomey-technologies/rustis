@@ -83,7 +83,7 @@ fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
     use rustis::{resp::cmd, Error};
 
     let runtime = current_thread_runtime();
-    let mut client = runtime.block_on(get_rustis_client());
+    let client = runtime.block_on(get_rustis_client());
 
     b.iter(|| {
         runtime
@@ -180,7 +180,7 @@ fn bench_rustis_long_pipeline(b: &mut Bencher) {
     use rustis::{client::BatchPreparedCommand, commands::StringCommands, Error};
 
     let runtime = current_thread_runtime();
-    let mut client = runtime.block_on(get_rustis_client());
+    let client = runtime.block_on(get_rustis_client());
 
     b.iter(|| {
         runtime

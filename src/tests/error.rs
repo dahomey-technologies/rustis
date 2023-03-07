@@ -6,7 +6,7 @@ use std::str::FromStr;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn unknown_command() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     let result: Result<()> = client.send(cmd("UNKNOWN").arg("arg"), None).await?.to();
 
@@ -54,7 +54,7 @@ fn ask_error() {
 // async fn network_error() -> Result<()> {
 //     use crate::commands::StringCommands;
 
-//     let mut client = get_test_client().await?;
+//     let client = get_test_client().await?;
 
 //     let items = (1..1000)
 //         .into_iter()
@@ -79,7 +79,7 @@ fn ask_error() {
 // async fn network_error_stress_test() -> Result<()> {
 //     use crate::commands::StringCommands;
 
-//     let mut client = get_test_client().await?;
+//     let client = get_test_client().await?;
 
 //     let items = (1..1000)
 //         .into_iter()
@@ -93,7 +93,7 @@ fn ask_error() {
 //     let tasks: Vec<_> = (0..8)
 //         .into_iter()
 //         .map(|_| {
-//             let mut client = client.clone();
+//             let client = client.clone();
 //             tokio::spawn(async move {
 //                 for _ in 1..10000 {
 //                     let i = rand::thread_rng().gen_range(1..1000);
@@ -129,7 +129,7 @@ fn ask_error() {
 //     let tasks: Vec<_> = (1..8)
 //         .into_iter()
 //         .map(|_| {
-//             let mut client = client.clone();
+//             let client = client.clone();
 //             tokio::spawn(async move {
 //                 for _ in 1..10 {
 //                     let i = rand::thread_rng().gen_range(1..1000);
@@ -158,7 +158,7 @@ fn ask_error() {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn kill_on_write() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // 3 reconnections
     let result = client

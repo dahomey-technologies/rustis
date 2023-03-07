@@ -11,7 +11,7 @@ use serde::Deserialize;
 ///
 /// # See Also
 /// [Bloom Filter Commands](https://redis.io/commands/?group=bf)
-pub trait BloomCommands {
+pub trait BloomCommands<'a> {
     /// Adds an item to a bloom filter
     ///
     /// # Arguments
@@ -25,7 +25,7 @@ pub trait BloomCommands {
     /// # See Also
     /// * [<https://redis.io/commands/bf.add/>](https://redis.io/commands/bf.add/)
     #[must_use]
-    fn bf_add(&mut self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<Self, bool>
+    fn bf_add(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -46,10 +46,10 @@ pub trait BloomCommands {
     /// * [<https://redis.io/commands/bf.exists/>](https://redis.io/commands/bf.exists/)
     #[must_use]
     fn bf_exists(
-        &mut self,
+        self,
         key: impl SingleArg,
         item: impl SingleArg,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -67,7 +67,7 @@ pub trait BloomCommands {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info_all(&mut self, key: impl SingleArg) -> PreparedCommand<Self, BfInfoResult>
+    fn bf_info_all(self, key: impl SingleArg) -> PreparedCommand<'a, Self, BfInfoResult>
     where
         Self: Sized,
     {
@@ -87,10 +87,10 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
     fn bf_info(
-        &mut self,
+        self,
         key: impl SingleArg,
         param: BfInfoParameter,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -116,11 +116,11 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
     fn bf_insert<I: SingleArg, R: CollectionResponse<bool>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
         options: BfInsertOptions,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -150,11 +150,11 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.loadchunk/>](https://redis.io/commands/bf.loadchunk/)
     #[must_use]
     fn bf_loadchunk(
-        &mut self,
+        self,
         key: impl SingleArg,
         iterator: i64,
         data: impl SingleArg,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -177,10 +177,10 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
     fn bf_madd<I: SingleArg, R: CollectionResponse<bool>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -201,10 +201,10 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
     fn bf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -243,12 +243,12 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.reserve/>](https://redis.io/commands/bf.reserve/)
     #[must_use]
     fn bf_reserve(
-        &mut self,
+        self,
         key: impl SingleArg,
         error_rate: f64,
         capacity: usize,
         options: BfReserveOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -278,10 +278,10 @@ pub trait BloomCommands {
     /// [<https://redis.io/commands/bf.scandump/>](https://redis.io/commands/bf.scandump/)
     #[must_use]
     fn bf_scandump(
-        &mut self,
+        self,
         key: impl SingleArg,
         iterator: i64,
-    ) -> PreparedCommand<Self, BfScanDumpResult>
+    ) -> PreparedCommand<'a, Self, BfScanDumpResult>
     where
         Self: Sized,
     {

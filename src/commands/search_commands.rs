@@ -18,7 +18,7 @@ use std::{collections::HashMap, fmt, future};
 /// # See Also
 /// * [RedisSearch Commands](https://redis.io/commands/?group=search)
 /// * [Auto-Suggest Commands](https://redis.io/commands/?group=suggestion)
-pub trait SearchCommands {
+pub trait SearchCommands<'a> {
     /// Run a search query on an index,
     /// and perform aggregate transformations on the results,
     /// extracting statistics etc from them
@@ -38,11 +38,11 @@ pub trait SearchCommands {
     /// * [`RedisSeach Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
     #[must_use]
     fn ft_aggregate<I, Q>(
-        &mut self,
+        self,
         index: I,
         query: Q,
         options: FtAggregateOptions,
-    ) -> PreparedCommand<Self, FtAggregateResult>
+    ) -> PreparedCommand<'a, Self, FtAggregateResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -60,7 +60,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasadd/>](https://redis.io/commands/ft.aliasadd/)
     #[must_use]
-    fn ft_aliasadd<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
+    fn ft_aliasadd<A, I>(self, alias: A, index: I) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         A: SingleArg,
@@ -77,7 +77,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasdel/>](https://redis.io/commands/ft.aliasdel/)
     #[must_use]
-    fn ft_aliasdel<A>(&mut self, alias: A) -> PreparedCommand<Self, ()>
+    fn ft_aliasdel<A>(self, alias: A) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         A: SingleArg,
@@ -97,7 +97,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasupdate/>](https://redis.io/commands/ft.aliasupdate/)
     #[must_use]
-    fn ft_aliasupdate<A, I>(&mut self, alias: A, index: I) -> PreparedCommand<Self, ()>
+    fn ft_aliasupdate<A, I>(self, alias: A, index: I) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         A: SingleArg,
@@ -120,11 +120,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.alter/>](https://redis.io/commands/ft.alter/)
     #[must_use]
     fn ft_alter<I>(
-        &mut self,
+        self,
         index: I,
         skip_initial_scan: bool,
         attribute: FtFieldSchema,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -151,7 +151,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.config-get/>](https://redis.io/commands/ft.config-get/)
     #[must_use]
-    fn ft_config_get<O, N, V, R>(&mut self, option: O) -> PreparedCommand<Self, R>
+    fn ft_config_get<O, N, V, R>(self, option: O) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         O: SingleArg,
@@ -171,7 +171,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.config-set/>](https://redis.io/commands/ft.config-set/)
     #[must_use]
-    fn ft_config_set<O, V>(&mut self, option: O, value: V) -> PreparedCommand<Self, ()>
+    fn ft_config_set<O, V>(self, option: O, value: V) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         O: SingleArg,
@@ -190,11 +190,11 @@ pub trait SearchCommands {
     /// * [`Aggregations`](https://redis.io/docs/stack/search/reference/aggregations/)
     #[must_use]
     fn ft_create<I, S>(
-        &mut self,
+        self,
         index: I,
         options: FtCreateOptions,
         schema: S,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -219,7 +219,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.cursor-del/>](https://redis.io/commands/ft.cursor-del/)
     #[must_use]
-    fn ft_cursor_del<I>(&mut self, index: I, cursor_id: u64) -> PreparedCommand<Self, ()>
+    fn ft_cursor_del<I>(self, index: I, cursor_id: u64) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -242,10 +242,10 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.cursor-read/>](https://redis.io/commands/ft.cursor-read/)
     #[must_use]
     fn ft_cursor_read<I>(
-        &mut self,
+        self,
         index: I,
         cursor_id: u64,
-    ) -> PreparedCommand<Self, FtAggregateResult>
+    ) -> PreparedCommand<'a, Self, FtAggregateResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -265,7 +265,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.dictadd/>](https://redis.io/commands/ft.dictadd/)
     #[must_use]
-    fn ft_dictadd<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
+    fn ft_dictadd<D, T, TT>(self, dict: D, terms: TT) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -287,7 +287,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.dictdel/>](https://redis.io/commands/ft.dictdel/)
     #[must_use]
-    fn ft_dictdel<D, T, TT>(&mut self, dict: D, terms: TT) -> PreparedCommand<Self, usize>
+    fn ft_dictdel<D, T, TT>(self, dict: D, terms: TT) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -308,7 +308,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.dictdump/>](https://redis.io/commands/ft.dictdump/)
     #[must_use]
-    fn ft_dictdump<D, T, TT>(&mut self, dict: D) -> PreparedCommand<Self, TT>
+    fn ft_dictdump<D, T, TT>(self, dict: D) -> PreparedCommand<'a, Self, TT>
     where
         Self: Sized,
         D: SingleArg,
@@ -339,7 +339,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.dropindex/>](https://redis.io/commands/ft.dropindex/)
     #[must_use]
-    fn ft_dropindex<I>(&mut self, index: I, dd: bool) -> PreparedCommand<Self, ()>
+    fn ft_dropindex<I>(self, index: I, dd: bool) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
         I: SingleArg,
@@ -367,11 +367,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.explain/>](https://redis.io/commands/ft.explain/)
     #[must_use]
     fn ft_explain<I, Q, R>(
-        &mut self,
+        self,
         index: I,
         query: Q,
         dialect_version: Option<u64>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         I: SingleArg,
@@ -403,11 +403,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.explaincli/>](https://redis.io/commands/ft.explaincli/)
     #[must_use]
     fn ft_explaincli<I, Q, R, RR>(
-        &mut self,
+        self,
         index: I,
         query: Q,
         dialect_version: Option<u64>,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         I: SingleArg,
@@ -435,7 +435,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.info/>](https://redis.io/commands/ft.info/)
     #[must_use]
-    fn ft_info(&mut self, index: impl SingleArg) -> PreparedCommand<Self, FtInfoResult>
+    fn ft_info(self, index: impl SingleArg) -> PreparedCommand<'a, Self, FtInfoResult>
     where
         Self: Sized,
     {
@@ -450,7 +450,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft._list/>](https://redis.io/commands/ft._list/)
     #[must_use]
-    fn ft_list<R, RR>(&mut self) -> PreparedCommand<Self, RR>
+    fn ft_list<R, RR>(self) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         R: PrimitiveResponse + DeserializeOwned,
@@ -477,11 +477,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
     #[must_use]
     fn ft_profile_search<I, Q, QQ>(
-        &mut self,
+        self,
         index: I,
         limited: bool,
         query: QQ,
-    ) -> PreparedCommand<Self, FtProfileSearchResult>
+    ) -> PreparedCommand<'a, Self, FtProfileSearchResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -517,11 +517,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
     #[must_use]
     fn ft_profile_aggregate<I, Q, QQ>(
-        &mut self,
+        self,
         index: I,
         limited: bool,
         query: QQ,
-    ) -> PreparedCommand<Self, FtProfileAggregateResult>
+    ) -> PreparedCommand<'a, Self, FtProfileAggregateResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -553,11 +553,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.search/>](https://redis.io/commands/ft.search/)
     #[must_use]
     fn ft_search<I, Q>(
-        &mut self,
+        self,
         index: I,
         query: Q,
         options: FtSearchOptions,
-    ) -> PreparedCommand<Self, FtSearchResult>
+    ) -> PreparedCommand<'a, Self, FtSearchResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -580,11 +580,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.spellcheck/>](https://redis.io/commands/ft.spellcheck/)
     #[must_use]
     fn ft_spellcheck<I, Q>(
-        &mut self,
+        self,
         index: I,
         query: Q,
         options: FtSpellCheckOptions,
-    ) -> PreparedCommand<Self, FtSpellCheckResult>
+    ) -> PreparedCommand<'a, Self, FtSpellCheckResult>
     where
         Self: Sized,
         I: SingleArg,
@@ -608,7 +608,7 @@ pub trait SearchCommands {
     /// * [<https://redis.io/commands/ft.syndump/>](https://redis.io/commands/ft.syndump/)
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
-    fn ft_syndump<I, R>(&mut self, index: I) -> PreparedCommand<Self, R>
+    fn ft_syndump<I, R>(self, index: I) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         I: SingleArg,
@@ -636,12 +636,12 @@ pub trait SearchCommands {
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
     fn ft_synupdate<T: SingleArg>(
-        &mut self,
+        self,
         index: impl SingleArg,
         synonym_group_id: impl SingleArg,
         skip_initial_scan: bool,
         terms: impl SingleArgCollection<T>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -670,10 +670,10 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
     fn ft_tagvals<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         index: impl SingleArg,
         field_name: impl SingleArg,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -698,12 +698,12 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.sugadd/>](https://redis.io/commands/ft.sugadd/)
     #[must_use]
     fn ft_sugadd(
-        &mut self,
+        self,
         key: impl SingleArg,
         string: impl SingleArg,
         score: f64,
         options: FtSugAddOptions,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -730,10 +730,10 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.sugdel/>](https://redis.io/commands/ft.sugdel/)
     #[must_use]
     fn ft_sugdel(
-        &mut self,
+        self,
         key: impl SingleArg,
         string: impl SingleArg,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -754,11 +754,11 @@ pub trait SearchCommands {
     /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
     #[must_use]
     fn ft_sugget(
-        &mut self,
+        self,
         key: impl SingleArg,
         prefix: impl SingleArg,
         options: FtSugGetOptions,
-    ) -> PreparedCommand<Self, Vec<FtSuggestion>>
+    ) -> PreparedCommand<'a, Self, Vec<FtSuggestion>>
     where
         Self: Sized,
     {
@@ -784,7 +784,7 @@ pub trait SearchCommands {
     /// # See Also
     /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
     #[must_use]
-    fn ft_suglen(&mut self, key: impl SingleArg) -> PreparedCommand<Self, usize>
+    fn ft_suglen(self, key: impl SingleArg) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {

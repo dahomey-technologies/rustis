@@ -13,7 +13,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitcount() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("mykey", "foobar").await?;
 
@@ -45,7 +45,7 @@ async fn bitcount() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitfield() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("mykey", "foobar").await?;
 
@@ -106,7 +106,7 @@ async fn bitfield() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitfield_readonly() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("mykey", "foobar").await?;
 
@@ -123,7 +123,7 @@ async fn bitfield_readonly() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("key1", "foobar").await?;
     client.set("key2", "abcdef").await?;
@@ -145,7 +145,7 @@ async fn bitop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bitpos() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client
         .set("mykey", CommandArg::Binary(vec![0xFFu8, 0xF0u8, 0x00u8]))
@@ -185,7 +185,7 @@ async fn bitpos() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn getbit() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("mykey", "foobar").await?;
 
@@ -201,7 +201,7 @@ async fn getbit() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn setbit() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     client.set("mykey", "foobar").await?;
 

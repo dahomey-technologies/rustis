@@ -85,7 +85,7 @@ impl Connection {
     }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, Connection, R>
+impl<'a, R> IntoFuture for PreparedCommand<'a, &'a mut Connection, R>
 where
     R: DeserializeOwned + Send + 'a,
 {
@@ -101,4 +101,4 @@ where
     }
 }
 
-impl InternalPubSubCommands for Connection {}
+impl<'a> InternalPubSubCommands<'a> for &'a mut Connection {}

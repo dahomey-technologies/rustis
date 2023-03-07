@@ -9,12 +9,12 @@ use rustis::{
     client::Client,
     commands::{GenericCommands, StringCommands},
 };
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 #[tokio::main]
 async fn main() {
-    // build rustis client
-    let redis = Client::connect("redis://127.0.0.1:6379").await.unwrap();
+    // build rustis client in multiplexer mode (a unique rustis instance for all axum workers)
+    let redis = Arc::new(Client::connect("redis://127.0.0.1:6379").await.unwrap());
 
     // build our application with a route
     let app = Router::new()
@@ -31,7 +31,7 @@ async fn main() {
 }
 
 async fn read(
-    State(mut redis): State<Client>,
+    State(redis): State<Arc<Client>>,
     Path(key): Path<String>,
 ) -> Result<String, ServiceError> {
     let value: Option<String> = redis.get(key.clone()).await?;
@@ -44,7 +44,7 @@ async fn read(
 }
 
 async fn update(
-    State(mut redis): State<Client>,
+    State(redis): State<Arc<Client>>,
     Path(key): Path<String>,
     value: Option<String>,
 ) -> Result<(), ServiceError> {
@@ -58,7 +58,10 @@ async fn update(
     Ok(())
 }
 
-async fn del(State(mut redis): State<Client>, Path(key): Path<String>) -> Result<(), ServiceError> {
+async fn del(
+    State(redis): State<Arc<Client>>,
+    Path(key): Path<String>,
+) -> Result<(), ServiceError> {
     let deleted = redis.del(key.clone()).await?;
     if deleted > 0 {
         Ok(())

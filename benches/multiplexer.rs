@@ -109,7 +109,7 @@ fn bench_rustis_parallel(b: &mut Bencher) {
             let tasks: Vec<_> = (0..PARALLEL_QUERIES)
                 .into_iter()
                 .map(|i| {
-                    let mut client = client.clone();
+                    let client = client.clone();
                     tokio::spawn(async move {
                         for _ in 0..ITERATIONS {
                             let key = format!("key{i}");

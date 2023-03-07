@@ -13,7 +13,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 ///
 /// # See Also
 /// [Top-K Commands](https://redis.io/commands/?group=topk)
-pub trait TopKCommands {
+pub trait TopKCommands<'a> {
     /// Adds an item to the data structure.
     ///
     /// Multiple items can be added at once.
@@ -31,10 +31,10 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
     fn topk_add<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -61,10 +61,10 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
     fn topk_incrby<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, i64>,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -82,7 +82,7 @@ pub trait TopKCommands {
     /// # See Also
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
-    fn topk_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, TopKInfoResult>
+    fn topk_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, TopKInfoResult>
     where
         Self: Sized,
     {
@@ -101,9 +101,9 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
     fn topk_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         key: impl SingleArg,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -124,9 +124,9 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
     fn topk_list_with_count<N: PrimitiveResponse + DeserializeOwned>(
-        &mut self,
+        self,
         key: impl SingleArg,
-    ) -> PreparedCommand<Self, TopKListWithCountResult<N>>
+    ) -> PreparedCommand<'a, Self, TopKListWithCountResult<N>>
     where
         Self: Sized,
     {
@@ -148,10 +148,10 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
     fn topk_query<I: SingleArg, R: CollectionResponse<bool>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -174,11 +174,11 @@ pub trait TopKCommands {
     /// * [<https://redis.io/commands/topk.reserve/>](https://redis.io/commands/topk.reserve/)
     #[must_use]
     fn topk_reserve(
-        &mut self,
+        self,
         key: impl SingleArg,
         topk: usize,
         width_depth_decay: Option<(usize, usize, f64)>,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {

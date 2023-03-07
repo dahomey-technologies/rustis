@@ -11,7 +11,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 ///
 /// # See Also
 /// [Redis Sorted Set Commands](https://redis.io/commands/?group=sorted-set)
-pub trait SortedSetCommands {
+pub trait SortedSetCommands<'a> {
     /// Adds all the specified members with the specified scores
     /// to the sorted set stored at key.
     ///
@@ -23,11 +23,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zadd/>](https://redis.io/commands/zadd/)
     #[must_use]
     fn zadd<K, M, I>(
-        &mut self,
+        self,
         key: K,
         items: I,
         options: ZAddOptions,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -48,14 +48,14 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zadd/>](https://redis.io/commands/zadd/)
     #[must_use]
     fn zadd_incr<K, M>(
-        &mut self,
+        self,
         key: K,
         condition: ZAddCondition,
         comparison: ZAddComparison,
         change: bool,
         score: f64,
         member: M,
-    ) -> PreparedCommand<Self, Option<f64>>
+    ) -> PreparedCommand<'a, Self, Option<f64>>
     where
         Self: Sized,
         K: SingleArg,
@@ -82,7 +82,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zcard/>](https://redis.io/commands/zcard/)
     #[must_use]
-    fn zcard<K>(&mut self, key: K) -> PreparedCommand<Self, usize>
+    fn zcard<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -98,7 +98,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zcount/>](https://redis.io/commands/zcount/)
     #[must_use]
-    fn zcount<K, M1, M2>(&mut self, key: K, min: M1, max: M2) -> PreparedCommand<Self, usize>
+    fn zcount<K, M1, M2>(self, key: K, min: M1, max: M2) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -117,7 +117,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff<K, C, E>(&mut self, keys: C) -> PreparedCommand<Self, Vec<E>>
+    fn zdiff<K, C, E>(self, keys: C) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -136,7 +136,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff_with_scores<K, C, E>(&mut self, keys: C) -> PreparedCommand<Self, Vec<(E, f64)>>
+    fn zdiff_with_scores<K, C, E>(self, keys: C) -> PreparedCommand<'a, Self, Vec<(E, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -161,7 +161,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zdiffstore/>](https://redis.io/commands/zdiffstore/)
     #[must_use]
-    fn zdiffstore<D, K, C>(&mut self, destination: D, keys: C) -> PreparedCommand<Self, usize>
+    fn zdiffstore<D, K, C>(self, destination: D, keys: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -185,7 +185,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zincrby/>](https://redis.io/commands/zincrby/)
     #[must_use]
-    fn zincrby<K, M>(&mut self, key: K, increment: f64, member: M) -> PreparedCommand<Self, f64>
+    fn zincrby<K, M>(self, key: K, increment: f64, member: M) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
         K: SingleArg,
@@ -204,11 +204,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
     fn zinter<K, C, W, E>(
-        &mut self,
+        self,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, Vec<E>>
+    ) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -236,11 +236,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
     fn zinter_with_scores<K, C, W, E>(
-        &mut self,
+        self,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, Vec<(E, f64)>>
+    ) -> PreparedCommand<'a, Self, Vec<(E, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -268,7 +268,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zintercard/>](https://redis.io/commands/zintercard/)
     #[must_use]
-    fn zintercard<K, C>(&mut self, keys: C, limit: usize) -> PreparedCommand<Self, usize>
+    fn zintercard<K, C>(self, keys: C, limit: usize) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -294,12 +294,12 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zinterstore/>](https://redis.io/commands/zinterstore/)
     #[must_use]
     fn zinterstore<D, K, C, W>(
-        &mut self,
+        self,
         destination: D,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -328,7 +328,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zlexcount/>](https://redis.io/commands/zlexcount/)
     #[must_use]
-    fn zlexcount<K, M1, M2>(&mut self, key: K, min: M1, max: M2) -> PreparedCommand<Self, usize>
+    fn zlexcount<K, M1, M2>(self, key: K, min: M1, max: M2) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -351,11 +351,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zmpop/>](https://redis.io/commands/zmpop/)
     #[must_use]
     fn zmpop<K, C, E>(
-        &mut self,
+        self,
         keys: C,
         where_: ZWhere,
         count: usize,
-    ) -> PreparedCommand<Self, Option<ZMPopResult<E>>>
+    ) -> PreparedCommand<'a, Self, Option<ZMPopResult<E>>>
     where
         Self: Sized,
         K: SingleArg,
@@ -383,7 +383,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zmscore/>](https://redis.io/commands/zmscore/)
     #[must_use]
-    fn zmscore<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, Vec<Option<f64>>>
+    fn zmscore<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, Vec<Option<f64>>>
     where
         Self: Sized,
         K: SingleArg,
@@ -401,7 +401,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zpopmax/>](https://redis.io/commands/zpopmax/)
     #[must_use]
-    fn zpopmax<K, M>(&mut self, key: K, count: usize) -> PreparedCommand<Self, Vec<(M, f64)>>
+    fn zpopmax<K, M>(self, key: K, count: usize) -> PreparedCommand<'a, Self, Vec<(M, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -418,7 +418,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zpopmin/>](https://redis.io/commands/zpopmin/)
     #[must_use]
-    fn zpopmin<K, M>(&mut self, key: K, count: usize) -> PreparedCommand<Self, Vec<(M, f64)>>
+    fn zpopmin<K, M>(self, key: K, count: usize) -> PreparedCommand<'a, Self, Vec<(M, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -435,7 +435,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmember<K, E>(&mut self, key: K) -> PreparedCommand<Self, E>
+    fn zrandmember<K, E>(self, key: K) -> PreparedCommand<'a, Self, E>
     where
         Self: Sized,
         K: SingleArg,
@@ -456,7 +456,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmembers<K, E>(&mut self, key: K, count: isize) -> PreparedCommand<Self, Vec<E>>
+    fn zrandmembers<K, E>(self, key: K, count: isize) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -478,10 +478,10 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
     fn zrandmembers_with_scores<K, E>(
-        &mut self,
+        self,
         key: K,
         count: isize,
-    ) -> PreparedCommand<Self, Vec<E>>
+    ) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -502,12 +502,12 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
     fn zrange<K, S, E>(
-        &mut self,
+        self,
         key: K,
         start: S,
         stop: S,
         options: ZRangeOptions,
-    ) -> PreparedCommand<Self, Vec<E>>
+    ) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -529,12 +529,12 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
     fn zrange_with_scores<K, S, E>(
-        &mut self,
+        self,
         key: K,
         start: S,
         stop: S,
         options: ZRangeOptions,
-    ) -> PreparedCommand<Self, Vec<(E, f64)>>
+    ) -> PreparedCommand<'a, Self, Vec<(E, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -562,13 +562,13 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zrangestore/>](https://redis.io/commands/zrangestore/)
     #[must_use]
     fn zrangestore<D, S, SS>(
-        &mut self,
+        self,
         dst: D,
         src: S,
         start: SS,
         stop: SS,
         options: ZRangeOptions,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,
@@ -596,7 +596,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
     #[must_use]
-    fn zrank<K, M>(&mut self, key: K, member: M) -> PreparedCommand<Self, Option<usize>>
+    fn zrank<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, Option<usize>>
     where
         Self: Sized,
         K: SingleArg,
@@ -613,7 +613,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zrem/>](https://redis.io/commands/zrem/)
     #[must_use]
-    fn zrem<K, M, C>(&mut self, key: K, members: C) -> PreparedCommand<Self, usize>
+    fn zrem<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -634,7 +634,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zremrangebylex/>](https://redis.io/commands/zremrangebylex/)
     #[must_use]
-    fn zremrangebylex<K, S>(&mut self, key: K, start: S, stop: S) -> PreparedCommand<Self, usize>
+    fn zremrangebylex<K, S>(self, key: K, start: S, stop: S) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -652,11 +652,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zremrangebyrank/>](https://redis.io/commands/zremrangebyrank/)
     #[must_use]
     fn zremrangebyrank<K>(
-        &mut self,
+        self,
         key: K,
         start: isize,
         stop: isize,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -672,7 +672,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zremrangebyscore/>](https://redis.io/commands/zremrangebyscore/)
     #[must_use]
-    fn zremrangebyscore<K, S>(&mut self, key: K, start: S, stop: S) -> PreparedCommand<Self, usize>
+    fn zremrangebyscore<K, S>(self, key: K, start: S, stop: S) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         K: SingleArg,
@@ -690,7 +690,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zrevrank/>](https://redis.io/commands/zrevrank/)
     #[must_use]
-    fn zrevrank<K, M>(&mut self, key: K, member: M) -> PreparedCommand<Self, Option<usize>>
+    fn zrevrank<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, Option<usize>>
     where
         Self: Sized,
         K: SingleArg,
@@ -710,11 +710,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zscan/>](https://redis.io/commands/zscan/)
     #[must_use]
     fn zscan<K, M>(
-        &mut self,
+        self,
         key: K,
         cursor: usize,
         options: ZScanOptions,
-    ) -> PreparedCommand<Self, ZScanResult<M>>
+    ) -> PreparedCommand<'a, Self, ZScanResult<M>>
     where
         Self: Sized,
         K: SingleArg,
@@ -731,7 +731,7 @@ pub trait SortedSetCommands {
     /// # See Also
     /// [<https://redis.io/commands/zscore/>](https://redis.io/commands/zscore/)
     #[must_use]
-    fn zscore<K, M>(&mut self, key: K, member: M) -> PreparedCommand<Self, Option<f64>>
+    fn zscore<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, Option<f64>>
     where
         Self: Sized,
         K: SingleArg,
@@ -750,11 +750,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
     fn zunion<K, C, W, E>(
-        &mut self,
+        self,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, Vec<E>>
+    ) -> PreparedCommand<'a, Self, Vec<E>>
     where
         Self: Sized,
         K: SingleArg,
@@ -782,11 +782,11 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
     fn zunion_with_scores<K, C, W, E>(
-        &mut self,
+        self,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, Vec<(E, f64)>>
+    ) -> PreparedCommand<'a, Self, Vec<(E, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -815,12 +815,12 @@ pub trait SortedSetCommands {
     /// [<https://redis.io/commands/zunionstore/>](https://redis.io/commands/zunionstore/)
     #[must_use]
     fn zunionstore<D, K, C, W>(
-        &mut self,
+        self,
         destination: D,
         keys: C,
         weights: Option<W>,
         aggregate: ZAggregate,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
         D: SingleArg,

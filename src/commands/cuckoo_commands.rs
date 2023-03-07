@@ -12,7 +12,7 @@ use std::collections::HashMap;
 ///
 /// # See Also
 /// [Cuckoo Filter Commands](https://redis.io/commands/?group=cf)
-pub trait CuckooCommands {
+pub trait CuckooCommands<'a> {
     /// Adds an item to the cuckoo filter, creating the filter if it does not exist.
     ///
     /// Cuckoo filters can contain the same item multiple times, and consider each insert as separate.
@@ -26,7 +26,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.add/>](https://redis.io/commands/cf.add/)
     #[must_use]
-    fn cf_add(&mut self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<Self, ()>
+    fn cf_add(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -54,7 +54,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.addnx/>](https://redis.io/commands/cf.addnx/)
     #[must_use]
-    fn cf_addnx(&mut self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<Self, bool>
+    fn cf_addnx(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -79,10 +79,10 @@ pub trait CuckooCommands {
     /// * [<https://redis.io/commands/cf.count/>](https://redis.io/commands/cf.count/)
     #[must_use]
     fn cf_count(
-        &mut self,
+        self,
         key: impl SingleArg,
         item: impl SingleArg,
-    ) -> PreparedCommand<Self, usize>
+    ) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -111,7 +111,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.del/>](https://redis.io/commands/cf.del/)
     #[must_use]
-    fn cf_del(&mut self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<Self, bool>
+    fn cf_del(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -132,10 +132,10 @@ pub trait CuckooCommands {
     /// * [<https://redis.io/commands/cf.exists/>](https://redis.io/commands/cf.exists/)
     #[must_use]
     fn cf_exists(
-        &mut self,
+        self,
         key: impl SingleArg,
         item: impl SingleArg,
-    ) -> PreparedCommand<Self, bool>
+    ) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -153,7 +153,7 @@ pub trait CuckooCommands {
     /// # See Also
     /// * [<https://redis.io/commands/cf.info/>](https://redis.io/commands/cf.info/)
     #[must_use]
-    fn cf_info(&mut self, key: impl SingleArg) -> PreparedCommand<Self, CfInfoResult>
+    fn cf_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, CfInfoResult>
     where
         Self: Sized,
     {
@@ -173,11 +173,11 @@ pub trait CuckooCommands {
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
     fn cf_insert<I: SingleArg>(
-        &mut self,
+        self,
         key: impl SingleArg,
         options: CfInsertOptions,
         item: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, Vec<usize>>
+    ) -> PreparedCommand<'a, Self, Vec<usize>>
     where
         Self: Sized,
     {
@@ -221,11 +221,11 @@ pub trait CuckooCommands {
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
     fn cf_insertnx<I: SingleArg, R: CollectionResponse<i64>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         options: CfInsertOptions,
         item: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -255,11 +255,11 @@ pub trait CuckooCommands {
     /// [<https://redis.io/commands/cf.loadchunk/>](https://redis.io/commands/cf.loadchunk/)
     #[must_use]
     fn cf_loadchunk(
-        &mut self,
+        self,
         key: impl SingleArg,
         iterator: i64,
         data: impl SingleArg,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -280,10 +280,10 @@ pub trait CuckooCommands {
     /// [<https://redis.io/commands/cf.mexists/>](https://redis.io/commands/cf.mexists/)
     #[must_use]
     fn cf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
-        &mut self,
+        self,
         key: impl SingleArg,
         items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -319,11 +319,11 @@ pub trait CuckooCommands {
     /// [<https://redis.io/commands/cf.reserve/>](https://redis.io/commands/cf.reserve/)
     #[must_use]
     fn cf_reserve(
-        &mut self,
+        self,
         key: impl SingleArg,
         capacity: usize,
         options: CfReserveOptions,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -346,10 +346,10 @@ pub trait CuckooCommands {
     /// [<https://redis.io/commands/cf.scandump/>](https://redis.io/commands/cf.scandump/)
     #[must_use]
     fn cf_scandump(
-        &mut self,
+        self,
         key: impl SingleArg,
         iterator: i64,
-    ) -> PreparedCommand<Self, CfScanDumpResult>
+    ) -> PreparedCommand<'a, Self, CfScanDumpResult>
     where
         Self: Sized,
     {

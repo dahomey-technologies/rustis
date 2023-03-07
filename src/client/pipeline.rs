@@ -95,7 +95,7 @@ impl Pipeline {
     ///     Ok(())
     /// }
     /// ```    
-    pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
+    pub async fn execute<T: DeserializeOwned>(self) -> Result<T> {
         let num_commands = self.commands.len();
         let results = self
             .client
@@ -131,7 +131,7 @@ pub trait BatchPreparedCommand<R = ()> {
     fn forget(self);
 }
 
-impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
+impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipeline, R> {
     /// Queue a command.
     #[inline]
     fn queue(self) {
@@ -145,44 +145,44 @@ impl<R: Response> BatchPreparedCommand for PreparedCommand<'_, Pipeline, R> {
     }
 }
 
-impl BitmapCommands for Pipeline {}
+impl<'a> BitmapCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl BloomCommands for Pipeline {}
-impl ClusterCommands for Pipeline {}
-impl ConnectionCommands for Pipeline {}
+impl<'a> BloomCommands<'a> for &'a mut Pipeline {}
+impl<'a> ClusterCommands<'a> for &'a mut Pipeline {}
+impl<'a> ConnectionCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CountMinSketchCommands for Pipeline {}
+impl<'a> CountMinSketchCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl CuckooCommands for Pipeline {}
-impl GenericCommands for Pipeline {}
-impl GeoCommands for Pipeline {}
+impl<'a> CuckooCommands<'a> for &'a mut Pipeline {}
+impl<'a> GenericCommands<'a> for &'a mut Pipeline {}
+impl<'a> GeoCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
 #[cfg(feature = "redis-graph")]
-impl GraphCommands for Pipeline {}
-impl HashCommands for Pipeline {}
-impl HyperLogLogCommands for Pipeline {}
+impl<'a> GraphCommands<'a> for &'a mut Pipeline {}
+impl<'a> HashCommands<'a> for &'a mut Pipeline {}
+impl<'a> HyperLogLogCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
 #[cfg(feature = "redis-json")]
-impl JsonCommands for Pipeline {}
-impl ListCommands for Pipeline {}
+impl<'a> JsonCommands<'a> for &'a mut Pipeline {}
+impl<'a> ListCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
 #[cfg(feature = "redis-search")]
-impl SearchCommands for Pipeline {}
-impl SetCommands for Pipeline {}
-impl ScriptingCommands for Pipeline {}
-impl ServerCommands for Pipeline {}
-impl SortedSetCommands for Pipeline {}
-impl StreamCommands for Pipeline {}
-impl StringCommands for Pipeline {}
+impl<'a> SearchCommands<'a> for &'a mut Pipeline {}
+impl<'a> SetCommands<'a> for &'a mut Pipeline {}
+impl<'a> ScriptingCommands<'a> for &'a mut Pipeline {}
+impl<'a> ServerCommands<'a> for &'a mut Pipeline {}
+impl<'a> SortedSetCommands<'a> for &'a mut Pipeline {}
+impl<'a> StreamCommands<'a> for &'a mut Pipeline {}
+impl<'a> StringCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TDigestCommands for Pipeline {}
+impl<'a> TDigestCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
 #[cfg(feature = "redis-time-series")]
-impl TimeSeriesCommands for Pipeline {}
+impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
-impl TopKCommands for Pipeline {}
+impl<'a> TopKCommands<'a> for &'a mut Pipeline {}

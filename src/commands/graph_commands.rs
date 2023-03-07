@@ -18,7 +18,7 @@ use std::{collections::HashMap, fmt, future, str::FromStr};
 ///
 /// # See Also
 /// [RedisGraph Commands](https://redis.io/commands/?group=graph)
-pub trait GraphCommands {
+pub trait GraphCommands<'a> {
     /// Retrieves the current value of a RedisGraph configuration parameter.
     ///
     /// # Arguments
@@ -31,7 +31,7 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<N, V, R>(&mut self, name: impl SingleArg) -> PreparedCommand<Self, R>
+    fn graph_config_get<N, V, R>(self, name: impl SingleArg) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
         N: PrimitiveResponse,
@@ -55,10 +55,10 @@ pub trait GraphCommands {
     /// As detailed in the link above, not all RedisGraph configuration parameters can be set at run-time.
     #[must_use]
     fn graph_config_set(
-        &mut self,
+        self,
         name: impl SingleArg,
         value: impl SingleArg,
-    ) -> PreparedCommand<Self, ()>
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -73,7 +73,7 @@ pub trait GraphCommands {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(&mut self, graph: impl SingleArg) -> PreparedCommand<Self, String>
+    fn graph_delete(self, graph: impl SingleArg) -> PreparedCommand<'a, Self, String>
     where
         Self: Sized,
     {
@@ -95,10 +95,10 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.explain/>](https://redis.io/commands/graph.explain/)
     #[must_use]
     fn graph_explain<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         graph: impl SingleArg,
         query: impl SingleArg,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -114,8 +114,8 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
     fn graph_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
-    ) -> PreparedCommand<Self, RR>
+        self,
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -136,11 +136,11 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
     fn graph_profile<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        &mut self,
+        self,
         graph: impl SingleArg,
         query: impl SingleArg,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<Self, RR>
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
     {
@@ -162,11 +162,11 @@ pub trait GraphCommands {
     /// * [`openCypher query language`](https://opencypher.org/)
     #[must_use]
     fn graph_query(
-        &mut self,
+        self,
         graph: impl SingleArg,
         query: impl SingleArg,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<Self, GraphResultSet>
+    ) -> PreparedCommand<'a, Self, GraphResultSet>
     where
         Self: Sized,
     {
@@ -195,11 +195,11 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.ro_query/>](https://redis.io/commands/graph.ro_query/)
     #[must_use]
     fn graph_ro_query(
-        &mut self,
+        self,
         graph: impl SingleArg,
         query: impl SingleArg,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<Self, GraphResultSet>
+    ) -> PreparedCommand<'a, Self, GraphResultSet>
     where
         Self: Sized,
     {
@@ -226,9 +226,9 @@ pub trait GraphCommands {
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
     fn graph_slowlog<R: CollectionResponse<GraphSlowlogResult>>(
-        &mut self,
+        self,
         graph: impl SingleArg,
-    ) -> PreparedCommand<Self, R>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -270,7 +270,7 @@ impl GraphResultSet {
     pub(crate) fn custom_conversion(
         resp_buffer: RespBuf,
         command: Command,
-        client: &mut Client,
+        client: &Client,
     ) -> Future<Self> {
         let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
@@ -346,14 +346,14 @@ impl GraphResultSet {
 
     fn deserialize<'de, D>(
         deserializer: D,
-        client: &mut Client,
+        client: &Client,
         cache_key: &str,
     ) -> std::result::Result<GraphResultSet, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct GraphResultSetVisitor<'a, 'b> {
-            client: &'a mut Client,
+            client: &'a Client,
             cache_key: &'b str,
         }
 
@@ -414,7 +414,7 @@ impl GraphResultSet {
 
     async fn load_missing_ids(
         graph_name: &str,
-        client: &mut Client,
+        client: &Client,
         num_node_labels: usize,
         num_prop_keys: usize,
         num_rel_types: usize,

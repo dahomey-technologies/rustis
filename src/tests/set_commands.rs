@@ -7,7 +7,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sadd() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -22,7 +22,7 @@ async fn sadd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn scard() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -38,7 +38,7 @@ async fn scard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiff() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3"]).await?;
@@ -59,7 +59,7 @@ async fn sdiff() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sdiffstore() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
@@ -83,7 +83,7 @@ async fn sdiffstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinter() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3"]).await?;
@@ -103,7 +103,7 @@ async fn sinter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sintercard() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3"]).await?;
@@ -122,7 +122,7 @@ async fn sintercard() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sinterstore() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
@@ -145,7 +145,7 @@ async fn sinterstore() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sismember() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -165,7 +165,7 @@ async fn sismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smembers() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -185,7 +185,7 @@ async fn smembers() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smismember() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -204,7 +204,7 @@ async fn smismember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn smove() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2"]).await?;
@@ -222,7 +222,7 @@ async fn smove() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn spop() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -239,7 +239,7 @@ async fn spop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srandmember() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -256,7 +256,7 @@ async fn srandmember() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn srem() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -273,7 +273,7 @@ async fn srem() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sscan() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del("key").await?;
@@ -291,7 +291,7 @@ async fn sscan() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunion() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3"]).await?;
@@ -315,7 +315,7 @@ async fn sunion() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn sunionstore() -> Result<()> {
-    let mut client = get_test_client().await?;
+    let client = get_test_client().await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;

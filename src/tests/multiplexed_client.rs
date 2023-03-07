@@ -14,7 +14,7 @@ use serial_test::serial;
 #[serial]
 async fn multiplexed_client() -> Result<()> {
     log_try_init();
-    let mut client = Client::connect("redis://127.0.0.1:6379").await?;
+    let client = Client::connect("redis://127.0.0.1:6379").await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -28,7 +28,7 @@ async fn multiplexed_client() -> Result<()> {
     let tasks: Vec<_> = (1..100)
         .into_iter()
         .map(|_| {
-            let mut client = client.clone();
+            let client = client.clone();
             spawn(async move {
                 for _ in 0..100 {
                     let i = rand::thread_rng().gen_range(0..100);

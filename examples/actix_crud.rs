@@ -1,4 +1,4 @@
-use actix_web::{delete, get, http::StatusCode, post, web, App, HttpServer, HttpResponseBuilder, HttpResponse};
+use actix_web::{delete, get, http::StatusCode, post, web, App, HttpServer, HttpResponse, Responder};
 use rustis::{
     client::Client,
     commands::{GenericCommands, StringCommands},
@@ -46,7 +46,7 @@ async fn update(
     redis: web::Data<Client>,
     key: web::Path<String>,
     value: Option<String>,
-) -> Result<HttpResponseBuilder, ServiceError> {
+) -> Result<impl Responder, ServiceError> {
     if value.is_none() {
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
@@ -61,7 +61,7 @@ async fn update(
 async fn delete(
     redis: web::Data<Client>,
     key: web::Path<String>,
-) -> Result<HttpResponseBuilder, ServiceError> {
+) -> Result<impl Responder, ServiceError> {
     let deleted = redis.del(key.clone()).await?;
     if deleted > 0 {
         Ok(HttpResponse::Ok())

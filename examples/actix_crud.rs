@@ -47,12 +47,12 @@ async fn update(
     key: web::Path<String>,
     value: Option<String>,
 ) -> Result<impl Responder, ServiceError> {
-    if value.is_none() {
+    let Some(value) = value else {
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
             "Value not provided",
         ));
-    }
+    };
     redis.set(key.into_inner(), value).await?;
     Ok(HttpResponse::Ok())
 }

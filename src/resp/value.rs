@@ -9,6 +9,7 @@ use std::{
 /// Generic Redis Object Model
 ///
 /// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/reference/protocol-spec/) (RESP)
+#[derive(Default)]
 pub enum Value {
     /// [RESP Simple String](https://redis.io/docs/reference/protocol-spec/#resp-simple-strings)
     SimpleString(String),
@@ -31,6 +32,7 @@ pub enum Value {
     /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
     Error(RedisError),
     /// [RESP Null](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
+    #[default]
     Nil,
 }
 
@@ -45,13 +47,6 @@ impl Value {
         T: DeserializeOwned,
     {
         T::deserialize(&self)
-    }
-}
-
-impl Default for Value {
-    #[inline]
-    fn default() -> Self {
-        Value::Nil
     }
 }
 

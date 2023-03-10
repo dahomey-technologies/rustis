@@ -794,10 +794,11 @@ pub trait SearchCommands<'a> {
 
 /// Field type used to declare an index schema
 /// for the [`ft_create`](SearchCommands::ft_create) command
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum FtFieldType {
     /// Allows full-text search queries against the value in this attribute.
+    #[default]
     Text,
     /// Allows exact-match queries, such as categories or primary keys,
     /// against the value in this attribute.
@@ -829,12 +830,6 @@ impl IntoArgs for FtFieldType {
             FtFieldType::Geo => "GEO",
             FtFieldType::Vector => "VECTOR",
         })
-    }
-}
-
-impl Default for FtFieldType {
-    fn default() -> Self {
-        FtFieldType::Text
     }
 }
 

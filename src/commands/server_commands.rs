@@ -851,18 +851,14 @@ pub trait ServerCommands<'a> {
 }
 
 /// Database flushing mode
+#[derive(Default)]
 pub enum FlushingMode {
+    #[default]
     Default,
     /// Flushes the database(s) asynchronously
     Async,
     /// Flushed the database(s) synchronously
     Sync,
-}
-
-impl Default for FlushingMode {
-    fn default() -> Self {
-        FlushingMode::Default
-    }
 }
 
 impl IntoArgs for FlushingMode {

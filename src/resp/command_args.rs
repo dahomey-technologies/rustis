@@ -6,8 +6,9 @@ use std::ops::Deref;
 /// 
 /// This enum is meant to hold a collection of arguments 
 /// without systematically allocate a container
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum CommandArgs {
+    #[default]
     Empty,
     Single(CommandArg),
     Array2([CommandArg; 2]),
@@ -63,12 +64,6 @@ impl CommandArgs {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-}
-
-impl Default for CommandArgs {
-    fn default() -> Self {
-        CommandArgs::Empty
     }
 }
 

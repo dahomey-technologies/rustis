@@ -709,8 +709,10 @@ pub struct LcsResult {
 }
 
 /// Expiration option for the [`set_with_options`](StringCommands::set_with_options) command
+#[derive(Default)]
 pub enum SetExpiration {
     /// No expiration
+    #[default]
     None,
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -720,12 +722,6 @@ pub enum SetExpiration {
     Exat(u64),
     /// Set the specified Unix time at which the key will expire, in milliseconds.
     Pxat(u64),
-}
-
-impl Default for SetExpiration {
-    fn default() -> Self {
-        SetExpiration::None
-    }
 }
 
 impl IntoArgs for SetExpiration {
@@ -741,19 +737,15 @@ impl IntoArgs for SetExpiration {
 }
 
 /// Condition option for the [`set_with_options`](StringCommands::set_with_options) command
+#[derive(Default)]
 pub enum SetCondition {
     /// No condition
+    #[default]
     None,
     /// Only set the key if it does not already exist.
     NX,
     /// Only set the key if it already exist.
     XX,
-}
-
-impl Default for SetCondition {
-    fn default() -> Self {
-        SetCondition::None
-    }
 }
 
 impl IntoArgs for SetCondition {

@@ -184,19 +184,15 @@ pub trait GeoCommands<'a> {
 }
 
 /// Condition for the [`geoadd`](GeoCommands::geoadd) command
+#[derive(Default)]
 pub enum GeoAddCondition {
     /// No option
+    #[default]
     None,
     /// Don't update already existing elements. Always add new elements.
     NX,
     /// Only update elements that already exist. Never add elements.
     XX,
-}
-
-impl Default for GeoAddCondition {
-    fn default() -> Self {
-        GeoAddCondition::None
-    }
 }
 
 impl IntoArgs for GeoAddCondition {

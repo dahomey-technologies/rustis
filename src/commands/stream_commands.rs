@@ -585,7 +585,9 @@ impl IntoArgs for XAddOptions {
 
 /// Stream Trim operator for the [`xadd`](StreamCommands::xadd)
 /// and [`xtrim`](StreamCommands::xtrim) commands
+#[derive(Default)]
 pub enum XTrimOperator {
+    #[default]
     None,
     /// =
     Equal,
@@ -600,12 +602,6 @@ impl IntoArgs for XTrimOperator {
             XTrimOperator::Equal => args.arg(CommandArg::Str("=")),
             XTrimOperator::Approximately => args.arg(CommandArg::Str("~")),
         }
-    }
-}
-
-impl Default for XTrimOperator {
-    fn default() -> Self {
-        XTrimOperator::None
     }
 }
 

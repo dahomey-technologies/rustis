@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::ModuleInfo,
     resp::{
-        cmd, CommandArg, CommandArgs, PrimitiveResponse, IntoArgs, SingleArg, SingleArgCollection,
+        cmd, CommandArg, CommandArgs, IntoArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
     },
     Result,
 };
@@ -693,10 +693,12 @@ impl IntoArgs for ClientKillOptions {
 }
 
 /// Mode options for the [`client_pause`](ConnectionCommands::client_pause) command.
+#[derive(Default)]
 pub enum ClientPauseMode {
     /// Clients are only blocked if they attempt to execute a write command.
     Write,
     /// This is the default mode. All client commands are blocked.
+    #[default]
     All,
 }
 
@@ -706,12 +708,6 @@ impl IntoArgs for ClientPauseMode {
             ClientPauseMode::Write => CommandArg::Str("WRITE"),
             ClientPauseMode::All => CommandArg::Str("ALL"),
         })
-    }
-}
-
-impl Default for ClientPauseMode {
-    fn default() -> Self {
-        ClientPauseMode::All
     }
 }
 
@@ -823,8 +819,10 @@ pub struct ClientTrackingInfo {
 }
 
 /// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
+#[derive(Default)]
 pub enum ClientUnblockMode {
     /// By default the client is unblocked as if the timeout of the command was reached,
+    #[default]
     Timeout,
     /// the behavior is to unblock the client returning as error the fact that the client was force-unblocked.
     Error,
@@ -836,12 +834,6 @@ impl IntoArgs for ClientUnblockMode {
             ClientUnblockMode::Timeout => CommandArg::Str("TIMEOUT"),
             ClientUnblockMode::Error => CommandArg::Str("ERROR"),
         })
-    }
-}
-
-impl Default for ClientUnblockMode {
-    fn default() -> Self {
-        ClientUnblockMode::Timeout
     }
 }
 

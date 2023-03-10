@@ -841,19 +841,15 @@ pub trait SortedSetCommands<'a> {
 }
 
 /// Condition option for the [`zadd`](SortedSetCommands::zadd) command
+#[derive(Default)]
 pub enum ZAddCondition {
     /// No condition
+    #[default]
     None,
     /// Only update elements that already exist. Don't add new elements.
     NX,
     /// Only add new elements. Don't update already existing elements.
     XX,
-}
-
-impl Default for ZAddCondition {
-    fn default() -> Self {
-        ZAddCondition::None
-    }
 }
 
 impl IntoArgs for ZAddCondition {
@@ -867,8 +863,10 @@ impl IntoArgs for ZAddCondition {
 }
 
 /// Comparison option for the [`zadd`](SortedSetCommands::zadd) command
+#[derive(Default)]
 pub enum ZAddComparison {
     /// No comparison
+    #[default]
     None,
     /// Only update existing elements if the new score is greater than the current score.
     ///
@@ -878,12 +876,6 @@ pub enum ZAddComparison {
     ///
     /// This flag doesn't prevent adding new elements.
     LT,
-}
-
-impl Default for ZAddComparison {
-    fn default() -> Self {
-        ZAddComparison::None
-    }
 }
 
 impl IntoArgs for ZAddComparison {
@@ -897,8 +889,10 @@ impl IntoArgs for ZAddComparison {
 }
 
 /// sort by option of the [`zrange`](SortedSetCommands::zrange) command
+#[derive(Default)]
 pub enum ZRangeSortBy {
     /// No sort by
+    #[default]
     None,
     /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
     /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
@@ -906,12 +900,6 @@ pub enum ZRangeSortBy {
     /// When the `ByLex` option is used, the command behaves like `ZRANGEBYLEX` and returns the range
     /// of elements from the sorted set between the `start` and `stop` lexicographical closed range intervals.
     ByLex,
-}
-
-impl Default for ZRangeSortBy {
-    fn default() -> Self {
-        ZRangeSortBy::None
-    }
 }
 
 impl IntoArgs for ZRangeSortBy {
@@ -931,8 +919,10 @@ impl IntoArgs for ZRangeSortBy {
 /// [zinterstore](SortedSetCommands::zinterstore)
 /// [zunion](SortedSetCommands::zunion)
 /// [zunionstore](SortedSetCommands::zunionstore)
+#[derive(Default)]
 pub enum ZAggregate {
     /// No aggregation
+    #[default]
     None,
     /// The score of an element is summed across the inputs where it exists.
     Sum,
@@ -940,12 +930,6 @@ pub enum ZAggregate {
     Min,
     /// The maximum score of an element across the inputs where it exists.
     Max,
-}
-
-impl Default for ZAggregate {
-    fn default() -> Self {
-        ZAggregate::None
-    }
 }
 
 impl IntoArgs for ZAggregate {

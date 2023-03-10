@@ -654,8 +654,10 @@ pub trait GenericCommands<'a> {
 }
 
 /// Options for the [`expire`](GenericCommands::expire) command
+#[derive(Default)]
 pub enum ExpireOption {
     /// No option
+    #[default]
     None,
     /// Set expiry only when the key has no expiry
     Nx,
@@ -665,12 +667,6 @@ pub enum ExpireOption {
     Gt,
     /// Set expiry only when the new expiry is less than current one
     Lt,
-}
-
-impl Default for ExpireOption {
-    fn default() -> Self {
-        ExpireOption::None
-    }
 }
 
 impl IntoArgs for ExpireOption {

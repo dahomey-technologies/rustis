@@ -26,7 +26,6 @@ async fn multiplexed_client() -> Result<()> {
         .await?;
 
     let tasks: Vec<_> = (1..100)
-        .into_iter()
         .map(|_| {
             let client = client.clone();
             spawn(async move {

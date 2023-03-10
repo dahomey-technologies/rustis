@@ -153,16 +153,14 @@ impl IntoArgs for &[u8] {
     }
 }
 
-impl<const N: usize> IntoArgs for &[u8; N]
-{
+impl<const N: usize> IntoArgs for &[u8; N] {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         CommandArg::Binary(self.to_vec()).into_args(args)
     }
 }
 
-impl<const N: usize> IntoArgs for [u8; N]
-{
+impl<const N: usize> IntoArgs for [u8; N] {
     #[inline]
     fn into_args(self, args: CommandArgs) -> CommandArgs {
         CommandArg::Binary(self.to_vec()).into_args(args)
@@ -404,17 +402,7 @@ impl IntoArgs for CommandArgs {
 }
 
 /// Generic Marker for single arguments (no collections nor tuples)
-pub trait SingleArg: IntoArgs {
-    fn into_command_arg(self) -> CommandArg
-    where
-        Self: Sized,
-    {
-        let CommandArgs::Single(arg) = self.into_args(CommandArgs::Empty) else {
-            panic!("Expected a single argument");
-        };
-        arg
-    }
-}
+pub trait SingleArg: IntoArgs {}
 
 impl SingleArg for CommandArg {}
 impl SingleArg for i8 {}
@@ -464,8 +452,7 @@ where
     fn into_iter(self) -> Self::IntoIter;
 }
 
-impl SingleArgCollection<CommandArg> for CommandArgs
-{
+impl SingleArgCollection<CommandArg> for CommandArgs {
     type IntoIter = CommandArgsIntoIter;
 
     #[inline]

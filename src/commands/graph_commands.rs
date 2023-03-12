@@ -252,8 +252,8 @@ impl GraphQueryOptions {
     }
 }
 
-impl IntoArgs for GraphQueryOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GraphQueryOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

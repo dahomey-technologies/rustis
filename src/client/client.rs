@@ -306,7 +306,7 @@ impl Client {
 
         let pub_sub_senders = channels
             .iter()
-            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c.clone(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
@@ -329,7 +329,7 @@ impl Client {
 
         let pub_sub_senders = patterns
             .iter()
-            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c.clone(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
@@ -352,7 +352,7 @@ impl Client {
 
         let pub_sub_senders = shardchannels
             .iter()
-            .map(|c| (c.as_bytes().to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c.clone().to_vec(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
@@ -467,7 +467,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        let channels = channels.into_args(CommandArgs::Empty);
+        let channels = CommandArgs::default().arg(channels).build();
 
         Box::pin(async move {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
@@ -491,7 +491,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>,
     {
-        let patterns = patterns.into_args(CommandArgs::Empty);
+        let patterns = CommandArgs::default().arg(patterns).build();
 
         Box::pin(async move {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
@@ -515,7 +515,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
-        let shardchannels = shardchannels.into_args(CommandArgs::Empty);
+        let shardchannels = CommandArgs::default().arg(shardchannels).build();
 
         Box::pin(async move {
             let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
@@ -526,7 +526,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
 
             Ok(PubSubStream::from_shardchannels(
                 shardchannels,
-                pub_sub_sender,
+                pub_sub_sender, 
                 pub_sub_receiver,
                 self.clone(),
             ))

@@ -211,7 +211,7 @@ impl NetworkHandler {
                                     command
                                         .args
                                         .iter()
-                                        .map(|a| (a.as_bytes().to_vec(), subscription_type))
+                                        .map(|a| (a.clone(), subscription_type))
                                         .collect(),
                                 );
                             }
@@ -282,21 +282,22 @@ impl NetworkHandler {
 
             for command in commands.into_iter() {
                 if command.name == "CLIENT" {
-                    match &command.args {
-                        CommandArgs::Array2(args)
-                            if args[0].as_bytes() == b"REPLY"
-                                && (args[1].as_bytes() == b"OFF"
-                                    || args[1].as_bytes() == b"SKIP") =>
-                        {
-                            self.is_reply_on = false
-                        }
-                        CommandArgs::Array2(args)
-                            if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
-                        {
-                            self.is_reply_on = true
-                        }
-                        _ => (),
-                    }
+                    todo!()
+                    // match &command.args {
+                    //     CommandArgs::Array2(args)
+                    //         if args[0].as_bytes() == b"REPLY"
+                    //             && (args[1].as_bytes() == b"OFF"
+                    //                 || args[1].as_bytes() == b"SKIP") =>
+                    //     {
+                    //         self.is_reply_on = false
+                    //     }
+                    //     CommandArgs::Array2(args)
+                    //         if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
+                    //     {
+                    //         self.is_reply_on = true
+                    //     }
+                    //     _ => (),
+                    // }
                 }
 
                 if self.is_reply_on {

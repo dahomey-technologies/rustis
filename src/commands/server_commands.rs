@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
     },
     Error, Result,
 };
@@ -861,12 +861,17 @@ pub enum FlushingMode {
     Sync,
 }
 
-impl IntoArgs for FlushingMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FlushingMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            FlushingMode::Default => args,
-            FlushingMode::Async => args.arg("ASYNC"),
-            FlushingMode::Sync => args.arg("SYNC"),
+            FlushingMode::Default => {
+            }
+            FlushingMode::Async => {
+                args.arg("ASYNC");
+            }
+            FlushingMode::Sync => {
+                args.arg("SYNC");
+            }
         }
     }
 }
@@ -879,16 +884,16 @@ pub struct AclCatOptions {
 
 impl AclCatOptions {
     #[must_use]
-    pub fn category_name<C: SingleArg>(self, category_name: C) -> Self {
+    pub fn category_name<C: SingleArg>(mut self, category_name: C) -> Self {
         Self {
-            command_args: self.command_args.arg(category_name),
+            command_args: self.command_args.arg(category_name).build(),
         }
     }
 }
 
-impl IntoArgs for AclCatOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for AclCatOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -900,20 +905,20 @@ pub struct AclDryRunOptions {
 
 impl AclDryRunOptions {
     #[must_use]
-    pub fn arg<A, AA>(self, args: AA) -> Self
+    pub fn arg<A, AA>(mut self, args: AA) -> Self
     where
         A: SingleArg,
         AA: SingleArgCollection<A>,
     {
         Self {
-            command_args: self.command_args.arg(args),
+            command_args: self.command_args.arg(args).build(),
         }
     }
 }
 
-impl IntoArgs for AclDryRunOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for AclDryRunOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -930,16 +935,16 @@ impl AclGenPassOptions {
     /// Note that the number of bits provided is always rounded to the next multiple of 4.
     /// So for instance asking for just 1 bit password will result in 4 bits to be emitted, in the form of a single hex character.
     #[must_use]
-    pub fn bits(self, bits: usize) -> Self {
+    pub fn bits(mut self, bits: usize) -> Self {
         Self {
-            command_args: self.command_args.arg(bits),
+            command_args: self.command_args.arg(bits).build(),
         }
     }
 }
 
-impl IntoArgs for AclGenPassOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for AclGenPassOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -953,24 +958,24 @@ impl AclLogOptions {
     /// This optional argument specifies how many entries to show.
     /// By default up to ten failures are returned.
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg(count),
+            command_args: self.command_args.arg(count).build(),
         }
     }
 
     /// The special RESET argument clears the log.
     #[must_use]
-    pub fn reset(self) -> Self {
+    pub fn reset(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("RESET"),
+            command_args: self.command_args.arg("RESET").build(),
         }
     }
 }
 
-impl IntoArgs for AclLogOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for AclLogOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1375,44 +1380,47 @@ pub struct CommandListOptions {
 impl CommandListOptions {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name<M: SingleArg>(self, module_name: M) -> Self {
+    pub fn filter_by_module_name<M: SingleArg>(mut self, module_name: M) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("FILTERBY")
                 .arg("MODULE")
-                .arg(module_name),
+                .arg(module_name)
+                .build(),
         }
     }
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category<C: SingleArg>(self, category: C) -> Self {
+    pub fn filter_by_acl_category<C: SingleArg>(mut self, category: C) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("FILTERBY")
                 .arg("ACLCAT")
-                .arg(category),
+                .arg(category)
+                .build(),
         }
     }
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern<P: SingleArg>(self, pattern: P) -> Self {
+    pub fn filter_by_pattern<P: SingleArg>(mut self, pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("FILTERBY")
                 .arg("PATTERN")
-                .arg(pattern),
+                .arg(pattern)
+                .build(),
         }
     }
 }
 
-impl IntoArgs for CommandListOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for CommandListOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1425,18 +1433,18 @@ pub struct FailOverOptions {
 impl FailOverOptions {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to<H: SingleArg>(self, host: H, port: u16) -> Self {
+    pub fn to<H: SingleArg>(mut self, host: H, port: u16) -> Self {
         Self {
-            command_args: self.command_args.arg("TO").arg(host).arg(port),
+            command_args: self.command_args.arg("TO").arg(host).arg(port).build(),
         }
     }
 
     /// This option allows specifying a maximum time a master will wait in the waiting-for-sync state
     /// before aborting the failover attempt and rolling back.
     #[must_use]
-    pub fn timeout(self, milliseconds: u64) -> Self {
+    pub fn timeout(mut self, milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds),
+            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds).build(),
         }
     }
 
@@ -1444,24 +1452,24 @@ impl FailOverOptions {
     /// the force flag can also be used to designate that that once the timeout has elapsed,
     /// the master should failover to the target replica instead of rolling back.
     #[must_use]
-    pub fn force(self) -> Self {
+    pub fn force(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("FORCE"),
+            command_args: self.command_args.arg("FORCE").build(),
         }
     }
 
     /// This command will abort an ongoing failover and return the master to its normal state.
     #[must_use]
-    pub fn abort(self) -> Self {
+    pub fn abort(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("ABORT"),
+            command_args: self.command_args.arg("ABORT").build(),
         }
     }
 }
 
-impl IntoArgs for FailOverOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for FailOverOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1487,26 +1495,26 @@ pub enum InfoSection {
 
 impl SingleArg for InfoSection {}
 
-impl IntoArgs for InfoSection {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for InfoSection {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            InfoSection::Server => CommandArg::Str("server"),
-            InfoSection::Clients => CommandArg::Str("clients"),
-            InfoSection::Memory => CommandArg::Str("memory"),
-            InfoSection::Persistence => CommandArg::Str("persistence"),
-            InfoSection::Stats => CommandArg::Str("stats"),
-            InfoSection::Replication => CommandArg::Str("replication"),
-            InfoSection::Cpu => CommandArg::Str("cpu"),
-            InfoSection::Commandstats => CommandArg::Str("commandstats"),
-            InfoSection::Latencystats => CommandArg::Str("latencystats"),
-            InfoSection::Cluster => CommandArg::Str("cluster"),
-            InfoSection::Keyspace => CommandArg::Str("keyspace"),
-            InfoSection::Modules => CommandArg::Str("modules"),
-            InfoSection::Errorstats => CommandArg::Str("errorstats"),
-            InfoSection::All => CommandArg::Str("all"),
-            InfoSection::Default => CommandArg::Str("default"),
-            InfoSection::Everything => CommandArg::Str("everything"),
-        })
+            InfoSection::Server => "server",
+            InfoSection::Clients => "clients",
+            InfoSection::Memory => "memory",
+            InfoSection::Persistence => "persistence",
+            InfoSection::Stats => "stats",
+            InfoSection::Replication => "replication",
+            InfoSection::Cpu => "cpu",
+            InfoSection::Commandstats => "commandstats",
+            InfoSection::Latencystats => "latencystats",
+            InfoSection::Cluster => "cluster",
+            InfoSection::Keyspace => "keyspace",
+            InfoSection::Modules => "modules",
+            InfoSection::Errorstats => "errorstats",
+            InfoSection::All => "all",
+            InfoSection::Default => "default",
+            InfoSection::Everything => "everything",
+        });
     }
 }
 
@@ -1533,8 +1541,8 @@ pub enum LatencyHistoryEvent {
 
 impl SingleArg for LatencyHistoryEvent {}
 
-impl IntoArgs for LatencyHistoryEvent {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for LatencyHistoryEvent {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle",
             LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always",
@@ -1552,7 +1560,7 @@ impl IntoArgs for LatencyHistoryEvent {
             LatencyHistoryEvent::FastCommand => "fast-command",
             LatencyHistoryEvent::Fork => "fork",
             LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file",
-        })
+        });
     }
 }
 
@@ -1580,23 +1588,23 @@ pub struct LolWutOptions {
 
 impl LolWutOptions {
     #[must_use]
-    pub fn version(self, version: usize) -> Self {
+    pub fn version(mut self, version: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("VERSION").arg(version),
+            command_args: self.command_args.arg("VERSION").arg(version).build(),
         }
     }
 
     #[must_use]
-    pub fn optional_arg<A: SingleArg>(self, arg: A) -> Self {
+    pub fn optional_arg<A: SingleArg>(mut self, arg: A) -> Self {
         Self {
-            command_args: self.command_args.arg(arg),
+            command_args: self.command_args.arg(arg).build(),
         }
     }
 }
 
-impl IntoArgs for LolWutOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for LolWutOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1757,16 +1765,16 @@ impl MemoryUsageOptions {
     /// By default, this option is set to 5.
     /// To sample the all of the nested values, use samples(0).
     #[must_use]
-    pub fn samples(self, count: usize) -> Self {
+    pub fn samples(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("SAMPLES").arg(count),
+            command_args: self.command_args.arg("SAMPLES").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for MemoryUsageOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for MemoryUsageOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1791,7 +1799,7 @@ impl ModuleLoadOptions {
     /// You can use this optional associated function to provide the module with configuration directives.
     /// This associated function can be called multiple times
     #[must_use]
-    pub fn config<N, V>(self, name: N, value: V) -> Self
+    pub fn config<N, V>(mut self, name: N, value: V) -> Self
     where
         N: SingleArg,
         V: SingleArg,
@@ -1803,7 +1811,7 @@ impl ModuleLoadOptions {
         }
 
         Self {
-            command_args: self.command_args.arg("CONFIG").arg(name).arg(value),
+            command_args: self.command_args.arg("CONFIG").arg(name).arg(value).build(),
             args_added: false,
         }
     }
@@ -1811,24 +1819,24 @@ impl ModuleLoadOptions {
     /// Any additional arguments are passed unmodified to the module.
     /// This associated function can be called multiple times
     #[must_use]
-    pub fn arg<A: SingleArg>(self, arg: A) -> Self {
+    pub fn arg<A: SingleArg>(mut self, arg: A) -> Self {
         if !self.args_added {
             Self {
-                command_args: self.command_args.arg("ARGS").arg(arg),
+                command_args: self.command_args.arg("ARGS").arg(arg).build(),
                 args_added: true,
             }
         } else {
             Self {
-                command_args: self.command_args.arg(arg),
+                command_args: self.command_args.arg(arg).build(),
                 args_added: false,
             }
         }
     }
 }
 
-impl IntoArgs for ModuleLoadOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ModuleLoadOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1844,7 +1852,7 @@ impl ReplicaOfOptions {
     #[must_use]
     pub fn no_one() -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg("NO").arg("ONE"),
+            command_args: CommandArgs::default().arg("NO").arg("ONE").build(),
         }
     }
 
@@ -1853,14 +1861,14 @@ impl ReplicaOfOptions {
     #[must_use]
     pub fn master<H: SingleArg>(host: H, port: u16) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg(host).arg(port),
+            command_args: CommandArgs::default().arg(host).arg(port).build(),
         }
     }
 }
 
-impl IntoArgs for ReplicaOfOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ReplicaOfOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -2005,40 +2013,43 @@ impl ShutdownOptions {
     /// - if save is true, will force a DB saving operation even if no save points are configured
     /// - if save is false, will prevent a DB saving operation even if one or more save points are configured.
     #[must_use]
-    pub fn save(self, save: bool) -> Self {
+    pub fn save(mut self, save: bool) -> Self {
         Self {
-            command_args: self.command_args.arg(if save { "SAVE" } else { "NOSAVE" }),
+            command_args: self
+                .command_args
+                .arg(if save { "SAVE" } else { "NOSAVE" })
+                .build(),
         }
     }
 
     /// skips waiting for lagging replicas, i.e. it bypasses the first step in the shutdown sequence.
     #[must_use]
-    pub fn now(self) -> Self {
+    pub fn now(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOW"),
+            command_args: self.command_args.arg("NOW").build(),
         }
     }
 
     /// ignores any errors that would normally prevent the server from exiting.
     #[must_use]
-    pub fn force(self) -> Self {
+    pub fn force(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("FORCE"),
+            command_args: self.command_args.arg("FORCE").build(),
         }
     }
 
     /// cancels an ongoing shutdown and cannot be combined with other flags.
     #[must_use]
-    pub fn abort(self) -> Self {
+    pub fn abort(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("ABORT"),
+            command_args: self.command_args.arg("ABORT").build(),
         }
     }
 }
 
-impl IntoArgs for ShutdownOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ShutdownOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -2051,16 +2062,16 @@ pub struct SlowLogOptions {
 impl SlowLogOptions {
     /// limits the number of returned entries, so the command returns at most up to `count` entries.
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg(count),
+            command_args: self.command_args.arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for SlowLogOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for SlowLogOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

@@ -300,8 +300,8 @@ pub enum BfInfoParameter {
     ExpansionRate,
 }
 
-impl IntoArgs for BfInfoParameter {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BfInfoParameter {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             BfInfoParameter::Capacity => args.arg("CAPACITY"),
             BfInfoParameter::Size => args.arg("SIZE"),
@@ -395,8 +395,8 @@ impl BfInsertOptions {
     }
 }
 
-impl IntoArgs for BfInsertOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BfInsertOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -433,8 +433,8 @@ impl BfReserveOptions {
     }
 }
 
-impl IntoArgs for BfReserveOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BfReserveOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

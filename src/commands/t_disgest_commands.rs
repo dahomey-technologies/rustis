@@ -458,8 +458,8 @@ impl TDigestMergeOptions {
     }
 }
 
-impl IntoArgs for TDigestMergeOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TDigestMergeOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

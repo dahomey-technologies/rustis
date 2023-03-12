@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, PrimitiveResponse, IntoArgs,
-        MultipleArgsCollection, SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CommandArgs, MultipleArgsCollection, PrimitiveResponse,
+        SingleArg, SingleArgCollection, ToArgs,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -852,12 +852,16 @@ pub enum ZAddCondition {
     XX,
 }
 
-impl IntoArgs for ZAddCondition {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ZAddCondition {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ZAddCondition::None => args,
-            ZAddCondition::NX => args.arg("NX"),
-            ZAddCondition::XX => args.arg("XX"),
+            ZAddCondition::None => {}
+            ZAddCondition::NX => {
+                args.arg("NX");
+            }
+            ZAddCondition::XX => {
+                args.arg("XX");
+            }
         }
     }
 }
@@ -878,12 +882,16 @@ pub enum ZAddComparison {
     LT,
 }
 
-impl IntoArgs for ZAddComparison {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ZAddComparison {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ZAddComparison::None => args,
-            ZAddComparison::GT => args.arg("GT"),
-            ZAddComparison::LT => args.arg("LT"),
+            ZAddComparison::None => {}
+            ZAddComparison::GT => {
+                args.arg("GT");
+            }
+            ZAddComparison::LT => {
+                args.arg("LT");
+            }
         }
     }
 }
@@ -902,12 +910,16 @@ pub enum ZRangeSortBy {
     ByLex,
 }
 
-impl IntoArgs for ZRangeSortBy {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ZRangeSortBy {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ZRangeSortBy::None => args,
-            ZRangeSortBy::ByScore => args.arg("BYSCORE"),
-            ZRangeSortBy::ByLex => args.arg("BYLEX"),
+            ZRangeSortBy::None => {}
+            ZRangeSortBy::ByScore => {
+                args.arg("BYSCORE");
+            }
+            ZRangeSortBy::ByLex => {
+                args.arg("BYLEX");
+            }
         }
     }
 }
@@ -932,13 +944,19 @@ pub enum ZAggregate {
     Max,
 }
 
-impl IntoArgs for ZAggregate {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ZAggregate {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ZAggregate::None => args,
-            ZAggregate::Sum => args.arg("SUM"),
-            ZAggregate::Min => args.arg("MIN"),
-            ZAggregate::Max => args.arg("MAX"),
+            ZAggregate::None => {}
+            ZAggregate::Sum => {
+                args.arg("SUM");
+            }
+            ZAggregate::Min => {
+                args.arg("MIN");
+            }
+            ZAggregate::Max => {
+                args.arg("MAX");
+            }
         }
     }
 }
@@ -952,12 +970,12 @@ pub enum ZWhere {
     Max,
 }
 
-impl IntoArgs for ZWhere {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ZWhere {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             ZWhere::Min => args.arg("MIN"),
             ZWhere::Max => args.arg("MAX"),
-        }
+        };
     }
 }
 
@@ -969,30 +987,30 @@ pub struct ZAddOptions {
 
 impl ZAddOptions {
     #[must_use]
-    pub fn condition(self, condition: ZAddCondition) -> Self {
+    pub fn condition(mut self, condition: ZAddCondition) -> Self {
         Self {
-            command_args: self.command_args.arg(condition),
+            command_args: self.command_args.arg(condition).build(),
         }
     }
 
     #[must_use]
-    pub fn comparison(self, comparison: ZAddComparison) -> Self {
+    pub fn comparison(mut self, comparison: ZAddComparison) -> Self {
         Self {
-            command_args: self.command_args.arg(comparison),
+            command_args: self.command_args.arg(comparison).build(),
         }
     }
 
     #[must_use]
-    pub fn change(self) -> Self {
+    pub fn change(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("CH"),
+            command_args: self.command_args.arg("CH").build(),
         }
     }
 }
 
-impl IntoArgs for ZAddOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ZAddOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        self.command_args.write_args(args);
     }
 }
 
@@ -1008,30 +1026,35 @@ pub struct ZRangeOptions {
 
 impl ZRangeOptions {
     #[must_use]
-    pub fn sort_by(self, sort_by: ZRangeSortBy) -> Self {
+    pub fn sort_by(mut self, sort_by: ZRangeSortBy) -> Self {
         Self {
-            command_args: self.command_args.arg(sort_by),
+            command_args: self.command_args.arg(sort_by).build(),
         }
     }
 
     #[must_use]
-    pub fn reverse(self) -> Self {
+    pub fn reverse(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("REV"),
+            command_args: self.command_args.arg("REV").build(),
         }
     }
 
     #[must_use]
-    pub fn limit(self, offset: usize, count: isize) -> Self {
+    pub fn limit(mut self, offset: usize, count: isize) -> Self {
         Self {
-            command_args: self.command_args.arg("LIMIT").arg(offset).arg(count),
+            command_args: self
+                .command_args
+                .arg("LIMIT")
+                .arg(offset)
+                .arg(count)
+                .build(),
         }
     }
 }
 
-impl IntoArgs for ZRangeOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ZRangeOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -1043,23 +1066,23 @@ pub struct ZScanOptions {
 
 impl ZScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for ZScanOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ZScanOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

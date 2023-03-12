@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CollectionResponse, CommandArgs, KeyValueArgsCollection,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -482,12 +482,16 @@ impl Default for ClusterFailoverOption {
     }
 }
 
-impl IntoArgs for ClusterFailoverOption {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClusterFailoverOption {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ClusterFailoverOption::Default => args,
-            ClusterFailoverOption::Force => args.arg("FORCE"),
-            ClusterFailoverOption::Takeover => args.arg("TAKEOVER"),
+            ClusterFailoverOption::Default => {}
+            ClusterFailoverOption::Force => {
+                args.arg("FORCE");
+            }
+            ClusterFailoverOption::Takeover => {
+                args.arg("TAKEOVER");
+            }
         }
     }
 }
@@ -660,12 +664,12 @@ pub enum ClusterResetType {
     Soft,
 }
 
-impl IntoArgs for ClusterResetType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClusterResetType {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             ClusterResetType::Hard => args.arg("HARD"),
             ClusterResetType::Soft => args.arg("SOFT"),
-        }
+        };
     }
 }
 
@@ -681,14 +685,14 @@ pub enum ClusterSetSlotSubCommand {
     Stable,
 }
 
-impl IntoArgs for ClusterSetSlotSubCommand {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClusterSetSlotSubCommand {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             ClusterSetSlotSubCommand::Importing { node_id } => args.arg("IMPORTING").arg(node_id),
             ClusterSetSlotSubCommand::Migrating { node_id } => args.arg("MIGRATING").arg(node_id),
             ClusterSetSlotSubCommand::Node { node_id } => args.arg("NODE").arg(node_id),
             ClusterSetSlotSubCommand::Stable => args.arg("STABLE"),
-        }
+        };
     }
 }
 

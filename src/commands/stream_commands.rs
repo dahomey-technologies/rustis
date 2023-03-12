@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, IntoArgs,
-        KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        cmd, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse, PrimitiveResponse,
+        SingleArg, SingleArgCollection, ToArgs,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -563,23 +563,23 @@ pub struct XAddOptions {
 
 impl XAddOptions {
     #[must_use]
-    pub fn no_mk_stream(self) -> Self {
+    pub fn no_mk_stream(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOMKSTREAM"),
+            command_args: self.command_args.arg("NOMKSTREAM").build(),
         }
     }
 
     #[must_use]
-    pub fn trim_options(self, trim_options: XTrimOptions) -> Self {
+    pub fn trim_options(mut self, trim_options: XTrimOptions) -> Self {
         Self {
-            command_args: self.command_args.arg(trim_options),
+            command_args: self.command_args.arg(trim_options).build(),
         }
     }
 }
 
-impl IntoArgs for XAddOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XAddOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -595,12 +595,16 @@ pub enum XTrimOperator {
     Approximately,
 }
 
-impl IntoArgs for XTrimOperator {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for XTrimOperator {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            XTrimOperator::None => args,
-            XTrimOperator::Equal => args.arg(CommandArg::Str("=")),
-            XTrimOperator::Approximately => args.arg(CommandArg::Str("~")),
+            XTrimOperator::None => {}
+            XTrimOperator::Equal => {
+                args.arg("=");
+            }
+            XTrimOperator::Approximately => {
+                args.arg("~");
+            }
         }
     }
 }
@@ -619,7 +623,8 @@ impl XTrimOptions {
             command_args: CommandArgs::default()
                 .arg("MAXLEN")
                 .arg(operator)
-                .arg(threshold),
+                .arg(threshold)
+                .build(),
         }
     }
 
@@ -629,21 +634,22 @@ impl XTrimOptions {
             command_args: CommandArgs::default()
                 .arg("MINID")
                 .arg(operator)
-                .arg(threshold_id),
+                .arg(threshold_id)
+                .build(),
         }
     }
 
     #[must_use]
-    pub fn limit(self, count: usize) -> Self {
+    pub fn limit(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("LIMIT").arg(count),
+            command_args: self.command_args.arg("LIMIT").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for XTrimOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XTrimOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -655,23 +661,23 @@ pub struct XAutoClaimOptions {
 
 impl XAutoClaimOptions {
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
     #[must_use]
-    pub fn just_id(self) -> Self {
+    pub fn just_id(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("JUSTID"),
+            command_args: self.command_args.arg("JUSTID").build(),
         }
     }
 }
 
-impl IntoArgs for XAutoClaimOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XAutoClaimOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -679,7 +685,7 @@ impl IntoArgs for XAutoClaimOptions {
 #[derive(Deserialize)]
 pub struct StreamEntry<V>
 where
-    V: PrimitiveResponse
+    V: PrimitiveResponse,
 {
     /// The stream Id
     pub stream_id: String,
@@ -714,26 +720,30 @@ pub struct XClaimOptions {
 impl XClaimOptions {
     /// Set the idle time (last time it was delivered) of the message.
     #[must_use]
-    pub fn idle_time(self, idle_time_millis: u64) -> Self {
+    pub fn idle_time(mut self, idle_time_millis: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("IDLE").arg(idle_time_millis),
+            command_args: self.command_args.arg("IDLE").arg(idle_time_millis).build(),
         }
     }
 
     ///  This is the same as `idle_time` but instead of a relative amount of milliseconds,
     /// it sets the idle time to a specific Unix time (in milliseconds).
     #[must_use]
-    pub fn time(self, unix_time_milliseconds: u64) -> Self {
+    pub fn time(mut self, unix_time_milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("TIME").arg(unix_time_milliseconds),
+            command_args: self
+                .command_args
+                .arg("TIME")
+                .arg(unix_time_milliseconds)
+                .build(),
         }
     }
 
     /// Set the retry counter to the specified value.
     #[must_use]
-    pub fn retry_count(self, count: usize) -> Self {
+    pub fn retry_count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("RETRYCOUNT").arg(count),
+            command_args: self.command_args.arg("RETRYCOUNT").arg(count).build(),
         }
     }
 
@@ -741,25 +751,25 @@ impl XClaimOptions {
     /// even if certain specified IDs are not already
     /// in the PEL assigned to a different client.
     #[must_use]
-    pub fn force(self) -> Self {
+    pub fn force(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("FORCE"),
+            command_args: self.command_args.arg("FORCE").build(),
         }
     }
 
     ///  Return just an array of IDs of messages successfully claimed,
     /// without returning the actual message.
     #[must_use]
-    pub fn just_id(self) -> Self {
+    pub fn just_id(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("JUSTID"),
+            command_args: self.command_args.arg("JUSTID").build(),
         }
     }
 }
 
-impl IntoArgs for XClaimOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XClaimOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -774,9 +784,9 @@ impl XGroupCreateOptions {
     ///  However, you can use the optional MKSTREAM subcommand as the last argument after the `id`
     /// to automatically create the stream (with length of 0) if it doesn't exist
     #[must_use]
-    pub fn mk_stream(self) -> Self {
+    pub fn mk_stream(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("MKSTREAM"),
+            command_args: self.command_args.arg("MKSTREAM").build(),
         }
     }
 
@@ -785,16 +795,20 @@ impl XGroupCreateOptions {
     /// This can be useful you know exactly how many entries are between the arbitrary ID (excluding it) and the stream's last entry.
     /// In such cases, the entries_read can be set to the stream's entries_added subtracted with the number of entries.
     #[must_use]
-    pub fn entries_read(self, entries_read: usize) -> Self {
+    pub fn entries_read(mut self, entries_read: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("ENTRIESREAD").arg(entries_read),
+            command_args: self
+                .command_args
+                .arg("ENTRIESREAD")
+                .arg(entries_read)
+                .build(),
         }
     }
 }
 
-impl IntoArgs for XGroupCreateOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XGroupCreateOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -848,25 +862,25 @@ pub struct XInfoStreamOptions {
 impl XInfoStreamOptions {
     /// The optional FULL modifier provides a more verbose reply.
     #[must_use]
-    pub fn full(self) -> Self {
+    pub fn full(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("FULL"),
+            command_args: self.command_args.arg("FULL").build(),
         }
     }
 
     /// The COUNT option can be used to limit the number of stream and PEL entries that are returned
     /// (The first `count` entries are returned).
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for XInfoStreamOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XInfoStreamOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -912,23 +926,23 @@ pub struct XReadOptions {
 
 impl XReadOptions {
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
     #[must_use]
-    pub fn block(self, milliseconds: u64) -> Self {
+    pub fn block(mut self, milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("BLOCK").arg(milliseconds),
+            command_args: self.command_args.arg("BLOCK").arg(milliseconds).build(),
         }
     }
 }
 
-impl IntoArgs for XReadOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XReadOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -940,30 +954,30 @@ pub struct XReadGroupOptions {
 
 impl XReadGroupOptions {
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
     #[must_use]
-    pub fn block(self, milliseconds: u64) -> Self {
+    pub fn block(mut self, milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("BLOCK").arg(milliseconds),
+            command_args: self.command_args.arg("BLOCK").arg(milliseconds).build(),
         }
     }
 
     #[must_use]
-    pub fn no_ack(self) -> Self {
+    pub fn no_ack(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOACK"),
+            command_args: self.command_args.arg("NOACK").build(),
         }
     }
 }
 
-impl IntoArgs for XReadGroupOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XReadGroupOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -975,44 +989,44 @@ pub struct XPendingOptions {
 
 impl XPendingOptions {
     #[must_use]
-    pub fn idle(self, min_idle_time: u64) -> Self {
+    pub fn idle(mut self, min_idle_time: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("IDLE").arg(min_idle_time),
+            command_args: self.command_args.arg("IDLE").arg(min_idle_time).build(),
         }
     }
 
     #[must_use]
-    pub fn start<S: SingleArg>(self, start: S) -> Self {
+    pub fn start<S: SingleArg>(mut self, start: S) -> Self {
         Self {
-            command_args: self.command_args.arg(start),
+            command_args: self.command_args.arg(start).build(),
         }
     }
 
     #[must_use]
-    pub fn end<E: SingleArg>(self, end: E) -> Self {
+    pub fn end<E: SingleArg>(mut self, end: E) -> Self {
         Self {
-            command_args: self.command_args.arg(end),
+            command_args: self.command_args.arg(end).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg(count),
+            command_args: self.command_args.arg(count).build(),
         }
     }
 
     #[must_use]
-    pub fn consumer<C: SingleArg>(self, consumer: C) -> Self {
+    pub fn consumer<C: SingleArg>(mut self, consumer: C) -> Self {
         Self {
-            command_args: self.command_args.arg(consumer),
+            command_args: self.command_args.arg(consumer).build(),
         }
     }
 }
 
-impl IntoArgs for XPendingOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for XPendingOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

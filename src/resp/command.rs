@@ -1,4 +1,4 @@
-use crate::resp::{CommandArgs, IntoArgs};
+use crate::resp::{CommandArgs, ToArgs};
 
 /// Shortcut function for creating a command.
 #[must_use]
@@ -43,9 +43,9 @@ impl Command {
     #[inline(always)]
     pub fn arg<A>(mut self, arg: A) -> Self
     where
-        A: IntoArgs,
+        A: ToArgs,
     {
-        self.args = self.args.arg(arg);
+        arg.write_args(&mut self.args);
         self
     }
 
@@ -54,9 +54,11 @@ impl Command {
     #[inline(always)]
     pub fn arg_if<A>(mut self, condition: bool, arg: A) -> Self
     where
-        A: IntoArgs,
+        A: ToArgs,
     {
-        self.args = self.args.arg_if(condition, arg);
+        if condition {
+            arg.write_args(&mut self.args); 
+        }
         self
     }
 

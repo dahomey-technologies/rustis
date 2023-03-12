@@ -421,8 +421,8 @@ impl CfInsertOptions {
     }
 }
 
-impl IntoArgs for CfInsertOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for CfInsertOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -466,8 +466,8 @@ impl CfReserveOptions {
     }
 }
 
-impl IntoArgs for CfReserveOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for CfReserveOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

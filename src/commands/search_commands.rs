@@ -821,8 +821,8 @@ pub enum FtFieldType {
     Vector,
 }
 
-impl IntoArgs for FtFieldType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtFieldType {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             FtFieldType::Text => "TEXT",
             FtFieldType::Tag => "TAG",
@@ -852,8 +852,8 @@ pub enum FtPhoneticMatcher {
     DmEs,
 }
 
-impl IntoArgs for FtPhoneticMatcher {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtPhoneticMatcher {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             FtPhoneticMatcher::DmEn => "dm:en",
             FtPhoneticMatcher::DmFr => "dm:fr",
@@ -994,8 +994,8 @@ impl FtFieldSchema {
     }
 }
 
-impl IntoArgs for FtFieldSchema {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtFieldSchema {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1010,8 +1010,8 @@ pub enum FtIndexDataType {
     Json,
 }
 
-impl IntoArgs for FtIndexDataType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtIndexDataType {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             FtIndexDataType::Hash => "HASH",
             FtIndexDataType::Json => "JSON",
@@ -1225,8 +1225,8 @@ impl FtCreateOptions {
     }
 }
 
-impl IntoArgs for FtCreateOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtCreateOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1417,8 +1417,8 @@ impl FtAggregateOptions {
     }
 }
 
-impl IntoArgs for FtAggregateOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtAggregateOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1449,8 +1449,8 @@ impl FtLoadAttribute {
     }
 }
 
-impl IntoArgs for FtLoadAttribute {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtLoadAttribute {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 
@@ -1671,8 +1671,8 @@ impl FtReducer {
     }
 }
 
-impl IntoArgs for FtReducer {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtReducer {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1705,8 +1705,8 @@ impl FtSortBy {
     }
 }
 
-impl IntoArgs for FtSortBy {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSortBy {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 
@@ -1745,8 +1745,8 @@ impl FtWithCursorOptions {
     }
 }
 
-impl IntoArgs for FtWithCursorOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtWithCursorOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -2757,8 +2757,8 @@ impl FtSearchOptions {
     }
 }
 
-impl IntoArgs for FtSearchOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSearchOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -2788,8 +2788,8 @@ impl FtSearchReturnAttribute {
     }
 }
 
-impl IntoArgs for FtSearchReturnAttribute {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSearchReturnAttribute {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -2849,8 +2849,8 @@ impl FtSearchSummarizeOptions {
     }
 }
 
-impl IntoArgs for FtSearchSummarizeOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSearchSummarizeOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -2887,8 +2887,8 @@ impl FtSearchHighlightOptions {
     }
 }
 
-impl IntoArgs for FtSearchHighlightOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSearchHighlightOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -2932,8 +2932,8 @@ impl Default for FtLanguage {
     }
 }
 
-impl IntoArgs for FtLanguage {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtLanguage {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             FtLanguage::Arabic => "arabic",
             FtLanguage::Armenian => "armenian",
@@ -3009,8 +3009,8 @@ impl FtSpellCheckOptions {
     }
 }
 
-impl IntoArgs for FtSpellCheckOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSpellCheckOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -3021,8 +3021,8 @@ pub enum FtTermType {
     Exclude,
 }
 
-impl IntoArgs for FtTermType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtTermType {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             FtTermType::Include => "INCLUDE",
             FtTermType::Exclude => "EXCLUDE",
@@ -3105,8 +3105,8 @@ impl FtSugAddOptions {
     }
 }
 
-impl IntoArgs for FtSugAddOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSugAddOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -3155,8 +3155,8 @@ impl FtSugGetOptions {
     }
 }
 
-impl IntoArgs for FtSugGetOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FtSugGetOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

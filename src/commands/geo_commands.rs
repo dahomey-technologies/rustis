@@ -1,12 +1,16 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
-        MultipleArgsCollection, SingleArg, SingleArgCollection,
+        cmd, CollectionResponse, CommandArgs, MultipleArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs,
     },
 };
 use serde::{
-    de::{self, value::{SeqAccessDeserializer, BytesDeserializer}, DeserializeOwned, Unexpected, Visitor},
+    de::{
+        self,
+        value::{BytesDeserializer, SeqAccessDeserializer},
+        DeserializeOwned, Unexpected, Visitor,
+    },
     Deserialize, Deserializer,
 };
 use std::{fmt, marker::PhantomData};
@@ -195,12 +199,16 @@ pub enum GeoAddCondition {
     XX,
 }
 
-impl IntoArgs for GeoAddCondition {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GeoAddCondition {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            GeoAddCondition::None => args,
-            GeoAddCondition::NX => args.arg("NX"),
-            GeoAddCondition::XX => args.arg("XX"),
+            GeoAddCondition::None => {}
+            GeoAddCondition::NX => {
+                args.arg("NX");
+            }
+            GeoAddCondition::XX => {
+                args.arg("XX");
+            }
         }
     }
 }
@@ -213,14 +221,14 @@ pub enum GeoUnit {
     Feet,
 }
 
-impl IntoArgs for GeoUnit {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GeoUnit {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            GeoUnit::Meters => CommandArg::Str("m"),
-            GeoUnit::Kilometers => CommandArg::Str("km"),
-            GeoUnit::Miles => CommandArg::Str("mi"),
-            GeoUnit::Feet => CommandArg::Str("ft"),
-        })
+            GeoUnit::Meters => "m",
+            GeoUnit::Kilometers => "km",
+            GeoUnit::Miles => "mi",
+            GeoUnit::Feet => "ft",
+        });
     }
 }
 
@@ -235,18 +243,18 @@ where
     FromLonLat { longitude: f64, latitude: f64 },
 }
 
-impl<M> IntoArgs for GeoSearchFrom<M>
+impl<M> ToArgs for GeoSearchFrom<M>
 where
     M: SingleArg,
 {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            GeoSearchFrom::FromMember { member } => args.arg("FROMMEMBER").arg(member),
+            GeoSearchFrom::FromMember { member } => args.arg("FROMMEMBER").arg_ref(member),
             GeoSearchFrom::FromLonLat {
                 longitude,
                 latitude,
-            } => args.arg("FROMLONLAT").arg(longitude).arg(latitude),
-        }
+            } => args.arg("FROMLONLAT").arg(*longitude).arg(*latitude),
+        };
     }
 }
 
@@ -262,16 +270,22 @@ pub enum GeoSearchBy {
     },
 }
 
-impl IntoArgs for GeoSearchBy {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GeoSearchBy {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            GeoSearchBy::ByRadius { radius, unit } => args.arg("BYRADIUS").arg(radius).arg(unit),
+            GeoSearchBy::ByRadius { radius, unit } => {
+                args.arg("BYRADIUS").arg_ref(radius).arg_ref(unit)
+            }
             GeoSearchBy::ByBox {
                 width,
                 height,
                 unit,
-            } => args.arg("BYBOX").arg(width).arg(height).arg(unit),
-        }
+            } => args
+                .arg("BYBOX")
+                .arg_ref(width)
+                .arg_ref(height)
+                .arg_ref(unit),
+        };
     }
 }
 
@@ -284,12 +298,12 @@ pub enum GeoSearchOrder {
     Desc,
 }
 
-impl IntoArgs for GeoSearchOrder {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GeoSearchOrder {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GeoSearchOrder::Asc => args.arg("ASC"),
             GeoSearchOrder::Desc => args.arg("DESC"),
-        }
+        };
     }
 }
 
@@ -301,44 +315,49 @@ pub struct GeoSearchOptions {
 
 impl GeoSearchOptions {
     #[must_use]
-    pub fn order(self, order: GeoSearchOrder) -> Self {
+    pub fn order(mut self, order: GeoSearchOrder) -> Self {
         Self {
-            command_args: self.command_args.arg(order),
+            command_args: self.command_args.arg(order).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize, any: bool) -> Self {
+    pub fn count(mut self, count: usize, any: bool) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count).arg_if(any, "ANY"),
+            command_args: self
+                .command_args
+                .arg("COUNT")
+                .arg(count)
+                .arg_if(any, "ANY")
+                .build(),
         }
     }
 
     #[must_use]
-    pub fn with_coord(self) -> Self {
+    pub fn with_coord(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHCOORD"),
+            command_args: self.command_args.arg("WITHCOORD").build(),
         }
     }
 
     #[must_use]
-    pub fn with_dist(self) -> Self {
+    pub fn with_dist(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHDIST"),
+            command_args: self.command_args.arg("WITHDIST").build(),
         }
     }
 
     #[must_use]
-    pub fn with_hash(self) -> Self {
+    pub fn with_hash(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHHASH"),
+            command_args: self.command_args.arg("WITHHASH").build(),
         }
     }
 }
 
-impl IntoArgs for GeoSearchOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for GeoSearchOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -500,29 +519,34 @@ pub struct GeoSearchStoreOptions {
 
 impl GeoSearchStoreOptions {
     #[must_use]
-    pub fn order(self, order: GeoSearchOrder) -> Self {
+    pub fn order(mut self, order: GeoSearchOrder) -> Self {
         Self {
-            command_args: self.command_args.arg(order),
+            command_args: self.command_args.arg(order).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize, any: bool) -> Self {
+    pub fn count(mut self, count: usize, any: bool) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count).arg_if(any, "ANY"),
+            command_args: self
+                .command_args
+                .arg("COUNT")
+                .arg(count)
+                .arg_if(any, "ANY")
+                .build(),
         }
     }
 
     #[must_use]
-    pub fn store_dist(self, store_dist: bool) -> Self {
+    pub fn store_dist(mut self, store_dist: bool) -> Self {
         Self {
-            command_args: self.command_args.arg_if(store_dist, "STOREDIST"),
+            command_args: self.command_args.arg_if(store_dist, "STOREDIST").build(),
         }
     }
 }
 
-impl IntoArgs for GeoSearchStoreOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for GeoSearchStoreOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }

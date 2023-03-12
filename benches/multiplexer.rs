@@ -52,7 +52,6 @@ fn bench_redis_parallel(b: &mut Bencher) {
     b.iter(|| {
         runtime.block_on(async {
             let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .into_iter()
                 .map(|i| {
                     let mut con = con.clone();
                     tokio::spawn(async move {
@@ -79,7 +78,6 @@ fn bench_fred_parallel(b: &mut Bencher) {
     b.iter(|| {
         runtime.block_on(async {
             let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .into_iter()
                 .map(|i| {
                     let client = client.clone();
                     tokio::spawn(async move {
@@ -107,7 +105,6 @@ fn bench_rustis_parallel(b: &mut Bencher) {
     b.iter(|| {
         runtime.block_on(async {
             let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .into_iter()
                 .map(|i| {
                     let client = client.clone();
                     tokio::spawn(async move {
@@ -128,7 +125,7 @@ fn bench_rustis_parallel(b: &mut Bencher) {
 fn bench_parallel(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel");
     group
-        .measurement_time(Duration::from_secs(10))
+        .measurement_time(Duration::from_secs(15))
         .bench_function("redis_parallel", bench_redis_parallel)
         .bench_function("fred_parallel", bench_fred_parallel)
         .bench_function("rustis_parallel", bench_rustis_parallel);

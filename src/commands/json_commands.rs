@@ -646,8 +646,8 @@ impl JsonGetOptions {
     }
 }
 
-impl IntoArgs for JsonGetOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for JsonGetOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -681,8 +681,8 @@ impl JsonArrIndexOptions {
     }
 }
 
-impl IntoArgs for JsonArrIndexOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for JsonArrIndexOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

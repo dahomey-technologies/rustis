@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, IntoArgs, SingleArg,
-        SingleArgCollection,
+        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
+        ToArgs,
     },
 };
 use serde::Deserialize;
@@ -330,7 +330,7 @@ impl CallBuilder {
     #[must_use]
     pub fn script<S: SingleArg>(script: S) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(script),
+            command_args: CommandArgs::default().arg(script).build(),
             keys_added: false,
         }
     }
@@ -340,7 +340,7 @@ impl CallBuilder {
     #[must_use]
     pub fn sha1<S: SingleArg>(sha1: S) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(sha1),
+            command_args: CommandArgs::default().arg(sha1).build(),
             keys_added: false,
         }
     }
@@ -350,36 +350,36 @@ impl CallBuilder {
     #[must_use]
     pub fn function<F: SingleArg>(function: F) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(function),
+            command_args: CommandArgs::default().arg(function).build(),
             keys_added: false,
         }
     }
 
     /// All the keys accessed by the script.
     #[must_use]
-    pub fn keys<K, C>(self, keys: C) -> Self
+    pub fn keys<K, C>(mut self, keys: C) -> Self
     where
         K: SingleArg,
         C: SingleArgCollection<K>,
     {
         Self {
-            command_args: self.command_args.arg(keys.num_args()).arg(keys),
+            command_args: self.command_args.arg(keys.num_args()).arg(keys).build(),
             keys_added: true,
         }
     }
 
     /// Additional input arguments that should not represent names of keys.
     #[must_use]
-    pub fn args<A, C>(self, args: C) -> Self
+    pub fn args<A, C>(mut self, args: C) -> Self
     where
         A: SingleArg,
         C: SingleArgCollection<A>,
     {
         let command_args = if self.keys_added {
-            self.command_args.arg(args)
+            self.command_args.arg(args).build()
         } else {
             // numkeys = 0
-            self.command_args.arg(0).arg(args)
+            self.command_args.arg(0).arg(args).build()
         };
 
         Self {
@@ -389,13 +389,13 @@ impl CallBuilder {
     }
 }
 
-impl IntoArgs for CallBuilder {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for CallBuilder {
+    fn write_args(&self, args: &mut CommandArgs) {
         // no keys, no args
         if self.command_args.len() == 1 {
-            args.arg(self.command_args).arg(0)
+            args.arg(&self.command_args).arg(0);
         } else {
-            args.arg(self.command_args)
+            args.arg(&self.command_args);
         }
     }
 }
@@ -421,13 +421,20 @@ impl Default for FunctionRestorePolicy {
     }
 }
 
-impl IntoArgs for FunctionRestorePolicy {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for FunctionRestorePolicy {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            FunctionRestorePolicy::Default => args,
-            FunctionRestorePolicy::Append => args.arg("APPEND"),
-            FunctionRestorePolicy::Flush => args.arg("FLUSH"),
-            FunctionRestorePolicy::Replace => args.arg("REPLACE"),
+            FunctionRestorePolicy::Default => {
+            }
+            FunctionRestorePolicy::Append => {
+                args.arg("APPEND");
+            }
+            FunctionRestorePolicy::Flush => {
+                args.arg("FLUSH");
+            }
+            FunctionRestorePolicy::Replace => {
+                args.arg("REPLACE");
+            }
         }
     }
 }
@@ -497,13 +504,13 @@ pub enum ScriptDebugMode {
     No,
 }
 
-impl IntoArgs for ScriptDebugMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ScriptDebugMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             ScriptDebugMode::Yes => args.arg("YES"),
             ScriptDebugMode::Sync => args.arg("SYNC"),
             ScriptDebugMode::No => args.arg("NO"),
-        }
+        };
     }
 }
 
@@ -516,27 +523,28 @@ pub struct FunctionListOptions {
 impl FunctionListOptions {
     /// specifies a pattern for matching library names.
     #[must_use]
-    pub fn library_name_pattern<P: SingleArg>(self, library_name_pattern: P) -> Self {
+    pub fn library_name_pattern<P: SingleArg>(mut self, library_name_pattern: P) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("LIBRARYNAME")
-                .arg(library_name_pattern),
+                .arg(library_name_pattern)
+                .build(),
         }
     }
 
     /// will cause the server to include the libraries source implementation in the reply.
     #[must_use]
-    pub fn with_code(self) -> Self {
+    pub fn with_code(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHCODE"),
+            command_args: self.command_args.arg("WITHCODE").build(),
         }
     }
 }
 
-impl IntoArgs for FunctionListOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for FunctionListOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

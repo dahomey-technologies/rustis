@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
-        CollectionResponse, IntoArgs, KeyValueArgsCollection, SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CollectionResponse, CommandArgs, KeyValueArgsCollection,
+        KeyValueCollectionResponse, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -349,23 +349,23 @@ pub struct HScanOptions {
 
 impl HScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for HScanOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for HScanOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

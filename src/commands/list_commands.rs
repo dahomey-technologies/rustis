@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
-        SingleArgCollection,
+        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
+        ToArgs,
     },
 };
 use serde::de::DeserializeOwned;
@@ -379,12 +379,12 @@ pub enum LInsertWhere {
     After,
 }
 
-impl IntoArgs for LInsertWhere {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for LInsertWhere {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            LInsertWhere::Before => CommandArg::Str("BEFORE"),
-            LInsertWhere::After => CommandArg::Str("AFTER"),
-        })
+            LInsertWhere::Before => "BEFORE",
+            LInsertWhere::After => "AFTER",
+        });
     }
 }
 
@@ -394,11 +394,11 @@ pub enum LMoveWhere {
     Right,
 }
 
-impl IntoArgs for LMoveWhere {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for LMoveWhere {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            LMoveWhere::Left => CommandArg::Str("LEFT"),
-            LMoveWhere::Right => CommandArg::Str("RIGHT"),
-        })
+            LMoveWhere::Left => "LEFT",
+            LMoveWhere::Right => "RIGHT",
+        });
     }
 }

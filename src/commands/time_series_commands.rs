@@ -690,8 +690,8 @@ impl TsAddOptions {
     }
 }
 
-impl IntoArgs for TsAddOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsAddOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -712,8 +712,8 @@ pub enum TsEncoding {
     Uncompressed,
 }
 
-impl IntoArgs for TsEncoding {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsEncoding {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsEncoding::Compressed => "COMPRESSED",
             TsEncoding::Uncompressed => "UNCOMPRESSED",
@@ -743,8 +743,8 @@ pub enum TsDuplicatePolicy {
     Sum,
 }
 
-impl IntoArgs for TsDuplicatePolicy {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsDuplicatePolicy {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsDuplicatePolicy::Block => "BLOCK",
             TsDuplicatePolicy::First => "FIRST",
@@ -843,8 +843,8 @@ impl TsCreateOptions {
     }
 }
 
-impl IntoArgs for TsCreateOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsCreateOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -886,8 +886,8 @@ pub enum TsAggregationType {
     Twa,
 }
 
-impl IntoArgs for TsAggregationType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsAggregationType {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsAggregationType::Avg => "avg",
             TsAggregationType::Sum => "sum",
@@ -928,8 +928,8 @@ impl TsCreateRuleOptions {
     }
 }
 
-impl IntoArgs for TsCreateRuleOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsCreateRuleOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1018,8 +1018,8 @@ impl TsIncrByDecrByOptions {
     }
 }
 
-impl IntoArgs for TsIncrByDecrByOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsIncrByDecrByOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1052,8 +1052,8 @@ impl TsGetOptions {
     }
 }
 
-impl IntoArgs for TsGetOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsGetOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1189,8 +1189,8 @@ impl TsMGetOptions {
     }
 }
 
-impl IntoArgs for TsMGetOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsMGetOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1376,8 +1376,8 @@ impl TsMRangeOptions {
     }
 }
 
-impl IntoArgs for TsMRangeOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsMRangeOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1413,8 +1413,8 @@ impl TsGroupByOptions {
     }
 }
 
-impl IntoArgs for TsGroupByOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsGroupByOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }
@@ -1548,8 +1548,8 @@ impl TsRangeOptions {
     }
 }
 
-impl IntoArgs for TsRangeOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for TsRangeOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.command_args)
     }
 }

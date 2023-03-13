@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, CollectionResponse, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
+        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, SingleArg, SingleArgCollection,
+        ToArgs, Value,
     },
 };
 use serde::Deserialize;
@@ -78,11 +78,7 @@ pub trait CuckooCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/cf.count/>](https://redis.io/commands/cf.count/)
     #[must_use]
-    fn cf_count(
-        self,
-        key: impl SingleArg,
-        item: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, usize>
+    fn cf_count(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, usize>
     where
         Self: Sized,
     {
@@ -131,11 +127,7 @@ pub trait CuckooCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/cf.exists/>](https://redis.io/commands/cf.exists/)
     #[must_use]
-    fn cf_exists(
-        self,
-        key: impl SingleArg,
-        item: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, bool>
+    fn cf_exists(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -403,9 +395,9 @@ impl CfInsertOptions {
     /// then the filter is created with the module-level default capacity which is `1024`.
     /// See [`cf_reserve`](CuckooCommands::cf_reserve) for more information on cuckoo filter capacities.
     #[must_use]
-    pub fn capacity(self, capacity: usize) -> Self {
+    pub fn capacity(mut self, capacity: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("CAPACITY").arg(capacity),
+            command_args: self.command_args.arg("CAPACITY").arg(capacity).build(),
         }
     }
 
@@ -414,16 +406,16 @@ impl CfInsertOptions {
     /// Instead, an error is returned if the filter does not already exist.
     /// This option is mutually exclusive with [`capacity`](CfInsertOptions::capacity).
     #[must_use]
-    pub fn nocreate(self) -> Self {
+    pub fn nocreate(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOCREATE"),
+            command_args: self.command_args.arg("NOCREATE").build(),
         }
     }
 }
 
 impl ToArgs for CfInsertOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -439,9 +431,9 @@ impl CfReserveOptions {
     /// A higher bucket size value improves the fill rate but also causes a higher error rate and slightly slower performance.
     /// The default value is 2.
     #[must_use]
-    pub fn bucketsize(self, bucketsize: usize) -> Self {
+    pub fn bucketsize(mut self, bucketsize: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("BUCKETSIZE").arg(bucketsize),
+            command_args: self.command_args.arg("BUCKETSIZE").arg(bucketsize).build(),
         }
     }
 
@@ -449,9 +441,9 @@ impl CfReserveOptions {
     ///
     ///  A low value is better for performance and a higher number is better for filter fill rate.
     /// The default value is 20.
-    pub fn maxiterations(self, maxiterations: usize) -> Self {
+    pub fn maxiterations(mut self, maxiterations: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("MAXITERATIONS").arg(maxiterations),
+            command_args: self.command_args.arg("MAXITERATIONS").arg(maxiterations).build(),
         }
     }
 
@@ -459,16 +451,16 @@ impl CfReserveOptions {
     /// Expansion is rounded to the next `2^n` number.
     /// The default value is 1.
     #[must_use]
-    pub fn expansion(self, expansion: usize) -> Self {
+    pub fn expansion(mut self, expansion: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion),
+            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
         }
     }
 }
 
 impl ToArgs for CfReserveOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 

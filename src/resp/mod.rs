@@ -69,7 +69,7 @@ Current implementation provides the following conversions:
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{CommandArgs, IntoArgs, SingleArg},
+    resp::{CommandArgs, ToArgs, SingleArg},
     Result,
 };
 
@@ -78,7 +78,7 @@ pub struct MyI32(i32);
  impl ToArgs for MyI32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.0)
+        args.arg(self.0);
     }
 }
 

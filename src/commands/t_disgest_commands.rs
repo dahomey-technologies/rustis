@@ -1,6 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{cmd, CommandArgs, CollectionResponse, IntoArgs, SingleArg, SingleArgCollection, Value},
+    resp::{cmd, CollectionResponse, CommandArgs, SingleArg, SingleArgCollection, ToArgs, Value},
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -443,23 +443,23 @@ impl TDigestMergeOptions {
     /// * If `destination` already exists and [`override`](TDigestMergeOptions::_override) is not specified, \
     ///   its compression is not changed.
     #[must_use]
-    pub fn compression(self, compression: usize) -> Self {
+    pub fn compression(mut self, compression: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COMPRESSION").arg(compression),
+            command_args: self.command_args.arg("COMPRESSION").arg(compression).build(),
         }
     }
 
     /// When specified, if `destination` already exists, it is overwritten.
     #[must_use]
-    pub fn _override(self) -> Self {
+    pub fn _override(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("OVERRIDE"),
+            command_args: self.command_args.arg("OVERRIDE").build(),
         }
     }
 }
 
 impl ToArgs for TDigestMergeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }

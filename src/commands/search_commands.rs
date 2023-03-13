@@ -2,9 +2,9 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::{GeoUnit, SortOrder},
     resp::{
-        cmd, deserialize_vec_of_pairs, Command, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
-        CollectionResponse, IntoArgs, MultipleArgsCollection, RespDeserializer, SingleArg,
-        SingleArgCollection, Value, VecOfPairsSeed,
+        cmd, deserialize_vec_of_pairs, CollectionResponse, Command, CommandArgs,
+        KeyValueCollectionResponse, MultipleArgsCollection, PrimitiveResponse, RespDeserializer,
+        SingleArg, SingleArgCollection, ToArgs, Value, VecOfPairsSeed,
     },
 };
 use serde::{
@@ -829,7 +829,7 @@ impl ToArgs for FtFieldType {
             FtFieldType::Numeric => "NUMERIC",
             FtFieldType::Geo => "GEO",
             FtFieldType::Vector => "VECTOR",
-        })
+        });
     }
 }
 
@@ -859,7 +859,7 @@ impl ToArgs for FtPhoneticMatcher {
             FtPhoneticMatcher::DmFr => "dm:fr",
             FtPhoneticMatcher::DmPt => "dm:pt",
             FtPhoneticMatcher::DmEs => "dm:es",
-        })
+        });
     }
 }
 
@@ -875,7 +875,7 @@ impl FtFieldSchema {
     #[must_use]
     pub fn identifier<N: SingleArg>(identifier: N) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg(identifier),
+            command_args: CommandArgs::default().arg(identifier).build(),
         }
     }
 
@@ -884,9 +884,9 @@ impl FtFieldSchema {
     ///  For example, you can use this feature to alias a complex JSONPath
     ///  expression with more memorable (and easier to type) name.
     #[must_use]
-    pub fn as_attribute<A: SingleArg>(self, as_attribute: A) -> Self {
+    pub fn as_attribute<A: SingleArg>(mut self, as_attribute: A) -> Self {
         Self {
-            command_args: self.command_args.arg("AS").arg(as_attribute),
+            command_args: self.command_args.arg("AS").arg(as_attribute).build(),
         }
     }
 
@@ -894,9 +894,9 @@ impl FtFieldSchema {
     ///
     /// Mandatory option to be used after `identifier` or `as_attribute`
     #[must_use]
-    pub fn field_type(self, field_type: FtFieldType) -> Self {
+    pub fn field_type(mut self, field_type: FtFieldType) -> Self {
         Self {
-            command_args: self.command_args.arg(field_type),
+            command_args: self.command_args.arg(field_type).build(),
         }
     }
 
@@ -906,27 +906,27 @@ impl FtFieldSchema {
     /// the results will be available with very low latency.
     /// (this adds memory overhead so consider not to declare it on large text attributes).
     #[must_use]
-    pub fn sortable(self) -> Self {
+    pub fn sortable(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("SORTABLE"),
+            command_args: self.command_args.arg("SORTABLE").build(),
         }
     }
 
     /// By default, SORTABLE applies a normalization to the indexed value (characters set to lowercase, removal of diacritics).
     ///  When using un-normalized form (UNF), you can disable the normalization and keep the original form of the value.
     #[must_use]
-    pub fn unf(self) -> Self {
+    pub fn unf(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("UNF"),
+            command_args: self.command_args.arg("UNF").build(),
         }
     }
 
     /// Text attributes can have the `NOSTEM` argument which will disable stemming when indexing its values.
     /// This may be ideal for things like proper names.
     #[must_use]
-    pub fn nostem(self) -> Self {
+    pub fn nostem(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOSTEM"),
+            command_args: self.command_args.arg("NOSTEM").build(),
         }
     }
 
@@ -936,9 +936,9 @@ impl FtFieldSchema {
     /// to create attributes whose update using PARTIAL will not cause full reindexing of the document.
     /// If an attribute has NOINDEX and doesn't have SORTABLE, it will just be ignored by the index.
     #[must_use]
-    pub fn noindex(self) -> Self {
+    pub fn noindex(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOINDEX"),
+            command_args: self.command_args.arg("NOINDEX").build(),
         }
     }
 
@@ -946,9 +946,9 @@ impl FtFieldSchema {
     ///
     /// The obligatory `matcher` argument specifies the phonetic algorithm and language used.
     #[must_use]
-    pub fn phonetic(self, matcher: FtPhoneticMatcher) -> Self {
+    pub fn phonetic(mut self, matcher: FtPhoneticMatcher) -> Self {
         Self {
-            command_args: self.command_args.arg("PHONETIC").arg(matcher),
+            command_args: self.command_args.arg("PHONETIC").arg(matcher).build(),
         }
     }
 
@@ -956,27 +956,27 @@ impl FtFieldSchema {
     ///
     /// This is a multiplication factor, and defaults to 1 if not specified.
     #[must_use]
-    pub fn weight(self, weight: f64) -> Self {
+    pub fn weight(mut self, weight: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("WEIGHT").arg(weight),
+            command_args: self.command_args.arg("WEIGHT").arg(weight).build(),
         }
     }
 
     /// for `TAG` attributes, indicates how the text contained in the attribute is to be split into individual tags.
     /// The default is `,`. The value must be a single character.
     #[must_use]
-    pub fn separator(self, sep: char) -> Self {
+    pub fn separator(mut self, sep: char) -> Self {
         Self {
-            command_args: self.command_args.arg("SEPARATOR").arg(sep),
+            command_args: self.command_args.arg("SEPARATOR").arg(sep).build(),
         }
     }
 
     /// for `TAG` attributes, keeps the original letter cases of the tags.
     /// If not specified, the characters are converted to lowercase.
     #[must_use]
-    pub fn case_sensitive(self) -> Self {
+    pub fn case_sensitive(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("CASESENSITIVE"),
+            command_args: self.command_args.arg("CASESENSITIVE").build(),
         }
     }
 
@@ -987,16 +987,16 @@ impl FtFieldSchema {
     /// Otherwise, a brute-force search on the trie is performed.
     /// If suffix trie exists for some fields, these queries will be disabled for other fields.
     #[must_use]
-    pub fn with_suffix_trie(self) -> Self {
+    pub fn with_suffix_trie(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHSUFFIXTRIE"),
+            command_args: self.command_args.arg("WITHSUFFIXTRIE").build(),
         }
     }
 }
 
 impl ToArgs for FtFieldSchema {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1015,7 +1015,7 @@ impl ToArgs for FtIndexDataType {
         args.arg(match self {
             FtIndexDataType::Hash => "HASH",
             FtIndexDataType::Json => "JSON",
-        })
+        });
     }
 }
 
@@ -1029,9 +1029,9 @@ impl FtCreateOptions {
     /// currently supports HASH (default) and JSON.
     /// To index JSON, you must have the [`RedisJSON`](https://redis.io/docs/stack/json) module installed.
     #[must_use]
-    pub fn on(self, data_type: FtIndexDataType) -> Self {
+    pub fn on(mut self, data_type: FtIndexDataType) -> Self {
         Self {
-            command_args: self.command_args.arg("ON").arg(data_type),
+            command_args: self.command_args.arg("ON").arg(data_type).build(),
         }
     }
 
@@ -1040,13 +1040,14 @@ impl FtCreateOptions {
     /// You can add several prefixes to index.
     /// Because the argument is optional, the default is * (all keys).
     #[must_use]
-    pub fn prefix<P: SingleArg, PP: SingleArgCollection<P>>(self, prefixes: PP) -> Self {
+    pub fn prefix<P: SingleArg, PP: SingleArgCollection<P>>(mut self, prefixes: PP) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("PREFIX")
                 .arg(prefixes.num_args())
-                .arg(prefixes),
+                .arg(prefixes)
+                .build(),
         }
     }
 
@@ -1055,9 +1056,9 @@ impl FtCreateOptions {
     /// It is possible to use `@__key` to access the key that was just added/changed.
     /// A field can be used to set field name by passing `FILTER @indexName=="myindexname"`.
     #[must_use]
-    pub fn filter<F: SingleArg>(self, filter: F) -> Self {
+    pub fn filter<F: SingleArg>(mut self, filter: F) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER").arg(filter),
+            command_args: self.command_args.arg("FILTER").arg(filter).build(),
         }
     }
 
@@ -1080,17 +1081,21 @@ impl FtCreateOptions {
     /// which segments text and checks it against a predefined dictionary.
     /// See [`Stemming`](https://redis.io/docs/stack/search/reference/stemming) for more information.
     #[must_use]
-    pub fn language(self, default_lang: FtLanguage) -> Self {
+    pub fn language(mut self, default_lang: FtLanguage) -> Self {
         Self {
-            command_args: self.command_args.arg("LANGUAGE").arg(default_lang),
+            command_args: self.command_args.arg("LANGUAGE").arg(default_lang).build(),
         }
     }
 
     /// document attribute set as the document language.
     #[must_use]
-    pub fn language_field<L: SingleArg>(self, default_lang: L) -> Self {
+    pub fn language_field<L: SingleArg>(mut self, default_lang: L) -> Self {
         Self {
-            command_args: self.command_args.arg("LANGUAGE_FIELD").arg(default_lang),
+            command_args: self
+                .command_args
+                .arg("LANGUAGE_FIELD")
+                .arg(default_lang)
+                .build(),
         }
     }
 
@@ -1098,9 +1103,9 @@ impl FtCreateOptions {
     ///
     /// Default score is 1.0.
     #[must_use]
-    pub fn score(self, default_score: f64) -> Self {
+    pub fn score(mut self, default_score: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("SCORE").arg(default_score),
+            command_args: self.command_args.arg("SCORE").arg(default_score).build(),
         }
     }
 
@@ -1108,21 +1113,26 @@ impl FtCreateOptions {
     ///
     /// Ranking must be between 0.0 and 1.0. If not set, the default score is 1.
     #[must_use]
-    pub fn score_field<S: SingleArg>(self, score_attribute: S) -> Self {
+    pub fn score_field<S: SingleArg>(mut self, score_attribute: S) -> Self {
         Self {
-            command_args: self.command_args.arg("SCORE_FIELD").arg(score_attribute),
+            command_args: self
+                .command_args
+                .arg("SCORE_FIELD")
+                .arg(score_attribute)
+                .build(),
         }
     }
 
     /// document attribute that you use as a binary safe payload string to the document
     /// that can be evaluated at query time by a custom scoring function or retrieved to the client.
     #[must_use]
-    pub fn payload_field<P: SingleArg>(self, payload_attribute: P) -> Self {
+    pub fn payload_field<P: SingleArg>(mut self, payload_attribute: P) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("PAYLOAD_FIELD")
-                .arg(payload_attribute),
+                .arg(payload_attribute)
+                .build(),
         }
     }
 
@@ -1131,9 +1141,9 @@ impl FtCreateOptions {
     ///
     /// For efficiency, RediSearch encodes indexes differently if they are created with less than 32 text attributes.
     #[must_use]
-    pub fn max_text_fields(self) -> Self {
+    pub fn max_text_fields(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("MAXTEXTFIELDS"),
+            command_args: self.command_args.arg("MAXTEXTFIELDS").build(),
         }
     }
 
@@ -1142,9 +1152,9 @@ impl FtCreateOptions {
     /// It saves memory, but does not allow exact searches or highlighting.
     /// It implies [`NOHL`](FtCreateOptions::nohl).
     #[must_use]
-    pub fn no_offsets(self) -> Self {
+    pub fn no_offsets(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOOFFSETS"),
+            command_args: self.command_args.arg("NOOFFSETS").build(),
         }
     }
 
@@ -1157,9 +1167,13 @@ impl FtCreateOptions {
     /// you can create thousands of such indexes without negative performance implications and, therefore,
     /// you should consider using [`SKIPINITIALSCAN`](FtCreateOptions::skip_initial_scan) to avoid costly scanning.
     #[must_use]
-    pub fn temporary(self, expiration_sec: u64) -> Self {
+    pub fn temporary(mut self, expiration_sec: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("TEMPORARY").arg(expiration_sec),
+            command_args: self
+                .command_args
+                .arg("TEMPORARY")
+                .arg(expiration_sec)
+                .build(),
         }
     }
 
@@ -1168,9 +1182,9 @@ impl FtCreateOptions {
     /// If set, the corresponding byte offsets for term positions are not stored.
     /// `NOHL` is also implied by [`NOOFFSETS`](FtCreateOptions::no_offsets).
     #[must_use]
-    pub fn nohl(self) -> Self {
+    pub fn nohl(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOHL"),
+            command_args: self.command_args.arg("NOHL").build(),
         }
     }
 
@@ -1178,9 +1192,9 @@ impl FtCreateOptions {
     ///
     /// It saves memory, but it does not allow filtering by specific attributes.
     #[must_use]
-    pub fn nofields(self) -> Self {
+    pub fn nofields(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOFIELDS"),
+            command_args: self.command_args.arg("NOFIELDS").build(),
         }
     }
 
@@ -1188,17 +1202,17 @@ impl FtCreateOptions {
     ///
     /// It saves memory, but does not allow sorting based on the frequencies of a given term within the document.
     #[must_use]
-    pub fn nofreqs(self) -> Self {
+    pub fn nofreqs(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOFREQS"),
+            command_args: self.command_args.arg("NOFREQS").build(),
         }
     }
 
     /// if set, does not scan and index.
     #[must_use]
-    pub fn skip_initial_scan(self) -> Self {
+    pub fn skip_initial_scan(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("SKIPINITIALSCAN"),
+            command_args: self.command_args.arg("SKIPINITIALSCAN").build(),
         }
     }
 
@@ -1210,7 +1224,7 @@ impl FtCreateOptions {
     /// If not set, [`FT.CREATE`](SearchCommands::ft_create) takes the default list of stopwords.
     /// If `count` is set to 0, the index does not have stopwords.
     #[must_use]
-    pub fn stop_words<W, WW>(self, stop_words: WW) -> Self
+    pub fn stop_words<W, WW>(mut self, stop_words: WW) -> Self
     where
         W: SingleArg,
         WW: SingleArgCollection<W>,
@@ -1220,14 +1234,15 @@ impl FtCreateOptions {
                 .command_args
                 .arg("STOPWORDS")
                 .arg(stop_words.num_args())
-                .arg(stop_words),
+                .arg(stop_words)
+                .build(),
         }
     }
 }
 
 impl ToArgs for FtCreateOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1246,29 +1261,30 @@ impl FtAggregateOptions {
     /// needs to execute the equivalent of [`HMGET`](crate::commands::HashCommands::hmget) against a Redis key,
     /// which when executed over millions of keys, amounts to high processing times.
     #[must_use]
-    pub fn verbatim(self) -> Self {
+    pub fn verbatim(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("VERBATIM"),
+            command_args: self.command_args.arg("VERBATIM").build(),
         }
     }
 
     /// loads document attributes from the source document.
     #[must_use]
-    pub fn load<A: MultipleArgsCollection<FtLoadAttribute>>(self, attributes: A) -> Self {
+    pub fn load<A: MultipleArgsCollection<FtLoadAttribute>>(mut self, attributes: A) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("LOAD")
                 .arg(attributes.num_args())
-                .arg(attributes),
+                .arg(attributes)
+                .build(),
         }
     }
 
     /// all attributes in a document are loaded.
     #[must_use]
-    pub fn load_all(self) -> Self {
+    pub fn load_all(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("LOAD").arg("*"),
+            command_args: self.command_args.arg("LOAD").arg("*").build(),
         }
     }
 
@@ -1279,7 +1295,7 @@ impl FtAggregateOptions {
     /// either counting them,
     /// or performing multiple aggregate operations (see [`FtReducer`](FtReducer)).
     #[must_use]
-    pub fn groupby<P, PP, R>(self, properties: PP, reducers: R) -> Self
+    pub fn groupby<P, PP, R>(mut self, properties: PP, reducers: R) -> Self
     where
         P: SingleArg,
         PP: SingleArgCollection<P>,
@@ -1291,7 +1307,8 @@ impl FtAggregateOptions {
                 .arg("GROUPBY")
                 .arg(properties.num_args())
                 .arg(properties)
-                .arg(reducers),
+                .arg(reducers)
+                .build(),
         }
     }
 
@@ -1300,7 +1317,7 @@ impl FtAggregateOptions {
     /// `max` is used to optimized sorting, by sorting only for the n-largest elements.
     /// Although it is not connected to [`limit`](FtAggregateOptions::limit), you usually need just `SORTBY … MAX` for common queries.
     #[must_use]
-    pub fn sortby<P>(self, properties: P, max: Option<usize>) -> Self
+    pub fn sortby<P>(mut self, properties: P, max: Option<usize>) -> Self
     where
         P: MultipleArgsCollection<FtSortBy>,
     {
@@ -1310,7 +1327,8 @@ impl FtAggregateOptions {
                 .arg("SORTBY")
                 .arg(properties.num_args())
                 .arg(properties)
-                .arg(max.map(|m| ("MAX", m))),
+                .arg(max.map(|m| ("MAX", m)))
+                .build(),
         }
     }
 
@@ -1323,13 +1341,19 @@ impl FtAggregateOptions {
     /// evaluates this expression dynamically for each record in the pipeline and store the result as
     ///  a new property called baz, which can be referenced by further `APPLY`/`SORTBY`/`GROUPBY`/`REDUCE` operations down the pipeline.
     #[must_use]
-    pub fn apply<E, N>(self, expr: E, name: N) -> Self
+    pub fn apply<E, N>(mut self, expr: E, name: N) -> Self
     where
         E: SingleArg,
         N: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("APPLY").arg(expr).arg("AS").arg(name),
+            command_args: self
+                .command_args
+                .arg("APPLY")
+                .arg(expr)
+                .arg("AS")
+                .arg(name)
+                .build(),
         }
     }
 
@@ -1344,38 +1368,38 @@ impl FtAggregateOptions {
     /// `SORTBY 1 @foo MAX 100 LIMIT 50 50`. Removing the `MAX` from `SORTBY` results in the pipeline
     /// sorting all the records and then paging over results 50-100.
     #[must_use]
-    pub fn limit(self, offset: usize, num: usize) -> Self {
+    pub fn limit(mut self, offset: usize, num: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("LIMIT").arg(offset).arg(num),
+            command_args: self.command_args.arg("LIMIT").arg(offset).arg(num).build(),
         }
     }
 
     /// filters the results using predicate expressions relating to values in each result.
     /// They are applied post query and relate to the current state of the pipeline.
     #[must_use]
-    pub fn filter<E, N>(self, expr: E) -> Self
+    pub fn filter<E, N>(mut self, expr: E) -> Self
     where
         E: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("FILTER").arg(expr),
+            command_args: self.command_args.arg("FILTER").arg(expr).build(),
         }
     }
 
     /// Scan part of the results with a quicker alternative than [`limit`](FtAggregateOptions::limit).
     /// See [`Cursor API`](https://redis.io/docs/stack/search/reference/aggregations/#cursor-api) for more details.
     #[must_use]
-    pub fn withcursor(self, options: FtWithCursorOptions) -> Self {
+    pub fn withcursor(mut self, options: FtWithCursorOptions) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHCURSOR").arg(options),
+            command_args: self.command_args.arg("WITHCURSOR").arg(options).build(),
         }
     }
 
     /// if set, overrides the timeout parameter of the module.
     #[must_use]
-    pub fn timeout(self, milliseconds: u64) -> Self {
+    pub fn timeout(mut self, milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds),
+            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds).build(),
         }
     }
 
@@ -1390,7 +1414,7 @@ impl FtAggregateOptions {
     /// You cannot reference parameters in the query string where concrete values are not allowed,
     /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](FtAggregateOptions::dialect) to 2 or greater than 2.
     #[must_use]
-    pub fn params<N, V, P>(self, params: P) -> Self
+    pub fn params<N, V, P>(mut self, params: P) -> Self
     where
         N: SingleArg,
         V: SingleArg,
@@ -1401,7 +1425,8 @@ impl FtAggregateOptions {
                 .command_args
                 .arg("PARAMS")
                 .arg(params.num_args())
-                .arg(params),
+                .arg(params)
+                .build(),
         }
     }
 
@@ -1410,16 +1435,20 @@ impl FtAggregateOptions {
     /// If not specified, the query will execute under the default dialect version
     /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
-    pub fn dialect(self, dialect_version: u64) -> Self {
+    pub fn dialect(mut self, dialect_version: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("DIALECT").arg(dialect_version),
+            command_args: self
+                .command_args
+                .arg("DIALECT")
+                .arg(dialect_version)
+                .build(),
         }
     }
 }
 
 impl ToArgs for FtAggregateOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1433,7 +1462,7 @@ impl FtLoadAttribute {
     /// `identifier` is either an attribute name for hashes and JSON or a JSON Path expression for JSON.
     pub fn new<I: SingleArg>(identifier: I) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg(identifier),
+            command_args: CommandArgs::default().arg(identifier).build(),
         }
     }
 
@@ -1444,14 +1473,14 @@ impl FtLoadAttribute {
     #[must_use]
     pub fn property<P: SingleArg>(property: P) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg("AS").arg(property),
+            command_args: CommandArgs::default().arg("AS").arg(property).build(),
         }
     }
 }
 
 impl ToArgs for FtLoadAttribute {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 
     fn num_args(&self) -> usize {
@@ -1469,7 +1498,11 @@ impl FtReducer {
     /// Count the number of records in each group
     pub fn count() -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty.arg("REDUCE").arg("COUNT").arg(0),
+            command_args: CommandArgs::default()
+                .arg("REDUCE")
+                .arg("COUNT")
+                .arg(0)
+                .build(),
         }
     }
 
@@ -1480,11 +1513,12 @@ impl FtReducer {
     /// This can be memory heavy if the groups are big.
     pub fn count_distinct<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("COUNT_DISTINCT")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1500,11 +1534,12 @@ impl FtReducer {
     /// but again, it does not fit every user case.
     pub fn count_distinctish<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("COUNT_DISTINCTISH")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1513,33 +1548,36 @@ impl FtReducer {
     /// Non numeric values if the group are counted as 0.
     pub fn sum<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("SUM")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
     /// Return the minimal value of a property, whether it is a string, number or NULL.
     pub fn min<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("MIN")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
     /// Return the maximal value of a property, whether it is a string, number or NULL.
     pub fn max<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("MAX")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1549,11 +1587,12 @@ impl FtReducer {
     /// and later on applying the ratio of them as an APPLY step.
     pub fn avg<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("AVG")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1561,11 +1600,12 @@ impl FtReducer {
     /// of a numeric property in the group.
     pub fn stddev<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("STDDEV")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1577,23 +1617,25 @@ impl FtReducer {
     /// e.g. REDUCE QUANTILE 2 @foo 0.5 AS median REDUCE QUANTILE 2 @foo 0.99 AS p99
     pub fn quantile<P: SingleArg>(property: P, quantile: f64) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("QUANTILE")
                 .arg(2)
                 .arg(property)
-                .arg(quantile),
+                .arg(quantile)
+                .build(),
         }
     }
 
     /// Merge all `distinct` values of a given property into a single array.
     pub fn tolist<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("TOLIST")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
@@ -1605,23 +1647,25 @@ impl FtReducer {
     /// but the same effect will be achieved by doing REDUCE FIRST_VALUE 4 @foo BY @foo DESC.
     pub fn first_value<P: SingleArg>(property: P) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("FIRST_VALUE")
                 .arg(1)
-                .arg(property),
+                .arg(property)
+                .build(),
         }
     }
 
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
     pub fn first_value_by<P: SingleArg, BP: SingleArg>(property: P, by_property: BP) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("FIRST_VALUE")
                 .arg(2)
                 .arg(property)
-                .arg(by_property),
+                .arg(by_property)
+                .build(),
         }
     }
 
@@ -1632,13 +1676,14 @@ impl FtReducer {
         order: SortOrder,
     ) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("FIRST_VALUE")
                 .arg(3)
                 .arg(property)
                 .arg(by_property)
-                .arg(order),
+                .arg(order)
+                .build(),
         }
     }
 
@@ -1649,12 +1694,13 @@ impl FtReducer {
         sample_size: usize,
     ) -> FtReducer {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("REDUCE")
                 .arg("RANDOM_SAMPLE")
                 .arg(2)
                 .arg(property)
-                .arg(sample_size),
+                .arg(sample_size)
+                .build(),
         }
     }
 
@@ -1664,16 +1710,16 @@ impl FtReducer {
     /// the name of the reduce function and the group properties.
     /// For example, if a name is not given to COUNT_DISTINCT by property @foo,
     /// the resulting name will be count_distinct(@foo).
-    pub fn as_name<N: SingleArg>(self, name: N) -> Self {
+    pub fn as_name<N: SingleArg>(mut self, name: N) -> Self {
         Self {
-            command_args: self.command_args.arg("AS").arg(name),
+            command_args: self.command_args.arg("AS").arg(name).build(),
         }
     }
 }
 
 impl ToArgs for FtReducer {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1686,28 +1732,28 @@ impl FtSortBy {
     /// sort by property
     pub fn property<P: SingleArg>(property: P) -> FtSortBy {
         Self {
-            command_args: CommandArgs::Empty.arg(property),
+            command_args: CommandArgs::default().arg(property).build(),
         }
     }
 
     /// ascending
-    pub fn asc(self) -> FtSortBy {
+    pub fn asc(mut self) -> FtSortBy {
         Self {
-            command_args: self.command_args.arg("ASC"),
+            command_args: self.command_args.arg("ASC").build(),
         }
     }
 
     /// ascending
-    pub fn desc(self) -> FtSortBy {
+    pub fn desc(mut self) -> FtSortBy {
         Self {
-            command_args: self.command_args.arg("DESC"),
+            command_args: self.command_args.arg("DESC").build(),
         }
     }
 }
 
 impl ToArgs for FtSortBy {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 
     fn num_args(&self) -> usize {
@@ -1723,9 +1769,9 @@ pub struct FtWithCursorOptions {
 
 impl FtWithCursorOptions {
     /// Control how many rows are read per each cursor fetch.
-    pub fn count(self, read_size: usize) -> FtWithCursorOptions {
+    pub fn count(mut self, read_size: usize) -> FtWithCursorOptions {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(read_size),
+            command_args: self.command_args.arg("COUNT").arg(read_size).build(),
         }
     }
 
@@ -1738,16 +1784,16 @@ impl FtWithCursorOptions {
     /// The default idle timeout is 300000 milliseconds (or 300 seconds).
     /// You can modify the idle timeout using the MAXIDLE keyword when creating the cursor.
     /// Note that the value cannot exceed the default 300s.
-    pub fn maxidle(self, idle_time_ms: u64) -> FtWithCursorOptions {
+    pub fn maxidle(mut self, idle_time_ms: u64) -> FtWithCursorOptions {
         Self {
-            command_args: self.command_args.arg("MAXIDLE").arg(idle_time_ms),
+            command_args: self.command_args.arg("MAXIDLE").arg(idle_time_ms).build(),
         }
     }
 }
 
 impl ToArgs for FtWithCursorOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -2267,7 +2313,7 @@ pub struct FtProfileAggregateResult {
     pub profile_details: FtProfileDetails,
 }
 
-/// Result details of a [`ft_profile_search`](SearchCommands::ft_profile_search) 
+/// Result details of a [`ft_profile_search`](SearchCommands::ft_profile_search)
 /// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
 #[derive(Debug)]
 pub struct FtProfileDetails {
@@ -2433,7 +2479,7 @@ impl<'de> Deserialize<'de> for FtProfileDetails {
     }
 }
 
-/// Result processors profile for the [`ft_profile_search`](SearchCommands::ft_profile_search) 
+/// Result processors profile for the [`ft_profile_search`](SearchCommands::ft_profile_search)
 /// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
 #[derive(Debug, Deserialize)]
 pub struct FtResultProcessorsProfile {
@@ -2455,17 +2501,17 @@ impl FtSearchOptions {
     /// returns the document ids and not the content.
     /// This is useful if RediSearch is only an index on an external document collection.
     #[must_use]
-    pub fn nocontent(self) -> Self {
+    pub fn nocontent(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOCONTENT"),
+            command_args: self.command_args.arg("NOCONTENT").build(),
         }
     }
 
     /// does not try to use stemming for query expansion but searches the query terms verbatim.
     #[must_use]
-    pub fn verbatim(self) -> Self {
+    pub fn verbatim(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("VERBATIM"),
+            command_args: self.command_args.arg("VERBATIM").build(),
         }
     }
 
@@ -2473,9 +2519,9 @@ impl FtSearchOptions {
     ///
     /// This can be used to merge results from multiple instances.
     #[must_use]
-    pub fn withscores(self) -> Self {
+    pub fn withscores(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHSCORES"),
+            command_args: self.command_args.arg("WITHSCORES").build(),
         }
     }
 
@@ -2484,9 +2530,9 @@ impl FtSearchOptions {
     /// See [`ft_create`](SearchCommands::ft_create)
     /// The payloads follow the document id and, if [`withscores`](FtSearchOptions::withscores) is set, the scores.
     #[must_use]
-    pub fn withpayloads(self) -> Self {
+    pub fn withpayloads(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHPAYLOADS"),
+            command_args: self.command_args.arg("WITHPAYLOADS").build(),
         }
     }
 
@@ -2495,9 +2541,9 @@ impl FtSearchOptions {
     /// This is usually not needed, and exists for distributed search coordination purposes.
     /// This option is relevant only if used in conjunction with [`sortby`](FtSearchOptions::sortby).
     #[must_use]
-    pub fn withsortkeys(self) -> Self {
+    pub fn withsortkeys(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHSORTKEYS"),
+            command_args: self.command_args.arg("WITHSORTKEYS").build(),
         }
     }
 
@@ -2508,7 +2554,7 @@ impl FtSearchOptions {
     /// and use `(` for exclusive ranges. Multiple numeric filters for different attributes are supported in one query.
     #[must_use]
     pub fn filter(
-        self,
+        mut self,
         numeric_field: impl SingleArg,
         min: impl SingleArg,
         max: impl SingleArg,
@@ -2519,7 +2565,8 @@ impl FtSearchOptions {
                 .arg("FILTER")
                 .arg(numeric_field)
                 .arg(min)
-                .arg(max),
+                .arg(max)
+                .build(),
         }
     }
 
@@ -2529,7 +2576,7 @@ impl FtSearchOptions {
     /// See [`geosearch`](crate::commands::GeoCommands::geosearch) for more details.
     #[must_use]
     pub fn geo_filter(
-        self,
+        mut self,
         geo_field: impl SingleArg,
         lon: f64,
         lat: f64,
@@ -2544,7 +2591,8 @@ impl FtSearchOptions {
                 .arg(lon)
                 .arg(lat)
                 .arg(radius)
-                .arg(unit),
+                .arg(unit)
+                .build(),
         }
     }
 
@@ -2552,7 +2600,7 @@ impl FtSearchOptions {
     ///
     /// Non-existent keys are ignored, unless all the keys are non-existent.
     #[must_use]
-    pub fn inkeys<A>(self, keys: impl SingleArgCollection<A>) -> Self
+    pub fn inkeys<A>(mut self, keys: impl SingleArgCollection<A>) -> Self
     where
         A: SingleArg,
     {
@@ -2561,13 +2609,14 @@ impl FtSearchOptions {
                 .command_args
                 .arg("INKEYS")
                 .arg(keys.num_args())
-                .arg(keys),
+                .arg(keys)
+                .build(),
         }
     }
 
     /// filters the results to those appearing only in specific attributes of the document, like `title` or `URL`.
     #[must_use]
-    pub fn infields<A>(self, attributes: impl SingleArgCollection<A>) -> Self
+    pub fn infields<A>(mut self, attributes: impl SingleArgCollection<A>) -> Self
     where
         A: SingleArg,
     {
@@ -2576,7 +2625,8 @@ impl FtSearchOptions {
                 .command_args
                 .arg("INFIELDS")
                 .arg(attributes.num_args())
-                .arg(attributes),
+                .arg(attributes)
+                .build(),
         }
     }
 
@@ -2584,13 +2634,17 @@ impl FtSearchOptions {
     ///
     /// If attributes is empty, it acts like [`nocontent`](FtSearchOptions::nocontent).
     #[must_use]
-    pub fn _return(self, attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>) -> Self {
+    pub fn _return(
+        mut self,
+        attributes: impl MultipleArgsCollection<FtSearchReturnAttribute>,
+    ) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("RETURN")
                 .arg(attributes.num_args())
-                .arg(attributes),
+                .arg(attributes)
+                .build(),
         }
     }
 
@@ -2598,9 +2652,9 @@ impl FtSearchOptions {
     ///
     /// See [`Highlighting`](https://redis.io/docs/stack/search/reference/highlight) for more information.
     #[must_use]
-    pub fn summarize(self, options: FtSearchSummarizeOptions) -> Self {
+    pub fn summarize(mut self, options: FtSearchSummarizeOptions) -> Self {
         Self {
-            command_args: self.command_args.arg("SUMMARIZE").arg(options),
+            command_args: self.command_args.arg("SUMMARIZE").arg(options).build(),
         }
     }
 
@@ -2608,9 +2662,9 @@ impl FtSearchOptions {
     ///
     /// See [`Highlighting`](https://redis.io/docs/stack/search/reference/highlight) for more information.
     #[must_use]
-    pub fn highlight(self, options: FtSearchHighlightOptions) -> Self {
+    pub fn highlight(mut self, options: FtSearchHighlightOptions) -> Self {
         Self {
-            command_args: self.command_args.arg("HIGHLIGHT").arg(options),
+            command_args: self.command_args.arg("HIGHLIGHT").arg(options).build(),
         }
     }
 
@@ -2618,9 +2672,9 @@ impl FtSearchOptions {
     ///
     /// In other words, the slop for exact phrases is 0.
     #[must_use]
-    pub fn slop(self, slop: usize) -> Self {
+    pub fn slop(mut self, slop: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("SLOP").arg(slop),
+            command_args: self.command_args.arg("SLOP").arg(slop).build(),
         }
     }
 
@@ -2629,9 +2683,9 @@ impl FtSearchOptions {
     ///
     /// Typically used in conjunction with [`slop`](FtSearchOptions::slop).
     #[must_use]
-    pub fn inorder(self) -> Self {
+    pub fn inorder(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("INORDER"),
+            command_args: self.command_args.arg("INORDER").build(),
         }
     }
 
@@ -2642,9 +2696,9 @@ impl FtSearchOptions {
     /// If an unsupported language is sent, the command returns an error.
     /// See FT.CREATE for the list of languages.
     #[must_use]
-    pub fn language(self, language: FtLanguage) -> Self {
+    pub fn language(mut self, language: FtLanguage) -> Self {
         Self {
-            command_args: self.command_args.arg("LANGUAGE").arg(language),
+            command_args: self.command_args.arg("LANGUAGE").arg(language).build(),
         }
     }
 
@@ -2652,9 +2706,9 @@ impl FtSearchOptions {
     ///
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn expander(self, expander: impl SingleArg) -> Self {
+    pub fn expander(mut self, expander: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("EXPANDER").arg(expander),
+            command_args: self.command_args.arg("EXPANDER").arg(expander).build(),
         }
     }
 
@@ -2662,9 +2716,9 @@ impl FtSearchOptions {
     ///
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn scorer(self, scorer: impl SingleArg) -> Self {
+    pub fn scorer(mut self, scorer: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("SCORER").arg(scorer),
+            command_args: self.command_args.arg("SCORER").arg(scorer).build(),
         }
     }
 
@@ -2672,9 +2726,9 @@ impl FtSearchOptions {
     ///
     /// Using this options requires the [`withscores`](FtSearchOptions::withscores) option.
     #[must_use]
-    pub fn explainscore(self) -> Self {
+    pub fn explainscore(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("EXPLAINSCORE"),
+            command_args: self.command_args.arg("EXPLAINSCORE").build(),
         }
     }
 
@@ -2682,9 +2736,9 @@ impl FtSearchOptions {
     ///
     /// See [`Extensions`](https://redis.io/docs/stack/search/reference/extensions).
     #[must_use]
-    pub fn payload(self, payload: impl SingleArg) -> Self {
+    pub fn payload(mut self, payload: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("PAYLOAD").arg(payload),
+            command_args: self.command_args.arg("PAYLOAD").arg(payload).build(),
         }
     }
 
@@ -2694,9 +2748,14 @@ impl FtSearchOptions {
     /// Attributes needed for `sortby` should be declared as [`SORTABLE`](FtFieldSchema::sortable) in the index,
     /// in order to be available with very low latency. Note that this adds memory overhead.
     #[must_use]
-    pub fn sortby(self, attribute: impl SingleArg, order: SortOrder) -> Self {
+    pub fn sortby(mut self, attribute: impl SingleArg, order: SortOrder) -> Self {
         Self {
-            command_args: self.command_args.arg("SORTBY").arg(attribute).arg(order),
+            command_args: self
+                .command_args
+                .arg("SORTBY")
+                .arg(attribute)
+                .arg(order)
+                .build(),
         }
     }
 
@@ -2705,17 +2764,17 @@ impl FtSearchOptions {
     /// Note that the offset is zero-indexed. The default is `0 10`, which returns 10 items starting from the first result.
     /// You can use `LIMIT 0 0` to count the number of documents in the result set without actually returning them.
     #[must_use]
-    pub fn limit(self, first: usize, num: usize) -> Self {
+    pub fn limit(mut self, first: usize, num: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("LIMIT").arg(first).arg(num),
+            command_args: self.command_args.arg("LIMIT").arg(first).arg(num).build(),
         }
     }
 
     /// overrides the timeout parameter of the module.
     #[must_use]
-    pub fn timeout(self, milliseconds: u64) -> Self {
+    pub fn timeout(mut self, milliseconds: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds),
+            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds).build(),
         }
     }
 
@@ -2730,7 +2789,7 @@ impl FtSearchOptions {
     /// You cannot reference parameters in the query string where concrete values are not allowed,
     /// such as in field names, for example, @loc. To use `PARAMS`, set [`dialect`](FtSearchOptions::dialect) to 2 or greater than 2.
     #[must_use]
-    pub fn params<N, V, P>(self, params: P) -> Self
+    pub fn params<N, V, P>(mut self, params: P) -> Self
     where
         N: SingleArg,
         V: SingleArg,
@@ -2741,7 +2800,8 @@ impl FtSearchOptions {
                 .command_args
                 .arg("PARAMS")
                 .arg(params.num_args())
-                .arg(params),
+                .arg(params)
+                .build(),
         }
     }
 
@@ -2750,16 +2810,20 @@ impl FtSearchOptions {
     /// If not specified, the query will execute under the default dialect version
     /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
-    pub fn dialect(self, dialect_version: u64) -> Self {
+    pub fn dialect(mut self, dialect_version: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("DIALECT").arg(dialect_version),
+            command_args: self
+                .command_args
+                .arg("DIALECT")
+                .arg(dialect_version)
+                .build(),
         }
     }
 }
 
 impl ToArgs for FtSearchOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -2773,7 +2837,7 @@ impl FtSearchReturnAttribute {
     #[must_use]
     pub fn identifier(identifier: impl SingleArg) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg(identifier),
+            command_args: CommandArgs::default().arg(identifier).build(),
         }
     }
 
@@ -2781,16 +2845,16 @@ impl FtSearchReturnAttribute {
     ///
     /// If not provided, the `identifier` is used in the result.
     #[must_use]
-    pub fn as_property(self, property: impl SingleArg) -> Self {
+    pub fn as_property(mut self, property: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("AS").arg(property),
+            command_args: self.command_args.arg("AS").arg(property).build(),
         }
     }
 }
 
 impl ToArgs for FtSearchReturnAttribute {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -2805,21 +2869,22 @@ impl FtSearchSummarizeOptions {
     /// Each field present is summarized.
     /// If no `FIELDS` directive is passed, then all fields returned are summarized.
     #[must_use]
-    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(mut self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("FIELDS")
                 .arg(fields.num_args())
-                .arg(fields),
+                .arg(fields)
+                .build(),
         }
     }
 
     /// How many fragments should be returned. If not specified, a default of 3 is used.
     #[must_use]
-    pub fn frags(self, num_frags: usize) -> Self {
+    pub fn frags(mut self, num_frags: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("FRAGS").arg(num_frags),
+            command_args: self.command_args.arg("FRAGS").arg(num_frags).build(),
         }
     }
 
@@ -2829,9 +2894,9 @@ impl FtSearchSummarizeOptions {
     /// A higher value will return a larger block of text.
     /// If not specified, the default value is 20.
     #[must_use]
-    pub fn len(self, frag_len: usize) -> Self {
+    pub fn len(mut self, frag_len: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("LEN").arg(frag_len),
+            command_args: self.command_args.arg("LEN").arg(frag_len).build(),
         }
     }
 
@@ -2842,16 +2907,16 @@ impl FtSearchSummarizeOptions {
     /// You may use a newline sequence, as newlines are stripped from the result body anyway
     /// (thus, it will not be conflated with an embedded newline in the text)
     #[must_use]
-    pub fn separator(self, separator: impl SingleArg) -> Self {
+    pub fn separator(mut self, separator: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("SEPARATOR").arg(separator),
+            command_args: self.command_args.arg("SEPARATOR").arg(separator).build(),
         }
     }
 }
 
 impl ToArgs for FtSearchSummarizeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -2866,13 +2931,14 @@ impl FtSearchHighlightOptions {
     /// Each field present is highlighted.
     /// If no `FIELDS` directive is passed, then all fields returned are highlighted.
     #[must_use]
-    pub fn fields<F: SingleArg>(self, fields: impl SingleArgCollection<F>) -> Self {
+    pub fn fields<F: SingleArg>(mut self, fields: impl SingleArgCollection<F>) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("FIELDS")
                 .arg(fields.num_args())
-                .arg(fields),
+                .arg(fields)
+                .build(),
         }
     }
 
@@ -2880,16 +2946,21 @@ impl FtSearchHighlightOptions {
     /// * `close_tag` - appended to each term match
     /// If no `TAGS` are specified, a built-in tag value is appended and prepended.
     #[must_use]
-    pub fn tags(self, open_tag: impl SingleArg, close_tag: impl SingleArg) -> Self {
+    pub fn tags(mut self, open_tag: impl SingleArg, close_tag: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("TAGS").arg(open_tag).arg(close_tag),
+            command_args: self
+                .command_args
+                .arg("TAGS")
+                .arg(open_tag)
+                .arg(close_tag)
+                .build(),
         }
     }
 }
 
 impl ToArgs for FtSearchHighlightOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -2963,7 +3034,7 @@ impl ToArgs for FtLanguage {
             FtLanguage::Tamil => "tamil",
             FtLanguage::Turkish => "turkish",
             FtLanguage::Yiddish => "yiddish",
-        })
+        });
     }
 }
 
@@ -2976,9 +3047,9 @@ pub struct FtSpellCheckOptions {
 impl FtSpellCheckOptions {
     /// maximum Levenshtein distance for spelling suggestions (default: 1, max: 4).
     #[must_use]
-    pub fn distance(self, distance: u64) -> Self {
+    pub fn distance(mut self, distance: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("DISTANCE").arg(distance),
+            command_args: self.command_args.arg("DISTANCE").arg(distance).build(),
         }
     }
 
@@ -2987,13 +3058,14 @@ impl FtSpellCheckOptions {
     /// Refer to [`ft_dictadd`](SearchCommands::ft_dictadd), [`ft_dictdel`](SearchCommands::ft_dictdel)
     /// and [`ft_dictdump`](SearchCommands::ft_dictdump) about managing custom dictionaries.
     #[must_use]
-    pub fn terms(self, term_type: FtTermType, dictionary: impl SingleArg) -> Self {
+    pub fn terms(mut self, term_type: FtTermType, dictionary: impl SingleArg) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("TERMS")
                 .arg(term_type)
-                .arg(dictionary),
+                .arg(dictionary)
+                .build(),
         }
     }
 
@@ -3002,16 +3074,16 @@ impl FtSpellCheckOptions {
     /// If not specified, the query will execute under the default dialect version
     /// set during module initial loading or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     #[must_use]
-    pub fn dialect(self, dialect_version: u64) -> Self {
+    pub fn dialect(mut self, dialect_version: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("DIALECT").arg(dialect_version),
+            command_args: self.command_args.arg("DIALECT").arg(dialect_version).build(),
         }
     }
 }
 
 impl ToArgs for FtSpellCheckOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -3026,7 +3098,7 @@ impl ToArgs for FtTermType {
         args.arg(match self {
             FtTermType::Include => "INCLUDE",
             FtTermType::Exclude => "EXCLUDE",
-        })
+        });
     }
 }
 
@@ -3090,24 +3162,24 @@ impl FtSugAddOptions {
     ///
     /// This is useful for updating the dictionary based on user queries in real time.
     #[must_use]
-    pub fn incr(self) -> Self {
+    pub fn incr(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("INCR"),
+            command_args: self.command_args.arg("INCR").build(),
         }
     }
 
     /// saves an extra payload with the suggestion
     #[must_use]
-    pub fn payload(self, payload: impl SingleArg) -> Self {
+    pub fn payload(mut self, payload: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("PAYLOAD").arg(payload),
+            command_args: self.command_args.arg("PAYLOAD").arg(payload).build(),
         }
     }
 }
 
 impl ToArgs for FtSugAddOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -3120,17 +3192,17 @@ pub struct FtSugGetOptions {
 impl FtSugGetOptions {
     /// performs a fuzzy prefix search, including prefixes at Levenshtein distance of 1 from the prefix sent.
     #[must_use]
-    pub fn fuzzy(self) -> Self {
+    pub fn fuzzy(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("INCR"),
+            command_args: self.command_args.arg("INCR").build(),
         }
     }
 
     /// limits the results to a maximum of `num` (default: 5).
     #[must_use]
-    pub fn max(self, num: usize) -> Self {
+    pub fn max(mut self, num: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("MAX").arg(num),
+            command_args: self.command_args.arg("MAX").arg(num).build(),
         }
     }
 
@@ -3138,9 +3210,9 @@ impl FtSugGetOptions {
     ///
     /// This can be used to merge results from multiple instances.
     #[must_use]
-    pub fn withscores(self) -> Self {
+    pub fn withscores(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHSCORES"),
+            command_args: self.command_args.arg("WITHSCORES").build(),
         }
     }
 
@@ -3148,16 +3220,16 @@ impl FtSugGetOptions {
     ///
     /// If no payload is present for an entry, it returns a null reply.
     #[must_use]
-    pub fn withpayload(self) -> Self {
+    pub fn withpayload(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHPAYLOADS"),
+            command_args: self.command_args.arg("WITHPAYLOADS").build(),
         }
     }
 }
 
 impl ToArgs for FtSugGetOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -3192,8 +3264,8 @@ impl FtSuggestion {
             where
                 A: de::SeqAccess<'de>,
             {
-                let with_scores = self.command.args.iter().any(|a| *a == "WITHSCORES");
-                let with_payloads = self.command.args.iter().any(|a| *a == "WITHPAYLOADS");
+                let with_scores = self.command.args.iter().any(|a| a.as_slice() == b"WITHSCORES");
+                let with_payloads = self.command.args.iter().any(|a| a.as_slice() == b"WITHPAYLOADS");
 
                 let mut suggestions = if let Some(size) = seq.size_hint() {
                     Vec::with_capacity(size)

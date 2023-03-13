@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs,
-        KeyValueArgsCollection, MultipleArgsCollection, SingleArg, SingleArgCollection, Value,
+        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, MultipleArgsCollection,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -516,7 +516,11 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<F: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
+    fn ts_queryindex<
+        F: SingleArg,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
+    >(
         self,
         filters: impl SingleArgCollection<F>,
     ) -> PreparedCommand<'a, Self, RR>
@@ -631,9 +635,9 @@ impl TsAddOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`retention`](TsCreateOptions::retention).
     #[must_use]
-    pub fn retention(self, retention_period: u64) -> Self {
+    pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period),
+            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
         }
     }
 
@@ -643,9 +647,9 @@ impl TsAddOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`encoding`](TsCreateOptions::encoding).
     #[must_use]
-    pub fn encoding(self, encoding: TsEncoding) -> Self {
+    pub fn encoding(mut self, encoding: TsEncoding) -> Self {
         Self {
-            command_args: self.command_args.arg("ENCODING").arg(encoding),
+            command_args: self.command_args.arg("ENCODING").arg(encoding).build(),
         }
     }
 
@@ -655,18 +659,18 @@ impl TsAddOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`chunk_size`](TsCreateOptions::chunk_size).
     #[must_use]
-    pub fn chunk_size(self, chunk_size: usize) -> Self {
+    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size),
+            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
         }
     }
 
     /// overwrite key and database configuration for
     /// [`DUPLICATE_POLICY`](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy)
     #[must_use]
-    pub fn on_duplicate(self, policy: TsDuplicatePolicy) -> Self {
+    pub fn on_duplicate(mut self, policy: TsDuplicatePolicy) -> Self {
         Self {
-            command_args: self.command_args.arg("ON_DUPLICATE").arg(policy),
+            command_args: self.command_args.arg("ON_DUPLICATE").arg(policy).build(),
         }
     }
 
@@ -681,18 +685,18 @@ impl TsAddOptions {
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
     pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        self,
+        mut self,
         labels: LL,
     ) -> Self {
         Self {
-            command_args: self.command_args.arg("LABELS").arg(labels),
+            command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
 impl ToArgs for TsAddOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -717,7 +721,7 @@ impl ToArgs for TsEncoding {
         args.arg(match self {
             TsEncoding::Compressed => "COMPRESSED",
             TsEncoding::Uncompressed => "UNCOMPRESSED",
-        })
+        });
     }
 }
 
@@ -752,7 +756,7 @@ impl ToArgs for TsDuplicatePolicy {
             TsDuplicatePolicy::Min => "MIN",
             TsDuplicatePolicy::Max => "MAX",
             TsDuplicatePolicy::Sum => "SUM",
-        })
+        });
     }
 }
 
@@ -774,17 +778,17 @@ impl TsCreateOptions {
     /// [`RETENTION_POLICY`](https://redis.io/docs/stack/timeseries/configuration/#retention_policy)
     /// configuration of the database, which by default is 0.
     #[must_use]
-    pub fn retention(self, retention_period: u64) -> Self {
+    pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period),
+            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
         }
     }
 
     /// specifies the series sample's encoding format.
     #[must_use]
-    pub fn encoding(self, encoding: TsEncoding) -> Self {
+    pub fn encoding(mut self, encoding: TsEncoding) -> Self {
         Self {
-            command_args: self.command_args.arg("ENCODING").arg(encoding),
+            command_args: self.command_args.arg("ENCODING").arg(encoding).build(),
         }
     }
 
@@ -808,18 +812,18 @@ impl TsCreateOptions {
     ///
     /// If you are unsure about your use case, select the default.
     #[must_use]
-    pub fn chunk_size(self, chunk_size: usize) -> Self {
+    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size),
+            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
         }
     }
 
     /// policy for handling insertion ([`ts_add`](TimeSeriesCommands::ts_add) and [`ts_madd`](TimeSeriesCommands::ts_madd))
     /// of multiple samples with identical timestamps
     #[must_use]
-    pub fn duplicate_policy(self, policy: TsDuplicatePolicy) -> Self {
+    pub fn duplicate_policy(mut self, policy: TsDuplicatePolicy) -> Self {
         Self {
-            command_args: self.command_args.arg("DUPLICATE_POLICY").arg(policy),
+            command_args: self.command_args.arg("DUPLICATE_POLICY").arg(policy).build(),
         }
     }
 
@@ -834,18 +838,18 @@ impl TsCreateOptions {
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
     pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        self,
+        mut self,
         labels: LL,
     ) -> Self {
         Self {
-            command_args: self.command_args.arg("LABELS").arg(labels),
+            command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
 impl ToArgs for TsCreateOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -902,7 +906,7 @@ impl ToArgs for TsAggregationType {
             TsAggregationType::VarP => "var.p",
             TsAggregationType::VarS => "var.s",
             TsAggregationType::Twa => "twa",
-        })
+        });
     }
 }
 
@@ -921,16 +925,16 @@ impl TsCreateRuleOptions {
     /// For example, if `bucket_duration` is 24 hours (`24 * 3600 * 1000`), setting `align_timestamp`
     /// to 6 hours after the epoch (`6 * 3600 * 1000`) ensures that each bucket’s timeframe is `[06:00 .. 06:00)`.
     #[must_use]
-    pub fn align_timestamp(self, align_timestamp: u64) -> Self {
+    pub fn align_timestamp(mut self, align_timestamp: u64) -> Self {
         Self {
-            command_args: self.command_args.arg(align_timestamp),
+            command_args: self.command_args.arg(align_timestamp).build(),
         }
     }
 }
 
 impl ToArgs for TsCreateRuleOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -959,9 +963,9 @@ impl TsIncrByDecrByOptions {
     ///
     /// When not specified, the timestamp is set according to the server clock.
     #[must_use]
-    pub fn timestamp(self, timestamp: impl SingleArg) -> Self {
+    pub fn timestamp(mut self, timestamp: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("TIMESTAMP").arg(timestamp),
+            command_args: self.command_args.arg("TIMESTAMP").arg(timestamp).build(),
         }
     }
 
@@ -972,9 +976,9 @@ impl TsIncrByDecrByOptions {
     ///
     /// See [`retention`](TsCreateOptions::retention).
     #[must_use]
-    pub fn retention(self, retention_period: u64) -> Self {
+    pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period),
+            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
         }
     }
 
@@ -984,9 +988,9 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`encoding`](TsCreateOptions::encoding).
     #[must_use]
-    pub fn uncompressed(self) -> Self {
+    pub fn uncompressed(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("UNCOMPRESSED"),
+            command_args: self.command_args.arg("UNCOMPRESSED").build(),
         }
     }
 
@@ -996,9 +1000,9 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`chunk_size`](TsCreateOptions::chunk_size).
     #[must_use]
-    pub fn chunk_size(self, chunk_size: usize) -> Self {
+    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size),
+            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
         }
     }
 
@@ -1009,18 +1013,18 @@ impl TsIncrByDecrByOptions {
     /// See [`labels`](TsCreateOptions::labels).
     #[must_use]
     pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        self,
+        mut self,
         labels: LL,
     ) -> Self {
         Self {
-            command_args: self.command_args.arg("LABELS").arg(labels),
+            command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
 impl ToArgs for TsIncrByDecrByOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1045,16 +1049,16 @@ impl TsGetOptions {
     /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
     /// In such a case, use `latest`.
     #[must_use]
-    pub fn latest(self) -> Self {
+    pub fn latest(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("LATEST"),
+            command_args: self.command_args.arg("LATEST").build(),
         }
     }
 }
 
 impl ToArgs for TsGetOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1161,9 +1165,9 @@ impl TsMGetOptions {
     /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
     /// In such a case, use `latest`.
     #[must_use]
-    pub fn latest(self) -> Self {
+    pub fn latest(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("LATEST"),
+            command_args: self.command_args.arg("LATEST").build(),
         }
     }
 
@@ -1171,9 +1175,9 @@ impl TsMGetOptions {
     ///
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn withlabels(self) -> Self {
+    pub fn withlabels(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHLABELS"),
+            command_args: self.command_args.arg("WITHLABELS").build(),
         }
     }
 
@@ -1182,16 +1186,16 @@ impl TsMGetOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgCollection<L>) -> Self {
+    pub fn selected_labels<L: SingleArg>(mut self, labels: impl SingleArgCollection<L>) -> Self {
         Self {
-            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels),
+            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
         }
     }
 }
 
 impl ToArgs for TsMGetOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1248,9 +1252,9 @@ impl TsMRangeOptions {
     /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
     /// In such a case, use `latest`.
     #[must_use]
-    pub fn latest(self) -> Self {
+    pub fn latest(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("LATEST"),
+            command_args: self.command_args.arg("LATEST").build(),
         }
     }
 
@@ -1258,17 +1262,17 @@ impl TsMRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(self, ts: impl SingleArgCollection<u64>) -> Self {
+    pub fn filter_by_ts(mut self, ts: impl SingleArgCollection<u64>) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts),
+            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
         }
     }
 
     /// filters samples by minimum and maximum values.
     #[must_use]
-    pub fn filter_by_value(self, min: f64, max: f64) -> Self {
+    pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max),
+            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max).build(),
         }
     }
 
@@ -1276,9 +1280,9 @@ impl TsMRangeOptions {
     ///
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn withlabels(self) -> Self {
+    pub fn withlabels(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("WITHLABELS"),
+            command_args: self.command_args.arg("WITHLABELS").build(),
         }
     }
 
@@ -1287,17 +1291,17 @@ impl TsMRangeOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(self, labels: impl SingleArgCollection<L>) -> Self {
+    pub fn selected_labels<L: SingleArg>(mut self, labels: impl SingleArgCollection<L>) -> Self {
         Self {
-            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels),
+            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
         }
     }
 
     /// limits the number of returned samples.
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
@@ -1313,9 +1317,9 @@ impl TsMRangeOptions {
     /// # Note
     /// When not provided, alignment is set to 0.
     #[must_use]
-    pub fn align(self, align: impl SingleArg) -> Self {
+    pub fn align(mut self, align: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("ALIGN").arg(align),
+            command_args: self.command_args.arg("ALIGN").arg(align).build(),
         }
     }
 
@@ -1329,13 +1333,14 @@ impl TsMRangeOptions {
     ///
     /// The first bucket start time is less than or equal to `from_timestamp`.
     #[must_use]
-    pub fn aggregation(self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
+    pub fn aggregation(mut self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("AGGREGATION")
                 .arg(aggregator)
-                .arg(bucket_duration),
+                .arg(bucket_duration)
+                .build(),
         }
     }
 
@@ -1345,12 +1350,13 @@ impl TsMRangeOptions {
     /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
     /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
     #[must_use]
-    pub fn bucket_timestamp(self, bucket_timestamp: u64) -> Self {
+    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("BUCKETTIMESTAMP")
-                .arg(bucket_timestamp),
+                .arg(bucket_timestamp)
+                .build(),
         }
     }
 
@@ -1369,16 +1375,16 @@ impl TsMRangeOptions {
     /// Regardless of the values of `from_timestamp` and `to_timestamp`,
     /// no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
     #[must_use]
-    pub fn empty(self) -> Self {
+    pub fn empty(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("EMPTY"),
+            command_args: self.command_args.arg("EMPTY").build(),
         }
     }
 }
 
 impl ToArgs for TsMRangeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1404,18 +1410,19 @@ impl TsGroupByOptions {
     #[must_use]
     pub fn new(label: impl SingleArg, reducer: TsAggregationType) -> Self {
         Self {
-            command_args: CommandArgs::Empty
+            command_args: CommandArgs::default()
                 .arg("GROUPBY")
                 .arg(label)
                 .arg("REDUCE")
-                .arg(reducer),
+                .arg(reducer)
+                .build(),
         }
     }
 }
 
 impl ToArgs for TsGroupByOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }
 
@@ -1441,9 +1448,9 @@ impl TsRangeOptions {
     /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
     /// In such a case, use `latest`.
     #[must_use]
-    pub fn latest(self) -> Self {
+    pub fn latest(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("LATEST"),
+            command_args: self.command_args.arg("LATEST").build(),
         }
     }
 
@@ -1451,25 +1458,25 @@ impl TsRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(self, ts: impl SingleArgCollection<u64>) -> Self {
+    pub fn filter_by_ts(mut self, ts: impl SingleArgCollection<u64>) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts),
+            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
         }
     }
 
     /// filters samples by minimum and maximum values.
     #[must_use]
-    pub fn filter_by_value(self, min: f64, max: f64) -> Self {
+    pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max),
+            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max).build(),
         }
     }
 
     /// limits the number of returned samples.
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
@@ -1485,9 +1492,9 @@ impl TsRangeOptions {
     /// # Note
     /// When not provided, alignment is set to 0.
     #[must_use]
-    pub fn align(self, align: impl SingleArg) -> Self {
+    pub fn align(mut self, align: impl SingleArg) -> Self {
         Self {
-            command_args: self.command_args.arg("ALIGN").arg(align),
+            command_args: self.command_args.arg("ALIGN").arg(align).build(),
         }
     }
 
@@ -1501,13 +1508,14 @@ impl TsRangeOptions {
     ///
     /// The first bucket start time is less than or equal to `from_timestamp`.
     #[must_use]
-    pub fn aggregation(self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
+    pub fn aggregation(mut self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("AGGREGATION")
                 .arg(aggregator)
-                .arg(bucket_duration),
+                .arg(bucket_duration)
+                .build(),
         }
     }
 
@@ -1517,12 +1525,13 @@ impl TsRangeOptions {
     /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
     /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
     #[must_use]
-    pub fn bucket_timestamp(self, bucket_timestamp: u64) -> Self {
+    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("BUCKETTIMESTAMP")
-                .arg(bucket_timestamp),
+                .arg(bucket_timestamp)
+                .build(),
         }
     }
 
@@ -1541,15 +1550,15 @@ impl TsRangeOptions {
     /// Regardless of the values of `from_timestamp` and `to_timestamp`,
     /// no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
     #[must_use]
-    pub fn empty(self) -> Self {
+    pub fn empty(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("EMPTY"),
+            command_args: self.command_args.arg("EMPTY").build(),
         }
     }
 }
 
 impl ToArgs for TsRangeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.command_args)
+        args.arg(&self.command_args);
     }
 }

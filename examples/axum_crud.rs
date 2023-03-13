@@ -34,7 +34,7 @@ async fn read(
     State(redis): State<Arc<Client>>,
     Path(key): Path<String>,
 ) -> Result<String, ServiceError> {
-    let value: Option<String> = redis.get(key.clone()).await?;
+    let value: Option<String> = redis.get(&key).await?;
     value.ok_or_else(|| {
         ServiceError::new(
             StatusCode::NOT_FOUND,
@@ -62,7 +62,7 @@ async fn del(
     State(redis): State<Arc<Client>>,
     Path(key): Path<String>,
 ) -> Result<(), ServiceError> {
-    let deleted = redis.del(key.clone()).await?;
+    let deleted = redis.del(&key).await?;
     if deleted > 0 {
         Ok(())
     } else {

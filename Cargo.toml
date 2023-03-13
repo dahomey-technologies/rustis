@@ -111,6 +111,3 @@ name = "cbor"
 
 [[example]]
 name = "axum_crud"
-
-[profile.release]
-debug = true

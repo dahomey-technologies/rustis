@@ -411,8 +411,9 @@ impl SingleArg for f32 {}
 impl SingleArg for f64 {}
 impl SingleArg for bool {}
 impl SingleArg for char {}
-impl SingleArg for &'static str {}
+impl SingleArg for &str {}
 impl SingleArg for String {}
+impl SingleArg for &String {}
 impl<const N: usize> SingleArg for &[u8; N] {}
 impl<const N: usize> SingleArg for [u8; N] {}
 impl SingleArg for &[u8] {}

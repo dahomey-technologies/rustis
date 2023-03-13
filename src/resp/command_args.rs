@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 use crate::resp::ToArgs;
 use std::{fmt};
 
@@ -7,7 +9,7 @@ use std::{fmt};
 /// without systematically allocate a container
 #[derive(Clone, Default)]
 pub struct CommandArgs {
-    args: Vec<Vec<u8>>,
+    args: SmallVec<[Vec<u8>;10]>,
 }
 
 impl CommandArgs {

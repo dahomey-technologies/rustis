@@ -1,5 +1,5 @@
 use crate::resp::ToArgs;
-use std::{fmt, ops::Deref};
+use std::{fmt};
 
 /// Collection of arguments of [`Command`](crate::resp::Command).
 ///
@@ -46,6 +46,7 @@ impl CommandArgs {
     }
 
     /// helper to build a CommandArgs in one line.
+    #[inline]
     pub fn build(&mut self) -> Self {
         let mut args = CommandArgs::default();
         std::mem::swap(&mut args.args, &mut self.args);
@@ -72,24 +73,31 @@ impl CommandArgs {
 }
 
 impl<'a> IntoIterator for &'a CommandArgs {
-    type Item = &'a Vec<u8>;
-    type IntoIter = std::slice::Iter<'a, Vec<u8>>;
+    type Item = &'a [u8];
+    type IntoIter = CommandArgsIterator<'a>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        self.args.iter()
+        CommandArgsIterator {
+            iter: self.args.iter()
+        }
     }
 }
 
-impl IntoIterator for CommandArgs {
-    type Item = Vec<u8>;
-    type IntoIter = std::vec::IntoIter<Vec<u8>>;
+pub struct CommandArgsIterator<'a> {
+    iter: std::slice::Iter<'a, Vec<u8>>
+}
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.args.into_iter()
+impl<'a> Iterator for CommandArgsIterator<'a> {
+    type Item = &'a [u8];
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|v| v.as_slice())
     }
 }
 
-impl Deref for CommandArgs {
+impl std::ops::Deref for CommandArgs {
     type Target = [Vec<u8>];
 
     fn deref(&self) -> &Self::Target {

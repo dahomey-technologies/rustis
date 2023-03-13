@@ -305,8 +305,8 @@ impl Client {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = channels
-            .iter()
-            .map(|c| (c.clone(), pub_sub_sender.clone()))
+            .into_iter()
+            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
@@ -328,8 +328,8 @@ impl Client {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = patterns
-            .iter()
-            .map(|c| (c.clone(), pub_sub_sender.clone()))
+            .into_iter()
+            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
@@ -351,8 +351,8 @@ impl Client {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
 
         let pub_sub_senders = shardchannels
-            .iter()
-            .map(|c| (c.clone().to_vec(), pub_sub_sender.clone()))
+            .into_iter()
+            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(

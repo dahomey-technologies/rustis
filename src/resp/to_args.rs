@@ -5,23 +5,26 @@ use smallvec::SmallVec;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
-    iter::{once, Once},
 };
 
 /// Types compatible with command args
 pub trait ToArgs {
     fn write_args(&self, args: &mut CommandArgs);
+
+    #[inline]
     fn num_args(&self) -> usize {
         1
     }
 }
 
+#[inline]
 fn write_integer<I: Integer>(i: I, args: &mut CommandArgs) {
     let mut buf = itoa::Buffer::new();
     let str = buf.format(i);
     args.write_arg(str.as_bytes());
 }
 
+#[inline]
 fn write_float<F: Float>(f: F, args: &mut CommandArgs) {
     let mut buf = dtoa::Buffer::new();
     let str = buf.format(f);
@@ -178,12 +181,14 @@ impl ToArgs for char {
 }
 
 impl<T: ToArgs> ToArgs for Option<T> {
+    #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         if let Some(t) = self {
             t.write_args(args);
         }
     }
 
+    #[inline]
     fn num_args(&self) -> usize {
         match self {
             Some(t) => t.num_args(),
@@ -363,18 +368,30 @@ where
 }
 
 impl ToArgs for CommandArgs {
+    #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self {
             args.write_arg(arg);
         }
     }
+
+    #[inline]
+    fn num_args(&self) -> usize {
+        self.len()
+    }
 }
 
 impl ToArgs for &CommandArgs {
+    #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self.into_iter() {
             args.write_arg(arg);
         }
+    }
+
+    #[inline]
+    fn num_args(&self) -> usize {
+        self.len()
     }
 }
 
@@ -423,92 +440,26 @@ pub trait SingleArgCollection<T>: ToArgs
 where
     T: SingleArg,
 {
-    type IntoIter: Iterator<Item = T>;
-
-    fn into_iter(self) -> Self::IntoIter;
 }
 
-impl SingleArgCollection<Vec<u8>> for CommandArgs {
-    type IntoIter = std::vec::IntoIter<Vec<u8>>;
+impl SingleArgCollection<Vec<u8>> for CommandArgs {}
 
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
-}
+impl<T, const N: usize> SingleArgCollection<T> for [T; N] where T: SingleArg {}
 
-impl<T, const N: usize> SingleArgCollection<T> for [T; N]
-where
-    T: SingleArg,
-{
-    type IntoIter = std::array::IntoIter<T, N>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
-}
-
-impl<T> SingleArgCollection<T> for Vec<T>
-where
-    T: SingleArg,
-{
-    type IntoIter = std::vec::IntoIter<T>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
-}
+impl<T> SingleArgCollection<T> for Vec<T> where T: SingleArg {}
 
 impl<A, T> SingleArgCollection<T> for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
     T: SingleArg,
 {
-    type IntoIter = smallvec::IntoIter<A>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
 }
 
-impl<T, S: BuildHasher> SingleArgCollection<T> for HashSet<T, S>
-where
-    T: SingleArg,
-{
-    type IntoIter = std::collections::hash_set::IntoIter<T>;
+impl<T, S: BuildHasher> SingleArgCollection<T> for HashSet<T, S> where T: SingleArg {}
 
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
-}
+impl<T> SingleArgCollection<T> for BTreeSet<T> where T: SingleArg {}
 
-impl<T> SingleArgCollection<T> for BTreeSet<T>
-where
-    T: SingleArg,
-{
-    type IntoIter = std::collections::btree_set::IntoIter<T>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter(self)
-    }
-}
-
-impl<T> SingleArgCollection<T> for T
-where
-    T: SingleArg,
-{
-    type IntoIter = Once<T>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        once(self)
-    }
-}
+impl<T> SingleArgCollection<T> for T where T: SingleArg {}
 
 /// Marker for key/value collections of Args
 ///

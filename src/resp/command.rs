@@ -63,6 +63,7 @@ impl Command {
     }
 
     #[cfg(debug_assertions)]
+    #[inline]
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {
         self.kill_connection_on_write = num_kills;
         self

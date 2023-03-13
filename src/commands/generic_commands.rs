@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArg, CommandArgs, PrimitiveResponse, CollectionResponse,
-        IntoArgs, SingleArg, SingleArgCollection,
+        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -476,7 +476,7 @@ pub trait GenericCommands<'a> {
             cmd("RESTORE")
                 .arg(key)
                 .arg(ttl)
-                .arg(CommandArg::Binary(serialized_value))
+                .arg(serialized_value)
                 .arg(options),
         )
     }
@@ -669,14 +669,22 @@ pub enum ExpireOption {
     Lt,
 }
 
-impl IntoArgs for ExpireOption {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ExpireOption {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            ExpireOption::None => args,
-            ExpireOption::Nx => args.arg("NX"),
-            ExpireOption::Xx => args.arg("XX"),
-            ExpireOption::Gt => args.arg("GT"),
-            ExpireOption::Lt => args.arg("LT"),
+            ExpireOption::None => {}
+            ExpireOption::Nx => {
+                args.arg("NX");
+            }
+            ExpireOption::Xx => {
+                args.arg("XX");
+            }
+            ExpireOption::Gt => {
+                args.arg("GT");
+            }
+            ExpireOption::Lt => {
+                args.arg("LT");
+            }
         }
     }
 }
@@ -689,44 +697,49 @@ pub struct MigrateOptions {
 
 impl MigrateOptions {
     #[must_use]
-    pub fn copy(self) -> Self {
+    pub fn copy(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("COPY"),
+            command_args: self.command_args.arg("COPY").build(),
         }
     }
 
     #[must_use]
-    pub fn replace(self) -> Self {
+    pub fn replace(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("REPLACE"),
+            command_args: self.command_args.arg("REPLACE").build(),
         }
     }
 
     #[must_use]
-    pub fn auth<P: SingleArg>(self, password: P) -> Self {
+    pub fn auth<P: SingleArg>(mut self, password: P) -> Self {
         Self {
-            command_args: self.command_args.arg("AUTH").arg(password),
+            command_args: self.command_args.arg("AUTH").arg(password).build(),
         }
     }
 
     #[must_use]
-    pub fn auth2<U: SingleArg, P: SingleArg>(self, username: U, password: P) -> Self {
+    pub fn auth2<U: SingleArg, P: SingleArg>(mut self, username: U, password: P) -> Self {
         Self {
-            command_args: self.command_args.arg("AUTH2").arg(username).arg(password),
+            command_args: self
+                .command_args
+                .arg("AUTH2")
+                .arg(username)
+                .arg(password)
+                .build(),
         }
     }
 
     #[must_use]
-    pub fn keys<K: SingleArg, KK: SingleArgCollection<K>>(self, keys: KK) -> Self {
+    pub fn keys<K: SingleArg, KK: SingleArgCollection<K>>(mut self, keys: KK) -> Self {
         Self {
-            command_args: self.command_args.arg("KEYS").arg(keys),
+            command_args: self.command_args.arg("KEYS").arg(keys).build(),
         }
     }
 }
 
-impl IntoArgs for MigrateOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for MigrateOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -738,37 +751,37 @@ pub struct RestoreOptions {
 
 impl RestoreOptions {
     #[must_use]
-    pub fn replace(self) -> Self {
+    pub fn replace(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("REPLACE"),
+            command_args: self.command_args.arg("REPLACE").build(),
         }
     }
 
     #[must_use]
-    pub fn abs_ttl(self) -> Self {
+    pub fn abs_ttl(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("ABSTTL"),
+            command_args: self.command_args.arg("ABSTTL").build(),
         }
     }
 
     #[must_use]
-    pub fn idle_time(self, idle_time: i64) -> Self {
+    pub fn idle_time(mut self, idle_time: i64) -> Self {
         Self {
-            command_args: self.command_args.arg("IDLETIME").arg(idle_time),
+            command_args: self.command_args.arg("IDLETIME").arg(idle_time).build(),
         }
     }
 
     #[must_use]
-    pub fn frequency(self, frequency: f64) -> Self {
+    pub fn frequency(mut self, frequency: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("FREQ").arg(frequency),
+            command_args: self.command_args.arg("FREQ").arg(frequency).build(),
         }
     }
 }
 
-impl IntoArgs for RestoreOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for RestoreOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -778,12 +791,12 @@ pub enum SortOrder {
     Desc,
 }
 
-impl IntoArgs for SortOrder {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for SortOrder {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             SortOrder::Asc => args.arg("ASC"),
             SortOrder::Desc => args.arg("DESC"),
-        }
+        };
     }
 }
 
@@ -795,44 +808,49 @@ pub struct SortOptions {
 
 impl SortOptions {
     #[must_use]
-    pub fn by<P: SingleArg>(self, pattern: P) -> Self {
+    pub fn by<P: SingleArg>(mut self, pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("BY").arg(pattern),
+            command_args: self.command_args.arg("BY").arg(pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn limit(self, offset: usize, count: isize) -> Self {
+    pub fn limit(mut self, offset: usize, count: isize) -> Self {
         Self {
-            command_args: self.command_args.arg("LIMIT").arg(offset).arg(count),
+            command_args: self
+                .command_args
+                .arg("LIMIT")
+                .arg(offset)
+                .arg(count)
+                .build(),
         }
     }
 
     #[must_use]
-    pub fn get<P: SingleArg>(self, pattern: P) -> Self {
+    pub fn get<P: SingleArg>(mut self, pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("GET").arg(pattern),
+            command_args: self.command_args.arg("GET").arg(pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn order(self, order: SortOrder) -> Self {
+    pub fn order(mut self, order: SortOrder) -> Self {
         Self {
-            command_args: self.command_args.arg(order),
+            command_args: self.command_args.arg(order).build(),
         }
     }
 
     #[must_use]
-    pub fn alpha(self) -> Self {
+    pub fn alpha(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("ALPHA"),
+            command_args: self.command_args.arg("ALPHA").build(),
         }
     }
 }
 
-impl IntoArgs for SortOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for SortOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -848,30 +866,30 @@ pub struct ScanOptions {
 
 impl ScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 
     #[must_use]
-    pub fn type_<TY: SingleArg>(self, type_: TY) -> Self {
+    pub fn type_<TY: SingleArg>(mut self, type_: TY) -> Self {
         Self {
-            command_args: self.command_args.arg("TYPE").arg(type_),
+            command_args: self.command_args.arg("TYPE").arg(type_).build(),
         }
     }
 }
 
-impl IntoArgs for ScanOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ScanOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

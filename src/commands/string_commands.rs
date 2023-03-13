@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, KeyValueArgsCollection,
-        SingleArg, SingleArgCollection,
+        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs,
     },
 };
 use serde::{
@@ -648,15 +648,15 @@ pub enum GetExOptions {
     Persist,
 }
 
-impl IntoArgs for GetExOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for GetExOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            GetExOptions::Ex(duration) => ("EX", duration).into_args(args),
-            GetExOptions::Px(duration) => ("PX", duration).into_args(args),
-            GetExOptions::Exat(timestamp) => ("EXAT", timestamp).into_args(args),
-            GetExOptions::Pxat(timestamp) => ("PXAT", timestamp).into_args(args),
-            GetExOptions::Persist => "PERSIST".into_args(args),
-        }
+            GetExOptions::Ex(duration) => args.arg(("EX", *duration)),
+            GetExOptions::Px(duration) => args.arg(("PX", *duration)),
+            GetExOptions::Exat(timestamp) => args.arg(("EXAT", *timestamp)),
+            GetExOptions::Pxat(timestamp) => args.arg(("PXAT", *timestamp)),
+            GetExOptions::Persist => args.arg("PERSIST"),
+        };
     }
 }
 
@@ -724,15 +724,23 @@ pub enum SetExpiration {
     Pxat(u64),
 }
 
-impl IntoArgs for SetExpiration {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for SetExpiration {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            SetExpiration::None => args,
-            SetExpiration::Ex(duration) => ("EX", duration).into_args(args),
-            SetExpiration::Px(duration) => ("PX", duration).into_args(args),
-            SetExpiration::Exat(timestamp) => ("EXAT", timestamp).into_args(args),
-            SetExpiration::Pxat(timestamp) => ("PXAT", timestamp).into_args(args),
-        }
+            SetExpiration::None => {}
+            SetExpiration::Ex(duration) => {
+                args.arg(("EX", *duration));
+            }
+            SetExpiration::Px(duration) => {
+                args.arg(("PX", *duration));
+            }
+            SetExpiration::Exat(timestamp) => {
+                args.arg(("EXAT", *timestamp));
+            }
+            SetExpiration::Pxat(timestamp) => {
+                args.arg(("PXAT", *timestamp));
+            }
+        };
     }
 }
 
@@ -748,12 +756,16 @@ pub enum SetCondition {
     XX,
 }
 
-impl IntoArgs for SetCondition {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for SetCondition {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            SetCondition::None => args,
-            SetCondition::NX => args.arg("NX"),
-            SetCondition::XX => args.arg("XX"),
+            SetCondition::None => {}
+            SetCondition::NX => {
+                args.arg("NX");
+            }
+            SetCondition::XX => {
+                args.arg("XX");
+            }
         }
     }
 }

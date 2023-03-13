@@ -1,7 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg, SingleArgCollection,
+        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
+        ToArgs,
     },
 };
 use serde::de::DeserializeOwned;
@@ -207,12 +208,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/smove/>](https://redis.io/commands/smove/)
     #[must_use]
-    fn smove<S, D, M>(
-        self,
-        source: S,
-        destination: D,
-        member: M,
-    ) -> PreparedCommand<'a, Self, bool>
+    fn smove<S, D, M>(self, source: S, destination: D, member: M) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
         S: SingleArg,
@@ -345,22 +341,22 @@ pub struct SScanOptions {
 
 impl SScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern),
+            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
     }
 
     #[must_use]
-    pub fn count(self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COUNT").arg(count),
+            command_args: self.command_args.arg("COUNT").arg(count).build(),
         }
     }
 }
 
-impl IntoArgs for SScanOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for SScanOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }

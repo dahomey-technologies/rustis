@@ -50,7 +50,7 @@ async fn poll_messages(
         return Ok(web::Json(messages));
     }
 
-    let mut sub_stream = redis.sub.subscribe(channel.clone()).await?;
+    let mut sub_stream = redis.sub.subscribe(&channel).await?;
     let msg = tokio::time::timeout(POLL_TIMEOUT, sub_stream.next()).await;
 
     let messages: Vec<String> = match msg {
@@ -74,7 +74,7 @@ async fn get_messages_from_queue(
     redis: &Client,
     channel: &str,
 ) -> Result<Vec<String>, ServiceError> {
-    Ok(redis.lpop(channel.to_owned(), i32::MAX as usize).await?)
+    Ok(redis.lpop(channel, i32::MAX as usize).await?)
 }
 
 #[post("/{channel}")]
@@ -94,8 +94,8 @@ async fn publish(
 
     // data is not sent via pub/sub; the pub/sub API is used only to notify subscriber to check for new notifications
     // the actual data is pushed into a list used as a queue
-    redis.regular.lpush(channel.clone(), message).await?;
-    redis.regular.publish(channel, "new").await?;
+    redis.regular.lpush(&channel, &message).await?;
+    redis.regular.publish(&channel, "new").await?;
     Ok(HttpResponse::Ok())
 }
 

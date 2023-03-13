@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand, PubSubStream},
     resp::{
-        cmd, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
-        SingleArgCollection,
+        cmd, CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
+        SingleArg, SingleArgCollection, ToArgs,
     },
     Future,
 };
@@ -237,15 +237,15 @@ pub struct PubSubChannelsOptions {
 }
 
 impl PubSubChannelsOptions {
-    pub fn pattern<P: SingleArg>(self, pattern: P) -> Self {
+    pub fn pattern<P: SingleArg>(mut self, pattern: P) -> Self {
         Self {
-            command_args: self.command_args.arg(pattern),
+            command_args: self.command_args.arg(pattern).build(),
         }
     }
 }
 
-impl IntoArgs for PubSubChannelsOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for PubSubChannelsOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }

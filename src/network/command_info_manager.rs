@@ -1,6 +1,6 @@
 use crate::{
     commands::{BeginSearch, CommandInfo, FindKeys, ServerCommands},
-    resp::{cmd, Command, CommandArg},
+    resp::{cmd, Command, CommandArgs},
     Error, Result, StandaloneConnection,
 };
 use smallvec::SmallVec;
@@ -45,12 +45,12 @@ impl CommandInfoManager {
         let command_info = self.command_info_map.get(command.name);
         if let Some(command_info) = command_info {
             if command_info.arity == -2 && !command_info.sub_commands.is_empty() {
-                let command_name = format!(
-                    "{}|{}",
-                    command.name,
-                    std::ops::Deref::deref(&command.args[0])
-                );
-                return self.command_info_map.get(&command_name);
+                if let Some(first_arg) = command.args.into_iter().next() {
+                    if let Ok(first_arg) = std::str::from_utf8(first_arg) {
+                        let command_name = format!("{}|{}", command.name, first_arg);
+                        return self.command_info_map.get(&command_name);
+                    }
+                }
             }
         }
 
@@ -72,7 +72,7 @@ impl CommandInfoManager {
         let mut keys = SmallVec::<[String; 10]>::new();
 
         for key_spec in &command_info.key_specifications {
-            let mut slice: &[CommandArg] = &command.args;
+            let mut slice: &[Vec<u8>] = &command.args;
 
             // begin_search
             match &key_spec.begin_search {
@@ -85,14 +85,14 @@ impl CommandInfoManager {
                         slice
                             .iter()
                             .skip(*start_from as usize - 1)
-                            .position(|arg| *arg == *keyword)
+                            .position(|arg| arg.as_slice() == keyword.as_bytes())
                             .map(|i| i + 1)
                     } else {
                         slice
                             .iter()
                             .rev()
                             .skip((-*start_from - 1) as usize)
-                            .position(|arg| *arg == *keyword)
+                            .position(|arg| arg.as_slice() == keyword.as_bytes())
                             .map(|i| slice.len() - (i + -start_from as usize - 1))
                     };
 
@@ -135,12 +135,18 @@ impl CommandInfoManager {
                     first_key,
                     key_step,
                 } => {
-                    let num_keys = slice[*key_num_idx].to_usize()?;
+                    let num_keys = slice[*key_num_idx].as_slice();
+                    let num_keys: usize = atoi::atoi(num_keys).ok_or_else(|| {
+                        Error::Client(format!(
+                            "Cannot parse integer from {}",
+                            String::from_utf8_lossy(num_keys)
+                        ))
+                    })?;
 
                     slice = &slice[*first_key..num_keys + 1];
                     *key_step
                 }
-                FindKeys::Unknown{} => {
+                FindKeys::Unknown {} => {
                     let args = Self::prepare_command_getkeys_args(command);
                     let keys: SmallVec<[String; 10]> = connection.command_getkeys(args).await?;
                     return Ok(keys);
@@ -151,7 +157,7 @@ impl CommandInfoManager {
                 if bs.is_empty() {
                     None
                 } else {
-                    Some(bs.to_string())
+                    String::from_utf8(bs.clone()).ok()
                 }
             }));
         }
@@ -177,7 +183,7 @@ impl CommandInfoManager {
         };
 
         if let Some(key_spec) = command_info.key_specifications.first() {
-            let slice: &[CommandArg] = &command.args;
+            let slice: &[Vec<u8>] = &command.args;
             let mut shard_command = cmd(command.name);
 
             // begin_search
@@ -223,7 +229,7 @@ impl CommandInfoManager {
 
             for shard_key in shard_keys {
                 let key_index =
-                    if let Some(key_index) = slice.iter().position(|arg| *arg == *shard_key) {
+                    if let Some(key_index) = slice.iter().position(|arg| arg.as_slice() == shard_key.as_bytes()) {
                         key_index
                     } else {
                         return Err(Error::Client(format!("Cannot find key {}", *shard_key)));
@@ -246,10 +252,10 @@ impl CommandInfoManager {
         unreachable!();
     }
 
-    fn prepare_command_getkeys_args(command: &Command) -> SmallVec<[CommandArg; 10]> {
-        let mut args = SmallVec::new();
-        args.push(CommandArg::Str(command.name));
-        args.extend((&command.args).into_iter().cloned());
+    fn prepare_command_getkeys_args(command: &Command) -> CommandArgs {
+        let mut args = CommandArgs::default();
+        args.arg(command.name);
+        args.arg(&command.args);
         args
     }
 }

@@ -2,7 +2,7 @@ use super::util::RefPubSubMessage;
 use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{cmd, Command, CommandArgs, RespBuf},
+    resp::{cmd, Command, RespBuf},
     spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
 use futures::{
@@ -210,8 +210,8 @@ impl NetworkHandler {
                                 self.pending_unsubscriptions.push_back(
                                     command
                                         .args
-                                        .iter()
-                                        .map(|a| (a.as_bytes().to_vec(), subscription_type))
+                                        .into_iter()
+                                        .map(|a| (a.to_vec(), subscription_type))
                                         .collect(),
                                 );
                             }
@@ -282,19 +282,12 @@ impl NetworkHandler {
 
             for command in commands.into_iter() {
                 if command.name == "CLIENT" {
-                    match &command.args {
-                        CommandArgs::Array2(args)
-                            if args[0].as_bytes() == b"REPLY"
-                                && (args[1].as_bytes() == b"OFF"
-                                    || args[1].as_bytes() == b"SKIP") =>
-                        {
-                            self.is_reply_on = false
-                        }
-                        CommandArgs::Array2(args)
-                            if args[0].as_bytes() == b"REPLY" && args[1].as_bytes() == b"ON" =>
-                        {
-                            self.is_reply_on = true
-                        }
+                    let mut args = command.args.into_iter();
+
+                    match (args.next(), args.next()) {
+                        (Some(b"REPLY"), Some(b"OFF")) => self.is_reply_on = false,
+                        (Some(b"REPLY"), Some(b"SKIP")) => self.is_reply_on = false,
+                        (Some(b"REPLY"), Some(b"ON")) => self.is_reply_on = true,
                         _ => (),
                     }
                 }
@@ -450,7 +443,8 @@ impl NetworkHandler {
                                             {
                                                 warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
                                             }
-                                        } else if let Err(e) = results_sender.send(Ok(vec![resp_buf]))
+                                        } else if let Err(e) =
+                                            results_sender.send(Ok(vec![resp_buf]))
                                         {
                                             warn!("Cannot send value to caller because receiver is not there anymore: {:?}", e);
                                         }
@@ -500,7 +494,10 @@ impl NetworkHandler {
         }
     }
 
-    async fn try_match_pubsub_message(&mut self, value: Result<RespBuf>) -> Option<Result<RespBuf>> {
+    async fn try_match_pubsub_message(
+        &mut self,
+        value: Result<RespBuf>,
+    ) -> Option<Result<RespBuf>> {
         if let Ok(ref_value) = &value {
             if let Some(pub_sub_message) = RefPubSubMessage::from_resp(ref_value) {
                 match pub_sub_message {
@@ -532,7 +529,7 @@ impl NetworkHandler {
                         }
                         if !self.pending_subscriptions.is_empty() {
                             return None;
-                        }   
+                        }
                         Some(Ok(RespBuf::ok()))
                     }
                     RefPubSubMessage::Unsubscribe(channel_or_pattern)

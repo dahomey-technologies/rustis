@@ -1,5 +1,5 @@
 use crate::{
-    resp::{CommandArg, Command, CommandArgs},
+    resp::{Command, CommandArgs},
     Error, Result,
 };
 use bytes::{BufMut, BytesMut};
@@ -12,101 +12,50 @@ impl Encoder<&Command> for CommandEncoder {
 
     #[inline]
     fn encode(&mut self, command: &Command, buf: &mut BytesMut) -> Result<()> {
+        buf.reserve(calculate_buf_size(command));
+
         buf.put_u8(b'*');
         encode_integer(command.args.len() as i64 + 1, buf);
         encode_crlf(buf);
-    
-        encode_bulkstring(&CommandArg::Str(command.name), buf);
+        encode_bulkstring(command.name.as_bytes(), buf);
         encode_command_args(&command.args, buf);
-
         Ok(())
     }
 }
 
-fn encode_bulkstring(bulk_string: &CommandArg, buf: &mut BytesMut) {
-    match bulk_string {
-        CommandArg::Nil => buf.put(&b"$-1\r\n"[..]),
-        CommandArg::Signed(i) => {
-            let mut temp = itoa::Buffer::new();
-            let str = temp.format(*i);
+#[inline]
+fn calculate_buf_size(command: &Command) -> usize {
+    let mut buf_size = 0;
 
-            buf.put_u8(b'$');
-            encode_integer(str.len() as i64, buf);
-            encode_crlf(buf);
-            buf.put(str.as_bytes());
-            encode_crlf(buf);
-        }
-        CommandArg::Unsigned(u) => {
-            let mut temp = itoa::Buffer::new();
-            let str = temp.format(*u);
+    // *<num_args>\r\n 
+    let num_args = command.args.len() + 1;
+    buf_size += if num_args <= 9 { 4 } else { 5 };
 
-            buf.put_u8(b'$');
-            encode_integer(str.len() as i64, buf);
-            encode_crlf(buf);
-            buf.put(str.as_bytes());
-            encode_crlf(buf);
-        }
-        CommandArg::F32(f) => {
-            let mut temp = dtoa::Buffer::new();
-            let str = temp.format(*f);
+    // $<name_len>\r\n<name>\r\n
+    let name = command.name.as_bytes();
+    buf_size += if name.len() <= 9 { 6 + name.len() } else { 7 + name.len() };
 
-            buf.put_u8(b'$');
-            encode_integer(str.len() as i64, buf);
-            encode_crlf(buf);
-            buf.put(str.as_bytes());
-            encode_crlf(buf);
-        }
-        CommandArg::F64(f) => {
-            let mut temp = dtoa::Buffer::new();
-            let str = temp.format(*f);
-
-            buf.put_u8(b'$');
-            encode_integer(str.len() as i64, buf);
-            encode_crlf(buf);
-            buf.put(str.as_bytes());
-            encode_crlf(buf);
-        }
-        _ => {
-            buf.put_u8(b'$');
-            encode_integer(bulk_string.len() as i64, buf);
-            encode_crlf(buf);
-            buf.put(bulk_string.as_bytes());
-            encode_crlf(buf);
-        }
+    for arg in &command.args {
+        // $<arg_len>\r\n<arg>\r\n
+        buf_size += if arg.len() <= 9 { 6 + arg.len() } else { 7 + arg.len() };
     }
+
+    buf_size
 }
 
-fn encode_command_args(command_args: &CommandArgs, buf: &mut BytesMut) {
-    match command_args {
-        CommandArgs::Empty => (),
-        CommandArgs::Single(arg) => {
-            encode_bulkstring(arg, buf);
-        }
-        CommandArgs::Array2(args) => {
-            for arg in args.iter() {
-                encode_bulkstring(arg, buf);
-            }
-        }
-        CommandArgs::Array3(args) => {
-            for arg in args.iter() {
-                encode_bulkstring(arg, buf);
-            }
-        }
-        CommandArgs::Array4(args) => {
-            for arg in args.iter() {
-                encode_bulkstring(arg, buf);
-            }
-        }
-        CommandArgs::Array5(args) => {
-            for arg in args.iter() {
-                encode_bulkstring(arg, buf);
-            }
-        }
-        CommandArgs::Vec(args) => {
-            for arg in args.iter() {
-                encode_bulkstring(arg, buf);
-            }
-        }
+#[inline]
+fn encode_bulkstring(arg: &[u8], buf: &mut BytesMut) {
+    buf.put_u8(b'$');
+    encode_integer(arg.len() as i64, buf);
+    encode_crlf(buf);
+    buf.put(arg);
+    encode_crlf(buf);
+}
+
+#[inline]
+fn encode_command_args(args: &CommandArgs, buf: &mut BytesMut) {
+    for arg in args {
+        encode_bulkstring(arg, buf);
     }
 }
 

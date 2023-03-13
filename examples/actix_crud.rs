@@ -32,7 +32,8 @@ async fn read(
     redis: web::Data<Client>,
     key: web::Path<String>,
 ) -> Result<String, ServiceError> {
-    let value: Option<String> = redis.get(key.clone()).await?;
+    let key = key.into_inner();
+    let value: Option<String> = redis.get(&key).await?;
     value.ok_or_else(|| {
         ServiceError::new(
             StatusCode::NOT_FOUND,
@@ -62,7 +63,8 @@ async fn delete(
     redis: web::Data<Client>,
     key: web::Path<String>,
 ) -> Result<impl Responder, ServiceError> {
-    let deleted = redis.del(key.clone()).await?;
+    let key = key.into_inner();
+    let deleted = redis.del(&key).await?;
     if deleted > 0 {
         Ok(HttpResponse::Ok())
     } else {

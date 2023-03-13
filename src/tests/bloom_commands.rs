@@ -1,9 +1,8 @@
 use crate::{
     commands::{
-        BfInfoParameter, BfInsertOptions, BfReserveOptions, BloomCommands, FlushingMode,
-        ServerCommands, BfScanDumpResult,
+        BfInfoParameter, BfInsertOptions, BfReserveOptions, BfScanDumpResult, BloomCommands,
+        FlushingMode, ServerCommands,
     },
-    resp::CommandArg,
     tests::get_redis_stack_test_client,
     Result,
 };
@@ -163,7 +162,11 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
 
     while let Some(dump_result) = chunks.pop_front() {
         client
-            .bf_loadchunk("bf", dump_result.iterator, CommandArg::Binary(dump_result.data))
+            .bf_loadchunk(
+                "bf",
+                dump_result.iterator,
+                dump_result.data,
+            )
             .await?;
     }
 

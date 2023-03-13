@@ -1,9 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     commands::ModuleInfo,
-    resp::{
-        cmd, CommandArg, CommandArgs, IntoArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
-    },
+    resp::{cmd, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs},
     Result,
 };
 use serde::{
@@ -346,12 +344,12 @@ pub enum ClientCachingMode {
     No,
 }
 
-impl IntoArgs for ClientCachingMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientCachingMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientCachingMode::Yes => CommandArg::Str("YES"),
-            ClientCachingMode::No => CommandArg::Str("NO"),
-        })
+            ClientCachingMode::Yes => "YES",
+            ClientCachingMode::No => "NO",
+        });
     }
 }
 
@@ -564,14 +562,14 @@ pub enum ClientType {
     PubSub,
 }
 
-impl IntoArgs for ClientType {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientType {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientType::Normal => CommandArg::Str("NORMAL"),
-            ClientType::Master => CommandArg::Str("MASTER"),
-            ClientType::Replica => CommandArg::Str("REPLICA"),
-            ClientType::PubSub => CommandArg::Str("PUBSUB"),
-        })
+            ClientType::Normal => "NORMAL",
+            ClientType::Master => "MASTER",
+            ClientType::Replica => "REPLICA",
+            ClientType::PubSub => "PUBSUB",
+        });
     }
 }
 
@@ -581,26 +579,26 @@ pub struct ClientListOptions {
     command_args: CommandArgs,
 }
 
-impl IntoArgs for ClientListOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ClientListOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
 impl ClientListOptions {
     #[must_use]
-    pub fn client_type(self, client_type: ClientType) -> Self {
+    pub fn client_type(mut self, client_type: ClientType) -> Self {
         Self {
-            command_args: self.command_args.arg("TYPE").arg(client_type),
+            command_args: self.command_args.arg("TYPE").arg(client_type).build(),
         }
     }
 
-    pub fn client_ids<II>(self, client_ids: II) -> Self
+    pub fn client_ids<II>(mut self, client_ids: II) -> Self
     where
         II: SingleArgCollection<i64>,
     {
         Self {
-            command_args: self.command_args.arg("ID").arg(client_ids),
+            command_args: self.command_args.arg("ID").arg(client_ids).build(),
         }
     }
 }
@@ -634,23 +632,23 @@ pub struct ClientKillOptions {
 
 impl ClientKillOptions {
     #[must_use]
-    pub fn id(self, client_id: i64) -> Self {
+    pub fn id(mut self, client_id: i64) -> Self {
         Self {
-            command_args: self.command_args.arg("ID").arg(client_id),
+            command_args: self.command_args.arg("ID").arg(client_id).build(),
         }
     }
 
     #[must_use]
-    pub fn client_type(self, client_type: ClientType) -> Self {
+    pub fn client_type(mut self, client_type: ClientType) -> Self {
         Self {
-            command_args: self.command_args.arg("TYPE").arg(client_type),
+            command_args: self.command_args.arg("TYPE").arg(client_type).build(),
         }
     }
 
     #[must_use]
-    pub fn user<U: SingleArg>(self, username: U) -> Self {
+    pub fn user<U: SingleArg>(mut self, username: U) -> Self {
         Self {
-            command_args: self.command_args.arg("USER").arg(username),
+            command_args: self.command_args.arg("USER").arg(username).build(),
         }
     }
 
@@ -659,36 +657,37 @@ impl ClientKillOptions {
     /// The ip:port should match a line returned by the
     /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr<A: SingleArg>(self, addr: A) -> Self {
+    pub fn addr<A: SingleArg>(mut self, addr: A) -> Self {
         Self {
-            command_args: self.command_args.arg("ADDR").arg(addr),
+            command_args: self.command_args.arg("ADDR").arg(addr).build(),
         }
     }
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr<A: SingleArg>(self, laddr: A) -> Self {
+    pub fn laddr<A: SingleArg>(mut self, laddr: A) -> Self {
         Self {
-            command_args: self.command_args.arg("LADDR").arg(laddr),
+            command_args: self.command_args.arg("LADDR").arg(laddr).build(),
         }
     }
 
     /// By default this option is set to yes, that is, the client calling the command will not get killed,
     /// however setting this option to no will have the effect of also killing the client calling the command.
     #[must_use]
-    pub fn skip_me(self, skip_me: bool) -> Self {
+    pub fn skip_me(mut self, skip_me: bool) -> Self {
         Self {
             command_args: self
                 .command_args
                 .arg("SKIPME")
-                .arg(if skip_me { "YES" } else { "NO" }),
+                .arg(if skip_me { "YES" } else { "NO" })
+                .build(),
         }
     }
 }
 
-impl IntoArgs for ClientKillOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ClientKillOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -702,12 +701,12 @@ pub enum ClientPauseMode {
     All,
 }
 
-impl IntoArgs for ClientPauseMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientPauseMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientPauseMode::Write => CommandArg::Str("WRITE"),
-            ClientPauseMode::All => CommandArg::Str("ALL"),
-        })
+            ClientPauseMode::Write => "WRITE",
+            ClientPauseMode::All => "ALL",
+        });
     }
 }
 
@@ -718,13 +717,13 @@ pub enum ClientReplyMode {
     Skip,
 }
 
-impl IntoArgs for ClientReplyMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientReplyMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientReplyMode::On => CommandArg::Str("ON"),
-            ClientReplyMode::Off => CommandArg::Str("OFF"),
-            ClientReplyMode::Skip => CommandArg::Str("SKIP"),
-        })
+            ClientReplyMode::On => "ON",
+            ClientReplyMode::Off => "OFF",
+            ClientReplyMode::Skip => "SKIP",
+        });
     }
 }
 
@@ -734,12 +733,12 @@ pub enum ClientTrackingStatus {
     Off,
 }
 
-impl IntoArgs for ClientTrackingStatus {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientTrackingStatus {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientTrackingStatus::On => CommandArg::Str("ON"),
-            ClientTrackingStatus::Off => CommandArg::Str("OFF"),
-        })
+            ClientTrackingStatus::On => "ON",
+            ClientTrackingStatus::Off => "OFF",
+        });
     }
 }
 
@@ -752,16 +751,16 @@ pub struct ClientTrackingOptions {
 impl ClientTrackingOptions {
     #[must_use]
     /// send invalidation messages to the connection with the specified ID.
-    pub fn redirect(self, client_id: i64) -> Self {
+    pub fn redirect(mut self, client_id: i64) -> Self {
         Self {
-            command_args: self.command_args.arg("REDIRECT").arg(client_id),
+            command_args: self.command_args.arg("REDIRECT").arg(client_id).build(),
         }
     }
 
     /// enable tracking in broadcasting mode.
-    pub fn broadcasting(self) -> Self {
+    pub fn broadcasting(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("BCAST"),
+            command_args: self.command_args.arg("BCAST").build(),
         }
     }
 
@@ -769,39 +768,39 @@ impl ClientTrackingOptions {
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix<P: SingleArg>(self, prefix: P) -> Self {
+    pub fn prefix<P: SingleArg>(mut self, prefix: P) -> Self {
         Self {
-            command_args: self.command_args.arg("PREFIX").arg(prefix),
+            command_args: self.command_args.arg("PREFIX").arg(prefix).build(),
         }
     }
 
     /// when broadcasting is NOT active, normally don't track keys in read only commands,
     /// unless they are called immediately after a `CLIENT CACHING yes` command.
-    pub fn optin(self) -> Self {
+    pub fn optin(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("OPTIN"),
+            command_args: self.command_args.arg("OPTIN").build(),
         }
     }
 
     /// when broadcasting is NOT active, normally track keys in read only commands,
     /// unless they are called immediately after a `CLIENT CACHING no` command.
-    pub fn optout(self) -> Self {
+    pub fn optout(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("OPTOUT"),
+            command_args: self.command_args.arg("OPTOUT").build(),
         }
     }
 
     /// don't send notifications about keys modified by this connection itself.
-    pub fn no_loop(self) -> Self {
+    pub fn no_loop(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOLOOP"),
+            command_args: self.command_args.arg("NOLOOP").build(),
         }
     }
 }
 
-impl IntoArgs for ClientTrackingOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for ClientTrackingOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -828,12 +827,12 @@ pub enum ClientUnblockMode {
     Error,
 }
 
-impl IntoArgs for ClientUnblockMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for ClientUnblockMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
-            ClientUnblockMode::Timeout => CommandArg::Str("TIMEOUT"),
-            ClientUnblockMode::Error => CommandArg::Str("ERROR"),
-        })
+            ClientUnblockMode::Timeout => "TIMEOUT",
+            ClientUnblockMode::Error => "ERROR",
+        });
     }
 }
 
@@ -847,35 +846,35 @@ impl HelloOptions {
     #[must_use]
     pub fn new(protover: usize) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(protover),
+            command_args: CommandArgs::default().arg(protover).build(),
         }
     }
 
     #[must_use]
-    pub fn auth<U, P>(self, username: U, password: P) -> Self
+    pub fn auth<U, P>(mut self, username: U, password: P) -> Self
     where
         U: SingleArg,
         P: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("AUTH").arg(username).arg(password),
+            command_args: self.command_args.arg("AUTH").arg(username).arg(password).build(),
         }
     }
 
     #[must_use]
-    pub fn set_name<C>(self, client_name: C) -> Self
+    pub fn set_name<C>(mut self, client_name: C) -> Self
     where
         C: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("SETNAME").arg(client_name),
+            command_args: self.command_args.arg("SETNAME").arg(client_name).build(),
         }
     }
 }
 
-impl IntoArgs for HelloOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for HelloOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -900,15 +899,15 @@ pub struct PingOptions {
 
 impl PingOptions {
     #[must_use]
-    pub fn message<M: SingleArg>(self, message: M) -> Self {
+    pub fn message<M: SingleArg>(mut self, message: M) -> Self {
         Self {
-            command_args: self.command_args.arg(message),
+            command_args: self.command_args.arg(message).build(),
         }
     }
 }
 
-impl IntoArgs for PingOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for PingOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }

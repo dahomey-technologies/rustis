@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::SetCondition,
     resp::{
-        cmd, CommandArgs, PrimitiveResponse, CollectionResponse, IntoArgs, SingleArg,
-        SingleArgCollection, Value,
+        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
+        ToArgs, Value,
     },
 };
 use serde::de::DeserializeOwned;
@@ -615,40 +615,40 @@ pub struct JsonGetOptions {
 impl JsonGetOptions {
     /// Sets the indentation string for nested levels.
     #[must_use]
-    pub fn indent<I: SingleArg>(self, indent: I) -> Self {
+    pub fn indent<I: SingleArg>(mut self, indent: I) -> Self {
         Self {
-            command_args: self.command_args.arg("INDENT").arg(indent),
+            command_args: self.command_args.arg("INDENT").arg(indent).build(),
         }
     }
 
     /// Sets the string that's printed at the end of each line.
     #[must_use]
-    pub fn newline<NL: SingleArg>(self, newline: NL) -> Self {
+    pub fn newline<NL: SingleArg>(mut self, newline: NL) -> Self {
         Self {
-            command_args: self.command_args.arg("NEWLINE").arg(newline),
+            command_args: self.command_args.arg("NEWLINE").arg(newline).build(),
         }
     }
 
     /// Sets the string that's put between a key and a value.
     #[must_use]
-    pub fn space<S: SingleArg>(self, space: S) -> Self {
+    pub fn space<S: SingleArg>(mut self, space: S) -> Self {
         Self {
-            command_args: self.command_args.arg("SPACE").arg(space),
+            command_args: self.command_args.arg("SPACE").arg(space).build(),
         }
     }
 
     /// JSONPath to specify
     #[must_use]
-    pub fn path<P: SingleArg, PP: SingleArgCollection<P>>(self, paths: PP) -> Self {
+    pub fn path<P: SingleArg, PP: SingleArgCollection<P>>(mut self, paths: PP) -> Self {
         Self {
-            command_args: self.command_args.arg(paths),
+            command_args: self.command_args.arg(paths).build(),
         }
     }
 }
 
-impl IntoArgs for JsonGetOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for JsonGetOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -663,9 +663,9 @@ impl JsonArrIndexOptions {
     ///
     /// Default is 0.
     #[must_use]
-    pub fn start(self, start: usize) -> Self {
+    pub fn start(mut self, start: usize) -> Self {
         Self {
-            command_args: self.command_args.arg(start),
+            command_args: self.command_args.arg(start).build(),
         }
     }
 
@@ -674,15 +674,15 @@ impl JsonArrIndexOptions {
     /// Default is 0.
     /// Negative values are interpreted as starting from the end.
     #[must_use]
-    pub fn stop(self, stop: isize) -> Self {
+    pub fn stop(mut self, stop: isize) -> Self {
         Self {
-            command_args: self.command_args.arg(stop),
+            command_args: self.command_args.arg(stop).build(),
         }
     }
 }
 
-impl IntoArgs for JsonArrIndexOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for JsonArrIndexOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }

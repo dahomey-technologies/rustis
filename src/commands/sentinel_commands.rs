@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, IntoArgs,
-        KeyValueArgsCollection, MultipleArgsCollection, SingleArg, Value,
+        cmd, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
+        MultipleArgsCollection, PrimitiveResponse, SingleArg, ToArgs, Value,
     },
 };
 use serde::Deserialize;
@@ -358,11 +358,11 @@ pub enum SentinelSimulateFailureMode {
     CrashAfterPromotion,
 }
 
-impl IntoArgs for SentinelSimulateFailureMode {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for SentinelSimulateFailureMode {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             SentinelSimulateFailureMode::CrashAfterElection => "CRASH-AFTER-ELECTION",
             SentinelSimulateFailureMode::CrashAfterPromotion => "CRASH-AFTER-PROMOTION",
-        })
+        });
     }
 }

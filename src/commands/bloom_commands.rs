@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, CollectionResponse, IntoArgs, SingleArg,
-        SingleArgCollection,
+        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, SingleArg, SingleArgCollection,
+        ToArgs,
     },
 };
 use serde::Deserialize;
@@ -45,11 +45,7 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/bf.exists/>](https://redis.io/commands/bf.exists/)
     #[must_use]
-    fn bf_exists(
-        self,
-        key: impl SingleArg,
-        item: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, bool>
+    fn bf_exists(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
     where
         Self: Sized,
     {
@@ -300,15 +296,15 @@ pub enum BfInfoParameter {
     ExpansionRate,
 }
 
-impl IntoArgs for BfInfoParameter {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BfInfoParameter {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
             BfInfoParameter::Capacity => args.arg("CAPACITY"),
             BfInfoParameter::Size => args.arg("SIZE"),
             BfInfoParameter::NumFilters => args.arg("FILTERS"),
             BfInfoParameter::NumItemsInserted => args.arg("ITEMS"),
             BfInfoParameter::ExpansionRate => args.arg("EXPANSION"),
-        }
+        };
     }
 }
 
@@ -341,9 +337,9 @@ impl BfInsertOptions {
     /// then the module-level capacity is used.
     /// See [`bf_reserve`](BloomCommands::bf_reserve) for more information about the impact of this value.
     #[must_use]
-    pub fn capacity(self, capacity: usize) -> Self {
+    pub fn capacity(mut self, capacity: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("CAPACITY").arg(capacity),
+            command_args: self.command_args.arg("CAPACITY").arg(capacity).build(),
         }
     }
 
@@ -352,9 +348,9 @@ impl BfInsertOptions {
     /// If the filter is automatically created and error is not specified then the module-level error rate is used.
     /// See [`bf_reserve`](BloomCommands::bf_reserve) for more information about the format of this value.
     #[must_use]
-    pub fn error(self, error_rate: f64) -> Self {
+    pub fn error(mut self, error_rate: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("ERROR").arg(error_rate),
+            command_args: self.command_args.arg("ERROR").arg(error_rate).build(),
         }
     }
 
@@ -365,9 +361,9 @@ impl BfInsertOptions {
     /// Otherwise, we recommend that you use an `expansion` of 1 to reduce memory consumption.
     /// The default expansion value is 2.
     #[must_use]
-    pub fn expansion(self, expansion: usize) -> Self {
+    pub fn expansion(mut self, expansion: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion),
+            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
         }
     }
 
@@ -377,9 +373,9 @@ impl BfInsertOptions {
     /// This may be used where a strict separation between filter creation and filter addition is desired.
     /// It is an error to specify `nocreate` together with either [`capacity`](BfInsertOptions::capacity) or [`error`](BfInsertOptions::error).
     #[must_use]
-    pub fn nocreate(self) -> Self {
+    pub fn nocreate(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NOCREATE"),
+            command_args: self.command_args.arg("NOCREATE").build(),
         }
     }
 
@@ -388,16 +384,16 @@ impl BfInsertOptions {
     /// Non-scaling filters require slightly less memory than their scaling counterparts.
     /// The filter returns an error when `capacity` is reached.
     #[must_use]
-    pub fn nonscaling(self) -> Self {
+    pub fn nonscaling(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NONSCALING"),
+            command_args: self.command_args.arg("NONSCALING").build(),
         }
     }
 }
 
-impl IntoArgs for BfInsertOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for BfInsertOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -415,9 +411,9 @@ impl BfReserveOptions {
     /// Otherwise, we recommend that you use an `expansion` of 1 to reduce memory consumption.
     /// The default expansion value is 2.
     #[must_use]
-    pub fn expansion(self, expansion: usize) -> Self {
+    pub fn expansion(mut self, expansion: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion),
+            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
         }
     }
 
@@ -426,16 +422,16 @@ impl BfReserveOptions {
     /// Non-scaling filters require slightly less memory than their scaling counterparts.
     /// The filter returns an error when `capacity` is reached.
     #[must_use]
-    pub fn nonscaling(self) -> Self {
+    pub fn nonscaling(mut self) -> Self {
         Self {
-            command_args: self.command_args.arg("NONSCALING"),
+            command_args: self.command_args.arg("NONSCALING").build(),
         }
     }
 }
 
-impl IntoArgs for BfReserveOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for BfReserveOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 

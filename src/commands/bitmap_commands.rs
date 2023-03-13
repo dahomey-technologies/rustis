@@ -1,7 +1,7 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, MultipleArgsCollection, CommandArgs, IntoArgs, SingleArg, SingleArgCollection,
+        cmd, CommandArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, ToArgs,
     },
 };
 
@@ -160,22 +160,22 @@ impl BitRange {
     #[must_use]
     pub fn range(start: isize, end: isize) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(start).arg(end),
+            command_args: CommandArgs::default().arg(start).arg(end).build(),
         }
     }
 
     /// Unit of the range, bit or byte
     #[must_use]
-    pub fn unit(self, unit: BitUnit) -> Self {
+    pub fn unit(mut self, unit: BitUnit) -> Self {
         Self {
-            command_args: self.command_args.arg(unit),
+            command_args: self.command_args.arg(unit).build(),
         }
     }
 }
 
-impl IntoArgs for BitRange {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for BitRange {
+    fn write_args(&self, args: &mut CommandArgs) {
+        self.command_args.write_args(args);
     }
 }
 
@@ -185,12 +185,12 @@ pub enum BitUnit {
     Bit,
 }
 
-impl IntoArgs for BitUnit {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BitUnit {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             BitUnit::Byte => "BYTE",
             BitUnit::Bit => "BIT",
-        })
+        });
     }
 }
 
@@ -236,22 +236,19 @@ where
     }
 }
 
-impl<E, O> IntoArgs for BitFieldSubCommand<E, O>
+impl<E, O> ToArgs for BitFieldSubCommand<E, O>
 where
     E: SingleArg,
     O: SingleArg,
 {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+    fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            BitFieldSubCommand::Get(g) => g.into_args(args),
-            BitFieldSubCommand::Set(encoding, offset, value) => {
-                args.arg("SET").arg(encoding).arg(offset).arg(value)
-            }
-            BitFieldSubCommand::IncrBy(encoding, offset, increment) => {
-                args.arg("INCRBY").arg(encoding).arg(offset).arg(increment)
-            }
-            BitFieldSubCommand::Overflow(overflow) => args.arg("OVERFLOW").arg(overflow),
-        }
+            BitFieldSubCommand::Get(g) => args.arg_ref(g),
+            BitFieldSubCommand::Set(encoding, offset, value) =>
+                args.arg("SET").arg_ref(encoding).arg_ref(offset).arg(*value),
+            BitFieldSubCommand::IncrBy(encoding, offset, increment) => args.arg("INCRBY").arg_ref(encoding).arg_ref(offset).arg(*increment),
+            BitFieldSubCommand::Overflow(overflow) => args.arg("OVERFLOW").arg_ref(overflow),
+        };
     }
 }
 
@@ -276,13 +273,13 @@ where
     }
 }
 
-impl<E, O> IntoArgs for BitFieldGetSubCommand<E, O>
+impl<E, O> ToArgs for BitFieldGetSubCommand<E, O>
 where
     E: SingleArg,
     O: SingleArg,
 {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg("GET").arg(self.encoding).arg(self.offset)
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg("GET").arg_ref(&self.encoding).arg_ref(&self.offset);
     }
 }
 
@@ -293,13 +290,13 @@ pub enum BitFieldOverflow {
     Fail,
 }
 
-impl IntoArgs for BitFieldOverflow {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BitFieldOverflow {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             BitFieldOverflow::Wrap => "WRAP",
             BitFieldOverflow::Sat => "SAT",
             BitFieldOverflow::Fail => "FAIL",
-        })
+        });
     }
 }
 
@@ -311,13 +308,13 @@ pub enum BitOperation {
     Not,
 }
 
-impl IntoArgs for BitOperation {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
+impl ToArgs for BitOperation {
+    fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             BitOperation::And => "AND",
             BitOperation::Or => "OR",
             BitOperation::Xor => "XOR",
             BitOperation::Not => "NOT",
-        })
+        });
     }
 }

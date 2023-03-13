@@ -69,16 +69,16 @@ Current implementation provides the following conversions:
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{CommandArgs, IntoArgs, SingleArg},
+    resp::{CommandArgs, ToArgs, SingleArg},
     Result,
 };
 
 pub struct MyI32(i32);
 
- impl IntoArgs for MyI32 {
+ impl ToArgs for MyI32 {
     #[inline]
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.0)
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(self.0);
     }
 }
 
@@ -260,16 +260,16 @@ async fn main() -> Result<()> {
 
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)
 
-You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand) 
+You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand)
 struct where `R` represents the [`Response`](Response) of the command.
 
 The different command traits implementations ([`Client`](crate::client::Client), [`Pipeline`](crate::client::Pipeline)
- or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`: 
+ or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`:
  it must implement serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait.
 
  Indeed, **rustis** provides a serde implementation of a [`RESP deserializer`](RespDeserializer).
  Each custom struct or enum defined as a response of a built-command implements
- serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait, 
+ serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
 
 Some more advanced traits allow to constraint more which Rust types are allowed for specific commands.
@@ -434,15 +434,14 @@ async fn main() -> Result<()> {
 mod buffer_decoder;
 mod bulk_string;
 mod command;
-mod command_arg;
 mod command_args;
 mod command_encoder;
-mod into_args;
 mod resp_batch_deserializer;
 mod resp_buf;
 mod resp_deserializer;
 mod resp_serializer;
 mod response;
+mod to_args;
 mod util;
 mod value;
 mod value_deserialize;
@@ -452,15 +451,14 @@ mod value_serialize;
 pub(crate) use buffer_decoder::*;
 pub use bulk_string::*;
 pub use command::*;
-pub use command_arg::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
-pub use into_args::*;
 pub(crate) use resp_batch_deserializer::*;
 pub use resp_buf::*;
 pub use resp_deserializer::*;
 pub use resp_serializer::*;
 pub use response::*;
+pub use to_args::*;
 pub use util::*;
 pub use value::*;
 pub(crate) use value_deserialize::*;

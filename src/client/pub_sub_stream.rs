@@ -137,8 +137,8 @@ impl PubSubStream {
         Self {
             closed: false,
             channels,
-            patterns: CommandArgs::Empty,
-            shardchannels: CommandArgs::Empty,
+            patterns: CommandArgs::default(),
+            shardchannels: CommandArgs::default(),
             sender,
             receiver,
             client,
@@ -153,9 +153,9 @@ impl PubSubStream {
     ) -> Self {
         Self {
             closed: false,
-            channels: CommandArgs::Empty,
+            channels: CommandArgs::default(),
             patterns,
-            shardchannels: CommandArgs::Empty,
+            shardchannels: CommandArgs::default(),
             sender,
             receiver,
             client,
@@ -170,8 +170,8 @@ impl PubSubStream {
     ) -> Self {
         Self {
             closed: false,
-            channels: CommandArgs::Empty,
-            patterns: CommandArgs::Empty,
+            channels: CommandArgs::default(),
+            patterns: CommandArgs::default(),
             shardchannels,
             sender,
             receiver,
@@ -185,15 +185,15 @@ impl PubSubStream {
         C: SingleArg + Send,
         CC: SingleArgCollection<C>,
     {
-        let channels = channels.into_args(CommandArgs::Empty);
+        let channels = CommandArgs::default().arg(channels).build();
 
         self.client
             .subscribe_from_pub_sub_sender(&channels, &self.sender)
             .await?;
 
-        let mut existing_channels = CommandArgs::Empty;
+        let mut existing_channels = CommandArgs::default();
         std::mem::swap(&mut existing_channels, &mut self.channels);
-        self.channels = existing_channels.arg(channels);
+        self.channels = existing_channels.arg(channels).build();
 
         Ok(())
     }
@@ -204,15 +204,15 @@ impl PubSubStream {
         P: SingleArg + Send,
         PP: SingleArgCollection<P>,
     {
-        let patterns = patterns.into_args(CommandArgs::Empty);
+        let patterns = CommandArgs::default().arg(patterns).build();
 
         self.client
             .psubscribe_from_pub_sub_sender(&patterns, &self.sender)
             .await?;
 
-        let mut existing_patterns = CommandArgs::Empty;
+        let mut existing_patterns = CommandArgs::default();
         std::mem::swap(&mut existing_patterns, &mut self.patterns);
-        self.patterns = existing_patterns.arg(patterns);
+        self.patterns = existing_patterns.arg(patterns).build();
 
         Ok(())
     }
@@ -223,15 +223,15 @@ impl PubSubStream {
         C: SingleArg + Send,
         CC: SingleArgCollection<C>,
     {
-        let shardchannels = shardchannels.into_args(CommandArgs::Empty);
+        let shardchannels = CommandArgs::default().arg(shardchannels).build();
 
         self.client
             .ssubscribe_from_pub_sub_sender(&shardchannels, &self.sender)
             .await?;
 
-        let mut existing_shardchannels = CommandArgs::Empty;
+        let mut existing_shardchannels = CommandArgs::default();
         std::mem::swap(&mut existing_shardchannels, &mut self.shardchannels);
-        self.shardchannels = existing_shardchannels.arg(shardchannels);
+        self.shardchannels = existing_shardchannels.arg(shardchannels).build();
 
         Ok(())
     }
@@ -240,19 +240,19 @@ impl PubSubStream {
     /// Calling `close` allows to wait for all the unsubscriptions.
     /// `drop` will achieve the same process but silently in background
     pub async fn close(mut self) -> Result<()> {
-        let mut channels = CommandArgs::Empty;
+        let mut channels = CommandArgs::default();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
             self.client.unsubscribe(channels).await?;
         }
 
-        let mut patterns = CommandArgs::Empty;
+        let mut patterns = CommandArgs::default();
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
             self.client.punsubscribe(patterns).await?;
         }
 
-        let mut shardchannels = CommandArgs::Empty;
+        let mut shardchannels = CommandArgs::default();
         std::mem::swap(&mut shardchannels, &mut self.shardchannels);
         if !shardchannels.is_empty() {
             self.client.sunsubscribe(shardchannels).await?;
@@ -288,19 +288,19 @@ impl Drop for PubSubStream {
             return;
         }
 
-        let mut channels = CommandArgs::Empty;
+        let mut channels = CommandArgs::default();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
             let _result = self.client.unsubscribe(channels).forget();
         }
 
-        let mut patterns = CommandArgs::Empty;
+        let mut patterns = CommandArgs::default();
         std::mem::swap(&mut patterns, &mut self.patterns);
         if !patterns.is_empty() {
             let _result = self.client.punsubscribe(patterns).forget();
         }
 
-        let mut shardchannels = CommandArgs::Empty;
+        let mut shardchannels = CommandArgs::default();
         std::mem::swap(&mut shardchannels, &mut self.shardchannels);
         if !shardchannels.is_empty() {
             let _result = self.client.sunsubscribe(shardchannels).forget();

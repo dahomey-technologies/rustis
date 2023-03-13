@@ -12,6 +12,7 @@ pub struct RespBuf(Bytes);
 
 impl RespBuf {
     /// Constructs a new `RespBuf` from a `Bytes` buffer
+    #[inline]
     pub fn new(bytes: Bytes) -> Self {
         Self(bytes)
     }

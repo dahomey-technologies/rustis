@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, Client, PreparedCommand},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
     resp::{
-        cmd, Command, CommandArg, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, CollectionResponse,
-        IntoArgs, RespBuf, RespDeserializer, SingleArg,
+        cmd, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
+        PrimitiveResponse, RespBuf, RespDeserializer, SingleArg, ToArgs,
     },
     Error, Future, Result,
 };
@@ -247,14 +247,14 @@ impl GraphQueryOptions {
     #[must_use]
     pub fn timeout(timeout: u64) -> Self {
         Self {
-            command_args: CommandArgs::Empty.arg("TIMEOUT").arg(timeout),
+            command_args: CommandArgs::default().arg("TIMEOUT").arg(timeout).build(),
         }
     }
 }
 
-impl IntoArgs for GraphQueryOptions {
-    fn into_args(self, args: CommandArgs) -> CommandArgs {
-        args.arg(self.command_args)
+impl ToArgs for GraphQueryOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
     }
 }
 
@@ -272,11 +272,15 @@ impl GraphResultSet {
         command: Command,
         client: &Client,
     ) -> Future<Self> {
-        let Some(CommandArg::Str(graph_name)) = command.args.iter().next() else {
+        let Some(graph_name) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
         };
 
-        let graph_name = *graph_name;
+        let Ok(graph_name) = std::str::from_utf8(graph_name) else {
+            return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
+        };
+
+        let graph_name = graph_name.to_owned();
 
         Box::pin(async move {
             let cache_key = format!("graph:{graph_name}");
@@ -310,7 +314,7 @@ impl GraphResultSet {
 
             if !cache_hit {
                 let (node_labels, prop_keys, rel_types) = Self::load_missing_ids(
-                    graph_name,
+                    &graph_name,
                     client,
                     num_node_labels,
                     num_prop_keys,

@@ -2,6 +2,7 @@ use crate::resp::{deserialize_byte_buf, serialize_byte_buf};
 use serde::{Deserialize, Serialize};
 use std::{fmt, ops::Deref};
 
+/// Represents the [Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings) RESP type
 #[derive(Deserialize, Serialize)]
 pub struct BulkString(#[serde(deserialize_with = "deserialize_byte_buf", serialize_with = "serialize_byte_buf")] Vec<u8>);
 

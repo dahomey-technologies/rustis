@@ -700,7 +700,7 @@ pub struct XAutoClaimResult<V>
 where
     V: PrimitiveResponse,
 {
-    /// A stream ID to be used as the <start> argument for
+    /// A stream ID to be used as the `start` argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).
     pub start_stream_id: String,
     /// An array containing all the successfully claimed messages in

@@ -661,7 +661,6 @@ impl ToArgs for GetExOptions {
 }
 
 /// Part of the result for the [`lcs`](StringCommands::lcs) command
-///pub type LcsMatch = ((usize, usize), (usize, usize), Option<usize>);
 #[derive(Debug, PartialEq, Eq)]
 pub struct LcsMatch(pub (usize, usize), pub (usize, usize), pub Option<usize>);
 

@@ -17,7 +17,7 @@ This conversion is easily accessible through the associate function [`Value::int
 # Command arguments
 
 **rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
-Basically a [`Command`](Command) is a collection of [`CommandArg`](CommandArg)s
+Basically a [`Command`](Command) is a builder which accepts a command name and one ore more command arguments.
 
 You will notice that each built-in command expects arguments through a set of traits defined in this module.
 
@@ -26,15 +26,15 @@ or request additional implementation for standard types.
 
 ### IntoArgs
 
-The trait [`IntoArgs`](IntoArgs) allows to convert a complex type into one ore multiple argumentss.
+The trait [`ToArgs`](ToArgs) allows to convert a complex type into one ore multiple argumentss.
 Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.
 
 Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`, `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
-* `Option<T>`
+* `String`, `&String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
+* `Option<T>` where `T: SingleArg`
 * `(T, U)`
 * `(T, U, V)`
 * `Vec<T>`
@@ -44,10 +44,11 @@ Current implementation provides the following conversions:
 * `HashSet<T, S>`
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
+* [`CommandArgs`](CommandArgs)
 
-Nevertheless, [`IntoArgs`](IntoArgs) is not expected directly in built-in commands arguments.
+Nevertheless, [`ToArgs`](ToArgs) is not expected directly in built-in commands arguments.
 
-The following traits are used to constraints which implementations of [`IntoArgs`](IntoArgs)
+The following traits are used to constraints which implementations of [`ToArgs`](ToArgs)
 are expected by a specific argument of a built-in command.
 
 ### SingleArg
@@ -57,11 +58,10 @@ Several Redis commands expect a Rust type that should be converted in a single c
 **rustis** uses the trait [`SingleArg`](SingleArg) to implement this behavior.
 
 Current implementation provides the following conversions:
-* [`CommandArg`](CommandArg)
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
 * `bool`,
-* `String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
+* `String`, `&String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
 * `Option<T>` where `T: SingleArg`
 
 #### Example
@@ -124,8 +124,9 @@ Current implementation provides the following conversions:
 * `SmallVec<A>`
 * `BTreeSet<T>`
 * `HashSet<T, S>`
+* [`CommandArgs`](CommandArgs)
 
-where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
+where each of theses implementations must also implement [`ToArgs`](ToArgs)
 
 #### Example
 ```
@@ -176,7 +177,7 @@ Current implementation provides the following conversions:
 * `Vec<T>`
 * `[T;N]`
 
-where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
+where each of theses implementations must also implement [`ToArgs`](ToArgs)
 
 #### Example
 ```
@@ -217,7 +218,7 @@ Current implementation provides the following conversions:
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
 
-where each of theses implementations must also implement [`IntoArgs`](IntoArgs)
+where each of theses implementations must also implement [`ToArgs`](ToArgs)
 
 #### Example
 ```

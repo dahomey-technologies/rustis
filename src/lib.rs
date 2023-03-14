@@ -89,7 +89,7 @@ allows programmers to communicate with Redis in a Rust idiomatic way.
 
 You will learn how to:
 * Manipulate the **rustis** object model, the enum [`Value`](resp::Value), which is a generic Rust data structure over RESP.
-* Convert Rust type into Rust Commands with the [`Command`](resp::Command) struct and the [`IntoArgs`](resp::IntoArgs) trait.
+* Convert Rust type into Rust Commands with the [`Command`](resp::Command) struct and the [`ToArgs`](resp::ToArgs) trait.
 * Convert Rust command responses into Rust type with serde and helpful marker traits.
 
 # Commands

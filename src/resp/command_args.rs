@@ -86,6 +86,7 @@ impl<'a> IntoIterator for &'a CommandArgs {
     }
 }
 
+/// [`CommandArgs`] iterator
 pub struct CommandArgsIterator<'a> {
     iter: std::slice::Iter<'a, Vec<u8>>
 }

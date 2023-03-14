@@ -69,6 +69,7 @@ impl CommandArgs {
         self.len() == 0
     }
 
+    #[inline]
     pub(crate) fn write_arg(&mut self, buf: &[u8]) {
         self.args.push(buf.to_vec());
     }
@@ -103,6 +104,7 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
 impl std::ops::Deref for CommandArgs {
     type Target = [Vec<u8>];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.args
     }

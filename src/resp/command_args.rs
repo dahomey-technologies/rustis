@@ -4,9 +4,6 @@ use crate::resp::ToArgs;
 use std::{fmt};
 
 /// Collection of arguments of [`Command`](crate::resp::Command).
-///
-/// This enum is meant to hold a collection of arguments
-/// without systematically allocate a container
 #[derive(Clone, Default)]
 pub struct CommandArgs {
     args: SmallVec<[Vec<u8>;10]>,

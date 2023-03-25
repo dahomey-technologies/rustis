@@ -31,7 +31,7 @@ async fn get_fred_client() -> fred::clients::RedisClient {
 
     let config = RedisConfig::default();
     let client = RedisClient::new(config, None, None);
-    let _ = client.connect();
+    client.connect();
     client.wait_for_connect().await.unwrap();
 
     client

@@ -24,7 +24,7 @@ You will notice that each built-in command expects arguments through a set of tr
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### IntoArgs
+### ToArgs
 
 The trait [`ToArgs`](ToArgs) allows to convert a complex type into one ore multiple argumentss.
 Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.

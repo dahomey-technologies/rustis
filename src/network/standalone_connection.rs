@@ -9,7 +9,7 @@ use crate::{
 #[cfg(feature = "tls")]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
 use serde::de::DeserializeOwned;
 use std::future::IntoFuture;
@@ -230,7 +230,7 @@ where
                 .await
                 .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))??;
 
-                resp_buf.to()
+            resp_buf.to()
         })
     }
 }

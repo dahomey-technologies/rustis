@@ -381,7 +381,7 @@ use rustis::{
     commands::{FlushingMode, PubSubCommands, ServerCommands},
     resp::{cmd, Value}, Result,
 };
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -424,7 +424,7 @@ use rustis::{
     commands::{FlushingMode, PubSubCommands, ServerCommands},
     resp::{cmd, Value}, Result,
 };
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]

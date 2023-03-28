@@ -5,10 +5,8 @@ use crate::{
     resp::{cmd, Command, RespBuf},
     spawn, Connection, Error, JoinHandle, Result, RetryReason,
 };
-use futures::{
-    channel::{mpsc, oneshot},
-    select, FutureExt, SinkExt, StreamExt,
-};
+use futures_channel::{mpsc, oneshot};
+use futures_util::{select, FutureExt, SinkExt, StreamExt};
 use log::{debug, error, info, log_enabled, warn, Level};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};

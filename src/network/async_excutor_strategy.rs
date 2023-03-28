@@ -1,7 +1,7 @@
 #[cfg(feature = "tls")]
 use crate::client::TlsConfig;
 use crate::{client::Config, Error, Result};
-use futures::{Future, FutureExt};
+use futures_util::{Future, FutureExt};
 use log::{debug, info};
 use socket2::{SockRef, TcpKeepalive};
 use std::{

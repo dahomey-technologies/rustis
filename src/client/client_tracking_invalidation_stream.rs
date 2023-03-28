@@ -1,5 +1,5 @@
 use crate::network::PushReceiver;
-use futures::{Stream, StreamExt};
+use futures_util::{Stream, StreamExt};
 use std::{
     pin::Pin,
     task::{Context, Poll},

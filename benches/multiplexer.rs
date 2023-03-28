@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
-use futures::Future;
+use futures_util::Future;
 use std::time::Duration;
 
 pub fn current_thread_runtime() -> tokio::runtime::Runtime {
@@ -64,7 +64,7 @@ fn bench_redis_parallel(b: &mut Bencher) {
                 })
                 .collect();
 
-            futures::future::join_all(tasks).await;
+            futures_util::future::join_all(tasks).await;
         })
     });
 }
@@ -84,13 +84,14 @@ fn bench_fred_parallel(b: &mut Bencher) {
                         for _ in 0..ITERATIONS {
                             let key = format!("key{i}");
                             let value = format!("value{i}");
-                            let _: Result<(), RedisError> = client.set(key, value, None, None, false).await;
+                            let _: Result<(), RedisError> =
+                                client.set(key, value, None, None, false).await;
                         }
                     })
                 })
                 .collect();
 
-            futures::future::join_all(tasks).await;
+            futures_util::future::join_all(tasks).await;
         })
     });
 }
@@ -117,7 +118,7 @@ fn bench_rustis_parallel(b: &mut Bencher) {
                 })
                 .collect();
 
-            futures::future::join_all(tasks).await;
+            futures_util::future::join_all(tasks).await;
         })
     });
 }

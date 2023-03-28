@@ -9,7 +9,7 @@ use crate::{
     tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
     Result,
 };
-use futures::{FutureExt, StreamExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

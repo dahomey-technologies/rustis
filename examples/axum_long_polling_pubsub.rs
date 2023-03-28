@@ -5,7 +5,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use futures::StreamExt;
+use futures_util::StreamExt;
 use rustis::{
     client::Client,
     commands::{ListCommands, PubSubCommands},

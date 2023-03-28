@@ -1,5 +1,5 @@
 use actix_web::{get, http::StatusCode, post, web, App, HttpResponse, HttpServer, Responder};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use rustis::{
     client::Client,
     commands::{ListCommands, PubSubCommands},

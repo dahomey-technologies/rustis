@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
-use futures::Future;
+use futures_util::Future;
 use std::time::Duration;
 
 pub fn current_thread_runtime() -> tokio::runtime::Runtime {

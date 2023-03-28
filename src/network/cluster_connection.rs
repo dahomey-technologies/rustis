@@ -8,7 +8,7 @@ use crate::{
     resp::{Command, RespBuf, RespDeserializer, RespSerializer},
     Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
-use futures::{future, FutureExt};
+use futures_util::{future, FutureExt};
 use log::{debug, info, trace, warn};
 use rand::Rng;
 use serde::{

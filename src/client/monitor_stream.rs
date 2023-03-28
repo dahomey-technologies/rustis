@@ -4,7 +4,7 @@ use crate::{
     network::PushReceiver,
     Result,
 };
-use futures::{Stream, StreamExt};
+use futures_util::{Stream, StreamExt};
 use log::error;
 use serde::{de, Deserialize, Deserializer};
 use std::{

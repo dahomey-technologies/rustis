@@ -11,7 +11,7 @@ use crate::{
     tests::{get_test_client, log_try_init},
     Error, RedisError, RedisErrorKind, Result,
 };
-use futures::StreamExt;
+use futures_util::StreamExt;
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

@@ -5,7 +5,7 @@ use crate::{
     tests::log_try_init,
     Result,
 };
-use futures::future;
+use futures_util::future;
 use rand::Rng;
 use serial_test::serial;
 

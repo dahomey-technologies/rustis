@@ -5,7 +5,7 @@ use crate::{
     resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection},
     PubSubReceiver, Result,
 };
-use futures::{Stream, StreamExt};
+use futures_util::{Stream, StreamExt};
 use serde::{
     de::{self, Visitor},
     Deserialize,
@@ -94,7 +94,7 @@ impl<'de> Deserialize<'de> for PubSubMessage {
 ///     resp::cmd,
 ///     Result,
 /// };
-/// use futures::StreamExt;
+/// use futures_util::StreamExt;
 ///
 /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]

@@ -168,7 +168,7 @@ use network::*;
 /// Library general result type.
 pub type Result<T> = std::result::Result<T, Error>;
 /// Library general future type.
-pub type Future<'a, T> = futures::future::BoxFuture<'a, Result<T>>;
+pub type Future<'a, T> = futures_util::future::BoxFuture<'a, Result<T>>;
 
 #[cfg(all(feature = "tokio-runtime", feature = "async-std-runtime"))]
 compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time");

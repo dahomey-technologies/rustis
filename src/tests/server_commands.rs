@@ -12,7 +12,7 @@ use crate::{
     tests::{get_sentinel_test_client, get_test_client},
     Error, RedisError, RedisErrorKind, Result,
 };
-use futures::StreamExt;
+use futures_util::StreamExt;
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 

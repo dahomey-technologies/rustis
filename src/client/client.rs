@@ -29,10 +29,8 @@ use crate::{
     resp::{cmd, Command, CommandArgs, RespBuf, Response, SingleArg, SingleArgCollection},
     Error, Future, Result,
 };
-use futures::{
-    channel::{mpsc, oneshot},
-    Stream,
-};
+use futures_channel::{mpsc, oneshot};
+use futures_util::Stream;
 use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
@@ -405,11 +403,11 @@ where
                     .await?;
                 custom_converter(result, command_for_result, self.executor).await
             } else {
-            let result = self
-                .executor
-                .send(self.command, self.retry_on_error)
-                .await?;
-            result.to()
+                let result = self
+                    .executor
+                    .send(self.command, self.retry_on_error)
+                    .await?;
+                result.to()
             }
         })
     }
@@ -526,7 +524,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
 
             Ok(PubSubStream::from_shardchannels(
                 shardchannels,
-                pub_sub_sender, 
+                pub_sub_sender,
                 pub_sub_receiver,
                 self.clone(),
             ))

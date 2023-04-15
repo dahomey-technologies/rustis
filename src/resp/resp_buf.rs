@@ -1,8 +1,10 @@
 use crate::{
-    resp::{RespDeserializer, ARRAY_TAG, BLOB_ERROR_TAG, ERROR_TAG, PUSH_TAG, SIMPLE_STRING_TAG},
+    resp::{
+        RespDeserializer, Value, ARRAY_TAG, BLOB_ERROR_TAG, ERROR_TAG, PUSH_TAG, SIMPLE_STRING_TAG,
+    },
     Result,
 };
-use bytes::{Bytes, BytesMut, BufMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use serde::Deserialize;
 use std::{fmt, ops::Deref};
 
@@ -18,7 +20,7 @@ impl RespBuf {
     }
 
     /// Constructs a new `RespBuf` as a RESP Array from a collection of chunks (byte slices)
-    pub fn from_chunks(chunks: &Vec::<&[u8]>) -> Self {
+    pub fn from_chunks(chunks: &Vec<&[u8]>) -> Self {
         let mut bytes = BytesMut::new();
 
         bytes.put_u8(ARRAY_TAG);
@@ -88,8 +90,8 @@ impl RespBuf {
 impl Deref for RespBuf {
     type Target = [u8];
 
-    
-    #[inline]fn deref(&self) -> &Self::Target {
+    #[inline]
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -97,14 +99,24 @@ impl Deref for RespBuf {
 impl fmt::Display for RespBuf {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = if self.0.len() > 1000 {
-            format!(
-                "{}...",
-                String::from_utf8_lossy(&self.0[..1000]).replace("\r\n", "\\r\\n")
-            )
-        } else {
-            String::from_utf8_lossy(&self.0).replace("\r\n", "\\r\\n")
+        let str = match self.to::<Value>() {
+            Ok(value) => {
+                let mut str = format!("{value:?}");
+                if str.len() > 1000 {
+                    str = str[..1000].to_owned();
+                }
+                str
+            }
+            Err(e) => format!("RESP buffer error: {e:?}"),
         };
+        // let str = if self.0.len() > 1000 {
+        //     format!(
+        //         "{}...",
+        //         String::from_utf8_lossy(&self.0[..1000]).replace("\r\n", "\\r\\n")
+        //     )
+        // } else {
+        //     String::from_utf8_lossy(&self.0).replace("\r\n", "\\r\\n")
+        // };
 
         f.write_str(&str)
     }

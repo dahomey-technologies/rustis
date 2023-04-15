@@ -6,6 +6,7 @@ mod network_handler;
 mod sentinel_connection;
 mod standalone_connection;
 mod util;
+mod version;
 
 pub(crate) use async_excutor_strategy::*;
 pub(crate) use cluster_connection::*;
@@ -14,3 +15,4 @@ pub(crate) use connection::*;
 pub(crate) use network_handler::*;
 pub(crate) use sentinel_connection::*;
 pub(crate) use standalone_connection::*;
+pub(crate) use version::*;

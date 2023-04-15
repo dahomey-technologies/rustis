@@ -1,5 +1,6 @@
 use crate::{
     commands::{BeginSearch, CommandInfo, FindKeys, ServerCommands},
+    network::Version,
     resp::{cmd, Command, CommandArgs},
     Error, Result, StandaloneConnection,
 };
@@ -8,6 +9,7 @@ use std::collections::HashMap;
 
 pub(crate) struct CommandInfoManager {
     command_info_map: HashMap<String, CommandInfo>,
+    legacy: bool,
 }
 
 impl CommandInfoManager {
@@ -26,6 +28,8 @@ impl CommandInfoManager {
             .collect::<Vec<_>>();
         command_info_result.extend(sub_commands);
 
+        let version: Version = connection.get_version().try_into()?;
+
         Ok(CommandInfoManager {
             command_info_map: command_info_result
                 .into_iter()
@@ -34,6 +38,7 @@ impl CommandInfoManager {
                     (c.name.to_string(), c)
                 })
                 .collect(),
+            legacy: version.major < 7,
         })
     }
 
@@ -68,6 +73,33 @@ impl CommandInfoManager {
         } else {
             return Err(Error::Client(format!("Unknown command {}", command.name)));
         };
+
+        if self.legacy {
+            if command_info.first_key == 0 || command_info.last_key == 0 {
+                return Ok(SmallVec::new());
+            } else if command_info.flags.iter().any(|f| f == "movablekeys") {
+                let args = Self::prepare_command_getkeys_args(command);
+                let keys: SmallVec<[String; 10]> = connection.command_getkeys(args).await?;
+                return Ok(keys);
+            } else {
+                let mut slice: &[Vec<u8>] = &command.args[command_info.first_key - 1..];
+                let stop_index = if command_info.last_key >= 0 {
+                    command_info.last_key as usize
+                } else {
+                    slice.len() - (-command_info.last_key as usize) + 1
+                };
+                slice = &slice[..stop_index];
+
+                let keys = slice.iter().step_by(command_info.step).filter_map(|bs| {
+                    if bs.is_empty() {
+                        None
+                    } else {
+                        String::from_utf8(bs.clone()).ok()
+                    }
+                }).collect();
+                return Ok(keys);
+            }
+        }
 
         let mut keys = SmallVec::<[String; 10]>::new();
 
@@ -218,7 +250,7 @@ impl CommandInfoManager {
                     first_key: _,
                     key_step: _,
                 } => todo!("Command not yet supported, ask for it !"),
-                FindKeys::Unknown{} => todo!("Command not yet supported, ask for it !"),
+                FindKeys::Unknown {} => todo!("Command not yet supported, ask for it !"),
             };
 
             if keys_start_index > 0 {
@@ -228,12 +260,14 @@ impl CommandInfoManager {
             }
 
             for shard_key in shard_keys {
-                let key_index =
-                    if let Some(key_index) = slice.iter().position(|arg| arg.as_slice() == shard_key.as_bytes()) {
-                        key_index
-                    } else {
-                        return Err(Error::Client(format!("Cannot find key {}", *shard_key)));
-                    };
+                let key_index = if let Some(key_index) = slice
+                    .iter()
+                    .position(|arg| arg.as_slice() == shard_key.as_bytes())
+                {
+                    key_index
+                } else {
+                    return Err(Error::Client(format!("Cannot find key {}", *shard_key)));
+                };
 
                 for key in &slice[key_index..key_index + key_step] {
                     shard_command = shard_command.arg(key.clone());

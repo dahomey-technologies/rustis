@@ -1002,10 +1002,13 @@ pub struct CommandInfo {
     pub acl_categories: Vec<String>,
     /// [From Redis 7.0] Helpful information about the command. To be used by clients/proxies.
     /// See [<https://redis.io/docs/reference/command-tips/>](https://redis.io/docs/reference/command-tips/)
+    #[serde(default)]
     pub command_tips: Vec<CommandTip>,
     /// [From Redis 7.0] This is an array consisting of the command's key specifications.
     /// See [<https://redis.io/docs/reference/key-specs/>](https://redis.io/docs/reference/key-specs/)
+    #[serde(default)]
     pub key_specifications: Vec<KeySpecification>,
+    #[serde(default)]
     pub sub_commands: Vec<CommandInfo>,
 }
 

@@ -1,3 +1,5 @@
+use std::{collections::HashMap, fmt};
+
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
@@ -5,7 +7,10 @@ use crate::{
         PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{
+    de::{self, DeserializeOwned},
+    Deserialize,
+};
 
 /// A group of Redis commands related to [`Cluster Management`](https://redis.io/docs/management/scaling/)
 /// # See Also
@@ -431,6 +436,21 @@ pub trait ClusterCommands<'a> {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
 
+    /// This command returns details details about which cluster slots map to which Redis instances.
+    ///
+    /// # Return
+    /// A nested list of slot ranges with networking information.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-slots/>](https://redis.io/commands/cluster-slots/)
+    fn cluster_slots<S>(self) -> PreparedCommand<'a, Self, S>
+    where
+        Self: Sized,
+        S: CollectionResponse<LegacyClusterShardResult>,
+    {
+        prepare_command(self, cmd("CLUSTER").arg("SLOTS"))
+    }
+
     /// Enables read queries for a connection to a Redis Cluster replica node.
     ///
     /// # See Also
@@ -747,4 +767,129 @@ pub enum ClusterHealthStatus {
     Online,
     Failed,
     Loading,
+}
+
+/// Result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
+#[derive(Debug)]
+pub struct LegacyClusterShardResult {
+    pub slot: (u16, u16),
+    pub nodes: Vec<LegacyClusterNodeResult>,
+}
+
+impl<'de> Deserialize<'de> for LegacyClusterShardResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = LegacyClusterShardResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("LegacyClusterShardResult")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let Some(start_slot_range) = seq.next_element::<u16>()? else {
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                };
+
+                let Some(end_slot_range) = seq.next_element::<u16>()? else {
+                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
+                };
+
+                let mut nodes = Vec::new();
+                while let Some(node) = seq.next_element::<LegacyClusterNodeResult>()? {
+                    nodes.push(node);
+                }
+
+                Ok(LegacyClusterShardResult {
+                    slot: (start_slot_range, end_slot_range),
+                    nodes,
+                })
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor)
+    }
+}
+
+/// Cluster node result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
+#[derive(Debug)]
+pub struct LegacyClusterNodeResult {
+    /// The node ID
+    pub id: String,
+
+    /// Preferred endpoint (Either an IP address, hostname, or NULL)
+    pub preferred_endpoint: String,
+
+    /// The IP address to send requests to for this node.
+    pub ip: String,
+
+    /// When a node has an announced hostname but the primary endpoint is not set to hostname.
+    pub hostname: Option<String>,
+
+    /// Port number
+    pub port: u16,
+}
+
+impl<'de> Deserialize<'de> for LegacyClusterNodeResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = LegacyClusterNodeResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("LegacyClusterNodeResult")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let Some(preferred_endpoint) = seq.next_element::<String>()? else {
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                };
+
+                let Some(port) = seq.next_element::<u16>()? else {
+                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
+                };
+
+                let Some(id) = seq.next_element::<String>()? else {
+                    return Err(de::Error::invalid_length(2, &"more elements in sequence"));
+                };
+
+                let additional_data = seq.next_element::<HashMap<String, String>>()?;
+
+                let (ip, hostname) = if let Some(mut additional_data) = additional_data {
+                    (
+                        additional_data
+                            .remove("id")
+                            .unwrap_or(preferred_endpoint.clone()),
+                        additional_data.remove("hostname"),
+                    )
+                } else {
+                    (preferred_endpoint.clone(), None)
+                };
+
+                Ok(LegacyClusterNodeResult {
+                    id,
+                    preferred_endpoint,
+                    ip,
+                    hostname,
+                    port
+                })
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor)
+    }
 }

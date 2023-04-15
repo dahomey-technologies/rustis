@@ -59,6 +59,7 @@ pub struct StandaloneConnection {
     config: Config,
     streams: Streams,
     buffer: BytesMut,
+    version: String,
 }
 
 impl StandaloneConnection {
@@ -71,6 +72,7 @@ impl StandaloneConnection {
             config: config.clone(),
             streams,
             buffer: BytesMut::new(),
+            version: String::new(),
         };
 
         connection.post_connect().await?;
@@ -202,7 +204,8 @@ impl StandaloneConnection {
             hello_options = hello_options.set_name(self.config.connection_name.clone());
         }
 
-        self.hello(hello_options).await?;
+        let hello_result = self.hello(hello_options).await?;
+        self.version = hello_result.version;
 
         // select database
         if self.config.database != 0 {
@@ -210,6 +213,10 @@ impl StandaloneConnection {
         }
 
         Ok(())
+    }
+
+    pub fn get_version(&self) -> &str {
+        &self.version
     }
 }
 

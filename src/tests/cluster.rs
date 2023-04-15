@@ -3,9 +3,10 @@ use crate::{
     commands::{
         CallBuilder, ClusterCommands, ClusterNodeResult,
         ClusterSetSlotSubCommand::{Importing, Migrating, Node},
-        ClusterShardResult, FlushingMode, GenericCommands, MigrateOptions, ScriptingCommands,
-        ServerCommands, StringCommands,
+        ClusterShardResult, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
+        MigrateOptions, ScriptingCommands, ServerCommands, StringCommands,
     },
+    network::{Version, ClusterConnection},
     sleep, spawn,
     tests::get_cluster_test_client,
     Error, RedisError, RedisErrorKind, Result,
@@ -186,7 +187,14 @@ async fn moved() -> Result<()> {
     let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let shard_info_list: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let hello_result = client.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+    } else {
+        client.cluster_shards().await?
+    };
 
     let slot = client.cluster_keyslot("key").await?;
 
@@ -295,7 +303,16 @@ async fn ask() -> Result<()> {
     let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let shard_info_list: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let hello_result = client.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+    } else {
+        client.cluster_shards().await?
+    };
+
+    log::debug!("shard_info_list: {shard_info_list:?}");
 
     let slot = client.cluster_keyslot("key").await?;
 

@@ -1,10 +1,10 @@
 use crate::{
     client::{ClusterConfig, Config},
     commands::{
-        ClusterCommands, ClusterNodeResult, ClusterShardResult, CommandTip, RequestPolicy,
-        ResponsePolicy,
+        ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult, CommandTip,
+        LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
-    network::CommandInfoManager,
+    network::{CommandInfoManager, Version},
     resp::{Command, RespBuf, RespDeserializer, RespSerializer},
     Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
@@ -800,16 +800,39 @@ impl ClusterConnection {
 
         for node_config in &cluster_config.nodes {
             match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
-                Ok(mut connection) => match connection.cluster_shards().await {
-                    Ok(si) => {
-                        shard_info_list = Some(si);
+                Ok(mut connection) => {
+                    let version: Result<Version> = connection.get_version().try_into();
+                    let Ok(version) = version else {
+                        warn!("Cannot execute get Redis version");
                         break;
+                    };
+
+                    // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
+                    if version.major < 7 {
+                        match connection.cluster_slots().await {
+                            Ok(si) => {
+                                shard_info_list =
+                                    Some(Self::convert_from_legacy_shard_description(si));
+                                break;
+                            }
+                            Err(e) => warn!(
+                                "Cannot execute `cluster_slots` on node ({}:{}): {}",
+                                node_config.0, node_config.1, e
+                            ),
+                        }
+                    } else {
+                        match connection.cluster_shards().await {
+                            Ok(si) => {
+                                shard_info_list = Some(si);
+                                break;
+                            }
+                            Err(e) => warn!(
+                                "Cannot execute `cluster_shards` on node ({}:{}): {}",
+                                node_config.0, node_config.1, e
+                            ),
+                        }
                     }
-                    Err(e) => warn!(
-                        "Cannot execute `cluster_shards` on node ({}:{}): {}",
-                        node_config.0, node_config.1, e
-                    ),
-                },
+                }
                 Err(e) => warn!(
                     "Cannot connect to node ({}:{}): {}",
                     node_config.0, node_config.1, e
@@ -817,9 +840,7 @@ impl ClusterConnection {
             }
         }
 
-        let shard_info_list = if let Some(shard_info_list) = shard_info_list {
-            shard_info_list
-        } else {
+        let Some(shard_info_list) = shard_info_list else {
             return Err(Error::Client("Cluster misconfiguration".to_owned()));
         };
 
@@ -859,11 +880,15 @@ impl ClusterConnection {
     async fn connect_replicas(&mut self) -> Result<()> {
         debug!("Connecting replicas...");
 
-        let shard_info_list: Vec<ClusterShardResult> = self
-            .get_random_node_mut()
-            .connection
-            .cluster_shards()
-            .await?;
+        let connection = &mut self.get_random_node_mut().connection;
+        let version: Version = connection.get_version().try_into()?;
+
+        // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
+        let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+            Self::convert_from_legacy_shard_description(connection.cluster_slots().await?)
+        } else {
+            connection.cluster_shards().await?
+        };
 
         for shard_info in shard_info_list {
             for node_info in shard_info.nodes.into_iter().filter(|n| n.role == "replica") {
@@ -904,11 +929,15 @@ impl ClusterConnection {
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
         debug!("Reloading slot ranges");
 
-        let shard_info_list: Vec<ClusterShardResult> = self
-            .get_random_node_mut()
-            .connection
-            .cluster_shards()
-            .await?;
+        let connection = &mut self.get_random_node_mut().connection;
+        let version: Version = connection.get_version().try_into()?;
+
+        // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
+        let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+            Self::convert_from_legacy_shard_description(connection.cluster_slots().await?)
+        } else {
+            connection.cluster_shards().await?
+        };
 
         // filter out nodes that do not exist anymore
         let mut node_ids = shard_info_list
@@ -1062,5 +1091,47 @@ impl ClusterConnection {
 
     fn crc16(str: &str) -> u16 {
         crc16::State::<crc16::XMODEM>::calculate(str.as_bytes())
+    }
+
+    pub(crate) fn convert_from_legacy_shard_description(
+        mut legacy_shards: Vec<LegacyClusterShardResult>,
+    ) -> Vec<ClusterShardResult> {
+        legacy_shards.sort_by(|s1, s2| s1.nodes[0].id.cmp(&s2.nodes[0].id));
+
+        let mut last_master_id = String::new();
+        let mut shards = Vec::new();
+        for legacy_shard in legacy_shards {
+            let master_id = &legacy_shard.nodes[0].id;
+            if master_id != &last_master_id {
+                last_master_id = master_id.clone();
+                shards.push(ClusterShardResult {
+                    slots: vec![legacy_shard.slot],
+                    nodes: legacy_shard
+                        .nodes
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, node)| ClusterNodeResult {
+                            id: node.id,
+                            endpoint: node.preferred_endpoint.clone(),
+                            ip: node.ip,
+                            port: Some(node.port),
+                            hostname: node.hostname,
+                            tls_port: None,
+                            role: if idx == 0 {
+                                "master".to_owned()
+                            } else {
+                                "replica".to_owned()
+                            },
+                            replication_offset: 0,
+                            health: ClusterHealthStatus::Online,
+                        })
+                        .collect(),
+                });
+            } else if let Some(shard) = shards.last_mut() {
+                shard.slots.push(legacy_shard.slot);
+            }
+        }
+
+        shards
     }
 }

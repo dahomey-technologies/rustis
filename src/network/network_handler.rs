@@ -311,6 +311,36 @@ impl NetworkHandler {
             .await
         {
             error!("Error while writing batch: {e}");
+
+            let mut idx: usize = 0;
+            while let Some(msg) = self.messages_to_send.pop_front() {
+                if commands_to_receive[idx] > 0 {
+                    match msg.message.commands {
+                        Commands::Single(_, Some(result_sender)) => {
+                            if let Err(e) = result_sender
+                                .send(Err(e.clone()))
+                            {
+                                warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                            }
+                        }
+                        Commands::Batch(_, results_sender) => {
+                            if let Err(e) = results_sender
+                                .send(Err(e.clone()))
+                            {
+                                warn!(
+                                "Cannot send value to caller because receiver is not there anymore: {:?}",
+                                e
+                            );
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                idx += 1;
+            }
         } else {
             let mut idx: usize = 0;
             while let Some(msg) = self.messages_to_send.pop_front() {

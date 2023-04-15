@@ -33,7 +33,7 @@ An asynchronous Redis client for Rust.
 * [Pub/sub](https://redis.io/docs/manual/pubsub/) support
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
-* [Cluster](https://redis.io/docs/manual/scaling/) support (minimus supported Redis version is 7)
+* [Cluster](https://redis.io/docs/manual/scaling/) support (minimus supported Redis version is 6)
 * [Redis Stack](https://redis.io/docs/stack/) support:
   * [RedisJSON v2.4](https://redis.io/docs/stack/json/) support
   * [RedisSearch v2.6](https://redis.io/docs/stack/search/) support

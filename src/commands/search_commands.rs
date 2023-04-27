@@ -1011,7 +1011,7 @@ pub enum FtVectorFieldAlgorithm {
     Flat(FtFlatVectorFieldAttributes),
 
     /// Hierarchical Navigable Small World algorithm.
-    HNSW(FtFlatVectorFieldAttributes),
+    HNSW(FtHnswVectorFieldAttributes),
 }
 
 impl ToArgs for FtVectorFieldAlgorithm {

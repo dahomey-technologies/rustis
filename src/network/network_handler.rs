@@ -37,7 +37,7 @@ enum Status {
 }
 
 #[derive(Clone, Copy)]
-enum SubcriptionType {
+enum SubscriptionType {
     Channel,
     Pattern,
     ShardChannel,
@@ -81,9 +81,9 @@ pub(crate) struct NetworkHandler {
     msg_receiver: MsgReceiver,
     messages_to_send: VecDeque<MessageToSend>,
     messages_to_receive: VecDeque<MessageToReceive>,
-    pending_subscriptions: HashMap<Vec<u8>, (SubcriptionType, PubSubSender)>,
-    pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubcriptionType>>,
-    subscriptions: HashMap<Vec<u8>, (SubcriptionType, PubSubSender)>,
+    pending_subscriptions: HashMap<Vec<u8>, (SubscriptionType, PubSubSender)>,
+    pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubscriptionType>>,
+    subscriptions: HashMap<Vec<u8>, (SubscriptionType, PubSubSender)>,
     is_reply_on: bool,
     push_sender: Option<PushSender>,
     pending_replies: Option<Vec<RespBuf>>,
@@ -157,9 +157,9 @@ impl NetworkHandler {
                 if let Some(pub_sub_senders) = pub_sub_senders {
                     let subscription_type = match &msg.commands {
                         Commands::Single(command, _) => match command.name {
-                            "SUBSCRIBE" => SubcriptionType::Channel,
-                            "PSUBSCRIBE" => SubcriptionType::Pattern,
-                            "SSUBSCRIBE" => SubcriptionType::ShardChannel,
+                            "SUBSCRIBE" => SubscriptionType::Channel,
+                            "PSUBSCRIBE" => SubscriptionType::Pattern,
+                            "SSUBSCRIBE" => SubscriptionType::ShardChannel,
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),
@@ -200,9 +200,9 @@ impl NetworkHandler {
                         for command in &msg.commands {
                             if let "UNSUBSCRIBE" | "PUNSUBSCRIBE" | "SUNSUBSCRIBE" = command.name {
                                 let subscription_type = match command.name {
-                                    "UNSUBSCRIBE" => SubcriptionType::Channel,
-                                    "PUNSUBSCRIBE" => SubcriptionType::Pattern,
-                                    "SUNSUBSCRIBE" => SubcriptionType::ShardChannel,
+                                    "UNSUBSCRIBE" => SubscriptionType::Channel,
+                                    "PUNSUBSCRIBE" => SubscriptionType::Pattern,
+                                    "SUNSUBSCRIBE" => SubscriptionType::ShardChannel,
                                     _ => unreachable!(),
                                 };
                                 self.pending_unsubscriptions.push_back(
@@ -771,17 +771,17 @@ impl NetworkHandler {
         if !self.subscriptions.is_empty() {
             for (channel_or_pattern, (subscription_type, _)) in &self.subscriptions {
                 match subscription_type {
-                    SubcriptionType::Channel => {
+                    SubscriptionType::Channel => {
                         self.connection
                             .subscribe(channel_or_pattern.clone())
                             .await?;
                     }
-                    SubcriptionType::Pattern => {
+                    SubscriptionType::Pattern => {
                         self.connection
                             .psubscribe(channel_or_pattern.clone())
                             .await?;
                     }
-                    SubcriptionType::ShardChannel => {
+                    SubscriptionType::ShardChannel => {
                         self.connection
                             .ssubscribe(channel_or_pattern.clone())
                             .await?;
@@ -795,17 +795,17 @@ impl NetworkHandler {
                 self.pending_subscriptions.drain()
             {
                 match subscription_type {
-                    SubcriptionType::Channel => {
+                    SubscriptionType::Channel => {
                         self.connection
                             .subscribe(channel_or_pattern.clone())
                             .await?;
                     }
-                    SubcriptionType::Pattern => {
+                    SubscriptionType::Pattern => {
                         self.connection
                             .psubscribe(channel_or_pattern.clone())
                             .await?;
                     }
-                    SubcriptionType::ShardChannel => {
+                    SubscriptionType::ShardChannel => {
                         self.connection
                             .ssubscribe(channel_or_pattern.clone())
                             .await?;
@@ -821,17 +821,17 @@ impl NetworkHandler {
             for mut map in self.pending_unsubscriptions.drain(..) {
                 for (channel_or_pattern, subscription_type) in map.drain() {
                     match subscription_type {
-                        SubcriptionType::Channel => {
+                        SubscriptionType::Channel => {
                             self.connection
                                 .subscribe(channel_or_pattern.clone())
                                 .await?;
                         }
-                        SubcriptionType::Pattern => {
+                        SubscriptionType::Pattern => {
                             self.connection
                                 .psubscribe(channel_or_pattern.clone())
                                 .await?;
                         }
-                        SubcriptionType::ShardChannel => {
+                        SubscriptionType::ShardChannel => {
                             self.connection
                                 .ssubscribe(channel_or_pattern.clone())
                                 .await?;

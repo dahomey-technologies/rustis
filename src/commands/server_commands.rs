@@ -1720,7 +1720,7 @@ pub struct MemoryStats {
 
     #[serde(rename = "allocator-fragmentation.bytes")]
     #[serde(default)]
-    pub allocator_fragmentation_bytes: usize,
+    pub allocator_fragmentation_bytes: isize,
 
     #[serde(rename = "allocator-rss.ratio")]
     #[serde(default)]
@@ -1728,7 +1728,7 @@ pub struct MemoryStats {
 
     #[serde(rename = "allocator-rss.bytes")]
     #[serde(default)]
-    pub allocator_rss_bytes: usize,
+    pub allocator_rss_bytes: isize,
 
     #[serde(rename = "rss-overhead.ratio")]
     #[serde(default)]
@@ -1736,7 +1736,7 @@ pub struct MemoryStats {
 
     #[serde(rename = "rss-overhead.bytes")]
     #[serde(default)]
-    pub rss_overhead_bytes: usize,
+    pub rss_overhead_bytes: isize,
 
     /// See [`INFO`](https://redis.io/commands/info)'s mem_fragmentation_ratio
     #[serde(rename = "fragmentation")]
@@ -1745,7 +1745,7 @@ pub struct MemoryStats {
 
     #[serde(rename = "fragmentation.bytes")]
     #[serde(default)]
-    pub fragmentation_bytes: usize,
+    pub fragmentation_bytes: isize,
 }
 
 /// Sub-result for the [`memory_stats`](ServerCommands::memory_stats) command.

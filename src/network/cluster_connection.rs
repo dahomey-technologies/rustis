@@ -35,7 +35,7 @@ impl Debug for Node {
         f.debug_struct("Node")
             .field("id", &self.id)
             .field("is_master", &self.is_master)
-            .field("address", &self.address)
+            .field("tag", &self.connection.tag())
             .finish()
     }
 }
@@ -82,6 +82,7 @@ pub struct ClusterConnection {
     slot_ranges: Vec<SlotRange>,
     command_info_manager: CommandInfoManager,
     pending_requests: VecDeque<RequestInfo>,
+    tag: String,
 }
 
 impl ClusterConnection {
@@ -90,8 +91,13 @@ impl ClusterConnection {
         config: &Config,
     ) -> Result<ClusterConnection> {
         let (mut nodes, slot_ranges) = Self::connect_to_cluster(cluster_config, config).await?;
+        let first_node = nodes
+            .get_mut(0)
+            .ok_or_else(|| Error::Client("No cluster nodes".to_owned()))?;
 
-        let command_info_manager = CommandInfoManager::initialize(&mut nodes[0].connection).await?;
+        let command_info_manager =
+            CommandInfoManager::initialize(&mut first_node.connection).await?;
+        let tag = first_node.connection.tag().to_owned();
 
         Ok(ClusterConnection {
             cluster_config: cluster_config.clone(),
@@ -100,6 +106,7 @@ impl ClusterConnection {
             slot_ranges,
             command_info_manager,
             pending_requests: VecDeque::new(),
+            tag,
         })
     }
 
@@ -112,14 +119,17 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        debug!("Analyzing command {command:?}");
+        debug!("[{}] Analyzing command {command:?}", self.tag);
 
         let command_info = self.command_info_manager.get_command_info(command);
 
         let command_info = if let Some(command_info) = command_info {
             command_info
         } else {
-            return Err(Error::Client(format!("Unknown command {}", command.name)));
+            return Err(Error::Client(format!(
+                "[{}] Unknown command {}",
+                self.tag, command.name
+            )));
         };
 
         let command_name = command_info.name.to_string();
@@ -139,7 +149,7 @@ impl ClusterConnection {
             .await?;
         let slots = Self::hash_slots(&keys);
 
-        debug!("keys: {keys:?}, slots: {slots:?}");
+        debug!("[{}] keys: {keys:?}, slots: {slots:?}", self.tag);
 
         if let Some(request_policy) = request_policy {
             match request_policy {
@@ -296,7 +306,7 @@ impl ClusterConnection {
             .collect::<Result<Vec<_>>>()?;
 
         node_slot_keys_ask.sort();
-        trace!("shard_slot_keys_ask: {node_slot_keys_ask:?}");
+        trace!("[{}] shard_slot_keys_ask: {node_slot_keys_ask:?}", self.tag);
 
         let mut last_slot = u16::MAX;
         let mut current_slot_keys = SmallVec::<[String; 10]>::new();
@@ -405,8 +415,8 @@ impl ClusterConnection {
             self.pending_requests.push_back(request_info);
         } else {
             return Err(Error::Client(format!(
-                "Cannot send command {} with mistmatched key slots",
-                command_name
+                "[{}] Cannot send command {} with mistmatched key slots",
+                self.tag, command_name
             )));
         }
 
@@ -420,7 +430,7 @@ impl ClusterConnection {
         _keys: SmallVec<[String; 10]>,
         _slots: SmallVec<[u16; 10]>,
     ) {
-        todo!("Command not yet supported in cluster mode")
+        todo!("[{}] Command not yet supported in cluster mode", self.tag)
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
@@ -445,11 +455,14 @@ impl ClusterConnection {
             }) {
                 sub_request.result = Some(result);
             } else {
-                return Some(Err(Error::Client("Received unexpected message".to_owned())));
+                return Some(Err(Error::Client(format!(
+                    "[{}] Received unexpected message",
+                    self.tag
+                ))));
             };
 
             if let Some(ri) = self.pending_requests.front() {
-                trace!("request_info: {ri:?}");
+                trace!("[{}] request_info: {ri:?}", self.tag);
                 if ri.sub_requests.iter().all(|sr| sr.result.is_some()) {
                     if let Some(ri) = self.pending_requests.pop_front() {
                         request_info = ri;
@@ -494,8 +507,8 @@ impl ClusterConnection {
 
         if !retry_reasons.is_empty() {
             debug!(
-                "read failed and will be retried. reasons: {:?}",
-                retry_reasons
+                "[{}] read failed and will be retried. reasons: {:?}",
+                self.tag, retry_reasons
             );
             return Some(Err(Error::Retry(retry_reasons)));
         }
@@ -509,8 +522,8 @@ impl ClusterConnection {
             command_info
         } else {
             return Some(Err(Error::Client(format!(
-                "Unknown command {}",
-                command_name
+                "[{}] Unknown command {}",
+                self.tag, command_name
             ))));
         };
 
@@ -693,7 +706,7 @@ impl ClusterConnection {
         &mut self,
         _sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
-        todo!("Command not yet supported in cluster mode");
+        todo!("[{}] Command not yet supported in cluster mode", self.tag);
     }
 
     fn no_response_policy(
@@ -701,7 +714,7 @@ impl ClusterConnection {
         sub_results: Vec<Result<RespBuf>>,
         request_info: &RequestInfo,
     ) -> Option<Result<RespBuf>> {
-        log::debug!("no_response_policy");
+        log::debug!("[{}] no_response_policy", self.tag);
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
@@ -718,7 +731,7 @@ impl ClusterConnection {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(format!(
-                                "Unexpected result {sub_result:?}"
+                                "[{}] Unexpected result {sub_result:?}", self.tag
                             ))));
                         };
 
@@ -745,7 +758,7 @@ impl ClusterConnection {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(format!(
-                                "Unexpected result {sub_result:?}"
+                                "[{}] Unexpected result {sub_result:?}", self.tag
                             ))));
                         };
 
@@ -753,7 +766,8 @@ impl ClusterConnection {
                             results.extend(zip(&sub_request.keys, chunks));
                         } else {
                             return Some(Err(Error::Client(format!(
-                                "Unexpected result {sub_result:?}"
+                                "[{}] Unexpected result {sub_result:?}",
+                                self.tag
                             ))));
                         }
                     }
@@ -777,10 +791,10 @@ impl ClusterConnection {
     }
 
     pub async fn reconnect(&mut self) -> Result<()> {
-        info!("Reconnecting to cluster...");
+        info!("[{}] Reconnecting to cluster...", self.tag);
         let (nodes, slot_ranges) =
             Self::connect_to_cluster(&self.cluster_config, &self.config).await?;
-        info!("Reconnected to cluster!");
+        info!("[{}] Reconnected to cluster!", self.tag);
 
         self.nodes = nodes;
         self.slot_ranges = slot_ranges;
@@ -803,7 +817,7 @@ impl ClusterConnection {
                 Ok(mut connection) => {
                     let version: Result<Version> = connection.get_version().try_into();
                     let Ok(version) = version else {
-                        warn!("Cannot execute get Redis version");
+                        warn!("[{}] Cannot execute get Redis version", connection.tag());
                         break;
                     };
 
@@ -816,8 +830,10 @@ impl ClusterConnection {
                                 break;
                             }
                             Err(e) => warn!(
-                                "Cannot execute `cluster_slots` on node ({}:{}): {}",
-                                node_config.0, node_config.1, e
+                                "[{}] Cannot execute `cluster_slots` on node ({}:{}): {e}",
+                                connection.tag(),
+                                node_config.0,
+                                node_config.1
                             ),
                         }
                     } else {
@@ -827,8 +843,10 @@ impl ClusterConnection {
                                 break;
                             }
                             Err(e) => warn!(
-                                "Cannot execute `cluster_shards` on node ({}:{}): {}",
-                                node_config.0, node_config.1, e
+                                "[{}] Cannot execute `cluster_shards` on node ({}:{}): {e}",
+                                connection.tag(),
+                                node_config.0,
+                                node_config.1
                             ),
                         }
                     }
@@ -878,7 +896,7 @@ impl ClusterConnection {
     }
 
     async fn connect_replicas(&mut self) -> Result<()> {
-        debug!("Connecting replicas...");
+        debug!("[{}] Connecting replicas...", self.tag);
 
         let connection = &mut self.get_random_node_mut().connection;
         let version: Version = connection.get_version().try_into()?;
@@ -917,8 +935,8 @@ impl ClusterConnection {
         self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
 
         debug!(
-            "Cluster replicas connected: nodes={:?}, slot_ranges={:?}",
-            self.nodes, self.slot_ranges
+            "[{}] Cluster replicas connected: nodes={:?}, slot_ranges={:?}",
+            self.tag, self.nodes, self.slot_ranges
         );
 
         Ok(())
@@ -927,7 +945,7 @@ impl ClusterConnection {
     /// Keep existing connection, connect new nodes, remove obsolte ones
     /// Rebuild slot_ranges from scratch
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
-        debug!("Reloading slot ranges");
+        debug!("[{}] Reloading slot ranges", self.tag);
 
         let connection = &mut self.get_random_node_mut().connection;
         let version: Version = connection.get_version().try_into()?;
@@ -996,8 +1014,8 @@ impl ClusterConnection {
         self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
 
         debug!(
-            "Cluster new setup: nodes={:?}, slot_ranges={:?}",
-            self.nodes, self.slot_ranges
+            "[{}] Cluster new setup: nodes={:?}, slot_ranges={:?}",
+            self.tag, self.nodes, self.slot_ranges
         );
 
         Ok(())
@@ -1133,5 +1151,9 @@ impl ClusterConnection {
         }
 
         shards
+    }
+
+    pub(crate) fn tag(&self) -> &str {
+        &self.tag
     }
 }

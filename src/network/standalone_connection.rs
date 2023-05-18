@@ -60,6 +60,7 @@ pub struct StandaloneConnection {
     streams: Streams,
     buffer: BytesMut,
     version: String,
+    tag: String,
 }
 
 impl StandaloneConnection {
@@ -73,6 +74,11 @@ impl StandaloneConnection {
             streams,
             buffer: BytesMut::new(),
             version: String::new(),
+            tag: if config.connection_name.is_empty() {
+                format!("{}:{}", host, port)
+            } else {
+                format!("{}:{}:{}", config.connection_name, host, port)
+            },
         };
 
         connection.post_connect().await?;
@@ -82,11 +88,7 @@ impl StandaloneConnection {
 
     pub async fn write(&mut self, command: &Command) -> Result<()> {
         if log_enabled!(Level::Debug) {
-            if self.config.connection_name.is_empty() {
-                debug!("[{}:{}] Sending {command:?}", self.host, self.port);
-            } else {
-                debug!("[{}] Sending {command:?}", self.config.connection_name);
-            }
+            debug!("[{}] Sending {command:?}", self.tag);
         }
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
@@ -113,11 +115,7 @@ impl StandaloneConnection {
 
         for command in commands {
             if log_enabled!(Level::Debug) {
-                if self.config.connection_name.is_empty() {
-                    debug!("[{}:{}] Sending {command:?}", self.host, self.port);
-                } else {
-                    debug!("[{}] Sending {command:?}", self.config.connection_name);
-                }
+                debug!("[{}] Sending {command:?}", self.tag);
             }
 
             #[cfg(debug_assertions)]
@@ -159,14 +157,9 @@ impl StandaloneConnection {
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
         } {
             if log_enabled!(Level::Debug) {
-                let connection_name = if self.config.connection_name.is_empty() {
-                    format!("{}:{}", self.host, self.port)
-                } else {
-                    self.config.connection_name.clone()
-                };
                 match &result {
-                    Ok(bytes) => debug!("[{connection_name}] Received result {bytes}"),
-                    Err(_) => debug!("[{connection_name}] Received result {result:?}"),
+                    Ok(bytes) => debug!("[{}] Received result {bytes}", self.tag),
+                    Err(err) => debug!("[{}] Received result {err:?}", self.tag),
                 }
             }
             Some(result)
@@ -218,6 +211,10 @@ impl StandaloneConnection {
     pub fn get_version(&self) -> &str {
         &self.version
     }
+
+    pub(crate) fn tag(&self) -> &str {
+        &self.tag
+    }
 }
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, &'a mut StandaloneConnection, R>
@@ -231,11 +228,9 @@ where
         Box::pin(async move {
             self.executor.write(&self.command).await?;
 
-            let resp_buf = self
-                .executor
-                .read()
-                .await
-                .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))??;
+            let resp_buf = self.executor.read().await.ok_or_else(|| {
+                Error::Client(format!("[{}] disconnected by peer", self.executor.tag()))
+            })??;
 
             resp_buf.to()
         })

@@ -527,10 +527,10 @@ impl ClusterConnection {
         if let Some(response_policy) = response_policy {
             match response_policy {
                 ResponsePolicy::OneSucceeded => {
-                    self.response_policy_one_succeeded(sub_results).await
+                    self.response_policy_one_succeeded(sub_results)
                 }
                 ResponsePolicy::AllSucceeded => {
-                    self.response_policy_all_succeeded(sub_results).await
+                    self.response_policy_all_succeeded(sub_results)
                 }
                 ResponsePolicy::AggLogicalAnd => {
                     self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
@@ -544,14 +544,14 @@ impl ClusterConnection {
                 ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
                 ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
                 ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
-                ResponsePolicy::Special => self.response_policy_special(sub_results).await,
+                ResponsePolicy::Special => self.response_policy_special(sub_results),
             }
         } else {
-            self.no_response_policy(sub_results, &request_info).await
+            self.no_response_policy(sub_results, &request_info)
         }
     }
 
-    async fn response_policy_one_succeeded(
+    fn response_policy_one_succeeded(
         &mut self,
         sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
@@ -568,7 +568,7 @@ impl ClusterConnection {
         Some(result)
     }
 
-    async fn response_policy_all_succeeded(
+    fn response_policy_all_succeeded(
         &mut self,
         sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
@@ -689,14 +689,14 @@ impl ClusterConnection {
         }
     }
 
-    async fn response_policy_special(
+    fn response_policy_special(
         &mut self,
         _sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
         todo!("Command not yet supported in cluster mode");
     }
 
-    async fn no_response_policy(
+    fn no_response_policy(
         &mut self,
         sub_results: Vec<Result<RespBuf>>,
         request_info: &RequestInfo,

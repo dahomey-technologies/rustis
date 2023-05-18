@@ -1,5 +1,11 @@
 use crate::resp::{CommandArgs, ToArgs};
 
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(debug_assertions)]
+static COMMAND_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 /// Shortcut function for creating a command.
 #[must_use]
 #[inline(always)]
@@ -21,6 +27,9 @@ pub struct Command {
     #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: usize,
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    pub (crate) command_seq: usize,
 }
 
 impl Command {
@@ -35,6 +44,8 @@ impl Command {
             args: CommandArgs::default(),
             #[cfg(debug_assertions)]
             kill_connection_on_write: 0,
+            #[cfg(debug_assertions)]
+            command_seq: COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 

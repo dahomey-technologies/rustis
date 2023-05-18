@@ -37,6 +37,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::Duration,
 };
+use log::trace;
 
 /// Client with a unique connection to a Redis server.
 #[derive(Clone)]
@@ -265,6 +266,7 @@ impl Client {
     #[inline]
     fn send_message(&self, message: Message) -> Result<()> {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
+            trace!("Will enqueue message: {message:?}");
             msg_sender.unbounded_send(message)?;
             Ok(())
         } else {

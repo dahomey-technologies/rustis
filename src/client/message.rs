@@ -2,6 +2,12 @@ use smallvec::SmallVec;
 
 use crate::{resp::Command, PushSender, PubSubSender, RetryReason, network::{ResultSender, ResultsSender}};
 
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(debug_assertions)]
+static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 #[allow(clippy::large_enum_variant)] 
 #[derive(Debug)]
 pub(crate) enum Commands {
@@ -114,7 +120,10 @@ pub(crate) struct Message {
     pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
     pub push_sender: Option<PushSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
-    pub retry_on_error: bool
+    pub retry_on_error: bool,
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    pub (crate) message_seq: usize,
 }
 
 impl Message {
@@ -126,6 +135,8 @@ impl Message {
             push_sender: None,
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 
@@ -137,6 +148,8 @@ impl Message {
             push_sender: None,
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 
@@ -148,6 +161,8 @@ impl Message {
             push_sender: None,
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 
@@ -163,6 +178,8 @@ impl Message {
             push_sender: None,
             retry_reasons: None,
             retry_on_error: true,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 
@@ -178,6 +195,8 @@ impl Message {
             push_sender: Some(push_sender),
             retry_reasons: None,
             retry_on_error: true,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 
@@ -189,6 +208,8 @@ impl Message {
             push_sender: Some(push_sender),
             retry_reasons: None,
             retry_on_error: false,
+            #[cfg(debug_assertions)]
+            message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
 }

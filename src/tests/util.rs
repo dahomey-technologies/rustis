@@ -130,5 +130,6 @@ pub fn log_try_init() {
         .filter_level(log::LevelFilter::Debug)
         .target(env_logger::Target::Stdout)
         .is_test(true)
+        .parse_default_env()
         .try_init();
 }

@@ -7,7 +7,7 @@ use crate::{
 };
 use futures_channel::{mpsc, oneshot};
 use futures_util::{select, FutureExt, SinkExt, StreamExt};
-use log::{debug, error, info, log_enabled, warn, Level};
+use log::{trace, debug, error, info, log_enabled, warn, Level};
 use smallvec::SmallVec;
 use std::collections::{HashMap, VecDeque};
 use tokio::sync::broadcast;
@@ -159,6 +159,7 @@ impl NetworkHandler {
 
         loop {
             if let Some(mut msg) = msg {
+                trace!("[{}] Will handle message: {msg:?}", self.tag);
                 let pub_sub_senders = msg.pub_sub_senders.take();
                 if let Some(pub_sub_senders) = pub_sub_senders {
                     let subscription_type = match &msg.commands {
@@ -476,6 +477,7 @@ impl NetworkHandler {
                                 error!("[{}] Cannot retry message: {e}", self.tag);
                             }
                         } else {
+                            trace!("[{}] Will respond to: {:?}", self.tag, message_to_receive.message);
                             match message_to_receive.message.commands {
                                 Commands::Single(_, Some(result_sender)) => {
                                     if let Err(e) = result_sender.send(result) {

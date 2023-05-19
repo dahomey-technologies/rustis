@@ -60,6 +60,9 @@ struct RequestInfo {
     pub command_name: String,
     pub keys: SmallVec<[String; 10]>,
     pub sub_requests: SmallVec<[SubRequest; 10]>,
+    #[allow(unused)]
+    #[cfg(debug_assertions)]
+    pub command_seq: usize,
 }
 
 impl ClusterNodeResult {
@@ -242,6 +245,8 @@ impl ClusterConnection {
             command_name: command_name.to_string(),
             sub_requests,
             keys,
+            #[cfg(debug_assertions)]
+            command_seq: command.command_seq,
         };
 
         self.pending_requests.push_back(request_info);
@@ -277,6 +282,8 @@ impl ClusterConnection {
             command_name: command_name.to_string(),
             sub_requests,
             keys,
+            #[cfg(debug_assertions)]
+            command_seq: command.command_seq,
         };
 
         self.pending_requests.push_back(request_info);
@@ -368,6 +375,8 @@ impl ClusterConnection {
             command_name: command_name.to_string(),
             keys,
             sub_requests,
+            #[cfg(debug_assertions)]
+            command_seq: command.command_seq,
         };
 
         trace!("{request_info:?}");
@@ -410,6 +419,8 @@ impl ClusterConnection {
                     result: None,
                 }],
                 keys,
+                #[cfg(debug_assertions)]
+                command_seq: command.command_seq,
             };
 
             self.pending_requests.push_back(request_info);
@@ -448,18 +459,29 @@ impl ClusterConnection {
 
             let node_id = &self.nodes[node_idx].id;
 
-            if let Some(sub_request) = self.pending_requests.iter_mut().find_map(|r| {
-                r.sub_requests
-                    .iter_mut()
-                    .find(|sr| sr.node_id == *node_id && sr.result.is_none())
-            }) {
-                sub_request.result = Some(result);
-            } else {
-                return Some(Err(Error::Client(format!(
-                    "[{}] Received unexpected message",
-                    self.tag
-                ))));
-            };
+            let Some((req_idx, sub_req_idx)) = self
+                .pending_requests
+                .iter()
+                .enumerate()
+                .find_map(|(req_idx, req)| {
+                    let sub_req_idx = req
+                        .sub_requests
+                        .iter()
+                        .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
+                    return Some((req_idx, sub_req_idx))
+                }) else {
+                    return Some(Err(Error::Client(format!(
+                        "[{}] Received unexpected message",
+                        self.tag
+                    ))));
+                };
+
+            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
+            trace!(
+                "[{}] Did store sub-request result into {:?}",
+                self.tag,
+                self.pending_requests[req_idx]
+            );
 
             if let Some(ri) = self.pending_requests.front() {
                 trace!("[{}] request_info: {ri:?}", self.tag);

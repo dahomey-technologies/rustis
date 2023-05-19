@@ -426,7 +426,7 @@ impl ClusterConnection {
             self.pending_requests.push_back(request_info);
         } else {
             return Err(Error::Client(format!(
-                "[{}] Cannot send command {} with mistmatched key slots",
+                "[{}] Cannot send command {} with mismatched key slots",
                 self.tag, command_name
             )));
         }

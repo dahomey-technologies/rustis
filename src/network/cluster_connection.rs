@@ -448,6 +448,16 @@ impl ClusterConnection {
         let mut request_info: RequestInfo;
 
         loop {
+            if let Some(ri) = self.pending_requests.front() {
+                if ri.sub_requests.iter().all(|sr| sr.result.is_some()) {
+                    trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                    if let Some(ri) = self.pending_requests.pop_front() {
+                        request_info = ri;
+                        break;
+                    }
+                }
+            }
+
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
@@ -482,16 +492,6 @@ impl ClusterConnection {
                 self.tag,
                 self.pending_requests[req_idx]
             );
-
-            if let Some(ri) = self.pending_requests.front() {
-                trace!("[{}] request_info: {ri:?}", self.tag);
-                if ri.sub_requests.iter().all(|sr| sr.result.is_some()) {
-                    if let Some(ri) = self.pending_requests.pop_front() {
-                        request_info = ri;
-                        break;
-                    }
-                }
-            }
         }
 
         let mut sub_results =

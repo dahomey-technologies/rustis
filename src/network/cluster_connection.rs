@@ -17,11 +17,11 @@ use serde::{
 };
 use smallvec::{smallvec, SmallVec};
 use std::{
-    sync::Arc,
     cmp::Ordering,
     collections::VecDeque,
     fmt::{self, Debug, Formatter},
     iter::zip,
+    sync::Arc,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -495,7 +495,7 @@ impl ClusterConnection {
                         .sub_requests
                         .iter()
                         .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
-                    return Some((req_idx, sub_req_idx))
+                    Some((req_idx, sub_req_idx))
                 }) else {
                     return Some(Err(Error::Client(format!(
                         "[{}] Received unexpected message",
@@ -578,12 +578,8 @@ impl ClusterConnection {
         // or when it's expected that clients implement a non-default aggregate.
         if let Some(response_policy) = response_policy {
             match response_policy {
-                ResponsePolicy::OneSucceeded => {
-                    self.response_policy_one_succeeded(sub_results)
-                }
-                ResponsePolicy::AllSucceeded => {
-                    self.response_policy_all_succeeded(sub_results)
-                }
+                ResponsePolicy::OneSucceeded => self.response_policy_one_succeeded(sub_results),
+                ResponsePolicy::AllSucceeded => self.response_policy_all_succeeded(sub_results),
                 ResponsePolicy::AggLogicalAnd => {
                     self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
                 }
@@ -953,7 +949,6 @@ impl ClusterConnection {
                 let port = node_info.get_port()?;
                 let node_id: NodeId = node_info.id.as_str().into();
 
-
                 let connection =
                     StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
 
@@ -1005,8 +1000,11 @@ impl ClusterConnection {
             .flat_map(|s| s.nodes.iter().map(|n| n.id.as_str()))
             .collect::<Vec<_>>();
         node_ids.sort();
-        self.nodes
-            .retain(|node| node_ids.binary_search_by(|n| (*n).cmp(node.id.as_ref())).is_ok());
+        self.nodes.retain(|node| {
+            node_ids
+                .binary_search_by(|n| (*n).cmp(node.id.as_ref()))
+                .is_ok()
+        });
 
         // create slot_ranges from scratch
         self.slot_ranges.clear();
@@ -1027,7 +1025,11 @@ impl ClusterConnection {
             for slot_range_info in &shard_info.slots {
                 self.slot_ranges.push(SlotRange {
                     slot_range: *slot_range_info,
-                    node_ids: shard_info.nodes.iter().map(|n| n.id.as_str().into()).collect(),
+                    node_ids: shard_info
+                        .nodes
+                        .iter()
+                        .map(|n| n.id.as_str().into())
+                        .collect(),
                 });
             }
 

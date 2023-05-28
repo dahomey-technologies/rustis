@@ -22,7 +22,7 @@ async fn main() -> std::io::Result<()> {
             .service(update)
             .service(delete)
     })
-    .bind(&addr)?
+    .bind(addr)?
     .run()
     .await
 }

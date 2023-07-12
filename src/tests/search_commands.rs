@@ -1025,6 +1025,45 @@ async fn ft_search() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn ft_search_empty_index() -> Result<()> {
+    let client = get_redis_stack_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc")
+                .payload_field("payload"),
+            [
+                FtFieldSchema::identifier("title")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("data")
+                    .field_type(FtFieldType::Text)
+                    .sortable(),
+                FtFieldSchema::identifier("published_at")
+                    .field_type(FtFieldType::Numeric)
+                    .sortable(),
+            ],
+        )
+        .await?;
+    wait_for_index_scanned(&client, "index").await?;
+
+    let result = client
+        .ft_search("index", "wizard", FtSearchOptions::default())
+        .await?;
+    log::debug!("result: {result:?}");
+    assert_eq!(0, result.total_results);
+    assert_eq!(0, result.results.len());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn ft_spellcheck() -> Result<()> {
     let client = get_redis_stack_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;

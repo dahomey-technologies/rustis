@@ -2067,6 +2067,13 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                     return Err(de::Error::custom("sequence `size_hint` is expected for FtSearchResult"));
                 };
 
+                if total_results == 0 {
+                    return Ok(FtSearchResult {
+                        total_results,
+                        results: Vec::new(),
+                    });
+                }
+
                 let row_num_fields = (seq_size - 1) / total_results;
                 let mut results = Vec::with_capacity(total_results);
                 let mut row: Option<FtSearchResultRow> = None;

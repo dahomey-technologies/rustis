@@ -2334,49 +2334,45 @@ impl<'de> Deserialize<'de> for FtSearchResult {
 
                 let row_num_fields = (seq_size - 1) / total_results;
                 let mut results = Vec::with_capacity(total_results);
+                let mut row: Option<FtSearchResultRow> = None;
+                let mut row_seed = RowSeed::new(row_num_fields);
 
-                if seq_size > 0 {
-                    let row_num_fields = (seq_size - 1) / total_results;
-                    let mut row: Option<FtSearchResultRow> = None;
-                    let mut row_seed = RowSeed::new(row_num_fields);
-
-                    while let Some(item) = seq.next_element_seed(&mut row_seed)? {
-                        match item {
-                            RowField::DocumentId(document_id) => {
-                                if let Some(row) = row.take() {
-                                    results.push(row);
-                                }
-                                row = Some(FtSearchResultRow {
-                                    document_id,
-                                    ..Default::default()
-                                })
+                while let Some(item) = seq.next_element_seed(&mut row_seed)? {
+                    match item {
+                        RowField::DocumentId(document_id) => {
+                            if let Some(row) = row.take() {
+                                results.push(row);
                             }
-                            RowField::Score(score) => {
-                                if let Some(row) = &mut row {
-                                    row.score = score;
-                                }
+                            row = Some(FtSearchResultRow {
+                                document_id,
+                                ..Default::default()
+                            })
+                        }
+                        RowField::Score(score) => {
+                            if let Some(row) = &mut row {
+                                row.score = score;
                             }
-                            RowField::Payload(payload) => {
-                                if let Some(row) = &mut row {
-                                    row.payload = payload;
-                                }
+                        }
+                        RowField::Payload(payload) => {
+                            if let Some(row) = &mut row {
+                                row.payload = payload;
                             }
-                            RowField::Sortkey(sortkey) => {
-                                if let Some(row) = &mut row {
-                                    row.sortkey = sortkey;
-                                }
+                        }
+                        RowField::Sortkey(sortkey) => {
+                            if let Some(row) = &mut row {
+                                row.sortkey = sortkey;
                             }
-                            RowField::Values(values) => {
-                                if let Some(row) = &mut row {
-                                    row.values = values;
-                                }
+                        }
+                        RowField::Values(values) => {
+                            if let Some(row) = &mut row {
+                                row.values = values;
                             }
                         }
                     }
+                }
 
-                    if let Some(row) = row.take() {
-                        results.push(row);
-                    }
+                if let Some(row) = row.take() {
+                    results.push(row);
                 }
 
                 Ok(FtSearchResult {

@@ -140,10 +140,9 @@ async fn multi_shard_agg_min() -> Result<()> {
     let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let result = client
-        .msetnx([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
-        .await?;
-    assert!(result);
+    client.set("key1", "value1").await?;
+    let num_replicas = client.wait(1, 1000).await?;
+    assert_eq!(1, num_replicas);
 
     Ok(())
 }

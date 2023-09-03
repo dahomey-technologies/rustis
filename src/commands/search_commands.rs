@@ -2433,7 +2433,7 @@ pub struct FtInfoResult {
 }
 
 /// Index attribute info
-#[derive(Debug, Default )]
+#[derive(Debug, Default)]
 pub struct FtIndexAttribute {
     /// field identifier
     pub identifier: String,

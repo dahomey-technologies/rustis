@@ -792,6 +792,253 @@ pub trait SearchCommands<'a> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum FtVectorType {
+    Float64,
+    Float32,
+}
+
+impl ToArgs for FtVectorType {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(match self {
+            FtVectorType::Float32 => "FLOAT32",
+            FtVectorType::Float64 => "FLOAT64",
+        });
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum FtVectorDistanceMetric {
+    L2,
+    IP,
+    Cosine,
+}
+
+impl ToArgs for FtVectorDistanceMetric {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(match self {
+            FtVectorDistanceMetric::L2 => "L2",
+            FtVectorDistanceMetric::IP => "IP",
+            FtVectorDistanceMetric::Cosine => "COSINE",
+        });
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct FtFlatVectorFieldAttributes {
+    pub ty: FtVectorType,
+    pub dim: usize,
+    pub distance_metric: FtVectorDistanceMetric,
+    pub initial_cap: Option<usize>,
+    pub block_size: Option<usize>,
+}
+
+impl FtFlatVectorFieldAttributes {
+    pub fn new(ty: FtVectorType, dim: usize, distance_metric: FtVectorDistanceMetric) -> Self {
+        Self {
+            ty,
+            dim,
+            distance_metric,
+            initial_cap: None,
+            block_size: None,
+        }
+    }
+
+    pub fn initial_cap(self, initial_cap: usize) -> Self {
+        Self {
+            initial_cap: Some(initial_cap),
+            ..self
+        }
+    }
+
+    pub fn block_size(self, block_size: usize) -> Self {
+        Self {
+            block_size: Some(block_size),
+            ..self
+        }
+    }
+}
+
+impl ToArgs for FtFlatVectorFieldAttributes {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg("TYPE")
+            .arg(self.ty)
+            .arg("DIM")
+            .arg(self.dim)
+            .arg("DISTANCE_METRIC")
+            .arg(self.distance_metric);
+
+        if let Some(initial_cap) = self.initial_cap {
+            args.arg("INITIAL_CAP").arg(initial_cap);
+        }
+
+        if let Some(block_size) = self.block_size {
+            args.arg("BLOCK_SIZE").arg(block_size);
+        }
+    }
+
+    fn num_args(&self) -> usize {
+        let mut num = 6;
+
+        if self.initial_cap.is_some() {
+            num += 2
+        }
+
+        if self.block_size.is_some() {
+            num += 2
+        }
+
+        num
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct FtHnswVectorFieldAttributes {
+    pub ty: FtVectorType,
+    pub dim: usize,
+    pub distance_metric: FtVectorDistanceMetric,
+    pub initial_cap: Option<usize>,
+    pub m: Option<usize>,
+    pub ef_construction: Option<usize>,
+    pub ef_runtime: Option<usize>,
+    pub epsilon: Option<f64>,
+}
+
+impl FtHnswVectorFieldAttributes {
+    pub fn new(ty: FtVectorType, dim: usize, distance_metric: FtVectorDistanceMetric) -> Self {
+        Self {
+            ty,
+            dim,
+            distance_metric,
+            initial_cap: None,
+            m: None,
+            ef_construction: None,
+            ef_runtime: None,
+            epsilon: None,
+        }
+    }
+
+    pub fn initial_cap(self, initial_cap: usize) -> Self {
+        Self {
+            initial_cap: Some(initial_cap),
+            ..self
+        }
+    }
+    pub fn m(self, m: usize) -> Self {
+        Self { m: Some(m), ..self }
+    }
+    pub fn ef_construction(self, ef_construction: usize) -> Self {
+        Self {
+            ef_construction: Some(ef_construction),
+            ..self
+        }
+    }
+    pub fn ef_runtime(self, ef_runtime: usize) -> Self {
+        Self {
+            ef_runtime: Some(ef_runtime),
+            ..self
+        }
+    }
+    pub fn epsilon(self, epsilon: f64) -> Self {
+        Self {
+            epsilon: Some(epsilon),
+            ..self
+        }
+    }
+}
+
+impl ToArgs for FtHnswVectorFieldAttributes {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg("TYPE")
+            .arg(self.ty)
+            .arg("DIM")
+            .arg(self.dim)
+            .arg("DISTANCE_METRIC")
+            .arg(self.distance_metric);
+
+        if let Some(initial_cap) = self.initial_cap {
+            args.arg("INITIAL_CAP").arg(initial_cap);
+        }
+
+        if let Some(m) = self.m {
+            args.arg("M").arg(m);
+        }
+
+        if let Some(ef_construction) = self.ef_construction {
+            args.arg("EF_CONSTRUCTION").arg(ef_construction);
+        }
+
+        if let Some(ef_runtime) = self.ef_runtime {
+            args.arg("EF_RUNTIME").arg(ef_runtime);
+        }
+
+        if let Some(epsilon) = self.epsilon {
+            args.arg("EPSILON").arg(epsilon);
+        }
+    }
+
+    fn num_args(&self) -> usize {
+        let mut num = 6;
+
+        if self.initial_cap.is_some() {
+            num += 2
+        }
+
+        if self.m.is_some() {
+            num += 2
+        }
+
+        if self.ef_construction.is_some() {
+            num += 2
+        }
+
+        if self.ef_runtime.is_some() {
+            num += 2
+        }
+
+        if self.epsilon.is_some() {
+            num += 2
+        }
+
+        num
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum FtVectorFieldAlgorithm {
+    /// Brute force algorithm.
+    Flat(FtFlatVectorFieldAttributes),
+
+    /// Hierarchical Navigable Small World algorithm.
+    HNSW(FtHnswVectorFieldAttributes),
+}
+
+impl ToArgs for FtVectorFieldAlgorithm {
+    fn write_args(&self, args: &mut CommandArgs) {
+        match self {
+            FtVectorFieldAlgorithm::Flat(attr) => {
+                args.arg("FLAT");
+                args.arg(attr.num_args());
+                attr.write_args(args);
+            }
+            FtVectorFieldAlgorithm::HNSW(attr) => {
+                args.arg("HNSW");
+                args.arg(attr.num_args());
+                attr.write_args(args);
+            }
+        }
+    }
+
+    fn num_args(&self) -> usize {
+        let num_attrs = match self {
+            FtVectorFieldAlgorithm::Flat(attr) => attr.num_args(),
+            FtVectorFieldAlgorithm::HNSW(attr) => attr.num_args(),
+        };
+
+        2 + num_attrs
+    }
+}
+
 /// Field type used to declare an index schema
 /// for the [`ft_create`](SearchCommands::ft_create) command
 #[derive(Debug, Deserialize, Default)]
@@ -818,18 +1065,29 @@ pub enum FtFieldType {
     /// Allows vector similarity queries against the value in this attribute.
     ///
     /// For more information, see [`Vector Fields`](https://redis.io/docs/stack/search/reference/vectors).
-    Vector,
+    Vector(#[serde(skip)] Option<FtVectorFieldAlgorithm>),
 }
 
 impl ToArgs for FtFieldType {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            FtFieldType::Text => "TEXT",
-            FtFieldType::Tag => "TAG",
-            FtFieldType::Numeric => "NUMERIC",
-            FtFieldType::Geo => "GEO",
-            FtFieldType::Vector => "VECTOR",
-        });
+        match self {
+            FtFieldType::Text => {
+                args.arg("TEXT");
+            }
+            FtFieldType::Tag => {
+                args.arg("TAG");
+            }
+            FtFieldType::Numeric => {
+                args.arg("NUMERIC");
+            }
+            FtFieldType::Geo => {
+                args.arg("GEO");
+            }
+            FtFieldType::Vector(ty) => {
+                args.arg("VECTOR");
+                ty.write_args(args)
+            }
+        }
     }
 }
 
@@ -3083,7 +3341,11 @@ impl FtSpellCheckOptions {
     #[must_use]
     pub fn dialect(mut self, dialect_version: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("DIALECT").arg(dialect_version).build(),
+            command_args: self
+                .command_args
+                .arg("DIALECT")
+                .arg(dialect_version)
+                .build(),
         }
     }
 }
@@ -3271,8 +3533,16 @@ impl FtSuggestion {
             where
                 A: de::SeqAccess<'de>,
             {
-                let with_scores = self.command.args.iter().any(|a| a.as_slice() == b"WITHSCORES");
-                let with_payloads = self.command.args.iter().any(|a| a.as_slice() == b"WITHPAYLOADS");
+                let with_scores = self
+                    .command
+                    .args
+                    .iter()
+                    .any(|a| a.as_slice() == b"WITHSCORES");
+                let with_payloads = self
+                    .command
+                    .args
+                    .iter()
+                    .any(|a| a.as_slice() == b"WITHPAYLOADS");
 
                 let mut suggestions = if let Some(size) = seq.size_hint() {
                     Vec::with_capacity(size)

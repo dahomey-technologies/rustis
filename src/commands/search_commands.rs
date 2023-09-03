@@ -7,7 +7,6 @@ use crate::{
         SingleArg, SingleArgCollection, ToArgs, Value, VecOfPairsSeed,
     },
 };
-use core::num;
 use serde::{
     de::{self, value::SeqAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
     Deserialize, Deserializer,
@@ -1042,10 +1041,11 @@ impl ToArgs for FtVectorFieldAlgorithm {
 
 /// Field type used to declare an index schema
 /// for the [`ft_create`](SearchCommands::ft_create) command
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum FtFieldType {
     /// Allows full-text search queries against the value in this attribute.
+    #[default]
     Text,
     /// Allows exact-match queries, such as categories or primary keys,
     /// against the value in this attribute.
@@ -2429,7 +2429,7 @@ pub struct FtInfoResult {
 }
 
 /// Index attribute info
-#[derive(Debug)]
+#[derive(Debug, Default )]
 pub struct FtIndexAttribute {
     /// field identifier
     pub identifier: String,
@@ -2475,20 +2475,7 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let mut attribute = FtIndexAttribute {
-                    identifier: Default::default(),
-                    attribute: Default::default(),
-                    field_type: FtFieldType::Text,
-                    weight: Default::default(),
-                    sortable: Default::default(),
-                    unf: Default::default(),
-                    no_stem: Default::default(),
-                    no_index: Default::default(),
-                    phonetic: Default::default(),
-                    separator: Default::default(),
-                    case_sensitive: Default::default(),
-                    with_suffixe_trie: Default::default(),
-                };
+                let mut attribute = FtIndexAttribute::default();
 
                 while let Some(field_name) = seq.next_element::<&str>()? {
                     match field_name {

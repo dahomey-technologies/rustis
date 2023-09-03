@@ -2,9 +2,10 @@ use crate::{
     client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
-        FtFieldSchema, FtFieldType, FtIndexDataType, FtLanguage, FtLoadAttribute, FtReducer,
-        FtSearchOptions, FtSearchResult, FtSortBy, FtSpellCheckOptions, FtSugAddOptions,
-        FtSugGetOptions, FtTermType, FtWithCursorOptions, HashCommands, JsonCommands,
+        FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtIndexDataType, FtLanguage,
+        FtLoadAttribute, FtReducer, FtSearchOptions, FtSearchResult, FtSortBy, FtSpellCheckOptions,
+        FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
+        FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
         SearchCommands, ServerCommands, SetCondition, SortOrder,
     },
     network::sleep,
@@ -451,6 +452,46 @@ async fn ft_create() -> Result<()> {
                 FtFieldSchema::identifier("$.categories")
                     .as_attribute("categories")
                     .field_type(FtFieldType::Tag),
+            ],
+        )
+        .await?;
+
+    // vector
+    // See: https://redis.io/docs/interact/search-and-query/search/vectors/#making-the-bikes-collection-searchable
+    client
+        .ft_create(
+            "idx:bikes_vss",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Json)
+                .prefix("bikes:")
+                .score(1.0),
+            [
+                FtFieldSchema::identifier("$.model")
+                    .field_type(FtFieldType::Text)
+                    .weight(1.0)
+                    .nostem(),
+                FtFieldSchema::identifier("$.brand")
+                    .field_type(FtFieldType::Text)
+                    .weight(1.0)
+                    .nostem(),
+                FtFieldSchema::identifier("$.price").field_type(FtFieldType::Numeric),
+                FtFieldSchema::identifier("$.type")
+                    .field_type(FtFieldType::Tag)
+                    .separator(','),
+                FtFieldSchema::identifier("$.description")
+                    .as_attribute("description")
+                    .field_type(FtFieldType::Text)
+                    .weight(1.0)
+                    .nostem(),
+                FtFieldSchema::identifier("$.description_embeddings ").field_type(
+                    FtFieldType::Vector(Some(FtVectorFieldAlgorithm::Flat(
+                        FtFlatVectorFieldAttributes::new(
+                            FtVectorType::Float32,
+                            768,
+                            FtVectorDistanceMetric::Cosine,
+                        ),
+                    ))),
+                ),
             ],
         )
         .await?;

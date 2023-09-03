@@ -33,7 +33,7 @@ async fn main() -> std::io::Result<()> {
             .service(poll_messages)
             .service(publish)
     })
-    .bind(&addr)?
+    .bind(addr)?
     .run()
     .await
 }

@@ -857,7 +857,12 @@ impl HelloOptions {
         P: SingleArg,
     {
         Self {
-            command_args: self.command_args.arg("AUTH").arg(username).arg(password).build(),
+            command_args: self
+                .command_args
+                .arg("AUTH")
+                .arg(username)
+                .arg(password)
+                .build(),
         }
     }
 
@@ -888,6 +893,7 @@ pub struct HelloResult {
     pub mode: String,
     #[serde(default)]
     pub role: String,
+    #[serde(default)]
     pub modules: Vec<ModuleInfo>,
 }
 

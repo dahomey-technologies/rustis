@@ -585,7 +585,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     }
 }
 
-pub struct NilSeqAccess;
+struct NilSeqAccess;
 
 impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
     type Error = Error;

@@ -128,4 +128,8 @@ impl SentinelConnection {
             )))
         }
     }
+
+    pub(crate) fn tag(&self) -> &str {
+        self.inner_connection.tag()
+    }
 }

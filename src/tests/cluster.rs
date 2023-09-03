@@ -8,11 +8,15 @@ use crate::{
     },
     network::{Version, ClusterConnection},
     sleep, spawn,
-    tests::get_cluster_test_client,
+    tests::{get_cluster_test_client, get_cluster_test_client_with_command_timeout},
     Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    future::IntoFuture,
+};
+use futures_util::try_join;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -136,10 +140,9 @@ async fn multi_shard_agg_min() -> Result<()> {
     let client = get_cluster_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    let result = client
-        .msetnx([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
-        .await?;
-    assert!(result);
+    client.set("key1", "value1").await?;
+    let num_replicas = client.wait(1, 1000).await?;
+    assert_eq!(1, num_replicas);
 
     Ok(())
 }
@@ -436,5 +439,29 @@ async fn ask() -> Result<()> {
     assert_eq!("value", value);
     client.del("key").await?;
 
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn commands_to_different_nodes() -> Result<()> {
+    // Assume test cluster has following slots split: [0 - 5460], [5461 - 10922], [10923 - 16383]
+    let client = get_cluster_test_client_with_command_timeout().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.set("key0", "0").await?; // cluster keyslot key0 = 13252
+    client.set("key1", "1").await?; // cluster keyslot key1 = 9189
+    client.set("key2", "2").await?; // cluster keyslot key2 = 4998
+
+    let (val0, val1, val2) = try_join!(
+        client.get::<_, String>("key0").into_future(),
+        client.get::<_, String>("key1").into_future(),
+        client.get::<_, String>("key2").into_future(),
+    )?;
+
+    assert_eq!("0", val0);
+    assert_eq!("1", val1);
+    assert_eq!("2", val2);
     Ok(())
 }

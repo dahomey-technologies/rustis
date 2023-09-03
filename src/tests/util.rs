@@ -117,6 +117,15 @@ pub(crate) async fn get_cluster_test_client() -> Result<Client> {
     .await
 }
 
+pub(crate) async fn get_cluster_test_client_with_command_timeout() -> Result<Client> {
+    log_try_init();
+    let host = get_default_host();
+    Client::connect(format!(
+        "redis+cluster://{host}:7000,{host}:7001,{host}:7002?command_timeout=2000"
+    ))
+    .await
+}
+
 #[cfg(any(feature = "redis-json"))]
 pub(crate) async fn get_redis_stack_test_client() -> Result<Client> {
     log_try_init();
@@ -130,5 +139,6 @@ pub fn log_try_init() {
         .filter_level(log::LevelFilter::Debug)
         .target(env_logger::Target::Stdout)
         .is_test(true)
+        .parse_default_env()
         .try_init();
 }

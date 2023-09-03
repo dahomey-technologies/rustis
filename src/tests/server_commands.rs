@@ -68,7 +68,7 @@ async fn acl_dryrun() -> Result<()> {
         .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
         .await?;
     assert_eq!(
-        "This user has no permissions to run the 'get' command",
+        "User VIRGINIA has no permissions to run the 'get' command",
         result
     );
 

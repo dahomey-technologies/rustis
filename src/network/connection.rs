@@ -83,6 +83,14 @@ impl Connection {
             .await
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
     }
+
+    pub(crate) fn tag(&self) -> &str {
+        match self {
+            Connection::Standalone(connection) => connection.tag(),
+            Connection::Sentinel(connection) => connection.tag(),
+            Connection::Cluster(connection) => connection.tag(),
+        }
+    }
 }
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, &'a mut Connection, R>

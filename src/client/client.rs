@@ -279,7 +279,7 @@ impl Client {
     /// Create a new transaction
     #[inline]
     pub fn create_transaction(&self) -> Transaction {
-        Transaction::new(self)
+        Transaction::new(self.clone())
     }
 
     /// Create a new pipeline

@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::commands::DebugCommands;
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 #[cfg(feature = "redis-json")]
@@ -19,7 +21,7 @@ use crate::{
         BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
         GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands,
         PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands
     },
     network::{
         timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
@@ -427,6 +429,8 @@ impl<'a> CountMinSketchCommands<'a> for &'a Client {}
 #[cfg(feature = "redis-bloom")]
 impl<'a> CuckooCommands<'a> for &'a Client {}
 impl<'a> ConnectionCommands<'a> for &'a Client {}
+#[cfg(test)]
+impl<'a> DebugCommands<'a> for &'a Client {}
 impl<'a> GenericCommands<'a> for &'a Client {}
 impl<'a> GeoCommands<'a> for &'a Client {}
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]

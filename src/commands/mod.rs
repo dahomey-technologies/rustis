@@ -95,6 +95,8 @@ mod count_min_sktech_commands;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 mod cuckoo_commands;
+#[cfg(test)]
+mod debug_commands;
 mod generic_commands;
 mod geo_commands;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
@@ -148,6 +150,8 @@ pub use count_min_sktech_commands::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
 #[cfg(feature = "redis-bloom")]
 pub use cuckoo_commands::*;
+#[cfg(test)]
+pub use debug_commands::*;
 pub use generic_commands::*;
 pub use geo_commands::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]

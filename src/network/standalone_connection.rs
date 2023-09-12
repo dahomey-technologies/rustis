@@ -164,6 +164,7 @@ impl StandaloneConnection {
             }
             Some(result)
         } else {
+            debug!("[{}] Socked is closed", self.tag);
             None
         }
     }

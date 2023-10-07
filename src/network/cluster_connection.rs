@@ -497,6 +497,8 @@ impl ClusterConnection {
                         .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
                     Some((req_idx, sub_req_idx))
                 }) else {
+                    log::error!("[{}] Received unexpected message: {result:?} from {}",
+                        self.tag, self.nodes[node_idx].connection.tag());
                     return Some(Err(Error::Client(format!(
                         "[{}] Received unexpected message",
                         self.tag

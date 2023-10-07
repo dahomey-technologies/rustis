@@ -5,6 +5,7 @@ services:
   redis-standalone:
     image: redis:alpine
     container_name: redis-standalone
+    restart: on-failure:20
     ports:
       - "6379:6379"
     volumes:
@@ -15,6 +16,7 @@ services:
   redis-tls:
     image: docker.io/bitnami/redis
     container_name: redis-tls
+    restart: on-failure:20
     ports:
       - "6380:6379"
     volumes:
@@ -33,6 +35,7 @@ services:
   redis-master:
     image: redis:alpine
     container_name: redis-master
+    restart: on-failure:20
     ports:
       - "6381:6381"
     command: redis-server --port 6381
@@ -40,6 +43,7 @@ services:
   redis-replica:
     image: redis:alpine
     container_name: redis-replica
+    restart: on-failure:20
     ports:
       - "6382:6382"
     command: redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
@@ -52,6 +56,7 @@ services:
       dockerfile: ./sentinel.dockerfile
     image: redis-sentinel1
     container_name: redis-sentinel1
+    restart: on-failure:20
     ports:
       - "26379:26379"
     depends_on:
@@ -66,6 +71,7 @@ services:
       dockerfile: ./sentinel.dockerfile
     image: redis-sentinel2
     container_name: redis-sentinel2
+    restart: on-failure:20
     ports:
       - "26380:26379"
     depends_on:
@@ -80,6 +86,7 @@ services:
       dockerfile: ./sentinel.dockerfile
     image: redis-sentinel3
     container_name: redis-sentinel3
+    restart: on-failure:20
     ports:
       - "26381:26379"
     depends_on:
@@ -107,6 +114,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node1
     container_name: redis-node1
+    restart: on-failure:20
     ports:
       - "7000:7000"
       - "17000:17000"
@@ -121,6 +129,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node2
     container_name: redis-node2
+    restart: on-failure:20
     ports:
       - "7001:7001"
       - "17001:17001"
@@ -135,6 +144,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node3
     container_name: redis-node3
+    restart: on-failure:20
     ports:
       - "7002:7002"
       - "17002:17002"
@@ -149,6 +159,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node4
     container_name: redis-node4
+    restart: on-failure:20
     ports:
       - "7003:7003"
       - "17003:17003"
@@ -163,6 +174,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node5
     container_name: redis-node5
+    restart: on-failure:20
     ports:
       - "7004:7004"
       - "17004:17004"
@@ -177,6 +189,7 @@ services:
       dockerfile: ./cluster.dockerfile
     image: redis-node6
     container_name: redis-node6
+    restart: on-failure:20
     ports:
       - "7005:7005"
       - "17005:17005"
@@ -189,5 +202,6 @@ services:
   redis-stack:
     image: redis/redis-stack-server:7.0.6-RC5
     container_name: redis-stack
+    restart: on-failure:20
     ports:
       - "8000:6379"

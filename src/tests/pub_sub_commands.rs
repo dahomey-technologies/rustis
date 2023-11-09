@@ -1,16 +1,18 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::{
     client::{Client, IntoConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
-        PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
+        ListCommands, PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
     },
     tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
     Result,
 };
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use serial_test::serial;
+use std::{
+    collections::{HashMap, HashSet},
+    future::IntoFuture,
+};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -607,6 +609,41 @@ async fn no_auto_resubscribe() -> Result<()> {
 
     let message = pub_sub_stream.next().now_or_never();
     assert!(message.is_none());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[serial]
+async fn concurrent_subscribe() -> Result<()> {
+    let pub_sub_client1 = get_test_client().await?;
+    let pub_sub_client2 = pub_sub_client1.clone();
+    let regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    regular_client.lpush("key", ["value1", "value2"]).await?;
+
+    let results = tokio::join!(
+        pub_sub_client1.subscribe("mychannel1"),
+        pub_sub_client2.subscribe("mychannel2"),
+        regular_client.lpop("key", 2).into_future(),
+        regular_client.lpop("key", 2).into_future(),
+        regular_client
+            .publish("mychannel1", "new")
+            .into_future()
+    );
+
+    let mut pub_sub_stream1 = results.0?;
+    let _pub_sub_stream2 = results.1?;
+    let values1: Vec<String> = results.2?;
+    let values2: Vec<String> = results.3?;
+    let message1 = pub_sub_stream1.next().await.unwrap()?;
+
+    assert_eq!(vec!["value2".to_owned(), "value1".to_owned()], values1);
+    assert_eq!(Vec::<String>::new(), values2);
+    assert_eq!(b"new".to_vec(), message1.payload);
 
     Ok(())
 }

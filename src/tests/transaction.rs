@@ -2,7 +2,7 @@ use crate::{
     client::BatchPreparedCommand,
     commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
     resp::cmd,
-    tests::get_test_client,
+    tests::{get_test_client, get_cluster_test_client},
     Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
@@ -157,6 +157,25 @@ async fn transaction_discard() -> Result<()> {
     client.set("key", "value").await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
+
+    Ok(())
+}
+
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn transaction_on_cluster_connection_with_keys_on_same_node() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+
+    let mut transaction = client.create_transaction();
+
+    transaction.queue(cmd("SET").arg("key1").arg("value1"));
+    transaction.queue(cmd("GET").arg("key1"));
+    transaction.queue(cmd("GET").arg("key1"));
+    let (_, val1, val2): ((), String, String) = transaction.execute().await.unwrap();
+    assert_eq!("value1", val1);
+    assert_eq!("value1", val2);
 
     Ok(())
 }

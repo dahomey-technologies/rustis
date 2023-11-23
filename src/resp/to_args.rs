@@ -452,6 +452,8 @@ impl SingleArgCollection<Vec<u8>> for CommandArgs {}
 
 impl<T, const N: usize> SingleArgCollection<T> for [T; N] where T: SingleArg {}
 
+impl<T> SingleArgCollection<T> for &[T] where T: SingleArg {}
+
 impl<T> SingleArgCollection<T> for Vec<T> where T: SingleArg {}
 
 impl<A, T> SingleArgCollection<T> for SmallVec<A>
@@ -493,6 +495,13 @@ where
 }
 
 impl<K, V, const N: usize> KeyValueArgsCollection<K, V> for [(K, V); N]
+where
+    K: SingleArg,
+    V: SingleArg,
+{
+}
+
+impl<K, V> KeyValueArgsCollection<K, V> for &[(K, V)]
 where
     K: SingleArg,
     V: SingleArg,

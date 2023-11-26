@@ -37,6 +37,11 @@ async fn key_value_collection() -> Result<()> {
     let len = client.hset("key", items).await?;
     assert_eq!(2, len);
 
+    client.del("key").await?;
+    let items = [("field1", "value1"), ("field2", "value2")];
+    let len = client.hset("key", items.as_slice()).await?;
+    assert_eq!(2, len);
+
     client.close().await?;
 
     Ok(())
@@ -56,6 +61,11 @@ async fn set_collection() -> Result<()> {
     client.del("key").await?;
     let items = ["member1", "member2"];
     let len = client.sadd("key", items).await?;
+    assert_eq!(2, len);
+
+    client.del("key").await?;
+    let items = ["member1", "member2"];
+    let len = client.sadd("key", items.as_slice()).await?;
     assert_eq!(2, len);
 
     client.del("key").await?;

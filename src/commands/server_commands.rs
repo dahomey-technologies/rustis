@@ -1996,7 +1996,11 @@ pub struct ReplicaInfo {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum ReplicationState {
+    /// the instance is in handshake with its master
+    Handshake,
     /// the instance needs to connect to its master
+    None,
+    /// the instance in not active
     Connect,
     /// the master-replica connection is in progress
     Connecting,
@@ -2004,6 +2008,8 @@ pub enum ReplicationState {
     Sync,
     /// the replica is online
     Connected,
+    /// instance state is unknown
+    Unknown,
 }
 
 /// options for the [`shutdown`](ServerCommands::shutdown) command.

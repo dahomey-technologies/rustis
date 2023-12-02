@@ -1,12 +1,12 @@
 use smallvec::SmallVec;
 
 use crate::resp::ToArgs;
-use std::{fmt};
+use std::fmt;
 
 /// Collection of arguments of [`Command`](crate::resp::Command).
 #[derive(Clone, Default)]
 pub struct CommandArgs {
-    args: SmallVec<[Vec<u8>;10]>,
+    args: SmallVec<[Vec<u8>; 10]>,
 }
 
 impl CommandArgs {
@@ -70,6 +70,13 @@ impl CommandArgs {
     pub(crate) fn write_arg(&mut self, buf: &[u8]) {
         self.args.push(buf.to_vec());
     }
+
+    pub(crate) fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&[u8]) -> bool,
+    {
+        self.args.retain(|arg| f(arg))
+    }
 }
 
 impl<'a> IntoIterator for &'a CommandArgs {
@@ -79,14 +86,14 @@ impl<'a> IntoIterator for &'a CommandArgs {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         CommandArgsIterator {
-            iter: self.args.iter()
+            iter: self.args.iter(),
         }
     }
 }
 
 /// [`CommandArgs`] iterator
 pub struct CommandArgsIterator<'a> {
-    iter: std::slice::Iter<'a, Vec<u8>>
+    iter: std::slice::Iter<'a, Vec<u8>>,
 }
 
 impl<'a> Iterator for CommandArgsIterator<'a> {
@@ -110,7 +117,14 @@ impl std::ops::Deref for CommandArgs {
 impl fmt::Debug for CommandArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommandArgs")
-            .field("args", &self.args.iter().map(|a| String::from_utf8_lossy(a.as_slice())).collect::<Vec<_>>())
+            .field(
+                "args",
+                &self
+                    .args
+                    .iter()
+                    .map(|a| String::from_utf8_lossy(a.as_slice()))
+                    .collect::<Vec<_>>(),
+            )
             .finish()
     }
 }

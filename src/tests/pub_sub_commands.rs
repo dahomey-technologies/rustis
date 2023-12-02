@@ -630,9 +630,7 @@ async fn concurrent_subscribe() -> Result<()> {
         pub_sub_client2.subscribe("mychannel2"),
         regular_client.lpop("key", 2).into_future(),
         regular_client.lpop("key", 2).into_future(),
-        regular_client
-            .publish("mychannel1", "new")
-            .into_future()
+        regular_client.publish("mychannel1", "new").into_future()
     );
 
     let mut pub_sub_stream1 = results.0?;
@@ -644,6 +642,88 @@ async fn concurrent_subscribe() -> Result<()> {
     assert_eq!(vec!["value2".to_owned(), "value1".to_owned()], values1);
     assert_eq!(Vec::<String>::new(), values2);
     assert_eq!(b"new".to_vec(), message1.payload);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn unsubscribe() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    let mut pub_sub_stream = pub_sub_client
+        .subscribe(["mychannel1", "mychannel2"])
+        .await?;
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+
+    let message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = String::from_utf8(message.channel).unwrap();
+    let payload: String = String::from_utf8(message.payload).unwrap();
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage1", payload);
+
+    let message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = String::from_utf8(message.channel).unwrap();
+    let payload: String = String::from_utf8(message.payload).unwrap();
+
+    assert_eq!("mychannel2", channel);
+    assert_eq!("mymessage2", payload);
+
+    regular_client.publish("mychannel1", "mymessage11").await?;
+    pub_sub_stream.unsubscribe("mychannel2").await?;
+    regular_client.publish("mychannel1", "mymessage12").await?;
+
+    let message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = String::from_utf8(message.channel).unwrap();
+    let payload: String = String::from_utf8(message.payload).unwrap();
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage11", payload);
+
+    let message = pub_sub_stream.next().await.unwrap()?;
+    let channel: String = String::from_utf8(message.channel).unwrap();
+    let payload: String = String::from_utf8(message.payload).unwrap();
+
+    assert_eq!("mychannel1", channel);
+    assert_eq!("mymessage12", payload);
+
+    pub_sub_stream.close().await?;
+    regular_client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn punsubscribe() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    let mut pub_sub_stream = pub_sub_client
+        .psubscribe(["mychannel1*", "mychannel2*"])
+        .await?;
+
+    let num_patterns = regular_client.pub_sub_numpat().await?;
+    assert_eq!(2, num_patterns);
+
+    pub_sub_stream.punsubscribe("mychannel1*").await?;
+
+    let num_patterns = regular_client.pub_sub_numpat().await?;
+    assert_eq!(1, num_patterns);
+
+    pub_sub_stream.close().await?;
+    regular_client.close().await?;
 
     Ok(())
 }

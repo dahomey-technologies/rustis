@@ -191,9 +191,7 @@ impl PubSubStream {
             .subscribe_from_pub_sub_sender(&channels, &self.sender)
             .await?;
 
-        let mut existing_channels = CommandArgs::default();
-        std::mem::swap(&mut existing_channels, &mut self.channels);
-        self.channels = existing_channels.arg(channels).build();
+        self.channels = self.channels.arg(channels).build();
 
         Ok(())
     }
@@ -210,9 +208,7 @@ impl PubSubStream {
             .psubscribe_from_pub_sub_sender(&patterns, &self.sender)
             .await?;
 
-        let mut existing_patterns = CommandArgs::default();
-        std::mem::swap(&mut existing_patterns, &mut self.patterns);
-        self.patterns = existing_patterns.arg(patterns).build();
+        self.patterns = self.patterns.arg(patterns).build();
 
         Ok(())
     }
@@ -229,9 +225,46 @@ impl PubSubStream {
             .ssubscribe_from_pub_sub_sender(&shardchannels, &self.sender)
             .await?;
 
-        let mut existing_shardchannels = CommandArgs::default();
-        std::mem::swap(&mut existing_shardchannels, &mut self.shardchannels);
-        self.shardchannels = existing_shardchannels.arg(shardchannels).build();
+        self.shardchannels = self.shardchannels.arg(shardchannels).build();
+
+        Ok(())
+    }
+
+    /// Unsubscribe from the given channels
+    pub async fn unsubscribe<C, CC>(&mut self, channels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        let channels = CommandArgs::default().arg(channels).build();
+        self.channels.retain(|channel| channels.iter().all(|c| c != channel));
+        self.client.unsubscribe(channels).await?;
+
+        Ok(())
+    }
+
+    /// Unsubscribe from the given patterns
+    pub async fn punsubscribe<C, CC>(&mut self, patterns: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        let patterns = CommandArgs::default().arg(patterns).build();
+        self.patterns.retain(|pattern| patterns.iter().all(|p| p != pattern));
+        self.client.punsubscribe(patterns).await?;
+
+        Ok(())
+    }
+
+    /// Unsubscribe from the given patterns
+    pub async fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        let shardchannels = CommandArgs::default().arg(shardchannels).build();
+        self.shardchannels.retain(|shardchannel| shardchannels.iter().all(|sc: &Vec<u8>| sc != shardchannel));
+        self.client.punsubscribe(shardchannels).await?;
 
         Ok(())
     }

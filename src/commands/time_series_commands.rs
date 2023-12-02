@@ -1389,6 +1389,7 @@ impl ToArgs for TsMRangeOptions {
 }
 
 /// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) command.
+#[derive(Default)]
 pub struct TsGroupByOptions {
     command_args: CommandArgs,
 }

@@ -74,16 +74,20 @@ async fn on_reconnect() -> Result<()> {
 async fn command_timeout() -> Result<()> {
     log_try_init();
 
-    let mut config = get_default_addr().into_config()?;
-    config.command_timeout = Duration::from_millis(10);
-
-    let client = Client::connect(config).await?;
-
+    let client = get_test_client().await?;
+    
     client.flushall(FlushingMode::Sync).await?;
 
     // create an empty list
     client.lpush("key", "value").await?;
     let _result: Vec<String> = client.lpop("key", 1).await?;
+    
+    client.close().await?;
+
+    let mut config = get_default_addr().into_config()?;
+    config.command_timeout = Duration::from_millis(10);
+
+    let client = Client::connect(config).await?;
 
     // block for 5 seconds
     // since the timeout is configured to 10ms, we should have a timeout error

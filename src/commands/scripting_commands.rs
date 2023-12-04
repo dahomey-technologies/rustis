@@ -3,7 +3,7 @@ use crate::{
     commands::FlushingMode,
     resp::{
         cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
-        ToArgs,
+        ToArgs, Response,
     },
 };
 use serde::Deserialize;
@@ -26,7 +26,7 @@ pub trait ScriptingCommands<'a> {
     fn eval<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("EVAL").arg(builder))
     }
@@ -43,7 +43,7 @@ pub trait ScriptingCommands<'a> {
     fn eval_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("EVAL_RO").arg(builder))
     }
@@ -59,7 +59,7 @@ pub trait ScriptingCommands<'a> {
     fn evalsha<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("EVALSHA").arg(builder))
     }
@@ -76,7 +76,7 @@ pub trait ScriptingCommands<'a> {
     fn evalsha_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("EVALSHA_RO").arg(builder))
     }
@@ -92,7 +92,7 @@ pub trait ScriptingCommands<'a> {
     fn fcall<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("FCALL").arg(builder))
     }
@@ -108,7 +108,7 @@ pub trait ScriptingCommands<'a> {
     fn fcall_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
-        R: PrimitiveResponse,
+        R: Response,
     {
         prepare_command(self, cmd("FCALL_RO").arg(builder))
     }

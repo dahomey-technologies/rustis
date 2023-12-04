@@ -40,6 +40,36 @@ async fn eval() -> Result<()> {
     Ok(())
 }
 
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn eval_tuple_response() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let lua_script = r#"
+redis.call("DEL", "key");
+redis.call("SADD", "key", 1, 2, 3, 4);
+local arr = redis.call("SMEMBERS", "key");
+redis.call("DEL", "key");
+return { ARGV[1], ARGV[2], 42, arr }
+    "#;
+    let result: (String, String, i32, Vec<i64>) = client
+        .eval(
+            CallBuilder::script(lua_script)
+                .args("Hello")
+                .args("world"),
+        )
+        .await?;
+
+    assert_eq!(result.0, "Hello");
+    assert_eq!(result.1, "world");
+    assert_eq!(result.2, 42);
+    assert_eq!(result.3, vec![1, 2, 3, 4]);
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -69,6 +99,39 @@ async fn fcall() -> Result<()> {
         .fcall(CallBuilder::function("myfunc").args("hello"))
         .await?;
     assert_eq!("hello", result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn fcall_tuple_response() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let lua_lib = r#"#!lua name=mylib
+redis.register_function('myfunc', function(keys, args) 
+    redis.call("DEL", "key");
+    redis.call("SADD", "key", 1, 2, 3, 4);
+    local arr = redis.call("SMEMBERS", "key");
+    redis.call("DEL", "key");
+    return { args[1], args[2], 42, arr }
+end)
+    "#;
+    let library: String = client.function_load(true, lua_lib).await?;
+    assert_eq!("mylib", library);
+    let result: (String, String, i32, Vec<i64>) = client
+        .fcall(
+            CallBuilder::function("myfunc")
+                .args("Hello")
+                .args("world"),
+        )
+        .await?;
+
+    assert_eq!(result.0, "Hello");
+    assert_eq!(result.1, "world");
+    assert_eq!(result.2, 42);
+    assert_eq!(result.3, vec![1, 2, 3, 4]);
 
     Ok(())
 }

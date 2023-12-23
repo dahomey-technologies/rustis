@@ -7,6 +7,10 @@ use crate::{
     sleep, spawn,
     tests::get_test_client,
     Result,
+    error::{
+        Error,
+        RedisErrorKind
+    },
 };
 use serial_test::serial;
 
@@ -36,6 +40,28 @@ async fn eval() -> Result<()> {
         )
         .await?;
     assert_eq!("hello world!", result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn evalsha_noscript() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // SHA1("") == da39a3ee5e6b4b0d3255bfef95601890afd80709
+    let result = client
+        .evalsha::<()>(CallBuilder::sha1("da39a3ee5e6b4b0d3255bfef95601890afd80709"))
+        .await
+        .unwrap_err();
+
+    let Error::Redis(error) = result else {
+        assert!(false);
+        return Ok(());
+    };
+
+    assert_eq!(error.kind, RedisErrorKind::NoScript);
 
     Ok(())
 }

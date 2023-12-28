@@ -2,7 +2,7 @@ use crate::{
     client::BatchPreparedCommand,
     commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
     resp::cmd,
-    tests::get_test_client,
+    tests::{get_test_client, get_cluster_test_client},
     Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
@@ -157,6 +157,43 @@ async fn transaction_discard() -> Result<()> {
     client.set("key", "value").await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn transaction_on_cluster_connection_with_keys_with_same_slot() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let mut transaction = client.create_transaction();
+
+    transaction.mset([("{hash}key1", "value1"), ("{hash}key2", "value2")]).queue();
+    transaction.get::<_, String>("{hash}key1").queue();
+    transaction.get::<_, String>("{hash}key2").queue();
+    let ((), val1, val2): ((), String, String) = transaction.execute().await.unwrap();
+    assert_eq!("value1", val1);
+    assert_eq!("value2", val2);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn transaction_on_cluster_connection_with_keys_with_different_slots() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let mut transaction = client.create_transaction();
+
+    transaction.mset([("key1", "value1"), ("key2", "value2")]).queue();
+    transaction.get::<_, String>("key1").queue();
+    transaction.get::<_, String>("key2").queue();
+    let result: Result<((), String, String)> = transaction.execute().await;
+    assert!(result.is_err());
 
     Ok(())
 }

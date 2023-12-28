@@ -7,6 +7,8 @@ use crate::{
 use log::debug;
 
 pub struct SentinelConnection {
+    sentinel_config: SentinelConfig,
+    config: Config,
     pub inner_connection: StandaloneConnection,
 }
 
@@ -34,7 +36,10 @@ impl SentinelConnection {
 
     #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
-        self.inner_connection.reconnect().await
+        self.inner_connection =
+            Self::connect_to_sentinel(&self.sentinel_config, &self.config).await?;
+
+        Ok(())
     }
 
     /// Follow `Redis service discovery via Sentinel` documentation
@@ -47,6 +52,19 @@ impl SentinelConnection {
         sentinel_config: &SentinelConfig,
         config: &Config,
     ) -> Result<SentinelConnection> {
+        let inner_connection = Self::connect_to_sentinel(sentinel_config, config).await?;
+
+        Ok(SentinelConnection {
+            sentinel_config: sentinel_config.clone(),
+            config: config.clone(),
+            inner_connection,
+        })
+    }
+
+    async fn connect_to_sentinel(
+        sentinel_config: &SentinelConfig,
+        config: &Config,
+    ) -> Result<StandaloneConnection> {
         let mut restart = false;
         let mut unreachable_sentinel = true;
 
@@ -99,9 +117,7 @@ impl SentinelConnection {
                     replica_infos: _,
                 } = role
                 {
-                    return Ok(SentinelConnection {
-                        inner_connection: master_connection,
-                    });
+                    return Ok(master_connection);
                 } else {
                     sleep(sentinel_config.wait_between_failures).await;
                     // restart from the beginning

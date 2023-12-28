@@ -6,6 +6,7 @@ use crate::{
     StandaloneConnection,
 };
 use serde::de::DeserializeOwned;
+use smallvec::SmallVec;
 use std::future::IntoFuture;
 
 pub enum Connection {
@@ -42,7 +43,7 @@ impl Connection {
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &mut Command>,
+        commands: SmallVec::<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         match self {

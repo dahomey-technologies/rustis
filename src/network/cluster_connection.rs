@@ -152,15 +152,7 @@ impl ClusterConnection {
             )));
         };
 
-        let command_name = command_info.name.to_string();
-
-        let request_policy = command_info.command_tips.iter().find_map(|tip| {
-            if let CommandTip::RequestPolicy(request_policy) = tip {
-                Some(request_policy)
-            } else {
-                None
-            }
-        });
+        let command_name = command_info.name.clone();
 
         let node_idx = self.get_random_node_index();
         let keys = self
@@ -170,6 +162,14 @@ impl ClusterConnection {
         let slots = Self::hash_slots(&keys);
 
         debug!("[{}] keys: {keys:?}, slots: {slots:?}", self.tag);
+
+        let request_policy = command_info.command_tips.iter().find_map(|tip| {
+            if let CommandTip::RequestPolicy(request_policy) = tip {
+                Some(request_policy)
+            } else {
+                None
+            }
+        });
 
         if let Some(request_policy) = request_policy {
             match request_policy {
@@ -205,7 +205,7 @@ impl ClusterConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &mut Command>,
+        commands: SmallVec<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         if retry_reasons.iter().any(|r| {
@@ -231,8 +231,39 @@ impl ClusterConnection {
             })
             .collect::<Vec<_>>();
 
-        for command in commands {
-            self.internal_write(command, &ask_reasons).await?;
+        if commands.len() > 1 && commands[0].name == "MULTI" {
+            let node_idx = self.get_random_node_index();
+            let keys = self
+                .command_info_manager
+                .extract_keys(commands[1], &mut self.nodes[node_idx].connection)
+                .await?;
+            let slots = Self::hash_slots(&keys);
+            if slots.is_empty() || !slots.windows(2).all(|s| s[0] == s[1]) {
+                return Err(Error::Client(format!(
+                    "[{}] Cannot execute transaction with mismatched key slots",
+                    self.tag
+                )));
+            }
+            let ref_slot = slots[0];
+
+            for command in commands {
+                let keys = self
+                    .command_info_manager
+                    .extract_keys(command, &mut self.nodes[node_idx].connection)
+                    .await?;
+                self.no_request_policy(
+                    command,
+                    command.name.to_string(),
+                    keys,
+                    SmallVec::from_slice(&[ref_slot]),
+                    &ask_reasons,
+                )
+                .await?;
+            }
+        } else {
+            for command in commands {
+                self.internal_write(command, &ask_reasons).await?;
+            }
         }
 
         Ok(())
@@ -308,7 +339,7 @@ impl ClusterConnection {
         Ok(())
     }
 
-    /// The client should execute the command on several shards.
+    /// The client should execute the command on multiple shards.
     /// The shards that execute the command are determined by the hash slots of its input key name arguments.
     /// Examples for such commands include MSET, MGET and DEL.
     /// However, note that SUNIONSTORE isn't considered as multi_shard because all of its keys must belong to the same hash slot.
@@ -486,24 +517,28 @@ impl ClusterConnection {
 
             let node_id = &self.nodes[node_idx].id;
 
-            let Some((req_idx, sub_req_idx)) = self
-                .pending_requests
-                .iter()
-                .enumerate()
-                .find_map(|(req_idx, req)| {
-                    let sub_req_idx = req
-                        .sub_requests
-                        .iter()
-                        .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
-                    Some((req_idx, sub_req_idx))
-                }) else {
-                    log::error!("[{}] Received unexpected message: {result:?} from {}",
-                        self.tag, self.nodes[node_idx].connection.tag());
-                    return Some(Err(Error::Client(format!(
-                        "[{}] Received unexpected message",
-                        self.tag
-                    ))));
-                };
+            let Some((req_idx, sub_req_idx)) =
+                self.pending_requests
+                    .iter()
+                    .enumerate()
+                    .find_map(|(req_idx, req)| {
+                        let sub_req_idx = req
+                            .sub_requests
+                            .iter()
+                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
+                        Some((req_idx, sub_req_idx))
+                    })
+            else {
+                log::error!(
+                    "[{}] Received unexpected message: {result:?} from {}",
+                    self.tag,
+                    self.nodes[node_idx].connection.tag()
+                );
+                return Some(Err(Error::Client(format!(
+                    "[{}] Received unexpected message",
+                    self.tag
+                ))));
+            };
 
             self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
             trace!(
@@ -768,7 +803,8 @@ impl ClusterConnection {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(format!(
-                                "[{}] Unexpected result {sub_result:?}", self.tag
+                                "[{}] Unexpected result {sub_result:?}",
+                                self.tag
                             ))));
                         };
 
@@ -795,7 +831,8 @@ impl ClusterConnection {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(format!(
-                                "[{}] Unexpected result {sub_result:?}", self.tag
+                                "[{}] Unexpected result {sub_result:?}",
+                                self.tag
                             ))));
                         };
 
@@ -903,7 +940,8 @@ impl ClusterConnection {
         let mut slot_ranges = Vec::<SlotRange>::new();
 
         for shard_info in shard_info_list.into_iter() {
-            let Some(master_info) = shard_info.nodes.into_iter().find(|n| n.role == "master") else {
+            let Some(master_info) = shard_info.nodes.into_iter().find(|n| n.role == "master")
+            else {
                 return Err(Error::Client("Cluster misconfiguration".to_owned()));
             };
             let master_id: NodeId = master_info.id.as_str().into();
@@ -1015,7 +1053,8 @@ impl ClusterConnection {
         for mut shard_info in shard_info_list {
             // ensure that the first node is master
             if shard_info.nodes[0].role != "master" {
-                let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master") else {
+                let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master")
+                else {
                     return Err(Error::Client("Cluster misconfiguration".to_owned()));
                 };
 

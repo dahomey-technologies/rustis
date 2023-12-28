@@ -328,7 +328,7 @@ impl NetworkHandler {
 
         if let Err(e) = self
             .connection
-            .write_batch(commands_to_write.into_iter(), &retry_reasons)
+            .write_batch(commands_to_write, &retry_reasons)
             .await
         {
             error!("[{}] Error while writing batch: {e}", self.tag);

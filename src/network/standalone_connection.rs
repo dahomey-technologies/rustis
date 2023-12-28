@@ -12,6 +12,7 @@ use bytes::BytesMut;
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, log_enabled, Level};
 use serde::de::DeserializeOwned;
+use smallvec::SmallVec;
 use std::future::IntoFuture;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
@@ -99,7 +100,7 @@ impl StandaloneConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &mut Command>,
+        commands: SmallVec::<[&mut Command; 10]>,
         _retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.buffer.clear();

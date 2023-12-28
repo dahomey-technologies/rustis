@@ -5,6 +5,7 @@ use crate::{
     sleep, Error, Result, RetryReason, StandaloneConnection,
 };
 use log::debug;
+use smallvec::SmallVec;
 
 pub struct SentinelConnection {
     pub inner_connection: StandaloneConnection,
@@ -19,7 +20,7 @@ impl SentinelConnection {
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: impl Iterator<Item = &mut Command>,
+        commands: SmallVec::<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.inner_connection

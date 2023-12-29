@@ -761,11 +761,12 @@ pub struct ClusterNodeResult {
 }
 
 /// Cluster health status for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ClusterHealthStatus {
     Online,
     Failed,
+    Fail,
     Loading,
 }
 

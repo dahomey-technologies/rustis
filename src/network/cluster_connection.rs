@@ -509,6 +509,10 @@ impl ClusterConnection {
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
+            if result.is_none() {
+                return None;
+            }
+
             if let Some(Ok(bytes)) = &result {
                 if bytes.is_push_message() {
                     return result;
@@ -940,7 +944,10 @@ impl ClusterConnection {
         let mut slot_ranges = Vec::<SlotRange>::new();
 
         for shard_info in shard_info_list.into_iter() {
-            let Some(master_info) = shard_info.nodes.into_iter().find(|n| n.role == "master")
+            let Some(master_info) = shard_info
+                .nodes
+                .into_iter()
+                .find(|n| n.role == "master" && n.health == ClusterHealthStatus::Online)
             else {
                 return Err(Error::Client("Cluster misconfiguration".to_owned()));
             };

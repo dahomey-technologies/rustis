@@ -6,17 +6,14 @@ use crate::{
         ClusterShardResult, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
         MigrateOptions, ScriptingCommands, ServerCommands, StringCommands,
     },
-    network::{Version, ClusterConnection},
+    network::{ClusterConnection, Version},
     sleep, spawn,
     tests::{get_cluster_test_client, get_cluster_test_client_with_command_timeout},
     Error, RedisError, RedisErrorKind, Result,
 };
-use serial_test::serial;
-use std::{
-    collections::HashSet,
-    future::IntoFuture,
-};
 use futures_util::try_join;
+use serial_test::serial;
+use std::{collections::HashSet, future::IntoFuture, time::Duration};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -463,5 +460,23 @@ async fn commands_to_different_nodes() -> Result<()> {
     assert_eq!("0", val0);
     assert_eq!("1", val1);
     assert_eq!("2", val2);
+    Ok(())
+}
+
+/// test reconnection to replica when master is stopped
+/// master stop is not automated but must be done manually
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+#[ignore]
+async fn get_loop() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.set("key", "value").await?;
+
+    for _ in 0..1000 {
+        let _value: Result<String> = client.get("key").await;
+        sleep(Duration::from_secs(1)).await;
+    }
+
     Ok(())
 }

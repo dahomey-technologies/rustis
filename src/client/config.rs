@@ -8,8 +8,8 @@ const DEFAULT_PORT: u16 = 6379;
 const DEFAULT_DATABASE: usize = 0;
 const DEFAULT_WAIT_BETWEEN_FAILURES: u64 = 250;
 const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
-const DEFAULT_COMMAND_TIMEOUT: u64 =  0;
-const DEFAULT_AUTO_RESUBSCRTBE: bool =  true;
+const DEFAULT_COMMAND_TIMEOUT: u64 = 0;
+const DEFAULT_AUTO_RESUBSCRTBE: bool = true;
 const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
@@ -38,7 +38,7 @@ pub struct Config {
     /// An optional password for authentication.
     ///
     /// The password could be either coupled with an ACL username either used alone.
-    /// 
+    ///
     /// See:
     /// * [`ACL`](https://redis.io/docs/management/security/acl/)
     /// * [`Authentication`](https://redis.io/docs/management/security/#authentication)
@@ -56,32 +56,32 @@ pub struct Config {
     pub connect_timeout: Duration,
     /// If a command does not return a reply within a set number of milliseconds,
     /// a timeout error will be thrown.
-    /// 
+    ///
     /// If set to 0, no timeout is apply
-    /// 
+    ///
     /// The default is 0
     pub command_timeout: Duration,
     /// When the client reconnects, channels subscribed in the previous connection will be
     /// resubscribed automatically if `auto_resubscribe` is `true`.
-    /// 
+    ///
     /// The default is `true`
     pub auto_resubscribe: bool,
-    /// When the client reconnects, if in `monitor` mode, the 
+    /// When the client reconnects, if in `monitor` mode, the
     /// [`monitor`](crate::commands::BlockingCommands::monitor) command
     /// will be resent automatically
-    /// 
+    ///
     /// The default is `true`
     pub auto_remonitor: bool,
     /// Set the name of the connection to make it easier to identity the connection in client list.
-    /// 
+    ///
     /// See [`client_setname`](crate::commands::ConnectionCommands::client_setname)
     pub connection_name: String,
     /// Enable/disable keep-alive functionality (default `None`)
-    /// 
+    ///
     /// See [`TcpKeepAlive::with_time`](https://docs.rs/socket2/latest/socket2/struct.TcpKeepalive.html#method.with_time)
     pub keep_alive: Option<Duration>,
     /// Enable/disable the use of Nagle's algorithm (default `true`)
-    /// 
+    ///
     /// See [`TcpStream::set_nodelay`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html#method.set_nodelay)    
     pub no_delay: bool,
     /// Maximum number of retry attempts to send a command to the Redis server (default `3`).
@@ -89,8 +89,8 @@ pub struct Config {
     /// Defines the default strategy for retries on network error (default `false`):
     /// * `true` - retry sending the command/batch of commands on network error
     /// * `false` - do not retry sending the command/batch of commands on network error
-    /// 
-    /// This strategy can be overriden for each command/batch 
+    ///
+    /// This strategy can be overriden for each command/batch
     /// of commands in the following functions:
     /// * [`PreparedCommand::retry_on_error`](crate::client::PreparedCommand::retry_on_error)
     /// * [`Pipeline::retry_on_error`](crate::client::Pipeline::retry_on_error)
@@ -177,10 +177,14 @@ impl Config {
         let (tls_config, server_type) = match scheme {
             "redis" => (None, ServerType::Standalone),
             "rediss" => (Some(TlsConfig::default()), ServerType::Standalone),
-            "redis+sentinel" => (None, ServerType::Sentinel),
-            "rediss+sentinel" => (Some(TlsConfig::default()), ServerType::Sentinel),
-            "redis+cluster" => (None, ServerType::Cluster),
-            "rediss+cluster" => (Some(TlsConfig::default()), ServerType::Cluster),
+            "redis+sentinel" | "redis-sentinel" => (None, ServerType::Sentinel),
+            "rediss+sentinel" | "rediss-sentinel" => {
+                (Some(TlsConfig::default()), ServerType::Sentinel)
+            }
+            "redis+cluster" | "redis-cluster" => (None, ServerType::Cluster),
+            "rediss+cluster" | "rediss-cluster" => {
+                (Some(TlsConfig::default()), ServerType::Cluster)
+            }
             _ => {
                 return None;
             }
@@ -189,8 +193,8 @@ impl Config {
         #[cfg(not(feature = "tls"))]
         let server_type = match scheme {
             "redis" => ServerType::Standalone,
-            "redis+sentinel" => ServerType::Sentinel,
-            "redis+cluster" => ServerType::Cluster,
+            "redis+sentinel" | "redis-sentinel" => ServerType::Sentinel,
+            "redis+cluster" | "redis-cluster" => ServerType::Cluster,
             _ => {
                 return None;
             }
@@ -586,10 +590,13 @@ impl ToString for Config {
             } else {
                 s.push('&');
             }
-            s.push_str(&format!("max_command_attempts={}", self.max_command_attempts));
+            s.push_str(&format!(
+                "max_command_attempts={}",
+                self.max_command_attempts
+            ));
         }
 
-        if self.retry_on_error != DEFAULT_RETRY_ON_ERROR{
+        if self.retry_on_error != DEFAULT_RETRY_ON_ERROR {
             if !query_separator {
                 query_separator = true;
                 s.push('?');

@@ -194,10 +194,10 @@ redis|rediss[+sentinel]://[[<username>]:<password>@]<host>[:<port>]/<service>[/<
 The URL scheme is used to detect the server type:
 * `redis://` - Non secure TCP connection to a standalone Redis server
 * `rediss://` - Secure (TSL) TCP connection to a standalone Redis server
-* `redis+sentinel://` - Non secure TCP connection to a Redis sentinel network
-* `rediss+sentinel://` - Secure (TSL) TCP connection to a Redis sentinel network
-* `redis+cluster://` - Non secure TCP connection to a Redis cluster
-* `rediss+cluster://` - Secure (TSL) TCP connection to a Redis cluster
+* `redis+sentinel://` or `redis-sentinel://` - Non secure TCP connection to a Redis sentinel network
+* `rediss+sentinel://` or `rediss-sentinel://` - Secure (TSL) TCP connection to a Redis sentinel network
+* `redis+cluster://` or `redis-cluster://` - Non secure TCP connection to a Redis cluster
+* `rediss+cluster://` or `rediss-cluster://` - Secure (TSL) TCP connection to a Redis cluster
 
 ### QueryParameters
 Query parameters match perfectly optional configuration fields

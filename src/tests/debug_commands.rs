@@ -14,11 +14,11 @@ async fn standalone_server_panic() -> Result<()> {
 
     let panic_result = client.debug_panic().await;
 
-    assert!(matches!(panic_result, Err(_)));
+    assert!(panic_result.is_err());
 
     let ping_result = client.ping::<()>(PingOptions::default()).await;
 
-    assert!(matches!(ping_result, Err(_)));
+    assert!(ping_result.is_err());
 
     Ok(())
 }
@@ -32,7 +32,7 @@ async fn cluster_server_panic() -> Result<()> {
 
     let panic_result = client.debug_panic().await;
 
-    assert!(matches!(panic_result, Err(_)));
+    assert!(panic_result.is_err());
 
     let ping_result = client.ping::<()>(PingOptions::default()).await;
 

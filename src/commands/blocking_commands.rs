@@ -2,7 +2,7 @@ use crate::{
     client::{prepare_command, MonitorStream, PreparedCommand},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
     resp::{cmd, deserialize_vec_of_triplets, PrimitiveResponse, SingleArg, SingleArgCollection},
-    Future,
+    Result,
 };
 use serde::{
     de::{DeserializeOwned, Visitor},
@@ -283,5 +283,6 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
     #[must_use]
-    fn monitor(self) -> Future<'a, MonitorStream>;
+    #[allow(async_fn_in_trait)]
+    async fn monitor(self) -> Result<MonitorStream>;
 }

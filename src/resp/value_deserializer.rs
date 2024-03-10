@@ -498,7 +498,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     where
         V: Visitor<'de>,
     {
-        fn check_resp2_array(values: &Vec<Value>, fields: &'static [&'static str]) -> bool {
+        fn check_resp2_array(values: &[Value], fields: &'static [&'static str]) -> bool {
             if values.len() > fields.len() {
                 true
             } else if let Some(Value::SimpleString(s)) = values.first() {
@@ -608,7 +608,7 @@ struct SeqAccess<'de> {
 }
 
 impl<'de> SeqAccess<'de> {
-    pub fn new(values: &'de Vec<Value>) -> Self {
+    pub fn new(values: &'de [Value]) -> Self {
         Self {
             len: values.len(),
             iter: values.iter(),

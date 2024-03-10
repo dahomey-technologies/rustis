@@ -509,9 +509,7 @@ impl ClusterConnection {
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
-            if result.is_none() {
-                return None;
-            }
+            result.as_ref()?;
 
             if let Some(Ok(bytes)) = &result {
                 if bytes.is_push_message() {

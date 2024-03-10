@@ -56,7 +56,7 @@ struct SeqAccess<'de> {
 }
 
 impl<'de> SeqAccess<'de> {
-    pub fn new(bufs: &'de Vec<RespBuf>) -> Self {
+    pub fn new(bufs: &'de [RespBuf]) -> Self {
         Self {
             len: bufs.len(),
             iter: bufs.iter(),

@@ -126,7 +126,7 @@ pub(crate) async fn get_cluster_test_client_with_command_timeout() -> Result<Cli
     .await
 }
 
-#[cfg(any(feature = "redis-json"))]
+#[cfg(feature = "redis-json")]
 pub(crate) async fn get_redis_stack_test_client() -> Result<Client> {
     log_try_init();
     Client::connect(format!("redis://{}:{}", get_default_host(), 8000)).await

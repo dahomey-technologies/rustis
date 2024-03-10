@@ -87,8 +87,7 @@ async fn evalsha_noscript() -> Result<()> {
         .unwrap_err();
 
     let Error::Redis(error) = result else {
-        assert!(false);
-        return Ok(());
+        unreachable!();
     };
 
     assert_eq!(error.kind, RedisErrorKind::NoScript);

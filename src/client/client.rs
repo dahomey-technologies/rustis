@@ -21,7 +21,7 @@ use crate::{
         BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
         GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands,
         PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands
+        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
     },
     network::{
         timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
@@ -33,13 +33,13 @@ use crate::{
 };
 use futures_channel::{mpsc, oneshot};
 use futures_util::Stream;
+use log::trace;
 use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::Duration,
 };
-use log::trace;
 
 /// Client with a unique connection to a Redis server.
 #[derive(Clone)]
@@ -466,91 +466,79 @@ impl<'a> TopKCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]
-    fn subscribe<C, CC>(self, channels: CC) -> Future<'a, PubSubStream>
+    async fn subscribe<C, CC>(self, channels: CC) -> Result<PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
         let channels = CommandArgs::default().arg(channels).build();
 
-        Box::pin(async move {
-            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
-                mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
-            self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender)
-                .await?;
+        self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender)
+            .await?;
 
-            Ok(PubSubStream::from_channels(
-                channels,
-                pub_sub_sender,
-                pub_sub_receiver,
-                self.clone(),
-            ))
-        })
+        Ok(PubSubStream::from_channels(
+            channels,
+            pub_sub_sender,
+            pub_sub_receiver,
+            self.clone(),
+        ))
     }
 
     #[inline]
-    fn psubscribe<P, PP>(self, patterns: PP) -> Future<'a, PubSubStream>
+    async fn psubscribe<P, PP>(self, patterns: PP) -> Result<PubSubStream>
     where
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>,
     {
         let patterns = CommandArgs::default().arg(patterns).build();
 
-        Box::pin(async move {
-            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
-                mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
-            self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender)
-                .await?;
+        self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender)
+            .await?;
 
-            Ok(PubSubStream::from_patterns(
-                patterns,
-                pub_sub_sender,
-                pub_sub_receiver,
-                self.clone(),
-            ))
-        })
+        Ok(PubSubStream::from_patterns(
+            patterns,
+            pub_sub_sender,
+            pub_sub_receiver,
+            self.clone(),
+        ))
     }
 
     #[inline]
-    fn ssubscribe<C, CC>(self, shardchannels: CC) -> Future<'a, PubSubStream>
+    async fn ssubscribe<C, CC>(self, shardchannels: CC) -> Result<PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>,
     {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
 
-        Box::pin(async move {
-            let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
-                mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
-            self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender)
-                .await?;
+        self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender)
+            .await?;
 
-            Ok(PubSubStream::from_shardchannels(
-                shardchannels,
-                pub_sub_sender,
-                pub_sub_receiver,
-                self.clone(),
-            ))
-        })
+        Ok(PubSubStream::from_shardchannels(
+            shardchannels,
+            pub_sub_sender,
+            pub_sub_receiver,
+            self.clone(),
+        ))
     }
 }
 
 impl<'a> BlockingCommands<'a> for &'a Client {
-    fn monitor(self) -> Future<'a, MonitorStream> {
-        Box::pin(async move {
-            let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
-                oneshot::channel();
-            let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
+    async fn monitor(self) -> Result<MonitorStream> {
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
 
-            let message = Message::monitor(cmd("MONITOR"), result_sender, push_sender);
+        let message = Message::monitor(cmd("MONITOR"), result_sender, push_sender);
 
-            self.send_message(message)?;
+        self.send_message(message)?;
 
-            let _bytes = result_receiver.await??;
-            Ok(MonitorStream::new(push_receiver, self.clone()))
-        })
+        let _bytes = result_receiver.await??;
+        Ok(MonitorStream::new(push_receiver, self.clone()))
     }
 }

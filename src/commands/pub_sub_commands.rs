@@ -4,7 +4,7 @@ use crate::{
         cmd, CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
         SingleArg, SingleArgCollection, ToArgs,
     },
-    Future,
+    Result,
 };
 use serde::de::DeserializeOwned;
 
@@ -49,7 +49,8 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
-    fn psubscribe<P, PP>(self, patterns: PP) -> Future<'a, PubSubStream>
+    #[allow(async_fn_in_trait)]
+    async fn psubscribe<P, PP>(self, patterns: PP) -> Result<PubSubStream>
     where
         P: SingleArg + Send + 'a,
         PP: SingleArgCollection<P>;
@@ -183,7 +184,8 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
-    fn ssubscribe<C, CC>(self, shardchannels: CC) -> Future<'a, PubSubStream>
+    #[allow(async_fn_in_trait)]
+    async fn ssubscribe<C, CC>(self, shardchannels: CC) -> Result<PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>;
@@ -224,7 +226,8 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
-    fn subscribe<C, CC>(self, channels: CC) -> Future<'a, PubSubStream>
+    #[allow(async_fn_in_trait)]
+    async fn subscribe<C, CC>(self, channels: CC) -> Result<PubSubStream>
     where
         C: SingleArg + Send + 'a,
         CC: SingleArgCollection<C>;

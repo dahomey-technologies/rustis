@@ -2,7 +2,7 @@ use crate::{
     client::IntoConfig,
     commands::{
         GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands,
-        StringCommands, XReadOptions, ZAggregate,
+        StringCommands, XReadGroupOptions, XReadOptions, ZAggregate,
     },
     network::StandaloneConnection,
     tests::{get_default_addr, get_default_host, get_default_port, get_test_client},
@@ -57,6 +57,25 @@ async fn extract_keys() -> Result<()> {
         )
         .await?;
     assert_eq!(2, keys.len());
+    assert_eq!("mystream", keys[0]);
+    assert_eq!("writers", keys[1]);
+
+    // XREADGROUP
+    let keys = command_info_manager
+        .extract_keys(
+            client
+                .xreadgroup::<_, _, _, _, _, _, String, Vec<(_, _)>>(
+                    "mygroup",
+                    "myconsumer",
+                    XReadGroupOptions::default().count(2),
+                    ["mystream", "writers"],
+                    ["1526999352406-0", "1526985685298-0"],
+                )
+                .command(),
+            &mut connection,
+        )
+        .await?;
+    assert_eq!(2, keys.len(), "unexpected keys: {:?}", keys);
     assert_eq!("mystream", keys[0]);
     assert_eq!("writers", keys[1]);
 

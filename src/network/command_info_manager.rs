@@ -118,7 +118,7 @@ impl CommandInfoManager {
                             .iter()
                             .skip(*start_from as usize - 1)
                             .position(|arg| arg.as_slice() == keyword.as_bytes())
-                            .map(|i| i + 1)
+                            .map(|i| i + *start_from as usize)
                     } else {
                         slice
                             .iter()

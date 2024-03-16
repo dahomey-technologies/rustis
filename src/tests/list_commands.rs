@@ -321,6 +321,9 @@ async fn lpop() -> Result<()> {
     // cleanup
     client.del("mylist").await?;
 
+    let elements: Vec<String> = client.lpop("mylist", 2).await?;
+    assert_eq!(0, elements.len());
+
     client
         .lpush("mylist", ["element1", "element2", "element3"])
         .await?;

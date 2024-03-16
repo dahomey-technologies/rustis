@@ -1,9 +1,5 @@
 use crate::{
-    client::{Client, ClientPreparedCommand},
-    commands::InternalPubSubCommands,
-    network::PubSubSender,
-    resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection},
-    PubSubReceiver, Result,
+    client::{Client, ClientPreparedCommand}, commands::InternalPubSubCommands, network::PubSubSender, resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection}, Error, PubSubReceiver, Result
 };
 use futures_util::{Stream, StreamExt};
 use serde::{
@@ -104,6 +100,12 @@ impl PubSubSplitSink {
     {
         let channels = CommandArgs::default().arg(channels).build();
 
+        for channel in &channels {
+            if self.channels.iter().any(|c| c == channel) {
+                return Err(Error::Client(format!("pub sub stream already subscribed to channel `{}`", String::from_utf8_lossy(channel))));
+            }
+        }
+
         self.client
             .subscribe_from_pub_sub_sender(&channels, &self.sender)
             .await?;
@@ -121,6 +123,12 @@ impl PubSubSplitSink {
     {
         let patterns = CommandArgs::default().arg(patterns).build();
 
+        for pattern in &patterns {
+            if self.patterns.iter().any(|p| p == pattern) {
+                return Err(Error::Client(format!("pub sub stream already subscribed to pattern `{}`", String::from_utf8_lossy(pattern))));
+            }
+        }
+
         self.client
             .psubscribe_from_pub_sub_sender(&patterns, &self.sender)
             .await?;
@@ -137,6 +145,12 @@ impl PubSubSplitSink {
         CC: SingleArgCollection<C>,
     {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
+
+        for shardchannel in &shardchannels {
+            if self.shardchannels.iter().any(|c| c == shardchannel) {
+                return Err(Error::Client(format!("pub sub stream already subscribed to shard channel `{}`", String::from_utf8_lossy(shardchannel))));
+            }
+        }
 
         self.client
             .ssubscribe_from_pub_sub_sender(&shardchannels, &self.sender)

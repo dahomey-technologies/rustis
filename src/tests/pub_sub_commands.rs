@@ -768,3 +768,26 @@ async fn split() -> Result<()> {
 
     Ok(())
 }
+
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn subscribe_twice() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+    assert!(pub_sub_stream.subscribe("mychannel").await.is_err());
+
+    pub_sub_stream.psubscribe("pattern").await?;
+    assert!(pub_sub_stream.psubscribe("pattern").await.is_err());
+
+    pub_sub_stream.ssubscribe("mychannel").await?;
+    assert!(pub_sub_stream.ssubscribe("mychannel").await.is_err());
+
+    Ok(())
+}

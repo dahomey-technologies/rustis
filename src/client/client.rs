@@ -290,6 +290,13 @@ impl Client {
         Pipeline::new(self)
     }
 
+    /// Create a new pub sub stream with no upfront subscription
+    #[inline]
+    pub fn create_pub_sub(&self) -> PubSubStream {
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
+        PubSubStream::new(pub_sub_sender, pub_sub_receiver, self.clone())
+    }
+
     pub fn create_client_tracking_invalidation_stream(
         &self,
     ) -> Result<impl Stream<Item = Vec<String>>> {

@@ -4,6 +4,7 @@ use crate::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         ListCommands, PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
     },
+    spawn,
     tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
     Result,
 };
@@ -724,6 +725,46 @@ async fn punsubscribe() -> Result<()> {
 
     pub_sub_stream.close().await?;
     regular_client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn split() -> Result<()> {
+    let pub_sub_client = get_test_client().await?;
+    let regular_client = get_test_client().await?;
+
+    // cleanup
+    regular_client.flushdb(FlushingMode::Sync).await?;
+
+    let pub_sub_stream = pub_sub_client.create_pub_sub();
+    let (mut sink, mut stream) = pub_sub_stream.split();
+
+    sink.subscribe("mychannel1").await?;
+    regular_client.publish("mychannel1", "mymessage1").await?;
+    sink.subscribe("mychannel2").await?;
+    regular_client.publish("mychannel2", "mymessage2").await?;
+    sink.subscribe("mychannel3").await?;
+    regular_client.publish("mychannel3", "mymessage3").await?;
+
+    let join_handle_stream = spawn(async move {
+        let message1 = stream.next().await.unwrap().unwrap();
+        assert_eq!(b"mychannel1", message1.channel.as_slice());
+        assert_eq!(b"mymessage1", message1.payload.as_slice());
+
+        let message2 = stream.next().await.unwrap().unwrap();
+        assert_eq!(b"mychannel2", message2.channel.as_slice());
+        assert_eq!(b"mymessage2", message2.payload.as_slice());
+
+        let message3 = stream.next().await.unwrap().unwrap();
+        assert_eq!(b"mychannel3", message3.channel.as_slice());
+        assert_eq!(b"mymessage3", message3.payload.as_slice());
+    });
+
+    join_handle_stream.await?;
+    sink.close().await?;
 
     Ok(())
 }

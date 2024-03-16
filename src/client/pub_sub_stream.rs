@@ -84,101 +84,16 @@ impl<'de> Deserialize<'de> for PubSubMessage {
     }
 }
 
-/// Stream to get messages from the channels or patterns [`subscribed`](https://redis.io/docs/manual/pubsub/) to
-///
-/// # Example
-/// ```
-/// use rustis::{
-///     client::{Client, ClientPreparedCommand},
-///     commands::{FlushingMode, PubSubCommands, ServerCommands},
-///     resp::cmd,
-///     Result,
-/// };
-/// use futures_util::StreamExt;
-///
-/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
-/// async fn main() -> Result<()> {
-///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
-///     let regular_client = Client::connect("127.0.0.1:6379").await?;
-///
-///     regular_client.flushdb(FlushingMode::Sync).await?;
-///
-///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
-///
-///     regular_client.publish("mychannel", "mymessage").await?;
-///
-///     let mut message = pub_sub_stream.next().await.unwrap()?;
-///     assert_eq!(b"mychannel".to_vec(), message.channel);
-///     assert_eq!(b"mymessage".to_vec(), message.payload);
-///
-///     pub_sub_stream.close().await?;
-///
-///     Ok(())
-/// }
-/// ```
-pub struct PubSubStream {
+pub struct PubSubSplitSink {
     closed: bool,
     channels: CommandArgs,
     patterns: CommandArgs,
     shardchannels: CommandArgs,
     sender: PubSubSender,
-    receiver: PubSubReceiver,
     client: Client,
 }
 
-impl PubSubStream {
-    pub(crate) fn from_channels(
-        channels: CommandArgs,
-        sender: PubSubSender,
-        receiver: PubSubReceiver,
-        client: Client,
-    ) -> Self {
-        Self {
-            closed: false,
-            channels,
-            patterns: CommandArgs::default(),
-            shardchannels: CommandArgs::default(),
-            sender,
-            receiver,
-            client,
-        }
-    }
-
-    pub(crate) fn from_patterns(
-        patterns: CommandArgs,
-        sender: PubSubSender,
-        receiver: PubSubReceiver,
-        client: Client,
-    ) -> Self {
-        Self {
-            closed: false,
-            channels: CommandArgs::default(),
-            patterns,
-            shardchannels: CommandArgs::default(),
-            sender,
-            receiver,
-            client,
-        }
-    }
-
-    pub(crate) fn from_shardchannels(
-        shardchannels: CommandArgs,
-        sender: PubSubSender,
-        receiver: PubSubReceiver,
-        client: Client,
-    ) -> Self {
-        Self {
-            closed: false,
-            channels: CommandArgs::default(),
-            patterns: CommandArgs::default(),
-            shardchannels,
-            sender,
-            receiver,
-            client,
-        }
-    }
-
+impl PubSubSplitSink {
     /// Subscribe to additional channels
     pub async fn subscribe<C, CC>(&mut self, channels: CC) -> Result<()>
     where
@@ -237,7 +152,8 @@ impl PubSubStream {
         CC: SingleArgCollection<C>,
     {
         let channels = CommandArgs::default().arg(channels).build();
-        self.channels.retain(|channel| channels.iter().all(|c| c != channel));
+        self.channels
+            .retain(|channel| channels.iter().all(|c| c != channel));
         self.client.unsubscribe(channels).await?;
 
         Ok(())
@@ -250,7 +166,8 @@ impl PubSubStream {
         CC: SingleArgCollection<C>,
     {
         let patterns = CommandArgs::default().arg(patterns).build();
-        self.patterns.retain(|pattern| patterns.iter().all(|p| p != pattern));
+        self.patterns
+            .retain(|pattern| patterns.iter().all(|p| p != pattern));
         self.client.punsubscribe(patterns).await?;
 
         Ok(())
@@ -263,7 +180,8 @@ impl PubSubStream {
         CC: SingleArgCollection<C>,
     {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
-        self.shardchannels.retain(|shardchannel| shardchannels.iter().all(|sc: &Vec<u8>| sc != shardchannel));
+        self.shardchannels
+            .retain(|shardchannel| shardchannels.iter().all(|sc: &Vec<u8>| sc != shardchannel));
         self.client.punsubscribe(shardchannels).await?;
 
         Ok(())
@@ -273,6 +191,10 @@ impl PubSubStream {
     /// Calling `close` allows to wait for all the unsubscriptions.
     /// `drop` will achieve the same process but silently in background
     pub async fn close(mut self) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+
         let mut channels = CommandArgs::default();
         std::mem::swap(&mut channels, &mut self.channels);
         if !channels.is_empty() {
@@ -297,24 +219,7 @@ impl PubSubStream {
     }
 }
 
-impl Stream for PubSubStream {
-    type Item = Result<PubSubMessage>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        if self.closed {
-            Poll::Ready(None)
-        } else {
-            match self.get_mut().receiver.poll_next_unpin(cx) {
-                Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(message.to())),
-                Poll::Ready(None) => Poll::Ready(None),
-                Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-                Poll::Pending => Poll::Pending,
-            }
-        }
-    }
-}
-
-impl Drop for PubSubStream {
+impl Drop for PubSubSplitSink {
     /// Cancel all subscriptions before dropping
     fn drop(&mut self) {
         if self.closed {
@@ -337,6 +242,216 @@ impl Drop for PubSubStream {
         std::mem::swap(&mut shardchannels, &mut self.shardchannels);
         if !shardchannels.is_empty() {
             let _result = self.client.sunsubscribe(shardchannels).forget();
+        }
+    }
+}
+
+pub struct PubSubSplitStream {
+    receiver: PubSubReceiver,
+}
+
+impl Stream for PubSubSplitStream {
+    type Item = Result<PubSubMessage>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        match self.get_mut().receiver.poll_next_unpin(cx) {
+            Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(message.to())),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Stream to get messages from the channels or patterns [`subscribed`](https://redis.io/docs/manual/pubsub/) to
+///
+/// # Example
+/// ```
+/// use rustis::{
+///     client::{Client, ClientPreparedCommand},
+///     commands::{FlushingMode, PubSubCommands, ServerCommands},
+///     resp::cmd,
+///     Result,
+/// };
+/// use futures_util::StreamExt;
+///
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// async fn main() -> Result<()> {
+///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
+///     let regular_client = Client::connect("127.0.0.1:6379").await?;
+///
+///     regular_client.flushdb(FlushingMode::Sync).await?;
+///
+///     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
+///
+///     regular_client.publish("mychannel", "mymessage").await?;
+///
+///     let mut message = pub_sub_stream.next().await.unwrap()?;
+///     assert_eq!(b"mychannel".to_vec(), message.channel);
+///     assert_eq!(b"mymessage".to_vec(), message.payload);
+///
+///     pub_sub_stream.close().await?;
+///
+///     Ok(())
+/// }
+/// ```
+pub struct PubSubStream {
+    split_sink: PubSubSplitSink,
+    split_stream: PubSubSplitStream,
+}
+
+impl PubSubStream {
+    pub(crate) fn new(
+        sender: PubSubSender,
+        receiver: PubSubReceiver,
+        client: Client,
+    ) -> Self {
+        Self {
+            split_sink: PubSubSplitSink {
+                closed: false,
+                channels: CommandArgs::default(),
+                patterns: CommandArgs::default(),
+                shardchannels: CommandArgs::default(),
+                sender,
+                client,
+            },
+            split_stream: PubSubSplitStream { receiver },
+        }
+    }
+
+    pub(crate) fn from_channels(
+        channels: CommandArgs,
+        sender: PubSubSender,
+        receiver: PubSubReceiver,
+        client: Client,
+    ) -> Self {
+        Self {
+            split_sink: PubSubSplitSink {
+                closed: false,
+                channels,
+                patterns: CommandArgs::default(),
+                shardchannels: CommandArgs::default(),
+                sender,
+                client,
+            },
+            split_stream: PubSubSplitStream { receiver },
+        }
+    }
+
+    pub(crate) fn from_patterns(
+        patterns: CommandArgs,
+        sender: PubSubSender,
+        receiver: PubSubReceiver,
+        client: Client,
+    ) -> Self {
+        Self {
+            split_sink: PubSubSplitSink {
+                closed: false,
+                channels: CommandArgs::default(),
+                patterns,
+                shardchannels: CommandArgs::default(),
+                sender,
+                client,
+            },
+            split_stream: PubSubSplitStream { receiver },
+        }
+    }
+
+    pub(crate) fn from_shardchannels(
+        shardchannels: CommandArgs,
+        sender: PubSubSender,
+        receiver: PubSubReceiver,
+        client: Client,
+    ) -> Self {
+        Self {
+            split_sink: PubSubSplitSink {
+                closed: false,
+                channels: CommandArgs::default(),
+                patterns: CommandArgs::default(),
+                shardchannels,
+                sender,
+                client,
+            },
+            split_stream: PubSubSplitStream { receiver },
+        }
+    }
+
+    /// Subscribe to additional channels
+    pub async fn subscribe<C, CC>(&mut self, channels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        self.split_sink.subscribe(channels).await
+    }
+
+    /// Subscribe to additional patterns
+    pub async fn psubscribe<P, PP>(&mut self, patterns: PP) -> Result<()>
+    where
+        P: SingleArg + Send,
+        PP: SingleArgCollection<P>,
+    {
+        self.split_sink.psubscribe(patterns).await
+    }
+
+    /// Subscribe to additional shardchannels
+    pub async fn ssubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        self.split_sink.ssubscribe(shardchannels).await
+    }
+
+    /// Unsubscribe from the given channels
+    pub async fn unsubscribe<C, CC>(&mut self, channels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        self.split_sink.unsubscribe(channels).await
+    }
+
+    /// Unsubscribe from the given patterns
+    pub async fn punsubscribe<C, CC>(&mut self, patterns: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        self.split_sink.punsubscribe(patterns).await
+    }
+
+    /// Unsubscribe from the given patterns
+    pub async fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
+    where
+        C: SingleArg + Send,
+        CC: SingleArgCollection<C>,
+    {
+        self.split_sink.sunsubscribe(shardchannels).await
+    }
+
+    pub fn split(self) -> (PubSubSplitSink, PubSubSplitStream) {
+        (self.split_sink, self.split_stream)
+    }
+
+    /// Close the stream by cancelling all subscriptions
+    /// Calling `close` allows to wait for all the unsubscriptions.
+    /// `drop` will achieve the same process but silently in background
+    pub async fn close(self) -> Result<()> {
+        self.split_sink.close().await
+    }
+}
+
+impl Stream for PubSubStream {
+    type Item = Result<PubSubMessage>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        if self.split_sink.closed {
+            Poll::Ready(None)
+        } else {
+            let pinned = std::pin::pin!(&mut self.get_mut().split_stream);
+            pinned.poll_next(cx)
         }
     }
 }

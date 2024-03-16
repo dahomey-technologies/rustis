@@ -828,3 +828,22 @@ async fn xtrim() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xadd_ignore_result() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .xadd(
+            "mystream",
+            "123456-0",
+            [("name", "John"), ("surname", "Doe")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    Ok(())
+}

@@ -147,7 +147,7 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn peek_integer<T>(&self) -> Result<T>
     where
-    T: atoi::FromRadix10SignedChecked,
+        T: atoi::FromRadix10SignedChecked,
     {
         let next_line = self.peek_line()?;
         atoi::atoi(&next_line[1..]).ok_or_else(|| {
@@ -299,7 +299,7 @@ impl<'de> RespDeserializer<'de> {
             SIMPLE_STRING_TAG => {
                 let next_line = self.next_line()?;
                 fast_float::parse(next_line)
-                        .map_err(|_| Error::Client("Cannot parse number".to_owned()))
+                    .map_err(|_| Error::Client("Cannot parse number".to_owned()))
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
@@ -688,46 +688,24 @@ impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
         }
     }
 
+    /// deserialize_unit basically means the next value should be ignored
+    ///  expect if it is an error.
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        match self.next()? {
-            NIL_TAG => {
-                self.parse_nil()?;
-                visitor.visit_unit()
-            }
-            INTEGER_TAG => {
-                self.parse_integer::<i64>()?;
-                visitor.visit_unit()
-            }
-            SIMPLE_STRING_TAG => {
-                self.parse_string()?;
-                visitor.visit_unit()
-            }
-            BULK_STRING_TAG => {
-                let bs = self.parse_bulk_string()?;
-                if bs.is_empty() {
-                    visitor.visit_unit()
-                } else {
-                    Err(Error::Client("Expected nil".to_owned()))
-                }
-            }
-            ARRAY_TAG | SET_TAG | PUSH_TAG => {
-                let len = self.parse_integer::<usize>()?;
-                if len == 0 {
-                    visitor.visit_unit()
-                } else {
-                    Err(Error::Client("Expected nil".to_owned()))
-                }
-            }
+        let byte = self.peek()?;
+        match byte {
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client("Expected nil".to_owned())),
+            _ => {
+                self.ignore_value()?;
+                visitor.visit_unit()
+            }
         }
     }
 
-    // Unit struct means a named value containing no data.
+    /// Unit struct means a named value containing no data.
     #[inline]
     fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
     where

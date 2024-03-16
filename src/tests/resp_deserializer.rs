@@ -257,7 +257,7 @@ fn unit() -> Result<()> {
     assert!(result.is_ok());
 
     let result: Result<()> = deserialize("$5\r\nhello\r\n"); // "hello"
-    assert!(result.is_err());
+    assert!(result.is_ok());
 
     let result: Result<()> = deserialize(":1\r\n"); // 1
     assert!(result.is_ok(), "{result:?}");
@@ -285,7 +285,7 @@ fn unit_struct() -> Result<()> {
     assert!(result.is_ok());
 
     let result: Result<Unit> = deserialize("$5\r\nhello\r\n"); // "hello"
-    assert!(result.is_err());
+    assert!(result.is_ok());
 
     Ok(())
 }

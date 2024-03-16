@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
 ```
 
 # Client
-See the module [`client`](crate::client) to discover which are the 3 
+See the module [`client`] to discover which are the 3 
 usages of the [`Client`](client::Client) struct and how to configure it.
 
 You will also learn how to use pipeline, pub/sub and transactions.
@@ -84,7 +84,7 @@ You will also learn how to use pipeline, pub/sub and transactions.
 # RESP
 RESP is the [Redis Serialization Protocol](https://redis.io/docs/reference/protocol-spec/).
 
-See the module [`resp`](crate::resp) to discover how **rustis** 
+See the module [`resp`] to discover how **rustis** 
 allows programmers to communicate with Redis in a Rust idiomatic way.
 
 You will learn how to:
@@ -103,7 +103,7 @@ In order to send [Commands](https://redis.io/commands/) to the Redis server,
     not included in [Redis Stack](https://redis.io/docs/stack/).
 
 ## Built-in commands
-See the module [`commands`](crate::commands) to discover how Redis built-in commands are organized in different traits.
+See the module [`commands`] to discover how Redis built-in commands are organized in different traits.
 
 ## Generic command API
 To use the generic command API, you can use the [`cmd`](crate::resp::cmd) function to specify the name of the command,

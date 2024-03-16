@@ -17,7 +17,7 @@ This conversion is easily accessible through the associate function [`Value::int
 # Command arguments
 
 **rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
-Basically a [`Command`](Command) is a builder which accepts a command name and one ore more command arguments.
+Basically a [`Command`] is a builder which accepts a command name and one ore more command arguments.
 
 You will notice that each built-in command expects arguments through a set of traits defined in this module.
 
@@ -26,8 +26,8 @@ or request additional implementation for standard types.
 
 ### ToArgs
 
-The trait [`ToArgs`](ToArgs) allows to convert a complex type into one ore multiple argumentss.
-Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`](CommandArgs) struct.
+The trait [`ToArgs`] allows to convert a complex type into one ore multiple argumentss.
+Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`] struct.
 
 Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
@@ -44,18 +44,18 @@ Current implementation provides the following conversions:
 * `HashSet<T, S>`
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
-* [`CommandArgs`](CommandArgs)
+* [`CommandArgs`]
 
-Nevertheless, [`ToArgs`](ToArgs) is not expected directly in built-in commands arguments.
+Nevertheless, [`ToArgs`] is not expected directly in built-in commands arguments.
 
-The following traits are used to constraints which implementations of [`ToArgs`](ToArgs)
+The following traits are used to constraints which implementations of [`ToArgs`]
 are expected by a specific argument of a built-in command.
 
 ### SingleArg
 
 Several Redis commands expect a Rust type that should be converted in a single command argument.
 
-**rustis** uses the trait [`SingleArg`](SingleArg) to implement this behavior.
+**rustis** uses the trait [`SingleArg`] to implement this behavior.
 
 Current implementation provides the following conversions:
 * `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
 Several Redis commands expect a collection with elements that will produced a single
 command argument each
 
-**rustis** uses the trait [`SingleArgCollection`](SingleArgCollection) to implement this behavior.
+**rustis** uses the trait [`SingleArgCollection`] to implement this behavior.
 
 Current implementation provides the following conversions:
 * `T` (for the single item case)
@@ -124,9 +124,9 @@ Current implementation provides the following conversions:
 * `SmallVec<A>`
 * `BTreeSet<T>`
 * `HashSet<T, S>`
-* [`CommandArgs`](CommandArgs)
+* [`CommandArgs`]
 
-where each of theses implementations must also implement [`ToArgs`](ToArgs)
+where each of theses implementations must also implement [`ToArgs`]
 
 #### Example
 ```
@@ -170,14 +170,14 @@ async fn main() -> Result<()> {
 Several Redis commands expect a collection with elements that will produced multiple
 command arguments each
 
-**rustis** uses the trait [`MultipleArgsCollection`](MultipleArgsCollection) to implement this behavior.
+**rustis** uses the trait [`MultipleArgsCollection`] to implement this behavior.
 
 Current implementation provides the following conversions:
 * `T` (for the single item case)
 * `Vec<T>`
 * `[T;N]`
 
-where each of theses implementations must also implement [`ToArgs`](ToArgs)
+where each of theses implementations must also implement [`ToArgs`]
 
 #### Example
 ```
@@ -208,7 +208,7 @@ async fn main() -> Result<()> {
 
 Several Redis commands expect one or multiple key/value pairs.
 
-**rustis** uses the trait [`KeyValueArgsCollection`](KeyValueArgsCollection) to implement this behavior.
+**rustis** uses the trait [`KeyValueArgsCollection`] to implement this behavior.
 
 Current implementation provides the following conversions:
 * `(K, V)` (for the single item case)
@@ -218,7 +218,7 @@ Current implementation provides the following conversions:
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
 
-where each of theses implementations must also implement [`ToArgs`](ToArgs)
+where each of theses implementations must also implement [`ToArgs`]
 
 #### Example
 ```
@@ -262,7 +262,7 @@ async fn main() -> Result<()> {
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)
 
 You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand)
-struct where `R` represents the [`Response`](Response) of the command.
+struct where `R` represents the [`Response`] of the command.
 
 The different command traits implementations ([`Client`](crate::client::Client), [`Pipeline`](crate::client::Pipeline)
  or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`:
@@ -282,10 +282,10 @@ or request additional implementation for standard types.
 
 Several Redis commands return a simple primitive response.
 
-**rustis** uses the trait [`PrimitiveResponse`](PrimitiveResponse) to implement this behavior.
+**rustis** uses the trait [`PrimitiveResponse`] to implement this behavior.
 
 Current implementation provides the following deserializations from a RESP Buffer:
-* [`Value`](Value)
+* [`Value`]
 * ()
 * `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
 * `f32`, `f64`,
@@ -342,7 +342,7 @@ async fn main() -> Result<()> {
 ### CollectionResponse
 
 Several Redis commands return a collection of items.
-**rustis** uses the trait [`CollectionResponse`](CollectionResponse) to implement this behavior.
+**rustis** uses the trait [`CollectionResponse`] to implement this behavior.
 
 Current implementation provides the following deserializations from a RESP Buffer:
 * `Vec<T>`
@@ -351,7 +351,7 @@ Current implementation provides the following deserializations from a RESP Buffe
 * `BTreeSet<T>`
 * `HashSet<T, S>`
 
-where each of theses implementations must also implement [`Response`](Response)
+where each of theses implementations must also implement [`Response`]
 
 #### Example
 ```
@@ -391,7 +391,7 @@ async fn main() -> Result<()> {
 ### KeyValueCollectionResponse
 
 Several Redis commands return a collection of key/value pairs
-**rustis** uses the trait [`KeyValueCollectionResponse`](KeyValueCollectionResponse) to implement this behavior.
+**rustis** uses the trait [`KeyValueCollectionResponse`] to implement this behavior.
 
 Current implementation provides the following deserializations from a RESP Buffer:
 * `BTreeMap<K, V>`
@@ -399,7 +399,7 @@ Current implementation provides the following deserializations from a RESP Buffe
 * `SmallVec<A>` where `A: Array<Item = (K, V)>`
 * `Vec<(K, V>)>`
 
-where each of theses implementations must also implement [`Response`](Response)
+where each of theses implementations must also implement [`Response`]
 
 #### Example
 ```

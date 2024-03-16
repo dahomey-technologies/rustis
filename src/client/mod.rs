@@ -4,18 +4,18 @@ Defines types related to the clients structs and their dependencies:
 
 # Clients
 
-The central object in **rustis** is the [`Client`](Client).
+The central object in **rustis** is the [`Client`].
 
 It will allow you to connect to the Redis server, to send command requests
 and to receive command responses and push messages.
 
-The [`Client`](Client) struct can be used in 3 different modes
+The [`Client`] struct can be used in 3 different modes
 * As a single client
 * As a mutiplexer
 * In a pool of clients
 
 ## The single client
-The single [`Client`](crate::client::Client) maintains a unique connection to a Redis Server or cluster.
+The single [`Client`] maintains a unique connection to a Redis Server or cluster.
 
 This use case of the client is not meant to be used directly in a Web application, where multiple HTTP connections access
 the Redis server at the same time in a multi-threaded architecture (like [Actix](https://actix.rs/) or [Rocket](https://rocket.rs/)).
@@ -44,25 +44,25 @@ async fn main() -> Result<()> {
 ```
 
 ## The multiplexer
-A [`Client`](Client) instance can be cloned, allowing requests
+A [`Client`] instance can be cloned, allowing requests
 to be sent concurrently on the same underlying connection.
 
 The multiplexer mode is great because it offers much performance in a multi-threaded architecture, with only a single
 underlying connection. It should be the prefered mode for Web applications.
 
 ### Limitations
-Beware that using [`Client`](Client) in a multiplexer mode, by cloning an instance across multiple threads,
+Beware that using [`Client`] in a multiplexer mode, by cloning an instance across multiple threads,
 is not suitable for using [blocking commands](crate::commands::BlockingCommands)
 because they monopolize the whole connection which cannot be shared anymore.
 
 Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
 with the multiplexer mode is either. Indeed, it's the shared connection that will be watched, not only
-the [`Client`](Client) instance through which the [`watch`](crate::commands::TransactionCommands::watch) command is sent.
+the [`Client`] instance through which the [`watch`](crate::commands::TransactionCommands::watch) command is sent.
 
 ### Managing multiplexed subscriptions
 
 Even if the [`subscribe`][crate::commands::PubSubCommands::subscribe] monopolize the whole connection,
-it is still possible to use it in a multiplexed [`Client`](Client).
+it is still possible to use it in a multiplexed [`Client`].
 
 Indeed the subscribing mode of Redis still allows to share the connection between multiple clients,
 at the only condition that this connection is dedicated to subscriptions.
@@ -110,7 +110,7 @@ async fn main() -> Result<()> {
 ```
 
 ## The pooled client manager
-The pooled client manager holds a pool of [`Client`](Client)s, based on [bb8](https://docs.rs/bb8/latest/bb8/).
+The pooled client manager holds a pool of [`Client`]s, based on [bb8](https://docs.rs/bb8/latest/bb8/).
 
 Each time a new command must be sent to the Redis Server, a client will be borrowed temporarily to the manager
 and automatically given back to it at the end of the operation.
@@ -154,12 +154,12 @@ async fn main() -> Result<()> {
 
 # Configuration
 
-A [`Client`](Client) instance can be configured with the [`Config`](Config) struct:
+A [`Client`] instance can be configured with the [`Config`] struct:
 * Authentication
-* [`TlsConfig`](TlsConfig)
-* [`ServerConfig`](ServerConfig) (Standalone, Sentinel or Cluster)
+* [`TlsConfig`]
+* [`ServerConfig`] (Standalone, Sentinel or Cluster)
 
-[`IntoConfig`] is a convenient trait to convert more known types to a [`Config`](Config) instance:
+[`IntoConfig`] is a convenient trait to convert more known types to a [`Config`] instance:
 * &[`str`](https://doc.rust-lang.org/std/primitive.str.html): host and port separated by a colon
 * `(impl Into<String>, u16)`: a pair of host and port
 * [`String`](https://doc.rust-lang.org/alloc/string/struct.String.html): host and port separated by a colon
@@ -167,7 +167,7 @@ A [`Client`](Client) instance can be configured with the [`Config`](Config) stru
 
 ## Url Syntax
 
-The **rustis** [`Config`](Config) can also be built from an URL
+The **rustis** [`Config`] can also be built from an URL
 
 ### Standalone
 
@@ -201,7 +201,7 @@ The URL scheme is used to detect the server type:
 
 ### QueryParameters
 Query parameters match perfectly optional configuration fields
-of the struct [`Config`](Config) or its dependencies:
+of the struct [`Config`] or its dependencies:
 * [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default `10,000` ms).
 * [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
    a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).
@@ -242,17 +242,17 @@ This allow to optimize round-trip times by batching Redis commands.
 
 ### API description
 
-You can create a pipeline on a [`Client`](Client) instance by calling the associated fonction [`create_pipeline`](Client::create_pipeline).
+You can create a pipeline on a [`Client`] instance by calling the associated fonction [`create_pipeline`](Client::create_pipeline).
 Be sure to store the pipeline instance in a mutable variable because a pipeline requires an exclusive access.
 
 Once the pipeline is created, you can use exactly the same commands that you would directly use on a client instance.
-This is possible because the [`Pipeline`](Pipeline) implements all the built-in [command traits](crate::commands).
+This is possible because the [`Pipeline`] implements all the built-in [command traits](crate::commands).
 
 The main difference, is that you have to choose for each command:
-* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Pipeline`](Pipeline) instance will queue the command in an internal
+* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Pipeline`] instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
 * to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well **BUT** its response won't be awaited
-  by the [`Pipeline`](Pipeline) instance
+  by the [`Pipeline`] instance
 
 Finally, call the [`execute`](Pipeline::execute) associated function.
 
@@ -302,13 +302,13 @@ You can create a transaction on a client instance by calling the associated fonc
 Be sure to store the transaction instance in a mutable variable because a transaction requires an exclusive access.
 
 Once the transaction is created, you can use exactly the same commands that you would directly use on a client instance.
-This is possible because the [`Transaction`](Transaction) implements all the built-in [command traits](crate::commands).
+This is possible because the [`Transaction`] implements all the built-in [command traits](crate::commands).
 
 The main difference, is that you have to choose for each command:
-* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Transaction`](Transaction) instance will queue the command in an internal
+* to [`queue`](BatchPreparedCommand::queue) it, meaning that the [`Transaction`] instance will queue the command in an internal
   queue to be able to send later the batch of commands to the Redis server.
 * to [`forget`](BatchPreparedCommand::forget) it, meaning that the command will be queued as well **BUT** its response won't be awaited
-  by the [`Transaction`](Transaction) instance.
+  by the [`Transaction`] instance.
 
 Finally, call the [`execute`](Transaction::execute) associated function.
 
@@ -360,16 +360,16 @@ It also possible to use the sharded flavor of the publish function: [`spublish`]
 Subscribing will block the current client connection, in order to let the client wait for incoming messages.
 Consequently, **rustis** implements subsribing through an async [`Stream`](https://docs.rs/futures/latest/futures/stream/trait.Stream.html).
 
-You can create a [`PubSubStream`](PubSubStream) by calling [`subscribe`](crate::commands::PubSubCommands::subscribe),
+You can create a [`PubSubStream`] by calling [`subscribe`](crate::commands::PubSubCommands::subscribe),
 [`psubscribe`](crate::commands::PubSubCommands::psubscribe), or [`ssubscribe`](crate::commands::PubSubCommands::ssubscribe)
 on their dedicated crate.
 
 Then by calling [`next`](https://docs.rs/futures/latest/futures/stream/trait.StreamExt.html#method.next) on the pub/sub stream, you can
-wait for incoming message in the form of the struct [`PubSubMessage`](crate::client::PubSubMessage).
+wait for incoming message in the form of the struct [`PubSubMessage`].
 
 ### Warning!
 
-Mulitplexed [`Client`](Client) instances must be decidated to Pub/Sub once a subscribing function has been called.
+Mulitplexed [`Client`] instances must be decidated to Pub/Sub once a subscribing function has been called.
 Indeed, because subscription blocks the multiplexed client shared connection,
 other callers would be blocked when sending regular commands.
 
@@ -414,7 +414,7 @@ async fn main() -> Result<()> {
 
 Once the stream has been created, it is still possible to add addtional subscriptions
 by calling [`subscribe`](PubSubStream::subscribe), [`psubscribe`](PubSubStream::psubscribe)
-or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`](PubSubStream) instance
+or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`] instance
 
 #### Example
 

@@ -84,6 +84,8 @@ impl<'de> Deserialize<'de> for PubSubMessage {
     }
 }
 
+/// A pub sub `Sink` part of the [`split`](PubSubStream::split) pair.
+/// It allows to subscribe/unsubscribe to/from channels or patterns
 pub struct PubSubSplitSink {
     closed: bool,
     channels: CommandArgs,
@@ -246,6 +248,8 @@ impl Drop for PubSubSplitSink {
     }
 }
 
+/// A pub sub `Stream` part of the [`split`](PubSubStream::split) pair.
+/// It allows to get messages from the channels or patterns subscribed to
 pub struct PubSubSplitStream {
     receiver: PubSubReceiver,
 }
@@ -264,6 +268,7 @@ impl Stream for PubSubSplitStream {
 }
 
 /// Stream to get messages from the channels or patterns [`subscribed`](https://redis.io/docs/manual/pubsub/) to
+/// It allows also to subscribe/unsubscribe to/from channels or patterns
 ///
 /// # Example
 /// ```
@@ -431,6 +436,8 @@ impl PubSubStream {
         self.split_sink.sunsubscribe(shardchannels).await
     }
 
+    /// Splits this object into separate [`Sink`](PubSubSplitSink) and [`Stream`](PubSubSplitStream) objects.
+    /// This can be useful when you want to split ownership between tasks. 
     pub fn split(self) -> (PubSubSplitSink, PubSubSplitStream) {
         (self.split_sink, self.split_stream)
     }

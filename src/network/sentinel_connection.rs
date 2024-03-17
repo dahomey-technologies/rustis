@@ -69,9 +69,9 @@ impl SentinelConnection {
         let mut restart = false;
         let mut unreachable_sentinel = true;
 
-        let mut config = config.clone();
-        config.username = sentinel_config.username.clone();
-        config.password = sentinel_config.password.clone();
+        let mut sentinel_node_config = config.clone();
+        sentinel_node_config.username = sentinel_config.username.clone();
+        sentinel_node_config.password = sentinel_config.password.clone();
 
         loop {
             for sentinel_instance in &sentinel_config.instances {
@@ -79,7 +79,7 @@ impl SentinelConnection {
                 let (host, port) = sentinel_instance;
 
                 let mut sentinel_connection =
-                    match StandaloneConnection::connect(host, *port, &config).await {
+                    match StandaloneConnection::connect(host, *port, &sentinel_node_config).await {
                         Ok(sentinel_connection) => sentinel_connection,
                         Err(e) => {
                             debug!("Cannot connect to Sentinel {}:{} : {}", *host, *port, e);

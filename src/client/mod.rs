@@ -72,7 +72,7 @@ would be to connect two multiplexed clients to the Redis server:
 * 1 for the subscriptions
 * 1 for the regular commands
 
-### See also 
+### See also
 [Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
 
 ### Example
@@ -214,8 +214,8 @@ of the struct [`Config`] or its dependencies:
 * [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
 * [`max_command_attempts`](Config::max_command_attempts) - Maximum number of retry attempts to send a command to the Redis server (default `3`).
-* [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`). 
-* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after 
+* [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`).
+* [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after
   failing before connecting to the next Sentinel instance (default `250` ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
@@ -345,6 +345,7 @@ async fn main() -> Result<()> {
 ```
 
 # Pub/Sub
+
 [`Pub/Sub`](https://redis.io/docs/manual/pubsub/) is a Redis architecture were senders can publish messages into channels
 and subscribers can subscribe by channel names or patterns to receive messages.
 
@@ -361,19 +362,19 @@ Subscribing will block the current client connection, in order to let the client
 Consequently, **rustis** implements subsribing through an async [`Stream`](https://docs.rs/futures/latest/futures/stream/trait.Stream.html).
 
 You can create a [`PubSubStream`] by calling [`subscribe`](crate::commands::PubSubCommands::subscribe),
-[`psubscribe`](crate::commands::PubSubCommands::psubscribe), or [`ssubscribe`](crate::commands::PubSubCommands::ssubscribe)
-on their dedicated crate.
+[`psubscribe`](crate::commands::PubSubCommands::psubscribe), or [`ssubscribe`](crate::commands::PubSubCommands::ssubscribe).
 
 Then by calling [`next`](https://docs.rs/futures/latest/futures/stream/trait.StreamExt.html#method.next) on the pub/sub stream, you can
-wait for incoming message in the form of the struct [`PubSubMessage`].
+wait for an incoming message in the form of the struct [`PubSubMessage`].
+
+You can also create a [`PubSubStream`] without an upfront subscription by calling [`create_pub_sub`](crate::client::Client::create_pub_sub).
 
 ### Warning!
 
-Mulitplexed [`Client`] instances must be decidated to Pub/Sub once a subscribing function has been called.
-Indeed, because subscription blocks the multiplexed client shared connection,
-other callers would be blocked when sending regular commands.
+Multiplexed [`Client`] instances must be dedicated to Pub/Sub once a subscribing function has been called.
+Because subscription blocks the multiplexed client shared connection other callers would be blocked when sending regular commands.
 
-### Example
+### Simple Example
 
 ```
 use rustis::{
@@ -389,34 +390,35 @@ async fn main() -> Result<()> {
     let subscribing_client = Client::connect("127.0.0.1:6379").await?;
     let regular_client = Client::connect("127.0.0.1:6379").await?;
 
-    // cleanup
     regular_client.flushdb(FlushingMode::Sync).await?;
 
-    // subscribing_client subscribes
+    // Create a subscription from the subscribing client:
     let mut pub_sub_stream = subscribing_client.subscribe("mychannel").await?;
 
-    // regular_client publishes
+    // The regular client publishes a message on the channel:
     regular_client.publish("mychannel", "mymessage").await?;
 
-    // subscribing_client wait for the next message
-    if let Some(Ok(message)) = pub_sub_stream.next().await {
+    // Let's now iterate over messages received:
+    while let Some(Ok(message)) = pub_sub_stream.next().await {
         assert_eq!(b"mychannel".to_vec(), message.channel);
         assert_eq!(b"mymessage".to_vec(), message.payload);
+        break;
     }
-
-    pub_sub_stream.close().await?;
 
     Ok(())
 }
 ```
 
-### Additional Subscriptions
-
-Once the stream has been created, it is still possible to add addtional subscriptions
+Once the stream has been created, it is still possible to add additional subscriptions
 by calling [`subscribe`](PubSubStream::subscribe), [`psubscribe`](PubSubStream::psubscribe)
-or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`] instance
+or [`ssubscribe`](PubSubStream::ssubscribe) on the [`PubSubStream`] instance.
 
-#### Example
+### Split Stream Example
+
+To make it easy to modify subscriptions while iterating over messages, you can use the [`split`](PubSubStream::split) method to
+split the stream into [sink](PubSubSplitSink) and [stream](PubSubSplitStream) parts. Once this is done, you call [`subscribe`](PubSubSplitSink::subscribe)
+or [`unsubscribe`](PubSubSplitSink::unsubscribe) (and related methods) on the sink while the split stream is used only for iteration. This can be useful
+when you want to split ownership between async tasks.
 
 ```
 use rustis::{
@@ -430,17 +432,26 @@ use futures_util::StreamExt;
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let subscribing_client = Client::connect("127.0.0.1:6379").await?;
+    let regular_client = Client::connect("127.0.0.1:6379").await?;
 
-    // 1st subscription
-    let mut pub_sub_stream = subscribing_client.subscribe("mychannel1").await?;
+    regular_client.flushdb(FlushingMode::Sync).await?;
 
-    // 2nd subscription
-    pub_sub_stream.subscribe("mychannel2").await?;
+    // This time we will split the stream into sink and stream parts:
+    let (mut sink, mut stream) = subscribing_client.subscribe("mychannel").await?.split();
 
-    // 3nd subscription (possibility to mix all the kinds of subscription)
-    pub_sub_stream.psubscribe("o*").await?;
+    // You can then subscribe or unsubscribe using the sink.
+    // Typically you would pass ownership of the sink to another async task.
+    sink.subscribe("otherchannel").await?;
+    sink.psubscribe("o*").await?;
 
-    pub_sub_stream.close().await?;
+    regular_client.publish("mychannel", "mymessage").await?;
+
+    // Iterate over messages using the split stream:
+    while let Some(Ok(message)) = stream.next().await {
+        assert_eq!(b"mychannel".to_vec(), message.channel);
+        assert_eq!(b"mymessage".to_vec(), message.payload);
+        break;
+    }
 
     Ok(())
 }

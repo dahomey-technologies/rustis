@@ -18,6 +18,10 @@ impl BulkString {
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
+
+    pub(crate) fn into_inner(self) -> Vec<u8> {
+        self.0
+    }
 }
 
 impl Deref for BulkString {

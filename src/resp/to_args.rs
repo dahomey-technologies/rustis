@@ -123,7 +123,7 @@ impl ToArgs for bool {
 impl ToArgs for BulkString {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.into_inner());
     }
 }
 
@@ -137,7 +137,7 @@ impl ToArgs for Vec<u8> {
 impl ToArgs for &[u8] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self);
+        args.write_arg(self.to_vec());
     }
 }
 
@@ -165,7 +165,7 @@ impl ToArgs for &str {
 impl ToArgs for String {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.into_bytes());
     }
 }
 

@@ -67,8 +67,8 @@ impl CommandArgs {
     }
 
     #[inline]
-    pub(crate) fn write_arg(&mut self, buf: &[u8]) {
-        self.args.push(buf.to_vec());
+    pub(crate) fn write_arg(&mut self, buf: impl Into<Vec<u8>>) {
+        self.args.push(buf.into());
     }
 
     pub(crate) fn retain<F>(&mut self, mut f: F)

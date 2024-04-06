@@ -164,7 +164,11 @@ impl NetworkHandler {
 
         loop {
             if let Some(mut msg) = msg {
-                trace!("[{}] Will handle message: {msg:?}", self.tag);
+                trace!(
+                    "[{}][{:?}] Will handle message: {msg:?}",
+                    self.tag,
+                    self.status
+                );
                 let pub_sub_senders = msg.pub_sub_senders.take();
                 if let Some(pub_sub_senders) = pub_sub_senders {
                     let subscription_type = match &msg.commands {
@@ -408,6 +412,9 @@ impl NetworkHandler {
                 Status::Subscribed => {
                     if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
                         self.receive_result(resp_buf);
+                        if self.subscriptions.is_empty() {
+                            self.status = Status::Connected;
+                        }
                     }
                 }
                 Status::EnteringMonitor => {
@@ -584,8 +591,10 @@ impl NetworkHandler {
                     | RefPubSubMessage::SSubscribe(channel_or_pattern) => {
                         if let Some(pending_sub) = self.pending_subscriptions.pop_front() {
                             if pending_sub.channel_or_pattern == channel_or_pattern {
-                                self.subscriptions
-                                    .insert(channel_or_pattern.to_vec(), (pending_sub.subscription_type, pending_sub.sender));
+                                self.subscriptions.insert(
+                                    channel_or_pattern.to_vec(),
+                                    (pending_sub.subscription_type, pending_sub.sender),
+                                );
 
                                 if pending_sub.more_to_come {
                                     return None;
@@ -622,9 +631,10 @@ impl NetworkHandler {
                                 None
                             } else {
                                 // last unsubscription notification received
-                                let Some(mut remaining) = self.pending_unsubscriptions.pop_front() else {
+                                let Some(mut remaining) = self.pending_unsubscriptions.pop_front()
+                                else {
                                     error!(
-                                        "[{}] Cannot find channel or pattern to remove: {}", 
+                                        "[{}] Cannot find channel or pattern to remove: {}",
                                         self.tag,
                                         String::from_utf8_lossy(channel_or_pattern)
                                     );
@@ -847,8 +857,7 @@ impl NetworkHandler {
         }
 
         if !self.pending_subscriptions.is_empty() {
-            for pending_sub in self.pending_subscriptions.drain(..)
-            {
+            for pending_sub in self.pending_subscriptions.drain(..) {
                 match pending_sub.subscription_type {
                     SubscriptionType::Channel => {
                         self.connection
@@ -867,8 +876,10 @@ impl NetworkHandler {
                     }
                 }
 
-                self.subscriptions
-                    .insert(pending_sub.channel_or_pattern, (pending_sub.subscription_type, pending_sub.sender));
+                self.subscriptions.insert(
+                    pending_sub.channel_or_pattern,
+                    (pending_sub.subscription_type, pending_sub.sender),
+                );
             }
         }
 

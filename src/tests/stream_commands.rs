@@ -631,7 +631,7 @@ async fn xautoclaim() -> Result<()> {
     let id1: String = client
         .xadd(
             "mystream",
-            "*",
+            "1-0",
             ("message", "apple"),
             XAddOptions::default(),
         )
@@ -640,7 +640,7 @@ async fn xautoclaim() -> Result<()> {
     let id2: String = client
         .xadd(
             "mystream",
-            "*",
+            "2-0",
             ("message", "orange"),
             XAddOptions::default(),
         )
@@ -649,7 +649,7 @@ async fn xautoclaim() -> Result<()> {
     let id3: String = client
         .xadd(
             "mystream",
-            "*",
+            "3-0",
             ("message", "strawberry"),
             XAddOptions::default(),
         )
@@ -658,7 +658,7 @@ async fn xautoclaim() -> Result<()> {
     let id4: String = client
         .xadd(
             "mystream",
-            "*",
+            "4-0",
             ("message", "apricot"),
             XAddOptions::default(),
         )
@@ -667,7 +667,7 @@ async fn xautoclaim() -> Result<()> {
     let id5: String = client
         .xadd(
             "mystream",
-            "*",
+            "5-0",
             ("message", "banana"),
             XAddOptions::default(),
         )

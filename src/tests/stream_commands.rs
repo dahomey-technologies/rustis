@@ -715,7 +715,7 @@ async fn xautoclaim() -> Result<()> {
             "mystream",
             "mygroup",
             "Bob",
-            1,
+            0,
             id5.clone(),
             XAutoClaimOptions::default().count(1),
         )

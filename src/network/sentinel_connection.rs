@@ -109,7 +109,7 @@ impl SentinelConnection {
 
                 // Step 3: call the ROLE command in the target instance
                 let mut master_connection =
-                    StandaloneConnection::connect(&master_host, master_port, &config).await?;
+                    StandaloneConnection::connect(&master_host, master_port, config).await?;
 
                 let role: RoleResult = master_connection.role().await?;
 

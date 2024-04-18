@@ -412,7 +412,11 @@ impl NetworkHandler {
                 Status::Subscribed => {
                     if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
                         self.receive_result(resp_buf);
-                        if self.subscriptions.is_empty() {
+                        if self.subscriptions.is_empty() && self.pending_subscriptions.is_empty() {
+                            debug!(
+                                "[{}] goint out from Pub/Sub state to connected state",
+                                self.tag
+                            );
                             self.status = Status::Connected;
                         }
                     }
@@ -591,24 +595,36 @@ impl NetworkHandler {
                     | RefPubSubMessage::SSubscribe(channel_or_pattern) => {
                         if let Some(pending_sub) = self.pending_subscriptions.pop_front() {
                             if pending_sub.channel_or_pattern == channel_or_pattern {
-                                self.subscriptions.insert(
-                                    channel_or_pattern.to_vec(),
-                                    (pending_sub.subscription_type, pending_sub.sender),
-                                );
+                                if self
+                                    .subscriptions
+                                    .insert(
+                                        channel_or_pattern.to_vec(),
+                                        (pending_sub.subscription_type, pending_sub.sender),
+                                    )
+                                    .is_some()
+                                {
+                                    return Some(Err(Error::Client(
+                                        format!(
+                                            "There is already a subscription on channel '{}'",
+                                            String::from_utf8_lossy(channel_or_pattern)
+                                        )
+                                        .to_string(),
+                                    )));
+                                }
 
                                 if pending_sub.more_to_come {
                                     return None;
                                 }
                             } else {
                                 error!(
-                                    "[{}] Unexpected subscription confirmation on channel '{:?}'",
+                                    "[{}] Unexpected subscription confirmation on channel '{}'",
                                     self.tag,
                                     String::from_utf8_lossy(channel_or_pattern)
                                 );
                             }
                         } else {
                             error!(
-                                "[{}] Cannot find pending subscription for channel '{:?}'",
+                                "[{}] Cannot find pending subscription for channel '{}'",
                                 self.tag,
                                 String::from_utf8_lossy(channel_or_pattern)
                             );
@@ -666,7 +682,7 @@ impl NetworkHandler {
                             }
                             None => {
                                 error!(
-                                    "[{}] Unexpected message on channel '{:?}' for pattern '{:?}'",
+                                    "[{}] Unexpected message on channel '{}' for pattern '{}'",
                                     self.tag,
                                     String::from_utf8_lossy(channel),
                                     String::from_utf8_lossy(pattern)

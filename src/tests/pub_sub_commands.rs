@@ -769,11 +769,10 @@ async fn split() -> Result<()> {
     Ok(())
 }
 
-
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn subscribe_twice() -> Result<()> {
+async fn subscribe_multiple_times_to_the_same_channel() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
     let regular_client = get_test_client().await?;
 
@@ -782,12 +781,15 @@ async fn subscribe_twice() -> Result<()> {
 
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
     assert!(pub_sub_stream.subscribe("mychannel").await.is_err());
+    assert!(pub_sub_client.subscribe("mychannel").await.is_err());
 
     pub_sub_stream.psubscribe("pattern").await?;
     assert!(pub_sub_stream.psubscribe("pattern").await.is_err());
+    assert!(pub_sub_client.psubscribe("pattern").await.is_err());
 
-    pub_sub_stream.ssubscribe("mychannel").await?;
-    assert!(pub_sub_stream.ssubscribe("mychannel").await.is_err());
+    pub_sub_stream.ssubscribe("myshardchannel").await?;
+    assert!(pub_sub_stream.ssubscribe("myshardchannel").await.is_err());
+    assert!(pub_sub_client.ssubscribe("myshardchannel").await.is_err());
 
     Ok(())
 }

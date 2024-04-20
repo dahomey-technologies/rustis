@@ -164,12 +164,6 @@ fn into_config() -> Result<()> {
             .to_string()
     );
     assert_eq!(
-        "redis://127.0.0.1?max_command_attempts=4",
-        "redis://127.0.0.1?max_command_attempts=4"
-            .into_config()?
-            .to_string()
-    );
-    assert_eq!(
         "redis://127.0.0.1?retry_on_error=true",
         "redis://127.0.0.1?retry_on_error=true"
             .into_config()?

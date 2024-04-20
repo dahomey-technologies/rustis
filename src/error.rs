@@ -1,6 +1,6 @@
-use crate::{client::Message, Result};
+use crate::Result;
 use futures_channel::{
-    mpsc::{self, TrySendError},
+    mpsc::{self},
     oneshot,
 };
 use smallvec::SmallVec;
@@ -99,12 +99,6 @@ impl std::error::Error for Error {}
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::IO(format!("[{}] {}", e.kind(), e))
-    }
-}
-
-impl From<TrySendError<Message>> for Error {
-    fn from(e: TrySendError<Message>) -> Self {
-        Error::Client(e.to_string())
     }
 }
 

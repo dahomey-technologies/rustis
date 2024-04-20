@@ -1,6 +1,11 @@
+use log::warn;
 use smallvec::SmallVec;
 
-use crate::{resp::Command, PushSender, PubSubSender, RetryReason, network::{ResultSender, ResultsSender}};
+use crate::{
+    network::{ResultSender, ResultsSender},
+    resp::Command,
+    Error, PubSubSender, PushSender, RetryReason,
+};
 
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(debug_assertions)]
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-#[allow(clippy::large_enum_variant)] 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum Commands {
     None,
@@ -22,6 +27,26 @@ impl Commands {
             Commands::None => 0,
             Commands::Single(_, _) => 1,
             Commands::Batch(commands, _) => commands.len(),
+        }
+    }
+
+    pub fn send_error(self, tag: &str, error: Error) {
+        match self {
+            Commands::Single(_, Some(result_sender)) => {
+                if let Err(e) = result_sender.send(Err(error)) {
+                    warn!(
+                    "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                );
+                }
+            }
+            Commands::Batch(_, results_sender) => {
+                if let Err(e) = results_sender.send(Err(error)) {
+                    warn!(
+                    "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                );
+                }
+            }
+            _ => (),
         }
     }
 }
@@ -65,7 +90,7 @@ impl<'a> IntoIterator for &'a mut Commands {
     }
 }
 
-#[allow(clippy::large_enum_variant)] 
+#[allow(clippy::large_enum_variant)]
 pub enum CommandsIterator {
     Single(Option<Command>),
     Batch(std::vec::IntoIter<Command>),
@@ -123,7 +148,7 @@ pub(crate) struct Message {
     pub retry_on_error: bool,
     #[cfg(debug_assertions)]
     #[allow(unused)]
-    pub (crate) message_seq: usize,
+    pub(crate) message_seq: usize,
 }
 
 impl Message {
@@ -154,7 +179,11 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn batch(commands: Vec<Command>, results_sender: ResultsSender, retry_on_error: bool) -> Self {
+    pub fn batch(
+        commands: Vec<Command>,
+        results_sender: ResultsSender,
+        retry_on_error: bool,
+    ) -> Self {
         Message {
             commands: Commands::Batch(commands, results_sender),
             pub_sub_senders: None,
@@ -184,11 +213,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn monitor(
-        command: Command,
-        result_sender: ResultSender,
-        push_sender: PushSender,
-    ) -> Self {
+    pub fn monitor(command: Command, result_sender: ResultSender, push_sender: PushSender) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
             pub_sub_senders: None,

@@ -1,6 +1,7 @@
-#[cfg(feature = "tls")]
-use crate::client::IntoConfig;
-use crate::{client::Client, Result};
+use crate::{
+    client::{Client, Config, IntoConfig},
+    Result,
+};
 #[cfg(feature = "tls")]
 use native_tls::Certificate;
 
@@ -65,11 +66,19 @@ pub(crate) fn get_default_addr() -> String {
     format!("{}:{}", get_default_host(), get_default_port())
 }
 
-pub(crate) async fn get_test_client() -> Result<Client> {
-    log_try_init();
-    Client::connect(get_default_addr()).await
+pub(crate) fn get_default_config() -> Result<Config> {
+    get_default_addr().into_config()
 }
-    
+
+pub(crate) async fn get_test_client_with_config(config: impl IntoConfig) -> Result<Client> {
+    log_try_init();
+    Client::connect(config).await
+}
+
+pub(crate) async fn get_test_client() -> Result<Client> {
+    get_test_client_with_config(get_default_config()?).await
+}
+
 #[cfg(feature = "tls")]
 pub(crate) async fn get_tls_test_client() -> Result<Client> {
     log_try_init();

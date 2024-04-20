@@ -13,7 +13,6 @@ const DEFAULT_AUTO_RESUBSCRTBE: bool = true;
 const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
-const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 3;
 const DEFAULT_RETRY_ON_ERROR: bool = false;
 
 type Uri<'a> = (
@@ -84,8 +83,6 @@ pub struct Config {
     ///
     /// See [`TcpStream::set_nodelay`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html#method.set_nodelay)    
     pub no_delay: bool,
-    /// Maximum number of retry attempts to send a command to the Redis server (default `3`).
-    pub max_command_attempts: usize,
     /// Defines the default strategy for retries on network error (default `false`):
     /// * `true` - retry sending the command/batch of commands on network error
     /// * `false` - do not retry sending the command/batch of commands on network error
@@ -99,6 +96,8 @@ pub struct Config {
     /// * [`Client::send_and_forget`](crate::client::Client::send_and_forget)
     /// * [`Client::send_batch`](crate::client::Client::send_batch)
     pub retry_on_error: bool,
+    /// Reconnection configuration (Constant, Linear or Exponential)
+    pub reconnection: ReconnectionConfig,
 }
 
 impl Default for Config {
@@ -117,8 +116,8 @@ impl Default for Config {
             connection_name: String::from(""),
             keep_alive: DEFAULT_KEEP_ALIVE,
             no_delay: DEFAULT_NO_DELAY,
-            max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
             retry_on_error: DEFAULT_RETRY_ON_ERROR,
+            reconnection: Default::default(),
         }
     }
 }
@@ -312,12 +311,6 @@ impl Config {
             if let Some(no_delay) = query.remove("no_delay") {
                 if let Ok(no_delay) = no_delay.parse::<bool>() {
                     config.no_delay = no_delay;
-                }
-            }
-
-            if let Some(max_command_attempts) = query.remove("max_command_attempts") {
-                if let Ok(max_command_attempts) = max_command_attempts.parse::<usize>() {
-                    config.max_command_attempts = max_command_attempts;
                 }
             }
 
@@ -581,19 +574,6 @@ impl ToString for Config {
                 s.push('&');
             }
             s.push_str(&format!("no_delay={}", self.no_delay));
-        }
-
-        if self.max_command_attempts != DEFAULT_MAX_COMMAND_ATTEMPTS {
-            if !query_separator {
-                query_separator = true;
-                s.push('?');
-            } else {
-                s.push('&');
-            }
-            s.push_str(&format!(
-                "max_command_attempts={}",
-                self.max_command_attempts
-            ));
         }
 
         if self.retry_on_error != DEFAULT_RETRY_ON_ERROR {
@@ -872,5 +852,113 @@ impl IntoConfig for String {
 impl IntoConfig for Url {
     fn into_config(self) -> Result<Config> {
         Config::from_uri(self)
+    }
+}
+
+/// The type of reconnection policy to use. This will apply to every connection used by the client.
+/// This code has been mostly inpisred by [fred ReconnectPolicy](https://docs.rs/fred/latest/fred/types/enum.ReconnectPolicy.html)
+#[derive(Debug, Clone)]
+pub enum ReconnectionConfig {
+    /// Wait a constant amount of time between reconnection attempts, in ms.
+    Constant {
+        /// Maximum number of attemps, set `0` to retry forever.
+        max_attempts: u32,
+        /// Delay in ms to wait between reconnection attempts
+        delay: u32,
+        /// Add jitter in ms to each delay
+        jitter: u32,
+    },
+    /// Backoff reconnection attempts linearly, adding `delay` each time.
+    Linear {
+        /// Maximum number of attemps, set `0` to retry forever.
+        max_attempts: u32,
+        /// Maximum delay in ms
+        max_delay: u32,
+        /// Delay in ms to add to the total waiting time at each attemp
+        delay: u32,
+        /// Add jitter in ms to each delay
+        jitter: u32,
+    },
+    /// Backoff reconnection attempts exponentially, multiplying the last delay by `multiplicative_factor` each time.
+    /// see https://en.wikipedia.org/wiki/Exponential_backoff
+    Exponential {
+        /// Maximum number of attemps, set `0` to retry forever.
+        max_attempts: u32,
+        /// Minimum delay in ms
+        min_delay: u32,
+        /// Maximum delay in ms
+        max_delay: u32,
+        // multiplicative factor
+        multiplicative_factor: u32,
+        /// Add jitter in ms to each delay
+        jitter: u32,
+    },
+}
+
+/// The default amount of jitter when waiting to reconnect.
+const DEFAULT_JITTER_MS: u32 = 100;
+const DEFAULT_DELAY_MS: u32 = 1000;
+
+impl Default for ReconnectionConfig {
+    fn default() -> Self {
+        Self::Constant {
+            max_attempts: 0,
+            delay: DEFAULT_DELAY_MS,
+            jitter: DEFAULT_JITTER_MS,
+        }
+    }
+}
+
+impl ReconnectionConfig {
+    /// Create a new reconnect policy with a constant backoff.
+    pub fn new_constant(max_attempts: u32, delay: u32) -> Self {
+        Self::Constant {
+            max_attempts,
+            delay,
+            jitter: DEFAULT_JITTER_MS,
+        }
+    }
+
+    /// Create a new reconnect policy with a linear backoff.
+    pub fn new_linear(max_attempts: u32, max_delay: u32, delay: u32) -> Self {
+        Self::Linear {
+            max_attempts,
+            max_delay,
+            delay,
+            jitter: DEFAULT_JITTER_MS,
+        }
+    }
+
+    /// Create a new reconnect policy with an exponential backoff.
+    pub fn new_exponential(
+        max_attempts: u32,
+        min_delay: u32,
+        max_delay: u32,
+        multiplicative_factor: u32,
+    ) -> Self {
+        Self::Exponential {
+            max_delay,
+            max_attempts,
+            min_delay,
+            multiplicative_factor,
+            jitter: DEFAULT_JITTER_MS,
+        }
+    }
+
+    /// Set the amount of jitter to add to each reconnection delay.
+    ///
+    /// Default: 100 ms
+    pub fn set_jitter(&mut self, jitter_ms: u32) {
+        match self {
+            Self::Constant { ref mut jitter, .. } => {
+                *jitter = jitter_ms;
+            }
+            Self::Linear { ref mut jitter, .. } => {
+                *jitter = jitter_ms;
+            }
+            Self::Exponential { ref mut jitter, .. } => {
+                *jitter = jitter_ms;
+            }
+        }
     }
 }

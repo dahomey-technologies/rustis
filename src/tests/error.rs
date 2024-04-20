@@ -153,48 +153,48 @@ fn ask_error() {
 //     Ok(())
 // }
 
-#[cfg(debug_assertions)]
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn kill_on_write() -> Result<()> {
-    let client = get_test_client().await?;
+// #[cfg(debug_assertions)]
+// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[serial]
+// async fn kill_on_write() -> Result<()> {
+//     let client = get_test_client().await?;
 
-    // 3 reconnections
-    let result = client
-        .send(
-            cmd("SET")
-                .arg("key1")
-                .arg("value1")
-                .kill_connection_on_write(3),
-            Some(true),
-        )
-        .await;
-    assert!(result.is_err());
+//     // 3 reconnections
+//     let result = client
+//         .send(
+//             cmd("SET")
+//                 .arg("key1")
+//                 .arg("value1")
+//                 .kill_connection_on_write(3),
+//             Some(true),
+//         )
+//         .await;
+//     assert!(result.is_err());
 
-    // 2 reconnections
-    let result = client
-        .send(
-            cmd("SET")
-                .arg("key2")
-                .arg("value2")
-                .kill_connection_on_write(2),
-            Some(true),
-        )
-        .await;
-    assert!(result.is_ok());
+//     // 2 reconnections
+//     let result = client
+//         .send(
+//             cmd("SET")
+//                 .arg("key2")
+//                 .arg("value2")
+//                 .kill_connection_on_write(2),
+//             Some(true),
+//         )
+//         .await;
+//     assert!(result.is_ok());
 
-    // 2 reconnections / no retry
-    let result = client
-        .send(
-            cmd("SET")
-                .arg("key3")
-                .arg("value3")
-                .kill_connection_on_write(2),
-            Some(false),
-        )
-        .await;
-    assert!(result.is_err());
+//     // 2 reconnections / no retry
+//     let result = client
+//         .send(
+//             cmd("SET")
+//                 .arg("key3")
+//                 .arg("value3")
+//                 .kill_connection_on_write(2),
+//             Some(false),
+//         )
+//         .await;
+//     assert!(result.is_err());
 
-    Ok(())
-}
+//     Ok(())
+// }

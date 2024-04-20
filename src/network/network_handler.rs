@@ -3,13 +3,16 @@ use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
     resp::{cmd, Command, RespBuf},
-    spawn, Connection, Error, JoinHandle, Result, RetryReason,
+    sleep, spawn, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
 };
 use futures_channel::{mpsc, oneshot};
 use futures_util::{select, FutureExt, SinkExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn, Level};
 use smallvec::SmallVec;
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    time::Duration,
+};
 use tokio::sync::broadcast;
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
@@ -98,8 +101,8 @@ pub(crate) struct NetworkHandler {
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
-    max_command_attempts: usize,
     tag: String,
+    reconnection_state: ReconnectionState,
 }
 
 impl NetworkHandler {
@@ -107,7 +110,7 @@ impl NetworkHandler {
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;
-        let max_command_attempts = config.max_command_attempts;
+        let reconnection_config = config.reconnection.clone();
 
         let connection = Connection::connect(config).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
@@ -130,8 +133,8 @@ impl NetworkHandler {
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
             auto_remonitor,
-            max_command_attempts,
             tag,
+            reconnection_state: ReconnectionState::new(reconnection_config),
         };
 
         let join_handle = spawn(async move {
@@ -150,7 +153,7 @@ impl NetworkHandler {
                     if !self.handle_message(msg).await { break; }
                 } ,
                 value = self.connection.read().fuse() => {
-                    self.handle_result(value).await;
+                    if !self.handle_result(value).await { break; }
                 }
             }
         }
@@ -340,27 +343,7 @@ impl NetworkHandler {
             let mut idx: usize = 0;
             while let Some(msg) = self.messages_to_send.pop_front() {
                 if commands_to_receive[idx] > 0 {
-                    match msg.message.commands {
-                        Commands::Single(_, Some(result_sender)) => {
-                            if let Err(e) = result_sender.send(Err(e.clone())) {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {:?}",
-                                self.tag,
-                                e
-                            );
-                            }
-                        }
-                        Commands::Batch(_, results_sender) => {
-                            if let Err(e) = results_sender.send(Err(e.clone())) {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {:?}",
-                                self.tag,
-                                e
-                            );
-                            }
-                        }
-                        _ => (),
-                    }
+                    msg.message.commands.send_error(&self.tag, e.clone());
                 }
                 idx += 1;
             }
@@ -379,7 +362,7 @@ impl NetworkHandler {
         }
     }
 
-    async fn handle_result(&mut self, result: Option<Result<RespBuf>>) {
+    async fn handle_result(&mut self, result: Option<Result<RespBuf>>) -> bool {
         match result {
             Some(result) => match self.status {
                 Status::Disconnected => (),
@@ -450,8 +433,10 @@ impl NetworkHandler {
                 },
             },
             // disconnection
-            None => self.reconnect().await,
+            None => return self.reconnect().await,
         }
+
+        true
     }
 
     fn receive_result(&mut self, result: Result<RespBuf>) {
@@ -700,153 +685,107 @@ impl NetworkHandler {
         }
     }
 
-    async fn reconnect(&mut self) {
+    async fn reconnect(&mut self) -> bool {
         debug!("[{}] reconnecting...", self.tag);
         let old_status = self.status;
         self.status = Status::Disconnected;
 
-        for message_to_receive in &mut self.messages_to_receive {
-            if message_to_receive.message.retry_on_error {
-                message_to_receive.attempts += 1;
-                debug!(
-                    "[{}]: {:?}: attempt {}",
-                    self.tag, message_to_receive.message.commands, message_to_receive.attempts
-                );
-            }
-        }
-
         while let Some(message_to_receive) = self.messages_to_receive.front() {
-            if !message_to_receive.message.retry_on_error
-                || message_to_receive.attempts >= self.max_command_attempts
-            {
-                debug!(
-                    "[{}] {:?}, max attempts reached",
-                    self.tag, message_to_receive.message.commands
-                );
+            if !message_to_receive.message.retry_on_error {
                 if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    match message_to_receive.message.commands {
-                        Commands::Single(_, Some(result_sender)) => {
-                            if let Err(e) = result_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                self.tag
-                            );
-                            }
-                        }
-                        Commands::Batch(_, results_sender) => {
-                            if let Err(e) = results_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                self.tag
-                            );
-                            }
-                        }
-                        _ => (),
-                    }
+                    message_to_receive.message.commands.send_error(
+                        &self.tag,
+                        Error::Client("Disconnected from server".to_string()),
+                    );
                 }
             } else {
                 break;
-            }
-        }
-
-        for message_to_send in &mut self.messages_to_send {
-            if message_to_send.message.retry_on_error {
-                message_to_send.attempts += 1;
-                debug!(
-                    "[{}] {:?}: attempt {}",
-                    self.tag, message_to_send.message.commands, message_to_send.attempts
-                );
             }
         }
 
         while let Some(message_to_send) = self.messages_to_send.front() {
-            if !message_to_send.message.retry_on_error
-                || message_to_send.attempts >= self.max_command_attempts
-            {
-                debug!(
-                    "[{}] {:?}, max attempts reached",
-                    self.tag, message_to_send.message.commands
-                );
+            if !message_to_send.message.retry_on_error {
                 if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    match message_to_send.message.commands {
-                        Commands::Single(_, Some(result_sender)) => {
-                            if let Err(e) = result_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                self.tag
-                            );
-                            }
-                        }
-                        Commands::Batch(_, results_sender) => {
-                            if let Err(e) = results_sender
-                                .send(Err(Error::Client("Disconnected from server".to_string())))
-                            {
-                                warn!(
-                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                self.tag
-                            );
-                            }
-                        }
-                        _ => (),
-                    }
+                    message_to_send.message.commands.send_error(
+                        &self.tag,
+                        Error::Client("Disconnected from server".to_string()),
+                    );
                 }
             } else {
                 break;
             }
         }
 
-        if let Err(e) = self.connection.reconnect().await {
-            error!("[{}] Failed to reconnect: {e:?}", self.tag);
-            return;
-        }
+        loop {
+            if let Some(delay) = self.reconnection_state.next_delay() {
+                debug!("[{}] Waiting {delay} ms before reconnection", self.tag);
+                sleep(Duration::from_millis(delay)).await;
+            } else {
+                warn!("[{}] Max reconnection attempts reached", self.tag);
+                while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
+                    message_to_receive.message.commands.send_error(
+                        &self.tag,
+                        Error::Client("Disconnected from server".to_string()),
+                    );
+                }
+                while let Some(message_to_send) = self.messages_to_send.pop_front() {
+                    message_to_send.message.commands.send_error(
+                        &self.tag,
+                        Error::Client("Disconnected from server".to_string()),
+                    );
+                }
+                return false;
+            }
 
-        if self.auto_resubscribe {
-            if let Err(e) = self.auto_resubscribe().await {
+            if let Err(e) = self.connection.reconnect().await {
                 error!("[{}] Failed to reconnect: {e:?}", self.tag);
-                return;
+                continue;
             }
-        }
 
-        if self.auto_remonitor {
-            if let Err(e) = self.auto_remonitor(old_status).await {
-                error!("[{}] Failed to reconnect: {e:?}", self.tag);
-                return;
+            if self.auto_resubscribe {
+                if let Err(e) = self.auto_resubscribe().await {
+                    error!("[{}] Failed to reconnect: {e:?}", self.tag);
+                    continue;
+                }
             }
-        }
 
-        if let Err(e) = self.reconnect_sender.send(()) {
-            debug!(
-                "[{}] Cannot send reconnect notification to clients: {e}",
-                self.tag
-            )
-        }
-
-        while let Some(message_to_receive) = self.messages_to_receive.pop_back() {
-            self.messages_to_send.push_front(MessageToSend {
-                message: message_to_receive.message,
-                attempts: message_to_receive.attempts,
-            });
-        }
-
-        self.send_messages().await;
-
-        if !self.subscriptions.is_empty() {
-            self.status = Status::Subscribed;
-        } else if let Status::Monitor | Status::EnteringMonitor = old_status {
-            if self.push_sender.is_some() {
-                self.status = Status::Monitor;
+            if self.auto_remonitor {
+                if let Err(e) = self.auto_remonitor(old_status).await {
+                    error!("[{}] Failed to reconnect: {e:?}", self.tag);
+                    continue;
+                }
             }
-        } else {
-            self.status = Status::Connected;
-        }
 
-        info!("[{}] reconnected!", self.tag);
+            if let Err(e) = self.reconnect_sender.send(()) {
+                debug!(
+                    "[{}] Cannot send reconnect notification to clients: {e}",
+                    self.tag
+                )
+            }
+
+            while let Some(message_to_receive) = self.messages_to_receive.pop_back() {
+                self.messages_to_send.push_front(MessageToSend {
+                    message: message_to_receive.message,
+                    attempts: message_to_receive.attempts,
+                });
+            }
+
+            self.send_messages().await;
+
+            if !self.subscriptions.is_empty() {
+                self.status = Status::Subscribed;
+            } else if let Status::Monitor | Status::EnteringMonitor = old_status {
+                if self.push_sender.is_some() {
+                    self.status = Status::Monitor;
+                }
+            } else {
+                self.status = Status::Connected;
+            }
+
+            info!("[{}] reconnected!", self.tag);
+            self.reconnection_state.reset_attempts();
+            return true;
+        }
     }
 
     async fn auto_resubscribe(&mut self) -> Result<()> {

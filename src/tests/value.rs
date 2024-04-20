@@ -1,5 +1,5 @@
 use crate::{
-    commands::{GenericCommands, SetCommands},
+    commands::{FlushingMode, ServerCommands, SetCommands},
     resp::Value,
     tests::{get_test_client, log_try_init},
     RedisError, RedisErrorKind, Result,
@@ -13,7 +13,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 async fn from_single_value_array() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.del("key").await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     client
         .sadd("key", ["member1", "member2", "member3"])

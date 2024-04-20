@@ -33,7 +33,7 @@ use crate::{
 };
 use futures_channel::{mpsc, oneshot};
 use futures_util::Stream;
-use log::trace;
+use log::{info, trace};
 use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
@@ -269,8 +269,10 @@ impl Client {
     fn send_message(&self, message: Message) -> Result<()> {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
             trace!("Will enqueue message: {message:?}");
-            msg_sender.unbounded_send(message)?;
-            Ok(())
+            Ok(msg_sender.unbounded_send(message).map_err(|e| {
+                info!("{}", e.to_string());
+                Error::Client("Disconnected from server".to_string())
+            })?)
         } else {
             Err(Error::Client(
                 "Invalid channel to send messages to the network handler".to_owned(),

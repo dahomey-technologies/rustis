@@ -96,7 +96,7 @@ pub struct Config {
     /// * [`Client::send_and_forget`](crate::client::Client::send_and_forget)
     /// * [`Client::send_batch`](crate::client::Client::send_batch)
     pub retry_on_error: bool,
-    /// Reconnection configuration (Constant, Linear or Exponential)
+    /// Reconnection policy configuration (Constant, Linear or Exponential)
     pub reconnection: ReconnectionConfig,
 }
 
@@ -880,7 +880,8 @@ pub enum ReconnectionConfig {
         jitter: u32,
     },
     /// Backoff reconnection attempts exponentially, multiplying the last delay by `multiplicative_factor` each time.
-    /// see https://en.wikipedia.org/wiki/Exponential_backoff
+    /// 
+    /// see <https://en.wikipedia.org/wiki/Exponential_backoff>
     Exponential {
         /// Maximum number of attemps, set `0` to retry forever.
         max_attempts: u32,

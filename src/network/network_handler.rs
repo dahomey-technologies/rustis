@@ -3,7 +3,7 @@ use crate::{
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
     resp::{cmd, Command, RespBuf},
-    sleep, spawn, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
+    spawn, timeout, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
 };
 use futures_channel::{mpsc, oneshot};
 use futures_util::{select, FutureExt, SinkExt, StreamExt};
@@ -13,7 +13,7 @@ use std::{
     collections::{HashMap, VecDeque},
     time::Duration,
 };
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::Instant};
 
 pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
@@ -28,7 +28,7 @@ pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<RespBuf>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
     Disconnected,
     Connected,
@@ -152,8 +152,8 @@ impl NetworkHandler {
                 msg = self.msg_receiver.next().fuse() => {
                     if !self.handle_message(msg).await { break; }
                 } ,
-                value = self.connection.read().fuse() => {
-                    if !self.handle_result(value).await { break; }
+                result = self.connection.read().fuse() => {
+                    if !self.handle_result(result).await { break; }
                 }
             }
         }
@@ -242,11 +242,22 @@ impl NetworkHandler {
                         self.messages_to_send.push_back(MessageToSend::new(msg));
                     }
                     Status::Disconnected => {
-                        debug!(
-                            "[{}] network disconnected, queuing command: {:?}",
-                            self.tag, msg.commands
-                        );
-                        self.messages_to_send.push_back(MessageToSend::new(msg));
+                        if msg.retry_on_error {
+                            debug!(
+                                "[{}] network disconnected, queuing command: {:?}",
+                                self.tag, msg.commands
+                            );
+                            self.messages_to_send.push_back(MessageToSend::new(msg));
+                        } else {
+                            debug!(
+                                "[{}] network disconnected, ending command in error: {:?}",
+                                self.tag, msg.commands
+                            );
+                            msg.commands.send_error(
+                                &self.tag,
+                                Error::Client("Disconnected from server".to_string()),
+                            );
+                        }
                     }
                     Status::EnteringMonitor => {
                         self.messages_to_send.push_back(MessageToSend::new(msg))
@@ -278,8 +289,7 @@ impl NetworkHandler {
             }
         }
 
-        if let Status::Disconnected = self.status {
-        } else {
+        if self.status != Status::Disconnected {
             self.send_messages().await
         }
 
@@ -719,7 +729,22 @@ impl NetworkHandler {
         loop {
             if let Some(delay) = self.reconnection_state.next_delay() {
                 debug!("[{}] Waiting {delay} ms before reconnection", self.tag);
-                sleep(Duration::from_millis(delay)).await;
+
+                // keep on receiving new message during the delay
+                let start = Instant::now();
+                let end = start.checked_add(Duration::from_millis(delay)).unwrap();
+                loop {
+                    let delay = end.duration_since(Instant::now());
+                    let result = timeout(delay, self.msg_receiver.next().fuse()).await;
+                    if let Ok(msg) = result {
+                        if !self.handle_message(msg).await {
+                            return false;
+                        }
+                    } else {
+                        // delay has expired
+                        break;
+                    }
+                }
             } else {
                 warn!("[{}] Max reconnection attempts reached", self.tag);
                 while let Some(message_to_receive) = self.messages_to_receive.pop_front() {

@@ -48,6 +48,7 @@ async fn password() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn reconnection() -> Result<()> {
+    log_try_init();
     let uri = format!(
         "redis://{}:{}/1",
         get_default_host(),
@@ -62,7 +63,7 @@ async fn reconnection() -> Result<()> {
         .client_kill(ClientKillOptions::default().id(client_id))
         .await?;
 
-    let client_info = client.client_info().await?;
+    let client_info = client.client_info().retry_on_error(true).await?;
     assert_eq!(1, client_info.db);
 
     Ok(())

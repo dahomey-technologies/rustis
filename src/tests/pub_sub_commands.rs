@@ -1,11 +1,14 @@
 use crate::{
-    client::{Client, IntoConfig},
+    client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         ListCommands, PubSubChannelsOptions, PubSubCommands, ServerCommands, StringCommands,
     },
     spawn,
-    tests::{get_cluster_test_client, get_default_addr, get_test_client, log_try_init},
+    tests::{
+        get_cluster_test_client, get_default_addr, get_default_config, get_test_client,
+        get_test_client_with_config, log_try_init,
+    },
     Result,
 };
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
@@ -535,7 +538,9 @@ async fn additional_sub() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn auto_resubscribe() -> Result<()> {
-    let pub_sub_client = get_test_client().await?;
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let pub_sub_client = get_test_client_with_config(config).await?;
     let regular_client = get_test_client().await?;
 
     let pub_sub_client_id = pub_sub_client.client_id().await?;

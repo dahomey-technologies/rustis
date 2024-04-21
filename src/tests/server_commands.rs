@@ -1,5 +1,5 @@
 use crate::{
-    client::Client,
+    client::{Client, ReconnectionConfig},
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands,
         ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram, CommandListOptions,
@@ -9,7 +9,7 @@ use crate::{
     },
     resp::{cmd, Value},
     spawn,
-    tests::{get_sentinel_test_client, get_test_client},
+    tests::{get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config},
     Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::StreamExt;
@@ -966,7 +966,9 @@ async fn monitor() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn auto_remonitor() -> Result<()> {
-    let client = get_test_client().await?;
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let client = get_test_client_with_config(config).await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let client2 = get_test_client().await?;

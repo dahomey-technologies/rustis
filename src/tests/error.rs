@@ -1,4 +1,9 @@
-use crate::{resp::cmd, tests::get_test_client, Error, RedisError, RedisErrorKind, Result};
+use crate::{
+    commands::{ClientKillOptions, ConnectionCommands, StringCommands},
+    resp::cmd,
+    tests::{get_default_config, get_test_client, get_test_client_with_config},
+    Error, RedisError, RedisErrorKind, Result,
+};
 use serial_test::serial;
 use std::str::FromStr;
 
@@ -46,6 +51,29 @@ fn ask_error() {
             description
         }) if description.is_empty() && host == "127.0.0.1"
     ));
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn reconnection() -> Result<()> {
+    let mut config = get_default_config()?;
+    config.connection_name = "regular".to_string();
+    let regular_client = get_test_client_with_config(config).await?;
+
+    let mut config = get_default_config()?;
+    config.connection_name = "killer".to_string();
+    let killer_client = get_test_client_with_config(config).await?;
+
+    let client_id = regular_client.client_id().await?;
+    killer_client
+        .client_kill(ClientKillOptions::default().id(client_id))
+        .await?;
+
+    let result = regular_client.set("key", "value").await;
+    assert!(result.is_err());
+
+    Ok(())
 }
 
 // #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -153,48 +181,52 @@ fn ask_error() {
 //     Ok(())
 // }
 
-// #[cfg(debug_assertions)]
-// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-// #[serial]
-// async fn kill_on_write() -> Result<()> {
-//     let client = get_test_client().await?;
+#[cfg(debug_assertions)]
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn kill_on_write() -> Result<()> {
+    use crate::client::ReconnectionConfig;
 
-//     // 3 reconnections
-//     let result = client
-//         .send(
-//             cmd("SET")
-//                 .arg("key1")
-//                 .arg("value1")
-//                 .kill_connection_on_write(3),
-//             Some(true),
-//         )
-//         .await;
-//     assert!(result.is_err());
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let client = get_test_client_with_config(config).await?;
 
-//     // 2 reconnections
-//     let result = client
-//         .send(
-//             cmd("SET")
-//                 .arg("key2")
-//                 .arg("value2")
-//                 .kill_connection_on_write(2),
-//             Some(true),
-//         )
-//         .await;
-//     assert!(result.is_ok());
+    // 3 reconnections
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key1")
+                .arg("value1")
+                .kill_connection_on_write(3),
+            Some(true),
+        )
+        .await;
+    assert!(result.is_ok());
 
-//     // 2 reconnections / no retry
-//     let result = client
-//         .send(
-//             cmd("SET")
-//                 .arg("key3")
-//                 .arg("value3")
-//                 .kill_connection_on_write(2),
-//             Some(false),
-//         )
-//         .await;
-//     assert!(result.is_err());
+    // 2 reconnections
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key2")
+                .arg("value2")
+                .kill_connection_on_write(2),
+            Some(true),
+        )
+        .await;
+    assert!(result.is_ok());
 
-//     Ok(())
-// }
+    // 2 reconnections / no retry
+    let result = client
+        .send(
+            cmd("SET")
+                .arg("key3")
+                .arg("value3")
+                .kill_connection_on_write(2),
+            Some(false),
+        )
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}

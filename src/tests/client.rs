@@ -57,7 +57,7 @@ async fn on_reconnect() -> Result<()> {
         .await?;
 
     // send command to be sure that the reconnection has been done
-    client1.set("key", "value").await?;
+    client1.set("key", "value").retry_on_error(true).await?;
 
     let result = receiver.try_recv();
     assert!(result.is_ok());

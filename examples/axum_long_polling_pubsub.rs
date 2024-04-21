@@ -11,6 +11,7 @@ use rustis::{
     commands::{ListCommands, PubSubCommands},
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tokio::net::TcpListener;
 
 const POLL_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -39,10 +40,8 @@ async fn main() {
     // run it
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn poll_messages(
@@ -90,7 +89,7 @@ async fn publish(
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
             "Message not provided",
-        ))
+        ));
     };
 
     // data is not sent via pub/sub; the pub/sub API is used only to notify subscriber to check for new notifications

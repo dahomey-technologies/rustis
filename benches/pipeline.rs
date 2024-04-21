@@ -30,7 +30,7 @@ async fn get_fred_client() -> fred::clients::RedisClient {
     use fred::prelude::*;
 
     let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None);
+    let client = RedisClient::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
@@ -109,7 +109,7 @@ fn bench_redis_async_long_pipeline(b: &mut Bencher) {
 
     let client = get_redis_client();
     let runtime = current_thread_runtime();
-    let mut con = runtime.block_on(client.get_async_connection()).unwrap();
+    let mut con = runtime.block_on(client.get_multiplexed_async_connection()).unwrap();
 
     b.iter(|| {
         runtime

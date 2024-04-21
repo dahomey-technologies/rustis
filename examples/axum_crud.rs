@@ -10,6 +10,7 @@ use rustis::{
     commands::{GenericCommands, StringCommands},
 };
 use std::{net::SocketAddr, sync::Arc};
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
@@ -24,10 +25,8 @@ async fn main() {
     // run it
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn read(

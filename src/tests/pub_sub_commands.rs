@@ -787,6 +787,7 @@ async fn subscribe_multiple_times_to_the_same_channel() -> Result<()> {
     let mut pub_sub_stream = pub_sub_client.subscribe("mychannel").await?;
     assert!(pub_sub_stream.subscribe("mychannel").await.is_err());
     assert!(pub_sub_client.subscribe("mychannel").await.is_err());
+    regular_client.publish("mychannel", "mymessage").await?;
 
     pub_sub_stream.psubscribe("pattern").await?;
     assert!(pub_sub_stream.psubscribe("pattern").await.is_err());

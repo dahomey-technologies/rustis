@@ -110,7 +110,7 @@ async fn sentinel_info_cache() -> Result<()> {
     let result: HashMap<String, Vec<(u64, String)>> =
         client.sentinel_info_cache("myservice").await?;
     assert_eq!(1, result.len());
-    assert!(result.get("myservice").is_some());
+    assert!(result.contains_key("myservice"));
     assert!(result.get("myservice").unwrap().len() == 2); // 1 master & 1 replica
 
     Ok(())

@@ -107,7 +107,7 @@ async fn connection_name() -> Result<()> {
     log_try_init();
 
     let mut config = get_default_addr().into_config()?;
-    config.connection_name = "myconnection".to_owned();
+    "myconnection".clone_into(&mut config.connection_name);
 
     let client = Client::connect(config).await?;
 

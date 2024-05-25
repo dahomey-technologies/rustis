@@ -99,26 +99,17 @@ impl Deref for RespBuf {
 impl fmt::Display for RespBuf {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = match self.to::<Value>() {
+        match self.to::<Value>() {
             Ok(value) => {
-                let mut str = format!("{value:?}");
+                let str = format!("{value:?}");
                 if str.len() > 1000 {
-                    str = str[..1000].to_owned();
+                    f.write_str(&str[..1000])
+                } else {
+                    f.write_str(&str)
                 }
-                str
             }
-            Err(e) => format!("RESP buffer error: {e:?}"),
-        };
-        // let str = if self.0.len() > 1000 {
-        //     format!(
-        //         "{}...",
-        //         String::from_utf8_lossy(&self.0[..1000]).replace("\r\n", "\\r\\n")
-        //     )
-        // } else {
-        //     String::from_utf8_lossy(&self.0).replace("\r\n", "\\r\\n")
-        // };
-
-        f.write_str(&str)
+            Err(e) => f.write_fmt(format_args!("RESP buffer error: {e:?}")),
+        }
     }
 }
 

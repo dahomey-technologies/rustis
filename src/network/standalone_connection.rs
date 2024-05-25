@@ -132,7 +132,7 @@ impl StandaloneConnection {
         if kill_connection {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
-            config.connection_name = "killer".to_owned();
+            "killer".clone_into(&mut config.connection_name);
             let mut connection =
                 StandaloneConnection::connect(&self.host, self.port, &config).await?;
             connection

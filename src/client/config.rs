@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 #[cfg(feature = "tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{collections::HashMap, fmt::{self, Display, Write}, str::FromStr, time::Duration};
 use url::Url;
 
 const DEFAULT_PORT: u16 = 6379;
@@ -423,48 +423,46 @@ impl Config {
     }
 }
 
-impl ToString for Config {
-    fn to_string(&self) -> String {
+impl Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(feature = "tls")]
-        let mut s = if self.tls_config.is_some() {
+        if self.tls_config.is_some() {
             match &self.server {
-                ServerConfig::Standalone { host: _, port: _ } => "rediss://",
-                ServerConfig::Sentinel(_) => "rediss+sentinel://",
-                ServerConfig::Cluster(_) => "rediss+cluster://",
+                ServerConfig::Standalone { host: _, port: _ } => f.write_str("rediss://")?,
+                ServerConfig::Sentinel(_) => f.write_str("rediss+sentinel://")?,
+                ServerConfig::Cluster(_) => f.write_str("rediss+cluster://")?,
             }
         } else {
             match &self.server {
-                ServerConfig::Standalone { host: _, port: _ } => "redis://",
-                ServerConfig::Sentinel(_) => "redis+sentinel://",
-                ServerConfig::Cluster(_) => "redis+cluster://",
+                ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
+                ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,
+                ServerConfig::Cluster(_) => f.write_str("redis+cluster://")?,
             }
         }
-        .to_owned();
 
         #[cfg(not(feature = "tls"))]
-        let mut s = match &self.server {
-            ServerConfig::Standalone { host: _, port: _ } => "redis://",
-            ServerConfig::Sentinel(_) => "redis+sentinel://",
-            ServerConfig::Cluster(_) => "redis+cluster://",
+        match &self.server {
+            ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
+            ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,
+            ServerConfig::Cluster(_) => f.write_str("redis+cluster://")?,
         }
-        .to_owned();
 
         if let Some(username) = &self.username {
-            s.push_str(username);
+            f.write_str(username)?;
         }
 
         if let Some(password) = &self.password {
-            s.push(':');
-            s.push_str(password);
-            s.push('@');
+            f.write_char(':')?;
+            f.write_str(password)?;
+            f.write_char('@')?;
         }
 
         match &self.server {
             ServerConfig::Standalone { host, port } => {
-                s.push_str(host);
+                f.write_str(host)?;
                 if *port != DEFAULT_PORT {
-                    s.push(':');
-                    s.push_str(&port.to_string());
+                    f.write_char(':')?;
+                    f.write_str(&port.to_string())?;
                 }
             }
             ServerConfig::Sentinel(SentinelConfig {
@@ -474,30 +472,30 @@ impl ToString for Config {
                 password: _,
                 username: _,
             }) => {
-                s.push_str(
+                f.write_str(
                     &instances
                         .iter()
                         .map(|(host, port)| format!("{host}:{port}"))
                         .collect::<Vec<String>>()
                         .join(","),
-                );
-                s.push('/');
-                s.push_str(service_name);
+                )?;
+                f.write_char('/')?;
+                f.write_str(service_name)?;
             }
             ServerConfig::Cluster(ClusterConfig { nodes }) => {
-                s.push_str(
+                f.write_str(
                     &nodes
                         .iter()
                         .map(|(host, port)| format!("{host}:{port}"))
                         .collect::<Vec<String>>()
                         .join(","),
-                );
+                )?;
             }
         }
 
         if self.database > 0 {
-            s.push('/');
-            s.push_str(&self.database.to_string());
+            f.write_char('/')?;
+            f.write_str(&self.database.to_string())?;
         }
 
         // query
@@ -508,82 +506,82 @@ impl ToString for Config {
         if connect_timeout != DEFAULT_CONNECT_TIMEOUT {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("connect_timeout={connect_timeout}"));
+            f.write_fmt(format_args!("connect_timeout={connect_timeout}"))?;
         }
 
         let command_timeout = self.command_timeout.as_millis() as u64;
         if command_timeout != DEFAULT_COMMAND_TIMEOUT {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("command_timeout={command_timeout}"));
+            f.write_fmt(format_args!("command_timeout={command_timeout}"))?;
         }
 
         if self.auto_resubscribe != DEFAULT_AUTO_RESUBSCRTBE {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("auto_resubscribe={}", self.auto_resubscribe));
+            f.write_fmt(format_args!("auto_resubscribe={}", self.auto_resubscribe))?;
         }
 
         if self.auto_remonitor != DEFAULT_AUTO_REMONITOR {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("auto_remonitor={}", self.auto_remonitor));
+            f.write_fmt(format_args!("auto_remonitor={}", self.auto_remonitor))?;
         }
 
         if !self.connection_name.is_empty() {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("connection_name={}", self.connection_name));
+            f.write_fmt(format_args!("connection_name={}", self.connection_name))?;
         }
 
         if let Some(keep_alive) = self.keep_alive {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("keep_alive={}", keep_alive.as_millis()));
+            f.write_fmt(format_args!("keep_alive={}", keep_alive.as_millis()))?;
         }
 
         if self.no_delay != DEFAULT_NO_DELAY {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("no_delay={}", self.no_delay));
+            f.write_fmt(format_args!("no_delay={}", self.no_delay))?;
         }
 
         if self.retry_on_error != DEFAULT_RETRY_ON_ERROR {
             if !query_separator {
                 query_separator = true;
-                s.push('?');
+                f.write_char('?')?;
             } else {
-                s.push('&');
+                f.write_char('&')?;
             }
-            s.push_str(&format!("retry_on_error={}", self.retry_on_error));
+            f.write_fmt(format_args!("retry_on_error={}", self.retry_on_error))?;
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {
@@ -598,34 +596,34 @@ impl ToString for Config {
             if wait_between_failures != DEFAULT_WAIT_BETWEEN_FAILURES {
                 if !query_separator {
                     query_separator = true;
-                    s.push('?');
+                    f.write_char('?')?;
                 } else {
-                    s.push('&');
+                    f.write_char('&')?;
                 }
-                s.push_str(&format!("wait_between_failures={wait_between_failures}"));
+                f.write_fmt(format_args!("wait_between_failures={wait_between_failures}"))?;
             }
             if let Some(username) = username {
                 if !query_separator {
                     query_separator = true;
-                    s.push('?');
+                    f.write_char('?')?;
                 } else {
-                    s.push('&');
+                    f.write_char('&')?;
                 }
-                s.push_str("sentinel_username=");
-                s.push_str(username);
+                f.write_str("sentinel_username=")?;
+                f.write_str(username)?;
             }
             if let Some(password) = password {
                 if !query_separator {
-                    s.push('?');
+                    f.write_char('?')?;
                 } else {
-                    s.push('&');
+                    f.write_char('&')?;
                 }
-                s.push_str("sentinel_password=");
-                s.push_str(password);
+                f.write_str("sentinel_password=")?;
+                f.write_str(password)?;
             }
         }
 
-        s
+        Ok(())
     }
 }
 
@@ -880,7 +878,7 @@ pub enum ReconnectionConfig {
         jitter: u32,
     },
     /// Backoff reconnection attempts exponentially, multiplying the last delay by `multiplicative_factor` each time.
-    /// 
+    ///
     /// see <https://en.wikipedia.org/wiki/Exponential_backoff>
     Exponential {
         /// Maximum number of attemps, set `0` to retry forever.

@@ -1212,7 +1212,7 @@ impl ClusterConnection {
         for legacy_shard in legacy_shards {
             let master_id = &legacy_shard.nodes[0].id;
             if master_id != &last_master_id {
-                last_master_id = master_id.clone();
+                last_master_id.clone_from(master_id);
                 shards.push(ClusterShardResult {
                     slots: vec![legacy_shard.slot],
                     nodes: legacy_shard

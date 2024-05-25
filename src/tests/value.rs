@@ -27,15 +27,15 @@ async fn from_single_value_array() -> Result<()> {
 
     let members: HashSet<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
-    assert!(members.contains(&"member1".to_owned()));
-    assert!(members.contains(&"member2".to_owned()));
-    assert!(members.contains(&"member3".to_owned()));
+    assert!(members.contains("member1"));
+    assert!(members.contains("member2"));
+    assert!(members.contains("member3"));
 
     let members: BTreeSet<String> = client.smembers("key").await?;
     assert_eq!(3, members.len());
-    assert!(members.contains(&"member1".to_owned()));
-    assert!(members.contains(&"member2".to_owned()));
-    assert!(members.contains(&"member3".to_owned()));
+    assert!(members.contains("member1"));
+    assert!(members.contains("member2"));
+    assert!(members.contains("member3"));
 
     Ok(())
 }

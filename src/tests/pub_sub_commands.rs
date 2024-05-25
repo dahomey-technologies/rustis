@@ -25,11 +25,11 @@ async fn pubsub() -> Result<()> {
     log_try_init();
 
     let mut config = get_default_addr().into_config()?;
-    config.connection_name = "pub/sub".to_owned();
+    "pub/sub".clone_into(&mut config.connection_name);
     let pub_sub_client = Client::connect(config).await?;
 
     let mut config = get_default_addr().into_config()?;
-    config.connection_name = "regular".to_owned();
+    "regular".clone_into(&mut config.connection_name);
     let regular_client = Client::connect(config).await?;
 
     // cleanup
@@ -587,12 +587,12 @@ async fn no_auto_resubscribe() -> Result<()> {
     log_try_init();
 
     let mut config = get_default_addr().into_config()?;
-    config.connection_name = "pub/sub".to_owned();
+    "pub/sub".clone_into(&mut config.connection_name);
     config.auto_resubscribe = false;
     let pub_sub_client = Client::connect(config).await?;
 
     let mut config = get_default_addr().into_config()?;
-    config.connection_name = "regular".to_owned();
+    "regular".clone_into(&mut config.connection_name);
     let regular_client = Client::connect(config).await?;
 
     let pub_sub_client_id = pub_sub_client.client_id().await?;

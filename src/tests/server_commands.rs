@@ -29,7 +29,7 @@ async fn acl_cat() -> Result<()> {
     let dangerous_commands: HashSet<String> = client
         .acl_cat(AclCatOptions::default().category_name("dangerous"))
         .await?;
-    assert!(dangerous_commands.contains(&"flushdb".to_owned()));
+    assert!(dangerous_commands.contains("flushdb"));
 
     Ok(())
 }
@@ -356,25 +356,25 @@ async fn command_getkeysandflags() -> Result<()> {
     let keys_and_flags: HashMap<String, Vec<String>> = client
         .command_getkeysandflags(["MSET", "a", "b", "c", "d", "e", "f"])
         .await?;
-    assert!(keys_and_flags.contains_key(&"a".to_owned()));
-    assert!(keys_and_flags.contains_key(&"c".to_owned()));
-    assert!(keys_and_flags.contains_key(&"e".to_owned()));
+    assert!(keys_and_flags.contains_key("a"));
+    assert!(keys_and_flags.contains_key("c"));
+    assert!(keys_and_flags.contains_key("e"));
 
     let keys_and_flags: HashMap<String, Vec<String>> = client
         .command_getkeysandflags(["EVAL", "not consulted", "3", "key1", "key2", "key3", "arg1"])
         .await?;
-    assert!(keys_and_flags.contains_key(&"key1".to_owned()));
-    assert!(keys_and_flags.contains_key(&"key2".to_owned()));
-    assert!(keys_and_flags.contains_key(&"key3".to_owned()));
+    assert!(keys_and_flags.contains_key("key1"));
+    assert!(keys_and_flags.contains_key("key2"));
+    assert!(keys_and_flags.contains_key("key3"));
 
     let keys_and_flags: HashMap<String, Vec<String>> = client
         .command_getkeysandflags(["LMOVE", "mylist1", "mylist2", "left", "left"])
         .await?;
-    let flags = keys_and_flags.get(&"mylist1".to_owned()).unwrap();
+    let flags = keys_and_flags.get("mylist1").unwrap();
     assert_eq!("RW", flags[0]);
     assert_eq!("access", flags[1]);
     assert_eq!("delete", flags[2]);
-    let flags = keys_and_flags.get(&"mylist2".to_owned()).unwrap();
+    let flags = keys_and_flags.get("mylist2").unwrap();
     assert_eq!("RW", flags[0]);
     assert_eq!("insert", flags[1]);
 

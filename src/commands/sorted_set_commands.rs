@@ -448,10 +448,10 @@ pub trait SortedSetCommands<'a> {
     ///
     /// # Return
     /// * If the provided count argument is positive, return an array of distinct elements.
-    /// The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
+    ///   The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
     /// * If called with a negative count, the behavior changes and the command is allowed
-    /// to return the same element multiple times. In this case, the number of returned elements
-    /// is the absolute value of the specified count.
+    ///   to return the same element multiple times. In this case, the number of returned elements
+    ///   is the absolute value of the specified count.
     ///
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
@@ -469,10 +469,10 @@ pub trait SortedSetCommands<'a> {
     ///
     /// # Return
     /// * If the provided count argument is positive, return an array of distinct elements with their scores.
-    /// The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
+    ///   The array's length is either count or the sorted set's cardinality (ZCARD), whichever is lower.
     /// * If called with a negative count, the behavior changes and the command is allowed
-    /// to return the same element multiple times. In this case, the number of returned elements
-    /// is the absolute value of the specified count.
+    ///   to return the same element multiple times. In this case, the number of returned elements
+    ///   is the absolute value of the specified count.
     ///
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)

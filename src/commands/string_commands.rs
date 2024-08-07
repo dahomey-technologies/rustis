@@ -498,7 +498,7 @@ pub trait StringCommands<'a> {
     /// # Return
     /// * `true` if SET was executed correctly.
     /// * `false` if the SET operation was not performed because the user
-    ///  specified the NX or XX option but the condition was not met.
+    ///   specified the NX or XX option but the condition was not met.
     ///
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)

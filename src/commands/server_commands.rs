@@ -1068,7 +1068,7 @@ impl<'de> Deserialize<'de> for CommandTip {
 /// The default behavior a client should implement for commands without the request_policy tip is as follows:
 /// 1. The command doesn't accept key name arguments: the client can execute the command on an arbitrary shard.
 /// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard,
-/// as determined by the hash slot of the input keys.
+///    as determined by the hash slot of the input keys.
 #[derive(Debug, Clone, Deserialize)]
 pub enum RequestPolicy {
     /// the client should execute the command on all nodes - masters and replicas alike.
@@ -1114,10 +1114,10 @@ impl FromStr for RequestPolicy {
 /// (i.e., an array, a set, or a map).
 /// The client's implementation for the default behavior should be as follows:
 /// 1. The command doesn't accept key name arguments: the client can aggregate all replies within a single nested data structure.
-/// For example, the array replies we get from calling [`keys`](crate::commands::GenericCommands::keys) against all shards.
-/// These should be packed in a single in no particular order.
+///    For example, the array replies we get from calling [`keys`](crate::commands::GenericCommands::keys) against all shards.
+///    These should be packed in a single in no particular order.
 /// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names.
-/// For example, [`mget`](crate::commands::StringCommands::mget)'s aggregated reply.
+///    For example, [`mget`](crate::commands::StringCommands::mget)'s aggregated reply.
 #[derive(Debug, Clone, Deserialize)]
 pub enum ResponsePolicy {
     /// the clients should return success if at least one shard didn't reply with an error.

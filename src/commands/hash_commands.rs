@@ -195,9 +195,9 @@ pub trait HashCommands<'a> {
     ///
     /// # Return
     /// * If the provided count argument is positive, return an array of distinct fields.
-    /// The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
+    ///   The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
     /// * If called with a negative count, the behavior changes and the command is allowed to return the same field multiple times.
-    /// In this case, the number of returned fields is the absolute value of the specified count.
+    ///   In this case, the number of returned fields is the absolute value of the specified count.
     ///
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
@@ -216,10 +216,10 @@ pub trait HashCommands<'a> {
     ///
     /// # Return
     /// * If the provided count argument is positive, return an array of distinct fields.
-    /// The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
+    ///   The array's length is either count or the hash's number of fields (HLEN), whichever is lower.
     /// * If called with a negative count, the behavior changes and the command is allowed to return the same field multiple times.
-    /// In this case, the number of returned fields is the absolute value of the specified count.
-    /// The optional WITHVALUES modifier changes the reply so it includes the respective values of the randomly selected hash fields.
+    ///   In this case, the number of returned fields is the absolute value of the specified count.
+    ///   The optional WITHVALUES modifier changes the reply so it includes the respective values of the randomly selected hash fields.
     ///
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)

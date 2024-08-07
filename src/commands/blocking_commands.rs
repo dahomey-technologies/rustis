@@ -145,7 +145,7 @@ pub trait BlockingCommands<'a> {
     /// # Return
     /// - `None` when no element could be popped and the timeout expired
     /// - a tuple with the first element being the name of the key where an element was popped
-    /// and the second element being the value of the popped element.
+    ///   and the second element being the value of the popped element.
     ///
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
@@ -172,7 +172,7 @@ pub trait BlockingCommands<'a> {
     /// # Return
     /// - `None` when no element could be popped and the timeout expired
     /// - a tuple with the first element being the name of the key where an element was popped
-    /// and the second element being the value of the popped element.
+    ///   and the second element being the value of the popped element.
     ///
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)

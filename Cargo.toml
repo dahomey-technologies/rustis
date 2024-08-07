@@ -52,8 +52,8 @@ redis-stack = [
 async-std = { version = "1.12", features = ["attributes"], optional = true }
 futures-util = { version = "0.3", features = ["sink"] }
 futures-channel = { version = "0.3", features = ["sink"] }
-bytes = "1.6"
-tokio = { version = "1.37", features = ["time", "io-util", "sync"] }
+bytes = "1.7"
+tokio = { version = "1.39", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 atoi = "2.0"
 itoa = "1.0"
@@ -73,16 +73,16 @@ socket2 = "0.5"
 memchr = "2.7"
 
 [dev-dependencies]
-serial_test = "3.0"
-tokio = { version = "1.37", features = ["rt-multi-thread"] }
+serial_test = "3.1"
+tokio = { version = "1.39", features = ["rt-multi-thread"] }
 rand = "0.8"
 env_logger = "0.11"
 smallvec = { version = "1.13", features = ["serde"] }
 criterion = "0.5"
-redis = { version = "0.25", features = ["aio", "tokio-comp"] }
+redis = { version = "0.26", features = ["aio", "tokio-comp"] }
 fred = "9.0"
 axum = "0.7"
-actix-web = "4.3"
+actix-web = "4.8"
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-tls", "redis-stack", "pool"]

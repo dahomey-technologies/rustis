@@ -2,7 +2,9 @@ use crate::Error;
 
 pub struct Version {
     pub major: u8,
+    #[allow(dead_code)]
     pub minor: u8,
+    #[allow(dead_code)]
     pub revision: u8,
 }
 

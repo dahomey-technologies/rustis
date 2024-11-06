@@ -62,14 +62,39 @@ pub trait ServerCommands<'a> {
     /// An error describing why the user can't execute the command.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// # use rustis::{
+    /// #    client::{Client, ClientPreparedCommand},
+    /// #    commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
+    /// #    resp::cmd,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// #     client.flushdb(FlushingMode::Sync).await?;
+    /// #     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
+    /// let _: () = client
+    ///     .acl_dryrun(
+    ///         "VIRGINIA",
+    ///         "SET",
+    ///         AclDryRunOptions::default().arg("foo").arg("bar"),
+    ///     )
+    ///     .await?;
+    ///
     /// let result: String = client
-    ///    .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
-    ///    .await?;
+    ///     .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
+    ///     .await?;
+    ///
     /// assert_eq!(
-    ///    "User VIRGINIA has no permissions to run the 'get' command",
-    ///    result
+    ///     "User VIRGINIA has no permissions to run the 'get' command",
+    ///     result
     /// );
+    /// #     client.acl_deluser("VIRGINIA").await?;
+    /// #     Ok(())
+    /// # }
     /// ```
     ///
     /// # See Also

@@ -61,6 +61,16 @@ pub trait ServerCommands<'a> {
     /// OK on success.
     /// An error describing why the user can't execute the command.
     ///
+    /// # Example
+    /// ```
+    /// let result: String = client.acl_dryrun(
+    ///     "VIRGINIA",
+    ///     "SET",
+    ///     AclDryRunOptions::default().arg("foo").arg("bar"),
+    /// ).await?;
+    /// assert_eq!("Ok", value);
+    /// ```
+    ///
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
     fn acl_dryrun<U, C, R>(

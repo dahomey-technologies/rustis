@@ -63,12 +63,13 @@ pub trait ServerCommands<'a> {
     ///
     /// # Example
     /// ```
-    /// let result: String = client.acl_dryrun(
-    ///     "VIRGINIA",
-    ///     "SET",
-    ///     AclDryRunOptions::default().arg("foo").arg("bar"),
-    /// ).await?;
-    /// assert_eq!("Ok", value);
+    /// let result: String = client
+    ///    .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
+    ///    .await?;
+    /// assert_eq!(
+    ///    "User VIRGINIA has no permissions to run the 'get' command",
+    ///    result
+    /// );
     /// ```
     ///
     /// # See Also

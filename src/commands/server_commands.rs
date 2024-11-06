@@ -62,7 +62,7 @@ pub trait ServerCommands<'a> {
     /// An error describing why the user can't execute the command.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// let result: String = client
     ///    .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
     ///    .await?;

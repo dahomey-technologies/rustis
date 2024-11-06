@@ -9,7 +9,9 @@ use crate::{
     },
     resp::{cmd, Value},
     spawn,
-    tests::{get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config},
+    tests::{
+        get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config,
+    },
     Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::StreamExt;

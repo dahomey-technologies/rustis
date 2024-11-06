@@ -1,5 +1,5 @@
 #[cfg(feature = "tls")]
-use crate::{tests::get_tls_test_client, commands::StringCommands, Result};
+use crate::{commands::StringCommands, tests::get_tls_test_client, Result};
 #[cfg(feature = "tls")]
 use serial_test::serial;
 

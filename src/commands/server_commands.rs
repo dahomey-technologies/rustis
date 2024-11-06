@@ -864,8 +864,7 @@ pub enum FlushingMode {
 impl ToArgs for FlushingMode {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            FlushingMode::Default => {
-            }
+            FlushingMode::Default => {}
             FlushingMode::Async => {
                 args.arg("ASYNC");
             }
@@ -1928,10 +1927,12 @@ impl<'de> Deserialize<'de> for RoleResult {
 
                 match role {
                     "master" => {
-                        let Some(master_replication_offset): Option<usize> = seq.next_element()? else {
+                        let Some(master_replication_offset): Option<usize> = seq.next_element()?
+                        else {
                             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
-                        let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()? else {
+                        let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()?
+                        else {
                             return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                         };
                         Ok(RoleResult::Master {

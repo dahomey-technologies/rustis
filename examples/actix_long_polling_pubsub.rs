@@ -87,7 +87,7 @@ async fn publish(
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
             "Message not provided",
-        ))
+        ));
     };
 
     let channel = channel.into_inner();

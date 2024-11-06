@@ -595,10 +595,11 @@ impl NetworkHandler {
                                 if let Err(e) = pub_sub_sender.unbounded_send(value) {
                                     let error_desc = e.to_string();
                                     if let Ok(ref_value) = &e.into_inner() {
-                                        if let Some(RefPubSubMessage::Message(channel_or_pattern, _)| RefPubSubMessage::SMessage(
-                                            channel_or_pattern,
-                                            _,
-                                        )) = RefPubSubMessage::from_resp(ref_value) {
+                                        if let Some(
+                                            RefPubSubMessage::Message(channel_or_pattern, _)
+                                            | RefPubSubMessage::SMessage(channel_or_pattern, _),
+                                        ) = RefPubSubMessage::from_resp(ref_value)
+                                        {
                                             warn!(
                                                 "[{}] Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
                                                 self.tag,

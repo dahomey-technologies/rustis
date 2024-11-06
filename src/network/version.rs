@@ -14,12 +14,22 @@ impl TryFrom<&str> for Version {
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         let mut split = value.split('.');
 
-        let (Some(major), Some(minor), Some(revision), None) = (split.next(), split.next(), split.next(), split.next()) else {
-            return Err(Error::Client("Cannot parse Redis server version".to_owned()));
+        let (Some(major), Some(minor), Some(revision), None) =
+            (split.next(), split.next(), split.next(), split.next())
+        else {
+            return Err(Error::Client(
+                "Cannot parse Redis server version".to_owned(),
+            ));
         };
 
-        let (Some(major), Some(minor), Some(revision)) = (atoi::atoi(major.as_bytes()), atoi::atoi(minor.as_bytes()), atoi::atoi(revision.as_bytes())) else {
-            return Err(Error::Client("Cannot parse Redis server version".to_owned()));
+        let (Some(major), Some(minor), Some(revision)) = (
+            atoi::atoi(major.as_bytes()),
+            atoi::atoi(minor.as_bytes()),
+            atoi::atoi(revision.as_bytes()),
+        ) else {
+            return Err(Error::Client(
+                "Cannot parse Redis server version".to_owned(),
+            ));
         };
 
         Ok(Version {

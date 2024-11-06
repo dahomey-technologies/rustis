@@ -201,7 +201,10 @@ fn map() -> Result<()> {
     log_try_init();
 
     let result = serialize(HashMap::from([(12, 13), (14, 15)]))?;
-    assert!(result == "%2\r\n:12\r\n:13\r\n:14\r\n:15\r\n" || result == "%2\r\n:14\r\n:15\r\n:12\r\n:13\r\n");
+    assert!(
+        result == "%2\r\n:12\r\n:13\r\n:14\r\n:15\r\n"
+            || result == "%2\r\n:14\r\n:15\r\n:12\r\n:13\r\n"
+    );
 
     Ok(())
 }
@@ -251,7 +254,10 @@ fn _enum() -> Result<()> {
         g: 13,
         b: 14,
     })?;
-    assert_eq!("%1\r\n+D\r\n%3\r\n+r\r\n:12\r\n+g\r\n:13\r\n+b\r\n:14\r\n", result);
+    assert_eq!(
+        "%1\r\n+D\r\n%3\r\n+r\r\n:12\r\n+g\r\n:13\r\n+b\r\n:14\r\n",
+        result
+    );
 
     Ok(())
 }

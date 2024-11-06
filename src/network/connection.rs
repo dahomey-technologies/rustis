@@ -43,7 +43,7 @@ impl Connection {
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec::<[&mut Command; 10]>,
+        commands: SmallVec<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         match self {

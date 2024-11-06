@@ -1,8 +1,6 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
-    resp::{
-        cmd, CommandArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, ToArgs,
-    },
+    resp::{cmd, CommandArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, ToArgs},
 };
 
 /// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/)
@@ -244,9 +242,16 @@ where
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             BitFieldSubCommand::Get(g) => args.arg_ref(g),
-            BitFieldSubCommand::Set(encoding, offset, value) =>
-                args.arg("SET").arg_ref(encoding).arg_ref(offset).arg(*value),
-            BitFieldSubCommand::IncrBy(encoding, offset, increment) => args.arg("INCRBY").arg_ref(encoding).arg_ref(offset).arg(*increment),
+            BitFieldSubCommand::Set(encoding, offset, value) => args
+                .arg("SET")
+                .arg_ref(encoding)
+                .arg_ref(offset)
+                .arg(*value),
+            BitFieldSubCommand::IncrBy(encoding, offset, increment) => args
+                .arg("INCRBY")
+                .arg_ref(encoding)
+                .arg_ref(offset)
+                .arg(*increment),
             BitFieldSubCommand::Overflow(overflow) => args.arg("OVERFLOW").arg_ref(overflow),
         };
     }
@@ -279,7 +284,9 @@ where
     O: SingleArg,
 {
     fn write_args(&self, args: &mut CommandArgs) {
-        args.arg("GET").arg_ref(&self.encoding).arg_ref(&self.offset);
+        args.arg("GET")
+            .arg_ref(&self.encoding)
+            .arg_ref(&self.offset);
     }
 }
 

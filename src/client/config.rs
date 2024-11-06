@@ -1,7 +1,12 @@
 use crate::{Error, Result};
 #[cfg(feature = "tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
-use std::{collections::HashMap, fmt::{self, Display, Write}, str::FromStr, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Write},
+    str::FromStr,
+    time::Duration,
+};
 use url::Url;
 
 const DEFAULT_PORT: u16 = 6379;
@@ -600,7 +605,9 @@ impl Display for Config {
                 } else {
                     f.write_char('&')?;
                 }
-                f.write_fmt(format_args!("wait_between_failures={wait_between_failures}"))?;
+                f.write_fmt(format_args!(
+                    "wait_between_failures={wait_between_failures}"
+                ))?;
             }
             if let Some(username) = username {
                 if !query_separator {

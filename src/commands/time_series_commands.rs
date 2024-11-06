@@ -637,7 +637,11 @@ impl TsAddOptions {
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
+            command_args: self
+                .command_args
+                .arg("RETENTION")
+                .arg(retention_period)
+                .build(),
         }
     }
 
@@ -780,7 +784,11 @@ impl TsCreateOptions {
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
+            command_args: self
+                .command_args
+                .arg("RETENTION")
+                .arg(retention_period)
+                .build(),
         }
     }
 
@@ -823,7 +831,11 @@ impl TsCreateOptions {
     #[must_use]
     pub fn duplicate_policy(mut self, policy: TsDuplicatePolicy) -> Self {
         Self {
-            command_args: self.command_args.arg("DUPLICATE_POLICY").arg(policy).build(),
+            command_args: self
+                .command_args
+                .arg("DUPLICATE_POLICY")
+                .arg(policy)
+                .build(),
         }
     }
 
@@ -978,7 +990,11 @@ impl TsIncrByDecrByOptions {
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
         Self {
-            command_args: self.command_args.arg("RETENTION").arg(retention_period).build(),
+            command_args: self
+                .command_args
+                .arg("RETENTION")
+                .arg(retention_period)
+                .build(),
         }
     }
 
@@ -1272,7 +1288,12 @@ impl TsMRangeOptions {
     #[must_use]
     pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max).build(),
+            command_args: self
+                .command_args
+                .arg("FILTER_BY_VALUE")
+                .arg(min)
+                .arg(max)
+                .build(),
         }
     }
 
@@ -1469,7 +1490,12 @@ impl TsRangeOptions {
     #[must_use]
     pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
         Self {
-            command_args: self.command_args.arg("FILTER_BY_VALUE").arg(min).arg(max).build(),
+            command_args: self
+                .command_args
+                .arg("FILTER_BY_VALUE")
+                .arg(min)
+                .arg(max)
+                .build(),
         }
     }
 

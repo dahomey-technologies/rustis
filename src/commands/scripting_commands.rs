@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::FlushingMode,
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
-        ToArgs, Response,
+        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, Response, SingleArg,
+        SingleArgCollection, ToArgs,
     },
 };
 use serde::Deserialize;
@@ -424,8 +424,7 @@ impl Default for FunctionRestorePolicy {
 impl ToArgs for FunctionRestorePolicy {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            FunctionRestorePolicy::Default => {
-            }
+            FunctionRestorePolicy::Default => {}
             FunctionRestorePolicy::Append => {
                 args.arg("APPEND");
             }

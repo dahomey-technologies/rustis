@@ -246,10 +246,22 @@ async fn hscan() -> Result<()> {
 
     assert_eq!(0, result.cursor);
     assert_eq!(20, result.elements.len());
-    assert_eq!(("field1".to_owned(), "value1".to_owned()), result.elements[0]);
-    assert_eq!(("field2".to_owned(), "value2".to_owned()), result.elements[1]);
-    assert_eq!(("field3".to_owned(), "value3".to_owned()), result.elements[2]);
-    assert_eq!(("field4".to_owned(), "value4".to_owned()), result.elements[3]);
+    assert_eq!(
+        ("field1".to_owned(), "value1".to_owned()),
+        result.elements[0]
+    );
+    assert_eq!(
+        ("field2".to_owned(), "value2".to_owned()),
+        result.elements[1]
+    );
+    assert_eq!(
+        ("field3".to_owned(), "value3".to_owned()),
+        result.elements[2]
+    );
+    assert_eq!(
+        ("field4".to_owned(), "value4".to_owned()),
+        result.elements[3]
+    );
 
     Ok(())
 }

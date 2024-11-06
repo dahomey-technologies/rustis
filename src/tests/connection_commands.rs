@@ -3,8 +3,7 @@ use crate::{
     commands::{
         ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
         ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
-        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands,
-        StringCommands,
+        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands, StringCommands,
     },
     network::spawn,
     sleep,

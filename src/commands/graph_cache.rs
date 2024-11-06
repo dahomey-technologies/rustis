@@ -1,7 +1,7 @@
-use crate::{commands::GraphValueType};
+use crate::commands::GraphValueType;
 use serde::{
-    de::{self, DeserializeSeed, Visitor, IgnoredAny},
-    Deserializer, Deserialize
+    de::{self, DeserializeSeed, IgnoredAny, Visitor},
+    Deserialize, Deserializer,
 };
 use std::{fmt, marker::PhantomData};
 
@@ -49,7 +49,6 @@ impl GraphCache {
     pub fn check_for_result<'de, D: Deserializer<'de>>(&self, result: D) -> Result<bool, D::Error> {
         CheckCacheForResultSetSeed::new(self).deserialize(result)
     }
-
 }
 
 macro_rules! impl_deserialize_seq_for_seed {
@@ -75,9 +74,7 @@ macro_rules! impl_check_cache_factory {
     ($struct_name:ident) => {
         impl<'a> CheckCacheFactory<'a> for $struct_name<'a> {
             fn new(cache: &'a GraphCache) -> Self {
-                Self {
-                    cache,
-                }
+                Self { cache }
             }
         }
     };
@@ -85,7 +82,7 @@ macro_rules! impl_check_cache_factory {
 
 struct CheckCacheIteratorSeed<'a, ItemSeed> {
     phantom: PhantomData<ItemSeed>,
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl<'a, ItemSeed> CheckCacheFactory<'a> for CheckCacheIteratorSeed<'a, ItemSeed> {
@@ -136,7 +133,7 @@ where
 }
 
 struct CheckCacheForResultSetSeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForResultSetSeed);
@@ -163,8 +160,10 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForResultSetSeed<'a> {
             return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
-        let Some(check_rows) = 
-            seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheIteratorSeed::<CheckCacheForValueSeed>>::new(self.cache))? else {
+        let Some(check_rows) = seq.next_element_seed(CheckCacheIteratorSeed::<
+            CheckCacheIteratorSeed<CheckCacheForValueSeed>,
+        >::new(self.cache))?
+        else {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
@@ -190,10 +189,7 @@ impl<'a> CheckCacheFactory<'a> for CheckCacheForValueSeed<'a> {
 impl<'a> CheckCacheForValueSeed<'a> {
     #[inline]
     fn with_value_type(value_type: GraphValueType, cache: &'a GraphCache) -> Self {
-        Self {
-            value_type,
-            cache,
-        }
+        Self { value_type, cache }
     }
 }
 
@@ -212,7 +208,10 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForValueSeed<'a> {
             return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
-        let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(value_type, self.cache))? else {
+        let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(
+            value_type, self.cache,
+        ))?
+        else {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
@@ -228,44 +227,51 @@ impl<'de, 'a> DeserializeSeed<'de> for CheckCacheForValueSeed<'a> {
         D: Deserializer<'de>,
     {
         match self.value_type {
-            GraphValueType::Unknown => {
-                deserializer.deserialize_seq(self)
-            },
+            GraphValueType::Unknown => deserializer.deserialize_seq(self),
             GraphValueType::Null => {
                 <()>::deserialize(deserializer)?;
                 Ok(true)
-            },
+            }
             GraphValueType::String => {
                 let _string = <&str>::deserialize(deserializer)?;
                 Ok(true)
-            },
+            }
             GraphValueType::Integer => {
                 let _integer = i64::deserialize(deserializer)?;
                 Ok(true)
-            },
+            }
             GraphValueType::Boolean => {
                 let _boolean = bool::deserialize(deserializer)?;
                 Ok(true)
-            },
+            }
             GraphValueType::Double => {
                 let _double = f64::deserialize(deserializer)?;
                 Ok(true)
-            },
-            GraphValueType::Array => CheckCacheIteratorSeed::<CheckCacheForValueSeed>::new(self.cache).deserialize(deserializer),
+            }
+            GraphValueType::Array => {
+                CheckCacheIteratorSeed::<CheckCacheForValueSeed>::new(self.cache)
+                    .deserialize(deserializer)
+            }
             GraphValueType::Map => CheckCacheForMapSeed::new(self.cache).deserialize(deserializer),
-            GraphValueType::Edge => CheckCacheForEdgeSeed::new(self.cache).deserialize(deserializer),
-            GraphValueType::Node => CheckCacheForNodeSeed::new(self.cache).deserialize(deserializer),
-            GraphValueType::Path => CheckCacheForPathSeed::new(self.cache).deserialize(deserializer),
+            GraphValueType::Edge => {
+                CheckCacheForEdgeSeed::new(self.cache).deserialize(deserializer)
+            }
+            GraphValueType::Node => {
+                CheckCacheForNodeSeed::new(self.cache).deserialize(deserializer)
+            }
+            GraphValueType::Path => {
+                CheckCacheForPathSeed::new(self.cache).deserialize(deserializer)
+            }
             GraphValueType::Point => {
                 let _point = <(f32, f32)>::deserialize(deserializer)?;
                 Ok(true)
-            },
+            }
         }
     }
 }
 
 struct CheckCacheForMapSeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForMapSeed);
@@ -284,7 +290,9 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForMapSeed<'a> {
     {
         // ignore key
         while seq.next_element::<IgnoredAny>()?.is_some() {
-            let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
+            let Some(check_value) =
+                seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))?
+            else {
                 return Err(de::Error::custom("Cannot parse GraphValue::Map value"));
             };
 
@@ -298,7 +306,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForMapSeed<'a> {
 }
 
 struct CheckCacheForNodeSeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForNodeSeed);
@@ -329,7 +337,10 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForNodeSeed<'a> {
             return Ok(false);
         }
 
-        let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheForPropertySeed>::new(self.cache))? else {
+        let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<
+            CheckCacheForPropertySeed,
+        >::new(self.cache))?
+        else {
             return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 
@@ -338,7 +349,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForNodeSeed<'a> {
 }
 
 struct CheckCacheForEdgeSeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForEdgeSeed);
@@ -378,7 +389,10 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
             return Err(de::Error::invalid_length(3, &"more elements in sequence"));
         };
 
-        let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<CheckCacheForPropertySeed>::new(self.cache))? else {
+        let Some(check_properties) = seq.next_element_seed(CheckCacheIteratorSeed::<
+            CheckCacheForPropertySeed,
+        >::new(self.cache))?
+        else {
             return Err(de::Error::invalid_length(4, &"more elements in sequence"));
         };
 
@@ -387,7 +401,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForEdgeSeed<'a> {
 }
 
 struct CheckCacheForPathSeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForPathSeed);
@@ -404,7 +418,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPathSeed<'a> {
     where
         A: serde::de::SeqAccess<'de>,
     {
-        let Some(check_nodes) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
+        let Some(check_nodes) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))?
+        else {
             return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
@@ -412,7 +427,8 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPathSeed<'a> {
             return Ok(false);
         }
 
-        let Some(check_edges) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))? else {
+        let Some(check_edges) = seq.next_element_seed(CheckCacheForValueSeed::new(self.cache))?
+        else {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
@@ -421,7 +437,7 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPathSeed<'a> {
 }
 
 struct CheckCacheForPropertySeed<'a> {
-    cache: &'a GraphCache
+    cache: &'a GraphCache,
 }
 
 impl_check_cache_factory!(CheckCacheForPropertySeed);
@@ -450,7 +466,10 @@ impl<'de, 'a> Visitor<'de> for CheckCacheForPropertySeed<'a> {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
-        let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(value_type, self.cache))? else {
+        let Some(check_value) = seq.next_element_seed(CheckCacheForValueSeed::with_value_type(
+            value_type, self.cache,
+        ))?
+        else {
             return Err(de::Error::invalid_length(2, &"more elements in sequence"));
         };
 

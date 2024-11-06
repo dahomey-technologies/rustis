@@ -414,11 +414,17 @@ where
                         E: de::Error,
                     {
                         let Ok(distance) = std::str::from_utf8(v) else {
-                            return Err(de::Error::invalid_value(Unexpected::Bytes(v), &"A valid f64 encoded in an UTF8 string"));
+                            return Err(de::Error::invalid_value(
+                                Unexpected::Bytes(v),
+                                &"A valid f64 encoded in an UTF8 string",
+                            ));
                         };
 
                         let Ok(distance) = distance.parse::<f64>() else {
-                            return Err(de::Error::invalid_value(Unexpected::Bytes(v), &"A valid f64 encoded in an UTF8 string"));
+                            return Err(de::Error::invalid_value(
+                                Unexpected::Bytes(v),
+                                &"A valid f64 encoded in an UTF8 string",
+                            ));
                         };
 
                         Ok(GeoSearchResultField::Distance(distance))

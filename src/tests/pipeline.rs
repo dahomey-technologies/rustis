@@ -2,7 +2,7 @@ use crate::{
     client::BatchPreparedCommand,
     commands::{FlushingMode, ServerCommands, StringCommands},
     resp::{cmd, Value},
-    tests::{get_test_client, get_cluster_test_client},
+    tests::{get_cluster_test_client, get_test_client},
     Result,
 };
 use serial_test::serial;
@@ -46,7 +46,6 @@ async fn error() -> Result<()> {
 
     Ok(())
 }
-
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

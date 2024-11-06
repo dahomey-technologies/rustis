@@ -162,11 +162,7 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
 
     while let Some(dump_result) = chunks.pop_front() {
         client
-            .bf_loadchunk(
-                "bf",
-                dump_result.iterator,
-                dump_result.data,
-            )
+            .bf_loadchunk("bf", dump_result.iterator, dump_result.data)
             .await?;
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     commands::{
-        CfInsertOptions, CfReserveOptions, CuckooCommands, FlushingMode, ServerCommands,
-        StringCommands, CfScanDumpResult,
+        CfInsertOptions, CfReserveOptions, CfScanDumpResult, CuckooCommands, FlushingMode,
+        ServerCommands, StringCommands,
     },
     tests::get_redis_stack_test_client,
     Error, RedisError, RedisErrorKind, Result,
@@ -216,9 +216,7 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     while let Some(dump) = chunks.pop_front() {
-        client
-            .cf_loadchunk("cf", dump.iterator, dump.data)
-            .await?;
+        client.cf_loadchunk("cf", dump.iterator, dump.data).await?;
     }
 
     let result = client.cf_exists("cf", "item1").await?;

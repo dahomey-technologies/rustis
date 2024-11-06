@@ -1,4 +1,8 @@
-use rustis::{client::Client, Result, commands::{StringCommands, GenericCommands}};
+use rustis::{
+    client::Client,
+    commands::{GenericCommands, StringCommands},
+    Result,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -9,7 +13,7 @@ async fn main() -> Result<()> {
         client.set(key, 42.423456).await?;
         let _: f64 = client.get(key).await?;
         client.del(key).await?;
-    }    
+    }
 
     Ok(())
 }

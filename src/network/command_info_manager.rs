@@ -90,13 +90,17 @@ impl CommandInfoManager {
                 };
                 slice = &slice[..stop_index];
 
-                let keys = slice.iter().step_by(command_info.step).filter_map(|bs| {
-                    if bs.is_empty() {
-                        None
-                    } else {
-                        String::from_utf8(bs.clone()).ok()
-                    }
-                }).collect();
+                let keys = slice
+                    .iter()
+                    .step_by(command_info.step)
+                    .filter_map(|bs| {
+                        if bs.is_empty() {
+                            None
+                        } else {
+                            String::from_utf8(bs.clone()).ok()
+                        }
+                    })
+                    .collect();
                 return Ok(keys);
             }
         }

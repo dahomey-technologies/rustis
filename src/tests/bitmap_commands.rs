@@ -136,7 +136,7 @@ async fn bitop() -> Result<()> {
     assert_eq!("`bc`ab", value);
 
     client.close().await?;
-    
+
     Ok(())
 }
 
@@ -146,16 +146,12 @@ async fn bitop() -> Result<()> {
 async fn bitpos() -> Result<()> {
     let client = get_test_client().await?;
 
-    client
-        .set("mykey", vec![0xFFu8, 0xF0u8, 0x00u8])
-        .await?;
+    client.set("mykey", vec![0xFFu8, 0xF0u8, 0x00u8]).await?;
 
     let pos = client.bitpos("mykey", 1, BitRange::default()).await?;
     assert_eq!(0, pos);
 
-    client
-        .set("mykey", vec![0x00u8, 0xFFu8, 0xF0u8])
-        .await?;
+    client.set("mykey", vec![0x00u8, 0xFFu8, 0xF0u8]).await?;
     let pos = client.bitpos("mykey", 0, BitRange::range(0, -1)).await?;
     assert_eq!(0, pos);
 

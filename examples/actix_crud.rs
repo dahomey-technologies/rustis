@@ -1,4 +1,6 @@
-use actix_web::{delete, get, http::StatusCode, post, web, App, HttpServer, HttpResponse, Responder};
+use actix_web::{
+    delete, get, http::StatusCode, post, web, App, HttpResponse, HttpServer, Responder,
+};
 use rustis::{
     client::Client,
     commands::{GenericCommands, StringCommands},
@@ -28,10 +30,7 @@ async fn main() -> std::io::Result<()> {
 }
 
 #[get("/{key}")]
-async fn read(
-    redis: web::Data<Client>,
-    key: web::Path<String>,
-) -> Result<String, ServiceError> {
+async fn read(redis: web::Data<Client>, key: web::Path<String>) -> Result<String, ServiceError> {
     let key = key.into_inner();
     let value: Option<String> = redis.get(&key).await?;
     value.ok_or_else(|| {

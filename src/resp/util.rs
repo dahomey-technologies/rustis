@@ -149,7 +149,7 @@ where
 /// Serialize a byte buffer (&\[u8\])
 pub fn serialize_byte_buf<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
-    S: Serializer
+    S: Serializer,
 {
     serializer.serialize_bytes(bytes)
 }
@@ -195,7 +195,7 @@ where
 pub(crate) struct BytesSeed;
 
 impl<'de> DeserializeSeed<'de> for BytesSeed {
-    type Value =  &'de [u8];
+    type Value = &'de [u8];
 
     fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
     where

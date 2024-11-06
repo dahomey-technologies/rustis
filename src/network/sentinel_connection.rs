@@ -22,7 +22,7 @@ impl SentinelConnection {
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec::<[&mut Command; 10]>,
+        commands: SmallVec<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.inner_connection
@@ -70,8 +70,12 @@ impl SentinelConnection {
         let mut unreachable_sentinel = true;
 
         let mut sentinel_node_config = config.clone();
-        sentinel_node_config.username.clone_from(&sentinel_config.username);
-        sentinel_node_config.password.clone_from(&sentinel_config.password);
+        sentinel_node_config
+            .username
+            .clone_from(&sentinel_config.username);
+        sentinel_node_config
+            .password
+            .clone_from(&sentinel_config.password);
 
         loop {
             for sentinel_instance in &sentinel_config.instances {

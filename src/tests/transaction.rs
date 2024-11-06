@@ -2,7 +2,7 @@ use crate::{
     client::BatchPreparedCommand,
     commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
     resp::cmd,
-    tests::{get_test_client, get_cluster_test_client},
+    tests::{get_cluster_test_client, get_test_client},
     Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
@@ -170,7 +170,9 @@ async fn transaction_on_cluster_connection_with_keys_with_same_slot() -> Result<
 
     let mut transaction = client.create_transaction();
 
-    transaction.mset([("{hash}key1", "value1"), ("{hash}key2", "value2")]).queue();
+    transaction
+        .mset([("{hash}key1", "value1"), ("{hash}key2", "value2")])
+        .queue();
     transaction.get::<_, String>("{hash}key1").queue();
     transaction.get::<_, String>("{hash}key2").queue();
     let ((), val1, val2): ((), String, String) = transaction.execute().await.unwrap();
@@ -189,7 +191,9 @@ async fn transaction_on_cluster_connection_with_keys_with_different_slots() -> R
 
     let mut transaction = client.create_transaction();
 
-    transaction.mset([("key1", "value1"), ("key2", "value2")]).queue();
+    transaction
+        .mset([("key1", "value1"), ("key2", "value2")])
+        .queue();
     transaction.get::<_, String>("key1").queue();
     transaction.get::<_, String>("key2").queue();
     let result: Result<((), String, String)> = transaction.execute().await;

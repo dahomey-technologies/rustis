@@ -886,7 +886,7 @@ impl<'de> Deserialize<'de> for LegacyClusterNodeResult {
                     preferred_endpoint,
                     ip,
                     hostname,
-                    port
+                    port,
                 })
             }
         }

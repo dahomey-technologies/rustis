@@ -445,7 +445,11 @@ impl TDigestMergeOptions {
     #[must_use]
     pub fn compression(mut self, compression: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("COMPRESSION").arg(compression).build(),
+            command_args: self
+                .command_args
+                .arg("COMPRESSION")
+                .arg(compression)
+                .build(),
         }
     }
 

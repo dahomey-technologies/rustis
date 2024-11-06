@@ -34,7 +34,9 @@ impl ClientState {
         match self.cache.get(key) {
             Some(cache_entry) => match cache_entry.downcast_ref::<S>() {
                 Some(cache_entry) => Ok(Some(cache_entry)),
-                None => Err(Error::Client(format!("Cannot downcast cache entry '{key}'"))),
+                None => Err(Error::Client(format!(
+                    "Cannot downcast cache entry '{key}'"
+                ))),
             },
             None => Ok(None),
         }

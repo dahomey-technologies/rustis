@@ -221,7 +221,9 @@ impl<'a> Serializer for &'a mut RespSerializer {
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         let Some(len) = len else {
-            return Err(ser::Error::custom("expecting len on sequence serialization"));
+            return Err(ser::Error::custom(
+                "expecting len on sequence serialization",
+            ));
         };
 
         self.output.put_u8(ARRAY_TAG);
@@ -405,11 +407,7 @@ impl<'a> SerializeStruct for &'a mut RespSerializer {
     type Error = Error;
 
     #[inline]
-    fn serialize_field<T>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: serde::Serialize + ?Sized,
     {
@@ -428,11 +426,7 @@ impl<'a> SerializeStructVariant for &'a mut RespSerializer {
     type Error = Error;
 
     #[inline]
-    fn serialize_field<T>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: serde::Serialize + ?Sized,
     {

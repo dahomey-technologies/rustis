@@ -4,13 +4,10 @@ use crate::{
         CallBuilder, FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands,
         ServerCommands, StringCommands,
     },
+    error::{Error, RedisErrorKind},
     sleep, spawn,
     tests::get_test_client,
     Result,
-    error::{
-        Error,
-        RedisErrorKind
-    },
 };
 use serial_test::serial;
 
@@ -44,7 +41,6 @@ async fn eval() -> Result<()> {
     Ok(())
 }
 
-
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -59,11 +55,7 @@ redis.call("DEL", "key");
 return { ARGV[1], ARGV[2], 42, arr }
     "#;
     let result: (String, String, i32, Vec<i64>) = client
-        .eval(
-            CallBuilder::script(lua_script)
-                .args("Hello")
-                .args("world"),
-        )
+        .eval(CallBuilder::script(lua_script).args("Hello").args("world"))
         .await?;
 
     assert_eq!(result.0, "Hello");
@@ -82,7 +74,9 @@ async fn evalsha_noscript() -> Result<()> {
 
     // SHA1("") == da39a3ee5e6b4b0d3255bfef95601890afd80709
     let result = client
-        .evalsha::<()>(CallBuilder::sha1("da39a3ee5e6b4b0d3255bfef95601890afd80709"))
+        .evalsha::<()>(CallBuilder::sha1(
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        ))
         .await
         .unwrap_err();
 
@@ -146,11 +140,7 @@ end)
     let library: String = client.function_load(true, lua_lib).await?;
     assert_eq!("mylib", library);
     let result: (String, String, i32, Vec<i64>) = client
-        .fcall(
-            CallBuilder::function("myfunc")
-                .args("Hello")
-                .args("world"),
-        )
+        .fcall(CallBuilder::function("myfunc").args("Hello").args("world"))
         .await?;
 
     assert_eq!(result.0, "Hello");

@@ -72,9 +72,7 @@ impl<'de> serde::de::SeqAccess<'de> for SeqAccess<'de> {
         T: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(buf) => {
-                seed.deserialize(&mut RespDeserializer::new(buf)).map(Some)
-            }
+            Some(buf) => seed.deserialize(&mut RespDeserializer::new(buf)).map(Some),
             None => Ok(None),
         }
     }

@@ -443,7 +443,11 @@ impl CfReserveOptions {
     /// The default value is 20.
     pub fn maxiterations(mut self, maxiterations: usize) -> Self {
         Self {
-            command_args: self.command_args.arg("MAXITERATIONS").arg(maxiterations).build(),
+            command_args: self
+                .command_args
+                .arg("MAXITERATIONS")
+                .arg(maxiterations)
+                .build(),
         }
     }
 

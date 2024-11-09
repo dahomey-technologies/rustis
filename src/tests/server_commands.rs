@@ -9,7 +9,9 @@ use crate::{
     },
     resp::{cmd, Value},
     spawn,
-    tests::{get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config},
+    tests::{
+        get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config,
+    },
     Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::StreamExt;
@@ -114,6 +116,18 @@ async fn acl_getuser() -> Result<()> {
     assert!(matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all"));
 
     client.acl_deluser("foo").await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn acl_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result: Vec<String> = client.acl_help().await?;
+    assert!(result.iter().any(|e| e == "HELP"));
 
     Ok(())
 }

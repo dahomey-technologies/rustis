@@ -13,6 +13,7 @@ mod connection_commands;
 mod count_min_sktech_commands;
 #[cfg(feature = "redis-bloom")]
 mod cuckoo_commands;
+mod debug_commands;
 mod error;
 mod from_value;
 mod generic_commands;
@@ -41,7 +42,6 @@ mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
-mod debug_commands;
 #[cfg(feature = "redis-bloom")]
 mod t_disgest_commands;
 #[cfg(feature = "redis-time-series")]

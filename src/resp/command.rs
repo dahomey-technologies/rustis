@@ -29,7 +29,7 @@ pub struct Command {
     pub kill_connection_on_write: usize,
     #[cfg(debug_assertions)]
     #[allow(unused)]
-    pub (crate) command_seq: usize,
+    pub(crate) command_seq: usize,
 }
 
 impl Command {
@@ -68,7 +68,7 @@ impl Command {
         A: ToArgs,
     {
         if condition {
-            arg.write_args(&mut self.args); 
+            arg.write_args(&mut self.args);
         }
         self
     }

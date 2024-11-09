@@ -273,11 +273,15 @@ impl GraphResultSet {
         client: &Client,
     ) -> Future<Self> {
         let Some(graph_name) = command.args.iter().next() else {
-            return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
+            return Box::pin(future::ready(Err(Error::Client(
+                "Cannot parse graph command".to_owned(),
+            ))));
         };
 
         let Ok(graph_name) = std::str::from_utf8(graph_name) else {
-            return Box::pin(future::ready(Err(Error::Client("Cannot parse graph command".to_owned()))));
+            return Box::pin(future::ready(Err(Error::Client(
+                "Cannot parse graph command".to_owned(),
+            ))));
         };
 
         let graph_name = graph_name.to_owned();
@@ -373,7 +377,9 @@ impl GraphResultSet {
                 A: de::SeqAccess<'de>,
             {
                 let Some(size) = seq.size_hint() else {
-                    return Err(de::Error::custom("size hint is mandatory for GraphResultSet"));
+                    return Err(de::Error::custom(
+                        "size hint is mandatory for GraphResultSet",
+                    ));
                 };
 
                 if size == 1 {
@@ -392,7 +398,8 @@ impl GraphResultSet {
                     };
 
                     let client_state = self.client.get_client_state();
-                    let Ok(Some(cache)) = client_state.get_state::<GraphCache>(self.cache_key) else {
+                    let Ok(Some(cache)) = client_state.get_state::<GraphCache>(self.cache_key)
+                    else {
                         return Err(de::Error::custom("Cannot find graph cache"));
                     };
 
@@ -502,7 +509,10 @@ impl<'de> Deserialize<'de> for MappingsResult {
                                 A: de::SeqAccess<'de>,
                             {
                                 let Some(mapping) = seq.next_element::<String>()? else {
-                                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                                    return Err(de::Error::invalid_length(
+                                        0,
+                                        &"more elements in sequence",
+                                    ));
                                 };
 
                                 Ok(mapping)
@@ -557,7 +567,7 @@ impl<'de> Deserialize<'de> for MappingsResult {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let Some(_header) = seq.next_element::<Vec::<String>>()? else {
+                let Some(_header) = seq.next_element::<Vec<String>>()? else {
                     return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
@@ -565,7 +575,7 @@ impl<'de> Deserialize<'de> for MappingsResult {
                     return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                 };
 
-                let Some(_stats) = seq.next_element::<Vec::<String>>()? else {
+                let Some(_stats) = seq.next_element::<Vec<String>>()? else {
                     return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                 };
 
@@ -721,8 +731,10 @@ impl<'de> Deserialize<'de> for GraphQueryStatistics {
                 where
                     A: de::SeqAccess<'de>,
                 {
-                    let Some((value, _milliseconds))= value.split_once(' ') else {
-                        return Err(de::Error::custom("Cannot parse GraphQueryStatistics (query exuction time)"));
+                    let Some((value, _milliseconds)) = value.split_once(' ') else {
+                        return Err(de::Error::custom(
+                            "Cannot parse GraphQueryStatistics (query exuction time)",
+                        ));
                     };
 
                     match value.parse::<f64>() {
@@ -736,7 +748,7 @@ impl<'de> Deserialize<'de> for GraphQueryStatistics {
                 let mut stats = GraphQueryStatistics::default();
 
                 while let Some(str) = seq.next_element::<&str>()? {
-                    let Some((name, value))= str.split_once(": ") else {
+                    let Some((name, value)) = str.split_once(": ") else {
                         return Err(de::Error::custom("Cannot parse GraphQueryStatistics"));
                     };
 

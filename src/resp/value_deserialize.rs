@@ -206,10 +206,7 @@ impl<'de> Visitor<'de> for PushOrKeyVisitor {
     }
 
     #[inline]
-    fn visit_bytes<E: serde::de::Error>(
-        self,
-        v: &[u8],
-    ) -> std::result::Result<PushOrKey, E> {
+    fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> std::result::Result<PushOrKey, E> {
         let value_visitor = ValueVisitor;
         value_visitor.visit_bytes(v).map(PushOrKey::Key)
     }

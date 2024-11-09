@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
-use crate::{tests::get_test_client, commands::{GenericCommands, SScanOptions, SetCommands}, Result};
+use crate::{
+    commands::{GenericCommands, SScanOptions, SetCommands},
+    tests::get_test_client,
+    Result,
+};
 use serial_test::serial;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

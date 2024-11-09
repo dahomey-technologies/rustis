@@ -100,7 +100,7 @@ impl StandaloneConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec::<[&mut Command; 10]>,
+        commands: SmallVec<[&mut Command; 10]>,
         _retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.buffer.clear();

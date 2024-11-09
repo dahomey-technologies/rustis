@@ -1,6 +1,6 @@
 use crate::{
     client::{Client, IntoConfig},
-    commands::{ClientKillOptions, ConnectionCommands, ServerCommands, FlushingMode},
+    commands::{ClientKillOptions, ConnectionCommands, FlushingMode, ServerCommands},
     tests::{get_default_host, get_default_port, get_test_client, log_try_init},
     Result,
 };
@@ -49,11 +49,7 @@ async fn password() -> Result<()> {
 #[serial]
 async fn reconnection() -> Result<()> {
     log_try_init();
-    let uri = format!(
-        "redis://{}:{}/1",
-        get_default_host(),
-        get_default_port()
-    );
+    let uri = format!("redis://{}:{}/1", get_default_host(), get_default_port());
     let client = Client::connect(uri.clone()).await?;
 
     // kill client connection from another client to force reconnection
@@ -71,10 +67,7 @@ async fn reconnection() -> Result<()> {
 
 #[test]
 fn into_config() -> Result<()> {
-    assert_eq!(
-        "redis://127.0.0.1",
-        "127.0.0.1".into_config()?.to_string()
-    );
+    assert_eq!("redis://127.0.0.1", "127.0.0.1".into_config()?.to_string());
     assert_eq!(
         "redis://127.0.0.1",
         "127.0.0.1:6379".into_config()?.to_string()
@@ -108,7 +101,7 @@ fn into_config() -> Result<()> {
         "redis://username:pwd@127.0.0.1/1"
             .into_config()?
             .to_string()
-    );    
+    );
     #[cfg(feature = "tls")]
     assert_eq!(
         "rediss://username:pwd@127.0.0.1/1",

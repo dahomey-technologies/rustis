@@ -75,13 +75,13 @@ async fn command_timeout() -> Result<()> {
     log_try_init();
 
     let client = get_test_client().await?;
-    
+
     client.flushall(FlushingMode::Sync).await?;
 
     // create an empty list
     client.lpush("key", "value").await?;
     let _result: Vec<String> = client.lpop("key", 1).await?;
-    
+
     client.close().await?;
 
     let mut config = get_default_addr().into_config()?;
@@ -151,7 +151,15 @@ async fn mget_mset() -> Result<()> {
         .await?
         .to()?;
 
-    assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
+    assert_eq!(
+        vec![
+            "value1".to_owned(),
+            "value2".to_owned(),
+            "value3".to_owned(),
+            "value4".to_owned()
+        ],
+        values
+    );
 
     Ok(())
 }

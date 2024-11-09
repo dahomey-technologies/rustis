@@ -10,8 +10,8 @@ use std::{
 /// Types compatible with command args
 pub trait ToArgs {
     /// Write this Rust type as one ore multiple args into CommandArgs.
-    /// 
-    /// Primitives Rust types will generate a single argument 
+    ///
+    /// Primitives Rust types will generate a single argument
     /// whereas collections and tuples will generate multiple arguments
     fn write_args(&self, args: &mut CommandArgs);
 

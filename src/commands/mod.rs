@@ -51,7 +51,7 @@ Commands can be directly awaited or [forgotten](crate::client::ClientPreparedCom
 
 ```
 use rustis::{
-    client::{Client, ClientPreparedCommand}, 
+    client::{Client, ClientPreparedCommand},
     commands::{ListCommands, SortedSetCommands, ZAddOptions},
     Result,
 };
@@ -77,8 +77,8 @@ async fn main() -> Result<()> {
 
 # Documentation disclaimer
 
-The commands traits documentation is directly adapated from the official Redis 
-documentation found [here](https://github.com/redis/redis-doc) with the 
+The commands traits documentation is directly adapated from the official Redis
+documentation found [here](https://github.com/redis/redis-doc) with the
 following [COPYRIGHT](https://github.com/redis/redis-doc/blob/master/COPYRIGHT).
 */
 

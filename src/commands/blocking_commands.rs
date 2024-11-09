@@ -150,7 +150,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<K, KK, K1, V>(self, keys: KK, timeout: f64) -> PreparedCommand<'a, Self, Option<(K1, V)>>
+    fn blpop<K, KK, K1, V>(
+        self,
+        keys: KK,
+        timeout: f64,
+    ) -> PreparedCommand<'a, Self, Option<(K1, V)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -177,7 +181,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<K, KK, K1, V>(self, keys: KK, timeout: f64) -> PreparedCommand<'a, Self, Option<(K1, V)>>
+    fn brpop<K, KK, K1, V>(
+        self,
+        keys: KK,
+        timeout: f64,
+    ) -> PreparedCommand<'a, Self, Option<(K1, V)>>
     where
         Self: Sized,
         K: SingleArg,

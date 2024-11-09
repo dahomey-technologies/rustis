@@ -130,7 +130,9 @@ impl<'a> RefPubSubMessage<'a> {
 
         if resp_buffer.is_push_message() {
             let mut deserializer = RespDeserializer::new(resp_buffer);
-            deserializer.deserialize_seq(RefPubSubMessageVisitor).unwrap_or_default()
+            deserializer
+                .deserialize_seq(RefPubSubMessageVisitor)
+                .unwrap_or_default()
         } else {
             None
         }

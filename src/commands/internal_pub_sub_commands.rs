@@ -11,7 +11,7 @@ pub(crate) trait InternalPubSubCommands<'a> {
     where
         Self: Sized,
         P: SingleArg,
-        PP: SingleArgCollection<P>
+        PP: SingleArgCollection<P>,
     {
         prepare_command(self, cmd("PSUBSCRIBE").arg(patterns))
     }
@@ -33,7 +33,7 @@ pub(crate) trait InternalPubSubCommands<'a> {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgCollection<C>
+        CC: SingleArgCollection<C>,
     {
         prepare_command(self, cmd("SSUBSCRIBE").arg(shardchannels))
     }
@@ -42,7 +42,7 @@ pub(crate) trait InternalPubSubCommands<'a> {
     where
         Self: Sized,
         C: SingleArg,
-        CC: SingleArgCollection<C>
+        CC: SingleArgCollection<C>,
     {
         prepare_command(self, cmd("SUBSCRIBE").arg(channels))
     }

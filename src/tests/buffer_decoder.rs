@@ -1,4 +1,4 @@
-use bytes::{BytesMut};
+use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
 use crate::{resp::BufferDecoder, Result};
@@ -6,7 +6,9 @@ use crate::{resp::BufferDecoder, Result};
 fn decode(str: &str) -> Result<Option<Vec<u8>>> {
     let mut buffer_decoder = BufferDecoder;
     let mut buf: BytesMut = str.into();
-    buffer_decoder.decode(&mut buf).map(|b| b.map(|b| b.to_vec()))
+    buffer_decoder
+        .decode(&mut buf)
+        .map(|b| b.map(|b| b.to_vec()))
 }
 
 #[test]
@@ -137,7 +139,10 @@ fn bulk_string() -> Result<()> {
 #[test]
 fn array() -> Result<()> {
     let result = decode("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?;
-    assert_eq!(Some("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n".as_bytes().to_vec()), result);
+    assert_eq!(
+        Some("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n".as_bytes().to_vec()),
+        result
+    );
 
     let result = decode("*2")?;
     assert_eq!(None, result);
@@ -172,7 +177,10 @@ fn array() -> Result<()> {
 #[test]
 fn map() -> Result<()> {
     let result = decode("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?;
-    assert_eq!(Some("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n".as_bytes().to_vec()), result);
+    assert_eq!(
+        Some("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n".as_bytes().to_vec()),
+        result
+    );
 
     let result = decode("%1")?;
     assert_eq!(None, result);

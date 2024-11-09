@@ -27,17 +27,25 @@ impl Encoder<&Command> for CommandEncoder {
 fn calculate_buf_size(command: &Command) -> usize {
     let mut buf_size = 0;
 
-    // *<num_args>\r\n 
+    // *<num_args>\r\n
     let num_args = command.args.len() + 1;
     buf_size += if num_args <= 9 { 4 } else { 5 };
 
     // $<name_len>\r\n<name>\r\n
     let name = command.name.as_bytes();
-    buf_size += if name.len() <= 9 { 6 + name.len() } else { 7 + name.len() };
+    buf_size += if name.len() <= 9 {
+        6 + name.len()
+    } else {
+        7 + name.len()
+    };
 
     for arg in &command.args {
         // $<arg_len>\r\n<arg>\r\n
-        buf_size += if arg.len() <= 9 { 6 + arg.len() } else { 7 + arg.len() };
+        buf_size += if arg.len() <= 9 {
+            6 + arg.len()
+        } else {
+            7 + arg.len()
+        };
     }
 
     buf_size

@@ -2322,7 +2322,9 @@ impl<'de> Deserialize<'de> for FtSearchResult {
                 };
 
                 let Some(seq_size) = seq.size_hint() else {
-                    return Err(de::Error::custom("sequence `size_hint` is expected for FtSearchResult"));
+                    return Err(de::Error::custom(
+                        "sequence `size_hint` is expected for FtSearchResult",
+                    ));
                 };
 
                 if total_results == 0 {

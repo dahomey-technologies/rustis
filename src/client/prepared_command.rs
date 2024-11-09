@@ -5,8 +5,7 @@ use crate::{
 };
 use std::marker::PhantomData;
 
-type CustomConverter<'a, R> =
-    dyn Fn(RespBuf, Command, &'a Client) -> Future<'a, R> + Send + Sync;
+type CustomConverter<'a, R> = dyn Fn(RespBuf, Command, &'a Client) -> Future<'a, R> + Send + Sync;
 
 /// Wrapper around a command about to be send with a marker for the response type
 /// and a few options to decide how the response send back by Redis should be processed.
@@ -64,6 +63,9 @@ where
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
-pub(crate) fn prepare_command<'a, E, R: Response>(executor: E, command: Command) -> PreparedCommand<'a, E, R> {
+pub(crate) fn prepare_command<'a, E, R: Response>(
+    executor: E,
+    command: Command,
+) -> PreparedCommand<'a, E, R> {
     PreparedCommand::new(executor, command)
 }

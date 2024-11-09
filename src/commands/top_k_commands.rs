@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_vec_of_pairs, PrimitiveResponse, CollectionResponse, KeyValueArgsCollection,
-        SingleArg, SingleArgCollection,
+        cmd, deserialize_vec_of_pairs, CollectionResponse, KeyValueArgsCollection,
+        PrimitiveResponse, SingleArg, SingleArgCollection,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize};
@@ -60,7 +60,11 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
+    fn topk_incrby<
+        I: SingleArg,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
+    >(
         self,
         key: impl SingleArg,
         items: impl KeyValueArgsCollection<I, i64>,
@@ -224,7 +228,7 @@ where
     {
         Ok(TopKListWithCountResult {
             phantom: PhantomData,
-            items: deserialize_vec_of_pairs(deserializer)?
+            items: deserialize_vec_of_pairs(deserializer)?,
         })
     }
 }

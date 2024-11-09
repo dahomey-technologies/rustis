@@ -196,7 +196,12 @@ where
             _ => return Err(de::Error::custom("expected GraphValueType::Array (6)")),
         }
 
-        let Some(vec) = seq.next_element_seed(SubVecSeed { phantom: PhantomData, cache: self.cache, value_type: self.value_type })? else {
+        let Some(vec) = seq.next_element_seed(SubVecSeed {
+            phantom: PhantomData,
+            cache: self.cache,
+            value_type: self.value_type,
+        })?
+        else {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 
@@ -345,7 +350,9 @@ impl<'de, 'a> DeserializeSeed<'de> for GraphValueSeed<'a> {
                     return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
-                let Some(value) = seq.next_element_seed(GraphValueSeed::new(value_type, self.cache))? else {
+                let Some(value) =
+                    seq.next_element_seed(GraphValueSeed::new(value_type, self.cache))?
+                else {
                     return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                 };
 
@@ -576,11 +583,15 @@ impl<'de> GraphObjectVisitor<'de> for GraphPath {
     where
         A: de::SeqAccess<'de>,
     {
-        let Some(nodes) = seq.next_element_seed(GraphNode::into_vec_seed(cache, GraphValueType::Node))? else {
+        let Some(nodes) =
+            seq.next_element_seed(GraphNode::into_vec_seed(cache, GraphValueType::Node))?
+        else {
             return Err(de::Error::invalid_length(0, &"more elements in sequence"));
         };
 
-        let Some(edges) = seq.next_element_seed(GraphEdge::into_vec_seed(cache, GraphValueType::Edge))? else {
+        let Some(edges) =
+            seq.next_element_seed(GraphEdge::into_vec_seed(cache, GraphValueType::Edge))?
+        else {
             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
         };
 

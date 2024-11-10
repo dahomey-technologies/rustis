@@ -64,8 +64,8 @@ pub trait ServerCommands<'a> {
     /// # Example
     /// ```
     /// # use rustis::{
-    /// #    client::{Client, ClientPreparedCommand},
-    /// #    commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
+    /// #    client::Client,
+    /// #    commands::{ServerCommands, AclDryRunOptions},
     /// #    resp::cmd,
     /// #    Result,
     /// # };
@@ -74,9 +74,8 @@ pub trait ServerCommands<'a> {
     /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
-    /// #     client.flushdb(FlushingMode::Sync).await?;
     /// #     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
-    /// let _: () = client
+    /// client
     ///     .acl_dryrun(
     ///         "VIRGINIA",
     ///         "SET",
@@ -85,7 +84,11 @@ pub trait ServerCommands<'a> {
     ///     .await?;
     ///
     /// let result: String = client
-    ///     .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
+    ///     .acl_dryrun(
+    ///         "VIRGINIA",
+    ///         "GET",
+    ///         AclDryRunOptions::default().arg("foo")
+    ///     )
     ///     .await?;
     ///
     /// assert_eq!(

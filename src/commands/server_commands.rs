@@ -242,6 +242,24 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("ACL").arg("WHOAMI"))
     }
 
+    /// The command save the DB in background.
+    ///
+    /// # Return
+    /// Success text if Ok status
+    /// An error text is returned if there is already a background save running
+    /// or if there is another non-background-save process running,
+    /// specifically an in-progress AOF rewrite.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/bgsave/>](https://redis.io/commands/bgsave/)
+    fn bgsave<R>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R>
+    where
+        Self: Sized,
+        R: PrimitiveResponse,
+    {
+        prepare_command(self, cmd("BGSAVE").arg(options))
+    }
+
     /// Return an array with details about every Redis command.
     ///
     /// # Return
@@ -864,8 +882,7 @@ pub enum FlushingMode {
 impl ToArgs for FlushingMode {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
-            FlushingMode::Default => {
-            }
+            FlushingMode::Default => {}
             FlushingMode::Async => {
                 args.arg("ASYNC");
             }
@@ -974,6 +991,30 @@ impl AclLogOptions {
 }
 
 impl ToArgs for AclLogOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
+    }
+}
+
+/// Options for the [`bgsave`](ServerCommands::bgsave) command
+#[derive(Default)]
+pub struct BgsaveOptions {
+    command_args: CommandArgs,
+}
+
+impl BgsaveOptions {
+    /// This argument will immediately return OK
+    /// when an AOF rewrite is in progress and schedule the background save
+    /// to run at the next opportunity.
+    #[must_use]
+    pub fn schedule(mut self) -> Self {
+        Self {
+            command_args: self.command_args.arg("SCHEDULE").build(),
+        }
+    }
+}
+
+impl ToArgs for BgsaveOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1928,10 +1969,12 @@ impl<'de> Deserialize<'de> for RoleResult {
 
                 match role {
                     "master" => {
-                        let Some(master_replication_offset): Option<usize> = seq.next_element()? else {
+                        let Some(master_replication_offset): Option<usize> = seq.next_element()?
+                        else {
                             return Err(de::Error::invalid_length(1, &"more elements in sequence"));
                         };
-                        let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()? else {
+                        let Some(replica_infos): Option<Vec<ReplicaInfo>> = seq.next_element()?
+                        else {
                             return Err(de::Error::invalid_length(2, &"more elements in sequence"));
                         };
                         Ok(RoleResult::Master {

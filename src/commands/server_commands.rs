@@ -61,6 +61,45 @@ pub trait ServerCommands<'a> {
     /// OK on success.
     /// An error describing why the user can't execute the command.
     ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::{ServerCommands, AclDryRunOptions},
+    /// #    resp::cmd,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// #     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
+    /// client
+    ///     .acl_dryrun(
+    ///         "VIRGINIA",
+    ///         "SET",
+    ///         AclDryRunOptions::default().arg("foo").arg("bar"),
+    ///     )
+    ///     .await?;
+    ///
+    /// let result: String = client
+    ///     .acl_dryrun(
+    ///         "VIRGINIA",
+    ///         "GET",
+    ///         AclDryRunOptions::default().arg("foo")
+    ///     )
+    ///     .await?;
+    ///
+    /// assert_eq!(
+    ///     "User VIRGINIA has no permissions to run the 'get' command",
+    ///     result
+    /// );
+    /// #     client.acl_deluser("VIRGINIA").await?;
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
     fn acl_dryrun<U, C, R>(

@@ -250,6 +250,24 @@ pub trait ServerCommands<'a> {
     /// or if there is another non-background-save process running,
     /// specifically an in-progress AOF rewrite.
     ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::{Client,
+    /// #    commands::{ServerCommands, BgsaveOptions},
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: String = client.bgsave(BgsaveOptions::default()).await?;
+    /// assert_eq!("Background saving started", result);
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
     /// # See Also
     /// [<https://redis.io/commands/bgsave/>](https://redis.io/commands/bgsave/)
     fn bgsave<R>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R>

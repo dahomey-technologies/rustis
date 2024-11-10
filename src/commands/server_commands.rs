@@ -250,6 +250,8 @@ pub trait ServerCommands<'a> {
     /// or if there is another non-background-save process running,
     /// specifically an in-progress AOF rewrite.
     ///
+    /// See operation succeeded using the `client.lastsave` command.
+    ///
     /// # Example
     /// ```
     /// # use rustis::{

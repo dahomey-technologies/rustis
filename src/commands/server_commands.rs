@@ -253,7 +253,7 @@ pub trait ServerCommands<'a> {
     /// # Example
     /// ```
     /// # use rustis::{
-    /// #    client::{Client,
+    /// #    client::Client,
     /// #    commands::{ServerCommands, BgsaveOptions},
     /// #    Result,
     /// # };

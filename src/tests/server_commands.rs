@@ -1,11 +1,11 @@
 use crate::{
     client::{Client, ReconnectionConfig},
     commands::{
-        AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BlockingCommands,
-        ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram, CommandListOptions,
-        ConnectionCommands, FailOverOptions, FlushingMode, InfoSection, LatencyHistoryEvent,
-        MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions, RoleResult,
-        ServerCommands, SlowLogOptions, StringCommands,
+        AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
+        BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
+        CommandListOptions, ConnectionCommands, FailOverOptions, FlushingMode, InfoSection,
+        LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions,
+        RoleResult, ServerCommands, SlowLogOptions, StringCommands,
     },
     resp::{cmd, Value},
     spawn,
@@ -281,6 +281,18 @@ async fn acl_whoami() -> Result<()> {
 
     let current_user: String = client.acl_whoami().await?;
     assert_eq!("default", current_user);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bgsave() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result: String = client.bgsave(BgsaveOptions::default()).await?;
+    assert_eq!("Background saving started", result);
 
     Ok(())
 }

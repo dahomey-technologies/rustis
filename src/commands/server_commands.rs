@@ -313,6 +313,44 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("ACL").arg("WHOAMI"))
     }
 
+    /// The command save the DB in background.
+    ///
+    /// # Return
+    /// Success text if Ok status
+    /// An error text is returned if there is already a background save running
+    /// or if there is another non-background-save process running,
+    /// specifically an in-progress AOF rewrite.
+    ///
+    /// See operation succeeded using the `client.lastsave` command.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::{ServerCommands, BgsaveOptions},
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: String = client.bgsave(BgsaveOptions::default()).await?;
+    /// assert_eq!("Background saving started", result);
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/bgsave/>](https://redis.io/commands/bgsave/)
+    fn bgsave<R>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R>
+    where
+        Self: Sized,
+        R: PrimitiveResponse,
+    {
+        prepare_command(self, cmd("BGSAVE").arg(options))
+    }
+
     /// Return an array with details about every Redis command.
     ///
     /// # Return
@@ -1044,6 +1082,30 @@ impl AclLogOptions {
 }
 
 impl ToArgs for AclLogOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
+    }
+}
+
+/// Options for the [`bgsave`](ServerCommands::bgsave) command
+#[derive(Default)]
+pub struct BgsaveOptions {
+    command_args: CommandArgs,
+}
+
+impl BgsaveOptions {
+    /// This argument will immediately return OK
+    /// when an AOF rewrite is in progress and schedule the background save
+    /// to run at the next opportunity.
+    #[must_use]
+    pub fn schedule(mut self) -> Self {
+        Self {
+            command_args: self.command_args.arg("SCHEDULE").build(),
+        }
+    }
+}
+
+impl ToArgs for BgsaveOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

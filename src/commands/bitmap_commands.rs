@@ -14,6 +14,42 @@ pub trait BitmapCommands<'a> {
     /// # Return
     /// The number of bits set to 1.
     ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::{BitRange, BitUnit},
+    /// #    Result,
+    /// # };
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+    /// # async fn bitcount() -> Result<()> {
+    /// #    let client = get_test_client().await?;
+    /// client.set("mykey", "foobar").await?;
+    ///
+    /// let count = client.bitcount("mykey", BitRange::default()).await?;
+    /// assert_eq!(26, count);
+    ///
+    /// let count = client.bitcount("mykey", BitRange::range(0, 0)).await?;
+    /// assert_eq!(4, count);
+    ///
+    /// let count = client.bitcount("mykey", BitRange::range(1, 1)).await?;
+    /// assert_eq!(6, count);
+    ///
+    /// let count = client
+    ///     .bitcount("mykey", BitRange::range(1, 1).unit(BitUnit::Byte))
+    ///     .await?;
+    /// assert_eq!(6, count);
+    ///
+    /// let count = client
+    ///     .bitcount("mykey", BitRange::range(5, 30).unit(BitUnit::Bit))
+    ///     .await?;
+    /// assert_eq!(17, count);
+    /// #    client.close().await?;
+    ///
+    /// #    Ok(())
+    /// # }
+    ///```
     /// # See Also
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]

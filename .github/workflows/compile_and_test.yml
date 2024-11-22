@@ -1,25 +1,25 @@
 name: Build and Test
 
 on:
-  push:    
+  push:
     paths:
-      - 'src/**'
-      - 'redis/**'
-      - '.github/workflows/**'
-      - 'Cargo.toml'
+      - "src/**"
+      - "redis/**"
+      - ".github/workflows/**"
+      - "Cargo.toml"
     branches:
-      - '**'
+      - "**"
     tags-ignore:
-      - '*.*.*'
-  pull_request:    
+      - "*.*.*"
+  pull_request:
     paths:
-      - 'src/**'
-      - '.github/workflows/**'
-      - 'Cargo.toml'
+      - "src/**"
+      - ".github/workflows/**"
+      - "Cargo.toml"
     branches:
-      - '**'
+      - "**"
     tags-ignore:
-      - '*.*.*'    
+      - "*.*.*"
 
 jobs:
   check:
@@ -29,20 +29,9 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
+        uses: actions/checkout@v4
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-
+        run: cargo check
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -50,20 +39,11 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
       - name: Create Redis containers
         run: |
           cd /home/runner/work/rustis/rustis/redis/
           sh ./docker_up.sh
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:

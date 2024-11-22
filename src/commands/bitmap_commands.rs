@@ -46,7 +46,6 @@ pub trait BitmapCommands<'a> {
     ///     .await?;
     /// assert_eq!(17, count);
     /// #    client.close().await?;
-    ///
     /// #    Ok(())
     /// # }
     ///```

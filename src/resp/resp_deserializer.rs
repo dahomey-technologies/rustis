@@ -78,9 +78,8 @@ impl<'de> RespDeserializer<'de> {
 
     #[inline(always)]
     fn next(&mut self) -> Result<u8> {
-        self.peek().map(|v| {
+        self.peek().inspect(|_v| {
             self.advance();
-            v
         })
     }
 

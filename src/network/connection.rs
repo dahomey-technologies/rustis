@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
 use std::future::IntoFuture;
 
+#[allow(clippy::large_enum_variant)]
 pub enum Connection {
     Standalone(StandaloneConnection),
     Sentinel(SentinelConnection),

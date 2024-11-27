@@ -661,7 +661,7 @@ pub enum ExpireOption {
     None,
     /// Set expiry only when the key has no expiry
     Nx,
-    /// Set expiry only when the key has no expiry    
+    /// Set expiry only when the key has an existing expiry  
     Xx,
     /// Set expiry only when the new expiry is greater than current one
     Gt,

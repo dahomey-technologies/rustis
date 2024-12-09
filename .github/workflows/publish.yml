@@ -11,19 +11,10 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
     - name: Checkout sources
-      uses: actions/checkout@v3
-      
-    - name: Install stable toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        
+      uses: actions/checkout@v4
     - name: Update version
       run: |
         VERSION=${{github.ref_name}}
         sed -i -e 's/^version = .*/version = "'$VERSION'"/' Cargo.toml
-    
     - name: Publish crate
       run: cargo publish --allow-dirty --token ${{secrets.CRATES_IO_API_TOKEN}}

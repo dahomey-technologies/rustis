@@ -99,6 +99,7 @@ pub trait ConnectionCommands<'a> {
     /// assert!(result.iter().any(|e| e == "HELP"));
     /// #   Ok(())
     /// # }
+    /// ```
     ///
     /// # See Also
     /// [<https://redis.io/commands/client-help/>](https://redis.io/commands/client-help/)

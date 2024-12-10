@@ -7,6 +7,7 @@ use crate::{
         StringCommands,
     },
     network::spawn,
+    resp::cmd,
     sleep,
     tests::{get_test_client, log_try_init},
     Error, RedisError, RedisErrorKind, Result,
@@ -193,6 +194,7 @@ async fn client_setname_getname() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[serial]
 async fn client_setinfo() -> Result<()> {
     let client = get_test_client().await?;
     client

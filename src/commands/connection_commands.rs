@@ -204,6 +204,7 @@ pub trait ConnectionCommands<'a> {
     /// # use rustis::{
     /// #    client::Client,
     /// #    commands::{ConnectionCommands, SetInfoOptions},
+    /// #    resp::cmd,
     /// #    Result,
     /// # };
     /// #

@@ -213,12 +213,12 @@ pub trait ConnectionCommands<'a> {
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// client
-    ///     .client_setinfo(
-    ///         SetInfoOptions::default()
-    ///             .lib_name("rustis")
-    ///             .lib_ver("0.13.3"),
-    ///     )
-    ///     .await?;
+    ///      .client_setinfo(
+    ///          SetInfoOptions::default()
+    ///              .lib_name("rustis")
+    ///              .lib_ver("0.13.3"),
+    ///      )
+    ///      .await?;
     ///
     /// let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;
     ///
@@ -971,14 +971,14 @@ impl SetInfoOptions {
     #[must_use]
     pub fn lib_name<N: SingleArg>(mut self, lib_name: N) -> Self {
         Self {
-            command_args: self.command_args.arg(lib_name).build(),
+            command_args: self.command_args.arg("LIB-NAME").arg(lib_name).build(),
         }
     }
 
     #[must_use]
     pub fn lib_ver<V: SingleArg>(mut self, lib_ver: V) -> Self {
         Self {
-            command_args: self.command_args.arg(lib_ver).build(),
+            command_args: self.command_args.arg("LIB-VER").arg(lib_ver).build(),
         }
     }
 }

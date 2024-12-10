@@ -3,7 +3,8 @@ use crate::{
     commands::{
         ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
         ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
-        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands, StringCommands,
+        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands, SetInfoOptions,
+        StringCommands,
     },
     network::spawn,
     sleep,
@@ -187,6 +188,24 @@ async fn client_setname_getname() -> Result<()> {
     let client_name: Option<String> = client.client_getname().await?;
     assert_eq!(Some("Mike".to_string()), client_name);
 
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+async fn client_setinfo() -> Result<()> {
+    let client = get_test_client().await?;
+    client
+        .client_setinfo(
+            SetInfoOptions::default()
+                .lib_name("rustis")
+                .lib_ver("0.13.3"),
+        )
+        .await?;
+
+    let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;
+
+    assert!(attrs.contains("lib-name=rustis lib-ver=0.13.3"));
     Ok(())
 }
 

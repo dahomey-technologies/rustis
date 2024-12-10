@@ -194,6 +194,50 @@ pub trait ConnectionCommands<'a> {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
 
+    /// Assigns various info attributes to the current connection.
+    /// There is no limit to the length of these attributes.
+    /// However it is not possible to use spaces, newlines, or other non-printable characters.
+    /// Look changes with commands `client_list`` or `client_info`.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::{ConnectionCommands, SetInfoOptions},
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// client.client_setinfo(
+    ///     SetInfoOptions::default().lib_name("rustis").lib_ver("0.13.3")
+    /// ).await?;
+    ///
+    /// let attrs: String = client
+    ///    .send(
+    ///     cmd("CLIENT").arg("INFO"),
+    ///     None,
+    ///    )
+    ///    .await?
+    ///    .to()?;
+    ///
+    /// assert!(attrs.contains("lib-name=rustis lib-ver=0.13.3"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/docs/latest/commands/client-setinfo/>](https://redis.io/docs/latest/commands/client-setinfo/)
+    #[must_use]
+    fn client_setinfo(self, options: SetInfoOptions) -> PreparedCommand<'a, Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("SETINFO").arg(options))
+    }
+
     /// This command enables the tracking feature of the Redis server,
     /// that is used for [`server assisted client side caching`](https://redis.io/topics/client-side-caching).
     ///
@@ -913,6 +957,34 @@ impl PingOptions {
 }
 
 impl ToArgs for PingOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
+    }
+}
+
+//Options for the [`set_info`](ConnectionCommands::set_info) cpmmand.
+#[derive(Default)]
+pub struct SetInfoOptions {
+    command_args: CommandArgs,
+}
+
+impl SetInfoOptions {
+    #[must_use]
+    pub fn lib_name<N: SingleArg>(mut self, lib_name: N) -> Self {
+        Self {
+            command_args: self.command_args.arg(lib_name).build(),
+        }
+    }
+
+    #[must_use]
+    pub fn lib_ver<V: SingleArg>(mut self, lib_ver: V) -> Self {
+        Self {
+            command_args: self.command_args.arg(lib_ver).build(),
+        }
+    }
+}
+
+impl ToArgs for SetInfoOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

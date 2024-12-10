@@ -46,7 +46,4 @@ jobs:
           cd /home/runner/work/rustis/rustis/redis/
           sh ./docker_up.sh
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features pool,tokio-tls,redis-stack
+        run: cargo test --features pool,tokio-tls,redis-stack

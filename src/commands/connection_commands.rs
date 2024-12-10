@@ -86,8 +86,8 @@ pub trait ConnectionCommands<'a> {
     /// # Example
     /// ```
     /// # use rustis::{
-    /// #    client::ConnectionCommands,
-    /// #    commands::,
+    /// #    client::Client,
+    /// #    commands::ConnectionCommands,
     /// #    Result,
     /// # };
     /// #

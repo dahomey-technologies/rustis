@@ -78,6 +78,38 @@ pub trait ConnectionCommands<'a> {
         prepare_command(self, cmd("CLIENT").arg("GETREDIR"))
     }
 
+    /// The command returns a helpful text describing the different CLIENT subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::ConnectionCommands,
+    /// #    commands::,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.client_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/client-help/>](https://redis.io/commands/client-help/)
+    #[must_use]
+    fn client_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CLIENT").arg("HELP"))
+    }
+
     /// The command just returns the ID of the current connection.
     ///
     /// # Return

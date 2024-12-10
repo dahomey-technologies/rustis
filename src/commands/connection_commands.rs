@@ -197,7 +197,7 @@ pub trait ConnectionCommands<'a> {
     /// Assigns various info attributes to the current connection.
     /// There is no limit to the length of these attributes.
     /// However it is not possible to use spaces, newlines, or other non-printable characters.
-    /// Look changes with commands `client_list`` or `client_info`.
+    /// Look changes with commands `client_list` or `client_info`.
     ///
     /// # Example
     /// ```
@@ -211,17 +211,15 @@ pub trait ConnectionCommands<'a> {
     /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
-    /// client.client_setinfo(
-    ///     SetInfoOptions::default().lib_name("rustis").lib_ver("0.13.3")
-    /// ).await?;
+    /// client
+    ///     .client_setinfo(
+    ///         SetInfoOptions::default()
+    ///             .lib_name("rustis")
+    ///             .lib_ver("0.13.3"),
+    ///     )
+    ///     .await?;
     ///
-    /// let attrs: String = client
-    ///    .send(
-    ///     cmd("CLIENT").arg("INFO"),
-    ///     None,
-    ///    )
-    ///    .await?
-    ///    .to()?;
+    /// let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;
     ///
     /// assert!(attrs.contains("lib-name=rustis lib-ver=0.13.3"));
     /// #   Ok(())

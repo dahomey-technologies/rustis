@@ -1,10 +1,10 @@
 use crate::{
     client::{BatchPreparedCommand, Client, ClientPreparedCommand},
     commands::{
-        ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
-        ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
-        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands, SetInfoOptions,
-        StringCommands,
+        ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
+        ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus,
+        ClientUnblockMode, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
+        PingOptions, ServerCommands, StringCommands,
     },
     network::spawn,
     resp::cmd,
@@ -198,11 +198,10 @@ async fn client_setname_getname() -> Result<()> {
 async fn client_setinfo() -> Result<()> {
     let client = get_test_client().await?;
     client
-        .client_setinfo(
-            SetInfoOptions::default()
-                .lib_name("rustis")
-                .lib_ver("0.13.3"),
-        )
+        .client_setinfo(ClientInfoAttribute::LibName, "rustis")
+        .await?;
+    client
+        .client_setinfo(ClientInfoAttribute::LibVer, "0.13.3")
         .await?;
 
     let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;

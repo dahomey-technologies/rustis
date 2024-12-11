@@ -961,7 +961,7 @@ impl ToArgs for PingOptions {
     }
 }
 
-// Info options for the [`client_setinfo`](ConnectionCommands::client_info) command.
+// Info options for the [`client_setinfo`](ConnectionCommands::client_setinfo) command.
 pub enum ClientInfoAttribute {
     LibName,
     LibVer,

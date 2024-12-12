@@ -208,8 +208,8 @@ pub trait ConnectionCommands<'a> {
     /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
-    /// let _: () = client.client_no_touch(true).await?;
-    /// let _: () = client.client_no_touch(false).await?;
+    /// client.client_no_touch(true).await?;
+    /// client.client_no_touch(false).await?;
     /// #     Ok(())
     /// }
     /// ```

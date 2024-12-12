@@ -137,8 +137,8 @@ async fn client_list() -> Result<()> {
 async fn client_no_evict() -> Result<()> {
     let client = get_test_client().await?;
 
-    let _: () = client.client_no_evict(true).await?;
-    let _: () = client.client_no_evict(false).await?;
+    client.client_no_evict(true).await?;
+    client.client_no_evict(false).await?;
 
     Ok(())
 }
@@ -149,8 +149,8 @@ async fn client_no_evict() -> Result<()> {
 async fn client_no_touch() -> Result<()> {
     let client = get_test_client().await?;
 
-    let _: () = client.client_no_touch(true).await?;
-    let _: () = client.client_no_touch(false).await?;
+    client.client_no_touch(true).await?;
+    client.client_no_touch(false).await?;
 
     Ok(())
 }

@@ -137,8 +137,20 @@ async fn client_list() -> Result<()> {
 async fn client_no_evict() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.client_no_evict(true).await?;
-    client.client_no_evict(false).await?;
+    let _: () = client.client_no_evict(true).await?;
+    let _: () = client.client_no_evict(false).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_no_touch() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let _: () = client.client_no_touch(true).await?;
+    let _: () = client.client_no_touch(false).await?;
 
     Ok(())
 }

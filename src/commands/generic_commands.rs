@@ -284,7 +284,9 @@ pub trait GenericCommands<'a> {
     /// let result: Vec<String> = client.object_help().await?;
     /// assert!(result.iter().any(|e| e == "HELP"));
     /// #     Ok(())
+    /// }
     /// ```
+    ///
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/object-help/>](https://redis.io/docs/latest/commands/object-help/)
     #[must_use]

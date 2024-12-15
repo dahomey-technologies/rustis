@@ -1,11 +1,13 @@
 use crate::{
     client::{BatchPreparedCommand, Client, ClientPreparedCommand},
     commands::{
-        ClientCachingMode, ClientKillOptions, ClientListOptions, ClientPauseMode, ClientReplyMode,
-        ClientTrackingOptions, ClientTrackingStatus, ClientUnblockMode, ConnectionCommands,
-        FlushingMode, GenericCommands, HelloOptions, PingOptions, ServerCommands, StringCommands,
+        ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
+        ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus,
+        ClientUnblockMode, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
+        PingOptions, ServerCommands, StringCommands,
     },
     network::spawn,
+    resp::cmd,
     sleep,
     tests::{get_test_client, log_try_init},
     Error, RedisError, RedisErrorKind, Result,
@@ -209,6 +211,24 @@ async fn client_setname_getname() -> Result<()> {
     let client_name: Option<String> = client.client_getname().await?;
     assert_eq!(Some("Mike".to_string()), client_name);
 
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[serial]
+async fn client_setinfo() -> Result<()> {
+    let client = get_test_client().await?;
+    client
+        .client_setinfo(ClientInfoAttribute::LibName, "rustis")
+        .await?;
+    client
+        .client_setinfo(ClientInfoAttribute::LibVer, "0.13.3")
+        .await?;
+
+    let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;
+
+    assert!(attrs.contains("lib-name=rustis lib-ver=0.13.3"));
     Ok(())
 }
 

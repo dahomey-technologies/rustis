@@ -431,6 +431,38 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
 
+    /// The command returns a helpful text describing the different COMMAND subcommands.
+    ///
+    /// # Return
+    /// The array strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.command_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/docs/latest/commands/command-help/>](https://redis.io/docs/latest/commands/command-help/)
+    fn command_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("COMMAND").arg("HELP"))
+    }
+
     /// Return an array with details about multiple Redis command.
     ///
     /// # Return

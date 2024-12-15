@@ -264,6 +264,39 @@ pub trait GenericCommands<'a> {
         prepare_command(self, cmd("OBJECT").arg("FREQ").arg(key))
     }
 
+    /// The command returns a helpful text describing the different OBJECT subcommands.
+    ///
+    /// # Return
+    /// The array strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::GenericCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.object_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/docs/latest/commands/object-help/>](https://redis.io/docs/latest/commands/object-help/)
+    #[must_use]
+    fn object_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("OBJECT").arg("HELP"))
+    }
+
     /// This command returns the time in seconds since the last access to the value stored at `key`.
     ///
     /// # Return

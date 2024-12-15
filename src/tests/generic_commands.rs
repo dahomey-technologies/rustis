@@ -315,6 +315,16 @@ async fn object_freq() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn object_help() -> Result<()> {
+    let client = get_test_client().await?;
+    let result: Vec<String> = client.object_help().await?;
+    assert!(result.iter().any(|e| e == "HELP"));
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn object_idle_time() -> Result<()> {
     let client = get_test_client().await?;
 

@@ -146,6 +146,18 @@ async fn client_no_evict() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn client_no_touch() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.client_no_touch(true).await?;
+    client.client_no_touch(false).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn client_pause() -> Result<()> {
     let client = get_test_client().await?;
 

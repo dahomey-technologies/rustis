@@ -189,6 +189,46 @@ pub trait ConnectionCommands<'a> {
         )
     }
 
+    /// The command controls whether commands sent by the client will alter the LRU/LFU of the keys they access.
+    /// If ON, the client will not change LFU/LRU stats.
+    /// If OFF or send TOUCH, client will change LFU/LRU stats just as a normal client.
+    ///
+    /// # Return
+    /// The () type
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ConnectionCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// client.client_no_touch(true).await?;
+    /// client.client_no_touch(false).await?;
+    /// #     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/docs/latest/commands/client-no-touch/>](https://redis.io/docs/latest/commands/client-no-touch/)
+    #[must_use]
+    fn client_no_touch(self, no_touch: bool) -> PreparedCommand<'a, Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(
+            self,
+            cmd("CLIENT")
+                .arg("NO-TOUCH")
+                .arg(if no_touch { "ON" } else { "OFF" }),
+        )
+    }
+
     /// Connections control command able to suspend all the Redis clients
     /// for the specified amount of time (in milliseconds).
     ///

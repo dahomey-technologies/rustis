@@ -1,15 +1,16 @@
 An asynchronous Redis client for Rust.
 
-
 [![Crate](https://img.shields.io/crates/v/rustis.svg)](https://crates.io/crates/rustis)
 [![docs.rs](https://docs.rs/rustis/badge.svg)](https://docs.rs/rustis)
 [![Build](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml/badge.svg)](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 # Documentation
+
 [Official Documentation](https://docs.rs/rustis/latest/rustis/)
 
 # Philosophy
+
 * Low allocations
 * Full async library
 * Lock free implementation
@@ -17,6 +18,7 @@ An asynchronous Redis client for Rust.
 * Multiplexing as a core feature
 
 # Features
+
 * Full documentation with multiple examples
 * Support all [Redis Commands](https://redis.io/commands/) until Redis 7.0
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
@@ -74,7 +76,9 @@ async fn main() -> Result<()> {
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
 2. run `cargo test --features pool,redis-stack,tokio-tls` (Tokio runtime)
 3. run `cargo test --no-default-features --features redis-stack,async-std-runtime,async-std-tls` (async-std runtime)
+4. run `cargo fmt --all -- --check`
 
 # Benchmarks
+
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
 2. run `cargo bench`

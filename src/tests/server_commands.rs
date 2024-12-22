@@ -467,6 +467,17 @@ async fn config_get() -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[serial]
+async fn config_help() -> Result<()> {
+    let client = get_test_client().await?;
+    let result: Vec<String> = client.config_help().await?;
+    assert!(result.iter().any(|e| e == "HELP"));
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]

@@ -516,6 +516,38 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
 
+    /// The command returns a helpful text describing the different CONFIG subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.config_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    /// # See Also
+    /// [<https://redis.io/commands/config-help/>](https://redis.io/commands/config-help/)
+    #[must_use]
+    fn config_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("CONFIG").arg("HELP"))
+    }
+
     /// Resets the statistics reported by Redis using the [`info`](ServerCommands::info) command.
     ///
     /// # See Also

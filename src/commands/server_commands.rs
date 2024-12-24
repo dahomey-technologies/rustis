@@ -695,6 +695,37 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("LATENCY").arg("GRAPH").arg(event))
     }
 
+    /// The command returns a helpful text describing the different LATENCY subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.latency_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    /// # See Also
+    /// [<https://redis.io/commands/latency-help/>](https://redis.io/commands/latency-help/)
+    fn latency_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("LATENCY").arg("HELP"))
+    }
+
     /// This command reports a cumulative distribution of latencies
     /// in the format of a histogram for each of the specified command names.
     ///

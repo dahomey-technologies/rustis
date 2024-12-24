@@ -671,7 +671,7 @@ pub trait ServerCommands<'a> {
     /// # Example
     /// ```
     /// # use rustis::{
-    /// #    client::{Client, ClientPreparedCommand},
+    /// #    client::Client,
     /// #    commands::ServerCommands,
     /// #    Result,
     /// # };

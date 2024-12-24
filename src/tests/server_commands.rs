@@ -853,6 +853,18 @@ async fn memory_doctor() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn memory_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result = client.memory_help().await?;
+    assert!(result.iter().any(|e| e == "HELP"));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn memory_malloc_stats() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;

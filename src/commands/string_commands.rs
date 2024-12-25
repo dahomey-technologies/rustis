@@ -109,7 +109,7 @@ pub trait StringCommands<'a> {
     ///     // ... or it can be directly a String.
     ///     // In this cas a `nil` value will result in an empty String
     ///     let value: String = client.get("key").await?;
-    ///     assert_eq!("", &value);
+    ///     assert_eq!("", value);
     ///
     ///     client.set("key", "value").await?;
     ///     let value: String = client.get("key").await?;
@@ -127,7 +127,6 @@ pub trait StringCommands<'a> {
         Self: Sized,
         K: SingleArg,
         V: PrimitiveResponse,
-        Self: Sized,
     {
         prepare_command(self, cmd("GET").arg(key))
     }

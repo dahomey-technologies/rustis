@@ -32,7 +32,7 @@ pub struct Pipeline<'a> {
 }
 
 impl<'a> Pipeline<'a> {
-    pub(crate) fn new(client: &'a Client) -> Pipeline {
+    pub(crate) fn new(client: &Client) -> Pipeline {
         Pipeline {
             client,
             commands: Vec::new(),

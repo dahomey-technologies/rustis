@@ -1,6 +1,5 @@
 FROM redis:alpine
 
-RUN mkdir -p /redis
 WORKDIR /redis
 COPY cluster.conf .
 RUN chown redis:redis /redis/cluster.conf

@@ -316,7 +316,7 @@ pub trait ServerCommands<'a> {
     /// The command async rewrites the append-only file to disk.
     ///
     /// # Return
-    /// Success text that the rewriting started or error text.
+    /// Success text that the rewriting started/scheduled or error text.
     ///
     /// # Example
     /// ```

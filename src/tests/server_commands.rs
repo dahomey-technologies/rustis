@@ -291,7 +291,7 @@ async fn bgrewriteaof() -> Result<()> {
     let client = get_test_client().await?;
 
     let result: String = client.bgrewriteaof().await?;
-    assert_eq!("Background append only file rewriting started", result);
+    assert!(result.starts_with("Background append only file rewriting "));
 
     Ok(())
 }

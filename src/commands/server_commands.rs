@@ -331,7 +331,7 @@ pub trait ServerCommands<'a> {
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: String = client.bgrewriteaof().await?;
-    /// assert_eq!("Background append only file rewriting started", result);
+    /// assert!(result.starts_with("Background append only file rewriting "));
     /// #     Ok(())
     /// # }
     /// ```

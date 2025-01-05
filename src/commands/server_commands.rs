@@ -368,8 +368,10 @@ pub trait ServerCommands<'a> {
     /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
-    /// let result: String = client.bgsave(BgsaveOptions::default()).await?;
-    /// assert_eq!("Background saving started", result);
+    /// let result: String = client
+    ///     .bgsave(BgsaveOptions::default().arg("SCHEDULE"))
+    ///     .await?;
+    /// assert!(result.starts_with("Background saving "));
     /// #     Ok(())
     /// # }
     /// ```

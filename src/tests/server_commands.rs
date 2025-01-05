@@ -303,9 +303,7 @@ async fn bgrewriteaof() -> Result<()> {
 async fn bgsave() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: String = client
-        .bgsave(BgsaveOptions::default().arg("SCHEDULE"))
-        .await?;
+    let result: String = client.bgsave(BgsaveOptions::default().schedule()).await?;
     assert!(result.starts_with("Background saving "));
 
     Ok(())

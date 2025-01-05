@@ -288,6 +288,18 @@ async fn acl_whoami() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn bgrewriteaof() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result: String = client.bgrewriteaof().await?;
+    assert_eq!("Background append only file rewriting started", result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn bgsave() -> Result<()> {
     let client = get_test_client().await?;
 

@@ -313,6 +313,39 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("ACL").arg("WHOAMI"))
     }
 
+    /// The command async rewrites the append-only file to disk.
+    ///
+    /// # Return
+    /// Success text that the rewriting started or error text.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: String = client.bgrewriteaof().await?;
+    /// assert_eq!("Background append only file rewriting started", result);
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/docs/latest/commands/bgrewriteaof/>](https://redis.io/docs/latest/commands/bgrewriteaof/)
+    fn bgrewriteaof<R>(self) -> PreparedCommand<'a, Self, R>
+    where
+        Self: Sized,
+        R: PrimitiveResponse,
+    {
+        prepare_command(self, cmd("BGREWRITEAOF"))
+    }
+
     /// The command save the DB in background.
     ///
     /// # Return

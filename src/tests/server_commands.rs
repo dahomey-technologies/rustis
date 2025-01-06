@@ -122,7 +122,6 @@ async fn acl_getuser() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn acl_help() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -322,7 +321,6 @@ async fn command() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn command_help() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -481,7 +479,6 @@ async fn config_get() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
-#[serial]
 async fn config_help() -> Result<()> {
     let client = get_test_client().await?;
     let result: Vec<String> = client.config_help().await?;
@@ -722,7 +719,6 @@ async fn latency_graph() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn latency_help() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -864,7 +860,6 @@ async fn memory_doctor() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn memory_help() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -941,7 +936,6 @@ async fn memory_usage() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn module_help() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -1195,6 +1189,17 @@ async fn slowlog_get() -> Result<()> {
     let client = get_test_client().await?;
 
     let _entries = client.slowlog_get(SlowLogOptions::default()).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+async fn slowlog_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result = client.slowlog_help().await?;
+    assert!(result.iter().any(|e| e == "HELP"));
 
     Ok(())
 }

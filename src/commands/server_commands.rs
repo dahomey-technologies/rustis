@@ -1068,6 +1068,39 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("SLOWLOG").arg("GET").arg(options))
     }
 
+    /// The command returns a helpful text describing the different SLOWLOG subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.slowlog_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/slowlog-help/>](https://redis.io/commands/slowlog-help/)
+    #[must_use]
+    fn slowlog_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SLOWLOG").arg("HELP"))
+    }
+
     /// This command returns the current number of entries in the slow log.
     ///
     /// # See Also

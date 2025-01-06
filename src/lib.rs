@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
         .await?
         .to()?;
 
-    assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
+    assert_eq!(vec!["value1", "value2", "value3", "value4"], values);
 
     Ok(())
 }

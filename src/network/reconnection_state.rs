@@ -28,11 +28,7 @@ impl ReconnectionState {
                 max_attempts,
                 jitter,
             } => {
-                self.attempts = match incr_with_max(self.attempts, *max_attempts) {
-                    Some(a) => a,
-                    None => return None,
-                };
-
+                self.attempts = incr_with_max(self.attempts, *max_attempts)?;
                 Some(add_jitter(*delay as u64, *jitter))
             }
             ReconnectionConfig::Linear {
@@ -41,10 +37,7 @@ impl ReconnectionState {
                 delay,
                 jitter,
             } => {
-                self.attempts = match incr_with_max(self.attempts, *max_attempts) {
-                    Some(a) => a,
-                    None => return None,
-                };
+                self.attempts = incr_with_max(self.attempts, *max_attempts)?;
                 let delay = (*delay as u64).saturating_mul(self.attempts as u64);
 
                 Some(cmp::min(*max_delay as u64, add_jitter(delay, *jitter)))
@@ -56,10 +49,7 @@ impl ReconnectionState {
                 multiplicative_factor,
                 jitter,
             } => {
-                self.attempts = match incr_with_max(self.attempts, *max_attempts) {
-                    Some(a) => a,
-                    None => return None,
-                };
+                self.attempts = incr_with_max(self.attempts, *max_attempts)?;
                 let delay = (*multiplicative_factor as u64)
                     .saturating_pow(self.attempts - 1)
                     .saturating_mul(*min_delay as u64);

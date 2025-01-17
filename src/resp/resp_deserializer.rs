@@ -387,7 +387,7 @@ impl<'de> RespDeserializer<'de> {
     }
 }
 
-impl<'de, 'a> Deserializer<'de> for &'a mut RespDeserializer<'de> {
+impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
@@ -928,7 +928,7 @@ struct SeqAccess<'a, 'de: 'a> {
     len: usize,
 }
 
-impl<'de, 'a> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
+impl<'de> serde::de::SeqAccess<'de> for SeqAccess<'_, 'de> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -949,7 +949,7 @@ impl<'de, 'a> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
     }
 }
 
-impl<'de, 'a> serde::de::MapAccess<'de> for SeqAccess<'a, 'de> {
+impl<'de> serde::de::MapAccess<'de> for SeqAccess<'_, 'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -992,7 +992,7 @@ struct MapAccess<'a, 'de: 'a> {
     len: usize,
 }
 
-impl<'de, 'a> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
+impl<'de> serde::de::MapAccess<'de> for MapAccess<'_, 'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -1020,7 +1020,7 @@ impl<'de, 'a> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
     }
 }
 
-impl<'de, 'a> serde::de::SeqAccess<'de> for MapAccess<'a, 'de> {
+impl<'de> serde::de::SeqAccess<'de> for MapAccess<'_, 'de> {
     type Error = Error;
 
     fn next_element_seed<T>(
@@ -1043,7 +1043,7 @@ struct PairDeserializer<'a, 'de: 'a> {
     de: &'a mut RespDeserializer<'de>,
 }
 
-impl<'de, 'a> Deserializer<'de> for PairDeserializer<'a, 'de> {
+impl<'de> Deserializer<'de> for PairDeserializer<'_, 'de> {
     type Error = Error;
 
     #[inline]
@@ -1073,7 +1073,7 @@ impl<'de, 'a> Deserializer<'de> for PairDeserializer<'a, 'de> {
             len: usize,
         }
 
-        impl<'de, 'a> serde::de::SeqAccess<'de> for PairSeqAccess<'a, 'de> {
+        impl<'de> serde::de::SeqAccess<'de> for PairSeqAccess<'_, 'de> {
             type Error = Error;
 
             fn next_element_seed<T>(
@@ -1100,7 +1100,7 @@ struct Enum<'a, 'de: 'a> {
     de: &'a mut RespDeserializer<'de>,
 }
 
-impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
+impl<'de> EnumAccess<'de> for Enum<'_, 'de> {
     type Error = Error;
     type Variant = Self;
 
@@ -1114,7 +1114,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
     }
 }
 
-impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
+impl<'de> VariantAccess<'de> for Enum<'_, 'de> {
     type Error = Error;
 
     // If the `Visitor` expected this variant to be a unit variant, the input
@@ -1167,7 +1167,7 @@ impl<'de, 'a> PushMapAccess<'de, 'a> {
     }
 }
 
-impl<'de, 'a> serde::de::MapAccess<'de> for PushMapAccess<'de, 'a> {
+impl<'de> serde::de::MapAccess<'de> for PushMapAccess<'de, '_> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -1215,7 +1215,7 @@ struct PushDeserializer<'de, 'a> {
     de: &'a mut RespDeserializer<'de>,
 }
 
-impl<'de, 'a> Deserializer<'de> for PushDeserializer<'de, 'a> {
+impl<'de> Deserializer<'de> for PushDeserializer<'de, '_> {
     type Error = Error;
 
     #[inline]
@@ -1256,7 +1256,7 @@ impl<'de, 'a> RespArrayChunks<'de, 'a> {
     }
 }
 
-impl<'de, 'a> Iterator for RespArrayChunks<'de, 'a> {
+impl<'de> Iterator for RespArrayChunks<'de, '_> {
     type Item = &'de [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1276,7 +1276,7 @@ impl<'de, 'a> Iterator for RespArrayChunks<'de, 'a> {
     }
 }
 
-impl<'de, 'a> ExactSizeIterator for RespArrayChunks<'de, 'a> {
+impl ExactSizeIterator for RespArrayChunks<'_, '_> {
     #[inline]
     fn len(&self) -> usize {
         self.len

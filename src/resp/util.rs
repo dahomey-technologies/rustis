@@ -128,7 +128,7 @@ where
 {
     struct ByteBufVisitor;
 
-    impl<'de> Visitor<'de> for ByteBufVisitor {
+    impl Visitor<'_> for ByteBufVisitor {
         type Value = Vec<u8>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

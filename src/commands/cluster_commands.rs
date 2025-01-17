@@ -119,7 +119,7 @@ pub trait ClusterCommands<'a> {
     /// In Redis Cluster, each node keeps track of which master is serving a particular hash slot.
     /// This command asks a particular Redis Cluster node to forget which master
     ///  is serving the hash slots specified as arguments.
-
+    ///
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslots/>](https://redis.io/commands/cluster-delslots/)
     #[must_use]

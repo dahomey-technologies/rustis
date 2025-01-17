@@ -67,7 +67,7 @@ impl Default for RespSerializer {
     }
 }
 
-impl<'a> Serializer for &'a mut RespSerializer {
+impl Serializer for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
     type SerializeSeq = Self;
@@ -304,7 +304,7 @@ impl<'a> Serializer for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeSeq for &'a mut RespSerializer {
+impl SerializeSeq for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -322,7 +322,7 @@ impl<'a> SerializeSeq for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeTuple for &'a mut RespSerializer {
+impl SerializeTuple for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -340,7 +340,7 @@ impl<'a> SerializeTuple for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeTupleStruct for &'a mut RespSerializer {
+impl SerializeTupleStruct for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -358,7 +358,7 @@ impl<'a> SerializeTupleStruct for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeTupleVariant for &'a mut RespSerializer {
+impl SerializeTupleVariant for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -376,7 +376,7 @@ impl<'a> SerializeTupleVariant for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeMap for &'a mut RespSerializer {
+impl SerializeMap for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -402,7 +402,7 @@ impl<'a> SerializeMap for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeStruct for &'a mut RespSerializer {
+impl SerializeStruct for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 
@@ -421,7 +421,7 @@ impl<'a> SerializeStruct for &'a mut RespSerializer {
     }
 }
 
-impl<'a> SerializeStructVariant for &'a mut RespSerializer {
+impl SerializeStructVariant for &mut RespSerializer {
     type Ok = ();
     type Error = Error;
 

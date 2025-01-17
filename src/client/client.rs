@@ -195,7 +195,6 @@ impl Client {
     ///     Ok(())
     /// }
     /// ```
-
     #[inline]
     pub async fn send(&self, command: Command, retry_on_error: Option<bool>) -> Result<RespBuf> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();

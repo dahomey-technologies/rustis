@@ -14,7 +14,7 @@ pub enum RefPubSubMessage<'a> {
     SMessage(&'a [u8], &'a [u8]),
 }
 
-impl<'a> std::fmt::Debug for RefPubSubMessage<'a> {
+impl std::fmt::Debug for RefPubSubMessage<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Subscribe(arg0) => f

@@ -210,9 +210,8 @@ pub trait StringCommands<'a> {
     /// # Example
     /// ```
     /// # use rustis::{
-    /// #    client::{Client, ClientPreparedCommand},
-    /// #    commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
-    /// #    resp::cmd,
+    /// #    client::Client,
+    /// #    commands::{FlushingMode, StringCommands},
     /// #    Result,
     /// # };
     ///

@@ -630,6 +630,52 @@ pub trait StringCommands<'a> {
     {
         prepare_command(self, cmd("STRLEN").arg(key))
     }
+
+    /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
+    ///
+    /// Negative offsets can be used in order to provide an offset starting from the end of the string.
+    /// So -1 means the last character, -2 the penultimate and so forth.
+    ///
+    /// The function handles out of range requests by limiting the resulting range to the actual length of the string.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::{FlushingMode, ServerCommands, StringCommands},
+    /// #    Result,
+    /// # };
+    ///
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// #    client.flushdb(FlushingMode::Sync).await?;
+    /// client.set("mykey", "This is a string").await?;
+    ///
+    /// let value: String = client.substr("mykey", 0, 3).await?;
+    /// assert_eq!("This", value);
+    /// let value: String = client.substr("mykey", -3, -1).await?;
+    /// assert_eq!("ing", value);
+    /// let value: String = client.substr("mykey", 0, -1).await?;
+    /// assert_eq!("This is a string", value);
+    /// let value: String = client.substr("mykey", 10, 100).await?;
+    /// assert_eq!("string", value);
+    /// #    Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/substr/>](https://redis.io/commands/substr/)
+    #[must_use]
+    fn substr<K, V>(self, key: K, start: isize, end: isize) -> PreparedCommand<'a, Self, V>
+    where
+        Self: Sized,
+        K: SingleArg,
+        V: PrimitiveResponse,
+    {
+        prepare_command(self, cmd("SUBSTR").arg(key).arg(start).arg(end))
+    }
 }
 
 /// Options for the [`getex`](StringCommands::getex) command

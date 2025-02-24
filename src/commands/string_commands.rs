@@ -222,7 +222,7 @@ pub trait StringCommands<'a> {
     /// #    client.flushdb(FlushingMode::Sync).await?;
     /// client.set("mykey", "This is a string").await?;
     ///
-    /// let value: String = client.getrange("mykey", 0, 5).await?;
+    /// let value: String = client.getrange("mykey", 0, 3).await?;
     /// assert_eq!("This", value);
     /// let value: String = client.getrange("mykey", -3, -1).await?;
     /// assert_eq!("ing", value);

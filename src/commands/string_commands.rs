@@ -230,7 +230,7 @@ pub trait StringCommands<'a> {
     /// assert_eq!("This is a string", value);
     /// let value: String = client.getrange("mykey", 10, 100).await?;
     /// #    Ok(())
-    /// }
+    /// # }
     /// ```
     ///
     /// # See Also

@@ -229,7 +229,7 @@ pub trait StringCommands<'a> {
     /// let value: String = client.getrange("mykey", 0, -1).await?;
     /// assert_eq!("This is a string", value);
     /// let value: String = client.getrange("mykey", 10, 100).await?;
-    /// assert_eq!("string", value)
+    /// assert_eq!("string", value);
     /// #    Ok(())
     /// # }
     /// ```

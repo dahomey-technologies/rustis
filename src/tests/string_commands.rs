@@ -227,13 +227,16 @@ async fn get_persist() -> Result<()> {
 async fn getrange() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("key", "value").await?;
+    client.set("mykey", "This is a string").await?;
 
-    let value: String = client.getrange("key", 1, 3).await?;
-    assert_eq!("alu", value);
-
-    let value: String = client.getrange("key", 1, -3).await?;
-    assert_eq!("al", value);
+    let value: String = client.getrange("mykey", 0, 3).await?;
+    assert_eq!("This", value);
+    let value: String = client.getrange("mykey", -3, -1).await?;
+    assert_eq!("ing", value);
+    let value: String = client.getrange("mykey", 0, -1).await?;
+    assert_eq!("This is a string", value);
+    let value: String = client.getrange("mykey", 10, 100).await?;
+    assert_eq!("string", value);
 
     client.close().await?;
 

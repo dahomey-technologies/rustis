@@ -207,10 +207,37 @@ pub trait StringCommands<'a> {
     ///
     /// The function handles out of range requests by limiting the resulting range to the actual length of the string.
     ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::{Client, ClientPreparedCommand},
+    /// #    commands::{FlushingMode, GetExOptions, GenericCommands, ServerCommands, StringCommands},
+    /// #    resp::cmd,
+    /// #    Result,
+    /// # };
+    ///
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// #    client.flushdb(FlushingMode::Sync).await?;
+    /// client.set("mykey", "This is a string").await?;
+    ///
+    /// let value: String = client.getrange("mykey", 0, 5).await?;
+    /// assert_eq!("This", value);
+    /// let value: String = client.getrange("mykey", -3, -1).await?;
+    /// assert_eq!("ing", value);
+    /// let value: String = client.getrange("mykey", 0, -1).await?;
+    /// assert_eq!("This is a string", value);
+    /// let value: String = client.getrange("mykey", 10, 100).await?;
+    /// #    Ok(())
+    /// }
+    /// ```
+    ///
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<K, V>(self, key: K, start: usize, end: isize) -> PreparedCommand<'a, Self, V>
+    fn getrange<K, V>(self, key: K, start: isize, end: isize) -> PreparedCommand<'a, Self, V>
     where
         Self: Sized,
         K: SingleArg,

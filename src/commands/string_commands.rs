@@ -211,7 +211,7 @@ pub trait StringCommands<'a> {
     /// ```
     /// # use rustis::{
     /// #    client::Client,
-    /// #    commands::{FlushingMode, StringCommands},
+    /// #    commands::{FlushingMode, ServerCommands, StringCommands},
     /// #    Result,
     /// # };
     ///

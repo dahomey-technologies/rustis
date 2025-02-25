@@ -337,6 +337,39 @@ pub trait StreamCommands<'a> {
         prepare_command(self, cmd("XINFO").arg("GROUPS").arg(key))
     }
 
+    /// The command returns a helpful text describing the different XINFO subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::StreamCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.xinfo_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xinfo-help/>](https://redis.io/commands/xinfo-help/)
+    #[must_use]
+    fn xinfo_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("XINFO").arg("HELP"))
+    }
+
     /// This command returns information about the stream stored at `key`.
     ///
     /// # Return

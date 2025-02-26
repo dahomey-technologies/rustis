@@ -93,6 +93,39 @@ pub trait PubSubCommands<'a> {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
 
+    /// The command returns a helpful text describing the different PUBSUB subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::PubSubCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.pub_sub_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/pubsub-help/>](https://redis.io/commands/pubsub-help/)
+    #[must_use]
+    fn pub_sub_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("PUBSUB").arg("HELP"))
+    }
+
     /// Returns the number of unique patterns that are subscribed to by clients
     /// (that are performed using the PSUBSCRIBE command).
     ///

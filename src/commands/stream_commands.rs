@@ -273,6 +273,39 @@ pub trait StreamCommands<'a> {
         prepare_command(self, cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
     }
 
+    /// The command returns a helpful text describing the different XGROUP subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::StreamCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #    let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.xgroup_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #   Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xgroup-help/>](https://redis.io/commands/xgroup-help/)
+    #[must_use]
+    fn xgroup_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("XGROUP").arg("HELP"))
+    }
+
     /// Set the last delivered ID for a consumer group.
     ///
     /// # See Also

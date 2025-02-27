@@ -694,3 +694,25 @@ async fn strlen() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn substr() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.set("mykey", "This is a string").await?;
+
+    let value: String = client.substr("mykey", 0, 3).await?;
+    assert_eq!("This", value);
+    let value: String = client.substr("mykey", -3, -1).await?;
+    assert_eq!("ing", value);
+    let value: String = client.substr("mykey", 0, -1).await?;
+    assert_eq!("This is a string", value);
+    let value: String = client.substr("mykey", 10, 100).await?;
+    assert_eq!("string", value);
+
+    client.close().await?;
+
+    Ok(())
+}

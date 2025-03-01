@@ -1089,6 +1089,41 @@ pub trait ServerCommands<'a> {
         prepare_command(self, cmd("SHUTDOWN").arg(options))
     }
 
+    /// This command can change the replication settings of a replica on the fly.
+    ///
+    /// The command SLAVEOF will continue to work for backward compatibility.
+    /// Please use the new command REPLICAOF
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ServerCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// client
+    ///     .slaveof(SlaveOfOptions::master("127.0.0.1", 6379))
+    ///     .await?;
+    /// client.slaveof(SlaveOfOptions::no_one()).await?;
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/slaveof/>](https://redis.io/commands/slaveof/)
+    #[must_use]
+    fn slaveof(self, options: SlaveOfOptions) -> PreparedCommand<'a, Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("SLAVEOF").arg(options))
+    }
+
     /// This command returns entries from the slow log in chronological order.
     ///
     /// # See Also
@@ -2460,4 +2495,36 @@ pub struct SlowLogEntry {
     pub client_address: String,
     /// Client name if set via the CLIENT SETNAME command.
     pub client_name: String,
+}
+
+/// options for the [`slaveof`](ServerCommands::slaveof) command.
+pub struct SlaveOfOptions {
+    command_args: CommandArgs,
+}
+
+impl SlaveOfOptions {
+    /// If a Redis server is already acting as replica,
+    /// the command SLAVEOF NO ONE will turn off the replication,
+    /// turning the Redis server into a MASTER.
+    #[must_use]
+    pub fn no_one() -> Self {
+        Self {
+            command_args: CommandArgs::default().arg("NO").arg("ONE").build(),
+        }
+    }
+
+    /// In the proper form SLAVEOF hostname port will make the server
+    /// a replica of another server listening at the specified hostname and port.
+    #[must_use]
+    pub fn master<H: SingleArg>(host: H, port: u16) -> Self {
+        Self {
+            command_args: CommandArgs::default().arg(host).arg(port).build(),
+        }
+    }
+}
+
+impl ToArgs for SlaveOfOptions {
+    fn write_args(&self, args: &mut CommandArgs) {
+        args.arg(&self.command_args);
+    }
 }

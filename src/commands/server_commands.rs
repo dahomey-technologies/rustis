@@ -1098,7 +1098,7 @@ pub trait ServerCommands<'a> {
     /// ```
     /// # use rustis::{
     /// #    client::Client,
-    /// #    commands::ServerCommands,
+    /// #    commands::{ServerCommands, SlaveOfOptions},
     /// #    Result,
     /// # };
     /// #

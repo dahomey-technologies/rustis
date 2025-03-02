@@ -155,6 +155,39 @@ pub trait ScriptingCommands<'a> {
         prepare_command(self, cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
 
+    /// The command returns a helpful text describing the different FUNCTION subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # Example
+    /// ```
+    /// # use rustis::{
+    /// #    client::Client,
+    /// #    commands::ScriptingCommands,
+    /// #    Result,
+    /// # };
+    /// #
+    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # async fn main() -> Result<()> {
+    /// #     let client = Client::connect("127.0.0.1:6379").await?;
+    /// let result: Vec<String> = client.function_help().await?;
+    /// assert!(result.iter().any(|e| e == "HELP"));
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/function-help/>](https://redis.io/commands/function-help/)
+    #[must_use]
+    fn function_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("FUNCTION").arg("HELP"))
+    }
+
     /// Kill a function that is currently executing.
     ///
     /// # See Also

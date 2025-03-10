@@ -1,5 +1,5 @@
 use crate::client::ReconnectionConfig;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use std::cmp;
 
 pub(crate) struct ReconnectionState {
@@ -72,6 +72,6 @@ fn add_jitter(delay: u64, jitter: u32) -> u64 {
     if jitter == 0 {
         delay
     } else {
-        delay.saturating_add(thread_rng().gen_range(0..jitter as u64))
+        delay.saturating_add(rng().random_range(0..jitter as u64))
     }
 }

@@ -124,7 +124,7 @@ async fn reconnection() -> Result<()> {
 //             let client = client.clone();
 //             tokio::spawn(async move {
 //                 for _ in 1..10000 {
-//                     let i = rand::thread_rng().gen_range(1..1000);
+//                     let i = rand::rng().random_range(1..1000);
 //                     let key = format!("key{i}");
 //                     println!("getting key: {key:?}");
 //                     let result: Result<String> = client.get(key.clone()).retry_on_error(true).await;
@@ -160,7 +160,7 @@ async fn reconnection() -> Result<()> {
 //             let client = client.clone();
 //             tokio::spawn(async move {
 //                 for _ in 1..10 {
-//                     let i = rand::thread_rng().gen_range(1..1000);
+//                     let i = rand::rng().random_range(1..1000);
 //                     let result = client
 //                         .set(format!("key{i}"), format!("value{i}"))
 //                         .retry_on_error()

@@ -30,7 +30,7 @@ async fn multiplexed_client() -> Result<()> {
             let client = client.clone();
             spawn(async move {
                 for _ in 0..100 {
-                    let i = rand::thread_rng().gen_range(0..100);
+                    let i = rand::rng().random_range(0..100);
                     let key = format!("key{}", i);
                     let valyue: String = client.get(key.clone()).await.unwrap();
                     assert_eq!(format!("value{}", i), valyue)

@@ -12,7 +12,7 @@ use crate::{
     tests::get_redis_stack_test_client,
     Result,
 };
-use rand::{seq::SliceRandom, Rng};
+use rand::{seq::IndexedRandom, Rng};
 use serial_test::serial;
 use smallvec::SmallVec;
 use std::{
@@ -517,16 +517,16 @@ async fn ft_cursor() -> Result<()> {
                 [
                     (
                         "url",
-                        format!("page{}.html", rand::thread_rng().gen_range(1..21)).to_owned(),
+                        format!("page{}.html", rand::rng().random_range(1..21)).to_owned(),
                     ),
                     ("timestamp", (1668637156 + i).to_string()),
                     (
                         "country",
-                        (*["fr", "ca"].choose(&mut rand::thread_rng()).unwrap()).to_owned(),
+                        (*["fr", "ca"].choose(&mut rand::rng()).unwrap()).to_owned(),
                     ),
                     (
                         "user_id",
-                        format!("user{}", rand::thread_rng().gen_range(1..11)),
+                        format!("user{}", rand::rng().random_range(1..11)),
                     ),
                 ],
             )
@@ -875,16 +875,16 @@ async fn ft_profile() -> Result<()> {
                 [
                     (
                         "url",
-                        format!("page{}.html", rand::thread_rng().gen_range(1..21)).to_owned(),
+                        format!("page{}.html", rand::rng().random_range(1..21)).to_owned(),
                     ),
                     ("timestamp", (1668637156 + i).to_string()),
                     (
                         "country",
-                        (*["fr", "ca"].choose(&mut rand::thread_rng()).unwrap()).to_owned(),
+                        (*["fr", "ca"].choose(&mut rand::rng()).unwrap()).to_owned(),
                     ),
                     (
                         "user_id",
-                        format!("user{}", rand::thread_rng().gen_range(1..11)),
+                        format!("user{}", rand::rng().random_range(1..11)),
                     ),
                 ],
             )

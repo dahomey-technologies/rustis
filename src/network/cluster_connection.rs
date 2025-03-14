@@ -1119,7 +1119,7 @@ impl ClusterConnection {
 
     #[inline]
     fn get_random_node_index(&self) -> usize {
-        rand::thread_rng().gen_range(0..self.nodes.len())
+        rand::rng().random_range(0..self.nodes.len())
     }
 
     #[inline]

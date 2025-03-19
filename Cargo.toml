@@ -80,7 +80,7 @@ env_logger = "0.11"
 smallvec = { version = "1.14", features = ["serde"] }
 criterion = "0.5"
 redis = { version = "0.29", features = ["aio", "tokio-comp"] }
-fred = "9.4"
+fred = "10.1"
 axum = "0.8"
 actix-web = "4.10"
 

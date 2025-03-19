@@ -26,11 +26,11 @@ async fn get_rustis_client() -> rustis::client::Client {
         .unwrap()
 }
 
-async fn get_fred_client() -> fred::clients::RedisClient {
+async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None, None);
+    let config = Config::default();
+    let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
@@ -84,7 +84,7 @@ fn bench_fred_parallel(b: &mut Bencher) {
                         for _ in 0..ITERATIONS {
                             let key = format!("key{i}");
                             let value = format!("value{i}");
-                            let _: Result<(), RedisError> =
+                            let _: Result<(), Error> =
                                 client.set(key, value, None, None, false).await;
                         }
                     })

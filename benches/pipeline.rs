@@ -26,11 +26,11 @@ async fn get_rustis_client() -> rustis::client::Client {
         .unwrap()
 }
 
-async fn get_fred_client() -> fred::clients::RedisClient {
+async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None, None);
+    let config = Config::default();
+    let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
@@ -73,7 +73,7 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
                 pipeline.del::<usize, _>(key).await?;
                 let _result: ((), i64, usize) = pipeline.all().await?;
 
-                Ok::<_, RedisError>(())
+                Ok::<_, Error>(())
             })
             .unwrap()
     });
@@ -174,7 +174,7 @@ fn bench_fred_long_pipeline(b: &mut Bencher) {
 
                 let _result: Vec<String> = pipeline.all().await?;
 
-                Ok::<_, RedisError>(())
+                Ok::<_, Error>(())
             })
             .unwrap()
     });

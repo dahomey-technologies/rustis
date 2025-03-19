@@ -26,11 +26,11 @@ async fn get_rustis_client() -> rustis::client::Client {
         .unwrap()
 }
 
-async fn get_fred_client() -> fred::clients::RedisClient {
+async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None, None);
+    let config = Config::default();
+    let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
@@ -68,11 +68,13 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
         runtime
             .block_on(async {
                 let key = "test_key";
-                client.set::<(), _, _>(key, 42.423456, None, None, false).await?;
+                client
+                    .set::<(), _, _>(key, 42.423456, None, None, false)
+                    .await?;
                 let _: f64 = client.get(key).await?;
                 client.del::<usize, _>(key).await?;
 
-                Ok::<_, RedisError>(())
+                Ok::<_, Error>(())
             })
             .unwrap()
     });

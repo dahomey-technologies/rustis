@@ -20,11 +20,11 @@ fn get_redis_client() -> redis::Client {
     redis::Client::open("redis://127.0.0.1:6379").unwrap()
 }
 
-async fn get_fred_client() -> fred::clients::RedisClient {
+async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = RedisConfig::default();
-    let client = RedisClient::new(config, None, None, None);
+    let config = Config::default();
+    let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
@@ -74,22 +74,22 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
             .block_on(async {
                 let key = "test_key";
 
-                let args: Vec<RedisValue> = vec![key.into(), 42.423456.into()];
+                let args: Vec<Value> = vec![key.into(), 42.423456.into()];
                 client
                     .custom::<(), _>(CustomCommand::new_static("SET", None, false), args)
                     .await?;
 
-                let args: Vec<RedisValue> = vec![key.into()];
+                let args: Vec<Value> = vec![key.into()];
                 client
                     .custom::<f64, _>(CustomCommand::new_static("GET", None, false), args)
                     .await?;
 
-                let args: Vec<RedisValue> = vec![key.into()];
+                let args: Vec<Value> = vec![key.into()];
                 client
                     .custom::<usize, _>(CustomCommand::new_static("DEL", None, false), args)
                     .await?;
 
-                Ok::<_, RedisError>(())
+                Ok::<_, Error>(())
             })
             .unwrap()
     });

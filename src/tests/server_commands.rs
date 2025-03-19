@@ -60,7 +60,7 @@ async fn acl_dryrun() -> Result<()> {
 
     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
     client
-        .acl_dryrun(
+        .acl_dryrun::<_, _, String>(
             "VIRGINIA",
             "SET",
             AclDryRunOptions::default().arg("foo").arg("bar"),
@@ -479,6 +479,7 @@ async fn config_get() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[serial]
 async fn config_help() -> Result<()> {
     let client = get_test_client().await?;
     let result: Vec<String> = client.config_help().await?;

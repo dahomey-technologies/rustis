@@ -38,7 +38,7 @@ impl ManageConnection for PooledClientManager {
         Self: 'a,
     {
         Box::pin(async move {
-            client.ping(Default::default()).await?;
+            client.ping::<String>(Default::default()).await?;
             Ok(())
         })
     }

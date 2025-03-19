@@ -45,9 +45,9 @@ async fn read(
 async fn update(
     State(redis): State<Arc<Client>>,
     Path(key): Path<String>,
-    value: Option<String>,
+    value: String,
 ) -> Result<(), ServiceError> {
-    if value.is_none() {
+    if value.is_empty() {
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
             "Value not provided",

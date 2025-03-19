@@ -52,10 +52,10 @@ fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
                 cmd("SET")
                     .arg(key)
                     .arg(42.423456)
-                    .query_async(&mut con)
+                    .query_async::<()>(&mut con)
                     .await?;
                 let _: f64 = cmd("GET").arg(key).query_async(&mut con).await?;
-                cmd("DEL").arg(key).query_async(&mut con).await?;
+                cmd("DEL").arg(key).query_async::<usize>(&mut con).await?;
                 Ok::<_, RedisError>(())
             })
             .unwrap()
@@ -76,17 +76,17 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
 
                 let args: Vec<RedisValue> = vec![key.into(), 42.423456.into()];
                 client
-                    .custom(CustomCommand::new_static("SET", None, false), args)
-                    .await?;
-
-                let args: Vec<RedisValue> = vec![key.into()];
-                let _: f64 = client
-                    .custom(CustomCommand::new_static("GET", None, false), args)
+                    .custom::<(), _>(CustomCommand::new_static("SET", None, false), args)
                     .await?;
 
                 let args: Vec<RedisValue> = vec![key.into()];
                 client
-                    .custom(CustomCommand::new_static("DEL", None, false), args)
+                    .custom::<f64, _>(CustomCommand::new_static("GET", None, false), args)
+                    .await?;
+
+                let args: Vec<RedisValue> = vec![key.into()];
+                client
+                    .custom::<usize, _>(CustomCommand::new_static("DEL", None, false), args)
                     .await?;
 
                 Ok::<_, RedisError>(())

@@ -49,9 +49,9 @@ fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
         runtime
             .block_on(async {
                 let key = "test_key";
-                con.set(key, 42.423456).await?;
+                con.set::<_, _, ()>(key, 42.423456).await?;
                 let _: f64 = con.get(key).await?;
-                con.del(key).await?;
+                con.del::<_, usize>(key).await?;
                 Ok::<_, RedisError>(())
             })
             .unwrap()
@@ -68,9 +68,9 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
         runtime
             .block_on(async {
                 let key = "test_key";
-                client.set(key, 42.423456, None, None, false).await?;
+                client.set::<(), _, _>(key, 42.423456, None, None, false).await?;
                 let _: f64 = client.get(key).await?;
-                client.del(key).await?;
+                client.del::<usize, _>(key).await?;
 
                 Ok::<_, RedisError>(())
             })

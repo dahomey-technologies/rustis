@@ -88,7 +88,7 @@ async fn watch() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     transaction.set("key", value).queue();
-    transaction.execute().await?;
+    transaction.execute::<()>().await?;
 
     let value: i32 = client.get("key").await?;
     assert_eq!(2, value);
@@ -132,7 +132,7 @@ async fn unwatch() -> Result<()> {
     client2.set("key", 3).await?;
 
     transaction.set("key", value).queue();
-    transaction.execute().await?;
+    transaction.execute::<()>().await?;
 
     let value: i32 = client.get("key").await?;
     assert_eq!(2, value);

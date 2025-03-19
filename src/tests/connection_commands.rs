@@ -70,6 +70,7 @@ async fn client_getredir() -> Result<()> {
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[serial]
 async fn client_help() -> Result<()> {
     let client = get_test_client().await?;
     let result: Vec<String> = client.client_help().await?;
@@ -415,7 +416,8 @@ async fn hello_v3() -> Result<()> {
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.ping(PingOptions::default()).await?;
+    let result: String = client.ping(PingOptions::default()).await?;
+    assert_eq!("PONG", result);
     let result: String = client.ping(PingOptions::default().message("value")).await?;
     assert_eq!("value", result);
 

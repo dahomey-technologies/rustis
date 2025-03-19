@@ -83,9 +83,9 @@ async fn get_messages_from_queue(
 async fn publish(
     State(redis): State<Arc<RedisClients>>,
     Path(channel): Path<String>,
-    message: Option<String>,
+    message: String,
 ) -> Result<(), ServiceError> {
-    let Some(message) = message else {
+    if message.is_empty() {
         return Err(ServiceError::new(
             StatusCode::BAD_REQUEST,
             "Message not provided",

@@ -896,7 +896,7 @@ pub enum TsAggregationType {
     #[serde(rename = "VAR.P")]
     VarP,
     /// Sample variance of the values
-    #[serde(rename = "VAR.P")]
+    #[serde(rename = "VAR.S")]
     VarS,
     /// Time-weighted average over the bucket's timeframe (since RedisTimeSeries v1.8)
     Twa,

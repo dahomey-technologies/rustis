@@ -68,9 +68,9 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
                 let key = "test_key";
 
                 let pipeline = client.pipeline();
-                pipeline.set(key, 42, None, None, false).await?;
-                pipeline.get(key).await?;
-                pipeline.del(key).await?;
+                pipeline.set::<(), _, _>(key, 42, None, None, false).await?;
+                pipeline.get::<i64, _>(key).await?;
+                pipeline.del::<usize, _>(key).await?;
                 let _result: ((), i64, usize) = pipeline.all().await?;
 
                 Ok::<_, RedisError>(())
@@ -168,7 +168,7 @@ fn bench_fred_long_pipeline(b: &mut Bencher) {
                 let pipeline = client.pipeline();
                 for i in 0..PIPELINE_QUERIES {
                     pipeline
-                        .set(format!("foo{}", i), "bar", None, None, false)
+                        .set::<String, _, _>(format!("foo{}", i), "bar", None, None, false)
                         .await?;
                 }
 

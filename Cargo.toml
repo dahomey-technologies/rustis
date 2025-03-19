@@ -49,18 +49,18 @@ redis-stack = [
 ]
 
 [dependencies]
-async-std = { version = "1.12", features = ["attributes"], optional = true }
+async-std = { version = "1.13", features = ["attributes"], optional = true }
 futures-util = { version = "0.3", features = ["sink"] }
 futures-channel = { version = "0.3", features = ["sink"] }
-bytes = "1.7"
-tokio = { version = "1.39", features = ["time", "io-util", "sync"] }
+bytes = "1.10"
+tokio = { version = "1.44", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 atoi = "2.0"
 itoa = "1.0"
 fast-float = "0.2"
 dtoa = "1.0"
-smallvec = { version = "1.13", features = ["union", "serde"] }
-bb8 = { version = "0.8", optional = true }
+smallvec = { version = "1.14", features = ["union", "serde"] }
+bb8 = { version = "0.9", optional = true }
 url = "2.5"
 native-tls = { version = "0.2", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
@@ -73,16 +73,16 @@ socket2 = "0.5"
 memchr = "2.7"
 
 [dev-dependencies]
-serial_test = "3.1"
-tokio = { version = "1.39", features = ["rt-multi-thread"] }
+serial_test = "3.2"
+tokio = { version = "1.44", features = ["rt-multi-thread"] }
 rand = "0.9"
 env_logger = "0.11"
-smallvec = { version = "1.13", features = ["serde"] }
+smallvec = { version = "1.14", features = ["serde"] }
 criterion = "0.5"
-redis = { version = "0.26", features = ["aio", "tokio-comp"] }
-fred = "9.0"
-axum = "0.7"
-actix-web = "4.8"
+redis = { version = "0.29", features = ["aio", "tokio-comp"] }
+fred = "9.4"
+axum = "0.8"
+actix-web = "4.10"
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-tls", "redis-stack", "pool"]

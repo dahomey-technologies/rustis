@@ -535,7 +535,7 @@ async fn ft_cursor() -> Result<()> {
 
     pipeline.client_reply(ClientReplyMode::On).forget();
 
-    pipeline.execute().await?;
+    pipeline.execute::<()>().await?;
 
     client
         .ft_create(
@@ -893,7 +893,7 @@ async fn ft_profile() -> Result<()> {
 
     pipeline.client_reply(ClientReplyMode::On).forget();
 
-    pipeline.execute().await?;
+    pipeline.execute::<()>().await?;
 
     client
         .ft_create(

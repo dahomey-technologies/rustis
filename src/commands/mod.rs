@@ -17,30 +17,30 @@ These is the list of existing command traits:
 * [`ConnectionCommands`]: Connection management like authentication or RESP version management
 * [`GenericCommands`]: Generic commands like deleting, renaming or expiring keys
 * [`GeoCommands`]: [Geospatial](https://redis.io/docs/data-types/geospatial/) indices
-* [`HashCommands`]: [Hashes](https://redis.io/docs/data-types/hashes/)
-* [`HyperLogLogCommands`]: [HyperLogLog](https://redis.io/docs/data-types/hyperloglogs/)
-* [`ListCommands`]: [Lists](https://redis.io/docs/data-types/lists/)
-* [`PubSubCommands`]: [Pub/Sub](https://redis.io/docs/manual/pubsub/)
-* [`ScriptingCommands`]: [Scripts](https://redis.io/docs/manual/programmability/eval-intro/) &
+* [`HashCommands`](crate::commands::HashCommands): [Hashes](https://redis.io/docs/data-types/hashes/)
+* [`HyperLogLogCommands`](crate::commands::HyperLogLogCommands): [HyperLogLog](https://redis.io/docs/data-types/hyperloglogs/)
+* [`ListCommands`](crate::commands::ListCommands): [Lists](https://redis.io/docs/data-types/lists/)
+* [`PubSubCommands`](crate::commands::PubSubCommands): [Pub/Sub](https://redis.io/docs/manual/pubsub/)
+* [`ScriptingCommands`](crate::commands::ScriptingCommands): [Scripts](https://redis.io/docs/manual/programmability/eval-intro/) &
   [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
-* [`SentinelCommands`]: [Sentinel](https://redis.io/docs/management/sentinel/)
-* [`ServerCommands`]: Server management like [Access Control Lists](https://redis.io/docs/management/security/acl/) or monitoring
-* [`SetCommands`]: [Sets](https://redis.io/docs/data-types/sets/)
-* [`SortedSetCommands`]: [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
-* [`StreamCommands`]: [Streams](https://redis.io/docs/data-types/streams/)
-* [`StringCommands`]: [Strings](https://redis.io/docs/data-types/strings/)
-* [`TransactionCommands`]: [Transactions](https://redis.io/docs/manual/transactions/)
+* [`SentinelCommands`](crate::commands::SentinelCommands): [Sentinel](https://redis.io/docs/management/sentinel/)
+* [`ServerCommands`](crate::commands::ServerCommands): Server management like [Access Control Lists](https://redis.io/docs/management/security/acl/) or monitoring
+* [`SetCommands`](crate::commands::SetCommands): [Sets](https://redis.io/docs/data-types/sets/)
+* [`SortedSetCommands`](crate::commands::SortedSetCommands): [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
+* [`StreamCommands`](crate::commands::StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
+* [`StringCommands`](crate::commands::StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
+* [`TransactionCommands`](crate::commands::TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
 
 Redis Stack commands:
-* [`BloomCommands`]: [Bloom filters](https://redis.io/docs/stack/bloom/)
-* [`CuckooCommands`]: [Cuckoo filters](https://redis.io/docs/stack/bloom/)
-* [`CountMinSketchCommands`]: [Count min-sketch](https://redis.io/docs/stack/bloom/)
-* [`GraphCommands`]: [RedisGraph](https://redis.io/docs/stack/graph/)
-* [`JsonCommands`]: [RedisJson](https://redis.io/docs/stack/json/)
-* [`SearchCommands`]: [RedisSearch](https://redis.io/docs/stack/search/)
-* [`TDigestCommands`]: [T-Digest](https://redis.io/docs/stack/bloom/)
-* [`TimeSeriesCommands`]: [Time Series](https://redis.io/docs/stack/timeseries/)
-* [`TopKCommands`]: [Top-K](https://redis.io/docs/stack/bloom/)
+* [`BloomCommands`](crate::commands::BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
+* [`CuckooCommands`](crate::commands::CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
+* [`CountMinSketchCommands`](crate::commands::CountMinSketchCommands): [Count min-sketch](https://redis.io/docs/stack/bloom/)
+* [`GraphCommands`](crate::commands::GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
+* [`JsonCommands`](crate::commands::JsonCommands): [RedisJson](https://redis.io/docs/stack/json/)
+* [`SearchCommands`](crate::commands::SearchCommands): [RedisSearch](https://redis.io/docs/stack/search/)
+* [`TDigestCommands`](crate::commands::TDigestCommands): [T-Digest](https://redis.io/docs/stack/bloom/)
+* [`TimeSeriesCommands`](crate::commands::TimeSeriesCommands): [Time Series](https://redis.io/docs/stack/timeseries/)
+* [`TopKCommands`](crate::commands::TopKCommands): [Top-K](https://redis.io/docs/stack/bloom/)
 
 # Example
 

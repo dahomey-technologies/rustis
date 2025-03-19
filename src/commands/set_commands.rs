@@ -13,7 +13,7 @@ use std::hash::Hash;
 /// [Redis Set Commands](https://redis.io/commands/?group=set)
 pub trait SetCommands<'a> {
     /// Add the specified members to the set stored at key.
-    /// 
+    ///
     /// #Return
     /// The number of elements that were added to the set, not including all the elements already present in the set.
     ///

@@ -4,6 +4,7 @@ An asynchronous Redis client for Rust.
 [![docs.rs](https://docs.rs/rustis/badge.svg)](https://docs.rs/rustis)
 [![Build](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml/badge.svg)](https://github.com/dahomey-technologies/rustis/actions/workflows/compile_and_test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![libs.tech recommends](https://libs.tech/project/530004740/badge.svg)](https://libs.tech/project/530004740/rustis)
 
 # Documentation
 

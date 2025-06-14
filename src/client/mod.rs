@@ -204,7 +204,7 @@ Query parameters match perfectly optional configuration fields
 of the struct [`Config`] or its dependencies:
 * [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default `10,000` ms).
 * [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
-   a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).
+  a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).
 * [`auto_resubscribe`](Config::auto_resubscribe) - When the client reconnects, channels subscribed in the previous connection will be
   resubscribed automatically if `auto_resubscribe` is `true` (default `true`).
 * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the

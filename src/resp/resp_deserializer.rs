@@ -118,10 +118,10 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn parse_float<T>(&mut self) -> Result<T>
     where
-        T: fast_float::FastFloat,
+        T: fast_float2::FastFloat,
     {
         let next_line = self.next_line()?;
-        fast_float::parse(next_line).map_err(|_| {
+        fast_float2::parse(next_line).map_err(|_| {
             Error::Client(format!(
                 "Cannot parse number from {}",
                 String::from_utf8_lossy(next_line)
@@ -278,7 +278,7 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn parse_float_ex<T>(&mut self) -> Result<T>
     where
-        T: fast_float::FastFloat + Default,
+        T: fast_float2::FastFloat + Default,
     {
         match self.next()? {
             INTEGER_TAG | DOUBLE_TAG => self.parse_float::<T>(),
@@ -291,13 +291,13 @@ impl<'de> RespDeserializer<'de> {
                 if bs.is_empty() {
                     Ok(Default::default())
                 } else {
-                    fast_float::parse(bs)
+                    fast_float2::parse(bs)
                         .map_err(|_| Error::Client("Cannot parse number".to_owned()))
                 }
             }
             SIMPLE_STRING_TAG => {
                 let next_line = self.next_line()?;
-                fast_float::parse(next_line)
+                fast_float2::parse(next_line)
                     .map_err(|_| Error::Client("Cannot parse number".to_owned()))
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
@@ -807,7 +807,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             Ok(if array_len > fields.len() {
                 true
             } else if let Some(s) = de.peek_string()? {
-                fields.iter().any(|f| s == *f)
+                fields.contains(&s)
             } else {
                 false
             })

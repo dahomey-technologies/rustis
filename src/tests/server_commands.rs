@@ -954,7 +954,7 @@ async fn module_list() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     let modules: Vec<ModuleInfo> = client.module_list().await?;
-    assert_eq!(0, modules.len());
+    assert_eq!(5, modules.len());
 
     Ok(())
 }

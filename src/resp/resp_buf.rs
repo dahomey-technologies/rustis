@@ -99,6 +99,7 @@ impl Deref for RespBuf {
 impl fmt::Display for RespBuf {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //f.write_str(&String::from_utf8_lossy(&self.0))
         match self.to::<Value>() {
             Ok(value) => {
                 let str = format!("{value:?}");

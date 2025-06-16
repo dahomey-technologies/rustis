@@ -3,7 +3,7 @@ use crate::{
         CfInsertOptions, CfReserveOptions, CfScanDumpResult, CuckooCommands, FlushingMode,
         ServerCommands, StringCommands,
     },
-    tests::get_redis_stack_test_client,
+    tests::get_test_client,
     Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_add() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -40,7 +40,7 @@ async fn cf_add() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_addnx() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.cf_addnx("key", "item").await?;
@@ -56,7 +56,7 @@ async fn cf_addnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_count() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -73,7 +73,7 @@ async fn cf_count() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_del() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -96,7 +96,7 @@ async fn cf_del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_exists() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let exists = client.cf_exists("key", "item1").await?;
@@ -114,7 +114,7 @@ async fn cf_exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_info() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cf_add("key", "item1").await?;
@@ -135,25 +135,42 @@ async fn cf_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_insert() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
-
-    client
-        .cf_insert(
-            "key",
-            CfInsertOptions::default().capacity(2048),
-            ["item1", "item2", "item3"],
-        )
-        .await?;
 
     let result = client
         .cf_insert(
-            "key2",
-            CfInsertOptions::default().nocreate(),
-            ["item1", "item2", "item3"],
+            "key",
+            CfInsertOptions::default().capacity(1000),
+            ["item1", "item2"],
+        )
+        .await?;
+    assert_eq!(vec![true, true], result);
+
+    let result = client
+        .cf_insert(
+            "key1",
+            CfInsertOptions::default().capacity(1000).nocreate(),
+            ["item1", "item2"],
         )
         .await;
     assert!(result.is_err());
+
+    client
+        .cf_reserve(
+            "key2",
+            2,
+            CfReserveOptions::default().bucketsize(1).expansion(0),
+        )
+        .await?;
+    let result = client
+        .cf_insert(
+            "key2",
+            CfInsertOptions::default(),
+            [1, 1, 1, 1],
+        ).await?;
+    assert_eq!(vec![true, true, false, false], result);
+
 
     Ok(())
 }
@@ -162,7 +179,7 @@ async fn cf_insert() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_insertnx() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let results: Vec<i64> = client
@@ -190,7 +207,7 @@ async fn cf_insertnx() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_reserve_loadchunk_scandump() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -229,7 +246,7 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cf_mexists() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     commands::{
         FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
@@ -7,16 +5,17 @@ use crate::{
         TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsRangeSample,
         TsSample,
     },
-    tests::get_redis_stack_test_client,
+    tests::get_test_client,
     Result,
 };
 use serial_test::serial;
+use std::collections::HashMap;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_add() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let timestamp = client
@@ -40,7 +39,7 @@ async fn ts_add() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_create() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -60,7 +59,7 @@ async fn ts_create() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_alter() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -91,7 +90,7 @@ async fn ts_alter() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_create_delete_rule() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -146,7 +145,7 @@ async fn ts_create_delete_rule() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_del() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -175,7 +174,7 @@ async fn ts_del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_get() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -211,7 +210,7 @@ async fn ts_get() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_incrby() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let timestamp = client
@@ -253,7 +252,7 @@ async fn ts_incrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_info() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -304,7 +303,7 @@ async fn ts_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_madd() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.ts_create("key", TsCreateOptions::default()).await?;
@@ -324,7 +323,7 @@ async fn ts_madd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_mget() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -359,29 +358,29 @@ async fn ts_mget() -> Result<()> {
         ])
         .await?;
 
-    let results: Vec<TsSample> = client
+    let results: Vec<(String, TsSample)> = client
         .ts_mget(TsMGetOptions::default().withlabels(), "type=temp")
         .await?;
     assert_eq!(2, results.len());
-    assert_eq!("temp:JLM", results[0].key);
+    assert_eq!("temp:JLM", results[0].0);
     assert_eq!(
         HashMap::from([
             ("type".to_owned(), "temp".to_owned()),
             ("location".to_owned(), "JLM".to_owned())
         ]),
-        results[0].labels
+        results[0].1.labels
     );
-    assert_eq!((1035, 40.), results[0].timestamp_value);
+    assert_eq!((1035, 40.), results[0].1.timestamp_value);
 
-    assert_eq!("temp:TLV", results[1].key);
+    assert_eq!("temp:TLV", results[1].0);
     assert_eq!(
         HashMap::from([
             ("type".to_owned(), "temp".to_owned()),
             ("location".to_owned(), "TLV".to_owned())
         ]),
-        results[1].labels
+        results[1].1.labels
     );
-    assert_eq!((1030, 40.), results[1].timestamp_value);
+    assert_eq!((1030, 40.), results[1].1.timestamp_value);
 
     Ok(())
 }
@@ -390,7 +389,7 @@ async fn ts_mget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_mrange() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -423,7 +422,7 @@ async fn ts_mrange() -> Result<()> {
         ])
         .await?;
 
-    let results: Vec<TsRangeSample> = client
+    let results: Vec<(String, TsRangeSample)> = client
         .ts_mrange(
             "-",
             "+",
@@ -434,18 +433,16 @@ async fn ts_mrange() -> Result<()> {
         .await?;
 
     assert_eq!(1, results.len());
-    assert_eq!("type=stock", results[0].key);
+    assert_eq!("type=stock", results[0].0);
     assert_eq!(
-        HashMap::from([
-            ("type".to_owned(), "stock".to_owned()),
-            ("__reducer__".to_owned(), "max".to_owned()),
-            ("__source__".to_owned(), "stock:A,stock:B".to_owned())
-        ]),
-        results[0].labels
+        vec![("type".to_owned(), "stock".to_owned()),],
+        results[0].1.labels
     );
+    assert_eq!(vec!["max"], results[0].1.reducers);
+    assert_eq!(vec!["stock:A", "stock:B"], results[0].1.sources);
     assert_eq!(
         vec![(1000, 120.), (1010, 110.), (1020, 120.)],
-        results[0].values
+        results[0].1.values
     );
 
     client
@@ -468,7 +465,7 @@ async fn ts_mrange() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<TsRangeSample> = client
+    let results: Vec<(String, TsRangeSample)> = client
         .ts_mrange(
             "-",
             "+",
@@ -480,9 +477,9 @@ async fn ts_mrange() -> Result<()> {
     log::debug!("results: {results:?}");
     assert_eq!(
         vec![(1548149180000, 90.), (1548149185000, 45.)],
-        results[0].values
+        results[0].1.values
     );
-    assert_eq!(vec![(1548149180000, 99.)], results[1].values);
+    assert_eq!(vec![(1548149180000, 99.)], results[1].1.values);
 
     Ok(())
 }
@@ -491,7 +488,7 @@ async fn ts_mrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_mrevrange() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -524,7 +521,7 @@ async fn ts_mrevrange() -> Result<()> {
         ])
         .await?;
 
-    let results: Vec<TsRangeSample> = client
+    let results: Vec<(String, TsRangeSample)> = client
         .ts_mrevrange(
             "-",
             "+",
@@ -535,18 +532,16 @@ async fn ts_mrevrange() -> Result<()> {
         .await?;
 
     assert_eq!(1, results.len());
-    assert_eq!("type=stock", results[0].key);
+    assert_eq!("type=stock", results[0].0);
     assert_eq!(
-        HashMap::from([
-            ("type".to_owned(), "stock".to_owned()),
-            ("__reducer__".to_owned(), "max".to_owned()),
-            ("__source__".to_owned(), "stock:A,stock:B".to_owned())
-        ]),
-        results[0].labels
+        vec![("type".to_owned(), "stock".to_owned()),],
+        results[0].1.labels
     );
+    assert_eq!(vec!["max"], results[0].1.reducers);
+    assert_eq!(vec!["stock:A", "stock:B"], results[0].1.sources);
     assert_eq!(
         vec![(1020, 120.), (1010, 110.), (1000, 120.)],
-        results[0].values
+        results[0].1.values
     );
 
     client
@@ -569,7 +564,7 @@ async fn ts_mrevrange() -> Result<()> {
         )
         .await?;
 
-    let results: Vec<TsRangeSample> = client
+    let results: Vec<(String, TsRangeSample)> = client
         .ts_mrevrange(
             "-",
             "+",
@@ -581,9 +576,9 @@ async fn ts_mrevrange() -> Result<()> {
     log::debug!("results: {results:?}");
     assert_eq!(
         vec![(1548149185000, 45.), (1548149180000, 90.)],
-        results[0].values
+        results[0].1.values
     );
-    assert_eq!(vec![(1548149180000, 99.)], results[1].values);
+    assert_eq!(vec![(1548149180000, 99.)], results[1].1.values);
 
     Ok(())
 }
@@ -592,7 +587,7 @@ async fn ts_mrevrange() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_queryindex() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -639,7 +634,7 @@ async fn ts_queryindex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_range() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -689,7 +684,7 @@ async fn ts_range() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn ts_revrange() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client

@@ -1,20 +1,5 @@
-use serde::{
-    de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
-    forward_to_deserialize_any, Deserializer,
-};
-
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
-#[cfg(feature = "redis-json")]
-use crate::commands::JsonCommands;
-#[cfg(feature = "redis-search")]
-use crate::commands::SearchCommands;
-#[cfg(feature = "redis-time-series")]
-use crate::commands::TimeSeriesCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::commands::{
-    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
-};
 use crate::{
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
@@ -22,8 +7,16 @@ use crate::{
         ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
         StreamCommands, StringCommands,
     },
+    commands::{
+        BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
+        TDigestCommands, TimeSeriesCommands, TopKCommands,
+    },
     resp::{cmd, Command, RespDeserializer, Response},
     Error, Result,
+};
+use serde::{
+    de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
+    forward_to_deserialize_any, Deserializer,
 };
 use std::{fmt, marker::PhantomData};
 
@@ -275,14 +268,8 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Trans
 }
 
 impl<'a> BitmapCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> BloomCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CuckooCommands<'a> for &'a mut Transaction {}
 impl<'a> GenericCommands<'a> for &'a mut Transaction {}
 impl<'a> GeoCommands<'a> for &'a mut Transaction {}
@@ -291,12 +278,8 @@ impl<'a> GeoCommands<'a> for &'a mut Transaction {}
 impl<'a> GraphCommands<'a> for &'a mut Transaction {}
 impl<'a> HashCommands<'a> for &'a mut Transaction {}
 impl<'a> HyperLogLogCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
-#[cfg(feature = "redis-json")]
 impl<'a> JsonCommands<'a> for &'a mut Transaction {}
 impl<'a> ListCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
-#[cfg(feature = "redis-search")]
 impl<'a> SearchCommands<'a> for &'a mut Transaction {}
 impl<'a> SetCommands<'a> for &'a mut Transaction {}
 impl<'a> ScriptingCommands<'a> for &'a mut Transaction {}
@@ -304,12 +287,6 @@ impl<'a> ServerCommands<'a> for &'a mut Transaction {}
 impl<'a> SortedSetCommands<'a> for &'a mut Transaction {}
 impl<'a> StreamCommands<'a> for &'a mut Transaction {}
 impl<'a> StringCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
-#[cfg(feature = "redis-time-series")]
 impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TopKCommands<'a> for &'a mut Transaction {}

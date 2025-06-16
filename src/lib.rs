@@ -40,12 +40,7 @@ rustis is a Redis client for Rust.
 | `tokio-tls` | Tokio TLS support (optional) |
 | `async-std-tls` | async-std TLS support (optional) |
 | `pool` | Pooled client manager (optional) |
-| `redis-json` | [RedisJSON v2.4](https://redis.io/docs/stack/json/) support (optional) |
-| `redis-search` | [RedisSearch v2.6](https://redis.io/docs/stack/search/) support (optional) |
 | `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
-| `redis-bloom` | [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support (optional) |
-| `redis-time-series` | [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support (optional) |
-| `redis-stack` | activate `redis-json`, `redis-search`, `redis-graph`, `redis-bloom` & `redis-time-series` at the same time (optional) |
 
 # Basic Usage
 

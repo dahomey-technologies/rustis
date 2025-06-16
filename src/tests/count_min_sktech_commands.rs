@@ -1,6 +1,6 @@
 use crate::{
     commands::{CountMinSketchCommands, FlushingMode, ServerCommands},
-    tests::get_redis_stack_test_client,
+    tests::get_test_client,
     Result,
 };
 use serial_test::serial;
@@ -9,7 +9,7 @@ use serial_test::serial;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_incrby() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result: Result<Vec<usize>> = client.cms_incrby("key", [("item1", 1), ("item2", 2)]).await;
@@ -29,7 +29,7 @@ async fn cms_incrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_info() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cms_initbydim("key", 2000, 5).await?;
@@ -51,7 +51,7 @@ async fn cms_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_initbydim() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cms_initbydim("key", 2000, 5).await?;
@@ -63,7 +63,7 @@ async fn cms_initbydim() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_initbyprob() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cms_initbyprob("key", 0.001, 0.01).await?;
@@ -75,7 +75,7 @@ async fn cms_initbyprob() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_merge() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cms_initbydim("key1", 2000, 5).await?;
@@ -115,7 +115,7 @@ async fn cms_merge() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn cms_query() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.cms_initbydim("key1", 2000, 5).await?;

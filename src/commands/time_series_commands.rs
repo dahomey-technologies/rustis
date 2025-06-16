@@ -1,12 +1,16 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, MultipleArgsCollection,
-        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
+        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection,
+        KeyValueCollectionResponse, MultipleArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs, Value,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
-use std::collections::HashMap;
+use serde::{
+    de::{self, value::SeqAccessDeserializer, DeserializeOwned},
+    Deserialize,
+};
+use std::{collections::HashMap, fmt};
 
 /// A group of Redis commands related to [`Time Series`](https://redis.io/docs/stack/timeseries/)
 ///
@@ -101,7 +105,7 @@ pub trait TimeSeriesCommands<'a> {
     /// * If a key already exists, you get a Redis error reply, TSDB: key already exists.
     ///   You can check for the existence of a key with the [`exists`](crate::commands::GenericCommands::exists) command.
     /// * Other commands that also create a new time series when called with a key that does not exist are
-    /// [`ts_add`](TimeSeriesCommands::ts_add), [`ts_incrby`](TimeSeriesCommands::ts_incrby), and [`ts_decrby`](TimeSeriesCommands::ts_decrby).
+    ///   [`ts_add`](TimeSeriesCommands::ts_add), [`ts_incrby`](TimeSeriesCommands::ts_incrby), and [`ts_decrby`](TimeSeriesCommands::ts_decrby).
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.create/>](https://redis.io/commands/ts.create/)
@@ -122,7 +126,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # Arguments
     /// * `src_key` - key name for the source time series.
     /// * `dst_key` - key name for destination (compacted) time series.
-    ///  It must be created before `ts_createrule` is called.
+    ///   It must be created before `ts_createrule` is called.
     /// * `aggregator` - aggregates results into time buckets by taking an aggregation type
     /// * `bucket_duration` - duration of each aggregation bucket, in milliseconds.
     /// * `options` - See [`TsCreateRuleOptions`](TsCreateRuleOptions)
@@ -131,11 +135,11 @@ pub trait TimeSeriesCommands<'a> {
     /// * Only new samples that are added into the source series after the creation of the rule will be aggregated.
     /// * Calling `ts_createrule` with a nonempty `dst_key` may result in inconsistencies between the raw and the compacted data.
     /// * Explicitly adding samples to a compacted time series (using [`ts_add`](TimeSeriesCommands::ts_add),
-    ///  [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby), or [`ts_decrby`](TimeSeriesCommands::ts_decrby))
-    /// may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
+    ///   [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby), or [`ts_decrby`](TimeSeriesCommands::ts_decrby))
+    ///   may result in inconsistencies between the raw and the compacted data. The compaction process may override such samples.
     /// * If no samples are added to the source time series during a bucket period. no compacted sample is added to the destination time series.
     /// * The timestamp of a compacted sample added to the destination time series is set to the start timestamp the appropriate compaction bucket.
-    /// For example, for a 10-minute compaction bucket with no alignment, the compacted samples timestamps are `x:00`, `x:10`, `x:20`, and so on.
+    ///   For example, for a 10-minute compaction bucket with no alignment, the compacted samples timestamps are `x:00`, `x:10`, `x:20`, and so on.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.createrule/>](https://redis.io/commands/ts.createrule/)
@@ -175,9 +179,9 @@ pub trait TimeSeriesCommands<'a> {
     /// * When specified key does not exist, a new time series is created.
     /// * You can use this command as a counter or gauge that automatically gets history as a time series.
     /// * Explicitly adding samples to a compacted time series (using [`ts_add`](TimeSeriesCommands::ts_add),
-    ///  [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
-    /// or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
-    /// The compaction process may override such samples.
+    ///   [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
+    ///   or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
+    ///   The compaction process may override such samples.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.decrby/>](https://redis.io/commands/ts.decrby/)
@@ -287,9 +291,9 @@ pub trait TimeSeriesCommands<'a> {
     /// * When specified key does not exist, a new time series is created.
     /// * You can use this command as a counter or gauge that automatically gets history as a time series.
     /// * Explicitly adding samples to a compacted time series (using [`ts_add`](TimeSeriesCommands::ts_add),
-    ///  [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
-    /// or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
-    /// The compaction process may override such samples.
+    ///   [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
+    ///   or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
+    ///   The compaction process may override such samples.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.incrby/>](https://redis.io/commands/ts.incrby/)
@@ -332,20 +336,20 @@ pub trait TimeSeriesCommands<'a> {
     ///   * `key` - the key name for the time series.
     ///   * `timestamp` - the UNIX sample timestamp in milliseconds or * to set the timestamp according to the server clock.
     ///   * `value` - numeric data value of the sample (double). \
-    /// The double number should follow [`RFC 7159`](https://tools.ietf.org/html/rfc7159) (a JSON standard).
-    /// The parser rejects overly large values that would not fit in binary64.
-    /// It does not accept `NaN` or `infinite` values.
+    ///     The double number should follow [`RFC 7159`](https://tools.ietf.org/html/rfc7159) (a JSON standard).
+    ///     The parser rejects overly large values that would not fit in binary64.
+    ///     It does not accept `NaN` or `infinite` values.
     ///
     /// # Return
     /// a collection of the timestamps of added samples
     ///
     /// # Notes
     /// * If timestamp is older than the retention period compared to the maximum existing timestamp,
-    /// the sample is discarded and an error is returned.
+    ///   the sample is discarded and an error is returned.
     /// * Explicitly adding samples to a compacted time series (using [`ts_add`](TimeSeriesCommands::ts_add),
-    /// [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
-    /// or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
-    /// The compaction process may override such samples.
+    ///   [`ts_madd`](TimeSeriesCommands::ts_madd), [`ts_incrby`](TimeSeriesCommands::ts_incrby),
+    ///   or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
+    ///   The compaction process may override such samples.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
@@ -384,7 +388,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mget/>](https://redis.io/commands/ts.mget/)
     #[must_use]
-    fn ts_mget<F: SingleArg, R: CollectionResponse<TsSample>>(
+    fn ts_mget<F: SingleArg, R: KeyValueCollectionResponse<String, TsSample>>(
         self,
         options: TsMGetOptions,
         filters: impl SingleArgCollection<F>,
@@ -399,9 +403,9 @@ pub trait TimeSeriesCommands<'a> {
     ///
     /// # Arguments
     /// * `from_timestamp` - start timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `-` to denote the timestamp of the earliest sample in the time series.
+    ///   or `-` to denote the timestamp of the earliest sample in the time series.
     /// * `to_timestamp` - end timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `+` to denote the timestamp of the latest sample in the time series.
+    ///   or `+` to denote the timestamp of the latest sample in the time series.
     /// * `options` - See [`TsMRangeOptions`](TsMRangeOptions)
     /// * `filters` - filters time series based on their labels and label values, with these options:
     ///   * `label=value`, where `label` equals `value`
@@ -421,7 +425,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
-    fn ts_mrange<F: SingleArg, R: CollectionResponse<TsRangeSample>>(
+    fn ts_mrange<F: SingleArg, R: KeyValueCollectionResponse<String, TsRangeSample>>(
         self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -448,9 +452,9 @@ pub trait TimeSeriesCommands<'a> {
     ///
     /// # Arguments
     /// * `from_timestamp` - start timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `-` to denote the timestamp of the earliest sample in the time series.
+    ///   or `-` to denote the timestamp of the earliest sample in the time series.
     /// * `to_timestamp` - end timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `+` to denote the timestamp of the latest sample in the time series.
+    ///   or `+` to denote the timestamp of the latest sample in the time series.
     /// * `options` - See [`TsMRangeOptions`](TsMRangeOptions)
     /// * `filters` - filters time series based on their labels and label values, with these options:
     ///   * `label=value`, where `label` equals `value`
@@ -470,7 +474,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
-    fn ts_mrevrange<F: SingleArg, R: CollectionResponse<TsRangeSample>>(
+    fn ts_mrevrange<F: SingleArg, R: KeyValueCollectionResponse<String, TsRangeSample>>(
         self,
         from_timestamp: impl SingleArg,
         to_timestamp: impl SingleArg,
@@ -535,9 +539,9 @@ pub trait TimeSeriesCommands<'a> {
     /// # Arguments
     /// * `key` - the key name for the time series.
     /// * `from_timestamp` - start timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `-`to denote the timestamp of the earliest sample in the time series.
+    ///   or `-`to denote the timestamp of the earliest sample in the time series.
     /// * `to_timestamp` - end timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `+` to denote the timestamp of the latest sample in the time series.
+    ///   or `+` to denote the timestamp of the latest sample in the time series.
     /// * `options` - See [`TsRangeOptions`](TsRangeOptions)
     ///
     /// # Return
@@ -577,9 +581,9 @@ pub trait TimeSeriesCommands<'a> {
     /// # Arguments
     /// * `key` - the key name for the time series.
     /// * `from_timestamp` - start timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `-`to denote the timestamp of the earliest sample in the time series.
+    ///   or `-`to denote the timestamp of the earliest sample in the time series.
     /// * `to_timestamp` - end timestamp for the range query (integer UNIX timestamp in milliseconds)
-    ///    or `+` to denote the timestamp of the latest sample in the time series.
+    ///   or `+` to denote the timestamp of the latest sample in the time series.
     /// * `options` - See [`TsRangeOptions`](TsRangeOptions)
     ///
     /// # Return
@@ -619,9 +623,9 @@ pub trait TimeSeriesCommands<'a> {
 ///
 /// # Notes
 /// * You can use this command to add data to a nonexisting time series in a single command.
-/// This is why [`retention`](TsAddOptions::retention), [`encoding`](TsAddOptions::encoding),
-/// [`chunk_size`](TsAddOptions::chunk_size), [`on_duplicate`](TsAddOptions::on_duplicate),
-/// and [`labels`](TsAddOptions::labels) are optional arguments.
+///   This is why [`retention`](TsAddOptions::retention), [`encoding`](TsAddOptions::encoding),
+///   [`chunk_size`](TsAddOptions::chunk_size), [`on_duplicate`](TsAddOptions::on_duplicate),
+///   and [`labels`](TsAddOptions::labels) are optional arguments.
 /// * Setting [`retention`](TsAddOptions::retention) and [`labels`](TsAddOptions::labels) introduces additional time complexity.
 #[derive(Default)]
 pub struct TsAddOptions {
@@ -955,9 +959,9 @@ impl ToArgs for TsCreateRuleOptions {
 ///
 /// # Notes
 /// * You can use this command to add data to a nonexisting time series in a single command.
-/// This is why `retention`, `uncompressed`, `chunk_size`, and `labels` are optional arguments.
+///   This is why `retention`, `uncompressed`, `chunk_size`, and `labels` are optional arguments.
 /// * When specified and the key doesn't exist, a new time series is created.
-/// Setting the `retention` and `labels` options introduces additional time complexity.
+///   Setting the `retention` and `labels` options introduces additional time complexity.
 #[derive(Default)]
 pub struct TsIncrByDecrByOptions {
     command_args: CommandArgs,
@@ -1119,6 +1123,7 @@ pub struct TsInfoResult {
     /// * The bucket duration
     /// * The aggregator
     /// * The alignment (since RedisTimeSeries v1.8)
+    #[serde(deserialize_with = "deserialize_compation_rules")]
     pub rules: Vec<TsCompactionRule>,
     /// Additional chunk information when the `debug` flag is specified in [`ts_info`](TimeSeriesCommands::ts_info)
     #[serde(rename = "Chunks")]
@@ -1148,7 +1153,7 @@ pub struct TsInfoChunkResult {
 
 /// information about the [`compaction rules`](https://redis.io/commands/ts.createrule/)
 /// of a time series collection, in the context of the [`ts_info`](TimeSeriesCommands::ts_info) command.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct TsCompactionRule {
     /// The compaction key
     pub compaction_key: String,
@@ -1159,6 +1164,66 @@ pub struct TsCompactionRule {
     /// The alignment (since RedisTimeSeries v1.8)
     pub alignment: u64,
 }
+
+fn deserialize_compation_rules<'de, D>(deserializer: D) -> Result<Vec<TsCompactionRule>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = Vec<TsCompactionRule>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("an array of TsCompactionRule")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::MapAccess<'de>,
+        {
+            let mut rules = Vec::with_capacity(map.size_hint().unwrap_or_default());
+            while let Some(compaction_key) = map.next_key()? {
+                let (bucket_duration, aggregator, alignment) =
+                    map.next_value::<(u64, TsAggregationType, u64)>()?;
+                rules.push(TsCompactionRule {
+                    compaction_key,
+                    bucket_duration,
+                    aggregator,
+                    alignment,
+                });
+            }
+
+            Ok(rules)
+        }
+    }
+
+    deserializer.deserialize_map(Visitor)
+}
+
+// impl<'de> de::Deserialize<'de> for Vec<TsCompactionRule> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: de::Deserializer<'de> {
+//         struct Visitor;
+
+//         impl<'de> de::Visitor<'de> for Visitor {
+//             type Value = TsCompactionRule;
+
+//             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+//                 formatter.write_str("TsCompactionRule")
+//             }
+
+//             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+//                 where
+//                     A: de::MapAccess<'de>, {
+//                 let Some(entry)
+//             }
+//         }
+
+//         deserializer.deserialize_map(Visitor)
+//     }
+// }
 
 /// Options for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
 #[derive(Default)]
@@ -1218,8 +1283,6 @@ impl ToArgs for TsMGetOptions {
 /// Result for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
 #[derive(Debug, Deserialize)]
 pub struct TsSample {
-    /// The key name
-    pub key: String,
     /// Label-value pairs
     ///
     /// * By default, an empty list is reported
@@ -1239,18 +1302,124 @@ pub struct TsMRangeOptions {
 
 /// Result for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
 /// [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct TsRangeSample {
-    /// The key name
-    pub key: String,
     /// Label-value pairs
     ///
     /// * By default, an empty list is reported
     /// * If [`withlabels`](TsMGetOptions::withlabels) is specified, all labels associated with this time series are reported
     /// * If [`selected_labels`](TsMGetOptions::selected_labels) is specified, the selected labels are reported
-    pub labels: HashMap<String, String>,
+    pub labels: Vec<(String, String)>,
+    pub reducers: Vec<String>,
+    pub sources: Vec<String>,
+    pub aggregators: Vec<String>,
     /// Timestamp-value pairs for all samples/aggregations matching the range
     pub values: Vec<(u64, f64)>,
+}
+
+impl<'de> de::Deserialize<'de> for TsRangeSample {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        enum TsRangeSampleField {
+            Aggregators(Vec<String>),
+            Reducers(Vec<String>),
+            Sources(Vec<String>),
+            Values(Vec<(u64, f64)>),
+        }
+
+        impl<'de> de::Deserialize<'de> for TsRangeSampleField {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: de::Deserializer<'de>,
+            {
+                struct Visitor;
+
+                impl<'de> de::Visitor<'de> for Visitor {
+                    type Value = TsRangeSampleField;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("TsRangeSampleField")
+                    }
+
+                    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: de::SeqAccess<'de>,
+                    {
+                        Ok(TsRangeSampleField::Values(Vec::<(u64, f64)>::deserialize(
+                            SeqAccessDeserializer::new(seq),
+                        )?))
+                    }
+
+                    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: de::MapAccess<'de>,
+                    {
+                        let (Some((field, value)), None) = (
+                            map.next_entry::<&str, Vec<String>>()?,
+                            map.next_entry::<&str, Vec<String>>()?,
+                        ) else {
+                            return Err(de::Error::invalid_length(0, &"1 in map"));
+                        };
+
+                        match field {
+                            "reducers" => Ok(TsRangeSampleField::Reducers(value)),
+                            "sources" => Ok(TsRangeSampleField::Sources(value)),
+                            "aggregators" => Ok(TsRangeSampleField::Aggregators(value)),
+                            _ => Err(de::Error::unknown_field(field, &["reducers", "sources", "aggregators"]))
+                        }
+                    }
+                }
+
+                deserializer.deserialize_any(Visitor)
+            }
+        }
+
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = TsRangeSample;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("TsRangeSample")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let mut sample = TsRangeSample {
+                    labels: Vec::new(),
+                    reducers: Vec::new(),
+                    sources: Vec::new(),
+                    aggregators: Vec::new(),
+                    values: Vec::new(),
+                };
+
+                let Some(labels) = seq.next_element::<Vec<(String, String)>>()? else {
+                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                };
+
+                sample.labels = labels;
+
+                while let Some(field) = seq.next_element::<TsRangeSampleField>()? {
+                    match field {
+                        TsRangeSampleField::Aggregators(aggregators) => {
+                            sample.aggregators = aggregators
+                        }
+                        TsRangeSampleField::Reducers(reducers) => sample.reducers = reducers,
+                        TsRangeSampleField::Sources(sources) => sample.sources = sources,
+                        TsRangeSampleField::Values(values) => sample.values = values,
+                    }
+                }
+
+                Ok(sample)
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor)
+    }
 }
 
 impl TsMRangeOptions {
@@ -1385,12 +1554,12 @@ impl TsMRangeOptions {
     /// when `aggregator` values are:
     /// * `sum`, `count` - the value reported for each empty bucket is `0`
     /// * `last` - the value reported for each empty bucket is the value
-    ///    of the last sample before the bucket's start.
-    ///    `NaN` when no such sample.
+    ///   of the last sample before the bucket's start.
+    ///   `NaN` when no such sample.
     /// * `twa` - the value reported for each empty bucket is the average value
-    ///    over the bucket's timeframe based on linear interpolation
-    ///    of the last sample before the bucket's start and the first sample after the bucket's end.
-    ///    `NaN` when no such samples.
+    ///   over the bucket's timeframe based on linear interpolation
+    ///   of the last sample before the bucket's start and the first sample after the bucket's end.
+    ///   `NaN` when no such samples.
     /// * `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` - the value reported for each empty bucket is `NaN`
     ///
     /// Regardless of the values of `from_timestamp` and `to_timestamp`,
@@ -1566,12 +1735,12 @@ impl TsRangeOptions {
     /// when `aggregator` values are:
     /// * `sum`, `count` - the value reported for each empty bucket is `0`
     /// * `last` - the value reported for each empty bucket is the value
-    ///    of the last sample before the bucket's start.
-    ///    `NaN` when no such sample.
+    ///   of the last sample before the bucket's start.
+    ///   `NaN` when no such sample.
     /// * `twa` - the value reported for each empty bucket is the average value
-    ///    over the bucket's timeframe based on linear interpolation
-    ///    of the last sample before the bucket's start and the first sample after the bucket's end.
-    ///    `NaN` when no such samples.
+    ///   over the bucket's timeframe based on linear interpolation
+    ///   of the last sample before the bucket's start and the first sample after the bucket's end.
+    ///   `NaN` when no such samples.
     /// * `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` - the value reported for each empty bucket is `NaN`
     ///
     /// Regardless of the values of `from_timestamp` and `to_timestamp`,

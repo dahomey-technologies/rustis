@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     resp::{RespDeserializer, Value},
     tests::log_try_init,
@@ -27,6 +29,18 @@ fn integer() -> Result<()> {
 
     let result = deserialize_value(":12\r\n")?; // 12
     assert_eq!(Value::Integer(12), result);
+
+    Ok(())
+}
+
+#[test]
+fn bool() -> Result<()> {
+    log_try_init();
+
+    let result = deserialize_value("#t\r\n")?; // true
+    assert_eq!(Value::Boolean(true), result);
+    let result = deserialize_value("#f\r\n")?; // false
+    assert_eq!(Value::Boolean(false), result);
 
     Ok(())
 }
@@ -113,12 +127,13 @@ fn map() -> Result<()> {
 
     let result = deserialize_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
-        Value::Array(vec![
-            Value::BulkString(b"id".to_vec()),
-            Value::Integer(12),
-            Value::BulkString(b"name".to_vec()),
-            Value::BulkString(b"Mike".to_vec())
-        ]),
+        Value::Map(HashMap::from([
+            (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
+            (
+                Value::BulkString(b"name".to_vec()),
+                Value::BulkString(b"Mike".to_vec())
+            )
+        ])),
         result
     );
 

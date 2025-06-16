@@ -80,13 +80,13 @@ pub trait CountMinSketchCommands<'a> {
     /// # Arguments
     /// * `key` - The name of the sketch.
     /// * `error` - Estimate size of error.\
-    ///  The error is a percent of total counted items. This effects the width of the sketch.
+    ///   The error is a percent of total counted items. This effects the width of the sketch.
     /// * `probability` - The desired probability for inflated count. \
-    ///  This should be a decimal value between 0 and 1.
-    ///  This effects the depth of the sketch.
-    ///  For example, for a desired false positive rate of 0.1% (1 in 1000),
-    ///  error_rate should be set to 0.001. The closer this number is to zero,
-    ///  the greater the memory consumption per item and the more CPU usage per operation.
+    ///   This should be a decimal value between 0 and 1.
+    ///   This effects the depth of the sketch.
+    ///   For example, for a desired false positive rate of 0.1% (1 in 1000),
+    ///   error_rate should be set to 0.001. The closer this number is to zero,
+    ///   the greater the memory consumption per item and the more CPU usage per operation.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/cms.initbyprob/>](https://redis.io/commands/cms.initbyprob/)

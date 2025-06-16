@@ -30,17 +30,15 @@ These is the list of existing command traits:
 * [`StreamCommands`](crate::commands::StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
 * [`StringCommands`](crate::commands::StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
 * [`TransactionCommands`](crate::commands::TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
-
-Redis Stack commands:
 * [`BloomCommands`](crate::commands::BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
 * [`CuckooCommands`](crate::commands::CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
 * [`CountMinSketchCommands`](crate::commands::CountMinSketchCommands): [Count min-sketch](https://redis.io/docs/stack/bloom/)
-* [`GraphCommands`](crate::commands::GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
 * [`JsonCommands`](crate::commands::JsonCommands): [RedisJson](https://redis.io/docs/stack/json/)
 * [`SearchCommands`](crate::commands::SearchCommands): [RedisSearch](https://redis.io/docs/stack/search/)
 * [`TDigestCommands`](crate::commands::TDigestCommands): [T-Digest](https://redis.io/docs/stack/bloom/)
 * [`TimeSeriesCommands`](crate::commands::TimeSeriesCommands): [Time Series](https://redis.io/docs/stack/timeseries/)
 * [`TopKCommands`](crate::commands::TopKCommands): [Top-K](https://redis.io/docs/stack/bloom/)
+* [`GraphCommands`](crate::commands::GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
 
 # Example
 
@@ -84,16 +82,10 @@ following [COPYRIGHT](https://github.com/redis/redis-doc/blob/master/COPYRIGHT).
 
 mod bitmap_commands;
 mod blocking_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 mod bloom_commands;
 mod cluster_commands;
 mod connection_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 mod count_min_sktech_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 mod cuckoo_commands;
 #[cfg(test)]
 mod debug_commands;
@@ -111,14 +103,10 @@ mod graph_value;
 mod hash_commands;
 mod hyper_log_log_commands;
 mod internal_pub_sub_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
-#[cfg(feature = "redis-json")]
 mod json_commands;
 mod list_commands;
 mod pub_sub_commands;
 mod scripting_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
-#[cfg(feature = "redis-search")]
 mod search_commands;
 mod sentinel_commands;
 mod server_commands;
@@ -126,29 +114,17 @@ mod set_commands;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 mod t_disgest_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
-#[cfg(feature = "redis-time-series")]
 mod time_series_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 mod top_k_commands;
 mod transaction_commands;
 
 pub use bitmap_commands::*;
 pub use blocking_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 pub use bloom_commands::*;
 pub use cluster_commands::*;
 pub use connection_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 pub use count_min_sktech_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 pub use cuckoo_commands::*;
 #[cfg(test)]
 pub use debug_commands::*;
@@ -166,14 +142,10 @@ pub use graph_value::*;
 pub use hash_commands::*;
 pub use hyper_log_log_commands::*;
 pub(crate) use internal_pub_sub_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
-#[cfg(feature = "redis-json")]
 pub use json_commands::*;
 pub use list_commands::*;
 pub use pub_sub_commands::*;
 pub use scripting_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
-#[cfg(feature = "redis-search")]
 pub use search_commands::*;
 pub use sentinel_commands::*;
 pub use server_commands::*;
@@ -181,13 +153,7 @@ pub use set_commands::*;
 pub use sorted_set_commands::*;
 pub use stream_commands::*;
 pub use string_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 pub use t_disgest_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
-#[cfg(feature = "redis-time-series")]
 pub use time_series_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 pub use top_k_commands::*;
 pub use transaction_commands::*;

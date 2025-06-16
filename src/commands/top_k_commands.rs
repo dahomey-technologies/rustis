@@ -51,8 +51,8 @@ pub trait TopKCommands<'a> {
     /// * `items` - collection of tuples:
     ///   * `item` - Item to be added
     ///   * `increment` - increment to current item score. \
-    ///   Increment must be greater or equal to 1. \
-    ///   Increment is limited to 100,000 to avoid server freeze.
+    ///     Increment must be greater or equal to 1. \
+    ///     Increment is limited to 100,000 to avoid server freeze.
     ///
     /// # Return
     /// Collection of items if an element was dropped from the TopK list, Null reply otherwise.
@@ -171,8 +171,8 @@ pub trait TopKCommands<'a> {
     ///   * `width` - Number of counters kept in each array. (Default 8)
     ///   * `depth` - Number of arrays. (Default 7)
     ///   * `decay` - The probability of reducing a counter in an occupied bucket. \
-    ///   It is raised to power of it's counter (decay ^ bucket\[i\].counter). \
-    ///   Therefore, as the counter gets higher, the chance of a reduction is being reduced. (Default 0.9)
+    ///     It is raised to power of it's counter (decay ^ bucket\[i\].counter). \
+    ///     Therefore, as the counter gets higher, the chance of a reduction is being reduced. (Default 0.9)
     ///
     /// # See Also
     /// * [<https://redis.io/commands/topk.reserve/>](https://redis.io/commands/topk.reserve/)

@@ -1,1 +1,1 @@
-cd redis && .\docker_up.cmd && cd .. && cargo test --features tokio-tls,pool,redis-stack
+cd redis && .\docker_up.cmd && cd .. && cargo test --features tokio-tls,pool

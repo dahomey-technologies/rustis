@@ -3,7 +3,7 @@ use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer,
 };
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 pub(crate) const PUSH_FAKE_FIELD: &str = ">>>PUSH>>>";
 
@@ -29,7 +29,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
     #[inline]
     fn visit_bool<E>(self, v: bool) -> Result<Value, E> {
-        Ok(Value::Integer(i64::from(v)))
+        Ok(Value::Boolean(v))
     }
 
     #[inline]
@@ -104,9 +104,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
         if let Some(0) = len {
             Ok(Value::Nil)
         } else {
-            let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
+            let mut values: HashMap<Value, Value> = HashMap::with_capacity(len.unwrap_or_default());
             loop {
-                match map.next_key::<PushOrKey>()? {
+                let key = match map.next_key::<PushOrKey>()? {
                     None => break,
                     Some(PushOrKey::Push) => {
                         let values: Vec<Value> = map.next_value()?;
@@ -116,12 +116,16 @@ impl<'de> Visitor<'de> for ValueVisitor {
                             return Ok(Value::Push(values));
                         }
                     }
-                    Some(PushOrKey::Key(value)) => values.push(value),
+                    Some(PushOrKey::Key(key)) => key,
                 };
 
-                values.push(map.next_value()?);
+                values.insert(key, map.next_value()?);
             }
-            Ok(Value::Array(values))
+            if values.is_empty() {
+                Ok(Value::Nil)
+            } else {
+                Ok(Value::Map(values))
+            }
         }
     }
 }

@@ -2,16 +2,6 @@
 use crate::commands::DebugCommands;
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
-#[cfg(feature = "redis-json")]
-use crate::commands::JsonCommands;
-#[cfg(feature = "redis-search")]
-use crate::commands::SearchCommands;
-#[cfg(feature = "redis-time-series")]
-use crate::commands::TimeSeriesCommands;
-#[cfg(feature = "redis-bloom")]
-use crate::commands::{
-    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
-};
 use crate::{
     client::{
         ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
@@ -22,6 +12,10 @@ use crate::{
         GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands,
         PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
         SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
+    },
+    commands::{
+        BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
+        TDigestCommands, TimeSeriesCommands, TopKCommands,
     },
     network::{
         timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
@@ -269,7 +263,7 @@ impl Client {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
             trace!("Will enqueue message: {message:?}");
             Ok(msg_sender.unbounded_send(message).map_err(|e| {
-                info!("{}", e.to_string());
+                info!("{}", e);
                 Error::Client("Disconnected from server".to_string())
             })?)
         } else {
@@ -426,15 +420,9 @@ where
 }
 
 impl<'a> BitmapCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> BloomCommands<'a> for &'a Client {}
 impl<'a> ClusterCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CountMinSketchCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CuckooCommands<'a> for &'a Client {}
 impl<'a> ConnectionCommands<'a> for &'a Client {}
 #[cfg(test)]
@@ -447,13 +435,9 @@ impl<'a> GraphCommands<'a> for &'a Client {}
 impl<'a> HashCommands<'a> for &'a Client {}
 impl<'a> HyperLogLogCommands<'a> for &'a Client {}
 impl<'a> InternalPubSubCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
-#[cfg(feature = "redis-json")]
 impl<'a> JsonCommands<'a> for &'a Client {}
 impl<'a> ListCommands<'a> for &'a Client {}
 impl<'a> ScriptingCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
-#[cfg(feature = "redis-search")]
 impl<'a> SearchCommands<'a> for &'a Client {}
 impl<'a> SentinelCommands<'a> for &'a Client {}
 impl<'a> ServerCommands<'a> for &'a Client {}
@@ -461,15 +445,9 @@ impl<'a> SetCommands<'a> for &'a Client {}
 impl<'a> SortedSetCommands<'a> for &'a Client {}
 impl<'a> StreamCommands<'a> for &'a Client {}
 impl<'a> StringCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TDigestCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
-#[cfg(feature = "redis-time-series")]
 impl<'a> TimeSeriesCommands<'a> for &'a Client {}
 impl<'a> TransactionCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TopKCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {

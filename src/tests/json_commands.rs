@@ -1,7 +1,7 @@
 use crate::{
     commands::{FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetOptions, ServerCommands},
     resp::Value,
-    tests::get_redis_stack_test_client,
+    tests::get_test_client,
     Result,
 };
 use serial_test::serial;
@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrappend() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -39,7 +39,7 @@ async fn json_arrappend() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrindex() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -84,7 +84,7 @@ async fn json_arrindex() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrinsert() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -121,7 +121,7 @@ async fn json_arrinsert() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrlen() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -147,7 +147,7 @@ async fn json_arrlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrpop() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -185,7 +185,7 @@ async fn json_arrpop() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_arrtrim() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -214,7 +214,7 @@ async fn json_arrtrim() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_clear() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -239,7 +239,7 @@ async fn json_clear() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_debug_memory() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -253,7 +253,7 @@ async fn json_debug_memory() -> Result<()> {
 
     let result: Vec<usize> = client.json_debug_memory("key", "$.foo[*].bar").await?;
     assert_eq!(2, result.len());
-    assert_eq!(35, result[0]);
+    assert_eq!(59, result[0]);
     assert_eq!(8, result[1]);
 
     Ok(())
@@ -263,7 +263,7 @@ async fn json_debug_memory() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_del() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -288,7 +288,7 @@ async fn json_del() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_forget() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -313,7 +313,7 @@ async fn json_forget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_get() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -337,7 +337,7 @@ async fn json_get() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_mget() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -370,7 +370,7 @@ async fn json_mget() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_numincrby() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -382,11 +382,11 @@ async fn json_numincrby() -> Result<()> {
         )
         .await?;
 
-    let json: String = client.json_numincrby("key", "$.a", 2).await?;
-    assert_eq!("[null]", json);
+    let response: Vec<Option<i32>> = client.json_numincrby("key", "$.a", 2).await?;
+    assert_eq!(vec![None], response);
 
-    let json: String = client.json_numincrby("key", "$..a", 2).await?;
-    assert_eq!("[null,4,7,null]", json);
+    let response: Vec<Option<i32>> = client.json_numincrby("key", "$..a", 2).await?;
+    assert_eq!(vec![None, Some(4), Some(7), None], response);
 
     Ok(())
 }
@@ -395,7 +395,7 @@ async fn json_numincrby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_nummultby() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -407,11 +407,11 @@ async fn json_nummultby() -> Result<()> {
         )
         .await?;
 
-    let json: String = client.json_nummultby("key", "$.a", 2).await?;
-    assert_eq!("[null]", json);
+    let response: Vec<Option<i32>> = client.json_nummultby("key", "$.a", 2).await?;
+    assert_eq!(vec![None], response);
 
-    let json: String = client.json_nummultby("key", "$..a", 2).await?;
-    assert_eq!("[null,4,10,null]", json);
+    let response: Vec<Option<i32>> = client.json_nummultby("key", "$..a", 2).await?;
+    assert_eq!(vec![None, Some(4), Some(10), None], response);
 
     Ok(())
 }
@@ -420,7 +420,7 @@ async fn json_nummultby() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_objkeys() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -446,7 +446,7 @@ async fn json_objkeys() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_objlen() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -470,7 +470,7 @@ async fn json_objlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_resp() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -520,7 +520,7 @@ async fn json_resp() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_strappend() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -545,7 +545,7 @@ async fn json_strappend() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_strlen() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -570,7 +570,7 @@ async fn json_strlen() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_toggle() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -605,7 +605,7 @@ async fn json_toggle() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn json_type() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client
@@ -617,17 +617,24 @@ async fn json_type() -> Result<()> {
         )
         .await?;
 
-    let result: Vec<String> = client.json_type("key", "$..foo").await?;
+    let result: Vec<String> = client.json_type("key", ".foo").await?;
     assert_eq!(1, result.len());
     assert_eq!("string", result[0]);
 
-    let result: Vec<String> = client.json_type("key", "$..a").await?;
-    assert_eq!(2, result.len());
-    assert_eq!("integer", result[0]);
-    assert_eq!("boolean", result[1]);
+    let result: Vec<Vec<String>> = client.json_type("key", "$..foo").await?;
+    assert_eq!(1, result.len());
+    assert_eq!(1, result[0].len());
+    assert_eq!("string", result[0][0]);
 
-    let result: Vec<String> = client.json_type("key", "$..dummy").await?;
-    assert_eq!(0, result.len());
+    let result: Vec<Vec<String>> = client.json_type("key", "$..a").await?;
+    assert_eq!(1, result.len());
+    assert_eq!(2, result[0].len());
+    assert_eq!("integer", result[0][0]);
+    assert_eq!("boolean", result[0][1]);
+
+    let result: Vec<Vec<String>> = client.json_type("key", "$..dummy").await?;
+    assert_eq!(1, result.len());
+    assert_eq!(0, result[0].len());
 
     Ok(())
 }

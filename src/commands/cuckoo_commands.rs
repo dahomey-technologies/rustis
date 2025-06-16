@@ -169,7 +169,7 @@ pub trait CuckooCommands<'a> {
         key: impl SingleArg,
         options: CfInsertOptions,
         item: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, Vec<usize>>
+    ) -> PreparedCommand<'a, Self, Vec<bool>>
     where
         Self: Sized,
     {
@@ -302,9 +302,9 @@ pub trait CuckooCommands<'a> {
     /// # Arguments
     /// * `key` - The key under which the filter is found
     /// * `capacity` - Estimated capacity for the filter.
-    /// Capacity is rounded to the next 2^n number.
-    /// The filter will likely not fill up to 100% of it's capacity.
-    /// Make sure to reserve extra capacity if you want to avoid expansions.
+    ///   Capacity is rounded to the next 2^n number.
+    ///   The filter will likely not fill up to 100% of it's capacity.
+    ///   Make sure to reserve extra capacity if you want to avoid expansions.
     /// * `options` - See [`CfReserveOptions`](CfReserveOptions)
     ///
     /// # See Also
@@ -329,7 +329,7 @@ pub trait CuckooCommands<'a> {
     /// # Arguments
     /// * `key` - Name of the filter
     /// * `iterator` - Iterator value; either 0 or the iterator from a previous invocation of this command.\
-    ///  The first time this command is called, the value of `iterator` should be 0.
+    ///   The first time this command is called, the value of `iterator` should be 0.
     ///
     /// # Return
     /// This command returns successive `(iterator, data)` pairs until `(0, vec![])` to indicate completion.

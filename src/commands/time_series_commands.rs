@@ -1,9 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection,
-        KeyValueCollectionResponse, MultipleArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs, Value,
+        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
+        MultipleArgsCollection, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
     },
 };
 use serde::{
@@ -1367,7 +1366,10 @@ impl<'de> de::Deserialize<'de> for TsRangeSample {
                             "reducers" => Ok(TsRangeSampleField::Reducers(value)),
                             "sources" => Ok(TsRangeSampleField::Sources(value)),
                             "aggregators" => Ok(TsRangeSampleField::Aggregators(value)),
-                            _ => Err(de::Error::unknown_field(field, &["reducers", "sources", "aggregators"]))
+                            _ => Err(de::Error::unknown_field(
+                                field,
+                                &["reducers", "sources", "aggregators"],
+                            )),
                         }
                     }
                 }

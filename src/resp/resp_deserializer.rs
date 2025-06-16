@@ -271,7 +271,10 @@ impl<'de> RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _tag => Err(Error::Client(format!("Cannot parse number from `{}`", _tag as char))),
+            _tag => Err(Error::Client(format!(
+                "Cannot parse number from `{}`",
+                _tag as char
+            ))),
         }
     }
 
@@ -788,9 +791,14 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
             SIMPLE_STRING_TAG => {
                 let str = self.parse_string()?;
-                Err(Error::Client(format!("Cannot parse map from simple string `{str}`")))
-            },
-            _c => Err(Error::Client(format!("Cannot parse map from {}", _c as char))),
+                Err(Error::Client(format!(
+                    "Cannot parse map from simple string `{str}`"
+                )))
+            }
+            _c => Err(Error::Client(format!(
+                "Cannot parse map from {}",
+                _c as char
+            ))),
         }
     }
 

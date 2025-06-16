@@ -55,7 +55,7 @@ async fn bf_info() -> Result<()> {
     client.bf_add("key", "item2").await?;
     client.bf_add("key", "item3").await?;
 
-    let result: Vec<(String, usize)>  = client
+    let result: Vec<(String, usize)> = client
         .bf_info("key", BfInfoParameter::NumItemsInserted)
         .await?;
     assert_eq!(1, result.len());

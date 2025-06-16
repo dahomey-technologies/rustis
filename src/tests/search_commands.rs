@@ -1,12 +1,17 @@
 use crate::{
-    client::{BatchPreparedCommand, Client}, commands::{
+    client::{BatchPreparedCommand, Client},
+    commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
         FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtIndexDataType, FtLanguage,
         FtLoadAttribute, FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult, FtSortBy,
         FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
         FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
         SearchCommands, ServerCommands, SetCondition, SortOrder,
-    }, network::sleep, resp::Value, tests::{get_test_client, log_try_init}, Result
+    },
+    network::sleep,
+    resp::Value,
+    tests::{get_test_client, log_try_init},
+    Result,
 };
 use rand::{seq::IndexedRandom, Rng};
 use serial_test::serial;

@@ -164,13 +164,9 @@ async fn cf_insert() -> Result<()> {
         )
         .await?;
     let result = client
-        .cf_insert(
-            "key2",
-            CfInsertOptions::default(),
-            [1, 1, 1, 1],
-        ).await?;
+        .cf_insert("key2", CfInsertOptions::default(), [1, 1, 1, 1])
+        .await?;
     assert_eq!(vec![true, true, false, false], result);
-
 
     Ok(())
 }

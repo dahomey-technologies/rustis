@@ -605,7 +605,7 @@ pub trait SortedSetCommands<'a> {
         prepare_command(self, cmd("ZRANK").arg(key).arg(member))
     }
 
-     /// Returns the rank of member in the sorted set stored at key,
+    /// Returns the rank of member in the sorted set stored at key,
     /// with the scores ordered from low to high.
     ///
     /// # Return
@@ -615,7 +615,11 @@ pub trait SortedSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
     #[must_use]
-    fn zrank_with_score<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
+    fn zrank_with_score<K, M>(
+        self,
+        key: K,
+        member: M,
+    ) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
     where
         Self: Sized,
         K: SingleArg,
@@ -727,7 +731,11 @@ pub trait SortedSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/zrevrank/>](https://redis.io/commands/zrevrank/)
     #[must_use]
-    fn zrevrank_with_score<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
+    fn zrevrank_with_score<K, M>(
+        self,
+        key: K,
+        member: M,
+    ) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
     where
         Self: Sized,
         K: SingleArg,

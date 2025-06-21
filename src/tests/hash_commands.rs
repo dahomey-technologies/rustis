@@ -5,7 +5,8 @@ use std::{
 
 use crate::{
     commands::{
-        ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult, HSetExCondition, HashCommands, ServerCommands, SetExpiration
+        ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult,
+        HSetExCondition, HashCommands, ServerCommands, SetExpiration,
     },
     tests::get_test_client,
     Result,
@@ -250,19 +251,29 @@ async fn hgetdel() -> Result<()> {
     // cleanup
     client.flushall(FlushingMode::Sync).await?;
 
-    client.hset("key", [("field1", "Hello"), ("field2", "World"), ("field3", "!")]).await?;
+    client
+        .hset(
+            "key",
+            [("field1", "Hello"), ("field2", "World"), ("field3", "!")],
+        )
+        .await?;
     let values: Vec<Option<String>> = client.hgetdel("key", ["field3", "field4"]).await?;
     assert_eq!(values, vec![Some("!".to_string()), None]);
 
     let result: Vec<(String, String)> = client.hgetall("key").await?;
-    assert_eq!(result, vec![("field1".to_string(), "Hello".to_string()), ("field2".to_string(), "World".to_string())]);
+    assert_eq!(
+        result,
+        vec![
+            ("field1".to_string(), "Hello".to_string()),
+            ("field2".to_string(), "World".to_string())
+        ]
+    );
 
     let values: Vec<String> = client.hgetdel("key", ["field1", "field2"]).await?;
     assert_eq!(values, vec!["Hello".to_string(), "World".to_string()]);
 
     let result = client.exists("key").await?;
     assert_eq!(result, 0);
-
 
     Ok(())
 }
@@ -276,15 +287,21 @@ async fn hgetex() -> Result<()> {
     // cleanup
     client.flushall(FlushingMode::Sync).await?;
 
-    client.hset("key", [("field1", "Hello"), ("field2", "World")]).await?;
+    client
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
+        .await?;
 
-    let values: [String;1] = client.hgetex("key", GetExOptions::Ex(120), "field1").await?;
+    let values: [String; 1] = client
+        .hgetex("key", GetExOptions::Ex(120), "field1")
+        .await?;
     assert_eq!(values, ["Hello".to_string()]);
 
-    let values: [String;1] = client.hgetex("key", GetExOptions::Ex(100), "field2").await?;
+    let values: [String; 1] = client
+        .hgetex("key", GetExOptions::Ex(100), "field2")
+        .await?;
     assert_eq!(values, ["World".to_string()]);
 
-    let result: [i64;3] = client.httl("key", ["field1", "field2", "field3"]).await?;
+    let result: [i64; 3] = client.httl("key", ["field1", "field2", "field3"]).await?;
     assert_eq!(result, [120, 100, -2]);
 
     Ok(())

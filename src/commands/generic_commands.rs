@@ -686,7 +686,7 @@ pub trait GenericCommands<'a> {
     }
 }
 
-/// Options for the [`expire`](GenericCommands::expire) command
+/// Options for the [`expire`](GenericCommands::expire) and [`hexpire`](HashCommands::expire) commands
 #[derive(Default)]
 pub enum ExpireOption {
     /// No option

@@ -519,7 +519,7 @@ pub trait StringCommands<'a> {
         prepare_command(self, cmd("SET").arg(key).arg(value))
     }
 
-    ///Set key to hold the string value.
+    /// Set key to hold the string value.
     ///
     /// # Return
     /// * `true` if SET was executed correctly.
@@ -705,7 +705,7 @@ pub trait StringCommands<'a> {
     }
 }
 
-/// Options for the [`getex`](StringCommands::getex) command
+/// Options for the [`getex`](StringCommands::getex) and the [`hgetex`](HashCommands::hgetex) commands
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -778,7 +778,7 @@ pub struct LcsResult {
     pub len: usize,
 }
 
-/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) command
+/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](HashCommands::hsetex) commands
 #[derive(Default)]
 pub enum SetExpiration {
     /// No expiration

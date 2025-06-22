@@ -705,7 +705,7 @@ pub trait StringCommands<'a> {
     }
 }
 
-/// Options for the [`getex`](StringCommands::getex) and the [`hgetex`](HashCommands::hgetex) commands
+/// Options for the [`getex`](StringCommands::getex) and the [`hgetex`](crate::commands::HashCommands::hgetex) commands
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -778,7 +778,7 @@ pub struct LcsResult {
     pub len: usize,
 }
 
-/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](HashCommands::hsetex) commands
+/// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](crate::commands::HashCommands::hsetex) commands
 #[derive(Default)]
 pub enum SetExpiration {
     /// No expiration

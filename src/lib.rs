@@ -9,7 +9,7 @@ rustis is a Redis client for Rust.
 * Rust idiomatic API
 
 # Features
-* Support all [Redis Commands](https://redis.io/commands/) until Redis 7.0
+* Support all [Redis Commands](https://redis.io/commands/) until Redis 8.0
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client types:
   * Single client
@@ -25,12 +25,7 @@ rustis is a Redis client for Rust.
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support
-* [Redis Stack](https://redis.io/docs/stack/) support:
-  * [RedisJSON v2.4](https://redis.io/docs/stack/json/) support
-  * [RedisSearch v2.6](https://redis.io/docs/stack/search/) support
-  * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
-  * [RedisBloom v2.4](https://redis.io/docs/stack/bloom/) support
-  * [RedisTimeSeries v1.8](https://redis.io/docs/stack/timeseries/) support
+* [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 # Optional Features
 | Feature | Description |

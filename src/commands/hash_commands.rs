@@ -56,7 +56,7 @@ pub trait HashCommands<'a> {
     /// # Arguments
     /// * `key` - The hash key
     /// * `seconds ` - The expiration time in seconds
-    /// * `option` - The [`ExpireOption`](commands::ExpireOption) option.
+    /// * `option` - The [`ExpireOption`](crate::commands::ExpireOption) option.
     /// * `fields` - The fields to expire.
     ///
     /// # Return
@@ -104,7 +104,7 @@ pub trait HashCommands<'a> {
     /// # Arguments
     /// * `key` - The hash key
     /// * `unix_time_seconds ` - The aboslute unix timestamp the fields will expire at.
-    /// * `option` - The [`ExpireOption`](commands::ExpireOption) option.
+    /// * `option` - The [`ExpireOption`](crate::commands::ExpireOption) option.
     /// * `fields` - The fields to expire.
     ///
     /// # Return
@@ -251,7 +251,7 @@ pub trait HashCommands<'a> {
     ///
     /// # Arguments
     /// * `key` - The hash key
-    /// * `options` - The [`GetExOptions`](StringCommands::GetOptions) options.
+    /// * `options` - The [`GetExOptions`](crate::commands::GetExOptions) options.
     /// * `fields` - The fields to get.
     ///
     /// # Return
@@ -403,7 +403,7 @@ pub trait HashCommands<'a> {
     /// # Arguments
     /// * `key` - The hash key
     /// * `milliseconds ` - The expiration time in milliseconds
-    /// * `option` - The [`ExpireOption`](commands::ExpireOption) option.
+    /// * `option` - The [`ExpireOption`](crate::commands::ExpireOption) option.
     /// * `fields` - The fields to expire.
     ///
     /// # Return
@@ -449,7 +449,7 @@ pub trait HashCommands<'a> {
     /// # Arguments
     /// * `key` - The hash key
     /// * `unix_time_milliseconds` - The aboslute unix timestamp in milliseconds, the fields will expire at.
-    /// * `option` - The [`ExpireOption`](commands::ExpireOption) option.
+    /// * `option` - The [`ExpireOption`](crate::commands::ExpireOption) option.
     /// * `fields` - The fields to expire.
     ///
     /// # Return

@@ -17,29 +17,29 @@ These is the list of existing command traits:
 * [`ConnectionCommands`]: Connection management like authentication or RESP version management
 * [`GenericCommands`]: Generic commands like deleting, renaming or expiring keys
 * [`GeoCommands`]: [Geospatial](https://redis.io/docs/data-types/geospatial/) indices
-* [`HashCommands`](crate::commands::HashCommands): [Hashes](https://redis.io/docs/data-types/hashes/)
-* [`HyperLogLogCommands`](crate::commands::HyperLogLogCommands): [HyperLogLog](https://redis.io/docs/data-types/hyperloglogs/)
-* [`ListCommands`](crate::commands::ListCommands): [Lists](https://redis.io/docs/data-types/lists/)
-* [`PubSubCommands`](crate::commands::PubSubCommands): [Pub/Sub](https://redis.io/docs/manual/pubsub/)
-* [`ScriptingCommands`](crate::commands::ScriptingCommands): [Scripts](https://redis.io/docs/manual/programmability/eval-intro/) &
+* [`HashCommands`](HashCommands): [Hashes](https://redis.io/docs/data-types/hashes/)
+* [`HyperLogLogCommands`](HyperLogLogCommands): [HyperLogLog](https://redis.io/docs/data-types/hyperloglogs/)
+* [`ListCommands`](ListCommands): [Lists](https://redis.io/docs/data-types/lists/)
+* [`PubSubCommands`](PubSubCommands): [Pub/Sub](https://redis.io/docs/manual/pubsub/)
+* [`ScriptingCommands`](ScriptingCommands): [Scripts](https://redis.io/docs/manual/programmability/eval-intro/) &
   [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
-* [`SentinelCommands`](crate::commands::SentinelCommands): [Sentinel](https://redis.io/docs/management/sentinel/)
-* [`ServerCommands`](crate::commands::ServerCommands): Server management like [Access Control Lists](https://redis.io/docs/management/security/acl/) or monitoring
-* [`SetCommands`](crate::commands::SetCommands): [Sets](https://redis.io/docs/data-types/sets/)
-* [`SortedSetCommands`](crate::commands::SortedSetCommands): [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
-* [`StreamCommands`](crate::commands::StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
-* [`StringCommands`](crate::commands::StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
-* [`VectorSetCommands`](crate::commands::VectorSetCommands): [Vector sets](https://redis.io/docs/data-types/vector-sets/)
-* [`TransactionCommands`](crate::commands::TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
-* [`BloomCommands`](crate::commands::BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
-* [`CuckooCommands`](crate::commands::CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
-* [`CountMinSketchCommands`](crate::commands::CountMinSketchCommands): [Count min-sketch](https://redis.io/docs/stack/bloom/)
-* [`JsonCommands`](crate::commands::JsonCommands): [RedisJson](https://redis.io/docs/stack/json/)
-* [`SearchCommands`](crate::commands::SearchCommands): [RedisSearch](https://redis.io/docs/stack/search/)
-* [`TDigestCommands`](crate::commands::TDigestCommands): [T-Digest](https://redis.io/docs/stack/bloom/)
-* [`TimeSeriesCommands`](crate::commands::TimeSeriesCommands): [Time Series](https://redis.io/docs/stack/timeseries/)
-* [`TopKCommands`](crate::commands::TopKCommands): [Top-K](https://redis.io/docs/stack/bloom/)
-* [`GraphCommands`](crate::commands::GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
+* [`SentinelCommands`](SentinelCommands): [Sentinel](https://redis.io/docs/management/sentinel/)
+* [`ServerCommands`](ServerCommands): Server management like [Access Control Lists](https://redis.io/docs/management/security/acl/) or monitoring
+* [`SetCommands`](SetCommands): [Sets](https://redis.io/docs/data-types/sets/)
+* [`SortedSetCommands`](SortedSetCommands): [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
+* [`StreamCommands`](StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
+* [`StringCommands`](StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
+* [`VectorSetCommands`](VectorSetCommands): [Vector sets](https://redis.io/docs/data-types/vector-sets/)
+* [`TransactionCommands`](TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
+* [`BloomCommands`](BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
+* [`CuckooCommands`](CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
+* [`CountMinSketchCommands`](CountMinSketchCommands): [Count min-sketch](https://redis.io/docs/stack/bloom/)
+* [`JsonCommands`](JsonCommands): [RedisJson](https://redis.io/docs/stack/json/)
+* [`SearchCommands`](SearchCommands): [RedisSearch](https://redis.io/docs/stack/search/)
+* [`TDigestCommands`](TDigestCommands): [T-Digest](https://redis.io/docs/stack/bloom/)
+* [`TimeSeriesCommands`](TimeSeriesCommands): [Time Series](https://redis.io/docs/stack/timeseries/)
+* [`TopKCommands`](TopKCommands): [Top-K](https://redis.io/docs/stack/bloom/)
+* [`GraphCommands`](GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
 
 # Example
 

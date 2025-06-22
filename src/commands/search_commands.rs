@@ -2,13 +2,13 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::{GeoUnit, SortOrder},
     resp::{
-        cmd, deserialize_vec_of_pairs, CollectionResponse, Command, CommandArgs,
-        KeyValueCollectionResponse, MultipleArgsCollection, PrimitiveResponse, RespDeserializer,
-        SingleArg, SingleArgCollection, ToArgs, Value, VecOfPairsSeed,
+        cmd, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
+        MultipleArgsCollection, PrimitiveResponse, RespDeserializer, SingleArg,
+        SingleArgCollection, ToArgs, Value,
     },
 };
 use serde::{
-    de::{self, value::SeqAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
+    de::{self, value::MapAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
     Deserialize, Deserializer,
 };
 use std::{collections::HashMap, fmt, future};
@@ -26,8 +26,8 @@ pub trait SearchCommands<'a> {
     /// # Arguments
     /// * `index` - index against which the query is executed.
     /// * `query`- is base filtering query that retrieves the documents.\
-    ///  It follows the exact same syntax as the search query,\
-    ///  including filters, unions, not, optional, and so on.
+    ///   It follows the exact same syntax as the search query,\
+    ///   including filters, unions, not, optional, and so on.
     /// * `options` - See [`FtAggregateOptions`](FtAggregateOptions)
     ///
     /// # Returns
@@ -233,7 +233,7 @@ pub trait SearchCommands<'a> {
     /// * `index` - index name.
     /// * `cursor_id` - id of the cursor.
     /// * `read_size` - number of results to read. This parameter overrides
-    /// [`count`](FtWithCursorOptions::count) specified in [`ft_aggregate`](SearchCommands::ft_aggregate).
+    ///   [`count`](FtWithCursorOptions::count) specified in [`ft_aggregate`](SearchCommands::ft_aggregate).
     ///
     /// # Returns
     /// an instance of [`FtAggregateResult`](FtAggregateResult)
@@ -326,12 +326,12 @@ pub trait SearchCommands<'a> {
     ///
     /// # Notes
     /// * By default, `ft_dropindex` does not delete the document hashes associated with the index.
-    /// Adding the `dd` option deletes the hashes as well.
+    ///   Adding the `dd` option deletes the hashes as well.
     /// * When using `ft_dropindex` with the parameter `dd`, if an index creation is still running
-    /// ([`ft_create`](SearchCommands::ft_create) is running asynchronously),
-    /// only the document hashes that have already been indexed are deleted.
-    /// The document hashes left to be indexed remain in the database.
-    /// You can use [`ft_info`](SearchCommands::ft_info) to check the completion of the indexing.
+    ///   ([`ft_create`](SearchCommands::ft_create) is running asynchronously),
+    ///   only the document hashes that have already been indexed are deleted.
+    ///   The document hashes left to be indexed remain in the database.
+    ///   You can use [`ft_info`](SearchCommands::ft_info) to check the completion of the indexing.
     ///
     /// # Return
     /// the number of new terms that were added.
@@ -353,8 +353,8 @@ pub trait SearchCommands<'a> {
     /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `query` - query string, as if sent to [`ft_search`](SearchCommands::ft_search).
     /// * `dialect_version` - dialect version under which to execute the query. \
-    ///  If not specified, the query executes under the default dialect version set during module initial loading\
-    ///  or via [`ft_config_set`](SearchCommands::ft_config_set) command.
+    ///   If not specified, the query executes under the default dialect version set during module initial loading\
+    ///   or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     ///
     /// # Notes
     /// * In the returned response, a `+` on a term is an indication of stemming.
@@ -390,8 +390,8 @@ pub trait SearchCommands<'a> {
     /// * `index` - full-text index name. You must first create the index using [`ft_create`](SearchCommands::ft_create).
     /// * `query` - query string, as if sent to [`ft_search`](SearchCommands::ft_search).
     /// * `dialect_version` - dialect version under which to execute the query. \
-    ///  If not specified, the query executes under the default dialect version set during module initial loading\
-    ///  or via [`ft_config_set`](SearchCommands::ft_config_set) command.
+    ///   If not specified, the query executes under the default dialect version set during module initial loading\
+    ///   or via [`ft_config_set`](SearchCommands::ft_config_set) command.
     ///
     /// # Notes
     /// * In the returned response, a `+` on a term is an indication of stemming.
@@ -402,18 +402,16 @@ pub trait SearchCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/ft.explaincli/>](https://redis.io/commands/ft.explaincli/)
     #[must_use]
-    fn ft_explaincli<I, Q, R, RR>(
+    fn ft_explaincli<I, Q>(
         self,
         index: I,
         query: Q,
         dialect_version: Option<u64>,
-    ) -> PreparedCommand<'a, Self, RR>
+    ) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         I: SingleArg,
         Q: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: CollectionResponse<R>,
     {
         prepare_command(
             self,
@@ -471,7 +469,7 @@ pub trait SearchCommands<'a> {
     /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
     ///
     /// # Return
-    /// An instance of [`FtProfileSearchResult`](FtProfileSearchResult)
+    /// An instance of [`Value`](Value)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
@@ -481,7 +479,7 @@ pub trait SearchCommands<'a> {
         index: I,
         limited: bool,
         query: QQ,
-    ) -> PreparedCommand<'a, Self, FtProfileSearchResult>
+    ) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         I: SingleArg,
@@ -511,7 +509,7 @@ pub trait SearchCommands<'a> {
     /// or `LIMITED` to not reply with details of `reader iterators` inside builtin-unions such as `fuzzy` or `prefix`.
     ///
     /// # Return
-    /// An instance of [`FtProfileAggregateResult`](FtProfileAggregateResult)
+    /// An instance of [`Value`](Value)
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
@@ -521,7 +519,7 @@ pub trait SearchCommands<'a> {
         index: I,
         limited: bool,
         query: QQ,
-    ) -> PreparedCommand<'a, Self, FtProfileAggregateResult>
+    ) -> PreparedCommand<'a, Self, Value>
     where
         Self: Sized,
         I: SingleArg,
@@ -2054,12 +2052,15 @@ impl ToArgs for FtWithCursorOptions {
         args.arg(&self.command_args);
     }
 }
-
+/* */
 /// Result for the [`ft_aggregate`](SearchCommands::ft_aggregate) command
 #[derive(Debug)]
 pub struct FtAggregateResult {
+    pub attributes: Vec<String>,
+    pub format: String,
+    pub results: Vec<FtSearchResultRow>,
     pub total_results: usize,
-    pub results: Vec<Vec<(String, String)>>,
+    pub warning: Vec<String>,
     pub cursor_id: Option<u64>,
 }
 
@@ -2068,50 +2069,6 @@ impl<'de> Deserialize<'de> for FtAggregateResult {
     where
         D: Deserializer<'de>,
     {
-        enum TotalResultsOrResult {
-            TotalResults(usize),
-            Result(FtAggregateResult),
-        }
-
-        struct TotalResultsOrResultSeed;
-
-        impl<'de> DeserializeSeed<'de> for TotalResultsOrResultSeed {
-            type Value = TotalResultsOrResult;
-
-            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct TotalResultsOrResultVisitor;
-
-                impl<'de> Visitor<'de> for TotalResultsOrResultVisitor {
-                    type Value = TotalResultsOrResult;
-
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("TotalResultsOrResults")
-                    }
-
-                    fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
-                    where
-                        E: de::Error,
-                    {
-                        Ok(TotalResultsOrResult::TotalResults(v as usize))
-                    }
-
-                    fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
-                    where
-                        A: de::SeqAccess<'de>,
-                    {
-                        let result =
-                            FtAggregateResult::deserialize(SeqAccessDeserializer::new(seq))?;
-                        Ok(TotalResultsOrResult::Result(result))
-                    }
-                }
-
-                deserializer.deserialize_any(TotalResultsOrResultVisitor)
-            }
-        }
-
         struct FtAggregateResultVisitor;
 
         impl<'de> Visitor<'de> for FtAggregateResultVisitor {
@@ -2125,267 +2082,74 @@ impl<'de> Deserialize<'de> for FtAggregateResult {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let Some(first) = seq.next_element_seed(TotalResultsOrResultSeed)? else {
-                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                let Some(result) = seq.next_element::<FtSearchResult>()? else {
+                    return Err(de::Error::invalid_length(0, &"2 elements in sequence"));
                 };
 
-                match first {
-                    TotalResultsOrResult::TotalResults(total_results) => {
-                        let mut results = if let Some(size) = seq.size_hint() {
-                            Vec::<Vec<(String, String)>>::with_capacity(size - 1)
-                        } else {
-                            Vec::<Vec<(String, String)>>::new()
-                        };
-
-                        while let Some(sub_results) =
-                            seq.next_element_seed(VecOfPairsSeed::<String, String>::new())?
-                        {
-                            results.push(sub_results);
-                        }
-
-                        Ok(FtAggregateResult {
-                            total_results,
-                            results,
-                            cursor_id: None,
-                        })
-                    }
-                    TotalResultsOrResult::Result(mut result) => {
-                        let Some(cursor_id) = seq.next_element::<u64>()? else {
-                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                        };
-
-                        result.cursor_id = Some(cursor_id);
-                        Ok(result)
-                    }
-                }
-            }
-        }
-
-        deserializer.deserialize_seq(FtAggregateResultVisitor)
-    }
-}
-
-/// Result for the [`ft_search`](SearchCommands::ft_search) command
-#[derive(Debug)]
-pub struct FtSearchResult {
-    pub total_results: usize,
-    pub results: Vec<FtSearchResultRow>,
-}
-
-/// A row in a [`FtSearchResult`](FtSearchResult)
-#[derive(Debug, Default)]
-pub struct FtSearchResultRow {
-    /// Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate)
-    pub document_id: String,
-    /// relative internal score of each document. only if [`withscores`](FtSearchOptions::withscores) is set
-    pub score: f64,
-    /// document payload. only if [`withpayloads`](FtSearchOptions::withpayloads) is set
-    pub payload: Vec<u8>,
-    /// value of the sorting key. only if [`withsortkeys`](FtSearchOptions::withsortkeys) is set
-    pub sortkey: String,
-    /// collection of attribute/value pairs.
-    pub values: Vec<(String, String)>,
-}
-
-impl<'de> Deserialize<'de> for FtSearchResult {
-    #[inline]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        enum RowField {
-            DocumentId(String),
-            Score(f64),
-            Payload(Vec<u8>),
-            Sortkey(String),
-            Values(Vec<(String, String)>),
-        }
-
-        enum RowSeedState {
-            Start,
-            AfterDocumentId(usize),
-        }
-
-        struct RowSeed {
-            row_num_fields: usize,
-            state: RowSeedState,
-        }
-
-        impl RowSeed {
-            pub fn new(row_num_fields: usize) -> Self {
-                Self {
-                    row_num_fields,
-                    state: RowSeedState::Start,
-                }
-            }
-        }
-
-        impl<'de> DeserializeSeed<'de> for &mut RowSeed {
-            type Value = RowField;
-
-            #[inline]
-            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                deserializer.deserialize_any(self)
-            }
-        }
-
-        impl<'de> Visitor<'de> for &mut RowSeed {
-            type Value = RowField;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("RowField")
-            }
-
-            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> std::result::Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                match self.state {
-                    RowSeedState::Start => {
-                        if self.row_num_fields > 1 {
-                            self.state = RowSeedState::AfterDocumentId(1);
-                        }
-                        Ok(RowField::DocumentId(
-                            std::str::from_utf8(v)
-                                .map_err(de::Error::custom)?
-                                .to_owned(),
-                        ))
-                    }
-                    RowSeedState::AfterDocumentId(field_index) => {
-                        if field_index == self.row_num_fields - 1 {
-                            self.state = RowSeedState::Start;
-                        } else {
-                            self.state = RowSeedState::AfterDocumentId(field_index + 1);
-                        }
-
-                        // sortkeys begin by a '$' char
-                        if let Some(b'$') = v.first() {
-                            Ok(RowField::Sortkey(
-                                std::str::from_utf8(v)
-                                    .map_err(de::Error::custom)?
-                                    .to_owned(),
-                            ))
-                        } else {
-                            Ok(RowField::Payload(v.to_vec()))
-                        }
-                    }
-                }
-            }
-
-            fn visit_f64<E>(self, v: f64) -> std::result::Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                match self.state {
-                    RowSeedState::Start => unreachable!(),
-                    RowSeedState::AfterDocumentId(field_index) => {
-                        if field_index == self.row_num_fields - 1 {
-                            self.state = RowSeedState::Start;
-                        } else {
-                            self.state = RowSeedState::AfterDocumentId(field_index + 1);
-                        }
-
-                        Ok(RowField::Score(v))
-                    }
-                }
-            }
-
-            fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                self.state = RowSeedState::Start;
-                let values = deserialize_vec_of_pairs(SeqAccessDeserializer::new(seq))?;
-                Ok(RowField::Values(values))
-            }
-        }
-
-        struct FtSearchResultVisitor;
-
-        impl<'de> Visitor<'de> for FtSearchResultVisitor {
-            type Value = FtSearchResult;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("FtSearchResult")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                let Some(total_results) = seq.next_element()? else {
-                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
+                let Some(cursor) = seq.next_element::<u64>()? else {
+                    return Err(de::Error::invalid_length(0, &"2 elements in sequence"));
                 };
 
-                let Some(seq_size) = seq.size_hint() else {
-                    return Err(de::Error::custom(
-                        "sequence `size_hint` is expected for FtSearchResult",
-                    ));
-                };
+                Ok(FtAggregateResult {
+                    attributes: result.attributes,
+                    format: result.format,
+                    results: result.results,
+                    total_results: result.total_results,
+                    warning: result.warning,
+                    cursor_id: Some(cursor),
+                })
+            }
 
-                if total_results == 0 {
-                    return Ok(FtSearchResult {
-                        total_results,
-                        results: Vec::new(),
-                    });
-                }
-
-                let row_num_fields = (seq_size - 1) / total_results;
-                let mut results = Vec::with_capacity(total_results);
-                let mut row: Option<FtSearchResultRow> = None;
-                let mut row_seed = RowSeed::new(row_num_fields);
-
-                while let Some(item) = seq.next_element_seed(&mut row_seed)? {
-                    match item {
-                        RowField::DocumentId(document_id) => {
-                            if let Some(row) = row.take() {
-                                results.push(row);
-                            }
-                            row = Some(FtSearchResultRow {
-                                document_id,
-                                ..Default::default()
-                            })
-                        }
-                        RowField::Score(score) => {
-                            if let Some(row) = &mut row {
-                                row.score = score;
-                            }
-                        }
-                        RowField::Payload(payload) => {
-                            if let Some(row) = &mut row {
-                                row.payload = payload;
-                            }
-                        }
-                        RowField::Sortkey(sortkey) => {
-                            if let Some(row) = &mut row {
-                                row.sortkey = sortkey;
-                            }
-                        }
-                        RowField::Values(values) => {
-                            if let Some(row) = &mut row {
-                                row.values = values;
-                            }
-                        }
-                    }
-                }
-
-                if let Some(row) = row.take() {
-                    results.push(row);
-                }
-
-                Ok(FtSearchResult {
-                    total_results,
-                    results,
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::MapAccess<'de>,
+            {
+                let result = FtSearchResult::deserialize(MapAccessDeserializer::new(map))?;
+                Ok(FtAggregateResult {
+                    attributes: result.attributes,
+                    format: result.format,
+                    results: result.results,
+                    total_results: result.total_results,
+                    warning: result.warning,
+                    cursor_id: None,
                 })
             }
         }
 
-        deserializer.deserialize_seq(FtSearchResultVisitor)
+        deserializer.deserialize_any(FtAggregateResultVisitor)
     }
+}
+
+/// Result for the [`ft_search`](SearchCommands::ft_search) and [`ft_aggregate`](SearchCommands::ft_aggregate) commands
+#[derive(Debug, Deserialize)]
+pub struct FtSearchResult {
+    pub attributes: Vec<String>,
+    pub format: String,
+    pub results: Vec<FtSearchResultRow>,
+    pub total_results: usize,
+    pub warning: Vec<String>,
+}
+
+/// A row in a [`FtSearchResult`](FtSearchResult)
+#[derive(Debug, Default, Deserialize)]
+pub struct FtSearchResultRow {
+    /// Document id. Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate)
+    #[serde(default)]
+    pub id: String,
+    /// relative internal score of each document. only if [`withscores`](FtSearchOptions::withscores) is set
+    #[serde(default)]
+    pub score: f64,
+    /// document payload. only if [`withpayloads`](FtSearchOptions::withpayloads) is set
+    #[serde(default)]
+    pub payload: String,
+    /// value of the sorting key. only if [`withsortkeys`](FtSearchOptions::withsortkeys) is set
+    #[serde(default)]
+    pub sortkey: String,
+    /// collection of attribute/value pairs.
+    pub values: Vec<(String, String)>,
+    /// collection of attribute/value pairs.
+    #[serde(default)]
+    pub extra_attributes: Vec<(String, String)>,
 }
 
 /// Result for the [`ft_info`](SearchCommands::ft_info) command
@@ -2402,7 +2166,7 @@ pub struct FtInfoResult {
     /// Number of documents.
     pub num_docs: usize,
     /// Max document id
-    pub max_doc_id: String,
+    pub max_doc_id: u64,
     /// Number of distinct terms.
     pub num_terms: usize,
     pub num_records: usize,
@@ -2413,6 +2177,10 @@ pub struct FtInfoResult {
     pub doc_table_size_mb: f64,
     pub sortable_values_size_mb: f64,
     pub key_table_size_mb: f64,
+    pub tag_overhead_sz_mb: f64,
+    pub text_overhead_sz_mb: f64,
+    pub total_index_memory_sz_mb: f64,
+    pub geoshapes_sz_mb: f64,
     pub records_per_doc_avg: f64,
     pub bytes_per_record_avg: f64,
     pub offsets_per_term_avg: f64,
@@ -2424,7 +2192,10 @@ pub struct FtInfoResult {
     pub indexing: bool,
     /// progress of background indexing (1 if complete).
     pub percent_indexed: f64,
+    /// The number of times the index has been used.
     pub number_of_uses: usize,
+    /// The index deletion flag. A value of true indicates index deletion is in progress.
+    pub cleaning: bool,
     #[serde(default)]
     pub gc_stats: Option<FtGcStats>,
     #[serde(default)]
@@ -2432,6 +2203,7 @@ pub struct FtInfoResult {
     /// if a custom stopword list is used.
     #[serde(default)]
     pub stopwords_list: Vec<String>,
+    pub dialect_stats: HashMap<String, usize>,
 }
 
 /// Index attribute info
@@ -2468,6 +2240,53 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
     where
         D: serde::Deserializer<'de>,
     {
+        struct FlagsSeed<'a> {
+            attribute: &'a mut FtIndexAttribute,
+        }
+
+        impl<'a> FlagsSeed<'a> {
+            pub fn new(attribute: &'a mut FtIndexAttribute) -> Self {
+                Self { attribute }
+            }
+        }
+
+        impl<'de, 'a> de::DeserializeSeed<'de> for FlagsSeed<'a> {
+            type Value = ();
+
+            fn deserialize<D>(self, deserializer: D) -> Result<(), D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize_seq(self)
+            }
+        }
+
+        impl<'de, 'a> Visitor<'de> for FlagsSeed<'a> {
+            type Value = ();
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a sequence of flags")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                while let Some(flag) = seq.next_element::<&str>()? {
+                    match flag {
+                        "SORTABLE" => self.attribute.sortable = true,
+                        "UNF" => self.attribute.unf = true,
+                        "NOSTEM" => self.attribute.no_stem = true,
+                        "NOINDEX" => self.attribute.no_index = true,
+                        "CASESENSITIVE" => self.attribute.case_sensitive = true,
+                        "WITHSUFFIXTRIE" => self.attribute.with_suffixe_trie = true,
+                        _ => (),
+                    }
+                }
+                Ok(())
+            }
+        }
+
         struct FtIndexAttributeVisitor;
 
         impl<'de> Visitor<'de> for FtIndexAttributeVisitor {
@@ -2477,53 +2296,41 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
                 formatter.write_str("FtIndexAttribute")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
-                A: serde::de::SeqAccess<'de>,
+                A: de::MapAccess<'de>,
             {
                 let mut attribute = FtIndexAttribute::default();
 
-                while let Some(field_name) = seq.next_element::<&str>()? {
+                while let Some(field_name) = map.next_key::<&str>()? {
                     match field_name {
                         "identifier" => {
-                            if let Some(identifier) = seq.next_element::<String>()? {
-                                attribute.identifier = identifier;
-                            }
+                            attribute.identifier = map.next_value::<String>()?;
                         }
                         "attribute" => {
-                            if let Some(alias) = seq.next_element::<String>()? {
-                                attribute.attribute = alias;
-                            }
+                            attribute.attribute = map.next_value::<String>()?;
                         }
                         "type" => {
-                            if let Some(field_type) = seq.next_element::<FtFieldType>()? {
-                                attribute.field_type = field_type;
-                            }
+                            attribute.field_type = map.next_value::<FtFieldType>()?;
                         }
                         "WEIGHT" => {
-                            if let Some(weight) = seq.next_element::<f64>()? {
-                                attribute.weight = weight;
-                            }
+                            attribute.weight = map.next_value::<f64>()?;
                         }
-                        "SORTABLE" => attribute.sortable = true,
-                        "UNF" => attribute.unf = true,
-                        "NOSTEM" => attribute.no_stem = true,
-                        "NOINDEX" => attribute.no_index = true,
+                        "flags" => {
+                            map.next_value_seed(FlagsSeed::new(&mut attribute))?;
+                        }
+                        "SEPARATOR" => attribute.separator = Some(map.next_value::<char>()?),
                         "PHONETIC" => {
-                            attribute.phonetic = seq.next_element::<FtPhoneticMatcher>()?
+                            attribute.phonetic = Some(map.next_value::<FtPhoneticMatcher>()?)
                         }
-                        "SEPARATOR" => attribute.separator = seq.next_element::<char>()?,
-                        "CASESENSITIVE" => attribute.case_sensitive = true,
-                        "WITHSUFFIXTRIE" => attribute.with_suffixe_trie = true,
                         _ => (),
                     }
                 }
-
                 Ok(attribute)
             }
         }
 
-        deserializer.deserialize_seq(FtIndexAttributeVisitor)
+        deserializer.deserialize_map(FtIndexAttributeVisitor)
     }
 }
 
@@ -2564,198 +2371,8 @@ pub struct FtIndexDefinition {
     pub score_field: String,
     #[serde(default)]
     pub payload_field: String,
-}
-
-/// Result for the [`ft_profile_search`](SearchCommands::ft_profile_search) command.
-#[derive(Debug, Deserialize)]
-pub struct FtProfileSearchResult {
-    pub results: FtSearchResult,
-    pub profile_details: FtProfileDetails,
-}
-
-/// Result for the [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
-#[derive(Debug, Deserialize)]
-pub struct FtProfileAggregateResult {
-    pub results: FtAggregateResult,
-    pub profile_details: FtProfileDetails,
-}
-
-/// Result details of a [`ft_profile_search`](SearchCommands::ft_profile_search)
-/// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
-#[derive(Debug)]
-pub struct FtProfileDetails {
-    /// The total runtime of the query.
-    pub total_profile_time: f64,
-    /// Parsing time of the query and parameters into an execution plan.
-    pub parsing_time: f64,
-    /// Creation time of execution plan including iterators, result processors and reducers creation.
-    pub pipeline_creation_time: f64,
-    ///  Index iterators information including their type, term, count, and time data.
-    ///
-    /// Inverted-index iterators have in addition the number of elements they contain.
-    /// Hybrid vector iterators returning the top results from the vector index in batches,
-    /// include the number of batches.
-    pub iterators_profile: HashMap<String, Value>,
-    /// Result processors chain with type, count and time data.
-    pub result_processors_profile: Vec<FtResultProcessorsProfile>,
-}
-
-impl<'de> Deserialize<'de> for FtProfileDetails {
-    #[inline]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        enum FtProfileDetailsField {
-            TotalProfileTime(f64),
-            ParsingTime(f64),
-            PipelineCreationTime(f64),
-            IteratorsProfile(HashMap<String, Value>),
-            ResultProcessorsProfile(Vec<FtResultProcessorsProfile>),
-        }
-
-        struct FtProfileDetailsFieldVisitor;
-
-        impl<'de> Visitor<'de> for FtProfileDetailsFieldVisitor {
-            type Value = FtProfileDetailsField;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("FtProfileDetailsField")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                let Some(field) = seq.next_element::<&str>()? else {
-                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
-                };
-
-                match field {
-                    "Total profile time" => {
-                        let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                        };
-                        Ok(FtProfileDetailsField::TotalProfileTime(value))
-                    }
-                    "Parsing time" => {
-                        let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                        };
-                        Ok(FtProfileDetailsField::ParsingTime(value))
-                    }
-                    "Pipeline creation time" => {
-                        let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                        };
-                        Ok(FtProfileDetailsField::PipelineCreationTime(value))
-                    }
-                    "Iterators profile" => {
-                        let Some(value) = seq.next_element()? else {
-                            return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                        };
-                        Ok(FtProfileDetailsField::IteratorsProfile(value))
-                    }
-                    "Result processors profile" => {
-                        let mut results = if let Some(size_hint) = seq.size_hint() {
-                            Vec::with_capacity(size_hint)
-                        } else {
-                            Vec::new()
-                        };
-
-                        while let Some(result) = seq.next_element()? {
-                            results.push(result);
-                        }
-
-                        Ok(FtProfileDetailsField::ResultProcessorsProfile(results))
-                    }
-                    _ => Err(de::Error::unknown_field(field, &[])),
-                }
-            }
-        }
-
-        struct FtProfileDetailsFieldSeed;
-
-        impl<'de> DeserializeSeed<'de> for FtProfileDetailsFieldSeed {
-            type Value = FtProfileDetailsField;
-
-            #[inline]
-            fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                deserializer.deserialize_seq(FtProfileDetailsFieldVisitor)
-            }
-        }
-
-        struct FtProfileDetailsVisitor;
-
-        impl<'de> Visitor<'de> for FtProfileDetailsVisitor {
-            type Value = FtProfileDetails;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("FtProfileDetails")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                let mut total_profile_time = None;
-                let mut parsing_time = None;
-                let mut pipeline_creation_time = None;
-                let mut iterators_profile = None;
-                let mut result_processors_profile = None;
-
-                while let Some(field) = seq.next_element_seed(FtProfileDetailsFieldSeed)? {
-                    match field {
-                        FtProfileDetailsField::TotalProfileTime(v) => total_profile_time = Some(v),
-                        FtProfileDetailsField::ParsingTime(v) => parsing_time = Some(v),
-                        FtProfileDetailsField::PipelineCreationTime(v) => {
-                            pipeline_creation_time = Some(v)
-                        }
-                        FtProfileDetailsField::IteratorsProfile(v) => iterators_profile = Some(v),
-                        FtProfileDetailsField::ResultProcessorsProfile(v) => {
-                            result_processors_profile = Some(v)
-                        }
-                    }
-                }
-
-                let total_profile_time = total_profile_time
-                    .ok_or_else(|| de::Error::missing_field("total_profile_time"))?;
-                let parsing_time =
-                    parsing_time.ok_or_else(|| de::Error::missing_field("parsing_time"))?;
-                let pipeline_creation_time = pipeline_creation_time
-                    .ok_or_else(|| de::Error::missing_field("pipeline_creation_time"))?;
-                let iterators_profile = iterators_profile
-                    .ok_or_else(|| de::Error::missing_field("iterators_profile"))?;
-                let result_processors_profile = result_processors_profile
-                    .ok_or_else(|| de::Error::missing_field("result_processors_profile"))?;
-
-                Ok(FtProfileDetails {
-                    total_profile_time,
-                    parsing_time,
-                    pipeline_creation_time,
-                    iterators_profile,
-                    result_processors_profile,
-                })
-            }
-        }
-
-        deserializer.deserialize_seq(FtProfileDetailsVisitor)
-    }
-}
-
-/// Result processors profile for the [`ft_profile_search`](SearchCommands::ft_profile_search)
-/// or [`ft_profile_aggregate`](SearchCommands::ft_profile_aggregate) command.
-#[derive(Debug, Deserialize)]
-pub struct FtResultProcessorsProfile {
-    #[serde(rename = "Type")]
-    pub _type: String,
-    #[serde(rename = "Time")]
-    pub time: f64,
-    #[serde(rename = "Counter")]
-    pub counter: usize,
+    #[serde(default)]
+    pub indexes_all: String,
 }
 
 /// Options for the [`ft_search`](SearchCommands::ft_search) command.
@@ -3211,7 +2828,7 @@ impl FtSearchHighlightOptions {
 
     /// * `open_tag` - prepended to each term match
     /// * `close_tag` - appended to each term match
-    /// If no `TAGS` are specified, a built-in tag value is appended and prepended.
+    ///   If no `TAGS` are specified, a built-in tag value is appended and prepended.
     #[must_use]
     pub fn tags(mut self, open_tag: impl SingleArg, close_tag: impl SingleArg) -> Self {
         Self {
@@ -3374,52 +2991,126 @@ impl ToArgs for FtTermType {
 }
 
 /// Result for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtSpellCheckResult {
     /// a collection where each element represents a misspelled term from the query + suggestions for this term
     ///
     /// The misspelled terms are ordered by their order of appearance in the query.
+    #[serde(rename = "results", deserialize_with = "deserialize_misspelled_terms")]
     pub misspelled_terms: Vec<FtMisspelledTerm>,
 }
 
-impl<'de> Deserialize<'de> for FtSpellCheckResult {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(FtSpellCheckResult {
-            misspelled_terms: Vec::<FtMisspelledTerm>::deserialize(deserializer)?,
-        })
-    }
-}
-
 /// Misspelled term + suggestions for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FtMisspelledTerm {
     /// Misspelled term
     pub misspelled_term: String,
     /// Suggestion as a tuple composed of
+    /// * the suggestion
     /// * the score of the suggestion
-    /// * the suggestion itself
-    pub suggestions: Vec<(f64, String)>,
+    pub suggestions: Vec<(String, f64)>,
 }
 
-impl<'de> Deserialize<'de> for FtMisspelledTerm {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (field_name, misspelled_term, suggestions) =
-            <(String, String, Vec<(f64, String)>)>::deserialize(deserializer)?;
-        if field_name != "TERM" {
-            return Err(de::Error::unknown_field(field_name.as_str(), &["TERM"]));
+fn deserialize_misspelled_terms<'de, D>(deserializer: D) -> Result<Vec<FtMisspelledTerm>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct SuggestionSeed;
+
+    impl<'de> DeserializeSeed<'de> for SuggestionSeed {
+        type Value = (String, f64);
+
+        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct Visitor;
+
+            impl<'de> de::Visitor<'de> for Visitor {
+                type Value = (String, f64);
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a (String, f64)")
+                }
+
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: de::MapAccess<'de>,
+                {
+                    let Some(suggestion) = map.next_entry()? else {
+                        return Err(de::Error::custom("Cannot parse misspelled terms"));
+                    };
+
+                    Ok(suggestion)
+                }
+            }
+
+            deserializer.deserialize_map(Visitor)
+        }
+    }
+
+    struct SuggestionsSeed;
+
+    impl<'de> DeserializeSeed<'de> for SuggestionsSeed {
+        type Value = Vec<(String, f64)>;
+
+        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct Visitor;
+
+            impl<'de> de::Visitor<'de> for Visitor {
+                type Value = Vec<(String, f64)>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a Vec<(String, f64)>")
+                }
+
+                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: de::SeqAccess<'de>,
+                {
+                    let mut suggestions = Vec::with_capacity(seq.size_hint().unwrap_or_default());
+                    while let Some(suggestion) = seq.next_element_seed(SuggestionSeed)? {
+                        suggestions.push(suggestion);
+                    }
+
+                    Ok(suggestions)
+                }
+            }
+
+            deserializer.deserialize_seq(Visitor)
+        }
+    }
+
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = Vec<FtMisspelledTerm>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("an array of FtMisspelledTerm")
         }
 
-        Ok(FtMisspelledTerm {
-            misspelled_term,
-            suggestions,
-        })
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::MapAccess<'de>,
+        {
+            let mut result = Vec::with_capacity(map.size_hint().unwrap_or_default());
+            while let Some(misspelled_term) = map.next_key()? {
+                let suggestions = map.next_value_seed(SuggestionsSeed)?;
+                result.push(FtMisspelledTerm {
+                    misspelled_term,
+                    suggestions,
+                });
+            }
+
+            Ok(result)
+        }
     }
+
+    deserializer.deserialize_map(Visitor)
 }
 
 /// Options for the [`ft_sugadd`](SearchCommands::ft_sugadd) command.

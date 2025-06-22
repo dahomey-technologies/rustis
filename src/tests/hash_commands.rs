@@ -1,7 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime},
+};
 
 use crate::{
-    commands::{GenericCommands, HScanOptions, HScanResult, HashCommands},
+    commands::{
+        ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult,
+        HSetExCondition, HashCommands, ServerCommands, SetExpiration,
+    },
     tests::get_test_client,
     Result,
 };
@@ -25,6 +31,175 @@ async fn hdel() -> Result<()> {
 
     let len = client.hdel("key", "field").await?;
     assert_eq!(0, len);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hexpire() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    // no option
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hexpire("key", 10, ExpireOption::None, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+
+    // xx
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Xx, "field").await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![-1]
+    );
+
+    // nx
+    let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Nx, "field").await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+
+    // gt
+    let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Gt, "field").await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+    let result: Vec<i64> = client.hexpire("key", 15, ExpireOption::Gt, "field").await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![15]
+    );
+
+    // lt
+    let result: Vec<i64> = client.hexpire("key", 20, ExpireOption::Lt, "field").await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![15]
+    );
+    let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Lt, "field").await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![5]
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hexpireat() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .unwrap()
+        .as_secs();
+
+    // no option
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 10, ExpireOption::None, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+
+    // xx
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 10, ExpireOption::Xx, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![-1]
+    );
+
+    // nx
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 10, ExpireOption::Nx, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+
+    // gt
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 5, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![10]
+    );
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 15, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![15]
+    );
+
+    // lt
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 20, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![15]
+    );
+    let result: Vec<i64> = client
+        .hexpireat("key", now + 5, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(
+        client.httl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![5]
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hexpiretime() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hexpireat("key", 33177117420, ExpireOption::default(), "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    let time: Vec<i64> = client.hexpiretime("key", "field").await?;
+    assert_eq!(time, vec![33177117420]);
 
     Ok(())
 }
@@ -63,6 +238,71 @@ async fn hget() -> Result<()> {
     client.hset("key", ("field", "value")).await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hgetdel() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .hset(
+            "key",
+            [("field1", "Hello"), ("field2", "World"), ("field3", "!")],
+        )
+        .await?;
+    let values: Vec<Option<String>> = client.hgetdel("key", ["field3", "field4"]).await?;
+    assert_eq!(values, vec![Some("!".to_string()), None]);
+
+    let result: Vec<(String, String)> = client.hgetall("key").await?;
+    assert_eq!(
+        result,
+        vec![
+            ("field1".to_string(), "Hello".to_string()),
+            ("field2".to_string(), "World".to_string())
+        ]
+    );
+
+    let values: Vec<String> = client.hgetdel("key", ["field1", "field2"]).await?;
+    assert_eq!(values, vec!["Hello".to_string(), "World".to_string()]);
+
+    let result = client.exists("key").await?;
+    assert_eq!(result, 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hgetex() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .hset("key", [("field1", "Hello"), ("field2", "World")])
+        .await?;
+
+    let values: [String; 1] = client
+        .hgetex("key", GetExOptions::Ex(120), "field1")
+        .await?;
+    assert_eq!(values, ["Hello".to_string()]);
+
+    let values: [String; 1] = client
+        .hgetex("key", GetExOptions::Ex(100), "field2")
+        .await?;
+    assert_eq!(values, ["World".to_string()]);
+
+    let result: [i64; 3] = client.httl("key", ["field1", "field2", "field3"]).await?;
+    assert_eq!(result, [120, 100, -2]);
 
     Ok(())
 }
@@ -190,6 +430,151 @@ async fn hmget() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn hpexpire() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    // no option
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hpexpire("key", 10000, ExpireOption::None, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+
+    // xx
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hpexpire("key", 10000, ExpireOption::Xx, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.hpttl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![-1]
+    );
+
+    // nx
+    let result: Vec<i64> = client
+        .hpexpire("key", 10000, ExpireOption::Nx, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+
+    // gt
+    let result: Vec<i64> = client
+        .hpexpire("key", 5000, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+    let result: Vec<i64> = client
+        .hpexpire("key", 15000, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 15000);
+
+    // lt
+    let result: Vec<i64> = client
+        .hpexpire("key", 20000, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 15000);
+    let result: Vec<i64> = client
+        .hpexpire("key", 5000, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 5000);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hpexpireat() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .unwrap()
+        .as_millis() as u64;
+
+    // no option
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 10000, ExpireOption::None, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+
+    // xx
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 10000, ExpireOption::Xx, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert_eq!(
+        client.hpttl::<_, _, _, Vec<_>>("key", "field").await?,
+        vec![-1]
+    );
+
+    // nx
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 10000, ExpireOption::Nx, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+
+    // gt
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 5000, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 10000);
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 15000, ExpireOption::Gt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 15000);
+
+    // lt
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 20000, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![0]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 15000);
+    let result: Vec<i64> = client
+        .hpexpireat("key", now + 5000, ExpireOption::Lt, "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    assert!(client.hpttl::<_, _, _, Vec<_>>("key", "field").await?[0] <= 5000);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hpexpiretime() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.hset("key", ("field", "value")).await?;
+    let result: Vec<i64> = client
+        .hpexpireat("key", 33177117420000, ExpireOption::default(), "field")
+        .await?;
+    assert_eq!(result, vec![1]);
+    let time: Vec<i64> = client.hpexpiretime("key", "field").await?;
+    assert_eq!(time, vec![33177117420000]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn hrandfield() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -262,6 +647,142 @@ async fn hscan() -> Result<()> {
         ("field4".to_owned(), "value4".to_owned()),
         result.elements[3]
     );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hsetex() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // EX
+    client
+        .hsetex(
+            "key",
+            Default::default(),
+            SetExpiration::Ex(1),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    let value: String = client.hget("key", "field").await?;
+    assert_eq!("value", value);
+
+    let ttl: Vec<i64> = client.hpttl("key", "field").await?;
+    assert!(ttl[0] <= 1000);
+
+    // PX
+    client
+        .hsetex(
+            "key",
+            Default::default(),
+            SetExpiration::Px(1000),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    let value: String = client.hget("key", "field").await?;
+    assert_eq!("value", value);
+
+    let ttl: Vec<i64> = client.hpttl("key", "field").await?;
+    assert!(ttl[0] <= 1000);
+
+    // EXAT
+    let time = SystemTime::now()
+        .checked_add(Duration::from_secs(1))
+        .unwrap()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .unwrap()
+        .as_secs();
+    client
+        .hsetex(
+            "key",
+            Default::default(),
+            SetExpiration::Exat(time),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    let value: String = client.hget("key", "field").await?;
+    assert_eq!("value", value);
+
+    let ttl: Vec<i64> = client.hpttl("key", "field").await?;
+    assert!(ttl[0] <= 1000);
+
+    // PXAT
+    let time = SystemTime::now()
+        .checked_add(Duration::from_secs(1))
+        .unwrap()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .unwrap()
+        .as_millis();
+    client
+        .hsetex(
+            "key",
+            Default::default(),
+            SetExpiration::Pxat(time as u64),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    let value: String = client.hget("key", "field").await?;
+    assert_eq!("value", value);
+
+    let ttl: Vec<i64> = client.hpttl("key", "field").await?;
+    assert!(ttl[0] <= 1000);
+
+    // FNX
+    client.del("key").await?;
+    let result = client
+        .hsetex(
+            "key",
+            HSetExCondition::FNX,
+            Default::default(),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    assert!(result);
+    let result = client
+        .hsetex(
+            "key",
+            HSetExCondition::FNX,
+            Default::default(),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    assert!(!result);
+
+    // FXX
+    client.del("key").await?;
+    let result = client
+        .hsetex(
+            "key",
+            HSetExCondition::FXX,
+            Default::default(),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    assert!(!result);
+    client.hset("key", ("field", "value")).await?;
+    let result = client
+        .hsetex(
+            "key",
+            HSetExCondition::FXX,
+            Default::default(),
+            false,
+            ("field", "value"),
+        )
+        .await?;
+    assert!(result);
+
+    client.close().await?;
 
     Ok(())
 }

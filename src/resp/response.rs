@@ -40,6 +40,7 @@ where
 }
 
 impl<T> CollectionResponse<T> for () where T: Response + DeserializeOwned {}
+impl<T> CollectionResponse<T> for [T; 1] where T: Response + DeserializeOwned {}
 impl<T> CollectionResponse<T> for [T; 2] where T: Response + DeserializeOwned {}
 impl<T> CollectionResponse<T> for [T; 3] where T: Response + DeserializeOwned {}
 impl<T> CollectionResponse<T> for [T; 4] where T: Response + DeserializeOwned {}

@@ -1,6 +1,7 @@
 use crate::{
     commands::{
-        GenericCommands, GetExOptions, LcsMatch, SetCondition, SetExpiration, StringCommands,
+        FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
+        SetExpiration, StringCommands,
     },
     resp::Value,
     tests::get_test_client,
@@ -14,6 +15,8 @@ use std::time::{Duration, SystemTime};
 #[serial]
 async fn append() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
 
@@ -33,6 +36,8 @@ async fn append() -> Result<()> {
 #[serial]
 async fn decr() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     // cleanup
     client.del("key").await?;
@@ -67,6 +72,8 @@ async fn decr() -> Result<()> {
 async fn decrby() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     // cleanup
     client.del("key").await?;
 
@@ -100,6 +107,8 @@ async fn decrby() -> Result<()> {
 async fn get_and_set() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     // cleanup
     client.del("key").await?;
 
@@ -117,6 +126,8 @@ async fn get_and_set() -> Result<()> {
 #[serial]
 async fn get_ex() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Ex(1)).await?;
@@ -136,6 +147,8 @@ async fn get_ex() -> Result<()> {
 async fn get_pex() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Px(1000)).await?;
     assert_eq!("value", value);
@@ -153,6 +166,8 @@ async fn get_pex() -> Result<()> {
 #[serial]
 async fn get_exat() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "value").await?;
 
@@ -180,6 +195,8 @@ async fn get_exat() -> Result<()> {
 async fn get_pxat() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.set("key", "value").await?;
 
     let time = SystemTime::now()
@@ -206,6 +223,8 @@ async fn get_pxat() -> Result<()> {
 async fn get_persist() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.set("key", "value").await?;
     let value: String = client.getex("key", GetExOptions::Ex(1)).await?;
     assert_eq!("value", value);
@@ -226,6 +245,8 @@ async fn get_persist() -> Result<()> {
 #[serial]
 async fn getrange() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("mykey", "This is a string").await?;
 
@@ -249,6 +270,8 @@ async fn getrange() -> Result<()> {
 async fn getset() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.set("key", "value").await?;
 
     let value: String = client.getset("key", "newvalue").await?;
@@ -269,6 +292,8 @@ async fn getset() -> Result<()> {
 #[serial]
 async fn incr() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     // cleanup
     client.del("key").await?;
@@ -303,6 +328,8 @@ async fn incr() -> Result<()> {
 async fn incrby() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     // cleanup
     client.del("key").await?;
 
@@ -336,6 +363,8 @@ async fn incrby() -> Result<()> {
 async fn incrbyfloat() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     // cleanup
     client.del("key").await?;
 
@@ -362,6 +391,8 @@ async fn incrbyfloat() -> Result<()> {
 #[serial]
 async fn lcs() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     // cleanup
     client.del(["key1", "key2"]).await?;
@@ -404,6 +435,8 @@ async fn lcs() -> Result<()> {
 async fn mget_mset() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
 
@@ -428,6 +461,8 @@ async fn mget_mset() -> Result<()> {
 #[serial]
 async fn msetnx() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     // cleanup
     client.del(["key1", "key2", "key3", "key4"]).await?;
@@ -465,6 +500,8 @@ async fn msetnx() -> Result<()> {
 async fn psetex() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.psetex("key", 1000, "value").await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -482,6 +519,8 @@ async fn psetex() -> Result<()> {
 #[serial]
 async fn set_with_options() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     // EX
     client
@@ -621,6 +660,8 @@ async fn set_with_options() -> Result<()> {
 async fn setex() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.setex("key", 1, "value").await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -640,7 +681,7 @@ async fn setnx() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     let result = client.setnx("key", "value").await?;
     let value: String = client.get("key").await?;
@@ -664,7 +705,7 @@ async fn setrange() -> Result<()> {
     let client = get_test_client().await?;
 
     // cleanup
-    client.del("key").await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("key", "Hello World").await?;
 
@@ -685,6 +726,8 @@ async fn setrange() -> Result<()> {
 async fn strlen() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.flushall(FlushingMode::Sync).await?;
+
     client.set("key", "Hello World").await?;
 
     let len = client.strlen("key").await?;
@@ -703,6 +746,8 @@ async fn strlen() -> Result<()> {
 #[serial]
 async fn substr() -> Result<()> {
     let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
 
     client.set("mykey", "This is a string").await?;
 

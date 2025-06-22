@@ -1,8 +1,8 @@
 use crate::{
     client::{prepare_command, PreparedCommand},
     resp::{
-        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, SingleArg, SingleArgCollection,
-        ToArgs,
+        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, KeyValueCollectionResponse,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
     },
 };
 use serde::Deserialize;
@@ -82,11 +82,11 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info(
+    fn bf_info<N: PrimitiveResponse, R: KeyValueCollectionResponse<N, usize>>(
         self,
         key: impl SingleArg,
         param: BfInfoParameter,
-    ) -> PreparedCommand<'a, Self, usize>
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -226,13 +226,13 @@ pub trait BloomCommands<'a> {
     /// # Arguments
     /// * `key` - The key under which the filter is found
     /// * `error_rate` - The desired probability for false positives.
-    ///  The rate is a decimal value between 0 and 1.
-    ///  For example, for a desired false positive rate of 0.1% (1 in 1000),
-    ///  error_rate should be set to 0.001.
+    ///   The rate is a decimal value between 0 and 1.
+    ///   For example, for a desired false positive rate of 0.1% (1 in 1000),
+    ///   error_rate should be set to 0.001.
     /// * `capacity` - The number of entries intended to be added to the filter.
-    ///  If your filter allows scaling, performance will begin to degrade after adding more items than this number.
-    ///  The actual degradation depends on how far the limit has been exceeded.
-    ///  Performance degrades linearly with the number of `sub-filters`.
+    ///   If your filter allows scaling, performance will begin to degrade after adding more items than this number.
+    ///   The actual degradation depends on how far the limit has been exceeded.
+    ///   Performance degrades linearly with the number of `sub-filters`.
     /// * `options` - See [`BfReserveOptions`](BfReserveOptions)
     ///
     /// # See Also
@@ -265,7 +265,7 @@ pub trait BloomCommands<'a> {
     /// # Arguments
     /// * `key` - Name of the filter
     /// * `iterator` - Iterator value; either 0 or the iterator from a previous invocation of this command.\
-    ///  The first time this command is called, the value of `iterator` should be 0.
+    ///   The first time this command is called, the value of `iterator` should be 0.
     ///
     /// # Return
     /// This command returns successive `(iterator, data)` pairs until `(0, vec![])` to indicate completion.

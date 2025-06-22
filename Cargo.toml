@@ -35,18 +35,7 @@ async-std-tls = [
 ]
 pool = ["bb8"]
 tls = ["native-tls"]
-redis-json = []
-redis-search = []
 redis-graph = []
-redis-bloom = []
-redis-time-series = []
-redis-stack = [
-    "redis-json",
-    "redis-search",
-    "redis-graph",
-    "redis-bloom",
-    "redis-time-series"
-]
 
 [dependencies]
 async-std = { version = "1.13", features = ["attributes"], optional = true }
@@ -85,7 +74,7 @@ axum = "0.8"
 actix-web = "4.11"
 
 [package.metadata.docs.rs]
-features = ["tokio-runtime", "tokio-tls", "redis-stack", "pool"]
+features = ["tokio-runtime", "tokio-tls", "pool"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[bench]]
@@ -112,3 +101,8 @@ name = "cbor"
 
 [[example]]
 name = "axum_crud"
+
+[profile.dev]
+opt-level = 0
+debug = true
+split-debuginfo = "packed"

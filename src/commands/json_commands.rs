@@ -2,8 +2,8 @@ use crate::{
     client::{prepare_command, PreparedCommand},
     commands::SetCondition,
     resp::{
-        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
-        ToArgs, Value,
+        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, Response, SingleArg,
+        SingleArgCollection, ToArgs, Value,
     },
 };
 use serde::de::DeserializeOwned;
@@ -90,9 +90,9 @@ pub trait JsonCommands<'a> {
     /// * `key` - The key to modify.
     /// * `path`- The JSONPath to specify.
     /// * `index`- The position in the array where you want to insert a value.
-    ///  The index must be in the array's range.
-    ///  Inserting at index 0 prepends to the array.
-    ///  Negative index values start from the end of the array.
+    ///   The index must be in the array's range.
+    ///   Inserting at index 0 prepends to the array.
+    ///   Negative index values start from the end of the array.
     /// * `values` - one or more values to insert in one or more arrays.
     ///
     /// # Return
@@ -157,9 +157,9 @@ pub trait JsonCommands<'a> {
     /// * `key` - The key to modify.
     /// * `path`- The JSONPath to specify.
     /// * `index`- is position in the array to start popping from.
-    ///  Default is -1, meaning the last element.
-    ///  Out-of-range indexes round to their respective array ends.
-    ///  Popping an empty array returns null.
+    ///   Default is -1, meaning the last element.
+    ///   Out-of-range indexes round to their respective array ends.
+    ///   Popping an empty array returns null.
     ///
     /// # Return
     /// A collection of bulk string replies for each path, each reply is the popped JSON value,
@@ -191,7 +191,7 @@ pub trait JsonCommands<'a> {
     /// * `path`- The JSONPath to specify.
     /// * `start`- The index of the first element to keep (previous elements are trimmed).
     /// * `stop` - the index of the last element to keep (following elements are trimmed), including the last element.
-    ///  Negative values are interpreted as starting from the end.
+    ///   Negative values are interpreted as starting from the end.
     ///
     /// # Return
     /// A collection of integer replies for each path, the array's new size,
@@ -363,13 +363,19 @@ pub trait JsonCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/json.numincrby/>](https://redis.io/commands/json.numincrby/)
     #[must_use]
-    fn json_numincrby<K, P, V, R>(self, key: K, path: P, value: V) -> PreparedCommand<'a, Self, R>
+    fn json_numincrby<K, P, V, R, RR>(
+        self,
+        key: K,
+        path: P,
+        value: V,
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: PrimitiveResponse,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
     {
         prepare_command(self, cmd("JSON.NUMINCRBY").arg(key).arg(path).arg(value))
     }
@@ -388,13 +394,19 @@ pub trait JsonCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/json.nummultby/>](https://redis.io/commands/json.nummultby/)
     #[must_use]
-    fn json_nummultby<K, P, V, R>(self, key: K, path: P, value: V) -> PreparedCommand<'a, Self, R>
+    fn json_nummultby<K, P, V, R, RR>(
+        self,
+        key: K,
+        path: P,
+        value: V,
+    ) -> PreparedCommand<'a, Self, RR>
     where
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
         V: SingleArg,
-        R: PrimitiveResponse,
+        R: PrimitiveResponse + DeserializeOwned,
+        RR: CollectionResponse<R>,
     {
         prepare_command(self, cmd("JSON.NUMMULTBY").arg(key).arg(path).arg(value))
     }
@@ -464,7 +476,7 @@ pub trait JsonCommands<'a> {
     /// * JSON string maps to the bulk string reply.
     /// * JSON array is represented as an array reply in which the first element is the simple string reply `[`, followed by the array's elements.
     /// * JSON object is represented as an array reply in which the first element is the simple string reply `{`.
-    ///  Each successive entry represents a key-value pair as a two-entry array reply of the bulk string reply.
+    ///   Each successive entry represents a key-value pair as a two-entry array reply of the bulk string reply.
     ///
     /// # See Also
     /// [<https://redis.io/commands/json.resp/>](https://redis.io/commands/json.resp/)
@@ -484,9 +496,9 @@ pub trait JsonCommands<'a> {
     /// # Arguments
     /// * `key` - The key to modify.
     /// * `path` - JSONPath to specify.\
-    ///  For new Redis keys the path must be the root.\
-    ///  For existing keys, when the entire path exists, the value that it contains is replaced with the json value.\
-    ///  For existing keys, when the path exists, except for the last element, a new child is added with the json value.
+    ///   For new Redis keys the path must be the root.\
+    ///   For existing keys, when the entire path exists, the value that it contains is replaced with the json value.\
+    ///   For existing keys, when the path exists, except for the last element, a new child is added with the json value.
     /// * `value`- The value to set at the specified path
     /// * `condition`- See [`SetCondition`](crate::commands::SetCondition)
     ///
@@ -599,7 +611,7 @@ pub trait JsonCommands<'a> {
         Self: Sized,
         K: SingleArg,
         P: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
+        R: Response + DeserializeOwned,
         RR: CollectionResponse<R>,
     {
         prepare_command(self, cmd("JSON.TYPE").arg(key).arg(path))

@@ -3,7 +3,7 @@ use crate::{
         BfInfoParameter, BfInsertOptions, BfReserveOptions, BfScanDumpResult, BloomCommands,
         FlushingMode, ServerCommands,
     },
-    tests::get_redis_stack_test_client,
+    tests::get_test_client,
     Result,
 };
 use serial_test::serial;
@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_add() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.bf_add("key", "item").await?;
@@ -29,7 +29,7 @@ async fn bf_add() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_exists() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.bf_exists("key", "item").await?;
@@ -48,17 +48,18 @@ async fn bf_exists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_info() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client.bf_add("key", "item1").await?;
     client.bf_add("key", "item2").await?;
     client.bf_add("key", "item3").await?;
 
-    let result = client
+    let result: Vec<(String, usize)> = client
         .bf_info("key", BfInfoParameter::NumItemsInserted)
         .await?;
-    assert_eq!(3, result);
+    assert_eq!(1, result.len());
+    assert_eq!(3, result[0].1);
 
     let result = client.bf_info_all("key").await?;
     assert_eq!(3, result.num_items_inserted);
@@ -71,7 +72,7 @@ async fn bf_info() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_insert() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let results: Vec<bool> = client
@@ -100,7 +101,7 @@ async fn bf_insert() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_madd() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let results: Vec<bool> = client.bf_madd("filter", ["item1", "item2"]).await?;
@@ -116,7 +117,7 @@ async fn bf_madd() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_mexists() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     let results: [bool; 2] = client.bf_madd("filter", ["item1", "item2"]).await?;
@@ -134,7 +135,7 @@ async fn bf_mexists() -> Result<()> {
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn bf_reserve_loadchunk_scandump() -> Result<()> {
-    let client = get_redis_stack_test_client().await?;
+    let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
 
     client

@@ -1,14 +1,8 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
-#[cfg(feature = "redis-json")]
-use crate::commands::JsonCommands;
-#[cfg(feature = "redis-search")]
-use crate::commands::SearchCommands;
-#[cfg(feature = "redis-time-series")]
-use crate::commands::TimeSeriesCommands;
-#[cfg(feature = "redis-bloom")]
 use crate::commands::{
-    BloomCommands, CountMinSketchCommands, CuckooCommands, TDigestCommands, TopKCommands,
+    BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
+    TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
 };
 use crate::{
     client::{Client, PreparedCommand},
@@ -146,16 +140,10 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipel
 }
 
 impl<'a> BitmapCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> BloomCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> ClusterCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> ConnectionCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CountMinSketchCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> CuckooCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> GenericCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> GeoCommands<'a> for &'a mut Pipeline<'_> {}
@@ -164,12 +152,8 @@ impl<'a> GeoCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> GraphCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> HashCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> HyperLogLogCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-json")))]
-#[cfg(feature = "redis-json")]
 impl<'a> JsonCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> ListCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-search")))]
-#[cfg(feature = "redis-search")]
 impl<'a> SearchCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> SetCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> ScriptingCommands<'a> for &'a mut Pipeline<'_> {}
@@ -177,12 +161,7 @@ impl<'a> ServerCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> SortedSetCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> StreamCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> StringCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-time-series")))]
-#[cfg(feature = "redis-time-series")]
 impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-bloom")))]
-#[cfg(feature = "redis-bloom")]
 impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
+impl<'a> VectorSetCommands<'a> for &'a Pipeline<'_> {}

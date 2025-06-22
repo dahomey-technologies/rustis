@@ -830,6 +830,12 @@ async fn zrank() -> Result<()> {
     let len = client.zrank("key", "four").await?;
     assert_eq!(None, len);
 
+    let len = client.zrank_with_score("key", "three").await?;
+    assert_eq!(Some((2, 3.0)), len);
+
+    let len = client.zrank_with_score("key", "four").await?;
+    assert_eq!(None, len);
+
     Ok(())
 }
 
@@ -956,6 +962,12 @@ async fn zrevrank() -> Result<()> {
     assert_eq!(Some(2), len);
 
     let len = client.zrevrank("key", "four").await?;
+    assert_eq!(None, len);
+
+    let len = client.zrevrank_with_score("key", "one").await?;
+    assert_eq!(Some((2, 1.0)), len);
+
+    let len = client.zrevrank_with_score("key", "four").await?;
     assert_eq!(None, len);
 
     Ok(())

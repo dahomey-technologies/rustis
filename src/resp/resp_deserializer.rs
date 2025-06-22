@@ -266,12 +266,15 @@ impl<'de> RespDeserializer<'de> {
                 if len == 1 && self.next()? == INTEGER_TAG {
                     self.parse_integer::<T>()
                 } else {
-                    Err(Error::Client("Cannot parse number".to_owned()))
+                    Err(Error::Client("Cannot parse number from array".to_owned()))
                 }
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client("Cannot parse number".to_owned())),
+            _tag => Err(Error::Client(format!(
+                "Cannot parse number from `{}`",
+                _tag as char
+            ))),
         }
     }
 
@@ -786,7 +789,16 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client("Cannot parse map".to_owned())),
+            SIMPLE_STRING_TAG => {
+                let str = self.parse_string()?;
+                Err(Error::Client(format!(
+                    "Cannot parse map from simple string `{str}`"
+                )))
+            }
+            _c => Err(Error::Client(format!(
+                "Cannot parse map from {}",
+                _c as char
+            ))),
         }
     }
 

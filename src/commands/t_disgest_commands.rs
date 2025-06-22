@@ -125,10 +125,10 @@ pub trait TDigestCommands<'a> {
     /// # Arguments
     /// * `key` - key name for this new t-digest sketch.
     /// * `compression` - controllable tradeoff between accuracy and memory consumption. \
-    ///  100 is a common value for normal uses. 1000 is more accurate. \
-    ///  If no value is passed by default the compression will be 100. \
-    ///  For more information on scaling of accuracy versus the compression parameter,\
-    ///  see [`The t-digest: Efficient estimates of distributions`](https://www.sciencedirect.com/science/article/pii/S2665963820300403).
+    ///   100 is a common value for normal uses. 1000 is more accurate. \
+    ///   If no value is passed by default the compression will be 100. \
+    ///   For more information on scaling of accuracy versus the compression parameter,\
+    ///   see [`The t-digest: Efficient estimates of distributions`](https://www.sciencedirect.com/science/article/pii/S2665963820300403).
     ///
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.create/>](https://redis.io/commands/tdigest.create/)
@@ -192,7 +192,7 @@ pub trait TDigestCommands<'a> {
     /// * `destination` - key name for a t-digest sketch to merge observation values to.
     ///   * If `destination` not exist, a new sketch is created.
     ///   * If `destination` is an existing sketch, its values are merged with the values of the source keys.\
-    ///    To override the destination key contents use [`override`](TDigestMergeOptions::_override).
+    ///     To override the destination key contents use [`override`](TDigestMergeOptions::_override).
     /// * `sources` - collection of key names for t-digest sketches to merge observation values from.
     ///
     /// # See Also
@@ -356,11 +356,11 @@ pub trait TDigestCommands<'a> {
     /// # Arguments
     /// * `key` - key name for an existing t-digest sketch.
     /// * `low_cut_quantile` - Foating-point value in the range [0..1], should be lower than `high_cut_quantile` \
-    ///    When equal to 0: No low cut. \
-    ///    When higher than 0: Exclude observation values lower than this quantile.
+    ///   When equal to 0: No low cut. \
+    ///   When higher than 0: Exclude observation values lower than this quantile.
     /// * `high_cut_quantile` - Floating-point value in the range [0..1], should be higher than `low_cut_quantile` \
-    ///    When lower than 1: Exclude observation values higher than or equal to this quantile. \
-    ///    When equal to 1: No high cut.
+    ///   When lower than 1: Exclude observation values higher than or equal to this quantile. \
+    ///   When equal to 1: No high cut.
     ///
     /// # Return
     /// estimation of the mean value. 'nan' if the sketch is empty.

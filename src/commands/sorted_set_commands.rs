@@ -605,6 +605,29 @@ pub trait SortedSetCommands<'a> {
         prepare_command(self, cmd("ZRANK").arg(key).arg(member))
     }
 
+    /// Returns the rank of member in the sorted set stored at key,
+    /// with the scores ordered from low to high.
+    ///
+    /// # Return
+    /// * If member exists in the sorted set, the rank of member and its score
+    /// * If member does not exist in the sorted set or key does not exist, None.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
+    #[must_use]
+    fn zrank_with_score<K, M>(
+        self,
+        key: K,
+        member: M,
+    ) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
+    where
+        Self: Sized,
+        K: SingleArg,
+        M: SingleArg,
+    {
+        prepare_command(self, cmd("ZRANK").arg(key).arg(member).arg("WITHSCORE"))
+    }
+
     /// Removes the specified members from the sorted set stored at key.
     ///
     /// # Return
@@ -697,6 +720,28 @@ pub trait SortedSetCommands<'a> {
         M: SingleArg,
     {
         prepare_command(self, cmd("ZREVRANK").arg(key).arg(member))
+    }
+
+    /// Returns the rank of member in the sorted set stored at key, with the scores ordered from high to low.
+    ///
+    /// # Return
+    /// * If member exists in the sorted set, the rank of member and its score.
+    /// * If member does not exist in the sorted set or key does not exist, None.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/zrevrank/>](https://redis.io/commands/zrevrank/)
+    #[must_use]
+    fn zrevrank_with_score<K, M>(
+        self,
+        key: K,
+        member: M,
+    ) -> PreparedCommand<'a, Self, Option<(usize, f64)>>
+    where
+        Self: Sized,
+        K: SingleArg,
+        M: SingleArg,
+    {
+        prepare_command(self, cmd("ZREVRANK").arg(key).arg(member).arg("WITHSCORE"))
     }
 
     /// Iterates elements of Sorted Set types and their associated scores.

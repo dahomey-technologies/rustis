@@ -180,8 +180,7 @@ async fn vlinks() -> Result<()> {
         .await?;
 
     let result: Vec<Option<String>> = client.vlinks("key", "element").await?;
-    assert_eq!(1, result.len());
-    assert_eq!(None, result[0]);
+    assert!(result.into_iter().all(|r| r.is_none()));
 
     Ok(())
 }

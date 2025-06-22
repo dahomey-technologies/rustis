@@ -157,7 +157,7 @@ impl Client {
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
-    /// 
+    ///
     ///     client.flushall(FlushingMode::Sync).await?;
     ///
     ///     client

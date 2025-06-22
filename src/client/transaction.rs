@@ -3,13 +3,11 @@ use crate::commands::GraphCommands;
 use crate::{
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
-        BitmapCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
-        ListCommands, ScriptingCommands, ServerCommands, SetCommands, SortedSetCommands,
-        StreamCommands, StringCommands,
-    },
-    commands::{
-        BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-        TDigestCommands, TimeSeriesCommands, TopKCommands,
+        BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
+        GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands, ListCommands,
+        ScriptingCommands, SearchCommands, ServerCommands, SetCommands, SortedSetCommands,
+        StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
+        VectorSetCommands,
     },
     resp::{cmd, Command, RespDeserializer, Response},
     Error, Result,
@@ -290,3 +288,4 @@ impl<'a> StringCommands<'a> for &'a mut Transaction {}
 impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
 impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
 impl<'a> TopKCommands<'a> for &'a mut Transaction {}
+impl<'a> VectorSetCommands<'a> for &'a Transaction {}

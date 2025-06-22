@@ -47,5 +47,6 @@ mod value;
 mod value_deserialize;
 mod value_deserializer;
 mod value_serialize;
+mod vector_sets;
 
 pub(crate) use util::*;

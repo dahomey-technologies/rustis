@@ -8,14 +8,12 @@ use crate::{
         Pipeline, PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
-        BitmapCommands, BlockingCommands, ClusterCommands, ConnectionCommands, GenericCommands,
-        GeoCommands, HashCommands, HyperLogLogCommands, InternalPubSubCommands, ListCommands,
-        PubSubCommands, ScriptingCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands,
-    },
-    commands::{
-        BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-        TDigestCommands, TimeSeriesCommands, TopKCommands,
+        BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
+        CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
+        HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
+        ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+        TopKCommands, TransactionCommands, VectorSetCommands,
     },
     network::{
         timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
@@ -449,6 +447,7 @@ impl<'a> TDigestCommands<'a> for &'a Client {}
 impl<'a> TimeSeriesCommands<'a> for &'a Client {}
 impl<'a> TransactionCommands<'a> for &'a Client {}
 impl<'a> TopKCommands<'a> for &'a Client {}
+impl<'a> VectorSetCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]

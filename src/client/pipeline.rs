@@ -2,7 +2,7 @@
 use crate::commands::GraphCommands;
 use crate::commands::{
     BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-    TDigestCommands, TimeSeriesCommands, TopKCommands,
+    TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
 };
 use crate::{
     client::{Client, PreparedCommand},
@@ -164,3 +164,4 @@ impl<'a> StringCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
+impl<'a> VectorSetCommands<'a> for &'a Pipeline<'_> {}

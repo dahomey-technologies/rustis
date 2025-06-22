@@ -29,6 +29,7 @@ These is the list of existing command traits:
 * [`SortedSetCommands`](crate::commands::SortedSetCommands): [Sorted sets](https://redis.io/docs/data-types/sorted-sets/)
 * [`StreamCommands`](crate::commands::StreamCommands): [Streams](https://redis.io/docs/data-types/streams/)
 * [`StringCommands`](crate::commands::StringCommands): [Strings](https://redis.io/docs/data-types/strings/)
+* [`VectorSetCommands`](crate::commands::VectorSetCommands): [Vector sets](https://redis.io/docs/data-types/vector-sets/)
 * [`TransactionCommands`](crate::commands::TransactionCommands): [Transactions](https://redis.io/docs/manual/transactions/)
 * [`BloomCommands`](crate::commands::BloomCommands): [Bloom filters](https://redis.io/docs/stack/bloom/)
 * [`CuckooCommands`](crate::commands::CuckooCommands): [Cuckoo filters](https://redis.io/docs/stack/bloom/)
@@ -118,6 +119,7 @@ mod t_disgest_commands;
 mod time_series_commands;
 mod top_k_commands;
 mod transaction_commands;
+mod vector_set;
 
 pub use bitmap_commands::*;
 pub use blocking_commands::*;
@@ -157,3 +159,4 @@ pub use t_disgest_commands::*;
 pub use time_series_commands::*;
 pub use top_k_commands::*;
 pub use transaction_commands::*;
+pub use vector_set::*;

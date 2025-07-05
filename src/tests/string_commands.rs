@@ -443,9 +443,7 @@ async fn mget_mset() -> Result<()> {
     client.del(single_arg_ref_iter(keys.iter())).await?;
 
     let items = [("key1", "value1"), ("key2", "value2"), ("key3", "value3")];
-    client
-        .mset(key_value_args_ref_iter(items.iter()))
-        .await?;
+    client.mset(key_value_args_ref_iter(items.iter())).await?;
 
     let values: Vec<Option<String>> = client.mget(single_arg_ref_iter(keys.iter())).await?;
     assert_eq!(4, values.len());

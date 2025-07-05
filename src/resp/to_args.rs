@@ -605,7 +605,7 @@ where
 }
 
 /// Convenience function for constructing a [`SingleArgRefIterator`] from any clonable iterator of references to `SingleArg` items.
-/// 
+///
 /// # Example
 ///
 /// ```rust
@@ -619,10 +619,10 @@ where
 /// async fn main() -> Result<()> {
 ///     let client = Client::connect("127.0.0.1:6379").await?;
 ///     client.flushdb(FlushingMode::Sync).await?;
-/// 
+///
 ///     let keys = vec!["key1", "key2", "key3"];
 ///     client.del(single_arg_ref_iter(keys.iter())).await?;
-/// 
+///
 ///     Ok(())
 /// }
 /// ```
@@ -709,7 +709,7 @@ where
 ///   - once for counting arguments (`num_args`)
 ///   - once for serializing them (`write_args`)
 /// - Both key and value types must implement [`SingleArg`].
-/// 
+///
 /// # Note
 /// Most iterators in Rust are clonable, including those produced by `.iter()`, `.cloned()`, `.map()`, and `.zip()`.
 /// If you use a non-clonable iterator, this wrapper will not compile.
@@ -804,7 +804,7 @@ where
 ///
 ///     let map = vec![("foo", 1), ("bar", 2)];
 ///     client.mset(key_value_args_ref_iter(map.iter())).await?;
-/// 
+///
 ///     Ok(())
 /// }
 /// ```
@@ -822,10 +822,10 @@ where
 /// async fn main() -> Result<()> {
 ///     let client = Client::connect("127.0.0.1:6379").await?;
 ///     client.flushdb(FlushingMode::Sync).await?;
-/// 
+///
 ///     let arr = [("a", 42), ("b", 43)];
 ///     client.mset(key_value_args_ref_iter(arr.iter())).await?;
-/// 
+///
 ///     Ok(())
 /// }
 /// ```
@@ -889,7 +889,7 @@ where
 }
 
 /// Convenience function for constructing a [`KeyValueArgsRefIterator`] from any clonable iterator of references to `(K, V)` pairs.
-/// 
+///
 /// # Example
 ///
 /// ```rust
@@ -906,7 +906,7 @@ where
 ///
 ///     let map = vec![("foo", 1), ("bar", 2)];
 ///     client.mset(key_value_args_ref_iter(map.iter())).await?;
-/// 
+///
 ///     Ok(())
 /// }
 /// ```

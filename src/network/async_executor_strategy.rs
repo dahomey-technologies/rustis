@@ -1,9 +1,9 @@
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::client::TlsConfig;
 use crate::{client::Config, Error, Result};
 use futures_util::{Future, FutureExt};
 use log::{debug, info};
-use socket2::{SockRef, TcpKeepalive};
+use socket2::TcpKeepalive;
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -14,26 +14,40 @@ use std::{
 pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamWriter = tokio::io::WriteHalf<tokio::net::TcpStream>;
-#[cfg(feature = "tokio-tls")]
+#[cfg(feature = "tokio-rustls")]
+pub(crate) type TcpTlsStreamReader =
+    tokio::io::ReadHalf<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>;
+#[cfg(feature = "tokio-rustls")]
+pub(crate) type TcpTlsStreamWriter =
+    tokio::io::WriteHalf<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>;
+#[cfg(feature = "tokio-native-tls")]
 pub(crate) type TcpTlsStreamReader =
     tokio::io::ReadHalf<tokio_native_tls::TlsStream<tokio::net::TcpStream>>;
-#[cfg(feature = "tokio-tls")]
+#[cfg(feature = "tokio-native-tls")]
 pub(crate) type TcpTlsStreamWriter =
     tokio::io::WriteHalf<tokio_native_tls::TlsStream<tokio::net::TcpStream>>;
 
 #[cfg(feature = "async-std-runtime")]
 pub(crate) type TcpStreamReader =
-    tokio_util::compat::Compat<futures::io::ReadHalf<async_std::net::TcpStream>>;
+    tokio_util::compat::Compat<futures_util::io::ReadHalf<async_std::net::TcpStream>>;
 #[cfg(feature = "async-std-runtime")]
 pub(crate) type TcpStreamWriter =
-    tokio_util::compat::Compat<futures::io::WriteHalf<async_std::net::TcpStream>>;
-#[cfg(feature = "async-std-tls")]
+    tokio_util::compat::Compat<futures_util::io::WriteHalf<async_std::net::TcpStream>>;
+#[cfg(feature = "async-std-rustls")]
 pub(crate) type TcpTlsStreamReader = tokio_util::compat::Compat<
-    futures::io::ReadHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
+    futures_util::io::ReadHalf<async_tls::client::TlsStream<async_std::net::TcpStream>>,
 >;
-#[cfg(feature = "async-std-tls")]
+#[cfg(feature = "async-std-rustls")]
 pub(crate) type TcpTlsStreamWriter = tokio_util::compat::Compat<
-    futures::io::WriteHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
+    futures_util::io::WriteHalf<async_tls::client::TlsStream<async_std::net::TcpStream>>,
+>;
+#[cfg(feature = "async-std-native-tls")]
+pub(crate) type TcpTlsStreamReader = tokio_util::compat::Compat<
+    futures_util::io::ReadHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
+>;
+#[cfg(feature = "async-std-native-tls")]
+pub(crate) type TcpTlsStreamWriter = tokio_util::compat::Compat<
+    futures_util::io::WriteHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
 >;
 
 pub(crate) async fn tcp_connect(
@@ -58,7 +72,8 @@ pub(crate) async fn tcp_connect(
         .await??;
 
         if let Some(keep_alive) = config.keep_alive {
-            SockRef::from(&stream).set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+            socket2::SockRef::from(&stream)
+                .set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
         }
 
         if config.no_delay {
@@ -69,18 +84,31 @@ pub(crate) async fn tcp_connect(
     }
     #[cfg(feature = "async-std-runtime")]
     {
-        use futures::AsyncReadExt;
+        use async_std::net::TcpStream;
+        use futures_util::AsyncReadExt;
+        use socket2::{Domain, Protocol, Socket, Type};
+        use std::net::{SocketAddr, ToSocketAddrs};
         use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-        let stream = timeout(
-            config.connect_timeout,
-            async_std::net::TcpStream::connect((host, port)),
-        )
-        .await??;
-
-        if let Some(keep_alive) = config.keep_alive {
-            SockRef::from(&stream).set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+        fn resolve_address(host: &str, port: u16) -> std::io::Result<SocketAddr> {
+            let mut addrs_iter = (host, port).to_socket_addrs()?;
+            addrs_iter
+                .next()
+                .ok_or_else(|| std::io::Error::other("No address found"))
         }
+
+        let addr = resolve_address(host, port)?;
+
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+
+        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(60));
+
+        socket.set_tcp_keepalive(&keepalive)?;
+
+        socket.connect(&addr.into())?;
+
+        let std_stream: std::net::TcpStream = socket.into();
+        let stream = TcpStream::from(std_stream);
 
         if config.no_delay {
             stream.set_nodelay(true)?;
@@ -96,7 +124,7 @@ pub(crate) async fn tcp_connect(
     Ok((reader, writer))
 }
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(crate) async fn tcp_tls_connect(
     host: &str,
     port: u16,
@@ -107,11 +135,24 @@ pub(crate) async fn tcp_tls_connect(
 
     let reader: TcpTlsStreamReader;
     let writer: TcpTlsStreamWriter;
-    let builder = tls_config.into_tls_connector_builder();
 
     #[cfg(feature = "tokio-runtime")]
-    #[cfg(feature = "tokio-tls")]
+    #[cfg(feature = "tokio-rustls")]
     {
+        let stream = timeout(
+            connect_timeout,
+            tokio::net::TcpStream::connect((host, port)),
+        )
+        .await??;
+        let tls_connector = tokio_rustls::TlsConnector::from(tls_config.rustls_config.clone());
+        let server_name = host.to_owned().try_into()?;
+        let tls_stream = tls_connector.connect(server_name, stream).await?;
+        (reader, writer) = tokio::io::split(tls_stream);
+    }
+    #[cfg(feature = "tokio-runtime")]
+    #[cfg(feature = "tokio-native-tls")]
+    {
+        let builder = tls_config.into_tls_connector_builder();
         let stream = timeout(
             connect_timeout,
             tokio::net::TcpStream::connect((host, port)),
@@ -123,9 +164,9 @@ pub(crate) async fn tcp_tls_connect(
         (reader, writer) = tokio::io::split(tls_stream);
     }
     #[cfg(feature = "async-std-runtime")]
-    #[cfg(feature = "async-std-tls")]
+    #[cfg(feature = "async-std-native-tls")]
     {
-        use futures::AsyncReadExt;
+        use futures_util::AsyncReadExt;
         use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
         let stream = timeout(
@@ -133,7 +174,25 @@ pub(crate) async fn tcp_tls_connect(
             async_std::net::TcpStream::connect((host, port)),
         )
         .await??;
+        let builder = tls_config.into_tls_connector_builder();
         let tls_connector: async_native_tls::TlsConnector = builder.into();
+        let tls_stream = tls_connector.connect(host, stream).await?;
+        let (r, w) = tls_stream.split();
+        reader = r.compat();
+        writer = w.compat_write();
+    }
+    #[cfg(feature = "async-std-runtime")]
+    #[cfg(feature = "async-std-rustls")]
+    {
+        use futures_util::AsyncReadExt;
+        use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
+
+        let stream = timeout(
+            connect_timeout,
+            async_std::net::TcpStream::connect((host, port)),
+        )
+        .await??;
+        let tls_connector = async_tls::TlsConnector::from(tls_config.rustls_config.clone());
         let tls_stream = tls_connector.connect(host, stream).await?;
         let (r, w) = tls_stream.split();
         reader = r.compat();

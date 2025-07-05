@@ -102,7 +102,7 @@ fn into_config() -> Result<()> {
             .into_config()?
             .to_string()
     );
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     assert_eq!(
         "rediss://username:pwd@127.0.0.1/1",
         "rediss://username:pwd@127.0.0.1/1"

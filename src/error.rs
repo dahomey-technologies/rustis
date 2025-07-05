@@ -44,10 +44,14 @@ pub enum Error {
     Redis(RedisError),
     /// IO error when connecting the Redis server
     IO(String),
-    #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
-    #[cfg(feature = "tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "native-tls", feature = "rustls"))))]
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     /// Raised by the TLS library
     Tls(String),
+    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
+    #[cfg(feature = "rustls")]
+    /// Invalid Dns name (rustls)
+    InvalidDnsName(String),
     /// The I/O operation’s timeout expired
     Timeout(String),
     /// Internal error to trigger retry sending the command
@@ -67,8 +71,10 @@ impl std::fmt::Display for Error {
             Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
             Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
             Error::IO(e) => f.write_fmt(format_args!("IO error: {}", e)),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
+            #[cfg(feature = "rustls")]
+            Error::InvalidDnsName(e) => f.write_fmt(format_args!("InvalidDnsName error: {}", e)),
             Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
             Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {}", e)),
             Error::EOF => f.write_str("EOF error"),
@@ -138,9 +144,23 @@ impl From<ParseIntError> for Error {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 impl From<native_tls::Error> for Error {
     fn from(e: native_tls::Error) -> Self {
+        Error::Tls(e.to_string())
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl From<rustls::pki_types::InvalidDnsNameError> for Error {
+    fn from(e: rustls::pki_types::InvalidDnsNameError) -> Self {
+        Error::InvalidDnsName(e.to_string())
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl From<rustls::Error> for Error {
+    fn from(e: rustls::Error) -> Self {
         Error::Tls(e.to_string())
     }
 }

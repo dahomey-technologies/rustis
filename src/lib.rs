@@ -162,10 +162,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub type Future<'a, T> = futures_util::future::BoxFuture<'a, Result<T>>;
 
 #[cfg(all(feature = "tokio-runtime", feature = "async-std-runtime"))]
-compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time");
+compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time.");
 
 #[cfg(all(feature = "pool", feature = "async-std-runtime"))]
-compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint)");
+compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint).");
+
+#[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
+compile_error!("Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time.");
 
 #[cfg(test)]
 mod tests;

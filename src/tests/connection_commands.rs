@@ -68,8 +68,8 @@ async fn client_getredir() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_help() -> Result<()> {
     let client = get_test_client().await?;
@@ -214,8 +214,8 @@ async fn client_setname_getname() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn client_setinfo() -> Result<()> {
     let client = get_test_client().await?;

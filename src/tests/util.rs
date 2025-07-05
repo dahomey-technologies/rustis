@@ -2,48 +2,45 @@ use crate::{
     client::{Client, Config, IntoConfig},
     Result,
 };
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 use native_tls::Certificate;
 
 /// copy-paste of the root certificate located at crt/certs/ca.crt
-#[cfg(feature = "tls")]
-const ROOT_CERTIFICATE: &str = r#"-----BEGIN CERTIFICATE-----
-MIIFSzCCAzOgAwIBAgIULTp8cWRl326SijHSTdHpP0y/SkAwDQYJKoZIhvcNAQEL
-BQAwNTETMBEGA1UECgwKUmVkaXMgVGVzdDEeMBwGA1UEAwwVQ2VydGlmaWNhdGUg
-QXV0aG9yaXR5MB4XDTIyMTAwMTA4MjMyM1oXDTMyMDkyODA4MjMyM1owNTETMBEG
-A1UECgwKUmVkaXMgVGVzdDEeMBwGA1UEAwwVQ2VydGlmaWNhdGUgQXV0aG9yaXR5
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEApWm0kFW03v2s58VX3FI/
-gdIo0l+aEdYXoSaic9xPWl5MV5+T7YQ7V9tck6whi4ceUtDAKa8QZBoiJ9gn/Lbr
-e6ebZiJ7blBscEqKzXZk5URlHbxXlbfldHScnKNxluI5ApJ0sYov58R60klJNWeK
-Wlz+Hn2ubN1IkXuClMJ59i0UZ+MlALpXzpSiW1gS7pT4gIkuCQfdWWwUNDNuFN57
-/l9fU0VYQd/7AI9eJnV9ltTOaVyiL/uO3mueWBmM+AeeGaX0WRtctRcR2sNqDMIx
-JW/bUziTRncI+HEGQd7Wf1+yi4fjajUzLj8omVvO7RBrCyq5RV9dpMEAgY4LIM8w
-g+VlLDbOT52CY90ADbTfMDgiH5mg2Zt3l4xNiwno/Itkng93Hh/AbPomOGtJSYPr
-CIrzhkfD6PXMXYzdXAJLzjCc5sOIBrFhDSIzkGOAxX0DZaxngimCytigw8c1KdIw
-Z/j71rDjv6blleGJ6ZXBwtdQEG2clDSuVjBRuIIxe64/wMEe702MMC28Y97SZ3WV
-JU4KaQoW5oVaoom9+hngCT6btpmT6adu0oC424bmSxUdB6/Kk+kgsD6SyaXt6VCf
-PUpfipNwbS/GFoqevLSGjOsyrEl5nzF0VBdcg9TOodlqruVtNFSnShQh93hKmY1J
-Mz62dg/LnnZ4+yO1ARZk+tcCAwEAAaNTMFEwHQYDVR0OBBYEFHr9VpODSEUfgO/W
-sVebyT+YTcy9MB8GA1UdIwQYMBaAFHr9VpODSEUfgO/WsVebyT+YTcy9MA8GA1Ud
-EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggIBABImtJJhwE2b0cNeSI+ng9oa
-6PBXX5usNZQBuw3wvaLFephpbUH/HrWFJCbscubZ0wmt0UD6Ly7v32DJl505NFQQ
-XMDAdApLRMHcbFcyqIIVkcSlOoRNlf5Dx9A2oqUzwI392OrDeYEF+a+9CcLGo6Fv
-m8vii6Z1JS7TgGa9KqFErOgyvVv5xoSH31EVgezIoMgYWya2oiKZayYLNlr/eo3c
-8DxEvJ2sdv8MI09lrwAZ61bx4aDYcpnDckVzvttdjGrunr1AyblCo6yhKUax1w5K
-qLvLoVwuTFo4VFzMJMeIuRLm79hxhQIjAgIba8Cms0EPxcivVaWG5KvY8/oXLlP6
-YRgmWvuA9UGvnrAvUw+eAZj1aFzLRGLXG3VxHUSJyhEV54dZCMWMfK0KOdyptbR3
-7phJCeCGYS8/kJnCMAXU4NfiGWmRcTxkJTqgHC3txgzJQ4Izt8oeekJwlOJEN6R8
-OCT4DeNGKy0bcAwaUT2n+b+OmQpaT/F7u2Hx/n0356QjVSoNTgmg6Bjsp5hNlX6i
-I22ZhrayIRlXmMUmivMWBriz44yu6bo74EV6zHNvF1LYR7u2ajtdzlk1fHSE4OfM
-+J8SNDwRYRFTxZPTK2Yf/PQtyl+xaWAHcT7NumXQcqOVxq9jfaurIOCWz4i4BIeK
-bsPEVuonk6XLwUlSNI2W
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
+const ROOT_CERTIFICATE: &str = r#"
+-----BEGIN CERTIFICATE-----
+MIIEmjCCAwKgAwIBAgIRAMevjxGPA5ze+1QVT7rV7o8wDQYJKoZIhvcNAQELBQAw
+ZTEeMBwGA1UEChMVbWtjZXJ0IGRldmVsb3BtZW50IENBMR0wGwYDVQQLDBRyb290
+QExULVJLRDAyNzA1NTEwNjEkMCIGA1UEAwwbbWtjZXJ0IHJvb3RATFQtUktEMDI3
+MDU1MTA2MB4XDTI1MDcwNTA5NDc0OVoXDTM1MDcwNTA5NDc0OVowZTEeMBwGA1UE
+ChMVbWtjZXJ0IGRldmVsb3BtZW50IENBMR0wGwYDVQQLDBRyb290QExULVJLRDAy
+NzA1NTEwNjEkMCIGA1UEAwwbbWtjZXJ0IHJvb3RATFQtUktEMDI3MDU1MTA2MIIB
+ojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA0q7gJrQwX6sSO9dKmqLp09hP
+tHNGaTdhYsc4PBP1Z0lroieGW1UmmsVlWOaCH4166y56qpa/tfXMbWUTiSrzeW9J
+3grKS18HHDZNzXEsIsEmg66tDc9BKRoVv++XFd6OOxURa068t3AXVbpDCGOCfALV
+yzLOAJDXhASQ4u/uXT0WvVzJWbbCliDXEuJDMZPYdP2K7ticU+KrtMNhps4xZHst
+DhVW/me43JV8aTgUPEeD402igAKcXjQ42N4q1IZb4CUWNpL0tRY9EJmb1FCL5V8d
+mroVnCTfUgoinXEZhJ3xC8LfQFUZW0+7xQXI2YVv/TYTuV1eHpIBqd2QCakVv9P/
+HHzKL7pZ1BQKAibb0YHum2m0c3j5wszpjHl+cSbXlGTOdoqIEycIuMzO667RvdVT
+H4o3B2nf52ChZCuy0zkHIJapSLSi3a4JYp7wMP7uoljNcbcJOUPrmphcYxbOkfmF
+B4YNcpWI1EeCNUElYsEuj7zzpB8bwq4RoE9t2X9nAgMBAAGjRTBDMA4GA1UdDwEB
+/wQEAwICBDASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBQXcq+Dji/6Xa3M
+bGRThAkzfUOcVDANBgkqhkiG9w0BAQsFAAOCAYEAGZPX2hfDg9YAbGPTK6ZHDFPw
+R6ZRdxDQ8zFa1HDrQUvwkd3NhiY2CYYLkusMI0Dh1ut/xmoNRI7v9OL9twixAprl
+zPdCDc7oH9oYLOfFmUTWQ+Q8f8G2K97cZyc7WotMHiGDsafdVkZgEY4q6lyjmCM9
+WE8XFsc29RPtTLubronyLx5smDghjuDsrXbf9W2w5itYtVTq1uW7m0Shz7+Dhq92
+0WkCbI1XxqAe/UuiCQk3jUoQBvE5WfpaVf66Q+sA6MrZsTZ4Y9cvWj482LZ5mDX/
+wqDY1BSLvTnYC0QIzj/W3e94anJ4rjaoxKfT7OEEPk8tkl8ZVsBpoeINfzOB28LE
+0UmVTANz8G55Sv4FguSBh6LZ1yuxx4vn6zJUmZI+snMaza2vMi9IJHJi7GQh01TQ
+WVysQ5r2H8HWTaTivATozaOhu0vgcLl524mQ+3KtQ5CM4d+gbWe4b5XxfxxMfG2K
+Zz4JtMr3UAPczB+k+ei1v8o7sESoHoRoLvFVkFPp
 -----END CERTIFICATE-----
 "#;
 
 pub(crate) fn get_default_host() -> String {
     match std::env::var("REDIS_HOST") {
         Ok(host) => host,
-        Err(_) => "127.0.0.1".to_string(),
+        Err(_) => "localhost".to_string(),
     }
 }
 
@@ -54,7 +51,7 @@ pub(crate) fn get_default_port() -> u16 {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(crate) fn get_default_tls_port() -> u16 {
     match std::env::var("REDIS_TLS_PORT") {
         Ok(port) => port.parse::<u16>().unwrap(),
@@ -79,7 +76,7 @@ pub(crate) async fn get_test_client() -> Result<Client> {
     get_test_client_with_config(get_default_config()?).await
 }
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(crate) async fn get_tls_test_client() -> Result<Client> {
     log_try_init();
 
@@ -91,11 +88,40 @@ pub(crate) async fn get_tls_test_client() -> Result<Client> {
 
     let mut config = uri.into_config()?;
 
+    #[cfg(feature = "native-tls")]
     if let Some(tls_config) = &mut config.tls_config {
         let root_cert = Certificate::from_pem(ROOT_CERTIFICATE.as_bytes())?;
         tls_config.root_certificates(vec![root_cert]);
         // non trusted cert for tests
         tls_config.danger_accept_invalid_certs(true);
+    }
+
+    #[cfg(feature = "rustls")]
+    if let Some(tls_config) = &mut config.tls_config {
+        use std::{io::BufReader, sync::Arc};
+
+        let mut root_store = rustls::RootCertStore::empty();
+
+        let mut reader = BufReader::new(ROOT_CERTIFICATE.as_bytes());
+
+        for item in rustls_pemfile::read_all(&mut reader) {
+            if let rustls_pemfile::Item::X509Certificate(cert_der) = item.unwrap() {
+                root_store.add(cert_der)?;
+            }
+        }
+
+        // let certs = rustls_pemfile::certs(&mut reader);
+        // let certs = certs.into_iter().map(Certificate).collect::<Vec<_>>();
+        // root_store.add_parsable_certificates(&certs);
+
+        // let root_store =
+        //     rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        let rustls_config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        tls_config.rustls_config = Arc::new(rustls_config);
     }
 
     Client::connect(config).await

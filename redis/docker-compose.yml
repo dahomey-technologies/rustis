@@ -12,22 +12,15 @@ services:
 
 # TLS
   redis-tls:
-    image: docker.io/bitnami/redis
+    image: redis:alpine
     container_name: redis-tls
     restart: on-failure:20
     ports:
       - "6380:6379"
     volumes:
       - ./certs:/certs
-    environment:
-      - ALLOW_EMPTY_PASSWORD=false
-      - REDIS_PASSWORD=pwd
-      - REDIS_TLS_CERT_FILE=/certs/redis.crt
-      - REDIS_TLS_KEY_FILE=/certs/redis.key
-      - REDIS_TLS_CA_FILE=/certs/ca.crt
-      - REDIS_TLS_ENABLED=yes
-      - REDIS_TLS_PORT=6379
-      - REDIS_TLS_AUTH_CLIENTS=no
+      - .:/config
+    command: redis-server /config/tls.conf
 
 # Sentinel
   redis-master:

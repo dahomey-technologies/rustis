@@ -32,8 +32,10 @@ rustis is a Redis client for Rust.
 | ------- | ----------- |
 | `tokio-runtime` | [Tokio](https://tokio.rs/) runime (default) |
 | `async-std-runtime` | [async-std](https://async.rs/) runtime (optional) |
-| `tokio-tls` | Tokio TLS support (optional) |
-| `async-std-tls` | async-std TLS support (optional) |
+| `tokio-rustls` | Tokio Rustls TLS support (optional) |
+| `tokio-native-tls` | Tokio native_tls TLS support (optional) |
+| `async-std-rustls` | async-std Rustls TLS support (optional) |
+| `async-std-native-tls` | async-std native_tls TLS support (optional) |
 | `pool` | Pooled client manager (optional) |
 | `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
 

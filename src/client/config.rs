@@ -447,7 +447,7 @@ impl Display for Config {
             }
         }
 
-        #[cfg(any(feature = "native-tls", feature = "rustls"))]
+        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
         match &self.server {
             ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
             ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,

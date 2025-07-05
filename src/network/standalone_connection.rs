@@ -6,7 +6,7 @@ use crate::{
     resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
     tcp_connect, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
 };
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
 use bytes::BytesMut;
 use futures_util::{SinkExt, StreamExt};
@@ -22,7 +22,7 @@ pub(crate) enum Streams {
         FramedRead<TcpStreamReader, BufferDecoder>,
         FramedWrite<TcpStreamWriter, CommandEncoder>,
     ),
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     TcpTls(
         FramedRead<TcpTlsStreamReader, BufferDecoder>,
         FramedWrite<TcpTlsStreamWriter, CommandEncoder>,
@@ -31,7 +31,7 @@ pub(crate) enum Streams {
 
 impl Streams {
     pub async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
-        #[cfg(feature = "tls")]
+        #[cfg(any(feature = "native-tls", feature = "rustls"))]
         if let Some(tls_config) = &config.tls_config {
             let (reader, writer) =
                 tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
@@ -42,7 +42,7 @@ impl Streams {
             Self::connect_non_secure(host, port, config).await
         }
 
-        #[cfg(not(feature = "tls"))]
+        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
         Self::connect_non_secure(host, port, config).await
     }
 
@@ -93,7 +93,7 @@ impl StandaloneConnection {
         }
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
         }
     }
@@ -107,7 +107,7 @@ impl StandaloneConnection {
 
         let command_encoder = match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(_, framed_write) => framed_write.encoder_mut(),
         };
 
@@ -142,7 +142,7 @@ impl StandaloneConnection {
 
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(_, framed_write) => {
                 framed_write.get_mut().write_all(&self.buffer).await?
             }
@@ -154,7 +154,7 @@ impl StandaloneConnection {
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         if let Some(result) = match &mut self.streams {
             Streams::Tcp(framed_read, _) => framed_read.next().await,
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(framed_read, _) => framed_read.next().await,
         } {
             if log_enabled!(Level::Debug) {

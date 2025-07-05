@@ -13,33 +13,24 @@ edition = "2021"
 
 [features]
 default = ["tokio-runtime"]
-tokio-runtime = [
-    "tokio/macros",
-    "tokio/net",
-    "tokio/rt",
-    "tokio/io-util",
-]
-tokio-tls = [
-    "tokio-native-tls",
-    "tls"
-]
+tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]
+tokio-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "rustls"]
+tokio-native-tls = ["dep:tokio-native-tls", "native-tls"]
 async-std-runtime = [
-    "async-std",
+    "dep:async-std",
     "async-std/attributes",
     "tokio-util/compat",
-    "async-native-tls",
 ]
-async-std-tls = [
-    "async-native-tls",
-    "tls"
-]
-pool = ["bb8"]
-tls = ["native-tls"]
+async-std-rustls = ["dep:async-tls", "dep:webpki-roots", "rustls"]
+async-std-native-tls = ["dep:async-native-tls", "native-tls"]
+pool = ["dep:bb8"]
+native-tls = ["dep:native-tls"]
+rustls = ["dep:rustls"]
 redis-graph = []
 
 [dependencies]
 async-std = { version = "1.13", features = ["attributes"], optional = true }
-futures-util = { version = "0.3", features = ["sink"] }
+futures-util = { version = "0.3", features = ["sink", "io"] }
 futures-channel = { version = "0.3", features = ["sink"] }
 bytes = "1.10"
 tokio = { version = "1.45", features = ["time", "io-util", "sync"] }
@@ -51,14 +42,18 @@ dtoa = "1.0"
 smallvec = { version = "1.15", features = ["union", "serde"] }
 bb8 = { version = "0.9", optional = true }
 url = "2.5"
+tokio-rustls = { version = "0.26", optional = true }
+webpki-roots = { version = "1.0", optional = true }
 native-tls = { version = "0.2", optional = true }
+rustls = { version = "0.23", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
+async-tls = { git = "https://github.com/mgr9525/async-tls.git", optional = true }
 async-native-tls = { version = "0.5", optional = true }
 log = "0.4"
 crc16 = "0.4"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
-socket2 = "0.5"
+socket2 = "0.6"
 memchr = "2.7"
 
 [dev-dependencies]
@@ -72,9 +67,10 @@ redis = { version = "0.32", features = ["aio", "tokio-comp"] }
 fred = "10.1"
 axum = "0.8"
 actix-web = "4.11"
+rustls-pemfile = "2.2"
 
 [package.metadata.docs.rs]
-features = ["tokio-runtime", "tokio-tls", "pool"]
+features = ["tokio-runtime", "tokio-rustls", "pool"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[bench]]

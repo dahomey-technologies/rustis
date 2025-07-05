@@ -1,6 +1,8 @@
 use crate::{Error, Result};
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
+#[cfg(feature = "rustls")]
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
@@ -53,8 +55,8 @@ pub struct Config {
     /// command will be automatically issued at connection or reconnection.
     pub database: usize,
     /// An optional TLS configuration.
-    #[cfg_attr(docsrs, doc(cfg(feature = "tls")))]
-    #[cfg(feature = "tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "native-tls", feature = "rustls"))))]
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     pub tls_config: Option<TlsConfig>,
     /// The time to attempt a connection before timing out. The default is 10 seconds
     pub connect_timeout: Duration,
@@ -112,7 +114,7 @@ impl Default for Config {
             username: Default::default(),
             password: Default::default(),
             database: Default::default(),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             tls_config: Default::default(),
             connect_timeout: Duration::from_millis(DEFAULT_CONNECT_TIMEOUT),
             command_timeout: Duration::from_millis(DEFAULT_COMMAND_TIMEOUT),
@@ -177,7 +179,7 @@ impl Config {
             Cluster,
         }
 
-        #[cfg(feature = "tls")]
+        #[cfg(any(feature = "native-tls", feature = "rustls"))]
         let (tls_config, server_type) = match scheme {
             "redis" => (None, ServerType::Standalone),
             "rediss" => (Some(TlsConfig::default()), ServerType::Standalone),
@@ -194,7 +196,7 @@ impl Config {
             }
         };
 
-        #[cfg(not(feature = "tls"))]
+        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
         let server_type = match scheme {
             "redis" => ServerType::Standalone,
             "redis+sentinel" | "redis-sentinel" => ServerType::Sentinel,
@@ -273,7 +275,7 @@ impl Config {
             username: username.map(|u| u.to_owned()),
             password: password.map(|p| p.to_owned()),
             database,
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
             tls_config,
             ..Default::default()
         };
@@ -430,7 +432,7 @@ impl Config {
 
 impl Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(feature = "tls")]
+        #[cfg(any(feature = "native-tls", feature = "rustls"))]
         if self.tls_config.is_some() {
             match &self.server {
                 ServerConfig::Standalone { host: _, port: _ } => f.write_str("rediss://")?,
@@ -445,7 +447,7 @@ impl Display for Config {
             }
         }
 
-        #[cfg(not(feature = "tls"))]
+        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
         match &self.server {
             ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
             ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,
@@ -699,8 +701,32 @@ pub struct ClusterConfig {
 
 /// Config for TLS.
 ///
-/// See [TlsConnectorBuilder](https://docs.rs/tokio-native-tls/0.3.0/tokio_native_tls/native_tls/struct.TlsConnectorBuilder.html) documentation
-#[cfg(feature = "tls")]
+/// See [rustls::client::ClientConfig](https://docs.rs/rustls/latest/rustls/client/struct.ClientConfig.html) documentation
+#[cfg(feature = "rustls")]
+#[derive(Debug, Clone)]
+pub struct TlsConfig {
+    pub rustls_config: Arc<rustls::ClientConfig>,
+}
+
+#[cfg(feature = "rustls")]
+impl Default for TlsConfig {
+    fn default() -> Self {
+        let root_store =
+            rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let rustls_config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        Self {
+            rustls_config: Arc::new(rustls_config),
+        }
+    }
+}
+
+/// Config for TLS.
+///
+/// See [TlsConnectorBuilder](https://docs.rs/tokio-native-tls/latest/tokio_native_tls/native_tls/struct.TlsConnectorBuilder.html) documentation
+#[cfg(feature = "native-tls")]
 #[derive(Clone)]
 pub struct TlsConfig {
     identity: Option<Identity>,
@@ -713,7 +739,7 @@ pub struct TlsConfig {
     use_sni: bool,
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 impl Default for TlsConfig {
     fn default() -> Self {
         Self {
@@ -729,7 +755,7 @@ impl Default for TlsConfig {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 impl std::fmt::Debug for TlsConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TlsConfig")
@@ -749,7 +775,7 @@ impl std::fmt::Debug for TlsConfig {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "native-tls")]
 impl TlsConfig {
     pub fn identity(&mut self, identity: Identity) -> &mut Self {
         self.identity = Some(identity);

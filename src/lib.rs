@@ -32,8 +32,10 @@ rustis is a Redis client for Rust.
 | ------- | ----------- |
 | `tokio-runtime` | [Tokio](https://tokio.rs/) runime (default) |
 | `async-std-runtime` | [async-std](https://async.rs/) runtime (optional) |
-| `tokio-tls` | Tokio TLS support (optional) |
-| `async-std-tls` | async-std TLS support (optional) |
+| `tokio-rustls` | Tokio Rustls TLS support (optional) |
+| `tokio-native-tls` | Tokio native_tls TLS support (optional) |
+| `async-std-rustls` | async-std Rustls TLS support (optional) |
+| `async-std-native-tls` | async-std native_tls TLS support (optional) |
 | `pool` | Pooled client manager (optional) |
 | `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
 
@@ -162,10 +164,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub type Future<'a, T> = futures_util::future::BoxFuture<'a, Result<T>>;
 
 #[cfg(all(feature = "tokio-runtime", feature = "async-std-runtime"))]
-compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time");
+compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time.");
 
 #[cfg(all(feature = "pool", feature = "async-std-runtime"))]
-compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint)");
+compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint).");
+
+#[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
+compile_error!(
+    "Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time."
+);
 
 #[cfg(test)]
 mod tests;

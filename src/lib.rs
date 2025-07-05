@@ -170,7 +170,9 @@ compile_error!("feature \"tokio-runtime\" and feature \"async-std-runtime\" cann
 compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint).");
 
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
-compile_error!("Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time.");
+compile_error!(
+    "Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time."
+);
 
 #[cfg(test)]
 mod tests;

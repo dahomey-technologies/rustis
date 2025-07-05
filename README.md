@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
 2. run `cargo test --features pool,tokio-rustls` (Tokio runtime)
-3. run `cargo test --no-default-features --features async-std-runtime,async-std-tls` (async-std runtime)
+3. run `cargo test --no-default-features --features async-std-runtime,async-std-native-tls` (async-std runtime)
 4. run `cargo fmt --all -- --check`
 
 # Benchmarks

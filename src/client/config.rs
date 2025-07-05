@@ -718,7 +718,7 @@ impl Default for TlsConfig {
             .with_no_client_auth();
 
         Self {
-            rustls_config: Arc::new(rustls_config)
+            rustls_config: Arc::new(rustls_config),
         }
     }
 }

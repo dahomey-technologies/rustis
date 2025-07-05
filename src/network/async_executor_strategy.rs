@@ -33,14 +33,6 @@ pub(crate) type TcpStreamReader =
 #[cfg(feature = "async-std-runtime")]
 pub(crate) type TcpStreamWriter =
     tokio_util::compat::Compat<futures_util::io::WriteHalf<async_std::net::TcpStream>>;
-#[cfg(feature = "async-std-rustls")]
-pub(crate) type TcpTlsStreamReader = tokio_util::compat::Compat<
-    futures_util::io::ReadHalf<async_tls::client::TlsStream<async_std::net::TcpStream>>,
->;
-#[cfg(feature = "async-std-rustls")]
-pub(crate) type TcpTlsStreamWriter = tokio_util::compat::Compat<
-    futures_util::io::WriteHalf<async_tls::client::TlsStream<async_std::net::TcpStream>>,
->;
 #[cfg(feature = "async-std-native-tls")]
 pub(crate) type TcpTlsStreamReader = tokio_util::compat::Compat<
     futures_util::io::ReadHalf<async_native_tls::TlsStream<async_std::net::TcpStream>>,
@@ -176,23 +168,6 @@ pub(crate) async fn tcp_tls_connect(
         .await??;
         let builder = tls_config.into_tls_connector_builder();
         let tls_connector: async_native_tls::TlsConnector = builder.into();
-        let tls_stream = tls_connector.connect(host, stream).await?;
-        let (r, w) = tls_stream.split();
-        reader = r.compat();
-        writer = w.compat_write();
-    }
-    #[cfg(feature = "async-std-runtime")]
-    #[cfg(feature = "async-std-rustls")]
-    {
-        use futures_util::AsyncReadExt;
-        use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
-
-        let stream = timeout(
-            connect_timeout,
-            async_std::net::TcpStream::connect((host, port)),
-        )
-        .await??;
-        let tls_connector = async_tls::TlsConnector::from(tls_config.rustls_config.clone());
         let tls_stream = tls_connector.connect(host, stream).await?;
         let (r, w) = tls_stream.split();
         reader = r.compat();

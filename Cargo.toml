@@ -21,7 +21,6 @@ async-std-runtime = [
     "async-std/attributes",
     "tokio-util/compat",
 ]
-async-std-rustls = ["dep:async-tls", "dep:webpki-roots", "rustls"]
 async-std-native-tls = ["dep:async-native-tls", "native-tls"]
 pool = ["dep:bb8"]
 native-tls = ["dep:native-tls"]
@@ -47,7 +46,6 @@ webpki-roots = { version = "1.0", optional = true }
 native-tls = { version = "0.2", optional = true }
 rustls = { version = "0.23", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
-async-tls = { git = "https://github.com/mgr9525/async-tls.git", optional = true }
 async-native-tls = { version = "0.5", optional = true }
 log = "0.4"
 crc16 = "0.4"

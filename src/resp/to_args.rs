@@ -469,6 +469,171 @@ impl<T> SingleArgCollection<T> for BTreeSet<T> where T: SingleArg {}
 
 impl<T> SingleArgCollection<T> for T where T: SingleArg {}
 
+/// A wrapper type that adapts any clonable iterator of `SingleArg` items to the `SingleArgCollection` and `ToArgs` traits.
+///
+/// # Purpose
+///
+/// `SingleArgIterator` allows you to use any iterator of items implementing `SingleArg` (such as produced by `.iter()` or more complex iterator adapters)
+/// as a collection of arguments for Redis commands, without needing to collect your data into a concrete Vec or slice first.
+/// This is particularly useful for building command arguments on-the-fly, avoiding unnecessary allocations.
+///
+/// # Requirements
+///
+/// - The underlying iterator must implement [`Clone`] so that it can be traversed twice:
+///   - once for counting arguments (`num_args`)
+///   - once for serializing them (`write_args`)
+/// - The iterator's items must implement [`SingleArg`].
+///
+/// # Note
+/// Most common iterators in Rust are clonable, including those produced by `.iter()`, `.cloned()`, `.map()`, and ranges.
+/// If you use a non-clonable iterator, this wrapper will not compile.
+pub struct SingleArgIterator<I>
+where
+    I: Iterator + Clone,
+    I::Item: SingleArg,
+{
+    iter: I,
+}
+
+impl<I> SingleArgIterator<I>
+where
+    I: Iterator + Clone,
+    I::Item: SingleArg,
+{
+    /// Constructs a new `SingleArgIterator` from any clonable iterator of `SingleArg` items.    
+    pub fn new(iter: I) -> Self {
+        SingleArgIterator { iter }
+    }
+}
+
+/// Adapts any clonable iterator of `SingleArg` items to the `SingleArgCollection` and `ToArgs` traits.
+impl<I> ToArgs for SingleArgIterator<I>
+where
+    I: Iterator + Clone,
+    I::Item: SingleArg,
+{
+    fn write_args(&self, args: &mut CommandArgs) {
+        for item in self.iter.clone() {
+            item.write_args(args);
+        }
+    }
+    fn num_args(&self) -> usize {
+        self.iter.clone().fold(0, |acc, t| acc + t.num_args())
+    }
+}
+
+impl<I> SingleArgCollection<I::Item> for SingleArgIterator<I>
+where
+    I: Iterator + Clone,
+    I::Item: SingleArg,
+{
+}
+
+/// Convenience function for constructing a [`SingleArgIterator`] from any clonable iterator of `SingleArg` items.
+pub fn single_arg_iter<T, I>(iter: I) -> SingleArgIterator<I>
+where
+    I: Iterator<Item = T> + Clone,
+    T: SingleArg,
+{
+    SingleArgIterator::new(iter)
+}
+
+/// A wrapper type that adapts any clonable iterator of references to `SingleArg` items
+/// to the `SingleArgCollection` and `ToArgs` traits.
+///
+/// # Purpose
+///
+/// `SingleArgRefIterator` allows you to use any clonable iterator over references to items implementing `SingleArg`
+/// (such as produced by `.iter()` on a `Vec<T>` or slice) as a collection of arguments for Redis commands,
+/// without needing to collect your data into a concrete Vec or slice first. This is especially useful for
+/// passing arguments by reference, avoiding unnecessary cloning or allocation.
+///
+/// # Requirements
+///
+/// - The underlying iterator must be clonable ([`Clone`]), so it can be traversed twice:
+///   - once for counting arguments (`num_args`)
+///   - once for serializing them (`write_args`)
+/// - The iterator's items must be references to a type implementing [`SingleArg`].
+///
+/// # Note
+/// Most iterators produced by `.iter()` on collections are clonable.
+/// If you use a non-clonable iterator, this wrapper will not compile.
+///
+/// # Lifetime
+/// The lifetime parameter `'a` ensures that the iterator and the referenced items outlive
+/// the usage of this wrapper.
+pub struct SingleArgRefIterator<'a, I, T>
+where
+    I: Iterator<Item = &'a T> + Clone,
+    T: SingleArg + 'a,
+{
+    iter: I,
+}
+
+impl<'a, I, T> SingleArgRefIterator<'a, I, T>
+where
+    I: Iterator<Item = &'a T> + Clone,
+    T: SingleArg + 'a,
+{
+    /// Constructs a new `SingleArgRefIterator` from any clonable iterator of references to `SingleArg` items.
+    pub fn new(iter: I) -> Self {
+        SingleArgRefIterator { iter }
+    }
+}
+
+/// Implements argument serialization and counting for an iterator of references to `SingleArg` items.
+impl<'a, I, T> ToArgs for SingleArgRefIterator<'a, I, T>
+where
+    I: Iterator<Item = &'a T> + Clone,
+    T: SingleArg + 'a,
+{
+    fn write_args(&self, args: &mut CommandArgs) {
+        for item in self.iter.clone() {
+            item.write_args(args);
+        }
+    }
+    fn num_args(&self) -> usize {
+        self.iter.clone().fold(0, |acc, t| acc + t.num_args())
+    }
+}
+
+impl<'a, I, T> SingleArgCollection<T> for SingleArgRefIterator<'a, I, T>
+where
+    I: Iterator<Item = &'a T> + Clone,
+    T: SingleArg + 'a,
+{
+}
+
+/// Convenience function for constructing a [`SingleArgRefIterator`] from any clonable iterator of references to `SingleArg` items.
+/// 
+/// # Example
+///
+/// ```rust
+/// use rustis::{
+///     client::Client, commands::{FlushingMode, ServerCommands, GenericCommands},
+///     resp::{cmd, single_arg_ref_iter, Value}, Result,
+/// };
+///
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// async fn main() -> Result<()> {
+///     let client = Client::connect("127.0.0.1:6379").await?;
+///     client.flushdb(FlushingMode::Sync).await?;
+/// 
+///     let keys = vec!["key1", "key2", "key3"];
+///     client.del(single_arg_ref_iter(keys.iter())).await?;
+/// 
+///     Ok(())
+/// }
+/// ```
+pub fn single_arg_ref_iter<'a, I, T>(iter: I) -> SingleArgRefIterator<'a, I, T>
+where
+    I: Iterator<Item = &'a T> + Clone,
+    T: SingleArg + 'a,
+{
+    SingleArgRefIterator::new(iter)
+}
+
 /// Marker for key/value collections of Args
 ///
 /// The key and the value can only produce a single arg each.
@@ -527,4 +692,229 @@ where
     K: SingleArg,
     V: SingleArg,
 {
+}
+
+/// A wrapper type that adapts any clonable iterator of `(K, V)` pairs (where both `K` and `V` implement `SingleArg`)
+/// to the `KeyValueArgsCollection` and `ToArgs` traits.
+///
+/// # Purpose
+///
+/// `KeyValueArgsIterator` allows you to use any clonable iterator of key-value pairs as a collection of arguments
+/// for Redis commands that expect pairs (such as `MSET`, `HSET`, etc.), without needing to collect your data
+/// into a concrete Vec or slice first. This enables building argument lists on-the-fly and avoids unnecessary allocations.
+///
+/// # Requirements
+///
+/// - The underlying iterator must implement [`Clone`] so it can be traversed twice:
+///   - once for counting arguments (`num_args`)
+///   - once for serializing them (`write_args`)
+/// - Both key and value types must implement [`SingleArg`].
+/// 
+/// # Note
+/// Most iterators in Rust are clonable, including those produced by `.iter()`, `.cloned()`, `.map()`, and `.zip()`.
+/// If you use a non-clonable iterator, this wrapper will not compile.
+pub struct KeyValueArgsIterator<I, K, V>
+where
+    I: Iterator<Item = (K, V)> + Clone,
+    K: SingleArg,
+    V: SingleArg,
+{
+    iter: I,
+}
+
+impl<I, K, V> KeyValueArgsIterator<I, K, V>
+where
+    I: Iterator<Item = (K, V)> + Clone,
+    K: SingleArg,
+    V: SingleArg,
+{
+    /// Constructs a new `KeyValueArgsIterator` from any clonable iterator of `(K, V)` pairs.
+    pub fn new(iter: I) -> Self {
+        KeyValueArgsIterator { iter }
+    }
+}
+
+/// Implements argument serialization and counting for an iterator of `(K, V)` pairs.
+impl<I, K, V> ToArgs for KeyValueArgsIterator<I, K, V>
+where
+    I: Iterator<Item = (K, V)> + Clone,
+    K: SingleArg,
+    V: SingleArg,
+{
+    fn write_args(&self, args: &mut CommandArgs) {
+        for (key, value) in self.iter.clone() {
+            key.write_args(args);
+            value.write_args(args);
+        }
+    }
+    fn num_args(&self) -> usize {
+        self.iter
+            .clone()
+            .fold(0, |acc, (k, v)| acc + k.num_args() + v.num_args())
+    }
+}
+
+impl<I, K, V> KeyValueArgsCollection<K, V> for KeyValueArgsIterator<I, K, V>
+where
+    I: Iterator<Item = (K, V)> + Clone,
+    K: SingleArg,
+    V: SingleArg,
+{
+}
+
+/// Convenience function for constructing a [`KeyValueArgsIterator`] from any clonable iterator of `(K, V)` pairs.
+pub fn key_value_args_iter<I, K, V>(iter: I) -> KeyValueArgsIterator<I, K, V>
+where
+    I: Iterator<Item = (K, V)> + Clone,
+    K: SingleArg,
+    V: SingleArg,
+{
+    KeyValueArgsIterator::new(iter)
+}
+
+/// A wrapper type that adapts any clonable iterator of references to `(K, V)` pairs (where both `K` and `V` implement `SingleArg`)
+/// to the `KeyValueArgsCollection` and `ToArgs` traits.
+///
+/// # Purpose
+///
+/// `KeyValueArgsRefIterator` allows you to use any clonable iterator over references to key-value pairs
+/// (such as produced by `.iter()` on a slice or a `Vec<(K, V)>`) as a collection of arguments for Redis commands that expect pairs,
+/// like `MSET`, `HSET`, etc. This avoids unnecessary cloning or allocation and enables efficient argument passing by reference.
+///
+/// # Requirements
+///
+/// - The underlying iterator must implement [`Clone`] so it can be traversed twice:
+///   - once for counting arguments (`num_args`)
+///   - once for serializing them (`write_args`)
+/// - The iterator's items must be references to tuples where both key and value types implement [`SingleArg`].
+///
+/// # Examples
+///
+/// ```rust
+/// use rustis::{
+///     client::Client, commands::{FlushingMode, ServerCommands, StringCommands},
+///     resp::{cmd, key_value_args_ref_iter, Value}, Result,
+/// };
+///
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// async fn main() -> Result<()> {
+///     let client = Client::connect("127.0.0.1:6379").await?;
+///     client.flushdb(FlushingMode::Sync).await?;
+///
+///     let map = vec![("foo", 1), ("bar", 2)];
+///     client.mset(key_value_args_ref_iter(map.iter())).await?;
+/// 
+///     Ok(())
+/// }
+/// ```
+///
+/// This also works with arrays and slices:
+///
+/// ```rust
+/// use rustis::{
+///     client::Client, commands::{FlushingMode, ServerCommands, StringCommands},
+///     resp::{cmd, key_value_args_ref_iter, Value}, Result,
+/// };
+///
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// async fn main() -> Result<()> {
+///     let client = Client::connect("127.0.0.1:6379").await?;
+///     client.flushdb(FlushingMode::Sync).await?;
+/// 
+///     let arr = [("a", 42), ("b", 43)];
+///     client.mset(key_value_args_ref_iter(arr.iter())).await?;
+/// 
+///     Ok(())
+/// }
+/// ```
+///
+/// # Note
+/// Most iterators produced by `.iter()` on collections or slices are clonable.  
+/// If you use a non-clonable iterator, this wrapper will not compile.
+///
+/// # Lifetime
+/// The lifetime parameter `'a` ensures that the iterator and the referenced pairs outlive
+/// the usage of this wrapper.
+///
+pub struct KeyValueArgsRefIterator<'a, I, K, V>
+where
+    I: Iterator<Item = &'a (K, V)> + Clone,
+    K: SingleArg + 'a,
+    V: SingleArg + 'a,
+{
+    iter: I,
+}
+
+impl<'a, I, K, V> KeyValueArgsRefIterator<'a, I, K, V>
+where
+    I: Iterator<Item = &'a (K, V)> + Clone,
+    K: SingleArg + 'a,
+    V: SingleArg + 'a,
+{
+    /// Constructs a new `KeyValueArgsRefIterator` from any clonable iterator of references to `(K, V)` pairs.    
+    pub fn new(iter: I) -> Self {
+        KeyValueArgsRefIterator { iter }
+    }
+}
+
+/// Implements argument serialization and counting for an iterator of references to `(K, V)` pairs.
+impl<'a, I, K, V> ToArgs for KeyValueArgsRefIterator<'a, I, K, V>
+where
+    I: Iterator<Item = &'a (K, V)> + Clone,
+    K: SingleArg + 'a,
+    V: SingleArg + 'a,
+{
+    fn write_args(&self, args: &mut CommandArgs) {
+        for (key, value) in self.iter.clone() {
+            key.write_args(args);
+            value.write_args(args);
+        }
+    }
+    fn num_args(&self) -> usize {
+        self.iter
+            .clone()
+            .fold(0, |acc, (k, v)| acc + k.num_args() + v.num_args())
+    }
+}
+
+/// Marks this wrapper as a `KeyValueArgsCollection` for the referenced key and value types.
+impl<'a, I, K, V> KeyValueArgsCollection<K, V> for KeyValueArgsRefIterator<'a, I, K, V>
+where
+    I: Iterator<Item = &'a (K, V)> + Clone,
+    K: SingleArg + 'a,
+    V: SingleArg + 'a,
+{
+}
+
+/// Convenience function for constructing a [`KeyValueArgsRefIterator`] from any clonable iterator of references to `(K, V)` pairs.
+/// 
+/// # Example
+///
+/// ```rust
+/// use rustis::{
+///     client::Client, commands::{FlushingMode, ServerCommands, StringCommands},
+///     resp::{cmd, key_value_args_ref_iter, Value}, Result,
+/// };
+///
+/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// async fn main() -> Result<()> {
+///     let client = Client::connect("127.0.0.1:6379").await?;
+///     client.flushdb(FlushingMode::Sync).await?;
+///
+///     let map = vec![("foo", 1), ("bar", 2)];
+///     client.mset(key_value_args_ref_iter(map.iter())).await?;
+/// 
+///     Ok(())
+/// }
+/// ```
+pub fn key_value_args_ref_iter<'a, I, K, V>(iter: I) -> KeyValueArgsRefIterator<'a, I, K, V>
+where
+    I: Iterator<Item = &'a (K, V)> + Clone,
+    K: SingleArg + 'a,
+    V: SingleArg + 'a,
+{
+    KeyValueArgsRefIterator::new(iter)
 }

@@ -3,7 +3,7 @@ use crate::{
         FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
         SetExpiration, StringCommands,
     },
-    resp::Value,
+    resp::{key_value_args_ref_iter, single_arg_ref_iter, Value},
     tests::get_test_client,
     Error, RedisError, RedisErrorKind, Result,
 };
@@ -437,14 +437,17 @@ async fn mget_mset() -> Result<()> {
 
     client.flushall(FlushingMode::Sync).await?;
 
-    // cleanup
-    client.del(["key1", "key2", "key3", "key4"]).await?;
+    let keys = ["key1", "key2", "key3", "key4"];
 
+    // cleanup
+    client.del(single_arg_ref_iter(keys.iter())).await?;
+
+    let items = [("key1", "value1"), ("key2", "value2"), ("key3", "value3")];
     client
-        .mset([("key1", "value1"), ("key2", "value2"), ("key3", "value3")])
+        .mset(key_value_args_ref_iter(items.iter()))
         .await?;
 
-    let values: Vec<Option<String>> = client.mget(["key1", "key2", "key3", "key4"]).await?;
+    let values: Vec<Option<String>> = client.mget(single_arg_ref_iter(keys.iter())).await?;
     assert_eq!(4, values.len());
     assert!(matches!(&values[0], Some(value) if value == "value1"));
     assert!(matches!(&values[1], Some(value) if value == "value2"));

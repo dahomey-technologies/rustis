@@ -437,6 +437,8 @@ mod bulk_string;
 mod command;
 mod command_args;
 mod command_encoder;
+#[cfg(feature = "json")]
+mod json;
 mod resp_batch_deserializer;
 mod resp_buf;
 mod resp_deserializer;
@@ -454,6 +456,8 @@ pub use bulk_string::*;
 pub use command::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
+#[cfg(feature = "json")]
+pub use json::*;
 pub(crate) use resp_batch_deserializer::*;
 pub use resp_buf::*;
 pub use resp_deserializer::*;

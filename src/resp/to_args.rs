@@ -26,14 +26,14 @@ pub trait ToArgs {
 fn write_integer<I: Integer>(i: I, args: &mut CommandArgs) {
     let mut buf = itoa::Buffer::new();
     let str = buf.format(i);
-    args.write_arg(str.as_bytes());
+    args.write_arg(str.as_bytes().to_vec());
 }
 
 #[inline]
 fn write_float<F: Float>(f: F, args: &mut CommandArgs) {
     let mut buf = dtoa::Buffer::new();
     let str = buf.format(f);
-    args.write_arg(str.as_bytes());
+    args.write_arg(str.as_bytes().to_vec());
 }
 
 impl ToArgs for i8 {
@@ -116,63 +116,63 @@ impl ToArgs for f64 {
 impl ToArgs for bool {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(if *self { b"1" } else { b"0" });
+        args.write_arg(if *self { vec![b'1'] } else { vec![b'0'] });
     }
 }
 
 impl ToArgs for BulkString {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.as_bytes().to_vec());
     }
 }
 
 impl ToArgs for Vec<u8> {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_slice());
+        args.write_arg(self.clone());
     }
 }
 
 impl ToArgs for &[u8] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self);
+        args.write_arg(self.to_vec());
     }
 }
 
 impl<const N: usize> ToArgs for &[u8; N] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_slice());
+        args.write_arg(self.as_slice().to_vec());
     }
 }
 
 impl<const N: usize> ToArgs for [u8; N] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_slice());
+        args.write_arg(self.as_slice().to_vec());
     }
 }
 
 impl ToArgs for &str {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.as_bytes().to_vec());
     }
 }
 
 impl ToArgs for String {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.as_bytes().to_vec());
     }
 }
 
 impl ToArgs for &String {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
-        args.write_arg(self.as_bytes());
+        args.write_arg(self.as_bytes().to_vec());
     }
 }
 
@@ -181,7 +181,7 @@ impl ToArgs for char {
     fn write_args(&self, args: &mut CommandArgs) {
         let mut buf: [u8; 4] = [0; 4];
         self.encode_utf8(&mut buf);
-        args.write_arg(buf.as_slice());
+        args.write_arg(buf.as_slice().to_vec());
     }
 }
 
@@ -376,7 +376,7 @@ impl ToArgs for CommandArgs {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self {
-            args.write_arg(arg);
+            args.write_arg(arg.to_vec());
         }
     }
 
@@ -390,7 +390,7 @@ impl ToArgs for &CommandArgs {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self.into_iter() {
-            args.write_arg(arg);
+            args.write_arg(arg.to_vec());
         }
     }
 

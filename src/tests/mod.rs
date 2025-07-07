@@ -19,6 +19,8 @@ mod geo_commands;
 mod graph_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
+#[cfg(feature = "json")]
+mod json;
 mod json_commands;
 mod list_commands;
 mod multiplexed_client;

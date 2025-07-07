@@ -33,7 +33,7 @@ use serde::{
 ///     let user1 = User { id: 12, name: "foo".to_string() };
 ///     client.set("user:123", JsonRef(&user1)).await;
 ///     let Json(user2): Json<User> = client.get("user:123").await?;
-/// 
+///
 ///     assert_eq!(user1, user2);
 ///     Ok(())
 /// }
@@ -148,7 +148,7 @@ impl<T> SingleArg for Json<T> where T: Serialize {}
 ///     let user1 = User { id: 12, name: "foo".to_string() };
 ///     client.set("user:123", JsonRef(&user1)).await;
 ///     let Json(user2): Json<User> = client.get("user:123").await?;
-/// 
+///
 ///     assert_eq!(user1, user2);
 ///     Ok(())
 /// }

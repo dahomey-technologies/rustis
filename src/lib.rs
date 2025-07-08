@@ -152,13 +152,13 @@ async fn main() -> Result<()> {
 See the module [`cache`] to discover how you can implement client-side caching.
 */
 
+#[cfg(feature = "client-cache")]
+pub mod cache;
 pub mod client;
 pub mod commands;
 mod error;
 mod network;
 pub mod resp;
-#[cfg(feature = "client-cache")]
-pub mod cache;
 
 #[cfg(feature = "pool")]
 pub use bb8;

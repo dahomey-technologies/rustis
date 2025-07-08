@@ -53,9 +53,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 2]
@@ -64,9 +62,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 3]
@@ -75,9 +71,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 4]
@@ -86,9 +80,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 5]
@@ -97,9 +89,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 6]
@@ -108,9 +98,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 7]
@@ -119,9 +107,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 8]
@@ -130,9 +116,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 9]
@@ -141,9 +125,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 10]
@@ -152,9 +134,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 11]
@@ -163,9 +143,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 12]
@@ -174,9 +152,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 13]
@@ -185,9 +161,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 14]
@@ -196,9 +170,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 impl<T> CollectionResponse<T> for [T; 15]
@@ -207,9 +179,7 @@ where
 {
     fn from_collection<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut it = iter.into_iter();
-        std::array::from_fn(|_| {
-            it.next().expect("Not enough elements in iterator")
-        })
+        std::array::from_fn(|_| it.next().expect("Not enough elements in iterator"))
     }
 }
 

@@ -267,7 +267,10 @@ impl Client {
     #[inline]
     fn send_message(&self, message: Message) -> Result<()> {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
-            trace!("[{}], Will enqueue message: {message:?}", self.connection_tag);
+            trace!(
+                "[{}], Will enqueue message: {message:?}",
+                self.connection_tag
+            );
             Ok(msg_sender.unbounded_send(message).map_err(|e| {
                 info!("{}", e);
                 Error::Client("Disconnected from server".to_string())

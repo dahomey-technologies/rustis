@@ -106,7 +106,9 @@ pub(crate) struct NetworkHandler {
 }
 
 impl NetworkHandler {
-    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, String)> {
+    pub async fn connect(
+        config: Config,
+    ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, String)> {
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;

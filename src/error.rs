@@ -34,6 +34,8 @@ pub enum RetryReason {
 pub enum Error {
     /// Raised if an error occurs within the driver
     Client(String),
+    /// Raised if a required cache key is in the wrong type
+    CacheWrongKeyType,
     /// Raised if an error occurs in the [`Config`](crate::client::Config) parsing
     Config(String),
     /// A transaction has been aborted
@@ -66,8 +68,9 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Client(e) => f.write_fmt(format_args!("Client error: {}", e)),
+            Error::CacheWrongKeyType => f.write_str("Cache wrong key type"),
             Error::Config(e) => f.write_fmt(format_args!("Config error: {}", e)),
-            Error::Aborted => f.write_fmt(format_args!("Transaction aborted")),
+            Error::Aborted => f.write_str("Transaction aborted"),
             Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
             Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
             Error::IO(e) => f.write_fmt(format_args!("IO error: {}", e)),

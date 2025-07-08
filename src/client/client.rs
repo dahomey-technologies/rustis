@@ -24,7 +24,6 @@ use crate::{
     Error, Future, Result,
 };
 use futures_channel::{mpsc, oneshot};
-use futures_util::Stream;
 use log::{info, trace};
 use serde::de::DeserializeOwned;
 use std::{
@@ -42,6 +41,7 @@ pub struct Client {
     client_state: Arc<RwLock<ClientState>>,
     command_timeout: Duration,
     retry_on_error: bool,
+    connection_tag: String,
 }
 
 impl Drop for Client {
@@ -77,7 +77,7 @@ impl Client {
         let config = config.into_config()?;
         let command_timeout = config.command_timeout;
         let retry_on_error = config.retry_on_error;
-        let (msg_sender, network_task_join_handle, reconnect_sender) =
+        let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag) =
             NetworkHandler::connect(config.into_config()?).await?;
 
         Ok(Self {
@@ -87,7 +87,13 @@ impl Client {
             client_state: Arc::new(RwLock::new(ClientState::new())),
             command_timeout,
             retry_on_error,
+            connection_tag,
         })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn connection_tag(&self) -> &str {
+        &self.connection_tag
     }
 
     /// if this client is the last client on the shared connection, the channel to send messages
@@ -261,7 +267,7 @@ impl Client {
     #[inline]
     fn send_message(&self, message: Message) -> Result<()> {
         if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
-            trace!("Will enqueue message: {message:?}");
+            trace!("[{}], Will enqueue message: {message:?}", self.connection_tag);
             Ok(msg_sender.unbounded_send(message).map_err(|e| {
                 info!("{}", e);
                 Error::Client("Disconnected from server".to_string())
@@ -294,7 +300,7 @@ impl Client {
 
     pub fn create_client_tracking_invalidation_stream(
         &self,
-    ) -> Result<impl Stream<Item = Vec<String>>> {
+    ) -> Result<ClientTrackingInvalidationStream> {
         let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
         let message = Message::client_tracking_invalidation(push_sender);
         self.send_message(message)?;

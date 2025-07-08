@@ -4,7 +4,7 @@ use crate::resp::ToArgs;
 use std::fmt;
 
 /// Collection of arguments of [`Command`](crate::resp::Command).
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Eq, Hash)]
 pub struct CommandArgs {
     args: SmallVec<[Vec<u8>; 10]>,
 }
@@ -102,6 +102,32 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|v| v.as_slice())
+    }
+}
+
+impl IntoIterator for CommandArgs {
+    type Item = Vec<u8>;
+    type IntoIter = CommandArgsIntoIterator;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        CommandArgsIntoIterator {
+            iter: self.args.into_iter(),
+        }
+    }
+}
+
+/// [`CommandArgs`] into iterator
+pub struct CommandArgsIntoIterator {
+    iter: <SmallVec<[Vec<u8>; 10]> as IntoIterator>::IntoIter,
+}
+
+impl Iterator for CommandArgsIntoIterator {
+    type Item = Vec<u8>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
     }
 }
 

@@ -5,7 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-pub(crate) struct ClientTrackingInvalidationStream {
+pub struct ClientTrackingInvalidationStream {
     receiver: PushReceiver,
 }
 

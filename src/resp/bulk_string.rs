@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, ops::Deref};
 
 /// Represents the [Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings) RESP type
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Hash, PartialEq, Eq, Clone)]
 pub struct BulkString(
     #[serde(
         deserialize_with = "deserialize_byte_buf",
@@ -60,5 +60,11 @@ impl fmt::Debug for BulkString {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("BulkString").field(&self.0).finish()
+    }
+}
+
+impl fmt::Display for BulkString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(String::from_utf8_lossy(&self.0).as_ref())
     }
 }

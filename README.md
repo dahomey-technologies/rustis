@@ -37,6 +37,7 @@ An asynchronous Redis client for Rust.
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support (minimus supported Redis version is 6)
+* [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 # Basic Usage
@@ -70,8 +71,8 @@ async fn main() -> Result<()> {
 # Tests
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
-2. run `cargo test --features pool,tokio-rustls` (Tokio runtime)
-3. run `cargo test --no-default-features --features async-std-runtime,async-std-native-tls` (async-std runtime)
+2. run `cargo test --features pool,tokio-rustls,json,client-cache` (Tokio runtime)
+3. run `cargo test --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache` (async-std runtime)
 4. run `cargo fmt --all -- --check`
 
 # Benchmarks

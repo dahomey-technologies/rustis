@@ -6,6 +6,8 @@ mod cluster;
 mod cluster_commands;
 mod command_args;
 mod command_info_manager;
+#[cfg(feature = "client-cache")]
+mod cache;
 mod config;
 mod connection_commands;
 mod count_min_sktech_commands;

@@ -178,7 +178,7 @@ pub trait SetCommands<'a> {
     where
         Self: Sized,
         K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
+        M: PrimitiveResponse + DeserializeOwned,
         A: CollectionResponse<M> + DeserializeOwned,
     {
         prepare_command(self, cmd("SMEMBERS").arg(key))

@@ -106,7 +106,7 @@ pub(crate) struct NetworkHandler {
 }
 
 impl NetworkHandler {
-    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender)> {
+    pub async fn connect(config: Config) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, String)> {
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;
@@ -133,7 +133,7 @@ impl NetworkHandler {
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
             auto_remonitor,
-            tag,
+            tag: tag.clone(),
             reconnection_state: ReconnectionState::new(reconnection_config),
         };
 
@@ -143,7 +143,7 @@ impl NetworkHandler {
             }
         });
 
-        Ok((msg_sender, join_handle, reconnect_sender))
+        Ok((msg_sender, join_handle, reconnect_sender, tag))
     }
 
     async fn network_loop(&mut self) -> Result<()> {
@@ -277,8 +277,7 @@ impl NetworkHandler {
                     };
                     if let Some(subscription_type) = subscription_type {
                         self.pending_unsubscriptions.push_back(
-                            command
-                                .args
+                            (&command.args)
                                 .into_iter()
                                 .map(|a| (a.to_vec(), subscription_type))
                                 .collect(),
@@ -342,7 +341,7 @@ impl NetworkHandler {
 
             for command in commands.into_iter() {
                 if command.name == "CLIENT" {
-                    let mut args = command.args.into_iter();
+                    let mut args = (&command.args).into_iter();
 
                     match (args.next(), args.next()) {
                         (Some(b"REPLY"), Some(b"OFF")) => self.is_reply_on = false,

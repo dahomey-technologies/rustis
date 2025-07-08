@@ -25,6 +25,7 @@ rustis is a Redis client for Rust.
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support
+* [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 # Optional Features
@@ -35,7 +36,8 @@ rustis is a Redis client for Rust.
 | `tokio-rustls` | Tokio Rustls TLS support (optional) |
 | `tokio-native-tls` | Tokio native_tls TLS support (optional) |
 | `async-std-native-tls` | async-std native_tls TLS support (optional) |
-| `json` | Enables JSON (de)serialization support via `serde_json`            |
+| `json` | Enables JSON (de)serialization support via `serde_json` |
+| `client-cache` | Enables client-side caching support |
 | `pool` | Pooled client manager (optional) |
 | `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
 
@@ -145,6 +147,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+# Client-side caching
+See the module [`cache`] to discover how you can implement client-side caching.
 */
 
 pub mod client;
@@ -152,6 +157,8 @@ pub mod commands;
 mod error;
 mod network;
 pub mod resp;
+#[cfg(feature = "client-cache")]
+pub mod cache;
 
 #[cfg(feature = "pool")]
 pub use bb8;

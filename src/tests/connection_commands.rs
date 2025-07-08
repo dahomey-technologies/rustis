@@ -238,22 +238,15 @@ async fn client_setinfo() -> Result<()> {
 async fn client_tracking() -> Result<()> {
     log_try_init();
     let client1 = Client::connect("redis://127.0.0.1?connection_name=client1").await?;
-    let client1_invalidations =
-        Client::connect("redis://127.0.0.1?connection_name=client1_invalidations").await?;
     let client2 = Client::connect("redis://127.0.0.1?connection_name=client2").await?;
 
     // prepare invalidations
-    let invalidation_id = client1_invalidations.client_id().await?;
-    let mut invalidation_stream =
-        client1_invalidations.create_client_tracking_invalidation_stream()?;
+    let mut invalidation_stream = client1.create_client_tracking_invalidation_stream()?;
 
     client1.set("key", "value").await?;
 
     client1
-        .client_tracking(
-            ClientTrackingStatus::On,
-            ClientTrackingOptions::default().redirect(invalidation_id),
-        )
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
         .await?;
 
     // Redis track our local caching
@@ -273,9 +266,7 @@ async fn client_tracking() -> Result<()> {
     client1
         .client_tracking(
             ClientTrackingStatus::On,
-            ClientTrackingOptions::default()
-                .redirect(invalidation_id)
-                .optin(),
+            ClientTrackingOptions::default().optin(),
         )
         .await?;
 
@@ -302,10 +293,7 @@ async fn client_tracking() -> Result<()> {
     client1
         .client_tracking(
             ClientTrackingStatus::On,
-            ClientTrackingOptions::default()
-                .redirect(invalidation_id)
-                .prefix("k")
-                .broadcasting(),
+            ClientTrackingOptions::default().prefix("k").broadcasting(),
         )
         .await?;
 

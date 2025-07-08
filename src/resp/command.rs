@@ -1,7 +1,9 @@
 use crate::resp::{CommandArgs, ToArgs};
-
 #[cfg(debug_assertions)]
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    hash::{Hash, Hasher},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 #[cfg(debug_assertions)]
 static COMMAND_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -14,7 +16,7 @@ pub fn cmd(name: &'static str) -> Command {
 }
 
 /// Generic command meant to be sent to the Redis Server
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct Command {
     /// Name of the command.
     ///
@@ -78,5 +80,18 @@ impl Command {
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {
         self.kill_connection_on_write = num_kills;
         self
+    }
+}
+
+impl PartialEq for Command {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.args == other.args
+    }
+}
+
+impl Hash for Command {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.args.hash(state);
     }
 }

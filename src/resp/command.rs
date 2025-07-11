@@ -1,9 +1,9 @@
 use crate::resp::{CommandArgs, ToArgs};
+
+use std::hash::{Hash, Hasher};
+
 #[cfg(debug_assertions)]
-use std::{
-    hash::{Hash, Hasher},
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(debug_assertions)]
 static COMMAND_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);

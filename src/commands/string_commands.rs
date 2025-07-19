@@ -100,7 +100,7 @@ pub trait StringCommands<'a> {
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
-    ///     client.flushdb(FlushingMode::Sync).await?;
+    ///     client.flushall(FlushingMode::Sync).await?;
     ///
     ///     // return value can be an Option<String>...
     ///     let value: Option<String> = client.get("key").await?;
@@ -175,7 +175,7 @@ pub trait StringCommands<'a> {
     /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
-    ///     client.flushdb(FlushingMode::Sync).await?;
+    ///     client.flushall(FlushingMode::Sync).await?;
     ///
     ///     client.set("key", "value").await?;
     ///     let value: String = client.getex("key", GetExOptions::Ex(60)).await?;
@@ -209,29 +209,29 @@ pub trait StringCommands<'a> {
     ///
     /// # Example
     /// ```
-    /// # use rustis::{
-    /// #    client::Client,
-    /// #    commands::{FlushingMode, ServerCommands, StringCommands},
-    /// #    Result,
-    /// # };
+    /// use rustis::{
+    ///     client::Client,
+    ///     commands::{FlushingMode, ServerCommands, StringCommands},
+    ///     Result,
+    /// };
     ///
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
-    /// # async fn main() -> Result<()> {
-    /// #    let client = Client::connect("127.0.0.1:6379").await?;
-    /// #    client.flushdb(FlushingMode::Sync).await?;
-    /// client.set("mykey", "This is a string").await?;
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// async fn main() -> Result<()> {
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     client.flushall(FlushingMode::Sync).await?;
+    ///     client.set("mykey", "This is a string").await?;
     ///
-    /// let value: String = client.getrange("mykey", 0, 3).await?;
-    /// assert_eq!("This", value);
-    /// let value: String = client.getrange("mykey", -3, -1).await?;
-    /// assert_eq!("ing", value);
-    /// let value: String = client.getrange("mykey", 0, -1).await?;
-    /// assert_eq!("This is a string", value);
-    /// let value: String = client.getrange("mykey", 10, 100).await?;
-    /// assert_eq!("string", value);
-    /// #    Ok(())
-    /// # }
+    ///     let value: String = client.getrange("mykey", 0, 3).await?;
+    ///     assert_eq!("This", value);
+    ///     let value: String = client.getrange("mykey", -3, -1).await?;
+    ///     assert_eq!("ing", value);
+    ///     let value: String = client.getrange("mykey", 0, -1).await?;
+    ///     assert_eq!("This is a string", value);
+    ///     let value: String = client.getrange("mykey", 10, 100).await?;
+    ///     assert_eq!("string", value);
+    ///     Ok(())
+    /// }
     /// ```
     ///
     /// # See Also

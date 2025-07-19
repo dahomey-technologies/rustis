@@ -63,41 +63,45 @@ pub trait ServerCommands<'a> {
     ///
     /// # Example
     /// ```
-    /// # use rustis::{
-    /// #    client::Client,
-    /// #    commands::{ServerCommands, AclDryRunOptions},
-    /// #    resp::cmd,
-    /// #    Result,
-    /// # };
-    /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
-    /// # async fn main() -> Result<()> {
-    /// #     let client = Client::connect("127.0.0.1:6379").await?;
-    /// #     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
-    /// client
-    ///     .acl_dryrun(
-    ///         "VIRGINIA",
-    ///         "SET",
-    ///         AclDryRunOptions::default().arg("foo").arg("bar"),
-    ///     )
-    ///     .await?;
+    /// use rustis::{
+    ///     client::Client,
+    ///     commands::{AclDryRunOptions, FlushingMode, ServerCommands},
+    ///     resp::cmd,
+    ///     Result,
+    /// };
     ///
-    /// let result: String = client
-    ///     .acl_dryrun(
-    ///         "VIRGINIA",
-    ///         "GET",
-    ///         AclDryRunOptions::default().arg("foo")
-    ///     )
-    ///     .await?;
+    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
+    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// async fn main() -> Result<()> {
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     client.flushall(FlushingMode::Sync).await?;
     ///
-    /// assert_eq!(
-    ///     "User VIRGINIA has no permissions to run the 'get' command",
-    ///     result
-    /// );
-    /// #     client.acl_deluser("VIRGINIA").await?;
-    /// #     Ok(())
-    /// # }
+    ///     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
+    ///
+    ///     let result: String = client
+    ///         .acl_dryrun(
+    ///             "VIRGINIA",
+    ///             "SET",
+    ///             AclDryRunOptions::default().arg("foo").arg("bar"),
+    ///         )
+    ///         .await?;
+    ///     assert_eq!("OK", result);
+    ///
+    ///     let result: String = client
+    ///         .acl_dryrun(
+    ///             "VIRGINIA",
+    ///             "GET",
+    ///             AclDryRunOptions::default().arg("foo")
+    ///         )
+    ///         .await?;
+    ///     assert_eq!(
+    ///         "User VIRGINIA has no permissions to run the 'get' command",
+    ///         result
+    ///     );
+    ///
+    ///     client.acl_deluser("VIRGINIA").await?;
+    ///     Ok(())
+    /// }
     /// ```
     ///
     /// # See Also

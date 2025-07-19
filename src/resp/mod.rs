@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
     // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
+    client.flushall(FlushingMode::Sync).await?;
 
     client.zadd("key", (1.0, "member1"), ZAddOptions::default()).await?;
     client.zadd("key", [(1.0, "member1"), (2.0, "member2")], ZAddOptions::default()).await?;

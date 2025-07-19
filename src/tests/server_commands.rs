@@ -59,13 +59,15 @@ async fn acl_dryrun() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     client.acl_setuser("VIRGINIA", ["+SET", "~*"]).await?;
-    client
-        .acl_dryrun::<_, _, String>(
+    let result: String = client
+        .acl_dryrun(
             "VIRGINIA",
             "SET",
             AclDryRunOptions::default().arg("foo").arg("bar"),
         )
         .await?;
+    assert_eq!("OK", result);
+
     let result: String = client
         .acl_dryrun("VIRGINIA", "GET", AclDryRunOptions::default().arg("foo"))
         .await?;

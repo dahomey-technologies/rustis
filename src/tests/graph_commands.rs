@@ -1,11 +1,11 @@
 use crate::{
+    Error, Result,
     commands::{
         FlushingMode, GraphCommands, GraphQueryOptions, GraphSlowlogResult, GraphValue,
         ServerCommands,
     },
     resp::Value,
     tests::get_redis_stack_test_client,
-    Error, Result,
 };
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};

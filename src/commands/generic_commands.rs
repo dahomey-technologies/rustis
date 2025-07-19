@@ -1,11 +1,11 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, deserialize_byte_buf, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs,
+        CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
+        cmd, deserialize_byte_buf,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 /// A group of generic Redis commands
 ///

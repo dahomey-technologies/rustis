@@ -1,8 +1,8 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection,
-        ToArgs,
+        CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
+        cmd,
     },
 };
 use serde::de::DeserializeOwned;

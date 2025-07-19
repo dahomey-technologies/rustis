@@ -1,7 +1,5 @@
 use crate::resp::{CommandArgs, ToArgs};
-
 use std::hash::{Hash, Hasher};
-
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 

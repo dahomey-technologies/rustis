@@ -1,11 +1,11 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, deserialize_vec_of_pairs, CommandArgs, MultipleArgsCollection, PrimitiveResponse,
-        SingleArg, SingleArgCollection, ToArgs,
+        CommandArgs, MultipleArgsCollection, PrimitiveResponse, SingleArg, SingleArgCollection,
+        ToArgs, cmd, deserialize_vec_of_pairs,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Sorted Sets`](https://redis.io/docs/data-types/sorted-sets/)
 ///

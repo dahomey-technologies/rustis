@@ -1,11 +1,11 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     commands::{
         FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
         SetExpiration, StringCommands,
     },
-    resp::{key_value_args_ref_iter, single_arg_ref_iter, Value},
+    resp::{Value, key_value_args_ref_iter, single_arg_ref_iter},
     tests::get_test_client,
-    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};

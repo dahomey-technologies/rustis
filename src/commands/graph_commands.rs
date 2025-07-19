@@ -1,15 +1,15 @@
 use crate::{
-    client::{prepare_command, Client, PreparedCommand},
+    Error, Future, Result,
+    client::{Client, PreparedCommand, prepare_command},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
     resp::{
-        cmd, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
-        PrimitiveResponse, RespBuf, RespDeserializer, SingleArg, ToArgs,
+        CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
+        RespBuf, RespDeserializer, SingleArg, ToArgs, cmd,
     },
-    Error, Future, Result,
 };
 use serde::{
-    de::{self, DeserializeOwned, DeserializeSeed, Visitor},
     Deserialize, Deserializer,
+    de::{self, DeserializeOwned, DeserializeSeed, Visitor},
 };
 use smallvec::SmallVec;
 use std::{collections::HashMap, fmt, future, str::FromStr};

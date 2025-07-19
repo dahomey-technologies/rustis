@@ -1,15 +1,15 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        cmd, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
+        CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
         MultipleArgsCollection, PrimitiveResponse, RespDeserializer, SingleArg,
-        SingleArgCollection, ToArgs, Value,
+        SingleArgCollection, ToArgs, Value, cmd,
     },
 };
 use serde::{
-    de::{self, value::MapAccessDeserializer, DeserializeOwned, DeserializeSeed, Visitor},
     Deserialize, Deserializer,
+    de::{self, DeserializeOwned, DeserializeSeed, Visitor, value::MapAccessDeserializer},
 };
 use std::{collections::HashMap, fmt, future};
 

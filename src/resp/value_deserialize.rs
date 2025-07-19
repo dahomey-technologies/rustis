@@ -1,7 +1,7 @@
 use crate::resp::Value;
 use serde::{
-    de::{MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer,
+    de::{MapAccess, SeqAccess, Visitor},
 };
 use std::{collections::HashMap, fmt};
 

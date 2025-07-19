@@ -1,11 +1,11 @@
 use crate::{
+    Result,
     commands::{
         FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
         XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingOptions,
         XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

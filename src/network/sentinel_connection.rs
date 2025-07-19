@@ -1,8 +1,9 @@
 use crate::{
+    Error, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
     resp::{Command, RespBuf},
-    sleep, Error, Result, RetryReason, StandaloneConnection,
+    sleep,
 };
 use log::debug;
 use smallvec::SmallVec;
@@ -106,7 +107,10 @@ impl SentinelConnection {
                         continue;
                     }
                     Err(e) => {
-                        debug!("Cannot execute command `SENTINEL get-master-addr-by-name` with Sentinel {}:{}: {}", *host, *port, e);
+                        debug!(
+                            "Cannot execute command `SENTINEL get-master-addr-by-name` with Sentinel {}:{}: {}",
+                            *host, *port, e
+                        );
                         continue;
                     }
                 };

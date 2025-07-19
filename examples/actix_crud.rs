@@ -1,5 +1,5 @@
 use actix_web::{
-    delete, get, http::StatusCode, post, web, App, HttpResponse, HttpServer, Responder,
+    App, HttpResponse, HttpServer, Responder, delete, get, http::StatusCode, post, web,
 };
 use rustis::{
     client::Client,

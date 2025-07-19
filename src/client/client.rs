@@ -3,6 +3,7 @@ use crate::commands::DebugCommands;
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
+    Error, Future, Result,
     client::{
         ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
         Pipeline, PreparedCommand, PubSubStream, Transaction,
@@ -16,12 +17,11 @@ use crate::{
         TopKCommands, TransactionCommands, VectorSetCommands,
     },
     network::{
-        timeout, JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
+        JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
-        ResultsReceiver, ResultsSender,
+        ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{cmd, Command, CommandArgs, RespBuf, Response, SingleArg, SingleArgCollection},
-    Error, Future, Result,
+    resp::{Command, CommandArgs, RespBuf, Response, SingleArg, SingleArgCollection, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};

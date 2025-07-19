@@ -1,12 +1,12 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
     resp::{
-        cmd, deserialize_vec_of_pairs, CollectionResponse, CommandArgs, KeyValueArgsCollection,
-        KeyValueCollectionResponse, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
+        CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, cmd, deserialize_vec_of_pairs,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Hashes`](https://redis.io/docs/data-types/hashes/)
 ///

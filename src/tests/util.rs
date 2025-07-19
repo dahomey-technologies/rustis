@@ -1,6 +1,6 @@
 use crate::{
-    client::{Client, Config, IntoConfig},
     Result,
+    client::{Client, Config, IntoConfig},
 };
 #[cfg(feature = "native-tls")]
 use native_tls::Certificate;

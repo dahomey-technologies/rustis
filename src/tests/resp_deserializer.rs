@@ -1,5 +1,5 @@
 use crate::{
-    resp::RespDeserializer, tests::log_try_init, Error, RedisError, RedisErrorKind, Result,
+    Error, RedisError, RedisErrorKind, Result, resp::RespDeserializer, tests::log_try_init,
 };
 use serde::Deserialize;
 use smallvec::SmallVec;

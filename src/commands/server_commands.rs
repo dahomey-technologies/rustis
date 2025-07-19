@@ -1,14 +1,14 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
-    resp::{
-        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
-        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
-    },
     Error, Result,
+    client::{PreparedCommand, prepare_command},
+    resp::{
+        CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
+        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value, cmd,
+    },
 };
 use serde::{
-    de::{self, DeserializeOwned, SeqAccess, Visitor},
     Deserialize, Deserializer,
+    de::{self, DeserializeOwned, SeqAccess, Visitor},
 };
 use std::{collections::HashMap, fmt, str::FromStr};
 

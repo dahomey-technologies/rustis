@@ -1,14 +1,14 @@
 use crate::{
+    Error, PubSubReceiver, Result,
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
     resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection},
-    Error, PubSubReceiver, Result,
 };
 use futures_util::{Stream, StreamExt};
 use serde::{
-    de::{self, Visitor},
     Deserialize,
+    de::{self, Visitor},
 };
 use std::{
     fmt,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{resp::Value, Result};
+use crate::{Result, resp::Value};
 use serde::Deserialize;
 use smallvec::SmallVec;
 
@@ -19,12 +19,16 @@ fn map_to_tuple_vec() -> Result<()> {
 
     let values: Vec<(String, String)> = value.into()?;
     assert_eq!(2, values.len());
-    assert!(values
-        .iter()
-        .any(|i| *i == ("field1".to_owned(), "hello".to_owned())));
-    assert!(values
-        .iter()
-        .any(|i| *i == ("field2".to_owned(), "world".to_owned())));
+    assert!(
+        values
+            .iter()
+            .any(|i| *i == ("field1".to_owned(), "hello".to_owned()))
+    );
+    assert!(
+        values
+            .iter()
+            .any(|i| *i == ("field2".to_owned(), "world".to_owned()))
+    );
 
     Ok(())
 }
@@ -44,12 +48,16 @@ fn map_to_tuple_smallvec() -> Result<()> {
 
     let values: SmallVec<[(String, String); 2]> = value.into()?;
     assert_eq!(2, values.len());
-    assert!(values
-        .iter()
-        .any(|i| *i == ("field1".to_owned(), "hello".to_owned())));
-    assert!(values
-        .iter()
-        .any(|i| *i == ("field2".to_owned(), "world".to_owned())));
+    assert!(
+        values
+            .iter()
+            .any(|i| *i == ("field1".to_owned(), "hello".to_owned()))
+    );
+    assert!(
+        values
+            .iter()
+            .any(|i| *i == ("field2".to_owned(), "world".to_owned()))
+    );
 
     Ok(())
 }

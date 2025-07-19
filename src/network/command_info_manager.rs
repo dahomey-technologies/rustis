@@ -1,8 +1,8 @@
 use crate::{
+    Error, Result, StandaloneConnection,
     commands::{BeginSearch, CommandInfo, FindKeys, ServerCommands},
     network::Version,
-    resp::{cmd, Command, CommandArgs},
-    Error, Result, StandaloneConnection,
+    resp::{Command, CommandArgs, cmd},
 };
 use smallvec::SmallVec;
 use std::collections::HashMap;

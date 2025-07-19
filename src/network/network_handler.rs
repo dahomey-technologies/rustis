@@ -1,13 +1,14 @@
 use super::util::RefPubSubMessage;
 use crate::{
+    Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{cmd, Command, RespBuf},
-    spawn, timeout, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
+    resp::{Command, RespBuf, cmd},
+    spawn, timeout,
 };
 use futures_channel::{mpsc, oneshot};
-use futures_util::{select, FutureExt, SinkExt, StreamExt};
-use log::{debug, error, info, log_enabled, trace, warn, Level};
+use futures_util::{FutureExt, SinkExt, StreamExt, select};
+use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, VecDeque},
@@ -195,8 +196,7 @@ impl NetworkHandler {
     async fn handle_message(&mut self, mut msg: Message) {
         trace!(
             "[{}][{:?}] Will handle message: {msg:?}",
-            self.tag,
-            self.status
+            self.tag, self.status
         );
         let pub_sub_senders = msg.pub_sub_senders.take();
         if let Some(pub_sub_senders) = pub_sub_senders {
@@ -409,7 +409,10 @@ impl NetworkHandler {
                             }
                         }
                         None => {
-                            warn!("[{}] Received a push message with no sender configured: {resp_buf}", self.tag)
+                            warn!(
+                                "[{}] Received a push message with no sender configured: {resp_buf}",
+                                self.tag
+                            )
                         }
                     },
                     _ => {
@@ -507,13 +510,15 @@ impl NetworkHandler {
                         } else {
                             trace!(
                                 "[{}] Will respond to: {:?}",
-                                self.tag,
-                                message_to_receive.message
+                                self.tag, message_to_receive.message
                             );
                             match message_to_receive.message.commands {
                                 Commands::Single(_, Some(result_sender)) => {
                                     if let Err(e) = result_sender.send(result) {
-                                        warn!("[{}] Cannot send value to caller because receiver is not there anymore: {e:?}", self.tag);
+                                        warn!(
+                                            "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                                            self.tag
+                                        );
                                     }
                                 }
                                 Commands::Batch(_, results_sender) => match result {
@@ -524,17 +529,26 @@ impl NetworkHandler {
                                             pending_replies.push(resp_buf);
                                             if let Err(e) = results_sender.send(Ok(pending_replies))
                                             {
-                                                warn!("[{}] Cannot send value to caller because receiver is not there anymore: {e:?}", self.tag);
+                                                warn!(
+                                                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                                                    self.tag
+                                                );
                                             }
                                         } else if let Err(e) =
                                             results_sender.send(Ok(vec![resp_buf]))
                                         {
-                                            warn!("[{}] Cannot send value to caller because receiver is not there anymore: {e:?}", self.tag);
+                                            warn!(
+                                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                                                self.tag
+                                            );
                                         }
                                     }
                                     Err(e) => {
                                         if let Err(e) = results_sender.send(Err(e)) {
-                                            warn!("[{}] Cannot send value to caller because receiver is not there anymore: {e:?}", self.tag);
+                                            warn!(
+                                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                                                self.tag
+                                            );
                                         }
                                     }
                                 },

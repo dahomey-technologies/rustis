@@ -1,5 +1,5 @@
 use crate::resp::{BytesSeed, RespBuf, RespDeserializer};
-use serde::{de::Visitor, Deserializer};
+use serde::{Deserializer, de::Visitor};
 use std::fmt;
 
 pub enum RefPubSubMessage<'a> {

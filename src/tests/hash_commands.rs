@@ -4,12 +4,12 @@ use std::{
 };
 
 use crate::{
+    Result,
     commands::{
         ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult,
         HSetExCondition, HashCommands, ServerCommands, SetExpiration,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 
@@ -602,9 +602,11 @@ async fn hrandfield() -> Result<()> {
     let values: Vec<(String, String)> = client.hrandfields_with_values("coin", 5).await?;
     assert_eq!(3, values.len());
     for value in values {
-        assert!(fields_and_values
-            .iter()
-            .any(|v| v.0 == value.0 && v.1 == value.1));
+        assert!(
+            fields_and_values
+                .iter()
+                .any(|v| v.0 == value.0 && v.1 == value.1)
+        );
     }
 
     Ok(())

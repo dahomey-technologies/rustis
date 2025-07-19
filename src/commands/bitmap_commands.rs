@@ -1,6 +1,6 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
-    resp::{cmd, CommandArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, ToArgs},
+    client::{PreparedCommand, prepare_command},
+    resp::{CommandArgs, MultipleArgsCollection, SingleArg, SingleArgCollection, ToArgs, cmd},
 };
 
 /// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/)

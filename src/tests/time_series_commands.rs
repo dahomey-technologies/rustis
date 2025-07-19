@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     commands::{
         FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
         TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsGetOptions, TsGroupByOptions,
@@ -6,7 +7,6 @@ use crate::{
         TsSample,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 use std::collections::HashMap;

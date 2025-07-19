@@ -1,4 +1,5 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult, CommandTip,
@@ -6,16 +7,15 @@ use crate::{
     },
     network::{CommandInfoManager, Version},
     resp::{Command, RespBuf, RespDeserializer, RespSerializer},
-    Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
 };
-use futures_util::{future, FutureExt};
+use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
 use rand::Rng;
 use serde::{
-    de::{self, value::SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
+    de::{self, value::SeqAccessDeserializer},
 };
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -545,8 +545,7 @@ impl ClusterConnection {
             self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
             trace!(
                 "[{}] Did store sub-request result into {:?}",
-                self.tag,
-                self.pending_requests[req_idx]
+                self.tag, self.pending_requests[req_idx]
             );
         }
 
@@ -622,12 +621,8 @@ impl ClusterConnection {
                 ResponsePolicy::AggLogicalAnd => {
                     self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
                 }
-                ResponsePolicy::AggLogicalOr => {
-                    self.response_policy_agg(
-                        sub_results,
-                        |a, b| if a == 0 && b == 0 { 0 } else { 1 },
-                    )
-                }
+                ResponsePolicy::AggLogicalOr => self
+                    .response_policy_agg(sub_results, |a, b| if a == 0 && b == 0 { 0 } else { 1 }),
                 ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
                 ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
                 ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),

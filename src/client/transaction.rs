@@ -1,6 +1,7 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
+    Error, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
@@ -9,12 +10,12 @@ use crate::{
         StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
         VectorSetCommands,
     },
-    resp::{cmd, Command, RespDeserializer, Response},
-    Error, Result,
+    resp::{Command, RespDeserializer, Response, cmd},
 };
 use serde::{
+    Deserializer,
     de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
-    forward_to_deserialize_any, Deserializer,
+    forward_to_deserialize_any,
 };
 use std::{fmt, marker::PhantomData};
 

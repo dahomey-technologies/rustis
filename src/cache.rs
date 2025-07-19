@@ -1,5 +1,6 @@
 //! [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 use crate::{
+    Error, Result,
     client::{Client, PreparedCommand},
     commands::{
         BitFieldGetSubCommand, BitRange, BitmapCommands, ClientTrackingOptions,
@@ -7,16 +8,15 @@ use crate::{
         SortedSetCommands, StringCommands, ZRangeOptions,
     },
     resp::{
-        cmd, BulkString, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
+        BulkString, CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse,
         MultipleArgsCollection, PrimitiveResponse, RespBuf, RespDeserializer, RespSerializer,
-        Response, SingleArg, SingleArgCollection, Value,
+        Response, SingleArg, SingleArgCollection, Value, cmd,
     },
-    Error, Result,
 };
 use bytes::BytesMut;
 use dashmap::DashMap;
 use futures_util::StreamExt;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{fmt::Write, sync::Arc, time::Duration};
 
 /// Re-export the moka cache builder.

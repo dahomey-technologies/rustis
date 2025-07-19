@@ -1,10 +1,10 @@
 use crate::{
-    client::{prepare_command, PreparedCommand, PubSubStream},
-    resp::{
-        cmd, CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
-        SingleArg, SingleArgCollection, ToArgs,
-    },
     Result,
+    client::{PreparedCommand, PubSubStream, prepare_command},
+    resp::{
+        CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs, cmd,
+    },
 };
 use serde::de::DeserializeOwned;
 

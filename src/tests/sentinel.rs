@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     client::Client,
     commands::{ConnectionCommands, SentinelCommands, StringCommands},
     network::sleep,
     tests::{get_sentinel_master_test_client, get_sentinel_test_client, log_try_init},
-    Result,
 };
 use serial_test::serial;
 use std::{collections::HashMap, time::Duration};

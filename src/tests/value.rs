@@ -1,8 +1,8 @@
 use crate::{
+    RedisError, RedisErrorKind, Result,
     commands::{FlushingMode, ServerCommands, SetCommands},
     resp::Value,
     tests::{get_test_client, log_try_init},
-    RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::collections::{BTreeSet, HashMap, HashSet};

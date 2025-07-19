@@ -1,12 +1,12 @@
 use crate::{
+    Result,
     client::{Client, ClientPreparedCommand},
     commands::ConnectionCommands,
     network::PushReceiver,
-    Result,
 };
 use futures_util::{Stream, StreamExt};
 use log::error;
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::{
     net::SocketAddr,
     pin::Pin,

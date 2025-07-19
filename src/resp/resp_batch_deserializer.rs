@@ -1,8 +1,8 @@
 use crate::{
-    resp::{RespBuf, RespDeserializer},
     Error, Result,
+    resp::{RespBuf, RespDeserializer},
 };
-use serde::{de::DeserializeSeed, forward_to_deserialize_any, Deserializer};
+use serde::{Deserializer, de::DeserializeSeed, forward_to_deserialize_any};
 use std::slice;
 
 pub(crate) struct RespBatchDeserializer<'de> {

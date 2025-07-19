@@ -1,8 +1,9 @@
-use crate::{resp::PUSH_FAKE_FIELD, Error, RedisError, Result};
+use crate::{Error, RedisError, Result, resp::PUSH_FAKE_FIELD};
 use memchr::memchr;
 use serde::{
+    Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
-    forward_to_deserialize_any, Deserializer,
+    forward_to_deserialize_any,
 };
 use std::str::{self, FromStr};
 
@@ -587,7 +588,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 return Err(Error::Client(format!(
                     "Cannot parse to str a RESP value starting with `{}`",
                     tag as char
-                )))
+                )));
             }
         };
 
@@ -619,7 +620,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 return Err(Error::Client(format!(
                     "Cannot parse to string: `{}`",
                     String::from_utf8_lossy(self.next_line()?).replace("\r\n", "\\r\\n")
-                )))
+                )));
             }
         };
 

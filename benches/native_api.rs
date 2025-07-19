@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use futures_util::Future;
 use std::time::Duration;
 
@@ -82,8 +82,8 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
 
 fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
     use rustis::{
-        commands::{GenericCommands, StringCommands},
         Error,
+        commands::{GenericCommands, StringCommands},
     };
 
     let runtime = current_thread_runtime();

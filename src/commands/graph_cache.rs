@@ -1,7 +1,7 @@
 use crate::commands::GraphValueType;
 use serde::{
-    de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer,
+    de::{self, DeserializeSeed, IgnoredAny, Visitor},
 };
 use std::{fmt, marker::PhantomData};
 

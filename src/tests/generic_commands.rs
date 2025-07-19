@@ -1,11 +1,11 @@
 use crate::{
+    Result,
     commands::{
         ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands,
         RestoreOptions, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
     },
     resp::Value,
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};

@@ -1,5 +1,5 @@
 use crate::client::ReconnectionConfig;
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 use std::cmp;
 
 pub(crate) struct ReconnectionState {

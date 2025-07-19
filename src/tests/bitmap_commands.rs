@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     commands::{
         BitFieldGetSubCommand, BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange,
         BitUnit, BitmapCommands, StringCommands,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

@@ -1,4 +1,5 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     client::{Client, ReconnectionConfig},
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
@@ -7,12 +8,11 @@ use crate::{
         LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions,
         RoleResult, ServerCommands, SlowLogOptions, StringCommands,
     },
-    resp::{cmd, Value},
+    resp::{Value, cmd},
     spawn,
     tests::{
         get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config,
     },
-    Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::StreamExt;
 use serial_test::serial;

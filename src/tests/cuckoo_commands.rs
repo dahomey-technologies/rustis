@@ -1,10 +1,10 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     commands::{
         CfInsertOptions, CfReserveOptions, CfScanDumpResult, CuckooCommands, FlushingMode,
         ServerCommands, StringCommands,
     },
     tests::get_test_client,
-    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::collections::VecDeque;

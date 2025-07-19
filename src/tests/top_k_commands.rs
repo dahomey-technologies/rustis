@@ -1,7 +1,7 @@
 use crate::{
+    Result,
     commands::{FlushingMode, ServerCommands, TopKCommands, TopKListWithCountResult},
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

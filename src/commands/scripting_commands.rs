@@ -1,9 +1,9 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     commands::FlushingMode,
     resp::{
-        cmd, deserialize_byte_buf, CommandArgs, PrimitiveResponse, Response, SingleArg,
-        SingleArgCollection, ToArgs,
+        CommandArgs, PrimitiveResponse, Response, SingleArg, SingleArgCollection, ToArgs, cmd,
+        deserialize_byte_buf,
     },
 };
 use serde::Deserialize;

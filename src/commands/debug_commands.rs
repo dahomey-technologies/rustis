@@ -1,5 +1,5 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::cmd,
 };
 use std::time::Duration;

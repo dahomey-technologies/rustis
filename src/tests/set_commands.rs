@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use crate::{
+    Result,
     commands::{GenericCommands, SScanOptions, SetCommands},
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     commands::{
         BZpopMinMaxResult, BlockingCommands, FlushingMode, GenericCommands, ServerCommands,
         SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZScanResult,
@@ -6,7 +7,6 @@ use crate::{
     },
     sleep, spawn,
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -708,9 +708,11 @@ async fn zrandmember() -> Result<()> {
     assert!(values.iter().any(|v| v.1 == result));
 
     let result: Vec<(String, f64)> = client.zrandmembers_with_scores("key", -5).await?;
-    assert!(result
-        .iter()
-        .all(|r| values.iter().any(|v| v.0 == r.1 && v.1 == r.0)));
+    assert!(
+        result
+            .iter()
+            .all(|r| values.iter().any(|v| v.0 == r.1 && v.1 == r.0))
+    );
 
     Ok(())
 }

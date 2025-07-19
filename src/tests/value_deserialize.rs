@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     resp::{RespDeserializer, Value},
     tests::log_try_init,
-    Error, RedisError, RedisErrorKind, Result,
 };
 use serde::Deserialize;
 

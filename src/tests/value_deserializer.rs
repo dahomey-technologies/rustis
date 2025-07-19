@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{resp::Value, tests::log_try_init, Error, RedisError, RedisErrorKind, Result};
+use crate::{Error, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init};
 use serde::Deserialize;
 use smallvec::SmallVec;
 

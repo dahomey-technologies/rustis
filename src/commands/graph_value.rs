@@ -1,7 +1,7 @@
-use crate::{commands::GraphCache, resp::deserialize_byte_buf, Error, Result};
+use crate::{Error, Result, commands::GraphCache, resp::deserialize_byte_buf};
 use serde::{
-    de::{self, DeserializeSeed, Unexpected, Visitor},
     Deserialize, Deserializer,
+    de::{self, DeserializeSeed, Unexpected, Visitor},
 };
 use std::{collections::HashMap, fmt, marker::PhantomData};
 

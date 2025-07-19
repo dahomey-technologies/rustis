@@ -1,7 +1,7 @@
 use crate::{
+    Error, Result,
     client::{Client, Config, IntoConfig},
     commands::ConnectionCommands,
-    Error, Result,
 };
 use bb8::ManageConnection;
 

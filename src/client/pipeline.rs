@@ -5,6 +5,7 @@ use crate::commands::{
     TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
 };
 use crate::{
+    Result,
     client::{Client, PreparedCommand},
     commands::{
         BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
@@ -12,7 +13,6 @@ use crate::{
         SetCommands, SortedSetCommands, StreamCommands, StringCommands,
     },
     resp::{Command, RespBatchDeserializer, Response},
-    Result,
 };
 use serde::de::DeserializeOwned;
 use std::iter::zip;

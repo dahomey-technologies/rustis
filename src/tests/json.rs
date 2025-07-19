@@ -1,8 +1,8 @@
 use crate::{
+    Result,
     commands::{FlushingMode, ServerCommands, StringCommands},
     resp::{Json, JsonRef},
     tests::get_test_client,
-    Result,
 };
 use serde::{Deserialize, Serialize};
 use serial_test::serial;

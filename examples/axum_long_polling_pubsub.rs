@@ -1,9 +1,9 @@
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-    Json, Router,
 };
 use futures_util::StreamExt;
 use rustis::{
@@ -62,7 +62,7 @@ async fn poll_messages(
             return Err(ServiceError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("error received from PubSubStream: {e}"),
-            ))
+            ));
         }
         // stream closed
         Ok(None) => Vec::new(),

@@ -1,15 +1,15 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, deserialize_vec_of_pairs, CollectionResponse, CommandArgs, KeyValueArgsCollection,
-        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
+        CollectionResponse, CommandArgs, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs, cmd, deserialize_vec_of_pairs,
     },
 };
 use serde::{
-    de::{self, DeserializeOwned},
     Deserialize,
+    de::{self, DeserializeOwned},
 };
 
 /// A group of Redis commands related to [`Cluster Management`](https://redis.io/docs/management/scaling/)

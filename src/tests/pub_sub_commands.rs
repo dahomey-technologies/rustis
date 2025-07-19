@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
@@ -9,7 +10,6 @@ use crate::{
         get_cluster_test_client, get_default_addr, get_default_config, get_test_client,
         get_test_client_with_config, log_try_init,
     },
-    Result,
 };
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use serial_test::serial;

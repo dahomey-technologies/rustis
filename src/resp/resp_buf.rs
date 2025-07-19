@@ -1,8 +1,8 @@
 use crate::{
-    resp::{
-        RespDeserializer, Value, ARRAY_TAG, BLOB_ERROR_TAG, ERROR_TAG, PUSH_TAG, SIMPLE_STRING_TAG,
-    },
     Result,
+    resp::{
+        ARRAY_TAG, BLOB_ERROR_TAG, ERROR_TAG, PUSH_TAG, RespDeserializer, SIMPLE_STRING_TAG, Value,
+    },
 };
 use bytes::{BufMut, Bytes, BytesMut};
 use serde::Deserialize;

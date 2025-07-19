@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     commands::{
         BfInfoParameter, BfInsertOptions, BfReserveOptions, BfScanDumpResult, BloomCommands,
         FlushingMode, ServerCommands,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 use std::collections::VecDeque;

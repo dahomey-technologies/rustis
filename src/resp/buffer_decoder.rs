@@ -1,7 +1,7 @@
 use super::RespDeserializer;
-use crate::{resp::RespBuf, Error, Result};
+use crate::{Error, Result, resp::RespBuf};
 use bytes::BytesMut;
-use serde::{de::IgnoredAny, Deserialize};
+use serde::{Deserialize, de::IgnoredAny};
 use tokio_util::codec::Decoder;
 
 pub(crate) struct BufferDecoder;

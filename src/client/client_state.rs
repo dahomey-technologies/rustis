@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use std::{
     any::Any,
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
 };
 
 /// A struct which goal is to give a generic access to attach any state to a client instance

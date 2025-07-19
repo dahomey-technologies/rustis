@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use futures_util::Future;
 use std::time::Duration;
 
@@ -80,7 +80,7 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
 }
 
 fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
-    use rustis::{resp::cmd, Error};
+    use rustis::{Error, resp::cmd};
 
     let runtime = current_thread_runtime();
     let client = runtime.block_on(get_rustis_client());
@@ -181,7 +181,7 @@ fn bench_fred_long_pipeline(b: &mut Bencher) {
 }
 
 fn bench_rustis_long_pipeline(b: &mut Bencher) {
-    use rustis::{client::BatchPreparedCommand, commands::StringCommands, Error};
+    use rustis::{Error, client::BatchPreparedCommand, commands::StringCommands};
 
     let runtime = current_thread_runtime();
     let client = runtime.block_on(get_rustis_client());

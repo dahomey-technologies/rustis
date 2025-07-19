@@ -1,9 +1,9 @@
 use crate::{
+    ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
+    StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
     resp::{Command, RespBuf},
-    ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
-    StandaloneConnection,
 };
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;

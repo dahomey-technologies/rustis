@@ -1,10 +1,11 @@
-use crate::{resp::Value, Error, Result};
+use crate::{Error, Result, resp::Value};
 use serde::{
+    Deserialize, Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
-    forward_to_deserialize_any, Deserialize, Deserializer,
+    forward_to_deserialize_any,
 };
 use std::{
-    collections::{hash_map, HashMap},
+    collections::{HashMap, hash_map},
     slice, str, vec,
 };
 
@@ -48,7 +49,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to bool",
                     self
-                )))
+                )));
             }
         };
 
@@ -70,7 +71,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i8",
                     self
-                )))
+                )));
             }
         };
 
@@ -92,7 +93,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i16",
                     self
-                )))
+                )));
             }
         };
 
@@ -114,7 +115,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i32",
                     self
-                )))
+                )));
             }
         };
 
@@ -138,7 +139,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to i64",
                     self
-                )))
+                )));
             }
         };
 
@@ -160,7 +161,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u8",
                     self
-                )))
+                )));
             }
         };
 
@@ -182,7 +183,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u16",
                     self
-                )))
+                )));
             }
         };
 
@@ -204,7 +205,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u32",
                     self
-                )))
+                )));
             }
         };
 
@@ -227,7 +228,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to u64",
                     self
-                )))
+                )));
             }
         };
 
@@ -249,7 +250,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse result {:?} to f32",
                     self
-                )))
+                )));
             }
         };
 
@@ -271,7 +272,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse result {:?} to f64",
                     self
-                )))
+                )));
             }
         };
 
@@ -319,7 +320,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to str",
                     self
-                )))
+                )));
             }
         };
 
@@ -341,7 +342,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to String",
                     self
-                )))
+                )));
             }
         };
 
@@ -361,7 +362,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to byte buffer",
                     self
-                )))
+                )));
             }
         };
 
@@ -381,7 +382,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return Err(Error::Client(format!(
                     "Cannot parse value {:?} to byte buffer",
                     self
-                )))
+                )));
             }
         };
 

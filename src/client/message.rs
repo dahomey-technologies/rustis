@@ -2,9 +2,9 @@ use log::warn;
 use smallvec::SmallVec;
 
 use crate::{
+    Error, PubSubSender, PushSender, RetryReason,
     network::{ResultSender, ResultsSender},
     resp::Command,
-    Error, PubSubSender, PushSender, RetryReason,
 };
 
 #[cfg(debug_assertions)]
@@ -35,15 +35,15 @@ impl Commands {
             Commands::Single(_, Some(result_sender)) => {
                 if let Err(e) = result_sender.send(Err(error)) {
                     warn!(
-                    "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                );
+                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                    );
                 }
             }
             Commands::Batch(_, results_sender) => {
                 if let Err(e) = results_sender.send(Err(error)) {
                     warn!(
-                    "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                );
+                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                    );
                 }
             }
             _ => (),

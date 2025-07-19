@@ -1,7 +1,7 @@
 use crate::{
+    Future,
     client::Client,
     resp::{Command, RespBuf, Response},
-    Future,
 };
 use std::marker::PhantomData;
 

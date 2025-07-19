@@ -1,9 +1,9 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     client::BatchPreparedCommand,
     commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
     resp::cmd,
     tests::{get_cluster_test_client, get_test_client},
-    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 

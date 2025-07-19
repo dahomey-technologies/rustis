@@ -1,6 +1,6 @@
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::client::TlsConfig;
-use crate::{client::Config, Error, Result};
+use crate::{Error, Result, client::Config};
 use futures_util::{Future, FutureExt};
 use log::{debug, info};
 use socket2::TcpKeepalive;

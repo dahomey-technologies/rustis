@@ -1,8 +1,8 @@
 use crate::{
+    Result,
     client::Client,
     commands::{ClusterCommands, ClusterShardResult, LegacyClusterShardResult},
     tests::log_try_init,
-    Result,
 };
 use log::debug;
 use serial_test::serial;

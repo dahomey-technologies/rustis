@@ -1,16 +1,17 @@
 use crate::{
+    Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
     client::{Config, PreparedCommand},
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
     resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
-    tcp_connect, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
+    tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
-use crate::{tcp_tls_connect, TcpTlsStreamReader, TcpTlsStreamWriter};
+use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
 use bytes::BytesMut;
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, log_enabled, Level};
+use log::{Level, debug, log_enabled};
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
 use std::future::IntoFuture;

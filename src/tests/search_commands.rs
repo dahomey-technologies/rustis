@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
@@ -11,9 +12,8 @@ use crate::{
     network::sleep,
     resp::Value,
     tests::{get_test_client, log_try_init},
-    Result,
 };
-use rand::{seq::IndexedRandom, Rng};
+use rand::{Rng, seq::IndexedRandom};
 use serial_test::serial;
 use smallvec::SmallVec;
 use std::{
@@ -1132,14 +1132,18 @@ async fn ft_spellcheck() -> Result<()> {
     assert_eq!(1, result.misspelled_terms.len());
     assert_eq!("held", result.misspelled_terms[0].misspelled_term);
     assert_eq!(2, result.misspelled_terms[0].suggestions.len());
-    assert!(result.misspelled_terms[0]
-        .suggestions
-        .iter()
-        .any(|(suggestion, _score)| suggestion == "hello"));
-    assert!(result.misspelled_terms[0]
-        .suggestions
-        .iter()
-        .any(|(suggestion, _score)| suggestion == "help"));
+    assert!(
+        result.misspelled_terms[0]
+            .suggestions
+            .iter()
+            .any(|(suggestion, _score)| suggestion == "hello")
+    );
+    assert!(
+        result.misspelled_terms[0]
+            .suggestions
+            .iter()
+            .any(|(suggestion, _score)| suggestion == "help")
+    );
 
     client.ft_dictadd("dict", "store").await?;
 

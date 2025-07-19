@@ -1,8 +1,8 @@
 use crate::resp::{CommandArgs, PrimitiveResponse, SingleArg, ToArgs};
 use serde::{
+    Deserialize,
     de::{self, DeserializeOwned},
     ser::Serialize,
-    Deserialize,
 };
 
 /// Wrapper type that deserializes a Redis bulk string as JSON into a Rust value.

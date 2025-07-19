@@ -1,4 +1,5 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     client::Client,
     commands::{
         CallBuilder, ClusterCommands, ClusterNodeResult,
@@ -9,7 +10,6 @@ use crate::{
     network::{ClusterConnection, Version},
     sleep, spawn,
     tests::{get_cluster_test_client, get_cluster_test_client_with_command_timeout},
-    Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::try_join;
 use serial_test::serial;

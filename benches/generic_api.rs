@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use futures_util::Future;
 use std::time::Duration;
 
@@ -38,7 +38,7 @@ async fn get_rustis_client() -> rustis::client::Client {
 }
 
 fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
-    use redis::{cmd, RedisError};
+    use redis::{RedisError, cmd};
 
     let client = get_redis_client();
     let runtime = current_thread_runtime();
@@ -96,7 +96,7 @@ fn bench_fred_simple_getsetdel_async(b: &mut Bencher) {
 }
 
 fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
-    use rustis::{resp::cmd, Error};
+    use rustis::{Error, resp::cmd};
 
     let runtime = current_thread_runtime();
 

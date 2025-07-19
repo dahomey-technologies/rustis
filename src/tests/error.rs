@@ -1,8 +1,8 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     commands::{ClientKillOptions, ConnectionCommands, StringCommands},
     resp::cmd,
     tests::{get_default_config, get_test_client, get_test_client_with_config},
-    Error, RedisError, RedisErrorKind, Result,
 };
 use serial_test::serial;
 use std::str::FromStr;

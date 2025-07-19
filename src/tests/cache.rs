@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     cache::Cache,
     client::Client,
     commands::{
@@ -7,7 +8,6 @@ use crate::{
     },
     network::sleep,
     tests::log_try_init,
-    Result,
 };
 use serial_test::serial;
 use std::time::Duration;

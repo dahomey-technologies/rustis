@@ -1,6 +1,6 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
-    resp::{cmd, SingleArg, SingleArgCollection, Value},
+    client::{PreparedCommand, prepare_command},
+    resp::{SingleArg, SingleArgCollection, Value, cmd},
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)

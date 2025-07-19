@@ -1,8 +1,8 @@
 use crate::{
+    Result,
     commands::{FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetOptions, ServerCommands},
     resp::Value,
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 use smallvec::SmallVec;

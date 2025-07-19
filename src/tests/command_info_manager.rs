@@ -1,4 +1,5 @@
 use crate::{
+    CommandInfoManager, Result,
     client::IntoConfig,
     commands::{
         GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands,
@@ -6,7 +7,6 @@ use crate::{
     },
     network::StandaloneConnection,
     tests::{get_default_addr, get_default_host, get_default_port, get_test_client},
-    CommandInfoManager, Result,
 };
 use serial_test::serial;
 

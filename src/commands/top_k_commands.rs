@@ -1,13 +1,13 @@
 use std::marker::PhantomData;
 
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, deserialize_vec_of_pairs, CollectionResponse, KeyValueArgsCollection,
-        PrimitiveResponse, SingleArg, SingleArgCollection,
+        CollectionResponse, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, cmd, deserialize_vec_of_pairs,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Top-K`](https://redis.io/docs/stack/bloom/)
 ///

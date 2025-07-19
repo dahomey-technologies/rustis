@@ -37,11 +37,7 @@ impl CommandArgs {
     where
         A: ToArgs,
     {
-        if condition {
-            self.arg(args)
-        } else {
-            self
-        }
+        if condition { self.arg(args) } else { self }
     }
 
     /// helper to build a CommandArgs in one line.

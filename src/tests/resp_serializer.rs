@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     resp::{BulkString, RespSerializer},
     tests::log_try_init,
-    Result,
 };
 use serde::Serialize;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::collections::HashMap;
 
 fn serialize<T>(value: T) -> Result<String>

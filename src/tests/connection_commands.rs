@@ -1,4 +1,5 @@
 use crate::{
+    Error, RedisError, RedisErrorKind, Result,
     client::{BatchPreparedCommand, Client, ClientPreparedCommand},
     commands::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
@@ -10,7 +11,6 @@ use crate::{
     resp::cmd,
     sleep,
     tests::{get_test_client, log_try_init},
-    Error, RedisError, RedisErrorKind, Result,
 };
 use futures_util::StreamExt;
 use serial_test::serial;

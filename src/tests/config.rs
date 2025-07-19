@@ -1,8 +1,8 @@
 use crate::{
+    Result,
     client::{Client, IntoConfig},
     commands::{ClientKillOptions, ConnectionCommands, FlushingMode, ServerCommands},
     tests::{get_default_host, get_default_port, get_test_client, log_try_init},
-    Result,
 };
 use serial_test::serial;
 

@@ -1,5 +1,5 @@
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
-use crate::{commands::StringCommands, tests::get_tls_test_client, Result};
+use crate::{Result, commands::StringCommands, tests::get_tls_test_client};
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use serial_test::serial;
 

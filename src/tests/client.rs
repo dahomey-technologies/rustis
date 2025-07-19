@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::{
+    Error, Result,
     client::{Client, IntoConfig},
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
@@ -8,7 +9,6 @@ use crate::{
     },
     resp::cmd,
     tests::{get_default_addr, get_test_client, log_try_init},
-    Error, Result,
 };
 use serial_test::serial;
 

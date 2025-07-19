@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     commands::{
         GenericCommands, GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom,
         GeoSearchOptions, GeoSearchOrder, GeoSearchResult, GeoSearchStoreOptions, GeoUnit,
     },
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

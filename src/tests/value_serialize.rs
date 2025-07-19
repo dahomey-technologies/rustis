@@ -1,7 +1,7 @@
 use super::log_try_init;
 use crate::{
-    resp::{RespBuf, RespSerializer, Value},
     RedisError, RedisErrorKind, Result,
+    resp::{RespBuf, RespSerializer, Value},
 };
 use serde::Serialize;
 

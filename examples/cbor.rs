@@ -1,8 +1,8 @@
 use rustis::{
+    Result,
     client::Client,
     commands::{GenericCommands, StringCommands},
     resp::BulkString,
-    Result,
 };
 
 #[tokio::main]

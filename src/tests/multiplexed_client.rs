@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
     spawn,
     tests::log_try_init,
-    Result,
 };
 use futures_util::future;
 use rand::Rng;

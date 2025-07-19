@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     client::ClientPreparedCommand,
     commands::{
         CallBuilder, FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands,
@@ -7,7 +8,6 @@ use crate::{
     error::{Error, RedisErrorKind},
     sleep, spawn,
     tests::get_test_client,
-    Result,
 };
 use serial_test::serial;
 

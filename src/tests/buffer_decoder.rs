@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
-use crate::{resp::BufferDecoder, Result};
+use crate::{Result, resp::BufferDecoder};
 
 fn decode(str: &str) -> Result<Option<Vec<u8>>> {
     let mut buffer_decoder = BufferDecoder;

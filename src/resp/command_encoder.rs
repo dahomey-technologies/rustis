@@ -1,6 +1,6 @@
 use crate::{
-    resp::{Command, CommandArgs},
     Error, Result,
+    resp::{Command, CommandArgs},
 };
 use bytes::{BufMut, BytesMut};
 use tokio_util::codec::Encoder;

@@ -1,11 +1,11 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse, PrimitiveResponse,
-        SingleArg, SingleArgCollection, ToArgs,
+        CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse, PrimitiveResponse,
+        SingleArg, SingleArgCollection, ToArgs, cmd,
     },
 };
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)

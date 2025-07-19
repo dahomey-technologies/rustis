@@ -1,17 +1,16 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, CollectionResponse, CommandArgs, MultipleArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs,
+        CollectionResponse, CommandArgs, MultipleArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs, cmd,
     },
 };
 use serde::{
-    de::{
-        self,
-        value::{BytesDeserializer, SeqAccessDeserializer},
-        DeserializeOwned, Unexpected, Visitor,
-    },
     Deserialize, Deserializer,
+    de::{
+        self, DeserializeOwned, Unexpected, Visitor,
+        value::{BytesDeserializer, SeqAccessDeserializer},
+    },
 };
 use std::{fmt, marker::PhantomData};
 

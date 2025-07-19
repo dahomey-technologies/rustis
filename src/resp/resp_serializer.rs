@@ -1,19 +1,19 @@
 use crate::{
+    Error,
     resp::{
         ARRAY_TAG, BULK_STRING_TAG, DOUBLE_TAG, ERROR_TAG, INTEGER_TAG, MAP_TAG, PUSH_FAKE_FIELD,
         PUSH_TAG, SET_TAG, SIMPLE_STRING_TAG,
     },
-    Error,
 };
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
 use serde::{
+    Serialize, Serializer,
     ser::{
         self, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
         SerializeTupleStruct, SerializeTupleVariant,
     },
-    Serialize, Serializer,
 };
 
 pub(crate) const SET_FAKE_FIELD: &str = "~~~SET~~~";

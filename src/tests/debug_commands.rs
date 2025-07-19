@@ -1,7 +1,7 @@
 use crate::{
+    Error, Result,
     commands::{ConnectionCommands, DebugCommands, PingOptions},
     tests::{get_cluster_test_client_with_command_timeout, get_test_client},
-    Error, Result,
 };
 use serial_test::serial;
 

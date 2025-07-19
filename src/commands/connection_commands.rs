@@ -1,12 +1,12 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
-    commands::ModuleInfo,
-    resp::{cmd, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs},
     Result,
+    client::{PreparedCommand, prepare_command},
+    commands::ModuleInfo,
+    resp::{CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, cmd},
 };
 use serde::{
-    de::{self, DeserializeOwned},
     Deserialize, Deserializer,
+    de::{self, DeserializeOwned},
 };
 use std::collections::HashMap;
 

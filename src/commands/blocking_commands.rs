@@ -1,12 +1,12 @@
 use crate::{
-    client::{prepare_command, MonitorStream, PreparedCommand},
-    commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{cmd, deserialize_vec_of_triplets, PrimitiveResponse, SingleArg, SingleArgCollection},
     Result,
+    client::{MonitorStream, PreparedCommand, prepare_command},
+    commands::{LMoveWhere, ZMPopResult, ZWhere},
+    resp::{PrimitiveResponse, SingleArg, SingleArgCollection, cmd, deserialize_vec_of_triplets},
 };
 use serde::{
-    de::{DeserializeOwned, Visitor},
     Deserialize, Deserializer,
+    de::{DeserializeOwned, Visitor},
 };
 use std::{fmt, marker::PhantomData};
 

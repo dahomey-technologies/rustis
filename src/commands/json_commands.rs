@@ -1,9 +1,9 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     commands::SetCondition,
     resp::{
-        cmd, CollectionResponse, CommandArgs, PrimitiveResponse, Response, SingleArg,
-        SingleArgCollection, ToArgs, Value,
+        CollectionResponse, CommandArgs, PrimitiveResponse, Response, SingleArg,
+        SingleArgCollection, ToArgs, Value, cmd,
     },
 };
 use serde::de::DeserializeOwned;

@@ -1,13 +1,13 @@
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, CollectionResponse, CommandArgs, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs,
+        CollectionResponse, CommandArgs, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
+        SingleArgCollection, ToArgs, cmd,
     },
 };
 use serde::{
-    de::{self, SeqAccess, Visitor},
     Deserialize, Deserializer,
+    de::{self, SeqAccess, Visitor},
 };
 use std::fmt;
 

@@ -1,9 +1,9 @@
 use crate::{
+    Result,
     client::BatchPreparedCommand,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{cmd, Value},
+    resp::{Value, cmd},
     tests::{get_cluster_test_client, get_test_client},
-    Result,
 };
 use serial_test::serial;
 

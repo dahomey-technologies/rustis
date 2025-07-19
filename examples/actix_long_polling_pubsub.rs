@@ -1,4 +1,4 @@
-use actix_web::{get, http::StatusCode, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpResponse, HttpServer, Responder, get, http::StatusCode, post, web};
 use futures_util::StreamExt;
 use rustis::{
     client::Client,
@@ -59,7 +59,7 @@ async fn poll_messages(
             return Err(ServiceError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("error received from PubSubStream: {e}"),
-            ))
+            ));
         }
         // stream closed
         Ok(None) => Vec::new(),

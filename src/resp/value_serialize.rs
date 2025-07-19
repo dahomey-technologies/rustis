@@ -1,7 +1,7 @@
-use crate::resp::{Value, ERROR_FAKE_FIELD, PUSH_FAKE_FIELD, SET_FAKE_FIELD};
+use crate::resp::{ERROR_FAKE_FIELD, PUSH_FAKE_FIELD, SET_FAKE_FIELD, Value};
 use serde::{
-    ser::{SerializeMap, SerializeSeq, SerializeTupleStruct},
     Serialize,
+    ser::{SerializeMap, SerializeSeq, SerializeTupleStruct},
 };
 
 impl Serialize for Value {

@@ -1,10 +1,10 @@
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 use crate::{
-    client::{prepare_command, PreparedCommand},
+    client::{PreparedCommand, prepare_command},
     resp::{
-        cmd, BulkString, CollectionResponse, CommandArgs, KeyValueCollectionResponse,
-        PrimitiveResponse, Response, SingleArg, ToArgs,
+        BulkString, CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
+        Response, SingleArg, ToArgs, cmd,
     },
 };
 

@@ -62,10 +62,8 @@ impl ClientState {
             Entry::Vacant(v) => v.insert(Box::<S>::default()),
         };
 
-        let cache_entry = cache_entry
-            .downcast_mut::<S>()
-            .ok_or_else(|| Error::Client(format!("Cannot downcast cache entry '{key}'")));
-
         cache_entry
+            .downcast_mut::<S>()
+            .ok_or_else(|| Error::Client(format!("Cannot downcast cache entry '{key}'")))
     }
 }

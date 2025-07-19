@@ -982,13 +982,13 @@ impl ReconnectionConfig {
     /// Default: 100 ms
     pub fn set_jitter(&mut self, jitter_ms: u32) {
         match self {
-            Self::Constant { ref mut jitter, .. } => {
+            Self::Constant { jitter, .. } => {
                 *jitter = jitter_ms;
             }
-            Self::Linear { ref mut jitter, .. } => {
+            Self::Linear { jitter, .. } => {
                 *jitter = jitter_ms;
             }
-            Self::Exponential { ref mut jitter, .. } => {
+            Self::Exponential { jitter, .. } => {
                 *jitter = jitter_ms;
             }
         }

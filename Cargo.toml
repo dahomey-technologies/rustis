@@ -9,7 +9,7 @@ repository = "https://github.com/dahomey-technologies/rustis"
 documentation = "https://docs.rs/rustis"
 readme = "README.md"
 license-file = "LICENSE"
-edition = "2021"
+edition = "2024"
 
 [features]
 default = ["tokio-runtime"]

@@ -19,7 +19,7 @@ rustis is a Redis client for Rust.
 * Advanced reconnection & retry strategy
 * [Pipelining](https://redis.io/docs/manual/pipelining/) support
 * Configuration with Redis URL or dedicated builder
-* [TLS](https://redis.io/docs/manual/security/encryption/) support
+* [TLS](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/) support
 * [Transaction](https://redis.io/docs/manual/transactions/) support
 * [Pub/sub](https://redis.io/docs/manual/pubsub/) support
 * [Sentinel](https://redis.io/docs/manual/sentinel/) support

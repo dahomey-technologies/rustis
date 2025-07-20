@@ -40,6 +40,23 @@ An asynchronous Redis client for Rust.
 * [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 * [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
+# Protocol Compatibility
+
+Rustis uses the RESP3 protocol **exclusively**.
+
+The `HELLO 3` command is automatically sent when establishing a connection.  
+Therefore, your Redis server **must support RESP3** (Redis ≥6.0+ with RESP3 enabled).
+
+If you use Redis 5 or older, or your Redis 6+ server still defaults to RESP2,  
+**Rustis will not work.**
+
+To verify your server supports RESP3:
+```bash
+redis-cli --raw HELLO 3
+```
+If you see server info (role, version, etc.), you're good to go.
+If you get an error, upgrade Redis.
+
 # Basic Usage
 
 ```rust

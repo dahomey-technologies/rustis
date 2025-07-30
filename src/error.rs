@@ -67,19 +67,19 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Error::Client(e) => f.write_fmt(format_args!("Client error: {}", e)),
+            Error::Client(e) => f.write_fmt(format_args!("Client error: {e}")),
             Error::CacheWrongKeyType => f.write_str("Cache wrong key type"),
-            Error::Config(e) => f.write_fmt(format_args!("Config error: {}", e)),
+            Error::Config(e) => f.write_fmt(format_args!("Config error: {e}")),
             Error::Aborted => f.write_str("Transaction aborted"),
-            Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {}", e)),
-            Error::Redis(e) => f.write_fmt(format_args!("Redis error: {}", e)),
-            Error::IO(e) => f.write_fmt(format_args!("IO error: {}", e)),
+            Error::Sentinel(e) => f.write_fmt(format_args!("Sentinel error: {e}")),
+            Error::Redis(e) => f.write_fmt(format_args!("Redis error: {e}")),
+            Error::IO(e) => f.write_fmt(format_args!("IO error: {e}")),
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Error::Tls(e) => f.write_fmt(format_args!("Tls error: {}", e)),
             #[cfg(feature = "rustls")]
             Error::InvalidDnsName(e) => f.write_fmt(format_args!("InvalidDnsName error: {}", e)),
-            Error::Retry(r) => f.write_fmt(format_args!("Retry: {:?}", r)),
-            Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {}", e)),
+            Error::Retry(r) => f.write_fmt(format_args!("Retry: {r:?}")),
+            Error::Timeout(e) => f.write_fmt(format_args!("Timeout error: {e}")),
             Error::EOF => f.write_str("EOF error"),
         }
     }

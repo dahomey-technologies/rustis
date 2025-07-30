@@ -77,7 +77,7 @@ impl StandaloneConnection {
             buffer: BytesMut::new(),
             version: String::new(),
             tag: if config.connection_name.is_empty() {
-                format!("{}:{}", host, port)
+                format!("{host}:{port}")
             } else {
                 format!("{}:{}:{}", config.connection_name, host, port)
             },

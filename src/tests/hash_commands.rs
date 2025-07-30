@@ -622,7 +622,7 @@ async fn hscan() -> Result<()> {
     client.del("key").await?;
 
     let fields_and_values: Vec<_> = (1..21)
-        .map(|i| (format!("field{}", i), format!("value{}", i)))
+        .map(|i| (format!("field{i}"), format!("value{i}")))
         .collect();
 
     client.hset("key", fields_and_values).await?;

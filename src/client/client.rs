@@ -272,7 +272,7 @@ impl Client {
                 self.connection_tag
             );
             Ok(msg_sender.unbounded_send(message).map_err(|e| {
-                info!("{}", e);
+                info!("{e}");
                 Error::Client("Disconnected from server".to_string())
             })?)
         } else {

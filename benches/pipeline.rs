@@ -119,7 +119,7 @@ fn bench_redis_async_long_pipeline(b: &mut Bencher) {
                 let mut pipe = redis::pipe();
 
                 for i in 0..PIPELINE_QUERIES {
-                    pipe.set(format!("foo{}", i), "bar");
+                    pipe.set(format!("foo{i}"), "bar");
                 }
 
                 let _result: Vec<String> = pipe.query_async(&mut con).await?;
@@ -145,7 +145,7 @@ fn bench_redis_multiplexed_async_long_pipeline(b: &mut Bencher) {
                 let mut pipe = redis::pipe();
 
                 for i in 0..PIPELINE_QUERIES {
-                    pipe.set(format!("foo{}", i), "bar");
+                    pipe.set(format!("foo{i}"), "bar");
                 }
 
                 let _result: Vec<String> = pipe.query_async(&mut con).await?;
@@ -168,7 +168,7 @@ fn bench_fred_long_pipeline(b: &mut Bencher) {
                 let pipeline = client.pipeline();
                 for i in 0..PIPELINE_QUERIES {
                     pipeline
-                        .set::<String, _, _>(format!("foo{}", i), "bar", None, None, false)
+                        .set::<String, _, _>(format!("foo{i}"), "bar", None, None, false)
                         .await?;
                 }
 
@@ -191,7 +191,7 @@ fn bench_rustis_long_pipeline(b: &mut Bencher) {
             .block_on(async {
                 let mut pipeline = client.create_pipeline();
                 for i in 0..PIPELINE_QUERIES {
-                    pipeline.set(format!("foo{}", i), "bar").queue();
+                    pipeline.set(format!("foo{i}"), "bar").queue();
                 }
 
                 let _result: Vec<String> = pipeline.execute().await?;

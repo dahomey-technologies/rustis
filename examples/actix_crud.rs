@@ -16,7 +16,7 @@ async fn main() -> std::io::Result<()> {
     let redis = web::Data::new(Client::connect("redis://127.0.0.1:6379").await.unwrap());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on {}", addr);
+    println!("listening on {addr}");
     HttpServer::new(move || {
         App::new()
             .app_data(redis.clone())

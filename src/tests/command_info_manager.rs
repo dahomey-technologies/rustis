@@ -75,7 +75,7 @@ async fn extract_keys() -> Result<()> {
             &mut connection,
         )
         .await?;
-    assert_eq!(2, keys.len(), "unexpected keys: {:?}", keys);
+    assert_eq!(2, keys.len(), "unexpected keys: {keys:?}");
     assert_eq!("mystream", keys[0]);
     assert_eq!("writers", keys[1]);
 

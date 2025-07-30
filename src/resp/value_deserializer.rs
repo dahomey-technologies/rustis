@@ -1,11 +1,10 @@
-use crate::{Error, Result, resp::Value};
+use crate::{resp::Value, Error, Result};
 use serde::{
-    Deserialize, Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
-    forward_to_deserialize_any,
+    forward_to_deserialize_any, Deserialize, Deserializer,
 };
 use std::{
-    collections::{HashMap, hash_map},
+    collections::{hash_map, HashMap},
     slice, str, vec,
 };
 
@@ -67,9 +66,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to i8"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to i8")));
             }
         };
 
@@ -88,9 +85,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to i16"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to i16")));
             }
         };
 
@@ -109,9 +104,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to i32"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to i32")));
             }
         };
 
@@ -132,9 +125,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to i64"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to i64")));
             }
         };
 
@@ -153,9 +144,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to u8"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to u8")));
             }
         };
 
@@ -174,9 +163,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to u16"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to u16")));
             }
         };
 
@@ -195,9 +182,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to u32"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to u32")));
             }
         };
 
@@ -217,9 +202,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to u64"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to u64")));
             }
         };
 
@@ -306,9 +289,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.as_str(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to str"
-                )));
+                return Err(Error::Client(format!("Cannot parse value {self:?} to str")));
             }
         };
 

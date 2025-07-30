@@ -1,10 +1,11 @@
-use crate::{resp::Value, Error, Result};
+use crate::{Error, Result, resp::Value};
 use serde::{
+    Deserialize, Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
-    forward_to_deserialize_any, Deserialize, Deserializer,
+    forward_to_deserialize_any,
 };
 use std::{
-    collections::{hash_map, HashMap},
+    collections::{HashMap, hash_map},
     slice, str, vec,
 };
 

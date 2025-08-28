@@ -88,6 +88,7 @@ struct PendingSubscription {
 pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
+    ready_to_process_result: bool,
     /// for retries
     msg_sender: MsgSender,
     msg_receiver: MsgReceiver,
@@ -122,6 +123,7 @@ impl NetworkHandler {
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
+            ready_to_process_result: true,
             connection,
             msg_sender: msg_sender.clone(),
             msg_receiver,
@@ -150,13 +152,21 @@ impl NetworkHandler {
     }
 
     async fn network_loop(&mut self) -> Result<()> {
+        let mut results = Vec::with_capacity(512);
         loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => {
                     if !self.try_handle_message(msg).await { break; }
                 } ,
                 result = self.connection.read().fuse() => {
-                    if !self.handle_result(result).await { break; }
+                    results.push(result);
+                }
+            }
+            if self.ready_to_process_result && !results.is_empty() {
+                for result in results.drain(..) {
+                    if !self.handle_result(result).await {
+                        break;
+                    }
                 }
             }
         }
@@ -368,6 +378,9 @@ impl NetworkHandler {
             }
         }
 
+        // By this flag we disallow result processing before put item into messages_to_receive
+        self.ready_to_process_result = false;
+
         if let Err(e) = self
             .connection
             .write_batch(commands_to_write, &retry_reasons)
@@ -395,6 +408,8 @@ impl NetworkHandler {
                 idx += 1;
             }
         }
+
+        self.ready_to_process_result = true;
     }
 
     async fn handle_result(&mut self, result: Option<Result<RespBuf>>) -> bool {

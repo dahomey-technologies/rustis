@@ -153,7 +153,7 @@ impl NetworkHandler {
 
     async fn network_loop(&mut self) -> Result<()> {
         let mut results = Vec::with_capacity(512);
-        loop {
+        'outer: loop {
             select! {
                 msg = self.msg_receiver.next().fuse() => {
                     if !self.try_handle_message(msg).await { break; }
@@ -165,7 +165,7 @@ impl NetworkHandler {
             if self.ready_to_process_result && !results.is_empty() {
                 for result in results.drain(..) {
                     if !self.handle_result(result).await {
-                        break;
+                        break 'outer;
                     }
                 }
             }

@@ -104,7 +104,7 @@ impl fmt::Display for RespBuf {
             Ok(value) => {
                 let str = format!("{value:?}");
                 if str.len() > 1000 {
-                    f.write_str(&str[..1000])
+                    f.write_str(&str.get(..1000).unwrap_or("<can't slice to display>"))
                 } else {
                     f.write_str(&str)
                 }

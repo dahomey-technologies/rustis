@@ -131,7 +131,7 @@ impl Client {
     }
 
     /// Give an immutable generic access to attach any state to a client instance
-    pub fn get_client_state<'a> (&'a self) -> RwLockReadGuard<'a, ClientState> {
+    pub fn get_client_state<'a>(&'a self) -> RwLockReadGuard<'a, ClientState> {
         self.client_state.read().unwrap()
     }
 

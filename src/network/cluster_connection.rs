@@ -496,13 +496,13 @@ impl ClusterConnection {
         let mut request_info: RequestInfo;
 
         loop {
-            if let Some(ri) = self.pending_requests.front() {
-                if ri.sub_requests.iter().all(|sr| sr.result.is_some()) {
-                    trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
-                    if let Some(ri) = self.pending_requests.pop_front() {
-                        request_info = ri;
-                        break;
-                    }
+            if let Some(ri) = self.pending_requests.front()
+                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
+            {
+                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                if let Some(ri) = self.pending_requests.pop_front() {
+                    request_info = ri;
+                    break;
                 }
             }
 
@@ -511,10 +511,10 @@ impl ClusterConnection {
 
             result.as_ref()?;
 
-            if let Some(Ok(bytes)) = &result {
-                if bytes.is_push_message() {
-                    return result;
-                }
+            if let Some(Ok(bytes)) = &result
+                && bytes.is_push_message()
+            {
+                return result;
             }
 
             let node_id = &self.nodes[node_idx].id;
@@ -993,10 +993,10 @@ impl ClusterConnection {
                     StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
 
                 for slot_range_info in &shard_info.slots {
-                    if let Some(slot_range) = self.get_slot_range_by_slot_mut(slot_range_info.0) {
-                        if slot_range.slot_range.1 == slot_range_info.1 {
-                            slot_range.node_ids.push(node_id.clone())
-                        }
+                    if let Some(slot_range) = self.get_slot_range_by_slot_mut(slot_range_info.0)
+                        && slot_range.slot_range.1 == slot_range_info.1
+                    {
+                        slot_range.node_ids.push(node_id.clone())
                     }
                 }
 

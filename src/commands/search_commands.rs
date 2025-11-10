@@ -2850,6 +2850,7 @@ impl ToArgs for FtSearchHighlightOptions {
 
 /// Redis search supported languages
 /// See. [`Supported Languages`](https://redis.io/docs/stack/search/reference/stemming/#supported-languages)
+#[derive(Default)]
 pub enum FtLanguage {
     Arabic,
     Armenian,
@@ -2858,6 +2859,7 @@ pub enum FtLanguage {
     Chinese,
     Danish,
     Dutch,
+    #[default]
     English,
     Finnish,
     French,
@@ -2879,12 +2881,6 @@ pub enum FtLanguage {
     Tamil,
     Turkish,
     Yiddish,
-}
-
-impl Default for FtLanguage {
-    fn default() -> Self {
-        Self::English
-    }
 }
 
 impl ToArgs for FtLanguage {

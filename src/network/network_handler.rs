@@ -448,20 +448,20 @@ impl NetworkHandler {
                 }
                 Status::Monitor => match &result {
                     Ok(resp_buf) if resp_buf.is_monitor_message() => {
-                        if let Some(push_sender) = &mut self.push_sender {
-                            if let Err(e) = push_sender.send(result).await {
-                                warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
-                            }
+                        if let Some(push_sender) = &mut self.push_sender
+                            && let Err(e) = push_sender.send(result).await
+                        {
+                            warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
                         }
                     }
                     _ => self.receive_result(result),
                 },
                 Status::LeavingMonitor => match &result {
                     Ok(resp_buf) if resp_buf.is_monitor_message() => {
-                        if let Some(push_sender) = &mut self.push_sender {
-                            if let Err(e) = push_sender.send(result).await {
-                                warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
-                            }
+                        if let Some(push_sender) = &mut self.push_sender
+                            && let Err(e) = push_sender.send(result).await
+                        {
+                            warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
                         }
                     }
                     _ => {
@@ -609,18 +609,17 @@ impl NetworkHandler {
                             Some((_subscription_type, pub_sub_sender)) => {
                                 if let Err(e) = pub_sub_sender.unbounded_send(value) {
                                     let error_desc = e.to_string();
-                                    if let Ok(ref_value) = &e.into_inner() {
-                                        if let Some(
+                                    if let Ok(ref_value) = &e.into_inner()
+                                        && let Some(
                                             RefPubSubMessage::Message(channel_or_pattern, _)
                                             | RefPubSubMessage::SMessage(channel_or_pattern, _),
                                         ) = RefPubSubMessage::from_resp(ref_value)
-                                        {
-                                            warn!(
-                                                "[{}] Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
-                                                self.tag,
-                                                String::from_utf8_lossy(channel_or_pattern)
-                                            );
-                                        }
+                                    {
+                                        warn!(
+                                            "[{}] Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
+                                            self.tag,
+                                            String::from_utf8_lossy(channel_or_pattern)
+                                        );
                                     }
                                 }
                             }
@@ -816,18 +815,18 @@ impl NetworkHandler {
                 continue;
             }
 
-            if self.auto_resubscribe {
-                if let Err(e) = self.auto_resubscribe().await {
-                    error!("[{}] Failed to reconnect: {e:?}", self.tag);
-                    continue;
-                }
+            if self.auto_resubscribe
+                && let Err(e) = self.auto_resubscribe().await
+            {
+                error!("[{}] Failed to reconnect: {e:?}", self.tag);
+                continue;
             }
 
-            if self.auto_remonitor {
-                if let Err(e) = self.auto_remonitor(old_status).await {
-                    error!("[{}] Failed to reconnect: {e:?}", self.tag);
-                    continue;
-                }
+            if self.auto_remonitor
+                && let Err(e) = self.auto_remonitor(old_status).await
+            {
+                error!("[{}] Failed to reconnect: {e:?}", self.tag);
+                continue;
             }
 
             if let Err(e) = self.reconnect_sender.send(()) {

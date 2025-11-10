@@ -487,19 +487,15 @@ pub enum ClusterBumpEpochResult {
 }
 
 /// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command
+#[derive(Default)]
 pub enum ClusterFailoverOption {
     /// No option
+    #[default]
     Default,
     /// FORCE option: manual failover when the master is down
     Force,
     /// TAKEOVER option: manual failover without cluster consensus
     Takeover,
-}
-
-impl Default for ClusterFailoverOption {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 impl ToArgs for ClusterFailoverOption {

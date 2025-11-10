@@ -238,10 +238,10 @@ impl Config {
                 };
 
                 if let Some(ref mut query) = query {
-                    if let Some(millis) = query.remove("wait_between_failures") {
-                        if let Ok(millis) = millis.parse::<u64>() {
-                            sentinel_config.wait_between_failures = Duration::from_millis(millis);
-                        }
+                    if let Some(millis) = query.remove("wait_between_failures")
+                        && let Ok(millis) = millis.parse::<u64>()
+                    {
+                        sentinel_config.wait_between_failures = Duration::from_millis(millis);
                     }
 
                     sentinel_config.username = query.remove("sentinel_username");
@@ -281,50 +281,50 @@ impl Config {
         };
 
         if let Some(ref mut query) = query {
-            if let Some(millis) = query.remove("connect_timeout") {
-                if let Ok(millis) = millis.parse::<u64>() {
-                    config.connect_timeout = Duration::from_millis(millis);
-                }
+            if let Some(millis) = query.remove("connect_timeout")
+                && let Ok(millis) = millis.parse::<u64>()
+            {
+                config.connect_timeout = Duration::from_millis(millis);
             }
 
-            if let Some(millis) = query.remove("command_timeout") {
-                if let Ok(millis) = millis.parse::<u64>() {
-                    config.command_timeout = Duration::from_millis(millis);
-                }
+            if let Some(millis) = query.remove("command_timeout")
+                && let Ok(millis) = millis.parse::<u64>()
+            {
+                config.command_timeout = Duration::from_millis(millis);
             }
 
-            if let Some(auto_resubscribe) = query.remove("auto_resubscribe") {
-                if let Ok(auto_resubscribe) = auto_resubscribe.parse::<bool>() {
-                    config.auto_resubscribe = auto_resubscribe;
-                }
+            if let Some(auto_resubscribe) = query.remove("auto_resubscribe")
+                && let Ok(auto_resubscribe) = auto_resubscribe.parse::<bool>()
+            {
+                config.auto_resubscribe = auto_resubscribe;
             }
 
-            if let Some(auto_remonitor) = query.remove("auto_remonitor") {
-                if let Ok(auto_remonitor) = auto_remonitor.parse::<bool>() {
-                    config.auto_remonitor = auto_remonitor;
-                }
+            if let Some(auto_remonitor) = query.remove("auto_remonitor")
+                && let Ok(auto_remonitor) = auto_remonitor.parse::<bool>()
+            {
+                config.auto_remonitor = auto_remonitor;
             }
 
             if let Some(connection_name) = query.remove("connection_name") {
                 config.connection_name = connection_name;
             }
 
-            if let Some(keep_alive) = query.remove("keep_alive") {
-                if let Ok(keep_alive) = keep_alive.parse::<u64>() {
-                    config.keep_alive = Some(Duration::from_millis(keep_alive));
-                }
+            if let Some(keep_alive) = query.remove("keep_alive")
+                && let Ok(keep_alive) = keep_alive.parse::<u64>()
+            {
+                config.keep_alive = Some(Duration::from_millis(keep_alive));
             }
 
-            if let Some(no_delay) = query.remove("no_delay") {
-                if let Ok(no_delay) = no_delay.parse::<bool>() {
-                    config.no_delay = no_delay;
-                }
+            if let Some(no_delay) = query.remove("no_delay")
+                && let Ok(no_delay) = no_delay.parse::<bool>()
+            {
+                config.no_delay = no_delay;
             }
 
-            if let Some(retry_on_error) = query.remove("retry_on_error") {
-                if let Ok(retry_on_error) = retry_on_error.parse::<bool>() {
-                    config.retry_on_error = retry_on_error;
-                }
+            if let Some(retry_on_error) = query.remove("retry_on_error")
+                && let Ok(retry_on_error) = retry_on_error.parse::<bool>()
+            {
+                config.retry_on_error = retry_on_error;
             }
         }
 
@@ -332,7 +332,7 @@ impl Config {
     }
 
     /// break down an uri in a tuple (scheme, username, password, hosts, path_segments)
-    fn break_down_uri(uri: &str) -> Option<Uri> {
+    fn break_down_uri<'a>(uri: &'a str) -> Option<Uri<'a>> {
         let end_of_scheme = match uri.find("://") {
             Some(index) => index,
             None => {

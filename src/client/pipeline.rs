@@ -26,7 +26,7 @@ pub struct Pipeline<'a> {
 }
 
 impl Pipeline<'_> {
-    pub(crate) fn new(client: &Client) -> Pipeline {
+    pub(crate) fn new<'a>(client: &'a Client) -> Pipeline<'a> {
         Pipeline {
             client,
             commands: Vec::new(),

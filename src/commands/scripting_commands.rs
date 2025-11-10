@@ -434,8 +434,10 @@ impl ToArgs for CallBuilder {
 }
 
 /// Policy option for the [`function_restore`](ScriptingCommands::function_restore) command.
+#[derive(Default)]
 pub enum FunctionRestorePolicy {
     /// Append
+    #[default]
     Default,
     /// Appends the restored libraries to the existing libraries and aborts on collision.
     /// This is the default policy.
@@ -446,12 +448,6 @@ pub enum FunctionRestorePolicy {
     /// replacing any existing ones in case of name collisions.
     /// Note that this policy doesn't prevent function name collisions, only libraries.
     Replace,
-}
-
-impl Default for FunctionRestorePolicy {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 impl ToArgs for FunctionRestorePolicy {

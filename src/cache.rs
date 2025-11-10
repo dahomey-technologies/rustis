@@ -101,7 +101,8 @@ impl Cache {
                         "[{}] Invalidating key `{key}` from client cache",
                         connection_tag
                     );
-                    cache_clone.invalidate(&key.into_bytes().into()).await;
+                    let key: BulkString = key.into_bytes().into();
+                    cache_clone.invalidate(&key).await;
                 }
             }
         });

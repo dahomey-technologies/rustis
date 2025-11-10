@@ -131,12 +131,12 @@ impl Client {
     }
 
     /// Give an immutable generic access to attach any state to a client instance
-    pub fn get_client_state(&self) -> RwLockReadGuard<ClientState> {
+    pub fn get_client_state<'a> (&'a self) -> RwLockReadGuard<'a, ClientState> {
         self.client_state.read().unwrap()
     }
 
     /// Give a mutable generic access to attach any state to a client instance
-    pub fn get_client_state_mut(&self) -> RwLockWriteGuard<ClientState> {
+    pub fn get_client_state_mut<'a>(&'a self) -> RwLockWriteGuard<'a, ClientState> {
         self.client_state.write().unwrap()
     }
 
@@ -290,7 +290,7 @@ impl Client {
 
     /// Create a new pipeline
     #[inline]
-    pub fn create_pipeline(&self) -> Pipeline {
+    pub fn create_pipeline<'a>(&'a self) -> Pipeline<'a> {
         Pipeline::new(self)
     }
 

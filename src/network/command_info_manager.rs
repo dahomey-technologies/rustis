@@ -48,15 +48,14 @@ impl CommandInfoManager {
 
     pub fn get_command_info(&self, command: &Command) -> Option<&CommandInfo> {
         let command_info = self.command_info_map.get(command.name);
-        if let Some(command_info) = command_info {
-            if command_info.arity == -2 && !command_info.sub_commands.is_empty() {
-                if let Some(first_arg) = (&command.args).into_iter().next() {
-                    if let Ok(first_arg) = std::str::from_utf8(first_arg) {
-                        let command_name = format!("{}|{}", command.name, first_arg);
-                        return self.command_info_map.get(&command_name);
-                    }
-                }
-            }
+        if let Some(command_info) = command_info
+            && command_info.arity == -2
+            && !command_info.sub_commands.is_empty()
+            && let Some(first_arg) = (&command.args).into_iter().next()
+            && let Ok(first_arg) = std::str::from_utf8(first_arg)
+        {
+            let command_name = format!("{}|{}", command.name, first_arg);
+            return self.command_info_map.get(&command_name);
         }
 
         command_info

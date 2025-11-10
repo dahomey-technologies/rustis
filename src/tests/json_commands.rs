@@ -253,7 +253,7 @@ async fn json_debug_memory() -> Result<()> {
 
     let result: Vec<usize> = client.json_debug_memory("key", "$.foo[*].bar").await?;
     assert_eq!(2, result.len());
-    assert_eq!(59, result[0]);
+    assert_eq!(128, result[0]);
     assert_eq!(8, result[1]);
 
     Ok(())

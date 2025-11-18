@@ -52,7 +52,7 @@ underlying connection. It is the prefered mode for most Web applications.
 
 ### Managing Multiplexed Subscriptions
 
-With RESP3, there is no limitation when using subscriptions on a multiplexed connection.
+Because **rustis** implements the RESP3 protocol, there is no limitation when using subscriptions on a multiplexed connection.
 Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level, 
 allowing both to coexist safely on the same shared connection.
 
@@ -314,8 +314,7 @@ It also possible to use the sharded flavor of the publish function: [`spublish`]
 
 ### Subscribing
 
-Subscribing will block the current client connection, in order to let the client wait for incoming messages.
-Consequently, **rustis** implements subsribing through an async [`Stream`](https://docs.rs/futures/latest/futures/stream/trait.Stream.html).
+**rustis** implements subsribing through an async [`Stream`](https://docs.rs/futures/latest/futures/stream/trait.Stream.html).
 
 You can create a [`PubSubStream`] by calling [`subscribe`](crate::commands::PubSubCommands::subscribe),
 [`psubscribe`](crate::commands::PubSubCommands::psubscribe), or [`ssubscribe`](crate::commands::PubSubCommands::ssubscribe).
@@ -325,10 +324,11 @@ wait for an incoming message in the form of the struct [`PubSubMessage`].
 
 You can also create a [`PubSubStream`] without an upfront subscription by calling [`create_pub_sub`](crate::client::Client::create_pub_sub).
 
-### Warning!
+### Managing Multiplexed Subscriptions
 
-Multiplexed [`Client`] instances must be dedicated to Pub/Sub once a subscribing function has been called.
-Because subscription blocks the multiplexed client shared connection other callers would be blocked when sending regular commands.
+Because **rustis** implements the RESP3 protocol, there is no limitation when using subscriptions on a multiplexed connection. 
+Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level, 
+allowing both to coexist safely on the same shared connection.
 
 ### Simple Example
 
@@ -344,15 +344,15 @@ use futures_util::StreamExt;
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 async fn main() -> Result<()> {
     let subscribing_client = Client::connect("127.0.0.1:6379").await?;
-    let regular_client = Client::connect("127.0.0.1:6379").await?;
+    let publishing_client = Client::connect("127.0.0.1:6379").await?;
 
-    regular_client.flushdb(FlushingMode::Sync).await?;
+    subscribing_client.flushdb(FlushingMode::Sync).await?;
 
     // Create a subscription from the subscribing client:
     let mut pub_sub_stream = subscribing_client.subscribe("mychannel").await?;
 
-    // The regular client publishes a message on the channel:
-    regular_client.publish("mychannel", "mymessage").await?;
+    // The publishing client publishes a message on the channel:
+    publishing_client.publish("mychannel", "mymessage").await?;
 
     // Let's now iterate over messages received:
     while let Some(Ok(message)) = pub_sub_stream.next().await {

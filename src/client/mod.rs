@@ -44,70 +44,26 @@ async fn main() -> Result<()> {
 ```
 
 ## The multiplexer
-A [`Client`] instance can be cloned, allowing requests
+A [`Client`] instance can be cloned, allowing multiple requests
 to be sent concurrently on the same underlying connection.
 
-The multiplexer mode is great because it offers much performance in a multi-threaded architecture, with only a single
-underlying connection. It should be the prefered mode for Web applications.
+Multiplexer mode is highly efficient in multi-threaded architectures because it uses only a single
+underlying connection. It is the prefered mode for most Web applications.
+
+### Managing Multiplexed Subscriptions
+
+With RESP3, there is no limitation when using subscriptions on a multiplexed connection.
+Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level, 
+allowing both to coexist safely on the same shared connection.
 
 ### Limitations
-Beware that using [`Client`] in a multiplexer mode, by cloning an instance across multiple threads,
-is not suitable for using [blocking commands](crate::commands::BlockingCommands)
-because they monopolize the whole connection which cannot be shared anymore.
+Becaware that using a [`Client`] in a multiplexer mode, by cloning an instance across multiple threads,
+is not suitable when using [blocking commands](crate::commands::BlockingCommands).
+Blocking commands monopolize the entire connection, preventing it from being shared.
 
-Moreover using the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
-with the multiplexer mode is either. Indeed, it's the shared connection that will be watched, not only
-the [`Client`] instance through which the [`watch`](crate::commands::TransactionCommands::watch) command is sent.
-
-### Managing multiplexed subscriptions
-
-Even if the [`subscribe`][crate::commands::PubSubCommands::subscribe] monopolize the whole connection,
-it is still possible to use it in a multiplexed [`Client`].
-
-Indeed the subscribing mode of Redis still allows to share the connection between multiple clients,
-at the only condition that this connection is dedicated to subscriptions.
-
-In a Web application that requires subscriptions and regualar commands, the prefered solution
-would be to connect two multiplexed clients to the Redis server:
-* 1 for the subscriptions
-* 1 for the regular commands
-
-### See also
-[Multiplexing Explained](https://redis.com/blog/multiplexing-explained/)
-
-### Example
-```
-use rustis::{
-    client::{Client, IntoConfig},
-    commands::{FlushingMode, PubSubCommands, ServerCommands, StringCommands},
-    Result
-};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    let config = "127.0.0.1:6379".into_config()?;
-    let regular_client1 = Client::connect(config.clone()).await?;
-    let pub_sub_client = Client::connect(config).await?;
-
-    regular_client1.flushdb(FlushingMode::Sync).await?;
-
-    regular_client1.set("key", "value").await?;
-    let value: String = regular_client1.get("key").await?;
-    println!("value: {value:?}");
-
-    // clone a second instance on the same underlying connection
-    let regular_client2 = regular_client1.clone();
-    let value: String = regular_client2.get("key").await?;
-    println!("value: {value:?}");
-
-    // use 2nd connection to manager subscriptions
-    let pub_sub_stream = pub_sub_client.subscribe("my_channel").await?;
-    pub_sub_stream.close().await?;
-
-    Ok(())
-}
-```
+In addition, the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
+with multiplexer mode either. This is because the watched state applies to the shared connection itself, not just
+to the particular [`Client`] instance that issued the [`watch`](crate::commands::TransactionCommands::watch) command.
 
 ## The pooled client manager
 The pooled client manager holds a pool of [`Client`]s, based on [bb8](https://docs.rs/bb8/latest/bb8/).

@@ -51,9 +51,8 @@ Multiplexer mode is highly efficient in multi-threaded architectures because it 
 underlying connection. It is the prefered mode for most Web applications.
 
 ### Managing Multiplexed Subscriptions
-
 Because **rustis** implements the RESP3 protocol, there is no limitation when using subscriptions on a multiplexed connection.
-Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level, 
+Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level,
 allowing both to coexist safely on the same shared connection.
 
 ### Limitations
@@ -327,7 +326,7 @@ You can also create a [`PubSubStream`] without an upfront subscription by callin
 ### Managing Multiplexed Subscriptions
 
 Because **rustis** implements the RESP3 protocol, there is no limitation when using subscriptions on a multiplexed connection. 
-Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level, 
+Pub/Sub messages and regular command responses are cleanly distinguished at the protocol level,
 allowing both to coexist safely on the same shared connection.
 
 ### Simple Example

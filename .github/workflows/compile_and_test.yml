@@ -50,4 +50,4 @@ jobs:
           cd /home/runner/work/rustis/rustis/redis/
           sh ./docker_up.sh
       - name: Run cargo test
-        run: cargo test --features pool,tokio-rustls,json,client-cache -- --test-threads=1
+        run: cargo test --release --features pool,tokio-rustls,json,client-cache -- --test-threads=1

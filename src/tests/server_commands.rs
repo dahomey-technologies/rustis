@@ -653,10 +653,10 @@ async fn info() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
-    let info = client.info([]).await?;
+    let info: String = client.info(Vec::<InfoSection>::new()).await?;
     assert!(!info.is_empty());
 
-    let info = client
+    let info: String = client
         .info([InfoSection::Cpu, InfoSection::Clients])
         .await?;
     assert!(info.contains("# CPU"));
@@ -685,7 +685,7 @@ async fn latency_doctor() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
-    let report = client.latency_doctor().await?;
+    let report: String = client.latency_doctor().await?;
     assert!(!report.is_empty());
 
     Ok(())
@@ -714,7 +714,7 @@ async fn latency_graph() -> Result<()> {
         .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
         .await?;
 
-    let report = client.latency_graph(LatencyHistoryEvent::Command).await?;
+    let report: String = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
 
     Ok(())

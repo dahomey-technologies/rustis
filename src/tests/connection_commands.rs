@@ -30,7 +30,7 @@ async fn auth() -> Result<()> {
         }))
     ));
 
-    let result = client.auth::<&str, &str>(None, "password").await;
+    let result = client.auth(None::<String>, "password").await;
     assert!(matches!(
         result,
         Err(Error::Redis(RedisError {

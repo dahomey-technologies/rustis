@@ -3,7 +3,7 @@ use crate::{
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
-    resp::{ByteBufSeed, CommandArgs, SingleArg, SingleArgCollection},
+    resp::{Args, ByteBufSeed, CommandArgs},
 };
 use futures_util::{Stream, StreamExt};
 use serde::{
@@ -97,11 +97,7 @@ pub struct PubSubSplitSink {
 
 impl PubSubSplitSink {
     /// Subscribe to additional channels
-    pub async fn subscribe<C, CC>(&mut self, channels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn subscribe(&mut self, channels: impl Args) -> Result<()> {
         let channels = CommandArgs::default().arg(channels).build();
 
         for channel in &channels {
@@ -123,11 +119,7 @@ impl PubSubSplitSink {
     }
 
     /// Subscribe to additional patterns
-    pub async fn psubscribe<P, PP>(&mut self, patterns: PP) -> Result<()>
-    where
-        P: SingleArg + Send,
-        PP: SingleArgCollection<P>,
-    {
+    pub async fn psubscribe(&mut self, patterns: impl Args) -> Result<()> {
         let patterns = CommandArgs::default().arg(patterns).build();
 
         for pattern in &patterns {
@@ -149,11 +141,7 @@ impl PubSubSplitSink {
     }
 
     /// Subscribe to additional shardchannels
-    pub async fn ssubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn ssubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
 
         for shardchannel in &shardchannels {
@@ -175,11 +163,7 @@ impl PubSubSplitSink {
     }
 
     /// Unsubscribe from the given channels
-    pub async fn unsubscribe<C, CC>(&mut self, channels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn unsubscribe(&mut self, channels: impl Args) -> Result<()> {
         let channels = CommandArgs::default().arg(channels).build();
         self.channels
             .retain(|channel| channels.iter().all(|c| c != channel));
@@ -189,11 +173,7 @@ impl PubSubSplitSink {
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn punsubscribe<C, CC>(&mut self, patterns: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn punsubscribe(&mut self, patterns: impl Args) -> Result<()> {
         let patterns = CommandArgs::default().arg(patterns).build();
         self.patterns
             .retain(|pattern| patterns.iter().all(|p| p != pattern));
@@ -203,15 +183,11 @@ impl PubSubSplitSink {
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn sunsubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
         self.shardchannels
             .retain(|shardchannel| shardchannels.iter().all(|sc: &Vec<u8>| sc != shardchannel));
-        self.client.punsubscribe(shardchannels).await?;
+        self.client.sunsubscribe(shardchannels).await?;
 
         Ok(())
     }
@@ -406,56 +382,32 @@ impl PubSubStream {
     }
 
     /// Subscribe to additional channels
-    pub async fn subscribe<C, CC>(&mut self, channels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn subscribe(&mut self, channels: impl Args) -> Result<()> {
         self.split_sink.subscribe(channels).await
     }
 
     /// Subscribe to additional patterns
-    pub async fn psubscribe<P, PP>(&mut self, patterns: PP) -> Result<()>
-    where
-        P: SingleArg + Send,
-        PP: SingleArgCollection<P>,
-    {
+    pub async fn psubscribe(&mut self, patterns: impl Args) -> Result<()> {
         self.split_sink.psubscribe(patterns).await
     }
 
     /// Subscribe to additional shardchannels
-    pub async fn ssubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn ssubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
         self.split_sink.ssubscribe(shardchannels).await
     }
 
     /// Unsubscribe from the given channels
-    pub async fn unsubscribe<C, CC>(&mut self, channels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn unsubscribe(&mut self, channels: impl Args) -> Result<()> {
         self.split_sink.unsubscribe(channels).await
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn punsubscribe<C, CC>(&mut self, patterns: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn punsubscribe(&mut self, patterns: impl Args) -> Result<()> {
         self.split_sink.punsubscribe(patterns).await
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn sunsubscribe<C, CC>(&mut self, shardchannels: CC) -> Result<()>
-    where
-        C: SingleArg + Send,
-        CC: SingleArgCollection<C>,
-    {
+    pub async fn sunsubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
         self.split_sink.sunsubscribe(shardchannels).await
     }
 

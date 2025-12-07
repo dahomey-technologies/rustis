@@ -24,9 +24,9 @@ You will notice that each built-in command expects arguments through a set of tr
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### ToArgs
+### Args
 
-The trait [`ToArgs`] allows to convert a complex type into one ore multiple argumentss.
+The trait [`Args`] allows to convert a complex type into one ore multiple argumentss.
 Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`] struct.
 
 Current implementation provides the following conversions:
@@ -34,7 +34,7 @@ Current implementation provides the following conversions:
 * `f32`, `f64`,
 * `bool`,
 * `String`, `&String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
-* `Option<T>` where `T: SingleArg`
+* `Option<T>` where `T: Arg`
 * `(T, U)`
 * `(T, U, V)`
 * `Vec<T>`
@@ -46,43 +46,23 @@ Current implementation provides the following conversions:
 * `HashMap<K, V, S>`
 * [`CommandArgs`]
 
-Nevertheless, [`ToArgs`] is not expected directly in built-in commands arguments.
-
-The following traits are used to constraints which implementations of [`ToArgs`]
-are expected by a specific argument of a built-in command.
-
-### SingleArg
-
-Several Redis commands expect a Rust type that should be converted in a single command argument.
-
-**rustis** uses the trait [`SingleArg`] to implement this behavior.
-
-Current implementation provides the following conversions:
-* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
-* `f32`, `f64`,
-* `bool`,
-* `String`, `&String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
-* `Option<T>` where `T: SingleArg`
-
 #### Example
 ```
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{CommandArgs, ToArgs, SingleArg},
+    resp::{CommandArgs, Args},
     Result,
 };
 
 pub struct MyI32(i32);
 
- impl ToArgs for MyI32 {
+ impl Args for MyI32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.0);
     }
 }
-
-impl SingleArg for MyI32 {}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -110,153 +90,6 @@ async fn main() -> Result<()> {
 }
 ```
 
-### SingleArgCollection
-
-Several Redis commands expect a collection with elements that will produced a single
-command argument each
-
-**rustis** uses the trait [`SingleArgCollection`] to implement this behavior.
-
-Current implementation provides the following conversions:
-* `T` (for the single item case)
-* `Vec<T>`
-* `[T;N]`
-* `SmallVec<A>`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* [`CommandArgs`]
-
-where each of theses implementations must also implement [`ToArgs`]
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, ListCommands},
-    Result,
-};
-use smallvec::{SmallVec};
-use std::collections::{HashSet, BTreeSet};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
-
-    client.lpush("key", 12).await?;
-    client.lpush("key", [12, 13, 14]).await?;
-    client.lpush("key", vec![12, 13, 14]).await?;
-    client.lpush("key", SmallVec::from([12, 13, 14])).await?;
-    client.lpush("key", HashSet::from([12, 13, 14])).await?;
-    client.lpush("key", BTreeSet::from([12, 13, 14])).await?;
-
-    client.lpush("key", "value1").await?;
-    client.lpush("key", ["value1", "value2", "value13"]).await?;
-    client.lpush("key", vec!["value1", "value2", "value13"]).await?;
-    client.lpush("key", SmallVec::from(["value1", "value2", "value13"])).await?;
-    client.lpush("key", HashSet::from(["value1", "value2", "value13"])).await?;
-    client.lpush("key", BTreeSet::from(["value1", "value2", "value13"])).await?;
-
-    Ok(())
-}
-```
-
-### MultipleArgsCollection
-
-Several Redis commands expect a collection with elements that will produced multiple
-command arguments each
-
-**rustis** uses the trait [`MultipleArgsCollection`] to implement this behavior.
-
-Current implementation provides the following conversions:
-* `T` (for the single item case)
-* `Vec<T>`
-* `[T;N]`
-
-where each of theses implementations must also implement [`ToArgs`]
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, SortedSetCommands, ZAddOptions},
-    Result,
-};
-use std::collections::{HashSet, BTreeSet};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushall(FlushingMode::Sync).await?;
-
-    client.zadd("key", (1.0, "member1"), ZAddOptions::default()).await?;
-    client.zadd("key", [(1.0, "member1"), (2.0, "member2")], ZAddOptions::default()).await?;
-    client.zadd("key", vec![(1.0, "member1"), (2.0, "member2")], ZAddOptions::default()).await?;
-
-    Ok(())
-}
-```
-### KeyValueArgsCollection
-
-Several Redis commands expect one or multiple key/value pairs.
-
-**rustis** uses the trait [`KeyValueArgsCollection`] to implement this behavior.
-
-Current implementation provides the following conversions:
-* `(K, V)` (for the single item case)
-* `Vec<(K, V)>`
-* `[(K, V);N]`
-* `SmallVec<A>` where `A: Array<Item = (K, V)>`
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
-
-where each of theses implementations must also implement [`ToArgs`]
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, StringCommands},
-    Result,
-};
-use smallvec::{SmallVec};
-use std::collections::{HashMap, BTreeMap};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
-
-    client.mset(("key1", "value1")).await?;
-    client.mset([("key1", "value1"), ("key2", "value2")]).await?;
-    client.mset(vec![("key1", "value1"), ("key2", "value2")]).await?;
-    client.mset(SmallVec::from([("key1", "value1"), ("key2", "value2")])).await?;
-    client.mset(HashMap::from([("key1", "value1"), ("key2", "value2")])).await?;
-    client.mset(BTreeMap::from([("key1", "value1"), ("key2", "value2")])).await?;
-
-    client.mset(("key1", 12)).await?;
-    client.mset([("key1", 12), ("key2", 13)]).await?;
-    client.mset(vec![("key1", 12), ("key2", 13)]).await?;
-    client.mset(SmallVec::from([("key1", 12), ("key2", 13)])).await?;
-    client.mset(HashMap::from([("key1", 12), ("key2", 13)])).await?;
-    client.mset(BTreeMap::from([("key1", 12), ("key2", 13)])).await?;
-
-    Ok(())
-}
-```
-
 # Command results
 
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)
@@ -272,166 +105,9 @@ The different command traits implementations ([`Client`](crate::client::Client),
  Each custom struct or enum defined as a response of a built-command implements
  serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
-
-Some more advanced traits allow to constraint more which Rust types are allowed for specific commands.
-
-For each trait, you can add your own implementations for your custom types
-or request additional implementation for standard types.
-
-### PrimitiveResponse
-
-Several Redis commands return a simple primitive response.
-
-**rustis** uses the trait [`PrimitiveResponse`] to implement this behavior.
-
-Current implementation provides the following deserializations from a RESP Buffer:
-* [`Value`]
-* ()
-* `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
-* `f32`, `f64`,
-* `bool`,
-* `String`,
-* [`BulkString`],
-* `Option<T>`
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{PrimitiveResponse, deserialize_byte_buf},
-    Result,
-};
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-pub struct MyI32(i32);
-impl PrimitiveResponse for MyI32 {}
-
-#[derive(Deserialize)]
-pub struct Buffer(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);
-impl PrimitiveResponse for Buffer {}
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
-
-    client.set("key", 12).await?;
-    let _result: i32 = client.get("key").await?;
-    let _result: MyI32 = client.get("key").await?;
-
-    client.set("key", 12.12).await?;
-    let _result: f64 = client.get("key").await?;
-
-    client.set("key", true).await?;
-    let _result: bool = client.get("key").await?;
-
-    client.set("key", "value").await?;
-    let _result: String = client.get("key").await?;
-    let _result: Buffer = client.get("key").await?;
-
-    Ok(())
-}
-```
-
-### CollectionResponse
-
-Several Redis commands return a collection of items.
-**rustis** uses the trait [`CollectionResponse`] to implement this behavior.
-
-Current implementation provides the following deserializations from a RESP Buffer:
-* `Vec<T>`
-* `[T;N]`
-* `SmallVec<A>`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-
-where each of theses implementations must also implement [`Response`]
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, ListCommands},
-    Result,
-};
-use smallvec::{SmallVec};
-use std::collections::{HashSet, BTreeSet};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
-
-    client.lpush("key", [12, 13, 14]).await?;
-    let _values: Vec<Option<i32>> = client.rpop("key", 3).await?;
-
-    client.lpush("key", [12, 13, 14]).await?;
-    let _values: HashSet<Option<i32>> = client.rpop("key", 3).await?;
-
-    client.lpush("key", [12, 13, 14]).await?;
-    let _values: BTreeSet<Option<i32>> = client.rpop("key", 3).await?;
-
-    client.lpush("key", [12, 13, 14]).await?;
-    let _values: SmallVec<[Option<i32>;3]> = client.rpop("key", 3).await?;
-
-    Ok(())
-}
-```
-
-### KeyValueCollectionResponse
-
-Several Redis commands return a collection of key/value pairs
-**rustis** uses the trait [`KeyValueCollectionResponse`] to implement this behavior.
-
-Current implementation provides the following deserializations from a RESP Buffer:
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
-* `SmallVec<A>` where `A: Array<Item = (K, V)>`
-* `Vec<(K, V>)>`
-
-where each of theses implementations must also implement [`Response`]
-
-#### Example
-```
-use rustis::{
-    client::Client,
-    commands::{FlushingMode, ServerCommands, HashCommands},
-    Result,
-};
-use smallvec::{SmallVec};
-use std::collections::{HashMap, BTreeMap};
-
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
-async fn main() -> Result<()> {
-    // Connect the client to a Redis server from its IP and port
-    let client = Client::connect("127.0.0.1:6379").await?;
-
-    // Flush all existing data in Redis
-    client.flushdb(FlushingMode::Sync).await?;
-
-    client.hset("key", [("field1", 12), ("field2", 13)]).await?;
-
-    let _values: BTreeMap<String, i32> = client.hgetall("key").await?;
-    let _values: HashMap<String, i32> = client.hgetall("key").await?;
-    let _values: SmallVec<[(String, i32); 10]> = client.hgetall("key").await?;
-    let _values: Vec<(String, i32)> = client.hgetall("key").await?;
-
-    Ok(())
-}
-```
 */
 
+mod args;
 mod buffer_decoder;
 mod bulk_string;
 mod command;
@@ -444,13 +120,13 @@ mod resp_buf;
 mod resp_deserializer;
 mod resp_serializer;
 mod response;
-mod to_args;
 mod util;
 mod value;
 mod value_deserialize;
 mod value_deserializer;
 mod value_serialize;
 
+pub use args::*;
 pub(crate) use buffer_decoder::*;
 pub use bulk_string::*;
 pub use command::*;
@@ -463,7 +139,6 @@ pub use resp_buf::*;
 pub use resp_deserializer::*;
 pub use resp_serializer::*;
 pub use response::*;
-pub use to_args::*;
 pub use util::*;
 pub use value::*;
 pub(crate) use value_deserialize::*;

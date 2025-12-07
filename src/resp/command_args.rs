@@ -1,6 +1,6 @@
 use smallvec::SmallVec;
 
-use crate::resp::ToArgs;
+use crate::resp::Args;
 use std::fmt;
 
 /// Collection of arguments of [`Command`](crate::resp::Command).
@@ -14,7 +14,7 @@ impl CommandArgs {
     #[inline]
     pub fn arg<A>(&mut self, args: A) -> &mut Self
     where
-        A: ToArgs,
+        A: Args,
     {
         args.write_args(self);
         self
@@ -24,7 +24,7 @@ impl CommandArgs {
     #[inline]
     pub fn arg_ref<A>(&mut self, args: &A) -> &mut Self
     where
-        A: ToArgs,
+        A: Args,
     {
         args.write_args(self);
         self
@@ -35,7 +35,7 @@ impl CommandArgs {
     #[inline]
     pub fn arg_if<A>(&mut self, condition: bool, args: A) -> &mut Self
     where
-        A: ToArgs,
+        A: Args,
     {
         if condition { self.arg(args) } else { self }
     }

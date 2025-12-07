@@ -145,7 +145,7 @@ async fn geohash() -> Result<()> {
         .await?;
     assert_eq!(2, len);
 
-    let hashes = client.geohash("Sicily", ["Palermo", "Catania"]).await?;
+    let hashes: Vec<String> = client.geohash("Sicily", ["Palermo", "Catania"]).await?;
     assert_eq!(2, hashes.len());
     assert_eq!("sqc8b49rny0", hashes[0]);
     assert_eq!("sqdtr74hyu0", hashes[1]);

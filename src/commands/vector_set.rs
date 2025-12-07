@@ -1,18 +1,14 @@
-use serde::{Deserialize, de::DeserializeOwned};
-
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        BulkString, CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
-        Response, SingleArg, ToArgs, cmd,
-    },
+    resp::{Args, BulkString, CommandArgs, Response, cmd},
 };
+use serde::Deserialize;
 
 /// A group of Redis commands related to [`Vector Sets`](https://redis.io/docs/data-types/vector-sets/)
 ///
 /// # See Also
 /// [Redis Sorted Set Commands](https://redis.io/docs/latest/commands/?group=vector_set)
-pub trait VectorSetCommands<'a> {
+pub trait VectorSetCommands<'a>: Sized {
     /// Add a new element into the vector set specified by key.
     ///
     /// The vector can be provided as 32-bit floating point (FP32) blob of values,
@@ -32,19 +28,14 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vadd/>](https://redis.io/commands/vadd/)
     #[must_use]
-    fn vadd<K, E>(
+    fn vadd(
         self,
-        key: K,
+        key: impl Args,
         reduce_dim: Option<usize>,
         values: &[f32],
-        element: E,
+        element: impl Args,
         options: VAddOptions,
-    ) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
             cmd("VADD")
@@ -62,11 +53,7 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vcard/>](https://redis.io/commands/vcard/)
     #[must_use]
-    fn vcard<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn vcard(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("VCARD").arg(key))
     }
 
@@ -75,11 +62,7 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vdim/>](https://redis.io/commands/vdim/)
     #[must_use]
-    fn vdim<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn vdim(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("VDIM").arg(key))
     }
 
@@ -88,13 +71,7 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vemb<K, E, R>(self, key: K, element: E) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        R: CollectionResponse<f32>,
-    {
+    fn vemb<R: Response>(self, key: impl Args, element: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VEMB").arg(key).arg(element))
     }
 
@@ -103,13 +80,11 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vgetattr<K, E, R>(self, key: K, element: E) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        R: Response,
-    {
+    fn vgetattr<R: Response>(
+        self,
+        key: impl Args,
+        element: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VGETATTR").arg(key).arg(element))
     }
 
@@ -119,11 +94,7 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vinfo/>](https://redis.io/commands/vinfo/)
     #[must_use]
-    fn vinfo<K>(self, key: K) -> PreparedCommand<'a, Self, VInfoResult>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn vinfo(self, key: impl Args) -> PreparedCommand<'a, Self, VInfoResult> {
         prepare_command(self, cmd("VINFO").arg(key))
     }
 
@@ -136,14 +107,11 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vlinks/>](https://redis.io/commands/vlinks/)
     #[must_use]
-    fn vlinks<K, E, R, RR>(self, key: K, element: E) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        R: Response + DeserializeOwned,
-        RR: CollectionResponse<R> + DeserializeOwned,
-    {
+    fn vlinks<R: Response>(
+        self,
+        key: impl Args,
+        element: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VLINKS").arg(key).arg(element))
     }
 
@@ -157,14 +125,11 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vlinks/>](https://redis.io/commands/vlinks/)
     #[must_use]
-    fn vlinks_with_score<K, E, R, RR>(self, key: K, element: E) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: KeyValueCollectionResponse<R, f64> + DeserializeOwned,
-    {
+    fn vlinks_with_score<R: Response>(
+        self,
+        key: impl Args,
+        element: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VLINKS").arg(key).arg(element))
     }
 
@@ -186,13 +151,11 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vrandmember/>](https://redis.io/commands/vrandmember/)
     #[must_use]
-    fn vrandmember<K, R, RR>(self, key: K, count: isize) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        K: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: CollectionResponse<R> + DeserializeOwned,
-    {
+    fn vrandmember<R: Response>(
+        self,
+        key: impl Args,
+        count: isize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VRANDMEMBER").arg(key).arg(count))
     }
 
@@ -210,12 +173,7 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vrem/>](https://redis.io/commands/vrem/)
     #[must_use]
-    fn vrem<K, E>(self, key: K, element: E) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-    {
+    fn vrem(self, key: impl Args, element: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("VREM").arg(key).arg(element))
     }
 
@@ -228,13 +186,12 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vsetattr<K, E, J>(self, key: K, element: E, json: J) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        J: SingleArg,
-    {
+    fn vsetattr(
+        self,
+        key: impl Args,
+        element: impl Args,
+        json: impl Args,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("VSETATTR").arg(key).arg(element).arg(json))
     }
 
@@ -244,18 +201,12 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vsim/>](https://redis.io/commands/vsim/)
     #[must_use]
-    fn vsim<K, R, RR>(
+    fn vsim<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         vector_or_element: VectorOrElement,
         options: VSimOptions,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        K: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: CollectionResponse<R> + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("VSIM").arg(key).arg(vector_or_element).arg(options),
@@ -268,18 +219,12 @@ pub trait VectorSetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/vsim/>](https://redis.io/commands/vsim/)
     #[must_use]
-    fn vsim_with_scores<K, RF, R>(
+    fn vsim_with_scores<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         vector_or_element: VectorOrElement,
         options: VSimOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        RF: PrimitiveResponse + DeserializeOwned,
-        R: KeyValueCollectionResponse<RF, f64> + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("VSIM")
@@ -397,7 +342,7 @@ impl VAddOptions {
     }
 }
 
-impl ToArgs for VAddOptions {
+impl Args for VAddOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         self.command_args.write_args(args);
     }
@@ -425,7 +370,7 @@ pub enum VectorOrElement<'a> {
     Element(&'a str),
 }
 
-impl<'a> ToArgs for VectorOrElement<'a> {
+impl<'a> Args for VectorOrElement<'a> {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             VectorOrElement::Vector(vector) => {
@@ -514,7 +459,7 @@ impl VSimOptions {
     }
 }
 
-impl ToArgs for VSimOptions {
+impl Args for VSimOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         self.command_args.write_args(args);
     }

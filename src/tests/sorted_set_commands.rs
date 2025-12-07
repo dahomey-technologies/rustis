@@ -627,7 +627,7 @@ async fn zmscore() -> Result<()> {
         .zadd("key", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
         .await?;
 
-    let scores = client.zmscore("key", ["one", "two", "nofield"]).await?;
+    let scores: Vec<Option<f64>> = client.zmscore("key", ["one", "two", "nofield"]).await?;
     assert_eq!(3, scores.len());
     assert_eq!(Some(1.0), scores[0]);
     assert_eq!(Some(2.0), scores[1]);

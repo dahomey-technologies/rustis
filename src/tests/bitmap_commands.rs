@@ -1,8 +1,8 @@
 use crate::{
     Result,
     commands::{
-        BitFieldGetSubCommand, BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange,
-        BitUnit, BitmapCommands, StringCommands,
+        BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
+        StringCommands,
     },
     tests::get_test_client,
 };
@@ -89,9 +89,7 @@ async fn bitfield() -> Result<()> {
     let results = client
         .bitfield(
             "mykey",
-            [BitFieldSubCommand::<String, String>::overflow(
-                BitFieldOverflow::Fail,
-            )],
+            [BitFieldSubCommand::overflow(BitFieldOverflow::Fail)],
         )
         .await?;
     assert_eq!(0, results.len());
@@ -110,7 +108,7 @@ async fn bitfield_readonly() -> Result<()> {
     client.set("mykey", "foobar").await?;
 
     let results = client
-        .bitfield_readonly("mykey", [BitFieldGetSubCommand::new("i8", 0)])
+        .bitfield_readonly("mykey", [BitFieldSubCommand::get("i8", 0)])
         .await?;
     assert_eq!(1, results.len());
     assert_eq!(b'f' as u64, results[0]);

@@ -1,23 +1,18 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{SingleArg, SingleArgCollection, cmd},
+    resp::{Args, cmd},
 };
 
 /// A group of Redis commands related to Transactions
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=transactions)
-pub trait TransactionCommands<'a> {
+pub trait TransactionCommands<'a>: Sized {
     /// Marks the given keys to be watched for conditional execution of a transaction.
     ///
     /// # See Also
     /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
-    fn watch<K, KK>(self, keys: KK) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-    {
+    fn watch(self, keys: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("WATCH").arg(keys))
     }
 
@@ -29,10 +24,7 @@ pub trait TransactionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/unwatch/>](https://redis.io/commands/unwatch/)
     #[must_use]
-    fn unwatch(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn unwatch(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("UNWATCH"))
     }
 }

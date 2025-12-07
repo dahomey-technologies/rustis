@@ -3,7 +3,7 @@ use crate::{
     client::IntoConfig,
     commands::{
         GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands,
-        StringCommands, XReadGroupOptions, XReadOptions, ZAggregate,
+        StreamEntry, StringCommands, XReadGroupOptions, XReadOptions, ZAggregate,
     },
     network::StandaloneConnection,
     tests::{get_default_addr, get_default_host, get_default_port, get_test_client},
@@ -47,7 +47,7 @@ async fn extract_keys() -> Result<()> {
     let keys = command_info_manager
         .extract_keys(
             client
-                .xread::<_, _, _, _, String, Vec<(_, _)>>(
+                .xread::<Vec<(String, Vec<StreamEntry<String>>)>>(
                     XReadOptions::default().count(2),
                     ["mystream", "writers"],
                     ["1526999352406-0", "1526985685298-0"],
@@ -64,7 +64,7 @@ async fn extract_keys() -> Result<()> {
     let keys = command_info_manager
         .extract_keys(
             client
-                .xreadgroup::<_, _, _, _, _, _, String, Vec<(_, _)>>(
+                .xreadgroup::<Vec<(String, Vec<StreamEntry<String>>)>>(
                     "mygroup",
                     "myconsumer",
                     XReadGroupOptions::default().count(2),
@@ -104,7 +104,7 @@ async fn extract_keys() -> Result<()> {
     let keys = command_info_manager
         .extract_keys(
             client
-                .zunion::<_, _, _, String>(["zset1", "zset2"], Some([1.5, 2.5]), ZAggregate::Max)
+                .zunion::<String>(["zset1", "zset2"], Some([1.5, 2.5]), ZAggregate::Max)
                 .command(),
             &mut connection,
         )

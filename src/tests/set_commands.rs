@@ -196,7 +196,7 @@ async fn smismember() -> Result<()> {
 
     client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result = client.smismember("key", ["value1", "value4"]).await?;
+    let result: Vec<bool> = client.smismember("key", ["value1", "value4"]).await?;
     assert_eq!(2, result.len());
     assert!(result[0]);
     assert!(!result[1]);

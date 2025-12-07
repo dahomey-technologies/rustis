@@ -452,9 +452,9 @@ async fn commands_to_different_nodes() -> Result<()> {
     client.set("key2", "2").await?; // cluster keyslot key2 = 4998
 
     let (val0, val1, val2) = try_join!(
-        client.get::<_, String>("key0").into_future(),
-        client.get::<_, String>("key1").into_future(),
-        client.get::<_, String>("key2").into_future(),
+        client.get::<String>("key0").into_future(),
+        client.get::<String>("key1").into_future(),
+        client.get::<String>("key2").into_future(),
     )?;
 
     assert_eq!("0", val0);

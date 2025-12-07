@@ -1,13 +1,13 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{SingleArg, SingleArgCollection, cmd},
+    resp::{Args, cmd},
 };
 
 /// A group of Redis commands related to [`HyperLogLog`](https://redis.io/docs/data-types/hyperloglogs/)
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hyperloglog)
-pub trait HyperLogLogCommands<'a> {
+pub trait HyperLogLogCommands<'a>: Sized {
     /// Adds the specified elements to the specified HyperLogLog.
     ///
     /// # Return
@@ -16,13 +16,7 @@ pub trait HyperLogLogCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfadd/>](https://redis.io/commands/pfadd/)
-    fn pfadd<K, E, EE>(self, key: K, elements: EE) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        E: SingleArg,
-        EE: SingleArgCollection<E>,
-    {
+    fn pfadd(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("PFADD").arg(key).arg(elements))
     }
 
@@ -34,12 +28,7 @@ pub trait HyperLogLogCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
-    fn pfcount<K, KK>(self, keys: KK) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-    {
+    fn pfcount(self, keys: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("PFCOUNT").arg(keys))
     }
 
@@ -47,13 +36,7 @@ pub trait HyperLogLogCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfmerge/>](https://redis.io/commands/pfmerge/)
-    fn pfmerge<D, S, SS>(self, dest_key: D, source_keys: SS) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        D: SingleArg,
-        S: SingleArg,
-        SS: SingleArgCollection<S>,
-    {
+    fn pfmerge(self, dest_key: impl Args, source_keys: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("PFMERGE").arg(dest_key).arg(source_keys))
     }
 }

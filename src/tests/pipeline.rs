@@ -17,8 +17,8 @@ async fn pipeline() -> Result<()> {
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
-    pipeline.get::<_, ()>("key1").queue();
-    pipeline.get::<_, ()>("key2").queue();
+    pipeline.get::<()>("key1").queue();
+    pipeline.get::<()>("key2").queue();
 
     let (value1, value2): (String, String) = pipeline.execute().await?;
     assert_eq!("value1", value1);
@@ -38,8 +38,8 @@ async fn error() -> Result<()> {
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
     pipeline.queue(cmd("UNKNOWN"));
-    pipeline.get::<_, ()>("key1").queue();
-    pipeline.get::<_, ()>("key2").queue();
+    pipeline.get::<()>("key1").queue();
+    pipeline.get::<()>("key2").queue();
 
     let result: Result<(Value, String, String)> = pipeline.execute().await;
     assert!(result.is_err());
@@ -57,8 +57,8 @@ async fn pipeline_on_cluster() -> Result<()> {
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
-    pipeline.get::<_, ()>("key1").queue();
-    pipeline.get::<_, ()>("key2").queue();
+    pipeline.get::<()>("key1").queue();
+    pipeline.get::<()>("key2").queue();
 
     let (value1, value2): (String, String) = pipeline.execute().await?;
     assert_eq!("value1", value1);

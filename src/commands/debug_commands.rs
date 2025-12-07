@@ -9,22 +9,16 @@ use std::time::Duration;
 /// [Redis Debug Commands](https://redis.io/commands/debug/)
 /// The DEBUG command is an internal command. It is meant to be used
 /// for developing and testing Redis and libraries.
-pub trait DebugCommands<'a> {
+pub trait DebugCommands<'a>: Sized {
     /// Stop the server for <seconds>. Decimals allowed.
     #[must_use]
-    fn debug_sleep(self, duration: Duration) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_sleep(self, duration: Duration) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("DEBUG").arg("SLEEP").arg(duration.as_secs_f32()))
     }
 
     /// Graceful restart: save config, db, restart after a <milliseconds> delay (default 0).
     #[must_use]
-    fn debug_restart(self, delay: Option<Duration>) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_restart(self, delay: Option<Duration>) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("DEBUG")
@@ -35,10 +29,7 @@ pub trait DebugCommands<'a> {
 
     /// Hard crash and restart after a <milliseconds> delay (default 0).
     #[must_use]
-    fn debug_crash_and_recover(self, delay: Option<Duration>) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_crash_and_recover(self, delay: Option<Duration>) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("DEBUG")
@@ -49,28 +40,19 @@ pub trait DebugCommands<'a> {
 
     /// Crash the server by assertion failed.
     #[must_use]
-    fn debug_assert(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_assert(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("DEBUG").arg("ASSERT"))
     }
 
     /// Crash the server simulating an out-of-memory error.
     #[must_use]
-    fn debug_oom(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_oom(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("DEBUG").arg("OOM"))
     }
 
     /// Crash the server simulating a panic.
     #[must_use]
-    fn debug_panic(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn debug_panic(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("DEBUG").arg("PANIC"))
     }
 }

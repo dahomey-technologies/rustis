@@ -1,7 +1,7 @@
-use crate::resp::{CommandArgs, PrimitiveResponse, SingleArg, Args};
+use crate::resp::{Args, CommandArgs};
 use serde::{
     Deserialize,
-    de::{self, DeserializeOwned},
+    de::{self},
     ser::Serialize,
 };
 
@@ -105,21 +105,6 @@ where
     }
 }
 
-impl<T> PrimitiveResponse for Json<T> where T: DeserializeOwned {}
-
-impl<T> Args for Json<T>
-where
-    T: Serialize,
-{
-    fn write_args(&self, args: &mut CommandArgs) {
-        if let Ok(bytes) = serde_json::to_vec(&self.0) {
-            args.write_arg(bytes);
-        }
-    }
-}
-
-impl<T> SingleArg for Json<T> where T: Serialize {}
-
 /// Wrapper type that serializes a Rust value as JSON before sending it to Redis.
 ///
 /// This is useful for storing structured data in Redis as a bulk string using JSON encoding.
@@ -167,5 +152,3 @@ where
         }
     }
 }
-
-impl<'a, T> SingleArg for JsonRef<'a, T> where T: Serialize {}

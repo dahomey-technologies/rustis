@@ -2,19 +2,16 @@ use crate::{
     Result,
     client::{PreparedCommand, prepare_command},
     commands::ModuleInfo,
-    resp::{CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, cmd},
+    resp::{CommandArgs, Response, Args, cmd},
 };
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, DeserializeOwned},
-};
+use serde::{Deserialize, Deserializer, de};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to connection management
 ///
 /// # See Also
 /// [Redis Connection Management Commands](https://redis.io/commands/?group=connection)
-pub trait ConnectionCommands<'a> {
+pub trait ConnectionCommands<'a>: Sized {
     /// Authenticates the current connection.
     ///
     /// # Errors
@@ -23,12 +20,11 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/auth/>](https://redis.io/commands/auth/)
     #[must_use]
-    fn auth<U, P>(self, username: Option<U>, password: P) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        U: SingleArg,
-        P: SingleArg,
-    {
+    fn auth(
+        self,
+        username: Option<impl Args>,
+        password: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
 
@@ -39,8 +35,6 @@ pub trait ConnectionCommands<'a> {
     /// [<https://redis.io/commands/client-caching/>](https://redis.io/commands/client-caching/)
     #[must_use]
     fn client_caching(self, mode: ClientCachingMode) -> PreparedCommand<'a, Self, Option<()>>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("CLIENT").arg("CACHING").arg(mode))
     }
@@ -53,11 +47,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
     #[must_use]
-    fn client_getname<CN>(self) -> PreparedCommand<'a, Self, Option<CN>>
-    where
-        Self: Sized,
-        CN: PrimitiveResponse + DeserializeOwned,
-    {
+    fn client_getname<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
 
@@ -71,10 +61,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-getredir/>](https://redis.io/commands/client-getredir/)
     #[must_use]
-    fn client_getredir(self) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-    {
+    fn client_getredir(self) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("CLIENT").arg("GETREDIR"))
     }
 
@@ -104,10 +91,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-help/>](https://redis.io/commands/client-help/)
     #[must_use]
-    fn client_help(self) -> PreparedCommand<'a, Self, Vec<String>>
-    where
-        Self: Sized,
-    {
+    fn client_help<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLIENT").arg("HELP"))
     }
 
@@ -119,10 +103,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-id/>](https://redis.io/commands/client-id/)
     #[must_use]
-    fn client_id(self) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-    {
+    fn client_id(self) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("CLIENT").arg("ID"))
     }
 
@@ -135,10 +116,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-info/>](https://redis.io/commands/client-info/)
     #[must_use]
-    fn client_info(self) -> PreparedCommand<'a, Self, ClientInfo>
-    where
-        Self: Sized,
-    {
+    fn client_info(self) -> PreparedCommand<'a, Self, ClientInfo> {
         prepare_command(self, cmd("CLIENT").arg("INFO"))
     }
 
@@ -150,10 +128,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-kill/>](https://redis.io/commands/client-kill/)
     #[must_use]
-    fn client_kill(self, options: ClientKillOptions) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-    {
+    fn client_kill(self, options: ClientKillOptions) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("CLIENT").arg("KILL").arg(options))
     }
 
@@ -165,10 +140,10 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-list/>](https://redis.io/commands/client-list/)
     #[must_use]
-    fn client_list(self, options: ClientListOptions) -> PreparedCommand<'a, Self, ClientListResult>
-    where
-        Self: Sized,
-    {
+    fn client_list(
+        self,
+        options: ClientListOptions,
+    ) -> PreparedCommand<'a, Self, ClientListResult> {
         prepare_command(self, cmd("CLIENT").arg("LIST").arg(options))
     }
 
@@ -177,10 +152,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-no-evict/>](https://redis.io/commands/client-no-evict/)
     #[must_use]
-    fn client_no_evict(self, no_evict: bool) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn client_no_evict(self, no_evict: bool) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("CLIENT")
@@ -217,10 +189,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/client-no-touch/>](https://redis.io/docs/latest/commands/client-no-touch/)
     #[must_use]
-    fn client_no_touch(self, no_touch: bool) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn client_no_touch(self, no_touch: bool) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("CLIENT")
@@ -235,10 +204,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-pause/>](https://redis.io/commands/client-pause/)
     #[must_use]
-    fn client_pause(self, timeout: u64, mode: ClientPauseMode) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn client_pause(self, timeout: u64, mode: ClientPauseMode) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("PAUSE").arg(timeout).arg(mode))
     }
 
@@ -247,10 +213,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-reply/>](https://redis.io/commands/client-reply/)
     #[must_use]
-    fn client_reply(self, mode: ClientReplyMode) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn client_reply(self, mode: ClientReplyMode) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("REPLY").arg(mode))
     }
 
@@ -259,11 +222,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
-    fn client_setname<CN>(self, connection_name: CN) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        CN: SingleArg,
-    {
+    fn client_setname(self, connection_name: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
 
@@ -302,11 +261,11 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/client-setinfo/>](https://redis.io/docs/latest/commands/client-setinfo/)
     #[must_use]
-    fn client_setinfo<I>(self, attr: ClientInfoAttribute, info: I) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        I: SingleArg,
-    {
+    fn client_setinfo(
+        self,
+        attr: ClientInfoAttribute,
+        info: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("SETINFO").arg(attr).arg(info))
     }
 
@@ -320,10 +279,7 @@ pub trait ConnectionCommands<'a> {
         self,
         status: ClientTrackingStatus,
         options: ClientTrackingOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("TRACKING").arg(status).arg(options))
     }
 
@@ -333,10 +289,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
-    fn client_trackinginfo(self) -> PreparedCommand<'a, Self, ClientTrackingInfo>
-    where
-        Self: Sized,
-    {
+    fn client_trackinginfo(self) -> PreparedCommand<'a, Self, ClientTrackingInfo> {
         prepare_command(self, cmd("CLIENT").arg("TRACKINGINFO"))
     }
 
@@ -355,10 +308,7 @@ pub trait ConnectionCommands<'a> {
         self,
         client_id: i64,
         mode: ClientUnblockMode,
-    ) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("CLIENT").arg("UNBLOCK").arg(client_id).arg(mode))
     }
 
@@ -368,10 +318,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/client-unpause/>](https://redis.io/commands/client-unpause/)
     #[must_use]
-    fn client_unpause(self) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-    {
+    fn client_unpause(self) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("CLIENT").arg("UNPAUSE"))
     }
 
@@ -380,12 +327,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<M, R>(self, message: M) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        M: SingleArg,
-        R: PrimitiveResponse,
-    {
+    fn echo<R: Response>(self, message: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ECHO").arg(message))
     }
 
@@ -396,10 +338,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
     #[must_use]
-    fn hello(self, options: HelloOptions) -> PreparedCommand<'a, Self, HelloResult>
-    where
-        Self: Sized,
-    {
+    fn hello(self, options: HelloOptions) -> PreparedCommand<'a, Self, HelloResult> {
         prepare_command(self, cmd("HELLO").arg(options))
     }
 
@@ -408,11 +347,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R>(self, options: PingOptions) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: PrimitiveResponse,
-    {
+    fn ping<R: Response>(self, options: PingOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PING").arg(options))
     }
 
@@ -421,10 +356,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
     #[must_use]
-    fn quit(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn quit(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("QUIT"))
     }
 
@@ -434,10 +366,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn reset(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn reset(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("RESET"))
     }
 
@@ -446,10 +375,7 @@ pub trait ConnectionCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
-    fn select(self, index: usize) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn select(self, index: usize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SELECT").arg(index))
     }
 }
@@ -460,7 +386,7 @@ pub enum ClientCachingMode {
     No,
 }
 
-impl ToArgs for ClientCachingMode {
+impl Args for ClientCachingMode {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientCachingMode::Yes => "YES",
@@ -678,7 +604,7 @@ pub enum ClientType {
     PubSub,
 }
 
-impl ToArgs for ClientType {
+impl Args for ClientType {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientType::Normal => "NORMAL",
@@ -695,7 +621,7 @@ pub struct ClientListOptions {
     command_args: CommandArgs,
 }
 
-impl ToArgs for ClientListOptions {
+impl Args for ClientListOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -709,9 +635,7 @@ impl ClientListOptions {
         }
     }
 
-    pub fn client_ids<II>(mut self, client_ids: II) -> Self
-    where
-        II: SingleArgCollection<i64>,
+    pub fn client_ids(mut self, client_ids: impl Args) -> Self
     {
         Self {
             command_args: self.command_args.arg("ID").arg(client_ids).build(),
@@ -762,7 +686,7 @@ impl ClientKillOptions {
     }
 
     #[must_use]
-    pub fn user<U: SingleArg>(mut self, username: U) -> Self {
+    pub fn user(mut self, username: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("USER").arg(username).build(),
         }
@@ -773,7 +697,7 @@ impl ClientKillOptions {
     /// The ip:port should match a line returned by the
     /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr<A: SingleArg>(mut self, addr: A) -> Self {
+    pub fn addr(mut self, addr: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("ADDR").arg(addr).build(),
         }
@@ -781,7 +705,7 @@ impl ClientKillOptions {
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr<A: SingleArg>(mut self, laddr: A) -> Self {
+    pub fn laddr(mut self, laddr: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("LADDR").arg(laddr).build(),
         }
@@ -801,7 +725,7 @@ impl ClientKillOptions {
     }
 }
 
-impl ToArgs for ClientKillOptions {
+impl Args for ClientKillOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -817,7 +741,7 @@ pub enum ClientPauseMode {
     All,
 }
 
-impl ToArgs for ClientPauseMode {
+impl Args for ClientPauseMode {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientPauseMode::Write => "WRITE",
@@ -833,7 +757,7 @@ pub enum ClientReplyMode {
     Skip,
 }
 
-impl ToArgs for ClientReplyMode {
+impl Args for ClientReplyMode {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientReplyMode::On => "ON",
@@ -849,7 +773,7 @@ pub enum ClientTrackingStatus {
     Off,
 }
 
-impl ToArgs for ClientTrackingStatus {
+impl Args for ClientTrackingStatus {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientTrackingStatus::On => "ON",
@@ -884,7 +808,7 @@ impl ClientTrackingOptions {
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix<P: SingleArg>(mut self, prefix: P) -> Self {
+    pub fn prefix(mut self, prefix: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("PREFIX").arg(prefix).build(),
         }
@@ -914,7 +838,7 @@ impl ClientTrackingOptions {
     }
 }
 
-impl ToArgs for ClientTrackingOptions {
+impl Args for ClientTrackingOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -943,7 +867,7 @@ pub enum ClientUnblockMode {
     Error,
 }
 
-impl ToArgs for ClientUnblockMode {
+impl Args for ClientUnblockMode {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientUnblockMode::Timeout => "TIMEOUT",
@@ -967,10 +891,7 @@ impl HelloOptions {
     }
 
     #[must_use]
-    pub fn auth<U, P>(mut self, username: U, password: P) -> Self
-    where
-        U: SingleArg,
-        P: SingleArg,
+    pub fn auth(mut self, username: impl Args, password: impl Args) -> Self
     {
         Self {
             command_args: self
@@ -983,9 +904,7 @@ impl HelloOptions {
     }
 
     #[must_use]
-    pub fn set_name<C>(mut self, client_name: C) -> Self
-    where
-        C: SingleArg,
+    pub fn set_name(mut self, client_name: impl Args) -> Self
     {
         Self {
             command_args: self.command_args.arg("SETNAME").arg(client_name).build(),
@@ -993,7 +912,7 @@ impl HelloOptions {
     }
 }
 
-impl ToArgs for HelloOptions {
+impl Args for HelloOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1021,14 +940,14 @@ pub struct PingOptions {
 
 impl PingOptions {
     #[must_use]
-    pub fn message<M: SingleArg>(mut self, message: M) -> Self {
+    pub fn message(mut self, message: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(message).build(),
         }
     }
 }
 
-impl ToArgs for PingOptions {
+impl Args for PingOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1040,7 +959,7 @@ pub enum ClientInfoAttribute {
     LibVer,
 }
 
-impl ToArgs for ClientInfoAttribute {
+impl Args for ClientInfoAttribute {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             ClientInfoAttribute::LibName => "LIB-NAME",

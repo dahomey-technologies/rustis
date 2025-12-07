@@ -2,7 +2,7 @@ use crate::{
     Result,
     client::{MonitorStream, PreparedCommand, prepare_command},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{PrimitiveResponse, SingleArg, SingleArgCollection, cmd, deserialize_vec_of_triplets},
+    resp::{Response, Args, cmd, deserialize_vec_of_triplets},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -65,7 +65,7 @@ where
 }
 
 /// A group of blocking commands
-pub trait BlockingCommands<'a> {
+pub trait BlockingCommands<'a>: Sized {
     /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
     ///
     /// # Return
@@ -75,20 +75,14 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/blmove/>](https://redis.io/commands/blmove/)
     #[must_use]
-    fn blmove<S, D, E>(
+    fn blmove<R: Response>(
         self,
-        source: S,
-        destination: D,
+        source: impl Args,
+        destination: impl Args,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
         timeout: f64,
-    ) -> PreparedCommand<'a, Self, E>
-    where
-        Self: Sized,
-        S: SingleArg,
-        D: SingleArg,
-        E: PrimitiveResponse,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("BLMOVE")
@@ -109,19 +103,13 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
-    fn blmpop<K, KK, E>(
+    fn blmpop<R: Response + DeserializeOwned>(
         self,
         timeout: f64,
-        keys: KK,
+        keys: impl Args,
         where_: LMoveWhere,
         count: usize,
-    ) -> PreparedCommand<'a, Self, Option<(String, Vec<E>)>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        E: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, Option<(String, R)>> {
         prepare_command(
             self,
             cmd("BLMPOP")
@@ -150,18 +138,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<K, KK, K1, V>(
+    fn blpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: KK,
+        keys: impl Args,
         timeout: f64,
-    ) -> PreparedCommand<'a, Self, Option<(K1, V)>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        K1: PrimitiveResponse + DeserializeOwned,
-        V: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
     }
 
@@ -181,18 +162,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<K, KK, K1, V>(
+    fn brpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: KK,
+        keys: impl Args,
         timeout: f64,
-    ) -> PreparedCommand<'a, Self, Option<(K1, V)>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        K1: PrimitiveResponse + DeserializeOwned,
-        V: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
     }
 
@@ -207,19 +181,13 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
-    fn bzmpop<K, KK, E>(
+    fn bzmpop<R: Response + DeserializeOwned>(
         self,
         timeout: f64,
-        keys: KK,
+        keys: impl Args,
         where_: ZWhere,
         count: usize,
-    ) -> PreparedCommand<'a, Self, Option<ZMPopResult<E>>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        E: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, Option<ZMPopResult<R>>> {
         prepare_command(
             self,
             cmd("BZMPOP")
@@ -244,18 +212,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bzpopmax/>](https://redis.io/commands/bzpopmax/)
     #[must_use]
-    fn bzpopmax<K, KK, E, K1>(
+    fn bzpopmax<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: KK,
+        keys: impl Args,
         timeout: f64,
-    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<K1, E>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        K1: PrimitiveResponse + DeserializeOwned,
-        E: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
     }
 
@@ -271,18 +232,11 @@ pub trait BlockingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bzpopmin/>](https://redis.io/commands/bzpopmin/)
     #[must_use]
-    fn bzpopmin<K, KK, E, K1>(
+    fn bzpopmin<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: KK,
+        keys: impl Args,
         timeout: f64,
-    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<K1, E>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        K1: PrimitiveResponse + DeserializeOwned,
-        E: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
     }
 

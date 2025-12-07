@@ -1,11 +1,6 @@
-use std::marker::PhantomData;
-
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, cmd, deserialize_vec_of_pairs,
-    },
+    resp::{Response, Args, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, de::DeserializeOwned};
 
@@ -13,7 +8,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 ///
 /// # See Also
 /// [Top-K Commands](https://redis.io/commands/?group=topk)
-pub trait TopKCommands<'a> {
+pub trait TopKCommands<'a>: Sized {
     /// Adds an item to the data structure.
     ///
     /// Multiple items can be added at once.
@@ -30,14 +25,11 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<I: SingleArg, R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
+    fn topk_add<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.ADD").arg(key).arg(items))
     }
 
@@ -60,18 +52,11 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<
-        I: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: CollectionResponse<R>,
-    >(
+    fn topk_incrby<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl KeyValueArgsCollection<I, i64>,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.INCRBY").arg(key).arg(items))
     }
 
@@ -86,10 +71,7 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
-    fn topk_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, TopKInfoResult>
-    where
-        Self: Sized,
-    {
+    fn topk_info(self, key: impl Args) -> PreparedCommand<'a, Self, TopKInfoResult> {
         prepare_command(self, cmd("TOPK.INFO").arg(key))
     }
 
@@ -104,13 +86,7 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        self,
-        key: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+    fn topk_list<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.LIST").arg(key))
     }
 
@@ -127,13 +103,10 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list_with_count<N: PrimitiveResponse + DeserializeOwned>(
+    fn topk_list_with_count<R: Response + DeserializeOwned>(
         self,
-        key: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, TopKListWithCountResult<N>>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+    ) -> PreparedCommand<'a, Self, TopKListWithCountResult<R>> {
         prepare_command(self, cmd("TOPK.LIST").arg(key).arg("WITHCOUNT"))
     }
 
@@ -151,14 +124,11 @@ pub trait TopKCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<I: SingleArg, R: CollectionResponse<bool>>(
+    fn topk_query<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.QUERY").arg(key).arg(items))
     }
 
@@ -179,13 +149,10 @@ pub trait TopKCommands<'a> {
     #[must_use]
     fn topk_reserve(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         topk: usize,
         width_depth_decay: Option<(usize, usize, f64)>,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("TOPK.RESERVE")
@@ -213,21 +180,16 @@ pub struct TopKInfoResult {
 }
 
 #[derive(Debug)]
-pub struct TopKListWithCountResult<N: PrimitiveResponse + DeserializeOwned> {
-    phantom: PhantomData<N>,
-    pub items: Vec<(N, usize)>,
+pub struct TopKListWithCountResult<R: Response> {
+    pub items: Vec<(R, usize)>,
 }
 
-impl<'de, N> Deserialize<'de> for TopKListWithCountResult<N>
-where
-    N: PrimitiveResponse + DeserializeOwned,
-{
+impl<'de, R: Response + DeserializeOwned> Deserialize<'de> for TopKListWithCountResult<R> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         Ok(TopKListWithCountResult {
-            phantom: PhantomData,
             items: deserialize_vec_of_pairs(deserializer)?,
         })
     }

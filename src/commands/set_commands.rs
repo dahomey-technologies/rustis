@@ -1,17 +1,14 @@
+use serde::de::DeserializeOwned;
+
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs,
-        cmd,
-    },
+    resp::{CommandArgs, Response, Args, cmd},
 };
-use serde::de::DeserializeOwned;
-use std::hash::Hash;
 
 /// A group of Redis commands related to [`Sets`](https://redis.io/docs/data-types/sets/)
 /// # See Also
 /// [Redis Set Commands](https://redis.io/commands/?group=set)
-pub trait SetCommands<'a> {
+pub trait SetCommands<'a>: Sized {
     /// Add the specified members to the set stored at key.
     ///
     /// #Return
@@ -20,13 +17,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sadd/>](https://redis.io/commands/sadd/)
     #[must_use]
-    fn sadd<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        C: SingleArgCollection<M>,
-    {
+    fn sadd(
+        self,
+        key: impl Args,
+        members: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
     }
 
@@ -38,11 +33,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/scard/>](https://redis.io/commands/scard/)
     #[must_use]
-    fn scard<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn scard(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SCARD").arg(key))
     }
 
@@ -55,14 +46,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sdiff/>](https://redis.io/commands/sdiff/)
     #[must_use]
-    fn sdiff<K, M, C, A>(self, keys: C) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
-        C: SingleArgCollection<K>,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn sdiff<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
 
@@ -75,13 +59,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sdiffstore/>](https://redis.io/commands/sdiffstore/)
     #[must_use]
-    fn sdiffstore<D, K, C>(self, destination: D, keys: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        D: SingleArg,
-        K: SingleArg,
-        C: SingleArgCollection<K>,
-    {
+    fn sdiffstore(
+        self,
+        destination: impl Args,
+        keys: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
     }
 
@@ -93,14 +75,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sinter/>](https://redis.io/commands/sinter/)
     #[must_use]
-    fn sinter<K, M, C, A>(self, keys: C) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
-        C: SingleArgCollection<K>,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn sinter<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
 
@@ -116,12 +91,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sintercard/>](https://redis.io/commands/sintercard/)
     #[must_use]
-    fn sintercard<K, C>(self, keys: C, limit: usize) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        C: SingleArgCollection<K>,
-    {
+    fn sintercard(self, keys: impl Args, limit: usize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("SINTERCARD")
@@ -141,13 +111,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sinterstore/>](https://redis.io/commands/sinterstore/)
     #[must_use]
-    fn sinterstore<D, K, C>(self, destination: D, keys: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        D: SingleArg,
-        K: SingleArg,
-        C: SingleArgCollection<K>,
-    {
+    fn sinterstore(
+        self,
+        destination: impl Args,
+        keys: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
     }
 
@@ -160,12 +128,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sismember/>](https://redis.io/commands/sismember/)
     #[must_use]
-    fn sismember<K, M>(self, key: K, member: M) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-    {
+    fn sismember(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SISMEMBER").arg(key).arg(member))
     }
 
@@ -174,13 +137,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/smembers/>](https://redis.io/commands/smembers/)
     #[must_use]
-    fn smembers<K, M, A>(self, key: K) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + DeserializeOwned,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn smembers<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SMEMBERS").arg(key))
     }
 
@@ -192,13 +149,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/smismember/>](https://redis.io/commands/smismember/)
     #[must_use]
-    fn smismember<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, Vec<bool>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        C: SingleArgCollection<M>,
-    {
+    fn smismember<R: Response>(
+        self,
+        key: impl Args,
+        members: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
     }
 
@@ -211,13 +166,12 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/smove/>](https://redis.io/commands/smove/)
     #[must_use]
-    fn smove<S, D, M>(self, source: S, destination: D, member: M) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        S: SingleArg,
-        D: SingleArg,
-        M: SingleArg,
-    {
+    fn smove(
+        self,
+        source: impl Args,
+        destination: impl Args,
+        member: impl Args,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SMOVE").arg(source).arg(destination).arg(member))
     }
 
@@ -229,13 +183,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/spop/>](https://redis.io/commands/spop/)
     #[must_use]
-    fn spop<K, M, A>(self, key: K, count: usize) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn spop<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SPOP").arg(key).arg(count))
     }
 
@@ -247,13 +195,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/srandmember/>](https://redis.io/commands/srandmember/)
     #[must_use]
-    fn srandmember<K, M, A>(self, key: K, count: usize) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn srandmember<R: Response>(
+        self,
+        key: impl Args,
+        count: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
     }
 
@@ -265,13 +211,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/srem/>](https://redis.io/commands/srem/)
     #[must_use]
-    fn srem<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        C: SingleArgCollection<M>,
-    {
+    fn srem(self, key: impl Args, members: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SREM").arg(key).arg(members))
     }
 
@@ -283,17 +223,12 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sscan/>](https://redis.io/commands/sscan/)
     #[must_use]
-    fn sscan<K, M>(
+    fn sscan<R: Response + DeserializeOwned>(
         self,
-        key: K,
+        key: impl Args,
         cursor: u64,
         options: SScanOptions,
-    ) -> PreparedCommand<'a, Self, (u64, Vec<M>)>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, (u64, R)> {
         prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
     }
 
@@ -305,14 +240,7 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sunion/>](https://redis.io/commands/sunion/)
     #[must_use]
-    fn sunion<K, M, C, A>(self, keys: C) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: PrimitiveResponse + Eq + Hash + DeserializeOwned,
-        C: SingleArgCollection<K>,
-        A: CollectionResponse<M> + DeserializeOwned,
-    {
+    fn sunion<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SUNION").arg(keys))
     }
 
@@ -325,13 +253,11 @@ pub trait SetCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/sunionstore/>](https://redis.io/commands/sunionstore/)
     #[must_use]
-    fn sunionstore<D, K, C>(self, destination: D, keys: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        D: SingleArg,
-        K: SingleArg,
-        C: SingleArgCollection<K>,
-    {
+    fn sunionstore(
+        self,
+        destination: impl Args,
+        keys: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
     }
 }
@@ -344,7 +270,7 @@ pub struct SScanOptions {
 
 impl SScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
+    pub fn match_pattern(mut self, match_pattern: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
@@ -358,7 +284,7 @@ impl SScanOptions {
     }
 }
 
-impl ToArgs for SScanOptions {
+impl Args for SScanOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

@@ -2,14 +2,11 @@ use crate::{
     Error, Future, Result,
     client::{Client, PreparedCommand, prepare_command},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
-    resp::{
-        CollectionResponse, Command, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse,
-        RespBuf, RespDeserializer, SingleArg, ToArgs, cmd,
-    },
+    resp::{Command, CommandArgs, RespBuf, RespDeserializer, Response, Args, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
-    de::{self, DeserializeOwned, DeserializeSeed, Visitor},
+    de::{self, DeserializeSeed, Visitor},
 };
 use smallvec::SmallVec;
 use std::{collections::HashMap, fmt, future, str::FromStr};
@@ -18,7 +15,7 @@ use std::{collections::HashMap, fmt, future, str::FromStr};
 ///
 /// # See Also
 /// [RedisGraph Commands](https://redis.io/commands/?group=graph)
-pub trait GraphCommands<'a> {
+pub trait GraphCommands<'a>: Sized {
     /// Retrieves the current value of a RedisGraph configuration parameter.
     ///
     /// # Arguments
@@ -31,13 +28,7 @@ pub trait GraphCommands<'a> {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<N, V, R>(self, name: impl SingleArg) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        N: PrimitiveResponse,
-        V: PrimitiveResponse,
-        R: KeyValueCollectionResponse<N, V>,
-    {
+    fn graph_config_get<R: Response>(self, name: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
     }
 
@@ -56,12 +47,9 @@ pub trait GraphCommands<'a> {
     #[must_use]
     fn graph_config_set(
         self,
-        name: impl SingleArg,
-        value: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+        name: impl Args,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("SET").arg(name).arg(value))
     }
 
@@ -73,10 +61,7 @@ pub trait GraphCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(self, graph: impl SingleArg) -> PreparedCommand<'a, Self, String>
-    where
-        Self: Sized,
-    {
+    fn graph_delete(self, graph: impl Args) -> PreparedCommand<'a, Self, String> {
         prepare_command(self, cmd("GRAPH.DELETE").arg(graph))
     }
 
@@ -94,14 +79,11 @@ pub trait GraphCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/graph.explain/>](https://redis.io/commands/graph.explain/)
     #[must_use]
-    fn graph_explain<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
+    fn graph_explain<R: Response>(
         self,
-        graph: impl SingleArg,
-        query: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+        graph: impl Args,
+        query: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.EXPLAIN").arg(graph).arg(query))
     }
 
@@ -113,12 +95,7 @@ pub trait GraphCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_list<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
-        self,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+    fn graph_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.LIST"))
     }
 
@@ -135,15 +112,12 @@ pub trait GraphCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/graph.list/>](https://redis.io/commands/graph.list/)
     #[must_use]
-    fn graph_profile<R: PrimitiveResponse + DeserializeOwned, RR: CollectionResponse<R>>(
+    fn graph_profile<R: Response>(
         self,
-        graph: impl SingleArg,
-        query: impl SingleArg,
+        graph: impl Args,
+        query: impl Args,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.LIST").arg(graph).arg(query).arg(options))
     }
 
@@ -163,13 +137,10 @@ pub trait GraphCommands<'a> {
     #[must_use]
     fn graph_query(
         self,
-        graph: impl SingleArg,
-        query: impl SingleArg,
+        graph: impl Args,
+        query: impl Args,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<'a, Self, GraphResultSet>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, GraphResultSet> {
         prepare_command(
             self,
             cmd("GRAPH.QUERY")
@@ -196,13 +167,10 @@ pub trait GraphCommands<'a> {
     #[must_use]
     fn graph_ro_query(
         self,
-        graph: impl SingleArg,
-        query: impl SingleArg,
+        graph: impl Args,
+        query: impl Args,
         options: GraphQueryOptions,
-    ) -> PreparedCommand<'a, Self, GraphResultSet>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, GraphResultSet> {
         prepare_command(
             self,
             cmd("GRAPH.RO_QUERY")
@@ -225,13 +193,7 @@ pub trait GraphCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
-    fn graph_slowlog<R: CollectionResponse<GraphSlowlogResult>>(
-        self,
-        graph: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    fn graph_slowlog<R: Response>(self, graph: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.SLOWLOG").arg(graph))
     }
 }
@@ -252,7 +214,7 @@ impl GraphQueryOptions {
     }
 }
 
-impl ToArgs for GraphQueryOptions {
+impl Args for GraphQueryOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -271,7 +233,7 @@ impl GraphResultSet {
         resp_buffer: RespBuf,
         command: Command,
         client: &Client,
-    ) -> Future<Self> {
+    ) -> Future<'_, Self> {
         let Some(graph_name) = command.args.iter().next() else {
             return Box::pin(future::ready(Err(Error::Client(
                 "Cannot parse graph command".to_owned(),

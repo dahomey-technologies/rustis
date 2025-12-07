@@ -1,10 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
-        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, cmd, deserialize_vec_of_pairs,
-    },
+    resp::{CommandArgs, Response, Args, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, de::DeserializeOwned};
 
@@ -12,7 +9,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 ///
 /// # See Also
 /// [Redis Hash Commands](https://redis.io/commands/?group=hash)
-pub trait HashCommands<'a> {
+pub trait HashCommands<'a>: Sized {
     /// Removes the specified fields from the hash stored at key.
     ///
     /// # Return
@@ -21,13 +18,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hdel/>](https://redis.io/commands/hdel/)
     #[must_use]
-    fn hdel<K, F, C>(self, key: K, fields: C) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        C: SingleArgCollection<F>,
-    {
+    fn hdel(self, key: impl Args, fields: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("HDEL").arg(key).arg(fields))
     }
 
@@ -40,12 +31,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hexists/>](https://redis.io/commands/hexists/)
     #[must_use]
-    fn hexists<K, F>(self, key: K, field: F) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-    {
+    fn hexists(self, key: impl Args, field: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("HEXISTS").arg(key).arg(field))
     }
 
@@ -69,20 +55,13 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hexpire/>](https://redis.io/commands/hexpire/)
     #[must_use]
-    fn hexpire<K, F, FF, R>(
+    fn hexpire<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         seconds: u64,
         option: ExpireOption,
-        fields: FF,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HEXPIRE")
@@ -117,20 +96,13 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hexpireat/>](https://redis.io/commands/hexpireat/)
     #[must_use]
-    fn hexpireat<K, F, FF, R>(
+    fn hexpireat<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         unix_time_seconds: u64,
         option: ExpireOption,
-        fields: FF,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HEXPIREAT")
@@ -158,14 +130,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hexpiretime/>](https://redis.io/commands/hexpiretime/)
     #[must_use]
-    fn hexpiretime<K, F, FF, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+    fn hexpiretime<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HEXPIRETIME")
@@ -184,13 +153,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hget/>](https://redis.io/commands/hget/)
     #[must_use]
-    fn hget<K, F, V>(self, key: K, field: F) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn hget<R: Response>(
+        self,
+        key: impl Args,
+        field: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HGET").arg(key).arg(field))
     }
 
@@ -202,14 +169,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hgetall/>](https://redis.io/commands/hgetall/)
     #[must_use]
-    fn hgetall<K, F, V, R>(self, key: K) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse,
-        V: PrimitiveResponse,
-        R: KeyValueCollectionResponse<F, V>,
-    {
+    fn hgetall<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HGETALL").arg(key))
     }
 
@@ -227,15 +187,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hgetdel/>](https://redis.io/commands/hgetdel/)
     #[must_use]
-    fn hgetdel<K, F, FF, RV, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        RV: PrimitiveResponse + DeserializeOwned,
-        R: CollectionResponse<RV> + DeserializeOwned,
-    {
+    fn hgetdel<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HGETDEL")
@@ -260,20 +216,12 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hgetex/>](https://redis.io/commands/hgetex/)
     #[must_use]
-    fn hgetex<K, F, FF, RV, R>(
+    fn hgetex<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         options: GetExOptions,
-        fields: FF,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        RV: PrimitiveResponse + DeserializeOwned,
-        R: CollectionResponse<RV> + DeserializeOwned,
-    {
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HGETEX")
@@ -293,12 +241,12 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hincrby/>](https://redis.io/commands/hincrby/)
     #[must_use]
-    fn hincrby<K, F>(self, key: K, field: F, increment: i64) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-    {
+    fn hincrby(
+        self,
+        key: impl Args,
+        field: impl Args,
+        increment: i64,
+    ) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("HINCRBY").arg(key).arg(field).arg(increment))
     }
 
@@ -311,12 +259,12 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hincrbyfloat/>](https://redis.io/commands/hincrbyfloat/)
     #[must_use]
-    fn hincrbyfloat<K, F>(self, key: K, field: F, increment: f64) -> PreparedCommand<'a, Self, f64>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-    {
+    fn hincrbyfloat(
+        self,
+        key: impl Args,
+        field: impl Args,
+        increment: f64,
+    ) -> PreparedCommand<'a, Self, f64> {
         prepare_command(self, cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
     }
 
@@ -328,13 +276,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hkeys/>](https://redis.io/commands/hkeys/)
     #[must_use]
-    fn hkeys<K, F, A>(self, key: K) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse + DeserializeOwned,
-        A: CollectionResponse<F> + DeserializeOwned,
-    {
+    fn hkeys<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HKEYS").arg(key))
     }
 
@@ -346,11 +288,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hlen/)
     #[must_use]
-    fn hlen<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn hlen(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("HLEN").arg(key))
     }
 
@@ -362,15 +300,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hmget/>](https://redis.io/commands/hmget/)
     #[must_use]
-    fn hmget<K, F, FF, RV, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        RV: PrimitiveResponse + DeserializeOwned,
-        R: CollectionResponse<RV> + DeserializeOwned,
-    {
+    fn hmget<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
 
@@ -387,14 +321,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hpersist/>](https://redis.io/commands/hpersist/)
     #[must_use]
-    fn hpersist<K, F, FF, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64> + DeserializeOwned,
-    {
+    fn hpersist<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HPERSIST").arg(key).arg(fields))
     }
 
@@ -416,20 +347,13 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hpexpire/>](https://redis.io/commands/hpexpire/)
     #[must_use]
-    fn hpexpire<K, F, FF, R>(
+    fn hpexpire<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         milliseconds: u64,
         option: ExpireOption,
-        fields: FF,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HPEXPIRE")
@@ -462,20 +386,13 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hpexpireat/>](https://redis.io/commands/hpexpireat/)
     #[must_use]
-    fn hpexpireat<K, F, FF, R>(
+    fn hpexpireat<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         unix_time_milliseconds: u64,
         option: ExpireOption,
-        fields: FF,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HPEXPIREAT")
@@ -504,14 +421,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hpexpiretime/>](https://redis.io/commands/hpexpiretime/)
     #[must_use]
-    fn hpexpiretime<K, F, FF, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+    fn hpexpiretime<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HPEXPIRETIME")
@@ -537,14 +451,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hpttl/>](https://redis.io/commands/hpttl/)
     #[must_use]
-    fn hpttl<K, F, FF, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+    fn hpttl<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HPTTL")
@@ -563,12 +474,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfield<K, F>(self, key: K) -> PreparedCommand<'a, Self, F>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse,
-    {
+    fn hrandfield<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HRANDFIELD").arg(key))
     }
 
@@ -583,13 +489,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields<K, F, A>(self, key: K, count: isize) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse + DeserializeOwned,
-        A: CollectionResponse<F> + DeserializeOwned,
-    {
+    fn hrandfields<R: Response>(
+        self,
+        key: impl Args,
+        count: isize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
     }
 
@@ -605,18 +509,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields_with_values<K, F, V, A>(
+    fn hrandfields_with_values<R: Response>(
         self,
-        key: K,
+        key: impl Args,
         count: isize,
-    ) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse,
-        V: PrimitiveResponse,
-        A: KeyValueCollectionResponse<F, V>,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"),
@@ -632,18 +529,12 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hscan/)
     #[must_use]
-    fn hscan<K, F, V>(
+    fn hscan<F: Response + DeserializeOwned, V: Response + DeserializeOwned>(
         self,
-        key: K,
+        key: impl Args,
         cursor: u64,
         options: HScanOptions,
-    ) -> PreparedCommand<'a, Self, HScanResult<F, V>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: PrimitiveResponse + DeserializeOwned,
-        V: PrimitiveResponse + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, HScanResult<F, V>> {
         prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
     }
 
@@ -655,14 +546,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hset/>](https://redis.io/commands/hset/)
     #[must_use]
-    fn hset<K, F, V, I>(self, key: K, items: I) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        V: SingleArg,
-        I: KeyValueArgsCollection<F, V>,
-    {
+    fn hset(self, key: impl Args, items: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("HSET").arg(key).arg(items))
     }
 
@@ -676,21 +560,14 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hsetex/>](https://redis.io/commands/hsetex/)
     #[must_use]
-    fn hsetex<K, F, V, I>(
+    fn hsetex(
         self,
-        key: K,
+        key: impl Args,
         condition: HSetExCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-        items: I,
-    ) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        V: SingleArg,
-        I: KeyValueArgsCollection<F, V>,
-    {
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
             cmd("HSETEX")
@@ -713,13 +590,12 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hsetnx/>](https://redis.io/commands/hsetnx/)
     #[must_use]
-    fn hsetnx<K, F, V>(self, key: K, field: F, value: V) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        V: SingleArg,
-    {
+    fn hsetnx(
+        self,
+        key: impl Args,
+        field: impl Args,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("HSETNX").arg(key).arg(field).arg(value))
     }
 
@@ -732,12 +608,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hstrlen/>](https://redis.io/commands/hstrlen/)
     #[must_use]
-    fn hstrlen<K, F>(self, key: K, field: F) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-    {
+    fn hstrlen(
+        self,
+        key: impl Args,
+        field: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("HSTRLEN").arg(key).arg(field))
     }
 
@@ -757,14 +632,11 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/httl/>](https://redis.io/commands/httl/)
     #[must_use]
-    fn httl<K, F, FF, R>(self, key: K, fields: FF) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        F: SingleArg,
-        FF: SingleArgCollection<F>,
-        R: CollectionResponse<i64>,
-    {
+    fn httl<R: Response>(
+        self,
+        key: impl Args,
+        fields: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HTTL")
@@ -783,13 +655,7 @@ pub trait HashCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/hvals/>](https://redis.io/commands/hvals/)
     #[must_use]
-    fn hvals<K, V, A>(self, key: K) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse + DeserializeOwned,
-        A: CollectionResponse<V> + DeserializeOwned,
-    {
+    fn hvals<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HVALS").arg(key))
     }
 }
@@ -802,7 +668,7 @@ pub struct HScanOptions {
 
 impl HScanOptions {
     #[must_use]
-    pub fn match_pattern<P: SingleArg>(mut self, match_pattern: P) -> Self {
+    pub fn match_pattern<P: Args>(mut self, match_pattern: P) -> Self {
         Self {
             command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
         }
@@ -816,7 +682,7 @@ impl HScanOptions {
     }
 }
 
-impl ToArgs for HScanOptions {
+impl Args for HScanOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -824,11 +690,7 @@ impl ToArgs for HScanOptions {
 
 /// Result for the [`hscan`](HashCommands::hscan) command.
 #[derive(Debug, Deserialize)]
-pub struct HScanResult<F, V>
-where
-    F: PrimitiveResponse + DeserializeOwned,
-    V: PrimitiveResponse + DeserializeOwned,
-{
+pub struct HScanResult<F: Response + DeserializeOwned, V: Response + DeserializeOwned> {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]
     pub elements: Vec<(F, V)>,
@@ -846,7 +708,7 @@ pub enum HSetExCondition {
     FXX,
 }
 
-impl ToArgs for HSetExCondition {
+impl Args for HSetExCondition {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             HSetExCondition::None => {}

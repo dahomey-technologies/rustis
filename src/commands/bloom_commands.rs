@@ -1,9 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs, cmd, deserialize_byte_buf,
-    },
+    resp::{CommandArgs, Response, Args, cmd, deserialize_byte_buf},
 };
 use serde::Deserialize;
 
@@ -11,7 +8,7 @@ use serde::Deserialize;
 ///
 /// # See Also
 /// [Bloom Filter Commands](https://redis.io/commands/?group=bf)
-pub trait BloomCommands<'a> {
+pub trait BloomCommands<'a>: Sized {
     /// Adds an item to a bloom filter
     ///
     /// # Arguments
@@ -25,10 +22,7 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/bf.add/>](https://redis.io/commands/bf.add/)
     #[must_use]
-    fn bf_add(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-    {
+    fn bf_add(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("BF.ADD").arg(key).arg(item))
     }
 
@@ -45,10 +39,7 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/bf.exists/>](https://redis.io/commands/bf.exists/)
     #[must_use]
-    fn bf_exists(self, key: impl SingleArg, item: impl SingleArg) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-    {
+    fn bf_exists(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("BF.EXISTS").arg(key).arg(item))
     }
 
@@ -63,10 +54,7 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info_all(self, key: impl SingleArg) -> PreparedCommand<'a, Self, BfInfoResult>
-    where
-        Self: Sized,
-    {
+    fn bf_info_all(self, key: impl Args) -> PreparedCommand<'a, Self, BfInfoResult> {
         prepare_command(self, cmd("BF.INFO").arg(key))
     }
 
@@ -82,14 +70,11 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info<N: PrimitiveResponse, R: KeyValueCollectionResponse<N, usize>>(
+    fn bf_info<R: Response>(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         param: BfInfoParameter,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.INFO").arg(key).arg(param))
     }
 
@@ -111,15 +96,12 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
-    fn bf_insert<I: SingleArg, R: CollectionResponse<bool>>(
+    fn bf_insert<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
+        key: impl Args,
+        items: impl Args,
         options: BfInsertOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("BF.INSERT")
@@ -147,13 +129,10 @@ pub trait BloomCommands<'a> {
     #[must_use]
     fn bf_loadchunk(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         iterator: i64,
-        data: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+        data: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("BF.LOADCHUNK").arg(key).arg(iterator).arg(data))
     }
 
@@ -172,14 +151,11 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
-    fn bf_madd<I: SingleArg, R: CollectionResponse<bool>>(
+    fn bf_madd<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.MADD").arg(key).arg(items))
     }
 
@@ -196,14 +172,11 @@ pub trait BloomCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
-    fn bf_mexists<I: SingleArg, R: CollectionResponse<bool>>(
+    fn bf_mexists<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.MEXISTS").arg(key).arg(items))
     }
 
@@ -240,14 +213,11 @@ pub trait BloomCommands<'a> {
     #[must_use]
     fn bf_reserve(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         error_rate: f64,
         capacity: usize,
         options: BfReserveOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("BF.RESERVE")
@@ -275,12 +245,9 @@ pub trait BloomCommands<'a> {
     #[must_use]
     fn bf_scandump(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         iterator: i64,
-    ) -> PreparedCommand<'a, Self, BfScanDumpResult>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, BfScanDumpResult> {
         prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator))
     }
 }
@@ -296,7 +263,7 @@ pub enum BfInfoParameter {
     ExpansionRate,
 }
 
-impl ToArgs for BfInfoParameter {
+impl Args for BfInfoParameter {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             BfInfoParameter::Capacity => args.arg("CAPACITY"),
@@ -391,7 +358,7 @@ impl BfInsertOptions {
     }
 }
 
-impl ToArgs for BfInsertOptions {
+impl Args for BfInsertOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -429,7 +396,7 @@ impl BfReserveOptions {
     }
 }
 
-impl ToArgs for BfReserveOptions {
+impl Args for BfReserveOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

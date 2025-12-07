@@ -10,7 +10,7 @@ trait GraphObjectVisitor<'de>: Sized {
     where
         A: de::SeqAccess<'de>;
 
-    fn into_seed(cache: &GraphCache) -> GraphObjectSeed<Self> {
+    fn into_seed(cache: &GraphCache) -> GraphObjectSeed<'_, Self> {
         GraphObjectSeed {
             phantom: PhantomData,
             cache,
@@ -18,9 +18,9 @@ trait GraphObjectVisitor<'de>: Sized {
     }
 
     fn into_with_type_seed(
-        cache: &GraphCache,
+        cache: &'_ GraphCache,
         value_type: GraphValueType,
-    ) -> GraphObjectWithTypeSeed<Self> {
+    ) -> GraphObjectWithTypeSeed<'_, Self> {
         GraphObjectWithTypeSeed {
             phantom: PhantomData,
             cache,
@@ -28,7 +28,7 @@ trait GraphObjectVisitor<'de>: Sized {
         }
     }
 
-    fn into_vec_seed(cache: &GraphCache, value_type: GraphValueType) -> GraphVecSeed<Self> {
+    fn into_vec_seed(cache: &'_ GraphCache, value_type: GraphValueType) -> GraphVecSeed<'_, Self> {
         GraphVecSeed {
             phantom: PhantomData,
             cache,

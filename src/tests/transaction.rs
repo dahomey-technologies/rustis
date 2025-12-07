@@ -17,8 +17,8 @@ async fn transaction_exec() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, ()>("key1").queue();
-    transaction.get::<_, ()>("key2").queue();
+    transaction.get::<()>("key1").queue();
+    transaction.get::<()>("key2").queue();
     let (value1, value2): (String, String) = transaction.execute().await?;
 
     assert_eq!("value1", value1);
@@ -27,7 +27,7 @@ async fn transaction_exec() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     transaction.set("key", "value").forget();
-    transaction.get::<_, ()>("key").queue();
+    transaction.get::<()>("key").queue();
     let value: String = transaction.execute().await?;
 
     assert_eq!("value", value);
@@ -58,7 +58,7 @@ async fn transaction_error() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     transaction.set("key1", "abc").forget();
-    transaction.lpop::<_, (), ()>("key1", 1).queue();
+    transaction.lpop::<()>("key1", 1).queue();
     let result: Result<String> = transaction.execute().await;
 
     assert!(matches!(
@@ -150,7 +150,7 @@ async fn transaction_discard() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, ()>("key1").queue();
+    transaction.get::<()>("key1").queue();
 
     std::mem::drop(transaction);
 
@@ -173,8 +173,8 @@ async fn transaction_on_cluster_connection_with_keys_with_same_slot() -> Result<
     transaction
         .mset([("{hash}key1", "value1"), ("{hash}key2", "value2")])
         .queue();
-    transaction.get::<_, String>("{hash}key1").queue();
-    transaction.get::<_, String>("{hash}key2").queue();
+    transaction.get::<String>("{hash}key1").queue();
+    transaction.get::<String>("{hash}key2").queue();
     let ((), val1, val2): ((), String, String) = transaction.execute().await.unwrap();
     assert_eq!("value1", val1);
     assert_eq!("value2", val2);
@@ -194,8 +194,8 @@ async fn transaction_on_cluster_connection_with_keys_with_different_slots() -> R
     transaction
         .mset([("key1", "value1"), ("key2", "value2")])
         .queue();
-    transaction.get::<_, String>("key1").queue();
-    transaction.get::<_, String>("key2").queue();
+    transaction.get::<String>("key1").queue();
+    transaction.get::<String>("key2").queue();
     let result: Result<((), String, String)> = transaction.execute().await;
     assert!(result.is_err());
 

@@ -5,7 +5,6 @@ use crate::{
         ServerCommands,
     },
     resp::Value,
-    tests::get_redis_stack_test_client,
 };
 use serial_test::serial;
 use std::collections::{HashMap, HashSet};

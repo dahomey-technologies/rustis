@@ -1,4 +1,4 @@
-use crate::resp::{CommandArgs, ToArgs};
+use crate::resp::{CommandArgs, Args};
 use std::hash::{Hash, Hasher};
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,7 +54,7 @@ impl Command {
     #[inline(always)]
     pub fn arg<A>(mut self, arg: A) -> Self
     where
-        A: ToArgs,
+        A: Args,
     {
         arg.write_args(&mut self.args);
         self
@@ -65,7 +65,7 @@ impl Command {
     #[inline(always)]
     pub fn arg_if<A>(mut self, condition: bool, arg: A) -> Self
     where
-        A: ToArgs,
+        A: Args,
     {
         if condition {
             arg.write_args(&mut self.args);

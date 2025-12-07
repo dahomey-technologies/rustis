@@ -4,7 +4,7 @@ use crate::{
         FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
         SetExpiration, StringCommands,
     },
-    resp::{Value, key_value_args_ref_iter, single_arg_ref_iter},
+    resp::{Value, key_value_args_ref_iter, arg_ref_iter},
     tests::get_test_client,
 };
 use serial_test::serial;
@@ -440,12 +440,12 @@ async fn mget_mset() -> Result<()> {
     let keys = ["key1", "key2", "key3", "key4"];
 
     // cleanup
-    client.del(single_arg_ref_iter(keys.iter())).await?;
+    client.del(arg_ref_iter(keys.iter())).await?;
 
     let items = [("key1", "value1"), ("key2", "value2"), ("key3", "value3")];
     client.mset(key_value_args_ref_iter(items.iter())).await?;
 
-    let values: Vec<Option<String>> = client.mget(single_arg_ref_iter(keys.iter())).await?;
+    let values: Vec<Option<String>> = client.mget(arg_ref_iter(keys.iter())).await?;
     assert_eq!(4, values.len());
     assert!(matches!(&values[0], Some(value) if value == "value1"));
     assert!(matches!(&values[1], Some(value) if value == "value2"));

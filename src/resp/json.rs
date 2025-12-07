@@ -1,4 +1,4 @@
-use crate::resp::{CommandArgs, PrimitiveResponse, SingleArg, ToArgs};
+use crate::resp::{CommandArgs, PrimitiveResponse, SingleArg, Args};
 use serde::{
     Deserialize,
     de::{self, DeserializeOwned},
@@ -107,7 +107,7 @@ where
 
 impl<T> PrimitiveResponse for Json<T> where T: DeserializeOwned {}
 
-impl<T> ToArgs for Json<T>
+impl<T> Args for Json<T>
 where
     T: Serialize,
 {
@@ -157,7 +157,7 @@ impl<T> SingleArg for Json<T> where T: Serialize {}
 #[must_use]
 pub struct JsonRef<'a, T>(pub &'a T);
 
-impl<'a, T> ToArgs for JsonRef<'a, T>
+impl<'a, T> Args for JsonRef<'a, T>
 where
     T: Serialize,
 {

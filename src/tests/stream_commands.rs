@@ -1,9 +1,7 @@
 use crate::{
     Result,
     commands::{
-        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
-        XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingOptions,
-        XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
+        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions, XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions
     },
     tests::get_test_client,
 };
@@ -409,7 +407,7 @@ async fn xreadgroup() -> Result<()> {
     assert_eq!("Bob", result.consumers[1].consumer);
     assert_eq!(3, result.consumers[1].num_messages);
 
-    let results = client
+    let results: Vec<XPendingMessageResult> = client
         .xpending_with_options(
             "mystream",
             "mygroup",

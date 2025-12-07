@@ -1,10 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::FlushingMode,
-    resp::{
-        CommandArgs, PrimitiveResponse, Response, SingleArg, SingleArgCollection, ToArgs, cmd,
-        deserialize_byte_buf,
-    },
+    resp::{CommandArgs, Response, Args, cmd, deserialize_byte_buf},
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -14,7 +11,7 @@ use std::collections::HashMap;
 /// [Redis Scripting and Functions Commands](https://redis.io/commands/?group=scripting)
 /// [Scripting with LUA](https://redis.io/docs/manual/programmability/eval-intro/)
 /// [Functions](https://redis.io/docs/manual/programmability/functions-intro/)
-pub trait ScriptingCommands<'a> {
+pub trait ScriptingCommands<'a>: Sized {
     /// Invoke the execution of a server-side Lua script.
     ///
     /// # Return
@@ -23,11 +20,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn eval<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
-    {
+    fn eval<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("EVAL").arg(builder))
     }
 
@@ -40,11 +33,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/eval_ro/>](https://redis.io/commands/eval_ro/)
     #[must_use]
-    fn eval_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
-    {
+    fn eval_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("EVAL_RO").arg(builder))
     }
 
@@ -56,11 +45,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn evalsha<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
-    {
+    fn evalsha<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("EVALSHA").arg(builder))
     }
 
@@ -73,11 +58,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/evalsha_ro/>](https://redis.io/commands/evalsha_ro/)
     #[must_use]
-    fn evalsha_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
-    {
+    fn evalsha_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("EVALSHA_RO").arg(builder))
     }
 
@@ -89,10 +70,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
+    fn fcall<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     {
         prepare_command(self, cmd("FCALL").arg(builder))
     }
@@ -105,10 +83,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: Response,
+    fn fcall_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
     {
         prepare_command(self, cmd("FCALL_RO").arg(builder))
     }
@@ -118,11 +93,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/function-delete/>](https://redis.io/commands/function-delete/)
     #[must_use]
-    fn function_delete<L>(self, library_name: L) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        L: SingleArg,
-    {
+    fn function_delete(self, library_name: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FUNCTION").arg("DELETE").arg(library_name))
     }
 
@@ -137,8 +108,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
     fn function_dump(self) -> PreparedCommand<'a, Self, FunctionDumpResult>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
@@ -149,8 +118,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/function-flush/>](https://redis.io/commands/function-flush/)
     #[must_use]
     fn function_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
@@ -182,8 +149,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/function-help/>](https://redis.io/commands/function-help/)
     #[must_use]
     fn function_help(self) -> PreparedCommand<'a, Self, Vec<String>>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("HELP"))
     }
@@ -194,8 +159,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/function-kill/>](https://redis.io/commands/function-kill/)
     #[must_use]
     fn function_kill(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("KILL"))
     }
@@ -209,8 +172,6 @@ pub trait ScriptingCommands<'a> {
         self,
         options: FunctionListOptions,
     ) -> PreparedCommand<'a, Self, Vec<LibraryInfo>>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("LIST").arg(options))
     }
@@ -223,12 +184,11 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/function-load/>](https://redis.io/commands/function-load/)
     #[must_use]
-    fn function_load<F, L>(self, replace: bool, function_code: F) -> PreparedCommand<'a, Self, L>
-    where
-        Self: Sized,
-        F: SingleArg,
-        L: PrimitiveResponse,
-    {
+    fn function_load<R: Response>(
+        self,
+        replace: bool,
+        function_code: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("FUNCTION")
@@ -243,15 +203,11 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/function-restore/>](https://redis.io/commands/function-restore/)
     #[must_use]
-    fn function_restore<P>(
+    fn function_restore(
         self,
-        serialized_payload: P,
+        serialized_payload: impl Args,
         policy: FunctionRestorePolicy,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        P: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("FUNCTION")
@@ -267,8 +223,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/function-stats/>](https://redis.io/commands/function-stats/)
     #[must_use]
     fn function_stats(self) -> PreparedCommand<'a, Self, FunctionStats>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("FUNCTION").arg("STATS"))
     }
@@ -279,8 +233,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/script-debug/>](https://redis.io/commands/script-debug/)
     #[must_use]
     fn script_debug(self, debug_mode: ScriptDebugMode) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
     }
@@ -293,12 +245,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/script-exists/>](https://redis.io/commands/script-exists/)
     #[must_use]
-    fn script_exists<S, C>(self, sha1s: C) -> PreparedCommand<'a, Self, Vec<bool>>
-    where
-        Self: Sized,
-        S: SingleArg,
-        C: SingleArgCollection<S>,
-    {
+    fn script_exists(self, sha1s: impl Args) -> PreparedCommand<'a, Self, Vec<bool>> {
         prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
     }
 
@@ -308,8 +255,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/script-flush/>](https://redis.io/commands/script-flush/)
     #[must_use]
     fn script_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
     }
@@ -321,8 +266,6 @@ pub trait ScriptingCommands<'a> {
     /// [<https://redis.io/commands/script-kill/>](https://redis.io/commands/script-kill/)
     #[must_use]
     fn script_kill(self) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
     {
         prepare_command(self, cmd("SCRIPT").arg("KILL"))
     }
@@ -335,12 +278,7 @@ pub trait ScriptingCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
-    fn script_load<S, V>(self, script: S) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        S: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn script_load<R: Response>(self, script: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
     }
 }
@@ -361,7 +299,7 @@ impl CallBuilder {
     /// Script name when used with [`eval`](ScriptingCommands::eval)
     /// and [`eval_readonly`](ScriptingCommands::eval_readonly) commands
     #[must_use]
-    pub fn script<S: SingleArg>(script: S) -> Self {
+    pub fn script(script: impl Args) -> Self {
         Self {
             command_args: CommandArgs::default().arg(script).build(),
             keys_added: false,
@@ -371,7 +309,7 @@ impl CallBuilder {
     /// Sha1 haxadecimal string when used with [`eval`](ScriptingCommands::evalsha)
     /// and [`evalsha_readonly`](ScriptingCommands::evalsha_readonly) commands
     #[must_use]
-    pub fn sha1<S: SingleArg>(sha1: S) -> Self {
+    pub fn sha1(sha1: impl Args) -> Self {
         Self {
             command_args: CommandArgs::default().arg(sha1).build(),
             keys_added: false,
@@ -381,7 +319,7 @@ impl CallBuilder {
     /// Sha1 haxadecimal string when used with [`fcall`](ScriptingCommands::fcall)
     /// and [`fcall_readonly`](ScriptingCommands::fcall_readonly) commands
     #[must_use]
-    pub fn function<F: SingleArg>(function: F) -> Self {
+    pub fn function(function: impl Args) -> Self {
         Self {
             command_args: CommandArgs::default().arg(function).build(),
             keys_added: false,
@@ -390,10 +328,7 @@ impl CallBuilder {
 
     /// All the keys accessed by the script.
     #[must_use]
-    pub fn keys<K, C>(mut self, keys: C) -> Self
-    where
-        K: SingleArg,
-        C: SingleArgCollection<K>,
+    pub fn keys(mut self, keys: impl Args) -> Self
     {
         Self {
             command_args: self.command_args.arg(keys.num_args()).arg(keys).build(),
@@ -403,10 +338,7 @@ impl CallBuilder {
 
     /// Additional input arguments that should not represent names of keys.
     #[must_use]
-    pub fn args<A, C>(mut self, args: C) -> Self
-    where
-        A: SingleArg,
-        C: SingleArgCollection<A>,
+    pub fn args(mut self, args: impl Args) -> Self
     {
         let command_args = if self.keys_added {
             self.command_args.arg(args).build()
@@ -422,7 +354,7 @@ impl CallBuilder {
     }
 }
 
-impl ToArgs for CallBuilder {
+impl Args for CallBuilder {
     fn write_args(&self, args: &mut CommandArgs) {
         // no keys, no args
         if self.command_args.len() == 1 {
@@ -450,7 +382,7 @@ pub enum FunctionRestorePolicy {
     Replace,
 }
 
-impl ToArgs for FunctionRestorePolicy {
+impl Args for FunctionRestorePolicy {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             FunctionRestorePolicy::Default => {}
@@ -532,7 +464,7 @@ pub enum ScriptDebugMode {
     No,
 }
 
-impl ToArgs for ScriptDebugMode {
+impl Args for ScriptDebugMode {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             ScriptDebugMode::Yes => args.arg("YES"),
@@ -551,7 +483,7 @@ pub struct FunctionListOptions {
 impl FunctionListOptions {
     /// specifies a pattern for matching library names.
     #[must_use]
-    pub fn library_name_pattern<P: SingleArg>(mut self, library_name_pattern: P) -> Self {
+    pub fn library_name_pattern(mut self, library_name_pattern: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -570,7 +502,7 @@ impl FunctionListOptions {
     }
 }
 
-impl ToArgs for FunctionListOptions {
+impl Args for FunctionListOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

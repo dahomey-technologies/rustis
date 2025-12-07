@@ -8,7 +8,7 @@ use std::{
 };
 
 /// Types compatible with command args
-pub trait ToArgs {
+pub trait Args {
     /// Write this Rust type as one ore multiple args into CommandArgs.
     ///
     /// Primitives Rust types will generate a single argument
@@ -36,147 +36,147 @@ fn write_float<F: Float>(f: F, args: &mut CommandArgs) {
     args.write_arg(str.as_bytes().to_vec());
 }
 
-impl ToArgs for i8 {
+impl Args for i8 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for i16 {
+impl Args for i16 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for u16 {
+impl Args for u16 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for i32 {
+impl Args for i32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for u32 {
+impl Args for u32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for i64 {
+impl Args for i64 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for u64 {
+impl Args for u64 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for isize {
+impl Args for isize {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for usize {
+impl Args for usize {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_integer(*self, args);
     }
 }
 
-impl ToArgs for f32 {
+impl Args for f32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_float(*self, args);
     }
 }
 
-impl ToArgs for f64 {
+impl Args for f64 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         write_float(*self, args);
     }
 }
 
-impl ToArgs for bool {
+impl Args for bool {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(if *self { vec![b'1'] } else { vec![b'0'] });
     }
 }
 
-impl ToArgs for BulkString {
+impl Args for BulkString {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_bytes().to_vec());
     }
 }
 
-impl ToArgs for Vec<u8> {
+impl Args for Vec<u8> {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.clone());
     }
 }
 
-impl ToArgs for &[u8] {
+impl Args for &[u8] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.to_vec());
     }
 }
 
-impl<const N: usize> ToArgs for &[u8; N] {
+impl<const N: usize> Args for &[u8; N] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_slice().to_vec());
     }
 }
 
-impl<const N: usize> ToArgs for [u8; N] {
+impl<const N: usize> Args for [u8; N] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_slice().to_vec());
     }
 }
 
-impl ToArgs for &str {
+impl Args for &str {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_bytes().to_vec());
     }
 }
 
-impl ToArgs for String {
+impl Args for String {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_bytes().to_vec());
     }
 }
 
-impl ToArgs for &String {
+impl Args for &String {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.write_arg(self.as_bytes().to_vec());
     }
 }
 
-impl ToArgs for char {
+impl Args for char {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         let mut buf: [u8; 4] = [0; 4];
@@ -185,7 +185,7 @@ impl ToArgs for char {
     }
 }
 
-impl<T: ToArgs> ToArgs for Option<T> {
+impl<T: Args> Args for Option<T> {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         if let Some(t) = self {
@@ -202,7 +202,7 @@ impl<T: ToArgs> ToArgs for Option<T> {
     }
 }
 
-impl<T: ToArgs, const N: usize> ToArgs for [T; N] {
+impl<T: Args, const N: usize> Args for [T; N] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for e in self {
@@ -216,7 +216,7 @@ impl<T: ToArgs, const N: usize> ToArgs for [T; N] {
     }
 }
 
-impl<T: ToArgs> ToArgs for Vec<T> {
+impl<T: Args> Args for Vec<T> {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for e in self {
@@ -230,7 +230,7 @@ impl<T: ToArgs> ToArgs for Vec<T> {
     }
 }
 
-impl<T: ToArgs> ToArgs for &[T] {
+impl<T: Args> Args for &[T] {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for e in self.iter() {
@@ -244,10 +244,10 @@ impl<T: ToArgs> ToArgs for &[T] {
     }
 }
 
-impl<T, A> ToArgs for SmallVec<A>
+impl<T, A> Args for SmallVec<A>
 where
     A: smallvec::Array<Item = T>,
-    T: ToArgs,
+    T: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -262,9 +262,9 @@ where
     }
 }
 
-impl<T, S: BuildHasher> ToArgs for HashSet<T, S>
+impl<T, S: BuildHasher> Args for HashSet<T, S>
 where
-    T: ToArgs,
+    T: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -279,9 +279,9 @@ where
     }
 }
 
-impl<T> ToArgs for BTreeSet<T>
+impl<T> Args for BTreeSet<T>
 where
-    T: ToArgs,
+    T: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -296,10 +296,10 @@ where
     }
 }
 
-impl<K, V, S: BuildHasher> ToArgs for HashMap<K, V, S>
+impl<K, V, S: BuildHasher> Args for HashMap<K, V, S>
 where
-    K: ToArgs,
-    V: ToArgs,
+    K: Args,
+    V: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -316,10 +316,10 @@ where
     }
 }
 
-impl<K, V> ToArgs for BTreeMap<K, V>
+impl<K, V> Args for BTreeMap<K, V>
 where
-    K: ToArgs,
-    V: ToArgs,
+    K: Args,
+    V: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -336,10 +336,10 @@ where
     }
 }
 
-impl<T, U> ToArgs for (T, U)
+impl<T, U> Args for (T, U)
 where
-    T: ToArgs,
-    U: ToArgs,
+    T: Args,
+    U: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -353,11 +353,11 @@ where
     }
 }
 
-impl<T, U, V> ToArgs for (T, U, V)
+impl<T, U, V> Args for (T, U, V)
 where
-    T: ToArgs,
-    U: ToArgs,
-    V: ToArgs,
+    T: Args,
+    U: Args,
+    V: Args,
 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
@@ -372,7 +372,7 @@ where
     }
 }
 
-impl ToArgs for CommandArgs {
+impl Args for CommandArgs {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self {
@@ -386,7 +386,7 @@ impl ToArgs for CommandArgs {
     }
 }
 
-impl ToArgs for &CommandArgs {
+impl Args for &CommandArgs {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         for arg in self.into_iter() {
@@ -400,80 +400,11 @@ impl ToArgs for &CommandArgs {
     }
 }
 
-/// Generic Marker for single arguments (no collections nor tuples)
-pub trait SingleArg: ToArgs {}
-
-impl SingleArg for i8 {}
-impl SingleArg for u16 {}
-impl SingleArg for i16 {}
-impl SingleArg for u32 {}
-impl SingleArg for i32 {}
-impl SingleArg for u64 {}
-impl SingleArg for i64 {}
-impl SingleArg for usize {}
-impl SingleArg for isize {}
-impl SingleArg for f32 {}
-impl SingleArg for f64 {}
-impl SingleArg for bool {}
-impl SingleArg for char {}
-impl SingleArg for &str {}
-impl SingleArg for String {}
-impl SingleArg for &String {}
-impl<const N: usize> SingleArg for &[u8; N] {}
-impl<const N: usize> SingleArg for [u8; N] {}
-impl SingleArg for &[u8] {}
-impl SingleArg for Vec<u8> {}
-impl SingleArg for BulkString {}
-impl<T: SingleArg> SingleArg for Option<T> {}
-
-/// Generic Marker for Collections of `ToArgs`
-///
-/// Each element of the collection can produce multiple args.
-pub trait MultipleArgsCollection<T>: ToArgs
-where
-    T: ToArgs,
-{
-}
-
-impl<T, const N: usize> MultipleArgsCollection<T> for [T; N] where T: ToArgs {}
-impl<T> MultipleArgsCollection<T> for Vec<T> where T: ToArgs {}
-impl<T> MultipleArgsCollection<T> for T where T: ToArgs {}
-
-/// Marker for collections of single items of `ToArgs`
-///
-/// Each element of the collection can only produce a single arg.
-pub trait SingleArgCollection<T>: ToArgs
-where
-    T: SingleArg,
-{
-}
-
-impl SingleArgCollection<Vec<u8>> for CommandArgs {}
-
-impl<T, const N: usize> SingleArgCollection<T> for [T; N] where T: SingleArg {}
-
-impl<T> SingleArgCollection<T> for &[T] where T: SingleArg {}
-
-impl<T> SingleArgCollection<T> for Vec<T> where T: SingleArg {}
-
-impl<A, T> SingleArgCollection<T> for SmallVec<A>
-where
-    A: smallvec::Array<Item = T>,
-    T: SingleArg,
-{
-}
-
-impl<T, S: BuildHasher> SingleArgCollection<T> for HashSet<T, S> where T: SingleArg {}
-
-impl<T> SingleArgCollection<T> for BTreeSet<T> where T: SingleArg {}
-
-impl<T> SingleArgCollection<T> for T where T: SingleArg {}
-
-/// A wrapper type that adapts any clonable iterator of `SingleArg` items to the `SingleArgCollection` and `ToArgs` traits.
+/// A wrapper type that adapts any clonable iterator of `Args` items to `Args` traits.
 ///
 /// # Purpose
 ///
-/// `SingleArgIterator` allows you to use any iterator of items implementing `SingleArg` (such as produced by `.iter()` or more complex iterator adapters)
+/// `ArgIterator` allows you to use any iterator of items implementing `Args` (such as produced by `.iter()` or more complex iterator adapters)
 /// as a collection of arguments for Redis commands, without needing to collect your data into a concrete Vec or slice first.
 /// This is particularly useful for building command arguments on-the-fly, avoiding unnecessary allocations.
 ///
@@ -482,35 +413,35 @@ impl<T> SingleArgCollection<T> for T where T: SingleArg {}
 /// - The underlying iterator must implement [`Clone`] so that it can be traversed twice:
 ///   - once for counting arguments (`num_args`)
 ///   - once for serializing them (`write_args`)
-/// - The iterator's items must implement [`SingleArg`].
+/// - The iterator's items must implement [`Args`].
 ///
 /// # Note
 /// Most common iterators in Rust are clonable, including those produced by `.iter()`, `.cloned()`, `.map()`, and ranges.
 /// If you use a non-clonable iterator, this wrapper will not compile.
-pub struct SingleArgIterator<I>
+pub struct ArgIterator<I>
 where
     I: Iterator + Clone,
-    I::Item: SingleArg,
+    I::Item: Args,
 {
     iter: I,
 }
 
-impl<I> SingleArgIterator<I>
+impl<I> ArgIterator<I>
 where
     I: Iterator + Clone,
-    I::Item: SingleArg,
+    I::Item: Args,
 {
-    /// Constructs a new `SingleArgIterator` from any clonable iterator of `SingleArg` items.    
+    /// Constructs a new `ArgIterator` from any clonable iterator of `Args` items.    
     pub fn new(iter: I) -> Self {
-        SingleArgIterator { iter }
+        ArgIterator { iter }
     }
 }
 
-/// Adapts any clonable iterator of `SingleArg` items to the `SingleArgCollection` and `ToArgs` traits.
-impl<I> ToArgs for SingleArgIterator<I>
+/// Adapts any clonable iterator of `Args` items to the `Args` traits.
+impl<I> Args for ArgIterator<I>
 where
     I: Iterator + Clone,
-    I::Item: SingleArg,
+    I::Item: Args,
 {
     fn write_args(&self, args: &mut CommandArgs) {
         for item in self.iter.clone() {
@@ -522,28 +453,21 @@ where
     }
 }
 
-impl<I> SingleArgCollection<I::Item> for SingleArgIterator<I>
-where
-    I: Iterator + Clone,
-    I::Item: SingleArg,
-{
-}
-
-/// Convenience function for constructing a [`SingleArgIterator`] from any clonable iterator of `SingleArg` items.
-pub fn single_arg_iter<T, I>(iter: I) -> SingleArgIterator<I>
+/// Convenience function for constructing a [`ArgIterator`] from any clonable iterator of `Args` items.
+pub fn arg_iter<T, I>(iter: I) -> ArgIterator<I>
 where
     I: Iterator<Item = T> + Clone,
-    T: SingleArg,
+    T: Args,
 {
-    SingleArgIterator::new(iter)
+    ArgIterator::new(iter)
 }
 
-/// A wrapper type that adapts any clonable iterator of references to `SingleArg` items
-/// to the `SingleArgCollection` and `ToArgs` traits.
+/// A wrapper type that adapts any clonable iterator of references to `Args` items
+/// to `Args` traits.
 ///
 /// # Purpose
 ///
-/// `SingleArgRefIterator` allows you to use any clonable iterator over references to items implementing `SingleArg`
+/// `RefIterator` allows you to use any clonable iterator over references to items implementing `Args`
 /// (such as produced by `.iter()` on a `Vec<T>` or slice) as a collection of arguments for Redis commands,
 /// without needing to collect your data into a concrete Vec or slice first. This is especially useful for
 /// passing arguments by reference, avoiding unnecessary cloning or allocation.
@@ -553,7 +477,7 @@ where
 /// - The underlying iterator must be clonable ([`Clone`]), so it can be traversed twice:
 ///   - once for counting arguments (`num_args`)
 ///   - once for serializing them (`write_args`)
-/// - The iterator's items must be references to a type implementing [`SingleArg`].
+/// - The iterator's items must be references to a type implementing [`Args`].
 ///
 /// # Note
 /// Most iterators produced by `.iter()` on collections are clonable.
@@ -562,30 +486,30 @@ where
 /// # Lifetime
 /// The lifetime parameter `'a` ensures that the iterator and the referenced items outlive
 /// the usage of this wrapper.
-pub struct SingleArgRefIterator<'a, I, T>
+pub struct ArgRefIterator<'a, I, T>
 where
     I: Iterator<Item = &'a T> + Clone,
-    T: SingleArg + 'a,
+    T: Args + 'a,
 {
     iter: I,
 }
 
-impl<'a, I, T> SingleArgRefIterator<'a, I, T>
+impl<'a, I, T> ArgRefIterator<'a, I, T>
 where
     I: Iterator<Item = &'a T> + Clone,
-    T: SingleArg + 'a,
+    T: Args + 'a,
 {
-    /// Constructs a new `SingleArgRefIterator` from any clonable iterator of references to `SingleArg` items.
+    /// Constructs a new `ArgRefIterator` from any clonable iterator of references to `Args` items.
     pub fn new(iter: I) -> Self {
-        SingleArgRefIterator { iter }
+        ArgRefIterator { iter }
     }
 }
 
-/// Implements argument serialization and counting for an iterator of references to `SingleArg` items.
-impl<'a, I, T> ToArgs for SingleArgRefIterator<'a, I, T>
+/// Implements argument serialization and counting for an iterator of references to `Args` items.
+impl<'a, I, T> Args for ArgRefIterator<'a, I, T>
 where
     I: Iterator<Item = &'a T> + Clone,
-    T: SingleArg + 'a,
+    T: Args + 'a,
 {
     fn write_args(&self, args: &mut CommandArgs) {
         for item in self.iter.clone() {
@@ -597,14 +521,7 @@ where
     }
 }
 
-impl<'a, I, T> SingleArgCollection<T> for SingleArgRefIterator<'a, I, T>
-where
-    I: Iterator<Item = &'a T> + Clone,
-    T: SingleArg + 'a,
-{
-}
-
-/// Convenience function for constructing a [`SingleArgRefIterator`] from any clonable iterator of references to `SingleArg` items.
+/// Convenience function for constructing a [`ArgRefIterator`] from any clonable iterator of references to `Args` items.
 ///
 /// # Example
 ///
@@ -626,76 +543,16 @@ where
 ///     Ok(())
 /// }
 /// ```
-pub fn single_arg_ref_iter<'a, I, T>(iter: I) -> SingleArgRefIterator<'a, I, T>
+pub fn arg_ref_iter<'a, I, T>(iter: I) -> ArgRefIterator<'a, I, T>
 where
     I: Iterator<Item = &'a T> + Clone,
-    T: SingleArg + 'a,
+    T: Args + 'a,
 {
-    SingleArgRefIterator::new(iter)
+    ArgRefIterator::new(iter)
 }
 
-/// Marker for key/value collections of Args
-///
-/// The key and the value can only produce a single arg each.
-pub trait KeyValueArgsCollection<K, V>: ToArgs
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V> KeyValueArgsCollection<K, V> for Vec<(K, V)>
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<A, K, V> KeyValueArgsCollection<K, V> for SmallVec<A>
-where
-    A: smallvec::Array<Item = (K, V)>,
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V, const N: usize> KeyValueArgsCollection<K, V> for [(K, V); N]
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V> KeyValueArgsCollection<K, V> for &[(K, V)]
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V> KeyValueArgsCollection<K, V> for (K, V)
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V, S: BuildHasher> KeyValueArgsCollection<K, V> for HashMap<K, V, S>
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-impl<K, V> KeyValueArgsCollection<K, V> for BTreeMap<K, V>
-where
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
-/// A wrapper type that adapts any clonable iterator of `(K, V)` pairs (where both `K` and `V` implement `SingleArg`)
-/// to the `KeyValueArgsCollection` and `ToArgs` traits.
+/// A wrapper type that adapts any clonable iterator of `(K, V)` pairs (where both `K` and `V` implement `Args`)
+/// to `Args` traits.
 ///
 /// # Purpose
 ///
@@ -708,7 +565,7 @@ where
 /// - The underlying iterator must implement [`Clone`] so it can be traversed twice:
 ///   - once for counting arguments (`num_args`)
 ///   - once for serializing them (`write_args`)
-/// - Both key and value types must implement [`SingleArg`].
+/// - Both key and value types must implement [`Args`].
 ///
 /// # Note
 /// Most iterators in Rust are clonable, including those produced by `.iter()`, `.cloned()`, `.map()`, and `.zip()`.
@@ -716,8 +573,8 @@ where
 pub struct KeyValueArgsIterator<I, K, V>
 where
     I: Iterator<Item = (K, V)> + Clone,
-    K: SingleArg,
-    V: SingleArg,
+    K: Args,
+    V: Args,
 {
     iter: I,
 }
@@ -725,8 +582,8 @@ where
 impl<I, K, V> KeyValueArgsIterator<I, K, V>
 where
     I: Iterator<Item = (K, V)> + Clone,
-    K: SingleArg,
-    V: SingleArg,
+    K: Args,
+    V: Args,
 {
     /// Constructs a new `KeyValueArgsIterator` from any clonable iterator of `(K, V)` pairs.
     pub fn new(iter: I) -> Self {
@@ -735,11 +592,11 @@ where
 }
 
 /// Implements argument serialization and counting for an iterator of `(K, V)` pairs.
-impl<I, K, V> ToArgs for KeyValueArgsIterator<I, K, V>
+impl<I, K, V> Args for KeyValueArgsIterator<I, K, V>
 where
     I: Iterator<Item = (K, V)> + Clone,
-    K: SingleArg,
-    V: SingleArg,
+    K: Args,
+    V: Args,
 {
     fn write_args(&self, args: &mut CommandArgs) {
         for (key, value) in self.iter.clone() {
@@ -754,26 +611,18 @@ where
     }
 }
 
-impl<I, K, V> KeyValueArgsCollection<K, V> for KeyValueArgsIterator<I, K, V>
-where
-    I: Iterator<Item = (K, V)> + Clone,
-    K: SingleArg,
-    V: SingleArg,
-{
-}
-
 /// Convenience function for constructing a [`KeyValueArgsIterator`] from any clonable iterator of `(K, V)` pairs.
 pub fn key_value_args_iter<I, K, V>(iter: I) -> KeyValueArgsIterator<I, K, V>
 where
     I: Iterator<Item = (K, V)> + Clone,
-    K: SingleArg,
-    V: SingleArg,
+    K: Args,
+    V: Args,
 {
     KeyValueArgsIterator::new(iter)
 }
 
-/// A wrapper type that adapts any clonable iterator of references to `(K, V)` pairs (where both `K` and `V` implement `SingleArg`)
-/// to the `KeyValueArgsCollection` and `ToArgs` traits.
+/// A wrapper type that adapts any clonable iterator of references to `(K, V)` pairs (where both `K` and `V` implement `Args`)
+/// to the `Args` traits.
 ///
 /// # Purpose
 ///
@@ -786,7 +635,7 @@ where
 /// - The underlying iterator must implement [`Clone`] so it can be traversed twice:
 ///   - once for counting arguments (`num_args`)
 ///   - once for serializing them (`write_args`)
-/// - The iterator's items must be references to tuples where both key and value types implement [`SingleArg`].
+/// - The iterator's items must be references to tuples where both key and value types implement [`Args`].
 ///
 /// # Examples
 ///
@@ -841,8 +690,8 @@ where
 pub struct KeyValueArgsRefIterator<'a, I, K, V>
 where
     I: Iterator<Item = &'a (K, V)> + Clone,
-    K: SingleArg + 'a,
-    V: SingleArg + 'a,
+    K: Args + 'a,
+    V: Args + 'a,
 {
     iter: I,
 }
@@ -850,8 +699,8 @@ where
 impl<'a, I, K, V> KeyValueArgsRefIterator<'a, I, K, V>
 where
     I: Iterator<Item = &'a (K, V)> + Clone,
-    K: SingleArg + 'a,
-    V: SingleArg + 'a,
+    K: Args + 'a,
+    V: Args + 'a,
 {
     /// Constructs a new `KeyValueArgsRefIterator` from any clonable iterator of references to `(K, V)` pairs.    
     pub fn new(iter: I) -> Self {
@@ -860,11 +709,11 @@ where
 }
 
 /// Implements argument serialization and counting for an iterator of references to `(K, V)` pairs.
-impl<'a, I, K, V> ToArgs for KeyValueArgsRefIterator<'a, I, K, V>
+impl<'a, I, K, V> Args for KeyValueArgsRefIterator<'a, I, K, V>
 where
     I: Iterator<Item = &'a (K, V)> + Clone,
-    K: SingleArg + 'a,
-    V: SingleArg + 'a,
+    K: Args + 'a,
+    V: Args + 'a,
 {
     fn write_args(&self, args: &mut CommandArgs) {
         for (key, value) in self.iter.clone() {
@@ -877,15 +726,6 @@ where
             .clone()
             .fold(0, |acc, (k, v)| acc + k.num_args() + v.num_args())
     }
-}
-
-/// Marks this wrapper as a `KeyValueArgsCollection` for the referenced key and value types.
-impl<'a, I, K, V> KeyValueArgsCollection<K, V> for KeyValueArgsRefIterator<'a, I, K, V>
-where
-    I: Iterator<Item = &'a (K, V)> + Clone,
-    K: SingleArg + 'a,
-    V: SingleArg + 'a,
-{
 }
 
 /// Convenience function for constructing a [`KeyValueArgsRefIterator`] from any clonable iterator of references to `(K, V)` pairs.
@@ -913,8 +753,8 @@ where
 pub fn key_value_args_ref_iter<'a, I, K, V>(iter: I) -> KeyValueArgsRefIterator<'a, I, K, V>
 where
     I: Iterator<Item = &'a (K, V)> + Clone,
-    K: SingleArg + 'a,
-    V: SingleArg + 'a,
+    K: Args + 'a,
+    V: Args + 'a,
 {
     KeyValueArgsRefIterator::new(iter)
 }

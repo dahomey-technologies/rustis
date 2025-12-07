@@ -145,13 +145,13 @@ async fn cache_mget() -> Result<()> {
         .mset([("key1", "value1"), ("key2", "value2")])
         .await?;
 
-    assert_eq!("value1", cache.get::<_, String>("key1").await?);
+    assert_eq!("value1", cache.get::<String>("key1").await?);
 
     let values: Vec<String> = cache.mget(["key1", "key2"]).await?;
     assert_eq!(vec!["value1".to_string(), "value2".to_string()], values);
 
-    assert_eq!("value1", cache.get::<_, String>("key1").await?);
-    assert_eq!("value2", cache.get::<_, String>("key2").await?);
+    assert_eq!("value1", cache.get::<String>("key1").await?);
+    assert_eq!("value2", cache.get::<String>("key2").await?);
 
     let values: Vec<String> = cache.mget(["key1", "key2"]).await?;
     assert_eq!(vec!["value1".to_string(), "value2".to_string()], values);

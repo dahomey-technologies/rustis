@@ -24,9 +24,9 @@ You will notice that each built-in command expects arguments through a set of tr
 For each trait, you can add your own implementations for your custom types
 or request additional implementation for standard types.
 
-### ToArgs
+### Args
 
-The trait [`ToArgs`] allows to convert a complex type into one ore multiple argumentss.
+The trait [`Args`] allows to convert a complex type into one ore multiple argumentss.
 Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`] struct.
 
 Current implementation provides the following conversions:
@@ -46,9 +46,9 @@ Current implementation provides the following conversions:
 * `HashMap<K, V, S>`
 * [`CommandArgs`]
 
-Nevertheless, [`ToArgs`] is not expected directly in built-in commands arguments.
+Nevertheless, [`Args`] is not expected directly in built-in commands arguments.
 
-The following traits are used to constraints which implementations of [`ToArgs`]
+The following traits are used to constraints which implementations of [`Args`]
 are expected by a specific argument of a built-in command.
 
 ### SingleArg
@@ -69,20 +69,18 @@ Current implementation provides the following conversions:
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{CommandArgs, ToArgs, SingleArg},
+    resp::{CommandArgs, Args, SingleArg},
     Result,
 };
 
 pub struct MyI32(i32);
 
- impl ToArgs for MyI32 {
+ impl Args for MyI32 {
     #[inline]
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(self.0);
     }
 }
-
-impl SingleArg for MyI32 {}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -126,7 +124,7 @@ Current implementation provides the following conversions:
 * `HashSet<T, S>`
 * [`CommandArgs`]
 
-where each of theses implementations must also implement [`ToArgs`]
+where each of theses implementations must also implement [`Args`]
 
 #### Example
 ```
@@ -177,7 +175,7 @@ Current implementation provides the following conversions:
 * `Vec<T>`
 * `[T;N]`
 
-where each of theses implementations must also implement [`ToArgs`]
+where each of theses implementations must also implement [`Args`]
 
 #### Example
 ```
@@ -218,7 +216,7 @@ Current implementation provides the following conversions:
 * `BTreeMap<K, V>`
 * `HashMap<K, V, S>`
 
-where each of theses implementations must also implement [`ToArgs`]
+where each of theses implementations must also implement [`Args`]
 
 #### Example
 ```
@@ -444,7 +442,7 @@ mod resp_buf;
 mod resp_deserializer;
 mod resp_serializer;
 mod response;
-mod to_args;
+mod args;
 mod util;
 mod value;
 mod value_deserialize;
@@ -463,7 +461,7 @@ pub use resp_buf::*;
 pub use resp_deserializer::*;
 pub use resp_serializer::*;
 pub use response::*;
-pub use to_args::*;
+pub use args::*;
 pub use util::*;
 pub use value::*;
 pub(crate) use value_deserialize::*;

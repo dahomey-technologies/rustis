@@ -1,14 +1,11 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, MultipleArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs, cmd,
-    },
+    resp::{CommandArgs, Response, Args, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
     de::{
-        self, DeserializeOwned, Unexpected, Visitor,
+        self, Unexpected, Visitor,
         value::{BytesDeserializer, SeqAccessDeserializer},
     },
 };
@@ -18,7 +15,7 @@ use std::{fmt, marker::PhantomData};
 ///
 /// # See Also
 /// [Redis Geospatial Commands](https://redis.io/commands/?group=geo)
-pub trait GeoCommands<'a> {
+pub trait GeoCommands<'a>: Sized {
     /// Adds the specified geospatial items (longitude, latitude, name) to the specified key.
     ///
     /// # Return
@@ -28,19 +25,13 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geoadd/>](https://redis.io/commands/geoadd/)
     #[must_use]
-    fn geoadd<K, M, I>(
+    fn geoadd(
         self,
-        key: K,
+        key: impl Args,
         condition: GeoAddCondition,
         change: bool,
-        items: I,
-    ) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        I: MultipleArgsCollection<(f64, f64, M)>,
-    {
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("GEOADD")
@@ -60,18 +51,13 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geodist/>](https://redis.io/commands/geodist/)
     #[must_use]
-    fn geodist<K, M>(
+    fn geodist(
         self,
-        key: K,
-        member1: M,
-        member2: M,
+        key: impl Args,
+        member1: impl Args,
+        member2: impl Args,
         unit: GeoUnit,
-    ) -> PreparedCommand<'a, Self, Option<f64>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(
             self,
             cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit),
@@ -87,13 +73,11 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
-    fn geohash<K, M, C>(self, key: K, members: C) -> PreparedCommand<'a, Self, Vec<String>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        C: SingleArgCollection<M>,
-    {
+    fn geohash<R: Response>(
+        self,
+        key: impl Args,
+        members: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
     }
 
@@ -108,17 +92,11 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geopos/>](https://redis.io/commands/geopos/)
     #[must_use]
-    fn geopos<K, M, C>(
+    fn geopos(
         self,
-        key: K,
-        members: C,
-    ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M: SingleArg,
-        C: SingleArgCollection<M>,
-    {
+        key: impl Args,
+        members: impl Args,
+    ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>> {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }
 
@@ -132,20 +110,13 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
-    fn geosearch<K, M1, M2, A>(
+    fn geosearch<F: Args, R: Response>(
         self,
-        key: K,
-        from: GeoSearchFrom<M1>,
+        key: impl Args,
+        from: GeoSearchFrom<F>,
         by: GeoSearchBy,
         options: GeoSearchOptions,
-    ) -> PreparedCommand<'a, Self, A>
-    where
-        Self: Sized,
-        K: SingleArg,
-        M1: SingleArg,
-        M2: PrimitiveResponse + DeserializeOwned,
-        A: CollectionResponse<GeoSearchResult<M2>> + DeserializeOwned,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(options),
@@ -160,20 +131,14 @@ pub trait GeoCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/geosearchstore/>](https://redis.io/commands/geosearchstore/)
     #[must_use]
-    fn geosearchstore<D, S, M>(
+    fn geosearchstore<F: Args>(
         self,
-        destination: D,
-        source: S,
-        from: GeoSearchFrom<M>,
+        destination: impl Args,
+        source: impl Args,
+        from: GeoSearchFrom<F>,
         by: GeoSearchBy,
         options: GeoSearchStoreOptions,
-    ) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        D: SingleArg,
-        S: SingleArg,
-        M: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("GEOSEARCHSTORE")
@@ -198,7 +163,7 @@ pub enum GeoAddCondition {
     XX,
 }
 
-impl ToArgs for GeoAddCondition {
+impl Args for GeoAddCondition {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GeoAddCondition::None => {}
@@ -220,7 +185,7 @@ pub enum GeoUnit {
     Feet,
 }
 
-impl ToArgs for GeoUnit {
+impl Args for GeoUnit {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             GeoUnit::Meters => "m",
@@ -232,20 +197,14 @@ impl ToArgs for GeoUnit {
 }
 
 /// The query's center point is provided by one of these mandatory options:
-pub enum GeoSearchFrom<M>
-where
-    M: SingleArg,
-{
+pub enum GeoSearchFrom<M: Args> {
     /// Use the position of the given existing `member` in the sorted set.
     FromMember { member: M },
     /// Use the given `longitude` and `latitude` position.
     FromLonLat { longitude: f64, latitude: f64 },
 }
 
-impl<M> ToArgs for GeoSearchFrom<M>
-where
-    M: SingleArg,
-{
+impl<M: Args> Args for GeoSearchFrom<M> {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GeoSearchFrom::FromMember { member } => args.arg("FROMMEMBER").arg_ref(member),
@@ -269,7 +228,7 @@ pub enum GeoSearchBy {
     },
 }
 
-impl ToArgs for GeoSearchBy {
+impl Args for GeoSearchBy {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GeoSearchBy::ByRadius { radius, unit } => {
@@ -297,7 +256,7 @@ pub enum GeoSearchOrder {
     Desc,
 }
 
-impl ToArgs for GeoSearchOrder {
+impl Args for GeoSearchOrder {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GeoSearchOrder::Asc => args.arg("ASC"),
@@ -354,7 +313,7 @@ impl GeoSearchOptions {
     }
 }
 
-impl ToArgs for GeoSearchOptions {
+impl Args for GeoSearchOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -362,12 +321,9 @@ impl ToArgs for GeoSearchOptions {
 
 /// Result of the [`geosearch`](GeoCommands::geosearch) command.
 #[derive(Debug)]
-pub struct GeoSearchResult<M>
-where
-    M: PrimitiveResponse,
-{
+pub struct GeoSearchResult<R: Response> {
     /// The matched member.
-    pub member: M,
+    pub member: R,
 
     /// The distance of the matched member from the specified center.
     pub distance: Option<f64>,
@@ -379,10 +335,7 @@ where
     pub coordinates: Option<(f64, f64)>,
 }
 
-impl<'de, M> Deserialize<'de> for GeoSearchResult<M>
-where
-    M: PrimitiveResponse + DeserializeOwned,
-{
+impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -450,18 +403,12 @@ where
             }
         }
 
-        pub struct GeoSearchResultVisitor<M>
-        where
-            M: PrimitiveResponse,
-        {
-            phantom: PhantomData<M>,
+        pub struct GeoSearchResultVisitor<R: Response> {
+            phantom: PhantomData<R>,
         }
 
-        impl<'de, M> Visitor<'de> for GeoSearchResultVisitor<M>
-        where
-            M: PrimitiveResponse + DeserializeOwned,
-        {
-            type Value = GeoSearchResult<M>;
+        impl<'de, R: Response + Deserialize<'de>> Visitor<'de> for GeoSearchResultVisitor<R> {
+            type Value = GeoSearchResult<R>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("GeoSearchResult<M>")
@@ -471,7 +418,7 @@ where
             where
                 A: de::SeqAccess<'de>,
             {
-                let Some(member) = seq.next_element::<M>().map_err(de::Error::custom)? else {
+                let Some(member) = seq.next_element::<R>().map_err(de::Error::custom)? else {
                     return Err(de::Error::invalid_length(0, &"more elements in sequence"));
                 };
 
@@ -499,7 +446,7 @@ where
             where
                 E: de::Error,
             {
-                let member = M::deserialize(BytesDeserializer::new(v))?;
+                let member = R::deserialize(BytesDeserializer::new(v))?;
 
                 Ok(GeoSearchResult {
                     member,
@@ -510,7 +457,7 @@ where
             }
         }
 
-        deserializer.deserialize_any(GeoSearchResultVisitor::<M> {
+        deserializer.deserialize_any(GeoSearchResultVisitor::<R> {
             phantom: PhantomData,
         })
     }
@@ -550,7 +497,7 @@ impl GeoSearchStoreOptions {
     }
 }
 
-impl ToArgs for GeoSearchStoreOptions {
+impl Args for GeoSearchStoreOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

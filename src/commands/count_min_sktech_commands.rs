@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CollectionResponse, KeyValueArgsCollection, SingleArg, SingleArgCollection, cmd},
+    resp::{Response, Args, cmd},
 };
 use serde::Deserialize;
 
@@ -8,7 +8,7 @@ use serde::Deserialize;
 ///
 /// # See Also
 /// [Count-min Sketch Commands](https://redis.io/commands/?group=cms)
-pub trait CountMinSketchCommands<'a> {
+pub trait CountMinSketchCommands<'a>: Sized {
     /// Increases the count of item by increment.
     ///
     /// Multiple items can be increased with one call.
@@ -25,14 +25,11 @@ pub trait CountMinSketchCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
-    fn cms_incrby<I: SingleArg, R: CollectionResponse<usize>>(
+    fn cms_incrby<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl KeyValueArgsCollection<I, usize>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+        key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CMS.INCRBY").arg(key).arg(items))
     }
 
@@ -44,10 +41,7 @@ pub trait CountMinSketchCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
-    fn cms_info(self, key: impl SingleArg) -> PreparedCommand<'a, Self, CmsInfoResult>
-    where
-        Self: Sized,
-    {
+    fn cms_info(self, key: impl Args) -> PreparedCommand<'a, Self, CmsInfoResult> {
         prepare_command(self, cmd("CMS.INFO").arg(key))
     }
 
@@ -65,13 +59,10 @@ pub trait CountMinSketchCommands<'a> {
     #[must_use]
     fn cms_initbydim(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         width: usize,
         depth: usize,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CMS.INITBYDIM").arg(key).arg(width).arg(depth))
     }
 
@@ -93,13 +84,10 @@ pub trait CountMinSketchCommands<'a> {
     #[must_use]
     fn cms_initbyprob(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         error: f64,
         probability: f64,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("CMS.INITBYPROB").arg(key).arg(error).arg(probability),
@@ -115,20 +103,17 @@ pub trait CountMinSketchCommands<'a> {
     /// # Arguments
     /// * `destination` - The name of destination sketch. Must be initialized.
     /// * `sources` - Names of source sketches to be merged.
-    /// * `weights` - Multiple of each sketch. Default =1.
+    /// * `weights` - Multiple of each sketch. Default = 1.
     ///
     /// # See Also
     /// * [<https://redis.io/commands/cms.merge/>](https://redis.io/commands/cms.merge/)
     #[must_use]
-    fn cms_merge<S: SingleArg, W: SingleArgCollection<usize>>(
+    fn cms_merge(
         self,
-        destination: impl SingleArg,
-        sources: impl SingleArgCollection<S>,
-        weights: Option<W>,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+        destination: impl Args,
+        sources: impl Args,
+        weights: Option<impl Args>,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("CMS.MERGE")
@@ -155,14 +140,11 @@ pub trait CountMinSketchCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
-    fn cms_query<I: SingleArg, C: CollectionResponse<usize>>(
+    fn cms_query<R: Response>(
         self,
-        key: impl SingleArg,
-        items: impl SingleArgCollection<I>,
-    ) -> PreparedCommand<'a, Self, C>
-    where
-        Self: Sized,
-    {
+    key: impl Args,
+        items: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CMS.QUERY").arg(key).arg(items))
     }
 }

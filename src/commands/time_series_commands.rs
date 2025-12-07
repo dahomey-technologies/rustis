@@ -1,14 +1,10 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
-        MultipleArgsCollection, PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value,
-        cmd,
-    },
+    resp::{CommandArgs, Response, Args, Value, cmd},
 };
 use serde::{
     Deserialize,
-    de::{self, DeserializeOwned, value::SeqAccessDeserializer},
+    de::{self, value::SeqAccessDeserializer},
 };
 use std::{collections::HashMap, fmt};
 
@@ -16,7 +12,7 @@ use std::{collections::HashMap, fmt};
 ///
 /// # See Also
 /// [Time Series Commands](https://redis.io/commands/?group=timeseries)
-pub trait TimeSeriesCommands<'a> {
+pub trait TimeSeriesCommands<'a>: Sized {
     /// Append a sample to a time series
     ///
     /// # Arguments
@@ -54,14 +50,11 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_add(
         self,
-        key: impl SingleArg,
-        timestamp: impl SingleArg,
+        key: impl Args,
+        timestamp: impl Args,
         value: f64,
         options: TsAddOptions,
-    ) -> PreparedCommand<'a, Self, u64>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, u64> {
         prepare_command(
             self,
             cmd("TS.ADD")
@@ -85,14 +78,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.alter/>](https://redis.io/commands/ts.alter/)
     #[must_use]
-    fn ts_alter(
-        self,
-        key: impl SingleArg,
-        options: TsCreateOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    fn ts_alter(self, key: impl Args, options: TsCreateOptions) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.ALTER").arg(key).arg(options))
     }
 
@@ -112,12 +98,9 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_create(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         options: TsCreateOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.CREATE").arg(key).arg(options))
     }
 
@@ -146,15 +129,12 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_createrule(
         self,
-        src_key: impl SingleArg,
-        dst_key: impl SingleArg,
+        src_key: impl Args,
+        dst_key: impl Args,
         aggregator: TsAggregationType,
         bucket_duration: u64,
         options: TsCreateRuleOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("TS.CREATERULE")
@@ -188,13 +168,10 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_decrby(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         value: f64,
         options: TsIncrByDecrByOptions,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.DECRBY").arg(key).arg(value).arg(options))
     }
 
@@ -217,13 +194,10 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_del(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         from_timestamp: u64,
         to_timestamp: u64,
-    ) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("TS.DEL").arg(key).arg(from_timestamp).arg(to_timestamp),
@@ -244,12 +218,9 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_deleterule(
         self,
-        src_key: impl SingleArg,
-        dst_key: impl SingleArg,
-    ) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-    {
+        src_key: impl Args,
+        dst_key: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.DELETERULE").arg(src_key).arg(dst_key))
     }
 
@@ -269,12 +240,9 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_get(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         options: TsGetOptions,
-    ) -> PreparedCommand<'a, Self, Option<(u64, f64)>>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, Option<(u64, f64)>> {
         prepare_command(self, cmd("TS.GET").arg(key).arg(options))
     }
 
@@ -300,13 +268,10 @@ pub trait TimeSeriesCommands<'a> {
     #[must_use]
     fn ts_incrby(
         self,
-        key: impl SingleArg,
+        key: impl Args,
         value: f64,
         options: TsIncrByDecrByOptions,
-    ) -> PreparedCommand<'a, Self, u64>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, u64> {
         prepare_command(self, cmd("TS.INCRBY").arg(key).arg(value).arg(options))
     }
 
@@ -322,10 +287,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.info/>](https://redis.io/commands/ts.info/)
     #[must_use]
-    fn ts_info(self, key: impl SingleArg, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult>
-    where
-        Self: Sized,
-    {
+    fn ts_info(self, key: impl Args, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult> {
         prepare_command(self, cmd("TS.INFO").arg(key).arg_if(debug, "DEBUG"))
     }
 
@@ -354,13 +316,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
-    fn ts_madd<K: SingleArg, T: SingleArg, R: CollectionResponse<u64>>(
-        self,
-        items: impl MultipleArgsCollection<(K, T, f64)>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    fn ts_madd<R: Response>(self, items: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.MADD").arg(items))
     }
 
@@ -388,14 +344,11 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mget/>](https://redis.io/commands/ts.mget/)
     #[must_use]
-    fn ts_mget<F: SingleArg, R: KeyValueCollectionResponse<String, TsSample>>(
+    fn ts_mget<R: Response>(
         self,
         options: TsMGetOptions,
-        filters: impl SingleArgCollection<F>,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+        filters: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.MGET").arg(options).arg("FILTER").arg(filters))
     }
 
@@ -425,17 +378,14 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
-    fn ts_mrange<F: SingleArg, R: KeyValueCollectionResponse<String, TsRangeSample>>(
+    fn ts_mrange<R: Response>(
         self,
-        from_timestamp: impl SingleArg,
-        to_timestamp: impl SingleArg,
+        from_timestamp: impl Args,
+        to_timestamp: impl Args,
         options: TsMRangeOptions,
-        filters: impl SingleArgCollection<F>,
+        filters: impl Args,
         groupby_options: TsGroupByOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("TS.MRANGE")
@@ -474,17 +424,14 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
-    fn ts_mrevrange<F: SingleArg, R: KeyValueCollectionResponse<String, TsRangeSample>>(
+    fn ts_mrevrange<R: Response>(
         self,
-        from_timestamp: impl SingleArg,
-        to_timestamp: impl SingleArg,
+        from_timestamp: impl Args,
+        to_timestamp: impl Args,
         options: TsMRangeOptions,
-        filters: impl SingleArgCollection<F>,
+        filters: impl Args,
         groupby_options: TsGroupByOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("TS.MREVRANGE")
@@ -520,17 +467,7 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<
-        F: SingleArg,
-        R: PrimitiveResponse + DeserializeOwned,
-        RR: CollectionResponse<R>,
-    >(
-        self,
-        filters: impl SingleArgCollection<F>,
-    ) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-    {
+    fn ts_queryindex<R: Response>(self, filters: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.QUERYINDEX").arg(filters))
     }
 
@@ -556,16 +493,13 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.range/>](https://redis.io/commands/ts.range/)
     #[must_use]
-    fn ts_range<R: CollectionResponse<(u64, f64)>>(
+    fn ts_range<R: Response>(
         self,
-        key: impl SingleArg,
-        from_timestamp: impl SingleArg,
-        to_timestamp: impl SingleArg,
+        key: impl Args,
+        from_timestamp: impl Args,
+        to_timestamp: impl Args,
         options: TsRangeOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("TS.RANGE")
@@ -598,16 +532,13 @@ pub trait TimeSeriesCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/ts.revrange/>](https://redis.io/commands/ts.revrange/)
     #[must_use]
-    fn ts_revrange<R: CollectionResponse<(u64, f64)>>(
+    fn ts_revrange<R: Response>(
         self,
-        key: impl SingleArg,
-        from_timestamp: impl SingleArg,
-        to_timestamp: impl SingleArg,
+        key: impl Args,
+        from_timestamp: impl Args,
+        to_timestamp: impl Args,
         options: TsRangeOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("TS.REVRANGE")
@@ -692,17 +623,14 @@ impl TsAddOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        mut self,
-        labels: LL,
-    ) -> Self {
+    pub fn labels(mut self, labels: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
-impl ToArgs for TsAddOptions {
+impl Args for TsAddOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -724,7 +652,7 @@ pub enum TsEncoding {
     Uncompressed,
 }
 
-impl ToArgs for TsEncoding {
+impl Args for TsEncoding {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsEncoding::Compressed => "COMPRESSED",
@@ -755,7 +683,7 @@ pub enum TsDuplicatePolicy {
     Sum,
 }
 
-impl ToArgs for TsDuplicatePolicy {
+impl Args for TsDuplicatePolicy {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsDuplicatePolicy::Block => "BLOCK",
@@ -853,17 +781,14 @@ impl TsCreateOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        mut self,
-        labels: LL,
-    ) -> Self {
+    pub fn labels(mut self, labels: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
-impl ToArgs for TsCreateOptions {
+impl Args for TsCreateOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -906,7 +831,7 @@ pub enum TsAggregationType {
     Twa,
 }
 
-impl ToArgs for TsAggregationType {
+impl Args for TsAggregationType {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             TsAggregationType::Avg => "avg",
@@ -948,7 +873,7 @@ impl TsCreateRuleOptions {
     }
 }
 
-impl ToArgs for TsCreateRuleOptions {
+impl Args for TsCreateRuleOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -979,7 +904,7 @@ impl TsIncrByDecrByOptions {
     ///
     /// When not specified, the timestamp is set according to the server clock.
     #[must_use]
-    pub fn timestamp(mut self, timestamp: impl SingleArg) -> Self {
+    pub fn timestamp(mut self, timestamp: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("TIMESTAMP").arg(timestamp).build(),
         }
@@ -1032,17 +957,14 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`labels`](TsCreateOptions::labels).
     #[must_use]
-    pub fn labels<L: SingleArg, V: SingleArg, LL: KeyValueArgsCollection<L, V>>(
-        mut self,
-        labels: LL,
-    ) -> Self {
+    pub fn labels(mut self, labels: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("LABELS").arg(labels).build(),
         }
     }
 }
 
-impl ToArgs for TsIncrByDecrByOptions {
+impl Args for TsIncrByDecrByOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1076,7 +998,7 @@ impl TsGetOptions {
     }
 }
 
-impl ToArgs for TsGetOptions {
+impl Args for TsGetOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1267,14 +1189,14 @@ impl TsMGetOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(mut self, labels: impl SingleArgCollection<L>) -> Self {
+    pub fn selected_labels(mut self, labels: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
         }
     }
 }
 
-impl ToArgs for TsMGetOptions {
+impl Args for TsMGetOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1450,7 +1372,7 @@ impl TsMRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(mut self, ts: impl SingleArgCollection<u64>) -> Self {
+    pub fn filter_by_ts(mut self, ts: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
         }
@@ -1484,7 +1406,7 @@ impl TsMRangeOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels<L: SingleArg>(mut self, labels: impl SingleArgCollection<L>) -> Self {
+    pub fn selected_labels(mut self, labels: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
         }
@@ -1510,7 +1432,7 @@ impl TsMRangeOptions {
     /// # Note
     /// When not provided, alignment is set to 0.
     #[must_use]
-    pub fn align(mut self, align: impl SingleArg) -> Self {
+    pub fn align(mut self, align: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("ALIGN").arg(align).build(),
         }
@@ -1575,7 +1497,7 @@ impl TsMRangeOptions {
     }
 }
 
-impl ToArgs for TsMRangeOptions {
+impl Args for TsMRangeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1602,7 +1524,7 @@ impl TsGroupByOptions {
     ///   * `reducer`, the reducer used
     ///   * `source`, the time series keys used to compute the grouped series (key1,key2,key3,...)
     #[must_use]
-    pub fn new(label: impl SingleArg, reducer: TsAggregationType) -> Self {
+    pub fn new(label: impl Args, reducer: TsAggregationType) -> Self {
         Self {
             command_args: CommandArgs::default()
                 .arg("GROUPBY")
@@ -1614,7 +1536,7 @@ impl TsGroupByOptions {
     }
 }
 
-impl ToArgs for TsGroupByOptions {
+impl Args for TsGroupByOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1652,7 +1574,7 @@ impl TsRangeOptions {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(mut self, ts: impl SingleArgCollection<u64>) -> Self {
+    pub fn filter_by_ts(mut self, ts: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
         }
@@ -1691,7 +1613,7 @@ impl TsRangeOptions {
     /// # Note
     /// When not provided, alignment is set to 0.
     #[must_use]
-    pub fn align(mut self, align: impl SingleArg) -> Self {
+    pub fn align(mut self, align: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("ALIGN").arg(align).build(),
         }
@@ -1756,7 +1678,7 @@ impl TsRangeOptions {
     }
 }
 
-impl ToArgs for TsRangeOptions {
+impl Args for TsRangeOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

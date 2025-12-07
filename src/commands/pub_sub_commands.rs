@@ -1,17 +1,13 @@
 use crate::{
     Result,
     client::{PreparedCommand, PubSubStream, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueCollectionResponse, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs, cmd,
-    },
+    resp::{CommandArgs, Response, Args, cmd},
 };
-use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
 /// [Redis Pub/Sub Commands](https://redis.io/commands/?group=pubsub)
-pub trait PubSubCommands<'a> {
+pub trait PubSubCommands<'a>: Sized {
     /// Subscribes the client to the given patterns.
     ///
     /// # Example
@@ -50,10 +46,7 @@ pub trait PubSubCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/psubscribe/>](https://redis.io/commands/psubscribe/)
     #[allow(async_fn_in_trait)]
-    async fn psubscribe<P, PP>(self, patterns: PP) -> Result<PubSubStream>
-    where
-        P: SingleArg + Send + 'a,
-        PP: SingleArgCollection<P>;
+    async fn psubscribe(self, patterns: impl Args) -> Result<PubSubStream>;
 
     /// Posts a message to the given channel.
     ///
@@ -65,12 +58,11 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/publish/>](https://redis.io/commands/publish/)
-    fn publish<C, M>(self, channel: C, message: M) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        C: SingleArg,
-        M: SingleArg,
-    {
+    fn publish(
+        self,
+        channel: impl Args,
+        message: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
     }
 
@@ -81,15 +73,10 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-channels/>](https://redis.io/commands/pubsub-channels/)
-    fn pub_sub_channels<C, CC>(
+    fn pub_sub_channels<R: Response>(
         self,
         options: PubSubChannelsOptions,
-    ) -> PreparedCommand<'a, Self, CC>
-    where
-        Self: Sized,
-        C: PrimitiveResponse + DeserializeOwned,
-        CC: CollectionResponse<C>,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("CHANNELS").arg(options))
     }
 
@@ -119,10 +106,7 @@ pub trait PubSubCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/pubsub-help/>](https://redis.io/commands/pubsub-help/)
     #[must_use]
-    fn pub_sub_help(self) -> PreparedCommand<'a, Self, Vec<String>>
-    where
-        Self: Sized,
-    {
+    fn pub_sub_help(self) -> PreparedCommand<'a, Self, Vec<String>> {
         prepare_command(self, cmd("PUBSUB").arg("HELP"))
     }
 
@@ -134,10 +118,7 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-numpat/>](https://redis.io/commands/pubsub-numpat/)
-    fn pub_sub_numpat(self) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-    {
+    fn pub_sub_numpat(self) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("PUBSUB").arg("NUMPAT"))
     }
 
@@ -149,14 +130,7 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-numsub/>](https://redis.io/commands/pubsub-numsub/)
-    fn pub_sub_numsub<C, CC, R, RR>(self, channels: CC) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        C: SingleArg,
-        CC: SingleArgCollection<C>,
-        R: PrimitiveResponse,
-        RR: KeyValueCollectionResponse<R, usize>,
-    {
+    fn pub_sub_numsub<R: Response>(self, channels: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
 
@@ -167,15 +141,10 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-shardchannels/>](https://redis.io/commands/pubsub-shardchannels/)
-    fn pub_sub_shardchannels<C, CC>(
+    fn pub_sub_shardchannels<R: Response>(
         self,
         options: PubSubChannelsOptions,
-    ) -> PreparedCommand<'a, Self, CC>
-    where
-        Self: Sized,
-        C: PrimitiveResponse + DeserializeOwned,
-        CC: CollectionResponse<C>,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("SHARDCHANNELS").arg(options))
     }
 
@@ -186,14 +155,10 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-shardnumsub/>](https://redis.io/commands/pubsub-shardnumsub/)
-    fn pub_sub_shardnumsub<C, CC, R, RR>(self, channels: CC) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        C: SingleArg,
-        CC: SingleArgCollection<C>,
-        R: PrimitiveResponse,
-        RR: KeyValueCollectionResponse<R, usize>,
-    {
+    fn pub_sub_shardnumsub<R: Response>(
+        self,
+        channels: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }
 
@@ -204,12 +169,11 @@ pub trait PubSubCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/spublish/>](https://redis.io/commands/spublish/)
-    fn spublish<C, M>(self, shardchannel: C, message: M) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        C: SingleArg,
-        M: SingleArg,
-    {
+    fn spublish(
+        self,
+        shardchannel: impl Args,
+        message: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SPUBLISH").arg(shardchannel).arg(message))
     }
 
@@ -218,10 +182,7 @@ pub trait PubSubCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     #[allow(async_fn_in_trait)]
-    async fn ssubscribe<C, CC>(self, shardchannels: CC) -> Result<PubSubStream>
-    where
-        C: SingleArg + Send + 'a,
-        CC: SingleArgCollection<C>;
+    async fn ssubscribe(self, shardchannels: impl Args) -> Result<PubSubStream>;
 
     /// Subscribes the client to the specified channels.
     ///
@@ -260,10 +221,7 @@ pub trait PubSubCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
     #[allow(async_fn_in_trait)]
-    async fn subscribe<C, CC>(self, channels: CC) -> Result<PubSubStream>
-    where
-        C: SingleArg + Send + 'a,
-        CC: SingleArgCollection<C>;
+    async fn subscribe(self, channels: impl Args) -> Result<PubSubStream>;
 }
 
 /// Options for the [`pub_sub_channels`](PubSubCommands::pub_sub_channels) command
@@ -273,14 +231,14 @@ pub struct PubSubChannelsOptions {
 }
 
 impl PubSubChannelsOptions {
-    pub fn pattern<P: SingleArg>(mut self, pattern: P) -> Self {
+    pub fn pattern(mut self, pattern: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(pattern).build(),
         }
     }
 }
 
-impl ToArgs for PubSubChannelsOptions {
+impl Args for PubSubChannelsOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

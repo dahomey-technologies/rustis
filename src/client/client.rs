@@ -21,7 +21,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Command, CommandArgs, RespBuf, Response, SingleArg, SingleArgCollection, cmd},
+    resp::{Command, CommandArgs, RespBuf, Response, Args, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
@@ -401,10 +401,7 @@ impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a C
     }
 }
 
-impl<'a, R> IntoFuture for PreparedCommand<'a, &'a Client, R>
-where
-    R: DeserializeOwned + Send + 'a,
-{
+impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a, &'a Client, R> {
     type Output = Result<R>;
     type IntoFuture = Future<'a, R>;
 
@@ -462,11 +459,7 @@ impl<'a> VectorSetCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]
-    async fn subscribe<C, CC>(self, channels: CC) -> Result<PubSubStream>
-    where
-        C: SingleArg + Send + 'a,
-        CC: SingleArgCollection<C>,
-    {
+    async fn subscribe(self, channels: impl Args) -> Result<PubSubStream> {
         let channels = CommandArgs::default().arg(channels).build();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
@@ -483,11 +476,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     }
 
     #[inline]
-    async fn psubscribe<P, PP>(self, patterns: PP) -> Result<PubSubStream>
-    where
-        P: SingleArg + Send + 'a,
-        PP: SingleArgCollection<P>,
-    {
+    async fn psubscribe(self, patterns: impl Args) -> Result<PubSubStream> {
         let patterns = CommandArgs::default().arg(patterns).build();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
@@ -504,11 +493,7 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     }
 
     #[inline]
-    async fn ssubscribe<C, CC>(self, shardchannels: CC) -> Result<PubSubStream>
-    where
-        C: SingleArg + Send + 'a,
-        CC: SingleArgCollection<C>,
-    {
+    async fn ssubscribe(self, shardchannels: impl Args) -> Result<PubSubStream> {
         let shardchannels = CommandArgs::default().arg(shardchannels).build();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();

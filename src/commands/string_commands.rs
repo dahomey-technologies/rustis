@@ -1,9 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueArgsCollection, PrimitiveResponse, SingleArg,
-        SingleArgCollection, ToArgs, cmd,
-    },
+    resp::{CommandArgs, Response, Args, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -14,7 +11,7 @@ use std::fmt;
 /// A group of Redis commands related to [`Strings`](https://redis.io/docs/data-types/strings/)
 /// # See Also
 /// [Redis Generic Commands](https://redis.io/commands/?group=string)
-pub trait StringCommands<'a> {
+pub trait StringCommands<'a>: Sized {
     /// If key already exists and is a string,
     /// this command appends the value at the end of the string.
     /// If key does not exist it is created and set as an empty string,
@@ -26,12 +23,11 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn append(
+        self,
+        key: impl Args,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
 
@@ -48,11 +44,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
-    fn decr<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn decr(self, key: impl Args) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("DECR").arg(key))
     }
 
@@ -69,11 +61,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
-    fn decrby<K>(self, key: K, decrement: i64) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn decrby(self, key: impl Args, decrement: i64) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
     }
 
@@ -122,12 +110,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<K, V>(self, key: K) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn get<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GET").arg(key))
     }
 
@@ -142,12 +125,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<K, V>(self, key: K) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn getdel<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
 
@@ -191,12 +169,11 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
-    fn getex<K, V>(self, key: K, options: GetExOptions) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn getex<R: Response>(
+        self,
+        key: impl Args,
+        options: GetExOptions,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
     }
 
@@ -237,12 +214,12 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<K, V>(self, key: K, start: isize, end: isize) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn getrange<R: Response>(
+        self,
+        key: impl Args,
+        start: isize,
+        end: isize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
     }
 
@@ -256,13 +233,11 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<K, V, R>(self, key: K, value: V) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-        R: PrimitiveResponse,
-    {
+    fn getset<R: Response>(
+        self,
+        key: impl Args,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
 
@@ -285,11 +260,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
-    fn incr<K>(self, key: K) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn incr(self, key: impl Args) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("INCR").arg(key))
     }
 
@@ -308,11 +279,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
-    fn incrby<K>(self, key: K, increment: i64) -> PreparedCommand<'a, Self, i64>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn incrby(self, key: impl Args, increment: i64) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
     }
 
@@ -342,11 +309,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
-    fn incrbyfloat<K>(self, key: K, increment: f64) -> PreparedCommand<'a, Self, f64>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn incrbyfloat(self, key: impl Args, increment: f64) -> PreparedCommand<'a, Self, f64> {
         prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
 
@@ -358,12 +321,11 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<K, V>(self, key1: K, key2: K) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn lcs<R: Response>(
+        self,
+        key1: impl Args,
+        key2: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
 
@@ -375,11 +337,11 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len<K>(self, key1: K, key2: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn lcs_len(
+        self,
+        key1: impl Args,
+        key2: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
 
@@ -393,17 +355,13 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_idx<K>(
+    fn lcs_idx(
         self,
-        key1: K,
-        key2: K,
+        key1: impl Args,
+        key2: impl Args,
         min_match_len: Option<usize>,
         with_match_len: bool,
-    ) -> PreparedCommand<'a, Self, LcsResult>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, LcsResult> {
         prepare_command(
             self,
             cmd("LCS")
@@ -426,14 +384,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<K, KK, V, VV>(self, keys: KK) -> PreparedCommand<'a, Self, VV>
-    where
-        Self: Sized,
-        K: SingleArg,
-        KK: SingleArgCollection<K>,
-        V: PrimitiveResponse + serde::de::DeserializeOwned,
-        VV: CollectionResponse<V>,
-    {
+    fn mget<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("MGET").arg(keys))
     }
 
@@ -445,13 +396,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
-    fn mset<K, V, C>(self, items: C) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        C: KeyValueArgsCollection<K, V>,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn mset(self, items: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("MSET").arg(items))
     }
 
@@ -473,13 +418,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
-    fn msetnx<K, V, C>(self, items: C) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        C: KeyValueArgsCollection<K, V>,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn msetnx(self, items: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("MSETNX").arg(items))
     }
 
@@ -492,12 +431,12 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
     #[must_use]
-    fn psetex<K, V>(self, key: K, milliseconds: u64, value: V) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn psetex(
+        self,
+        key: impl Args,
+        milliseconds: u64,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
 
@@ -509,13 +448,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-        Self: Sized,
-    {
+    fn set(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SET").arg(key).arg(value))
     }
 
@@ -529,19 +462,14 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set_with_options<K, V>(
+    fn set_with_options(
         self,
-        key: K,
-        value: V,
+        key: impl Args,
+        value: impl Args,
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
             cmd("SET")
@@ -558,20 +486,14 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set_get_with_options<K, V1, V2>(
+    fn set_get_with_options<R: Response>(
         self,
-        key: K,
-        value: V1,
+        key: impl Args,
+        value: impl Args,
         condition: SetCondition,
         expiration: SetExpiration,
         keep_ttl: bool,
-    ) -> PreparedCommand<'a, Self, V2>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V1: SingleArg,
-        V2: PrimitiveResponse,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("SET")
@@ -589,12 +511,12 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
     #[must_use]
-    fn setex<K, V>(self, key: K, seconds: u64, value: V) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn setex(
+        self,
+        key: impl Args,
+        seconds: u64,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
 
@@ -612,12 +534,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
-    fn setnx<K, V>(self, key: K, value: V) -> PreparedCommand<'a, Self, bool>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn setnx(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SETNX").arg(key).arg(value))
     }
 
@@ -631,12 +548,12 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/setrange/>](https://redis.io/commands/setrange/)
     #[must_use]
-    fn setrange<K, V>(self, key: K, offset: usize, value: V) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: SingleArg,
-    {
+    fn setrange(
+        self,
+        key: impl Args,
+        offset: usize,
+        value: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
 
@@ -650,11 +567,7 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
-    fn strlen<K>(self, key: K) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    fn strlen(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("STRLEN").arg(key))
     }
 
@@ -695,12 +608,12 @@ pub trait StringCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/substr/>](https://redis.io/commands/substr/)
     #[must_use]
-    fn substr<K, V>(self, key: K, start: isize, end: isize) -> PreparedCommand<'a, Self, V>
-    where
-        Self: Sized,
-        K: SingleArg,
-        V: PrimitiveResponse,
-    {
+    fn substr<R: Response>(
+        self,
+        key: impl Args,
+        start: isize,
+        end: isize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SUBSTR").arg(key).arg(start).arg(end))
     }
 }
@@ -719,7 +632,7 @@ pub enum GetExOptions {
     Persist,
 }
 
-impl ToArgs for GetExOptions {
+impl Args for GetExOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             GetExOptions::Ex(duration) => args.arg(("EX", *duration)),
@@ -794,7 +707,7 @@ pub enum SetExpiration {
     Pxat(u64),
 }
 
-impl ToArgs for SetExpiration {
+impl Args for SetExpiration {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             SetExpiration::None => {}
@@ -826,7 +739,7 @@ pub enum SetCondition {
     XX,
 }
 
-impl ToArgs for SetCondition {
+impl Args for SetCondition {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             SetCondition::None => {}

@@ -1,14 +1,11 @@
 use crate::{
     Error, Result,
     client::{PreparedCommand, prepare_command},
-    resp::{
-        CollectionResponse, CommandArgs, KeyValueArgsCollection, KeyValueCollectionResponse,
-        PrimitiveResponse, SingleArg, SingleArgCollection, ToArgs, Value, cmd,
-    },
+    resp::{CommandArgs, Response, Args, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
-    de::{self, DeserializeOwned, SeqAccess, Visitor},
+    de::{self, SeqAccess, Visitor},
 };
 use std::{collections::HashMap, fmt, str::FromStr};
 
@@ -16,7 +13,7 @@ use std::{collections::HashMap, fmt, str::FromStr};
 /// # See Also
 /// [Redis Server Management Commands](https://redis.io/commands/?group=server)
 /// [ACL guide](https://redis.io/docs/manual/security/acl/)
-pub trait ServerCommands<'a> {
+pub trait ServerCommands<'a>: Sized {
     /// The command shows the available ACL categories if called without arguments.
     /// If a category name is given, the command shows all the Redis commands in the specified category.
     ///
@@ -28,12 +25,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-cat/>](https://redis.io/commands/acl-cat/)
-    fn acl_cat<C, CC>(self, options: AclCatOptions) -> PreparedCommand<'a, Self, CC>
-    where
-        Self: Sized,
-        C: PrimitiveResponse + DeserializeOwned,
-        CC: CollectionResponse<C>,
-    {
+    fn acl_cat<R: Response>(self, options: AclCatOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
     }
 
@@ -46,12 +38,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-deluser/>](https://redis.io/commands/acl-deluser/)
-    fn acl_deluser<U, UU>(self, usernames: UU) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        U: SingleArg,
-        UU: SingleArgCollection<U>,
-    {
+    fn acl_deluser(self, usernames: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
     }
 
@@ -106,18 +93,12 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
-    fn acl_dryrun<U, C, R>(
+    fn acl_dryrun<R: Response>(
         self,
-        username: U,
-        command: C,
+        username: impl Args,
+        command: impl Args,
         options: AclDryRunOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        U: SingleArg,
-        C: SingleArg,
-        R: PrimitiveResponse,
-    {
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ACL")
@@ -139,13 +120,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: PrimitiveResponse>(
-        self,
-        options: AclGenPassOptions,
-    ) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-    {
+    fn acl_genpass<R: Response>(self, options: AclGenPassOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("GENPASS").arg(options))
     }
 
@@ -156,12 +131,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-getuser/>](https://redis.io/commands/acl-getuser/)
-    fn acl_getuser<U, RR>(self, username: U) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        U: SingleArg,
-        RR: KeyValueCollectionResponse<String, Value>,
-    {
+    fn acl_getuser<R: Response>(self, username: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
 
@@ -190,7 +160,7 @@ pub trait ServerCommands<'a> {
     /// ```
     /// # See Also
     /// [<https://redis.io/commands/acl-help/>](https://redis.io/commands/acl-help/)
-    fn acl_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    fn acl_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -206,7 +176,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-list/>](https://redis.io/commands/acl-list/)
-    fn acl_list(self) -> PreparedCommand<'a, Self, Vec<String>>
+    fn acl_list<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -245,11 +215,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
-    fn acl_log<EE>(self, options: AclLogOptions) -> PreparedCommand<'a, Self, Vec<EE>>
-    where
-        Self: Sized,
-        EE: KeyValueCollectionResponse<String, Value> + DeserializeOwned,
-    {
+    fn acl_log<R: Response>(self, options: AclLogOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
 
@@ -277,13 +243,11 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-setuser/>](https://redis.io/commands/acl-setuser/)
-    fn acl_setuser<U, R, RR>(self, username: U, rules: RR) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        U: SingleArg,
-        R: SingleArg,
-        RR: SingleArgCollection<R>,
-    {
+    fn acl_setuser(
+        self,
+        username: impl Args,
+        rules: impl Args,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
 
@@ -294,12 +258,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-users/>](https://redis.io/commands/acl-users/)
-    fn acl_users<U, UU>(self) -> PreparedCommand<'a, Self, UU>
-    where
-        Self: Sized,
-        U: PrimitiveResponse + DeserializeOwned,
-        UU: CollectionResponse<U>,
-    {
+    fn acl_users<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("USERS"))
     }
 
@@ -310,7 +269,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<U: PrimitiveResponse>(self) -> PreparedCommand<'a, Self, U>
+    fn acl_whoami<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -342,11 +301,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/bgrewriteaof/>](https://redis.io/docs/latest/commands/bgrewriteaof/)
-    fn bgrewriteaof<R>(self) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: PrimitiveResponse,
-    {
+    fn bgrewriteaof<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BGREWRITEAOF"))
     }
 
@@ -380,11 +335,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/bgsave/>](https://redis.io/commands/bgsave/)
-    fn bgsave<R>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R>
-    where
-        Self: Sized,
-        R: PrimitiveResponse,
-    {
+    fn bgsave<R: Response>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BGSAVE").arg(options))
     }
 
@@ -424,13 +375,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
-    fn command_docs<N, NN, DD>(self, command_names: NN) -> PreparedCommand<'a, Self, DD>
-    where
-        Self: Sized,
-        N: SingleArg,
-        NN: SingleArgCollection<N>,
-        DD: KeyValueCollectionResponse<String, CommandDoc>,
-    {
+    fn command_docs<R: Response>(self, command_names: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
     }
 
@@ -441,13 +386,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
-    fn command_getkeys<A, AA, KK>(self, args: AA) -> PreparedCommand<'a, Self, KK>
-    where
-        Self: Sized,
-        A: SingleArg,
-        AA: SingleArgCollection<A>,
-        KK: CollectionResponse<String>,
-    {
+    fn command_getkeys<R: Response>(self, args: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
 
@@ -458,13 +397,10 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<A, AA, KK>(self, args: AA) -> PreparedCommand<'a, Self, KK>
-    where
-        Self: Sized,
-        A: SingleArg,
-        AA: SingleArgCollection<A>,
-        KK: KeyValueCollectionResponse<String, Vec<String>>,
-    {
+    fn command_getkeysandflags<R: Response>(
+        self,
+        args: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
 
@@ -493,7 +429,7 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/command-help/>](https://redis.io/docs/latest/commands/command-help/)
-    fn command_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    fn command_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -507,12 +443,10 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
-    fn command_info<N, NN>(self, command_names: NN) -> PreparedCommand<'a, Self, Vec<CommandInfo>>
-    where
-        Self: Sized,
-        N: SingleArg,
-        NN: SingleArgCollection<N>,
-    {
+    fn command_info(
+        self,
+        command_names: impl Args,
+    ) -> PreparedCommand<'a, Self, Vec<CommandInfo>> {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
     }
 
@@ -523,11 +457,10 @@ pub trait ServerCommands<'a> {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-list/>](https://redis.io/commands/command-list/)
-    fn command_list<CC>(self, options: CommandListOptions) -> PreparedCommand<'a, Self, CC>
-    where
-        Self: Sized,
-        CC: CollectionResponse<String>,
-    {
+    fn command_list<R: Response>(
+        self,
+        options: CommandListOptions,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("LIST").arg(options))
     }
 
@@ -542,14 +475,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
-    fn config_get<P, PP, V, VV>(self, params: PP) -> PreparedCommand<'a, Self, VV>
-    where
-        Self: Sized,
-        P: SingleArg,
-        PP: SingleArgCollection<P>,
-        V: PrimitiveResponse,
-        VV: KeyValueCollectionResponse<String, V>,
-    {
+    fn config_get<R: Response>(self, params: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
 
@@ -617,13 +543,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/config-set/>](https://redis.io/commands/config-set/)
     #[must_use]
-    fn config_set<P, V, C>(self, configs: C) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        P: SingleArg,
-        V: SingleArg,
-        C: KeyValueArgsCollection<P, V>,
-    {
+    fn config_set(self, configs: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
     }
 
@@ -682,11 +602,10 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<SS>(self, sections: SS) -> PreparedCommand<'a, Self, String>
-    where
-        Self: Sized,
-        SS: SingleArgCollection<InfoSection>,
-    {
+    fn info<R: Response>(
+        self,
+        sections: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("INFO").arg(sections))
     }
 
@@ -710,7 +629,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-doctor/>](https://redis.io/commands/latency-doctor/)
     #[must_use]
-    fn latency_doctor(self) -> PreparedCommand<'a, Self, String>
+    fn latency_doctor<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -725,7 +644,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-graph/>](https://redis.io/commands/latency-graph/)
     #[must_use]
-    fn latency_graph(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, String>
+    fn latency_graph<R: Response>(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -756,7 +675,7 @@ pub trait ServerCommands<'a> {
     /// ```
     /// # See Also
     /// [<https://redis.io/commands/latency-help/>](https://redis.io/commands/latency-help/)
-    fn latency_help(self) -> PreparedCommand<'a, Self, Vec<String>>
+    fn latency_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -772,13 +691,10 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<C, CC, RR>(self, commands: CC) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        C: SingleArg,
-        CC: SingleArgCollection<C>,
-        RR: KeyValueCollectionResponse<String, CommandHistogram>,
-    {
+    fn latency_histogram<R: Response>(
+        self,
+        commands: impl Args,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
 
@@ -792,11 +708,10 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-history/>](https://redis.io/commands/latency-history/)
     #[must_use]
-    fn latency_history<RR>(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        RR: CollectionResponse<(u32, u32)>,
-    {
+    fn latency_history<R: Response>(
+        self,
+        event: LatencyHistoryEvent,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LATENCY").arg("HISTORY").arg(event))
     }
 
@@ -816,11 +731,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_latest<RR>(self) -> PreparedCommand<'a, Self, RR>
-    where
-        Self: Sized,
-        RR: CollectionResponse<(String, u32, u32, u32)>,
-    {
+    fn latency_latest<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LATENCY").arg("LATEST"))
     }
 
@@ -832,11 +743,10 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_reset<EE>(self, events: EE) -> PreparedCommand<'a, Self, usize>
-    where
-        Self: Sized,
-        EE: SingleArgCollection<LatencyHistoryEvent>,
-    {
+    fn latency_reset(
+        self,
+        events: impl Args,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
     }
 
@@ -955,15 +865,11 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/memory-usage/>](https://redis.io/commands/memory-usage/)
     #[must_use]
-    fn memory_usage<K>(
+    fn memory_usage(
         self,
-        key: K,
+        key: impl Args,
         options: MemoryUsageOptions,
-    ) -> PreparedCommand<'a, Self, Option<usize>>
-    where
-        Self: Sized,
-        K: SingleArg,
-    {
+    ) -> PreparedCommand<'a, Self, Option<usize>> {
         prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
     }
 
@@ -976,11 +882,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
     #[must_use]
-    fn module_list<MM>(self) -> PreparedCommand<'a, Self, MM>
-    where
-        Self: Sized,
-        MM: CollectionResponse<ModuleInfo>,
-    {
+    fn module_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("MODULE").arg("LIST"))
     }
 
@@ -1022,11 +924,11 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/module-load/>](https://redis.io/commands/module-load/)
     #[must_use]
-    fn module_load<P>(self, path: P, options: ModuleLoadOptions) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        P: SingleArg,
-    {
+    fn module_load(
+        self,
+        path: impl Args,
+        options: ModuleLoadOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
     }
 
@@ -1035,11 +937,7 @@ pub trait ServerCommands<'a> {
     /// # See Also
     /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
     #[must_use]
-    fn module_unload<N>(self, name: N) -> PreparedCommand<'a, Self, ()>
-    where
-        Self: Sized,
-        N: SingleArg,
-    {
+    fn module_unload(self, name: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
 
@@ -1201,7 +1099,7 @@ pub enum FlushingMode {
     Sync,
 }
 
-impl ToArgs for FlushingMode {
+impl Args for FlushingMode {
     fn write_args(&self, args: &mut CommandArgs) {
         match self {
             FlushingMode::Default => {}
@@ -1223,14 +1121,14 @@ pub struct AclCatOptions {
 
 impl AclCatOptions {
     #[must_use]
-    pub fn category_name<C: SingleArg>(mut self, category_name: C) -> Self {
+    pub fn category_name(mut self, category_name: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(category_name).build(),
         }
     }
 }
 
-impl ToArgs for AclCatOptions {
+impl Args for AclCatOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1244,18 +1142,14 @@ pub struct AclDryRunOptions {
 
 impl AclDryRunOptions {
     #[must_use]
-    pub fn arg<A, AA>(mut self, args: AA) -> Self
-    where
-        A: SingleArg,
-        AA: SingleArgCollection<A>,
-    {
+    pub fn arg(mut self, args: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(args).build(),
         }
     }
 }
 
-impl ToArgs for AclDryRunOptions {
+impl Args for AclDryRunOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1281,7 +1175,7 @@ impl AclGenPassOptions {
     }
 }
 
-impl ToArgs for AclGenPassOptions {
+impl Args for AclGenPassOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1312,7 +1206,7 @@ impl AclLogOptions {
     }
 }
 
-impl ToArgs for AclLogOptions {
+impl Args for AclLogOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1336,7 +1230,7 @@ impl BgsaveOptions {
     }
 }
 
-impl ToArgs for BgsaveOptions {
+impl Args for BgsaveOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1746,7 +1640,7 @@ pub struct CommandListOptions {
 impl CommandListOptions {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name<M: SingleArg>(mut self, module_name: M) -> Self {
+    pub fn filter_by_module_name(mut self, module_name: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1759,7 +1653,7 @@ impl CommandListOptions {
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category<C: SingleArg>(mut self, category: C) -> Self {
+    pub fn filter_by_acl_category(mut self, category: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1772,7 +1666,7 @@ impl CommandListOptions {
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern<P: SingleArg>(mut self, pattern: P) -> Self {
+    pub fn filter_by_pattern(mut self, pattern: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -1784,7 +1678,7 @@ impl CommandListOptions {
     }
 }
 
-impl ToArgs for CommandListOptions {
+impl Args for CommandListOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1799,7 +1693,7 @@ pub struct FailOverOptions {
 impl FailOverOptions {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to<H: SingleArg>(mut self, host: H, port: u16) -> Self {
+    pub fn to(mut self, host: impl Args, port: u16) -> Self {
         Self {
             command_args: self.command_args.arg("TO").arg(host).arg(port).build(),
         }
@@ -1833,7 +1727,7 @@ impl FailOverOptions {
     }
 }
 
-impl ToArgs for FailOverOptions {
+impl Args for FailOverOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -1859,9 +1753,7 @@ pub enum InfoSection {
     Everything,
 }
 
-impl SingleArg for InfoSection {}
-
-impl ToArgs for InfoSection {
+impl Args for InfoSection {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             InfoSection::Server => "server",
@@ -1905,9 +1797,7 @@ pub enum LatencyHistoryEvent {
     RdbUnlinkTempFile,
 }
 
-impl SingleArg for LatencyHistoryEvent {}
-
-impl ToArgs for LatencyHistoryEvent {
+impl Args for LatencyHistoryEvent {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(match self {
             LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle",
@@ -1961,14 +1851,14 @@ impl LolWutOptions {
     }
 
     #[must_use]
-    pub fn optional_arg<A: SingleArg>(mut self, arg: A) -> Self {
+    pub fn optional_arg(mut self, arg: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(arg).build(),
         }
     }
 }
 
-impl ToArgs for LolWutOptions {
+impl Args for LolWutOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -2138,7 +2028,7 @@ impl MemoryUsageOptions {
     }
 }
 
-impl ToArgs for MemoryUsageOptions {
+impl Args for MemoryUsageOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -2165,11 +2055,7 @@ impl ModuleLoadOptions {
     /// You can use this optional associated function to provide the module with configuration directives.
     /// This associated function can be called multiple times
     #[must_use]
-    pub fn config<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: SingleArg,
-        V: SingleArg,
-    {
+    pub fn config(mut self, name: impl Args, value: impl Args) -> Self {
         if self.args_added {
             panic!(
                 "associated function `config` should be called before associated function `arg`"
@@ -2185,7 +2071,7 @@ impl ModuleLoadOptions {
     /// Any additional arguments are passed unmodified to the module.
     /// This associated function can be called multiple times
     #[must_use]
-    pub fn arg<A: SingleArg>(mut self, arg: A) -> Self {
+    pub fn arg(mut self, arg: impl Args) -> Self {
         if !self.args_added {
             Self {
                 command_args: self.command_args.arg("ARGS").arg(arg).build(),
@@ -2200,7 +2086,7 @@ impl ModuleLoadOptions {
     }
 }
 
-impl ToArgs for ModuleLoadOptions {
+impl Args for ModuleLoadOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -2225,14 +2111,14 @@ impl ReplicaOfOptions {
     /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
-    pub fn master<H: SingleArg>(host: H, port: u16) -> Self {
+    pub fn master(host: impl Args, port: u16) -> Self {
         Self {
             command_args: CommandArgs::default().arg(host).arg(port).build(),
         }
     }
 }
 
-impl ToArgs for ReplicaOfOptions {
+impl Args for ReplicaOfOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -2421,7 +2307,7 @@ impl ShutdownOptions {
     }
 }
 
-impl ToArgs for ShutdownOptions {
+impl Args for ShutdownOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }
@@ -2443,7 +2329,7 @@ impl SlowLogOptions {
     }
 }
 
-impl ToArgs for SlowLogOptions {
+impl Args for SlowLogOptions {
     fn write_args(&self, args: &mut CommandArgs) {
         args.arg(&self.command_args);
     }

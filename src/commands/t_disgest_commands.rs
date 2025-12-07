@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, Value, cmd},
+    resp::{Args, CommandArgs, Response, Value, cmd},
 };
 use serde::Deserialize;
 use std::collections::HashMap;

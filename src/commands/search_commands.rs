@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
-    resp::{Command, CommandArgs, RespDeserializer, Response, Args, Value, cmd},
+    resp::{Args, Command, CommandArgs, RespDeserializer, Response, Value, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -79,11 +79,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.aliasupdate/>](https://redis.io/commands/ft.aliasupdate/)
     #[must_use]
-    fn ft_aliasupdate(
-        self,
-        alias: impl Args,
-        index: impl Args,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn ft_aliasupdate(self, alias: impl Args, index: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FT.ALIASUPDATE").arg(alias).arg(index))
     }
 
@@ -141,11 +137,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.config-set/>](https://redis.io/commands/ft.config-set/)
     #[must_use]
-    fn ft_config_set(
-        self,
-        option: impl Args,
-        value: impl Args,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn ft_config_set(self, option: impl Args, value: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FT.CONFIG").arg("SET").arg(option).arg(value))
     }
 
@@ -2278,12 +2270,7 @@ impl FtSearchOptions {
     /// `min` and `max` follow [`zrange`](crate::commands::SortedSetCommands::zrange) syntax, and can be `-inf`, `+inf`,
     /// and use `(` for exclusive ranges. Multiple numeric filters for different attributes are supported in one query.
     #[must_use]
-    pub fn filter(
-        mut self,
-        numeric_field: impl Args,
-        min: impl Args,
-        max: impl Args,
-    ) -> Self {
+    pub fn filter(mut self, numeric_field: impl Args, min: impl Args, max: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args

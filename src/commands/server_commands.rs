@@ -1,7 +1,7 @@
 use crate::{
     Error, Result,
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -243,11 +243,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-setuser/>](https://redis.io/commands/acl-setuser/)
-    fn acl_setuser(
-        self,
-        username: impl Args,
-        rules: impl Args,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn acl_setuser(self, username: impl Args, rules: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
 
@@ -397,10 +393,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<R: Response>(
-        self,
-        args: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn command_getkeysandflags<R: Response>(self, args: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
 
@@ -443,10 +436,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
-    fn command_info(
-        self,
-        command_names: impl Args,
-    ) -> PreparedCommand<'a, Self, Vec<CommandInfo>> {
+    fn command_info(self, command_names: impl Args) -> PreparedCommand<'a, Self, Vec<CommandInfo>> {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
     }
 
@@ -602,10 +592,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<R: Response>(
-        self,
-        sections: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn info<R: Response>(self, sections: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("INFO").arg(sections))
     }
 
@@ -691,10 +678,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<R: Response>(
-        self,
-        commands: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn latency_histogram<R: Response>(self, commands: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
 
@@ -743,10 +727,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_reset(
-        self,
-        events: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn latency_reset(self, events: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
     }
 

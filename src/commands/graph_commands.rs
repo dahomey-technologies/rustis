@@ -2,7 +2,7 @@ use crate::{
     Error, Future, Result,
     client::{Client, PreparedCommand, prepare_command},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
-    resp::{Command, CommandArgs, RespBuf, RespDeserializer, Response, Args, cmd},
+    resp::{Args, Command, CommandArgs, RespBuf, RespDeserializer, Response, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -45,11 +45,7 @@ pub trait GraphCommands<'a>: Sized {
     /// # Note
     /// As detailed in the link above, not all RedisGraph configuration parameters can be set at run-time.
     #[must_use]
-    fn graph_config_set(
-        self,
-        name: impl Args,
-        value: impl Args,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn graph_config_set(self, name: impl Args, value: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("SET").arg(name).arg(value))
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd, deserialize_vec_of_pairs},
+    resp::{Args, CommandArgs, Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, de::DeserializeOwned};
 
@@ -489,11 +489,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
     #[must_use]
-    fn zrank(
-        self,
-        key: impl Args,
-        member: impl Args,
-    ) -> PreparedCommand<'a, Self, Option<usize>> {
+    fn zrank(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, Option<usize>> {
         prepare_command(self, cmd("ZRANK").arg(key).arg(member))
     }
 
@@ -642,11 +638,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zscore/>](https://redis.io/commands/zscore/)
     #[must_use]
-    fn zscore(
-        self,
-        key: impl Args,
-        member: impl Args,
-    ) -> PreparedCommand<'a, Self, Option<f64>> {
+    fn zscore(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(self, cmd("ZSCORE").arg(key).arg(member))
     }
 

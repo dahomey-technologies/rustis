@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, Args, cmd},
+    resp::{Args, Response, cmd},
 };
 use serde::Deserialize;
 
@@ -142,7 +142,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_query<R: Response>(
         self,
-    key: impl Args,
+        key: impl Args,
         items: impl Args,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CMS.QUERY").arg(key).arg(items))

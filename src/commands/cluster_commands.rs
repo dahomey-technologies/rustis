@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd, deserialize_vec_of_pairs},
+    resp::{Args, CommandArgs, Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{
     Deserialize,

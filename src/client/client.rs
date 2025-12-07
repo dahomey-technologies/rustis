@@ -21,7 +21,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Command, CommandArgs, RespBuf, Response, Args, cmd},
+    resp::{Args, Command, CommandArgs, RespBuf, Response, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};

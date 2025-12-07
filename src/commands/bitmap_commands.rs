@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Args, cmd},
+    resp::{Args, CommandArgs, cmd},
 };
 
 /// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/)
@@ -122,12 +122,7 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitpos/>](https://redis.io/commands/bitpos/)
     #[must_use]
-    fn bitpos(
-        self,
-        key: impl Args,
-        bit: u64,
-        range: BitRange,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn bitpos(self, key: impl Args, bit: u64, range: BitRange) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("BITPOS").arg(key).arg(bit).arg(range))
     }
 

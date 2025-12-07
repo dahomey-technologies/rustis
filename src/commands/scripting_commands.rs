@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::FlushingMode,
-    resp::{CommandArgs, Response, Args, cmd, deserialize_byte_buf},
+    resp::{Args, CommandArgs, Response, cmd, deserialize_byte_buf},
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -70,8 +70,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    {
+    fn fcall<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FCALL").arg(builder))
     }
 
@@ -83,8 +82,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R>
-    {
+    fn fcall_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FCALL_RO").arg(builder))
     }
 
@@ -107,8 +105,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
-    fn function_dump(self) -> PreparedCommand<'a, Self, FunctionDumpResult>
-    {
+    fn function_dump(self) -> PreparedCommand<'a, Self, FunctionDumpResult> {
         prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
 
@@ -117,8 +114,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-flush/>](https://redis.io/commands/function-flush/)
     #[must_use]
-    fn function_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
-    {
+    fn function_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
     }
 
@@ -148,8 +144,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-help/>](https://redis.io/commands/function-help/)
     #[must_use]
-    fn function_help(self) -> PreparedCommand<'a, Self, Vec<String>>
-    {
+    fn function_help(self) -> PreparedCommand<'a, Self, Vec<String>> {
         prepare_command(self, cmd("FUNCTION").arg("HELP"))
     }
 
@@ -158,8 +153,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-kill/>](https://redis.io/commands/function-kill/)
     #[must_use]
-    fn function_kill(self) -> PreparedCommand<'a, Self, ()>
-    {
+    fn function_kill(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FUNCTION").arg("KILL"))
     }
 
@@ -171,8 +165,7 @@ pub trait ScriptingCommands<'a>: Sized {
     fn function_list(
         self,
         options: FunctionListOptions,
-    ) -> PreparedCommand<'a, Self, Vec<LibraryInfo>>
-    {
+    ) -> PreparedCommand<'a, Self, Vec<LibraryInfo>> {
         prepare_command(self, cmd("FUNCTION").arg("LIST").arg(options))
     }
 
@@ -222,8 +215,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-stats/>](https://redis.io/commands/function-stats/)
     #[must_use]
-    fn function_stats(self) -> PreparedCommand<'a, Self, FunctionStats>
-    {
+    fn function_stats(self) -> PreparedCommand<'a, Self, FunctionStats> {
         prepare_command(self, cmd("FUNCTION").arg("STATS"))
     }
 
@@ -232,8 +224,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-debug/>](https://redis.io/commands/script-debug/)
     #[must_use]
-    fn script_debug(self, debug_mode: ScriptDebugMode) -> PreparedCommand<'a, Self, ()>
-    {
+    fn script_debug(self, debug_mode: ScriptDebugMode) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SCRIPT").arg("DEBUG").arg(debug_mode))
     }
 
@@ -254,8 +245,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-flush/>](https://redis.io/commands/script-flush/)
     #[must_use]
-    fn script_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
-    {
+    fn script_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
     }
 
@@ -265,8 +255,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-kill/>](https://redis.io/commands/script-kill/)
     #[must_use]
-    fn script_kill(self) -> PreparedCommand<'a, Self, ()>
-    {
+    fn script_kill(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SCRIPT").arg("KILL"))
     }
 
@@ -328,8 +317,7 @@ impl CallBuilder {
 
     /// All the keys accessed by the script.
     #[must_use]
-    pub fn keys(mut self, keys: impl Args) -> Self
-    {
+    pub fn keys(mut self, keys: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg(keys.num_args()).arg(keys).build(),
             keys_added: true,
@@ -338,8 +326,7 @@ impl CallBuilder {
 
     /// Additional input arguments that should not represent names of keys.
     #[must_use]
-    pub fn args(mut self, args: impl Args) -> Self
-    {
+    pub fn args(mut self, args: impl Args) -> Self {
         let command_args = if self.keys_added {
             self.command_args.arg(args).build()
         } else {

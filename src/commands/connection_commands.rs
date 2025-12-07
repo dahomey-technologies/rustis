@@ -2,7 +2,7 @@ use crate::{
     Result,
     client::{PreparedCommand, prepare_command},
     commands::ModuleInfo,
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 use serde::{Deserialize, Deserializer, de};
 use std::collections::HashMap;
@@ -34,8 +34,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/client-caching/>](https://redis.io/commands/client-caching/)
     #[must_use]
-    fn client_caching(self, mode: ClientCachingMode) -> PreparedCommand<'a, Self, Option<()>>
-    {
+    fn client_caching(self, mode: ClientCachingMode) -> PreparedCommand<'a, Self, Option<()>> {
         prepare_command(self, cmd("CLIENT").arg("CACHING").arg(mode))
     }
 
@@ -635,8 +634,7 @@ impl ClientListOptions {
         }
     }
 
-    pub fn client_ids(mut self, client_ids: impl Args) -> Self
-    {
+    pub fn client_ids(mut self, client_ids: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("ID").arg(client_ids).build(),
         }
@@ -891,8 +889,7 @@ impl HelloOptions {
     }
 
     #[must_use]
-    pub fn auth(mut self, username: impl Args, password: impl Args) -> Self
-    {
+    pub fn auth(mut self, username: impl Args, password: impl Args) -> Self {
         Self {
             command_args: self
                 .command_args
@@ -904,8 +901,7 @@ impl HelloOptions {
     }
 
     #[must_use]
-    pub fn set_name(mut self, client_name: impl Args) -> Self
-    {
+    pub fn set_name(mut self, client_name: impl Args) -> Self {
         Self {
             command_args: self.command_args.arg("SETNAME").arg(client_name).build(),
         }

@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd, deserialize_byte_buf},
+    resp::{Args, CommandArgs, Response, cmd, deserialize_byte_buf},
 };
 use serde::Deserialize;
 

@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{BulkString, CommandArgs, Response, Args, cmd},
+    resp::{Args, BulkString, CommandArgs, Response, cmd},
 };
 use serde::Deserialize;
 
@@ -71,11 +71,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vemb<R: Response>(
-        self,
-        key: impl Args,
-        element: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn vemb<R: Response>(self, key: impl Args, element: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VEMB").arg(key).arg(element))
     }
 

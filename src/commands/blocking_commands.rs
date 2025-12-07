@@ -2,7 +2,7 @@ use crate::{
     Result,
     client::{MonitorStream, PreparedCommand, prepare_command},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{Response, Args, cmd, deserialize_vec_of_triplets},
+    resp::{Args, Response, cmd, deserialize_vec_of_triplets},
 };
 use serde::{
     Deserialize, Deserializer,

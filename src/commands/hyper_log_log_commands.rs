@@ -16,8 +16,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfadd/>](https://redis.io/commands/pfadd/)
-    fn pfadd(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, bool>
-    {
+    fn pfadd(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("PFADD").arg(key).arg(elements))
     }
 
@@ -29,8 +28,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
-    fn pfcount(self, keys: impl Args) -> PreparedCommand<'a, Self, usize>
-    {
+    fn pfcount(self, keys: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("PFCOUNT").arg(keys))
     }
 
@@ -38,8 +36,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pfmerge/>](https://redis.io/commands/pfmerge/)
-    fn pfmerge(self, dest_key: impl Args, source_keys: impl Args) -> PreparedCommand<'a, Self, ()>
-    {
+    fn pfmerge(self, dest_key: impl Args, source_keys: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("PFMERGE").arg(dest_key).arg(source_keys))
     }
 }

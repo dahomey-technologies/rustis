@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{CommandArgs, Response, Args, cmd, deserialize_vec_of_pairs},
+    resp::{Args, CommandArgs, Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, de::DeserializeOwned};
 
@@ -153,11 +153,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hget/>](https://redis.io/commands/hget/)
     #[must_use]
-    fn hget<R: Response>(
-        self,
-        key: impl Args,
-        field: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn hget<R: Response>(self, key: impl Args, field: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HGET").arg(key).arg(field))
     }
 
@@ -300,11 +296,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hmget/>](https://redis.io/commands/hmget/)
     #[must_use]
-    fn hmget<R: Response>(
-        self,
-        key: impl Args,
-        fields: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn hmget<R: Response>(self, key: impl Args, fields: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HMGET").arg(key).arg(fields))
     }
 
@@ -451,11 +443,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpttl/>](https://redis.io/commands/hpttl/)
     #[must_use]
-    fn hpttl<R: Response>(
-        self,
-        key: impl Args,
-        fields: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn hpttl<R: Response>(self, key: impl Args, fields: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HPTTL")
@@ -608,11 +596,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hstrlen/>](https://redis.io/commands/hstrlen/)
     #[must_use]
-    fn hstrlen(
-        self,
-        key: impl Args,
-        field: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn hstrlen(self, key: impl Args, field: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("HSTRLEN").arg(key).arg(field))
     }
 
@@ -632,11 +616,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/httl/>](https://redis.io/commands/httl/)
     #[must_use]
-    fn httl<R: Response>(
-        self,
-        key: impl Args,
-        fields: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn httl<R: Response>(self, key: impl Args, fields: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HTTL")

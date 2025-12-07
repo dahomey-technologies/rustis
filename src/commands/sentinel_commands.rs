@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, Value, cmd},
+    resp::{Args, CommandArgs, Response, Value, cmd},
 };
 use serde::Deserialize;
 
@@ -160,11 +160,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// All the configuration parameters that can be configured via `sentinel.conf`
     /// are also configurable using this command.
     #[must_use]
-    fn sentinel_set(
-        self,
-        name: impl Args,
-        configs: impl Args,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_set(self, name: impl Args, configs: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("SET").arg(name).arg(configs))
     }
 

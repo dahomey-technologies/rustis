@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 
 /// A group of Redis commands related to [`Sets`](https://redis.io/docs/data-types/sets/)
@@ -17,11 +17,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sadd/>](https://redis.io/commands/sadd/)
     #[must_use]
-    fn sadd(
-        self,
-        key: impl Args,
-        members: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn sadd(self, key: impl Args, members: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
     }
 

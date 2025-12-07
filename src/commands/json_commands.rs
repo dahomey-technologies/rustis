@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::SetCondition,
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 
 /// A group of Redis commands related to [`RedisJson`](https://redis.io/docs/stack/json/)

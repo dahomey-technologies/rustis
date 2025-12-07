@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::{PreparedCommand, PubSubStream, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
@@ -58,11 +58,7 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/publish/>](https://redis.io/commands/publish/)
-    fn publish(
-        self,
-        channel: impl Args,
-        message: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn publish(self, channel: impl Args, message: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
     }
 
@@ -155,10 +151,7 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-shardnumsub/>](https://redis.io/commands/pubsub-shardnumsub/)
-    fn pub_sub_shardnumsub<R: Response>(
-        self,
-        channels: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn pub_sub_shardnumsub<R: Response>(self, channels: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("SHARDNUMSUB").arg(channels))
     }
 

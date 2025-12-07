@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, Value, cmd},
+    resp::{Args, CommandArgs, Response, Value, cmd},
 };
 use serde::{
     Deserialize,
@@ -96,11 +96,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.create/>](https://redis.io/commands/ts.create/)
     #[must_use]
-    fn ts_create(
-        self,
-        key: impl Args,
-        options: TsCreateOptions,
-    ) -> PreparedCommand<'a, Self, ()> {
+    fn ts_create(self, key: impl Args, options: TsCreateOptions) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.CREATE").arg(key).arg(options))
     }
 

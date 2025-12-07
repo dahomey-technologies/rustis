@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)

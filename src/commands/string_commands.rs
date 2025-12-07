@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgs, Response, Args, cmd},
+    resp::{Args, CommandArgs, Response, cmd},
 };
 use serde::{
     Deserialize, Deserializer,
@@ -23,11 +23,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append(
-        self,
-        key: impl Args,
-        value: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn append(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
 
@@ -233,11 +229,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<R: Response>(
-        self,
-        key: impl Args,
-        value: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn getset<R: Response>(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
 
@@ -321,11 +313,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<R: Response>(
-        self,
-        key1: impl Args,
-        key2: impl Args,
-    ) -> PreparedCommand<'a, Self, R> {
+    fn lcs<R: Response>(self, key1: impl Args, key2: impl Args) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
 
@@ -337,11 +325,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len(
-        self,
-        key1: impl Args,
-        key2: impl Args,
-    ) -> PreparedCommand<'a, Self, usize> {
+    fn lcs_len(self, key1: impl Args, key2: impl Args) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
 

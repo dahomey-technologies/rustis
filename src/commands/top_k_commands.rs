@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, Args, cmd, deserialize_vec_of_pairs},
+    resp::{Args, Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, de::DeserializeOwned};
 

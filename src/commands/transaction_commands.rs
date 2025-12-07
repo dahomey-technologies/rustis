@@ -12,8 +12,7 @@ pub trait TransactionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
-    fn watch(self, keys: impl Args) -> PreparedCommand<'a, Self, ()>
-    {
+    fn watch(self, keys: impl Args) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("WATCH").arg(keys))
     }
 
@@ -25,8 +24,7 @@ pub trait TransactionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/unwatch/>](https://redis.io/commands/unwatch/)
     #[must_use]
-    fn unwatch(self) -> PreparedCommand<'a, Self, ()>
-    {
+    fn unwatch(self) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("UNWATCH"))
     }
 }

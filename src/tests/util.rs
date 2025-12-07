@@ -40,7 +40,7 @@ Zz4JtMr3UAPczB+k+ei1v8o7sESoHoRoLvFVkFPp
 pub(crate) fn get_default_host() -> String {
     match std::env::var("REDIS_HOST") {
         Ok(host) => host,
-        Err(_) => "localhost".to_string(),
+        Err(_) => "127.0.0.1".to_string(),
     }
 }
 

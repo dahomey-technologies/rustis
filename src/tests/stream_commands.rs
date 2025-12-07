@@ -1,7 +1,9 @@
 use crate::{
     Result,
     commands::{
-        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions, XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions
+        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
+        XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingMessageResult,
+        XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
     },
     tests::get_test_client,
 };

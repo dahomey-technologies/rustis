@@ -4,7 +4,7 @@ use crate::{
         FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
         SetExpiration, StringCommands,
     },
-    resp::{Value, key_value_args_ref_iter, arg_ref_iter},
+    resp::{Value, arg_ref_iter, key_value_args_ref_iter},
     tests::get_test_client,
 };
 use serial_test::serial;

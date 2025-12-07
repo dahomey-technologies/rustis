@@ -49,55 +49,34 @@ async fn hexpire() -> Result<()> {
         .hexpire("key", 10, ExpireOption::None, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
     // xx
     client.hset("key", ("field", "value")).await?;
     let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Xx, "field").await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![-1]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![-1]);
 
     // nx
     let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Nx, "field").await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
     // gt
     let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Gt, "field").await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
     let result: Vec<i64> = client.hexpire("key", 15, ExpireOption::Gt, "field").await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![15]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
 
     // lt
     let result: Vec<i64> = client.hexpire("key", 20, ExpireOption::Lt, "field").await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![15]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
     let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Lt, "field").await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![5]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![5]);
 
     Ok(())
 }
@@ -122,10 +101,7 @@ async fn hexpireat() -> Result<()> {
         .hexpireat("key", now + 10, ExpireOption::None, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
     // xx
     client.hset("key", ("field", "value")).await?;
@@ -133,56 +109,38 @@ async fn hexpireat() -> Result<()> {
         .hexpireat("key", now + 10, ExpireOption::Xx, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![-1]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![-1]);
 
     // nx
     let result: Vec<i64> = client
         .hexpireat("key", now + 10, ExpireOption::Nx, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
     // gt
     let result: Vec<i64> = client
         .hexpireat("key", now + 5, ExpireOption::Gt, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![10]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
     let result: Vec<i64> = client
         .hexpireat("key", now + 15, ExpireOption::Gt, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![15]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
 
     // lt
     let result: Vec<i64> = client
         .hexpireat("key", now + 20, ExpireOption::Lt, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![15]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
     let result: Vec<i64> = client
         .hexpireat("key", now + 5, ExpireOption::Lt, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(
-        client.httl::<Vec<i64>>("key", "field").await?,
-        vec![5]
-    );
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![5]);
 
     Ok(())
 }
@@ -449,10 +407,7 @@ async fn hpexpire() -> Result<()> {
         .hpexpire("key", 10000, ExpireOption::Xx, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.hpttl::<Vec<i64>>("key", "field").await?,
-        vec![-1]
-    );
+    assert_eq!(client.hpttl::<Vec<i64>>("key", "field").await?, vec![-1]);
 
     // nx
     let result: Vec<i64> = client
@@ -516,10 +471,7 @@ async fn hpexpireat() -> Result<()> {
         .hpexpireat("key", now + 10000, ExpireOption::Xx, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(
-        client.hpttl::<Vec<i64>>("key", "field").await?,
-        vec![-1]
-    );
+    assert_eq!(client.hpttl::<Vec<i64>>("key", "field").await?, vec![-1]);
 
     // nx
     let result: Vec<i64> = client

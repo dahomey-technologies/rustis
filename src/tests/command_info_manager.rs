@@ -2,7 +2,8 @@ use crate::{
     CommandInfoManager, Result,
     client::IntoConfig,
     commands::{
-        GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands, StreamEntry, StringCommands, XReadGroupOptions, XReadOptions, ZAggregate
+        GenericCommands, MigrateOptions, SortOptions, SortOrder, SortedSetCommands, StreamCommands,
+        StreamEntry, StringCommands, XReadGroupOptions, XReadOptions, ZAggregate,
     },
     network::StandaloneConnection,
     tests::{get_default_addr, get_default_host, get_default_port, get_test_client},

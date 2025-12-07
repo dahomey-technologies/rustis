@@ -1,4 +1,4 @@
-use crate::resp::{CommandArgs, Args};
+use crate::resp::{Args, CommandArgs};
 use std::hash::{Hash, Hasher};
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicUsize, Ordering};

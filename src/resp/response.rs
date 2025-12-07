@@ -1,4 +1,4 @@
-use serde::{Deserialize};
+use serde::Deserialize;
 
 /// Marker for a RESP Response
 pub trait Response {}

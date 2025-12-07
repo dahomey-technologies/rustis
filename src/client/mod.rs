@@ -278,8 +278,8 @@ async fn main() -> Result<()> {
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
-    pipeline.get::<_, ()>("key1").queue();
-    pipeline.get::<_, ()>("key2").queue();
+    pipeline.get::<()>("key1").queue();
+    pipeline.get::<()>("key2").queue();
 
     let (value1, value2): (String, String) = pipeline.execute().await?;
     assert_eq!("value1", value1);
@@ -335,7 +335,7 @@ async fn main() -> Result<()> {
 
     transaction.set("key1", "value1").forget();
     transaction.set("key2", "value2").forget();
-    transaction.get::<_, ()>("key1").queue();
+    transaction.get::<()>("key1").queue();
     let value: String = transaction.execute().await?;
 
     assert_eq!("value1", value);

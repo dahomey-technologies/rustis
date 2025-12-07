@@ -83,7 +83,7 @@ impl Transaction {
     ///
     ///     transaction.set("key1", "value1").forget();
     ///     transaction.set("key2", "value2").forget();
-    ///     transaction.get::<_, String>("key1").queue();
+    ///     transaction.get::<String>("key1").queue();
     ///     let value: String = transaction.execute().await?;
     ///
     ///     assert_eq!("value1", value);

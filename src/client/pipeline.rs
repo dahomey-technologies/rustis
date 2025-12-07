@@ -79,8 +79,8 @@ impl Pipeline<'_> {
     ///     let mut pipeline = client.create_pipeline();
     ///     pipeline.set("key1", "value1").forget();
     ///     pipeline.set("key2", "value2").forget();
-    ///     pipeline.get::<_, String>("key1").queue();
-    ///     pipeline.get::<_, String>("key2").queue();
+    ///     pipeline.get::<String>("key1").queue();
+    ///     pipeline.get::<String>("key2").queue();
     ///
     ///     let (value1, value2): (String, String) = pipeline.execute().await?;
     ///     assert_eq!("value1", value1);

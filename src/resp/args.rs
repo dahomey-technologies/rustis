@@ -528,7 +528,7 @@ where
 /// ```rust
 /// use rustis::{
 ///     client::Client, commands::{FlushingMode, ServerCommands, GenericCommands},
-///     resp::{cmd, single_arg_ref_iter, Value}, Result,
+///     resp::{cmd, arg_ref_iter, Value}, Result,
 /// };
 ///
 /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
@@ -538,7 +538,7 @@ where
 ///     client.flushdb(FlushingMode::Sync).await?;
 ///
 ///     let keys = vec!["key1", "key2", "key3"];
-///     client.del(single_arg_ref_iter(keys.iter())).await?;
+///     client.del(arg_ref_iter(keys.iter())).await?;
 ///
 ///     Ok(())
 /// }

@@ -42,7 +42,7 @@ where
         }
     }
 
-    /// Set the functor [`self.custom_converter`]
+    /// Set the functor [`PreparedCommand::custom_converter`]
     pub fn custom_converter(mut self, custom_converter: Box<CustomConverter<'a, R>>) -> Self {
         self.custom_converter = Some(custom_converter);
         self

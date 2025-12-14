@@ -33,8 +33,6 @@ pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 enum Status {
     Disconnected,
     Connected,
-    Subscribing,
-    Subscribed,
     EnteringMonitor,
     Monitor,
     LeavingMonitor,
@@ -255,35 +253,34 @@ impl NetworkHandler {
             Status::Connected => {
                 for command in &msg.commands {
                     match command.name {
-                        "SUBSCRIBE" | "PSUBSCRIBE" | "SSUBSCRIBE" => {
-                            self.status = Status::Subscribing;
-                        }
                         "MONITOR" => {
                             self.status = Status::EnteringMonitor;
                         }
+                        "UNSUBSCRIBE" => {
+                            self.pending_unsubscriptions.push_back(
+                                (&command.args)
+                                    .into_iter()
+                                    .map(|a| (a.to_vec(), SubscriptionType::Channel))
+                                    .collect(),
+                            );
+                        }
+                        "PUNSUBSCRIBE" => {
+                            self.pending_unsubscriptions.push_back(
+                                (&command.args)
+                                    .into_iter()
+                                    .map(|a| (a.to_vec(), SubscriptionType::Pattern))
+                                    .collect(),
+                            );
+                        }
+                        "SUNSUBSCRIBE" => {
+                            self.pending_unsubscriptions.push_back(
+                                (&command.args)
+                                    .into_iter()
+                                    .map(|a| (a.to_vec(), SubscriptionType::ShardChannel))
+                                    .collect(),
+                            );
+                        }
                         _ => (),
-                    }
-                }
-                self.messages_to_send.push_back(MessageToSend::new(msg));
-            }
-            Status::Subscribing => {
-                self.messages_to_send.push_back(MessageToSend::new(msg));
-            }
-            Status::Subscribed => {
-                for command in &msg.commands {
-                    let subscription_type = match command.name {
-                        "UNSUBSCRIBE" => Some(SubscriptionType::Channel),
-                        "PUNSUBSCRIBE" => Some(SubscriptionType::Pattern),
-                        "SUNSUBSCRIBE" => Some(SubscriptionType::ShardChannel),
-                        _ => None,
-                    };
-                    if let Some(subscription_type) = subscription_type {
-                        self.pending_unsubscriptions.push_back(
-                            (&command.args)
-                                .into_iter()
-                                .map(|a| (a.to_vec(), subscription_type))
-                                .collect(),
-                        );
                     }
                 }
                 self.messages_to_send.push_back(MessageToSend::new(msg));
@@ -402,46 +399,34 @@ impl NetworkHandler {
             Some(result) => match self.status {
                 Status::Disconnected => (),
                 Status::Connected => match &result {
-                    Ok(resp_buf) if resp_buf.is_push_message() => match &mut self.push_sender {
-                        Some(push_sender) => {
-                            if let Err(e) = push_sender.send(result).await {
-                                warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
+                    Ok(resp_buf) if resp_buf.is_push_message() => {
+                        if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
+                            if resp_buf.is_err() {
+                                self.receive_result(resp_buf);
+                            } else {
+                                match &mut self.push_sender {
+                                    Some(push_sender) => {
+                                        if let Err(e) = push_sender.send(resp_buf).await {
+                                            warn!(
+                                                "[{}] Cannot send push message result to caller: {e}",
+                                                self.tag
+                                            );
+                                        }
+                                    }
+                                    None => {
+                                        warn!(
+                                            "[{}] Received a push message with no sender configured: {resp_buf:?}",
+                                            self.tag
+                                        )
+                                    }
+                                }
                             }
                         }
-                        None => {
-                            warn!(
-                                "[{}] Received a push message with no sender configured: {resp_buf}",
-                                self.tag
-                            )
-                        }
-                    },
+                    }
                     _ => {
                         self.receive_result(result);
                     }
                 },
-                Status::Subscribing => {
-                    if result.is_ok() {
-                        self.status = Status::Subscribed;
-                    } else {
-                        self.status = Status::Connected;
-                    }
-
-                    if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
-                        self.receive_result(resp_buf);
-                    }
-                }
-                Status::Subscribed => {
-                    if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
-                        self.receive_result(resp_buf);
-                        if self.subscriptions.is_empty() && self.pending_subscriptions.is_empty() {
-                            debug!(
-                                "[{}] goint out from Pub/Sub state to connected state",
-                                self.tag
-                            );
-                            self.status = Status::Connected;
-                        }
-                    }
-                }
                 Status::EnteringMonitor => {
                     self.receive_result(result);
                     self.status = Status::Monitor;
@@ -672,7 +657,8 @@ impl NetworkHandler {
                                 String::from_utf8_lossy(channel_or_pattern)
                             );
                         }
-                        Some(Ok(RespBuf::ok()))
+                        self.receive_result(Ok(RespBuf::ok()));
+                        None
                     }
                     RefPubSubMessage::Unsubscribe(channel_or_pattern)
                     | RefPubSubMessage::PUnsubscribe(channel_or_pattern)
@@ -707,7 +693,8 @@ impl NetworkHandler {
                                     );
                                     return None;
                                 }
-                                Some(Ok(RespBuf::ok()))
+                                self.receive_result(Ok(RespBuf::ok()));
+                                None
                             }
                         } else {
                             Some(value)
@@ -845,9 +832,7 @@ impl NetworkHandler {
 
             self.send_messages().await;
 
-            if !self.subscriptions.is_empty() {
-                self.status = Status::Subscribed;
-            } else if let Status::Monitor | Status::EnteringMonitor = old_status {
+            if let Status::Monitor | Status::EnteringMonitor = old_status {
                 if self.push_sender.is_some() {
                     self.status = Status::Monitor;
                 }

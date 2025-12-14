@@ -29,16 +29,15 @@ An asynchronous Redis client for Rust.
   * Pooled client manager (based on [bb8](https://docs.rs/bb8/latest/bb8/))
 * Automatic command batching
 * Advanced reconnection & retry strategy
-* [Pipelining](https://redis.io/docs/manual/pipelining/) support
+* [Pipelining](https://redis.io/docs/latest/develop/using-commands/pipelining/) support
 * Configuration with Redis URL or dedicated builder
 * [TLS](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/) support
-* [Transaction](https://redis.io/docs/manual/transactions/) support
-* [Pub/sub](https://redis.io/docs/manual/pubsub/) support
-* [Sentinel](https://redis.io/docs/manual/sentinel/) support
-* [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
-* [Cluster](https://redis.io/docs/manual/scaling/) support (minimus supported Redis version is 6)
+* [Transaction](https://redis.io/docs/latest/develop/using-commands/transactions/) support
+* [Pub/sub](https://redis.io/docs/latest/develop/pubsub/) support
+* [Sentinel](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/) support
+* [LUA Scripts/Functions](hhttps://redis.io/docs/latest/develop/programmability/) support
+* [Cluster](https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/) support (minimus supported Redis version is 6)
 * [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
-* [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 # Protocol Compatibility
 

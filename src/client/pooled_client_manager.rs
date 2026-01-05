@@ -28,7 +28,7 @@ impl ManageConnection for PooledClientManager {
     }
 
     async fn is_valid(&self, client: &mut Client) -> Result<()> {
-        client.ping::<String>(Default::default()).await?;
+        client.ping::<()>(()).await?;
         Ok(())
     }
 

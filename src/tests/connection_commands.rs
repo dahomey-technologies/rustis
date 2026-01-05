@@ -404,7 +404,7 @@ async fn hello_v3() -> Result<()> {
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: String = client.ping(None::<&str>).await?;
+    let result: String = client.ping(()).await?;
     assert_eq!("PONG", result);
     let result: String = client.ping(Some("value")).await?;
     assert_eq!("value", result);

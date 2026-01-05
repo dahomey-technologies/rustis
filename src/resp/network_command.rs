@@ -4,6 +4,7 @@ use crate::resp::CommandArgsIterator;
 use bytes::Bytes;
 use smallvec::SmallVec;
 
+#[derive(Debug)]
 pub struct NetworkCommand {
     buffer: Bytes,
     name_layout: (usize, usize),
@@ -28,7 +29,9 @@ impl NetworkCommand {
             buffer,
             name_layout,
             args_layout,
+            #[cfg(debug_assertions)]
             kill_connection_on_write,
+            #[cfg(debug_assertions)]
             command_seq,
         }
     }
@@ -64,17 +67,5 @@ impl fmt::Display for NetworkCommand {
         }
 
         Ok(())
-    }
-}
-
-impl fmt::Debug for NetworkCommand {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NetworkCommand")
-            .field("buffer", &self.buffer)
-            .field("name_layout", &self.name_layout)
-            .field("args_layout", &self.args_layout)
-            .field("kill_connection_on_write", &self.kill_connection_on_write)
-            .field("command_seq", &self.command_seq)
-            .finish()
     }
 }

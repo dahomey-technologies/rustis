@@ -224,7 +224,9 @@ impl From<Command> for NetworkCommand {
             bytes,
             (command.name_layout.0 - start_pos, command.name_layout.1),
             command.args_layout,
+            #[cfg(debug_assertions)]
             command.kill_connection_on_write,
+            #[cfg(debug_assertions)]
             command.command_seq,
         )
     }

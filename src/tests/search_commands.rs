@@ -56,15 +56,17 @@ async fn ft_aggregate() -> Result<()> {
             "idx",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Json)
-                .prefix("doc"),
-            [
-                FtFieldSchema::identifier("$..arr")
-                    .as_attribute("arr")
-                    .field_type(FtFieldType::Numeric),
-                FtFieldSchema::identifier("$..val")
-                    .as_attribute("val")
-                    .field_type(FtFieldType::Text),
-            ],
+                .prefix("doc")
+                .schema(
+                    FtFieldSchema::identifier("$..arr")
+                        .as_attribute("arr")
+                        .field_type(FtFieldType::Numeric),
+                )
+                .schema(
+                    FtFieldSchema::identifier("$..val")
+                        .as_attribute("val")
+                        .field_type(FtFieldType::Text),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "idx").await?;
@@ -220,22 +222,28 @@ async fn ft_aggregate() -> Result<()> {
             "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("log"),
-            [
-                FtFieldSchema::identifier("url")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("timestamp")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("country")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-                FtFieldSchema::identifier("user_id")
-                    .field_type(FtFieldType::Text)
-                    .noindex()
-                    .sortable(),
-            ],
+                .prefix("log")
+                .schema(
+                    FtFieldSchema::identifier("url")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("timestamp")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("country")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("user_id")
+                        .field_type(FtFieldType::Text)
+                        .noindex()
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -291,8 +299,8 @@ async fn ft_alias() -> Result<()> {
     client
         .ft_create(
             "idx1",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field").field_type(FtFieldType::Text)),
         )
         .await?;
     wait_for_index_scanned(&client, "idx1").await?;
@@ -300,8 +308,8 @@ async fn ft_alias() -> Result<()> {
     client
         .ft_create(
             "idx2",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field").field_type(FtFieldType::Text)),
         )
         .await?;
     wait_for_index_scanned(&client, "idx2").await?;
@@ -323,8 +331,8 @@ async fn ft_alter() -> Result<()> {
     client
         .ft_create(
             "idx1",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field1").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field1").field_type(FtFieldType::Text)),
         )
         .await?;
 
@@ -367,18 +375,23 @@ async fn ft_create() -> Result<()> {
     client
         .ft_create(
             "idx1",
-            FtCreateOptions::default().on(FtIndexDataType::Hash),
-            [
-                FtFieldSchema::identifier("title")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("published_at")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("category")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-            ],
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .schema(
+                    FtFieldSchema::identifier("title")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("published_at")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("category")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -387,16 +400,18 @@ async fn ft_create() -> Result<()> {
             "idx2",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("blog:post"),
-            [
-                FtFieldSchema::identifier("sku")
-                    .as_attribute("sku_text")
-                    .field_type(FtFieldType::Text),
-                FtFieldSchema::identifier("sku")
-                    .as_attribute("sku_tag")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-            ],
+                .prefix("blog:post")
+                .schema(
+                    FtFieldSchema::identifier("sku")
+                        .as_attribute("sku_text")
+                        .field_type(FtFieldType::Text),
+                )
+                .schema(
+                    FtFieldSchema::identifier("sku")
+                        .as_attribute("sku_tag")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -406,12 +421,10 @@ async fn ft_create() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("author:details:")
-                .prefix("book:details:"),
-            [
-                FtFieldSchema::identifier("author_id").field_type(FtFieldType::Tag),
-                FtFieldSchema::identifier("title").field_type(FtFieldType::Text),
-                FtFieldSchema::identifier("name").field_type(FtFieldType::Text),
-            ],
+                .prefix("book:details:")
+                .schema(FtFieldSchema::identifier("author_id").field_type(FtFieldType::Tag))
+                .schema(FtFieldSchema::identifier("title").field_type(FtFieldType::Text))
+                .schema(FtFieldSchema::identifier("name").field_type(FtFieldType::Text)),
         )
         .await?;
 
@@ -421,8 +434,8 @@ async fn ft_create() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("author:details")
-                .filter(r#"startswith(@name, "G")"#),
-            FtFieldSchema::identifier("name").field_type(FtFieldType::Text),
+                .filter(r#"startswith(@name, "G")"#)
+                .schema(FtFieldSchema::identifier("name").field_type(FtFieldType::Text)),
         )
         .await?;
 
@@ -432,8 +445,8 @@ async fn ft_create() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("book:details")
-                .filter(r#"@subtitle != """#),
-            FtFieldSchema::identifier("title").field_type(FtFieldType::Text),
+                .filter(r#"@subtitle != """#)
+                .schema(FtFieldSchema::identifier("title").field_type(FtFieldType::Text)),
         )
         .await?;
 
@@ -442,13 +455,13 @@ async fn ft_create() -> Result<()> {
             "books-idx",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("book:details"),
-            [
-                FtFieldSchema::identifier("title").field_type(FtFieldType::Text),
-                FtFieldSchema::identifier("categories")
-                    .field_type(FtFieldType::Tag)
-                    .separator(';'),
-            ],
+                .prefix("book:details")
+                .schema(FtFieldSchema::identifier("title").field_type(FtFieldType::Text))
+                .schema(
+                    FtFieldSchema::identifier("categories")
+                        .field_type(FtFieldType::Tag)
+                        .separator(';'),
+                ),
         )
         .await?;
 
@@ -457,15 +470,17 @@ async fn ft_create() -> Result<()> {
             "idx3",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Json)
-                .prefix("book:details"),
-            [
-                FtFieldSchema::identifier("$.title")
-                    .as_attribute("title")
-                    .field_type(FtFieldType::Text),
-                FtFieldSchema::identifier("$.categories")
-                    .as_attribute("categories")
-                    .field_type(FtFieldType::Tag),
-            ],
+                .prefix("book:details")
+                .schema(
+                    FtFieldSchema::identifier("$.title")
+                        .as_attribute("title")
+                        .field_type(FtFieldType::Text),
+                )
+                .schema(
+                    FtFieldSchema::identifier("$.categories")
+                        .as_attribute("categories")
+                        .field_type(FtFieldType::Tag),
+                ),
         )
         .await?;
 
@@ -477,35 +492,43 @@ async fn ft_create() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Json)
                 .prefix("bikes:")
-                .score(1.0),
-            [
-                FtFieldSchema::identifier("$.model")
-                    .field_type(FtFieldType::Text)
-                    .weight(1.0)
-                    .nostem(),
-                FtFieldSchema::identifier("$.brand")
-                    .field_type(FtFieldType::Text)
-                    .weight(1.0)
-                    .nostem(),
-                FtFieldSchema::identifier("$.price").field_type(FtFieldType::Numeric),
-                FtFieldSchema::identifier("$.type")
-                    .field_type(FtFieldType::Tag)
-                    .separator(','),
-                FtFieldSchema::identifier("$.description")
-                    .as_attribute("description")
-                    .field_type(FtFieldType::Text)
-                    .weight(1.0)
-                    .nostem(),
-                FtFieldSchema::identifier("$.description_embeddings ").field_type(
-                    FtFieldType::Vector(Some(FtVectorFieldAlgorithm::Flat(
-                        FtFlatVectorFieldAttributes::new(
-                            FtVectorType::Float32,
-                            768,
-                            FtVectorDistanceMetric::Cosine,
-                        ),
-                    ))),
+                .score(1.0)
+                .schema(
+                    FtFieldSchema::identifier("$.model")
+                        .field_type(FtFieldType::Text)
+                        .weight(1.0)
+                        .nostem(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("$.brand")
+                        .field_type(FtFieldType::Text)
+                        .weight(1.0)
+                        .nostem(),
+                )
+                .schema(FtFieldSchema::identifier("$.price").field_type(FtFieldType::Numeric))
+                .schema(
+                    FtFieldSchema::identifier("$.type")
+                        .field_type(FtFieldType::Tag)
+                        .separator(','),
+                )
+                .schema(
+                    FtFieldSchema::identifier("$.description")
+                        .as_attribute("description")
+                        .field_type(FtFieldType::Text)
+                        .weight(1.0)
+                        .nostem(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("$.description_embeddings ").field_type(
+                        FtFieldType::Vector(Some(FtVectorFieldAlgorithm::Flat(
+                            FtFlatVectorFieldAttributes::new(
+                                FtVectorType::Float32,
+                                768,
+                                FtVectorDistanceMetric::Cosine,
+                            ),
+                        ))),
+                    ),
                 ),
-            ],
         )
         .await?;
 
@@ -555,22 +578,28 @@ async fn ft_cursor() -> Result<()> {
             "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("log"),
-            [
-                FtFieldSchema::identifier("url")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("timestamp")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("country")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-                FtFieldSchema::identifier("user_id")
-                    .field_type(FtFieldType::Text)
-                    .noindex()
-                    .sortable(),
-            ],
+                .prefix("log")
+                .schema(
+                    FtFieldSchema::identifier("url")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("timestamp")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("country")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("user_id")
+                        .field_type(FtFieldType::Text)
+                        .noindex()
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -664,22 +693,28 @@ async fn ft_dropindex() -> Result<()> {
             "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("log"),
-            [
-                FtFieldSchema::identifier("url")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("timestamp")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("country")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-                FtFieldSchema::identifier("user_id")
-                    .field_type(FtFieldType::Text)
-                    .noindex()
-                    .sortable(),
-            ],
+                .prefix("log")
+                .schema(
+                    FtFieldSchema::identifier("url")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("timestamp")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("country")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("user_id")
+                        .field_type(FtFieldType::Text)
+                        .noindex()
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -693,22 +728,28 @@ async fn ft_dropindex() -> Result<()> {
             "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("log"),
-            [
-                FtFieldSchema::identifier("url")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("timestamp")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("country")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-                FtFieldSchema::identifier("user_id")
-                    .field_type(FtFieldType::Text)
-                    .noindex()
-                    .sortable(),
-            ],
+                .prefix("log")
+                .schema(
+                    FtFieldSchema::identifier("url")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("timestamp")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("country")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("user_id")
+                        .field_type(FtFieldType::Text)
+                        .noindex()
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -731,15 +772,17 @@ async fn ft_explain() -> Result<()> {
     client
         .ft_create(
             "index",
-            FtCreateOptions::default(),
-            [
-                FtFieldSchema::identifier("text")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("date")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-            ],
+            FtCreateOptions::default()
+                .schema(
+                    FtFieldSchema::identifier("text")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("date")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -765,15 +808,17 @@ async fn ft_explaincli() -> Result<()> {
     client
         .ft_create(
             "index",
-            FtCreateOptions::default(),
-            [
-                FtFieldSchema::identifier("text")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("date")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-            ],
+            FtCreateOptions::default()
+                .schema(
+                    FtFieldSchema::identifier("text")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("date")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -817,18 +862,20 @@ async fn ft_info() -> Result<()> {
                 .prefix("doc")
                 .skip_initial_scan()
                 .stop_word("hello")
-                .stop_word("world"),
-            [
-                FtFieldSchema::identifier("text")
-                    .field_type(FtFieldType::Text)
-                    .phonetic(FtPhoneticMatcher::DmEn)
-                    .nostem()
-                    .sortable()
-                    .unf(),
-                FtFieldSchema::identifier("date")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-            ],
+                .stop_word("world")
+                .schema(
+                    FtFieldSchema::identifier("text")
+                        .field_type(FtFieldType::Text)
+                        .phonetic(FtPhoneticMatcher::DmEn)
+                        .nostem()
+                        .sortable()
+                        .unf(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("date")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                ),
         )
         .await?;
 
@@ -848,24 +895,24 @@ async fn ft_list() -> Result<()> {
     client
         .ft_create(
             "idx1",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field").field_type(FtFieldType::Text)),
         )
         .await?;
 
     client
         .ft_create(
             "idx2",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field").field_type(FtFieldType::Text)),
         )
         .await?;
 
     client
         .ft_create(
             "idx3",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("field").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("field").field_type(FtFieldType::Text)),
         )
         .await?;
 
@@ -921,22 +968,28 @@ async fn ft_profile() -> Result<()> {
             "index",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix("log"),
-            [
-                FtFieldSchema::identifier("url")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("timestamp")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-                FtFieldSchema::identifier("country")
-                    .field_type(FtFieldType::Tag)
-                    .sortable(),
-                FtFieldSchema::identifier("user_id")
-                    .field_type(FtFieldType::Text)
-                    .noindex()
-                    .sortable(),
-            ],
+                .prefix("log")
+                .schema(
+                    FtFieldSchema::identifier("url")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("timestamp")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("country")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("user_id")
+                        .field_type(FtFieldType::Text)
+                        .noindex()
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -1008,18 +1061,22 @@ async fn ft_search() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("doc")
-                .payload_field("payload"),
-            [
-                FtFieldSchema::identifier("title")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("data")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("published_at")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-            ],
+                .payload_field("payload")
+                .schema(
+                    FtFieldSchema::identifier("title")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("data")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("published_at")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -1097,18 +1154,22 @@ async fn ft_search_empty_index() -> Result<()> {
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
                 .prefix("doc")
-                .payload_field("payload"),
-            [
-                FtFieldSchema::identifier("title")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("data")
-                    .field_type(FtFieldType::Text)
-                    .sortable(),
-                FtFieldSchema::identifier("published_at")
-                    .field_type(FtFieldType::Numeric)
-                    .sortable(),
-            ],
+                .payload_field("payload")
+                .schema(
+                    FtFieldSchema::identifier("title")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("data")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("published_at")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                ),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -1134,8 +1195,8 @@ async fn ft_spellcheck() -> Result<()> {
     client
         .ft_create(
             "index",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("text").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("text").field_type(FtFieldType::Text)),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -1196,8 +1257,8 @@ async fn ft_syn() -> Result<()> {
     client
         .ft_create(
             "index",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("t").field_type(FtFieldType::Text),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("t").field_type(FtFieldType::Text)),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;
@@ -1265,8 +1326,8 @@ async fn ft_tagvals() -> Result<()> {
     client
         .ft_create(
             "index",
-            FtCreateOptions::default(),
-            FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag),
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("tag").field_type(FtFieldType::Tag)),
         )
         .await?;
     wait_for_index_scanned(&client, "index").await?;

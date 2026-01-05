@@ -170,16 +170,8 @@ pub trait SearchCommands<'a>: Sized {
         self,
         index: impl Serialize,
         options: FtCreateOptions,
-        schema: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(
-            self,
-            cmd("FT.CREATE")
-                .arg(index)
-                .arg(options)
-                .arg("SCHEMA")
-                .arg(schema),
-        )
+        prepare_command(self, cmd("FT.CREATE").arg(index).arg(options))
     }
 
     /// Delete a cursor
@@ -1144,6 +1136,8 @@ pub struct FtCreateOptions<'a> {
         serialize_with = "serialize_slice_with_len"
     )]
     stopwords: SmallVec<[&'a str; 10]>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    schema: SmallVec<[FtFieldSchema<'a>; 10]>,
 }
 
 impl<'a> FtCreateOptions<'a> {
@@ -1312,6 +1306,12 @@ impl<'a> FtCreateOptions<'a> {
     #[must_use]
     pub fn stop_word(mut self, stop_word: &'a str) -> Self {
         self.stopwords.push(stop_word);
+        self
+    }
+
+    /// Declares which fields to index
+    pub fn schema(mut self, schema: FtFieldSchema<'a>) -> Self {
+        self.schema.push(schema);
         self
     }
 }

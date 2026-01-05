@@ -2,7 +2,8 @@ use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        Command, RespDeserializer, Response, Value, cmd, serialize_flag, serialize_slice_with_len,
+        Command, RespDeserializer, Response, Value, cmd, serialize_byte_buf_option, serialize_flag,
+        serialize_slice_with_len,
     },
 };
 use serde::{
@@ -2951,7 +2952,10 @@ pub struct FtSugAddOptions<'a> {
         serialize_with = "serialize_flag"
     )]
     incr: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_byte_buf_option"
+    )]
     payload: Option<&'a [u8]>,
 }
 

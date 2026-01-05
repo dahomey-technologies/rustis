@@ -155,6 +155,18 @@ where
     serializer.serialize_bytes(bytes)
 }
 
+/// Serialize a byte buffer (&\[u8\]) option
+pub fn serialize_byte_buf_option<S>(bytes: &Option<&[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if let Some(bytes) = bytes {
+        serializer.serialize_bytes(bytes)
+    } else {
+        serializer.serialize_none()
+    }
+}
+
 pub(crate) struct ByteBufSeed;
 
 impl<'de> DeserializeSeed<'de> for ByteBufSeed {

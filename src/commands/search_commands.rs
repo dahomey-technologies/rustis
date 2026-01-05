@@ -921,6 +921,13 @@ pub struct FtFieldSchema<'a> {
     r#as: Option<&'a str>,
     #[serde(rename = "")]
     field_type: FtFieldType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phonetic: Option<FtPhoneticMatcher>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nostem: bool,
     #[serde(
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
@@ -935,14 +942,7 @@ pub struct FtFieldSchema<'a> {
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
     )]
-    nostem: bool,
-    #[serde(
-        skip_serializing_if = "std::ops::Not::not",
-        serialize_with = "serialize_flag"
-    )]
     noindex: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    phonetic: Option<FtPhoneticMatcher>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weight: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]

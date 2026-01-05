@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    commands::{ConnectionCommands, DebugCommands, PingOptions},
+    commands::{ConnectionCommands, DebugCommands},
     tests::{get_cluster_test_client_with_command_timeout, get_test_client},
 };
 use serial_test::serial;
@@ -16,7 +16,7 @@ async fn standalone_server_panic() -> Result<()> {
 
     assert!(panic_result.is_err());
 
-    let ping_result = client.ping::<()>(PingOptions::default()).await;
+    let ping_result = client.ping::<()>(()).await;
 
     assert!(ping_result.is_err());
 
@@ -34,7 +34,7 @@ async fn cluster_server_panic() -> Result<()> {
 
     assert!(panic_result.is_err());
 
-    let ping_result = client.ping::<()>(PingOptions::default()).await;
+    let ping_result = client.ping::<()>(()).await;
 
     assert!(matches!(ping_result, Err(err) if !matches!(err, Error::Timeout(_))));
 

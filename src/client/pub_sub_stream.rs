@@ -3,14 +3,16 @@ use crate::{
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
-    resp::{Args, ByteBufSeed, CommandArgs},
+    resp::{ByteBufSeed, CommandArgs, CommandArgsMut},
 };
+use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
 use serde::{
-    Deserialize,
+    Deserialize, Serialize,
     de::{self, Visitor},
 };
 use std::{
+    collections::HashSet,
     fmt,
     pin::Pin,
     task::{Context, Poll},
@@ -84,27 +86,33 @@ impl<'de> Deserialize<'de> for PubSubMessage {
     }
 }
 
+fn extract_args_to_set(args: CommandArgs, set: &mut HashSet<Bytes>) {
+    for arg in &args {
+        set.insert(arg);
+    }
+}
+
 /// A pub sub `Sink` part of the [`split`](PubSubStream::split) pair.
 /// It allows to subscribe/unsubscribe to/from channels or patterns
 pub struct PubSubSplitSink {
     closed: bool,
-    channels: CommandArgs,
-    patterns: CommandArgs,
-    shardchannels: CommandArgs,
+    channels: HashSet<Bytes>,
+    patterns: HashSet<Bytes>,
+    shardchannels: HashSet<Bytes>,
     sender: PubSubSender,
     client: Client,
 }
 
 impl PubSubSplitSink {
     /// Subscribe to additional channels
-    pub async fn subscribe(&mut self, channels: impl Args) -> Result<()> {
-        let channels = CommandArgs::default().arg(channels).build();
+    pub async fn subscribe(&mut self, channels: impl Serialize) -> Result<()> {
+        let channels = CommandArgsMut::default().arg(channels).freeze();
 
         for channel in &channels {
-            if self.channels.iter().any(|c| c == channel) {
+            if self.channels.contains(&channel) {
                 return Err(Error::Client(format!(
                     "pub sub stream already subscribed to channel `{}`",
-                    String::from_utf8_lossy(channel)
+                    String::from_utf8_lossy(&channel)
                 )));
             }
         }
@@ -113,20 +121,20 @@ impl PubSubSplitSink {
             .subscribe_from_pub_sub_sender(&channels, &self.sender)
             .await?;
 
-        self.channels = self.channels.arg(channels).build();
+        extract_args_to_set(channels, &mut self.channels);
 
         Ok(())
     }
 
     /// Subscribe to additional patterns
-    pub async fn psubscribe(&mut self, patterns: impl Args) -> Result<()> {
-        let patterns = CommandArgs::default().arg(patterns).build();
+    pub async fn psubscribe(&mut self, patterns: impl Serialize) -> Result<()> {
+        let patterns = CommandArgsMut::default().arg(patterns).freeze();
 
         for pattern in &patterns {
-            if self.patterns.iter().any(|p| p == pattern) {
+            if self.patterns.contains(&pattern) {
                 return Err(Error::Client(format!(
                     "pub sub stream already subscribed to pattern `{}`",
-                    String::from_utf8_lossy(pattern)
+                    String::from_utf8_lossy(&pattern)
                 )));
             }
         }
@@ -135,20 +143,20 @@ impl PubSubSplitSink {
             .psubscribe_from_pub_sub_sender(&patterns, &self.sender)
             .await?;
 
-        self.patterns = self.patterns.arg(patterns).build();
+        extract_args_to_set(patterns, &mut self.patterns);
 
         Ok(())
     }
 
     /// Subscribe to additional shardchannels
-    pub async fn ssubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
-        let shardchannels = CommandArgs::default().arg(shardchannels).build();
+    pub async fn ssubscribe(&mut self, shardchannels: impl Serialize) -> Result<()> {
+        let shardchannels = CommandArgsMut::default().arg(shardchannels).freeze();
 
         for shardchannel in &shardchannels {
-            if self.shardchannels.iter().any(|c| c == shardchannel) {
+            if self.shardchannels.contains(&shardchannel) {
                 return Err(Error::Client(format!(
                     "pub sub stream already subscribed to shard channel `{}`",
-                    String::from_utf8_lossy(shardchannel)
+                    String::from_utf8_lossy(&shardchannel)
                 )));
             }
         }
@@ -157,36 +165,44 @@ impl PubSubSplitSink {
             .ssubscribe_from_pub_sub_sender(&shardchannels, &self.sender)
             .await?;
 
-        self.shardchannels = self.shardchannels.arg(shardchannels).build();
-
+        extract_args_to_set(shardchannels, &mut self.shardchannels);
         Ok(())
     }
 
     /// Unsubscribe from the given channels
-    pub async fn unsubscribe(&mut self, channels: impl Args) -> Result<()> {
-        let channels = CommandArgs::default().arg(channels).build();
-        self.channels
-            .retain(|channel| channels.iter().all(|c| c != channel));
+    pub async fn unsubscribe(&mut self, channels: impl Serialize) -> Result<()> {
+        let channels = CommandArgsMut::default().arg(channels).freeze();
+
+        for channel in &channels {
+            self.channels.remove(&channel);
+        }
+
         self.client.unsubscribe(channels).await?;
 
         Ok(())
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn punsubscribe(&mut self, patterns: impl Args) -> Result<()> {
-        let patterns = CommandArgs::default().arg(patterns).build();
-        self.patterns
-            .retain(|pattern| patterns.iter().all(|p| p != pattern));
+    pub async fn punsubscribe(&mut self, patterns: impl Serialize) -> Result<()> {
+        let patterns = CommandArgsMut::default().arg(patterns).freeze();
+
+        for pattern in &patterns {
+            self.patterns.remove(&pattern);
+        }
+
         self.client.punsubscribe(patterns).await?;
 
         Ok(())
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn sunsubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
-        let shardchannels = CommandArgs::default().arg(shardchannels).build();
-        self.shardchannels
-            .retain(|shardchannel| shardchannels.iter().all(|sc: &Vec<u8>| sc != shardchannel));
+    pub async fn sunsubscribe(&mut self, shardchannels: impl Serialize) -> Result<()> {
+        let shardchannels = CommandArgsMut::default().arg(shardchannels).freeze();
+
+        for shardchannel in &shardchannels {
+            self.shardchannels.remove(&shardchannel);
+        }
+
         self.client.sunsubscribe(shardchannels).await?;
 
         Ok(())
@@ -200,22 +216,31 @@ impl PubSubSplitSink {
             return Ok(());
         }
 
-        let mut channels = CommandArgs::default();
-        std::mem::swap(&mut channels, &mut self.channels);
-        if !channels.is_empty() {
-            self.client.unsubscribe(channels).await?;
+        if !self.channels.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for channel in &self.channels {
+                args = args.arg(channel);
+            }
+            self.client.unsubscribe(args).await?;
+            self.channels.clear();
         }
 
-        let mut patterns = CommandArgs::default();
-        std::mem::swap(&mut patterns, &mut self.patterns);
-        if !patterns.is_empty() {
-            self.client.punsubscribe(patterns).await?;
+        if !self.patterns.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for pattern in &self.patterns {
+                args = args.arg(pattern);
+            }
+            self.client.punsubscribe(args).await?;
+            self.patterns.clear();
         }
 
-        let mut shardchannels = CommandArgs::default();
-        std::mem::swap(&mut shardchannels, &mut self.shardchannels);
-        if !shardchannels.is_empty() {
-            self.client.sunsubscribe(shardchannels).await?;
+        if !self.shardchannels.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for shardchannel in &self.shardchannels {
+                args = args.arg(shardchannel);
+            }
+            self.client.sunsubscribe(args).await?;
+            self.shardchannels.clear();
         }
 
         self.closed = true;
@@ -231,23 +256,34 @@ impl Drop for PubSubSplitSink {
             return;
         }
 
-        let mut channels = CommandArgs::default();
-        std::mem::swap(&mut channels, &mut self.channels);
-        if !channels.is_empty() {
-            let _result = self.client.unsubscribe(channels).forget();
+        if !self.channels.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for channel in &self.channels {
+                args = args.arg(channel.as_ref());
+            }
+            let _result = self.client.unsubscribe(args).forget();
+            self.channels.clear();
         }
 
-        let mut patterns = CommandArgs::default();
-        std::mem::swap(&mut patterns, &mut self.patterns);
-        if !patterns.is_empty() {
-            let _result = self.client.punsubscribe(patterns).forget();
+        if !self.patterns.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for pattern in &self.patterns {
+                args = args.arg(pattern.as_ref());
+            }
+            let _result = self.client.punsubscribe(args).forget();
+            self.patterns.clear();
         }
 
-        let mut shardchannels = CommandArgs::default();
-        std::mem::swap(&mut shardchannels, &mut self.shardchannels);
-        if !shardchannels.is_empty() {
-            let _result = self.client.sunsubscribe(shardchannels).forget();
+        if !self.shardchannels.is_empty() {
+            let mut args = CommandArgsMut::default();
+            for shardchannel in &self.shardchannels {
+                args = args.arg(shardchannel.as_ref());
+            }
+            let _result = self.client.sunsubscribe(args).forget();
+            self.shardchannels.clear();
         }
+
+        self.closed = true;
     }
 }
 
@@ -314,9 +350,9 @@ impl PubSubStream {
         Self {
             split_sink: PubSubSplitSink {
                 closed: false,
-                channels: CommandArgs::default(),
-                patterns: CommandArgs::default(),
-                shardchannels: CommandArgs::default(),
+                channels: HashSet::default(),
+                patterns: HashSet::default(),
+                shardchannels: HashSet::default(),
                 sender,
                 client,
             },
@@ -330,12 +366,14 @@ impl PubSubStream {
         receiver: PubSubReceiver,
         client: Client,
     ) -> Self {
+        let mut set = HashSet::with_capacity(channels.len());
+        extract_args_to_set(channels, &mut set);
         Self {
             split_sink: PubSubSplitSink {
                 closed: false,
-                channels,
-                patterns: CommandArgs::default(),
-                shardchannels: CommandArgs::default(),
+                channels: set,
+                patterns: HashSet::default(),
+                shardchannels: HashSet::default(),
                 sender,
                 client,
             },
@@ -349,12 +387,14 @@ impl PubSubStream {
         receiver: PubSubReceiver,
         client: Client,
     ) -> Self {
+        let mut set: HashSet<Bytes> = HashSet::with_capacity(patterns.len());
+        extract_args_to_set(patterns, &mut set);
         Self {
             split_sink: PubSubSplitSink {
                 closed: false,
-                channels: CommandArgs::default(),
-                patterns,
-                shardchannels: CommandArgs::default(),
+                channels: HashSet::default(),
+                patterns: set,
+                shardchannels: HashSet::default(),
                 sender,
                 client,
             },
@@ -368,12 +408,14 @@ impl PubSubStream {
         receiver: PubSubReceiver,
         client: Client,
     ) -> Self {
+        let mut set: HashSet<Bytes> = HashSet::with_capacity(shardchannels.len());
+        extract_args_to_set(shardchannels, &mut set);
         Self {
             split_sink: PubSubSplitSink {
                 closed: false,
-                channels: CommandArgs::default(),
-                patterns: CommandArgs::default(),
-                shardchannels,
+                channels: HashSet::default(),
+                patterns: HashSet::default(),
+                shardchannels: set,
                 sender,
                 client,
             },
@@ -382,32 +424,32 @@ impl PubSubStream {
     }
 
     /// Subscribe to additional channels
-    pub async fn subscribe(&mut self, channels: impl Args) -> Result<()> {
+    pub async fn subscribe(&mut self, channels: impl Serialize) -> Result<()> {
         self.split_sink.subscribe(channels).await
     }
 
     /// Subscribe to additional patterns
-    pub async fn psubscribe(&mut self, patterns: impl Args) -> Result<()> {
+    pub async fn psubscribe(&mut self, patterns: impl Serialize) -> Result<()> {
         self.split_sink.psubscribe(patterns).await
     }
 
     /// Subscribe to additional shardchannels
-    pub async fn ssubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
+    pub async fn ssubscribe(&mut self, shardchannels: impl Serialize) -> Result<()> {
         self.split_sink.ssubscribe(shardchannels).await
     }
 
     /// Unsubscribe from the given channels
-    pub async fn unsubscribe(&mut self, channels: impl Args) -> Result<()> {
+    pub async fn unsubscribe(&mut self, channels: impl Serialize) -> Result<()> {
         self.split_sink.unsubscribe(channels).await
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn punsubscribe(&mut self, patterns: impl Args) -> Result<()> {
+    pub async fn punsubscribe(&mut self, patterns: impl Serialize) -> Result<()> {
         self.split_sink.punsubscribe(patterns).await
     }
 
     /// Unsubscribe from the given patterns
-    pub async fn sunsubscribe(&mut self, shardchannels: impl Args) -> Result<()> {
+    pub async fn sunsubscribe(&mut self, shardchannels: impl Serialize) -> Result<()> {
         self.split_sink.sunsubscribe(shardchannels).await
     }
 

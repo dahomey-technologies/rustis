@@ -3,7 +3,9 @@ use crate::commands::DebugCommands;
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
-    Error, Future, Result,
+    Error,
+    Future,
+    Result,
     client::{
         ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
         Pipeline, PreparedCommand, PubSubStream, Transaction,
@@ -13,19 +15,26 @@ use crate::{
         CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
         HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
         ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
-        TopKCommands, TransactionCommands, VectorSetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands, VectorSetCommands,
     },
+    // commands::{
+    //     BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
+    //     CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
+    //     HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
+    //     ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
+    //     SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+    //     TopKCommands, TransactionCommands, VectorSetCommands,
+    // },
     network::{
         JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Args, Command, CommandArgs, RespBuf, Response, cmd},
+    resp::{Command, CommandArgs, CommandArgsMut, RespBuf, Response, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     future::IntoFuture,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -199,7 +208,7 @@ impl Client {
     pub async fn send(&self, command: Command, retry_on_error: Option<bool>) -> Result<RespBuf> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let message = Message::single(
-            command,
+            command.into(),
             result_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
@@ -225,8 +234,10 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
     pub fn send_and_forget(&self, command: Command, retry_on_error: Option<bool>) -> Result<()> {
-        let message =
-            Message::single_forget(command, retry_on_error.unwrap_or(self.retry_on_error));
+        let message = Message::single_forget(
+            command.into(),
+            retry_on_error.unwrap_or(self.retry_on_error),
+        );
         self.send_message(message)?;
         Ok(())
     }
@@ -250,8 +261,9 @@ impl Client {
     ) -> Result<Vec<RespBuf>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =
             oneshot::channel();
+        let network_commands = commands.into_iter().map(|c| c.into()).collect();
         let message = Message::batch(
-            commands,
+            network_commands,
             results_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
@@ -319,11 +331,11 @@ impl Client {
 
         let pub_sub_senders = channels
             .into_iter()
-            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c, pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
-            cmd("SUBSCRIBE").arg(channels.clone()),
+            cmd("SUBSCRIBE").arg(channels).into(),
             result_sender,
             pub_sub_senders,
         );
@@ -342,11 +354,11 @@ impl Client {
 
         let pub_sub_senders = patterns
             .into_iter()
-            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c, pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
-            cmd("PSUBSCRIBE").arg(patterns.clone()),
+            cmd("PSUBSCRIBE").arg(patterns).into(),
             result_sender,
             pub_sub_senders,
         );
@@ -365,11 +377,11 @@ impl Client {
 
         let pub_sub_senders = shardchannels
             .into_iter()
-            .map(|c| (c.to_vec(), pub_sub_sender.clone()))
+            .map(|c| (c, pub_sub_sender.clone()))
             .collect::<Vec<_>>();
 
         let message = Message::pub_sub(
-            cmd("SSUBSCRIBE").arg(shardchannels.clone()),
+            cmd("SSUBSCRIBE").arg(shardchannels).into(),
             result_sender,
             pub_sub_senders,
         );
@@ -435,9 +447,9 @@ impl<'a> ConnectionCommands<'a> for &'a Client {}
 impl<'a> DebugCommands<'a> for &'a Client {}
 impl<'a> GenericCommands<'a> for &'a Client {}
 impl<'a> GeoCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-impl<'a> GraphCommands<'a> for &'a Client {}
+// #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
+// #[cfg(feature = "redis-graph")]
+// impl<'a> GraphCommands<'a> for &'a Client {}
 impl<'a> HashCommands<'a> for &'a Client {}
 impl<'a> HyperLogLogCommands<'a> for &'a Client {}
 impl<'a> InternalPubSubCommands<'a> for &'a Client {}
@@ -451,16 +463,16 @@ impl<'a> SetCommands<'a> for &'a Client {}
 impl<'a> SortedSetCommands<'a> for &'a Client {}
 impl<'a> StreamCommands<'a> for &'a Client {}
 impl<'a> StringCommands<'a> for &'a Client {}
-impl<'a> TDigestCommands<'a> for &'a Client {}
-impl<'a> TimeSeriesCommands<'a> for &'a Client {}
+// impl<'a> TDigestCommands<'a> for &'a Client {}
+// impl<'a> TimeSeriesCommands<'a> for &'a Client {}
 impl<'a> TransactionCommands<'a> for &'a Client {}
-impl<'a> TopKCommands<'a> for &'a Client {}
+// impl<'a> TopKCommands<'a> for &'a Client {}
 impl<'a> VectorSetCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]
-    async fn subscribe(self, channels: impl Args) -> Result<PubSubStream> {
-        let channels = CommandArgs::default().arg(channels).build();
+    async fn subscribe(self, channels: impl Serialize) -> Result<PubSubStream> {
+        let channels = CommandArgsMut::default().arg(channels).freeze();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
@@ -476,8 +488,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     }
 
     #[inline]
-    async fn psubscribe(self, patterns: impl Args) -> Result<PubSubStream> {
-        let patterns = CommandArgs::default().arg(patterns).build();
+    async fn psubscribe(self, patterns: impl Serialize) -> Result<PubSubStream> {
+        let patterns = CommandArgsMut::default().arg(patterns).freeze();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
@@ -493,8 +505,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     }
 
     #[inline]
-    async fn ssubscribe(self, shardchannels: impl Args) -> Result<PubSubStream> {
-        let shardchannels = CommandArgs::default().arg(shardchannels).build();
+    async fn ssubscribe(self, shardchannels: impl Serialize) -> Result<PubSubStream> {
+        let shardchannels = CommandArgsMut::default().arg(shardchannels).freeze();
 
         let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
 
@@ -515,7 +527,7 @@ impl<'a> BlockingCommands<'a> for &'a Client {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
 
-        let message = Message::monitor(cmd("MONITOR"), result_sender, push_sender);
+        let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);
 
         self.send_message(message)?;
 

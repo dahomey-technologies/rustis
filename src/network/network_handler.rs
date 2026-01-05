@@ -3,9 +3,10 @@ use crate::{
     Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{Command, RespBuf, cmd},
+    resp::{NetworkCommand, RespBuf, cmd},
     spawn, timeout,
 };
+use bytes::Bytes;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{FutureExt, SinkExt, StreamExt, select};
 use log::{Level, debug, error, info, log_enabled, trace, warn};
@@ -78,7 +79,7 @@ impl MessageToReceive {
 }
 
 struct PendingSubscription {
-    pub channel_or_pattern: Vec<u8>,
+    pub channel_or_pattern: Bytes,
     pub subscription_type: SubscriptionType,
     pub sender: PubSubSender,
     /// indicates if more subscriptions will arrive in the same batch
@@ -94,8 +95,8 @@ pub(crate) struct NetworkHandler {
     messages_to_send: VecDeque<MessageToSend>,
     messages_to_receive: VecDeque<MessageToReceive>,
     pending_subscriptions: VecDeque<PendingSubscription>,
-    pending_unsubscriptions: VecDeque<HashMap<Vec<u8>, SubscriptionType>>,
-    subscriptions: HashMap<Vec<u8>, (SubscriptionType, PubSubSender)>,
+    pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
+    subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
     is_reply_on: bool,
     push_sender: Option<PushSender>,
     pending_replies: Option<Vec<RespBuf>>,
@@ -201,10 +202,10 @@ impl NetworkHandler {
         let pub_sub_senders = msg.pub_sub_senders.take();
         if let Some(pub_sub_senders) = pub_sub_senders {
             let subscription_type = match &msg.commands {
-                Commands::Single(command, _) => match command.name {
-                    "SUBSCRIBE" => SubscriptionType::Channel,
-                    "PSUBSCRIBE" => SubscriptionType::Pattern,
-                    "SSUBSCRIBE" => SubscriptionType::ShardChannel,
+                Commands::Single(command, _) => match command.get_name() {
+                    b"SUBSCRIBE" => SubscriptionType::Channel,
+                    b"PSUBSCRIBE" => SubscriptionType::Pattern,
+                    b"SSUBSCRIBE" => SubscriptionType::ShardChannel,
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
@@ -254,11 +255,11 @@ impl NetworkHandler {
         match &self.status {
             Status::Connected => {
                 for command in &msg.commands {
-                    match command.name {
-                        "SUBSCRIBE" | "PSUBSCRIBE" | "SSUBSCRIBE" => {
+                    match command.get_name() {
+                        b"SUBSCRIBE" | b"PSUBSCRIBE" | b"SSUBSCRIBE" => {
                             self.status = Status::Subscribing;
                         }
-                        "MONITOR" => {
+                        b"MONITOR" => {
                             self.status = Status::EnteringMonitor;
                         }
                         _ => (),
@@ -271,19 +272,15 @@ impl NetworkHandler {
             }
             Status::Subscribed => {
                 for command in &msg.commands {
-                    let subscription_type = match command.name {
-                        "UNSUBSCRIBE" => Some(SubscriptionType::Channel),
-                        "PUNSUBSCRIBE" => Some(SubscriptionType::Pattern),
-                        "SUNSUBSCRIBE" => Some(SubscriptionType::ShardChannel),
+                    let subscription_type = match command.get_name() {
+                        b"UNSUBSCRIBE" => Some(SubscriptionType::Channel),
+                        b"PUNSUBSCRIBE" => Some(SubscriptionType::Pattern),
+                        b"SUNSUBSCRIBE" => Some(SubscriptionType::ShardChannel),
                         _ => None,
                     };
                     if let Some(subscription_type) = subscription_type {
-                        self.pending_unsubscriptions.push_back(
-                            (&command.args)
-                                .into_iter()
-                                .map(|a| (a.to_vec(), subscription_type))
-                                .collect(),
-                        );
+                        self.pending_unsubscriptions
+                            .push_back(command.args().map(|a| (a, subscription_type)).collect());
                     }
                 }
                 self.messages_to_send.push_back(MessageToSend::new(msg));
@@ -309,7 +306,7 @@ impl NetworkHandler {
             Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
             Status::Monitor => {
                 for command in &msg.commands {
-                    if command.name == "RESET" {
+                    if command.get_name() == b"RESET" {
                         self.status = Status::LeavingMonitor;
                     }
                 }
@@ -332,7 +329,7 @@ impl NetworkHandler {
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::new();
+        let mut commands_to_write = SmallVec::<[&mut NetworkCommand; 10]>::new();
         let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
@@ -342,10 +339,10 @@ impl NetworkHandler {
             let mut num_commands_to_receive: usize = 0;
 
             for command in commands.into_iter() {
-                if command.name == "CLIENT" {
-                    let mut args = (&command.args).into_iter();
+                if command.get_name() == b"CLIENT" {
+                    let mut args = command.args();
 
-                    match (args.next(), args.next()) {
+                    match (args.next().as_deref(), args.next().as_deref()) {
                         (Some(b"REPLY"), Some(b"OFF")) => self.is_reply_on = false,
                         (Some(b"REPLY"), Some(b"SKIP")) => self.is_reply_on = false,
                         (Some(b"REPLY"), Some(b"ON")) => self.is_reply_on = true,
@@ -605,7 +602,7 @@ impl NetworkHandler {
                 match pub_sub_message {
                     RefPubSubMessage::Message(channel_or_pattern, _)
                     | RefPubSubMessage::SMessage(channel_or_pattern, _) => {
-                        match self.subscriptions.get_mut(channel_or_pattern) {
+                        match self.subscriptions.get_mut(&channel_or_pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
                                 if let Err(e) = pub_sub_sender.unbounded_send(value) {
                                     let error_desc = e.to_string();
@@ -618,7 +615,7 @@ impl NetworkHandler {
                                         warn!(
                                             "[{}] Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
                                             self.tag,
-                                            String::from_utf8_lossy(channel_or_pattern)
+                                            String::from_utf8_lossy(&channel_or_pattern)
                                         );
                                     }
                                 }
@@ -627,7 +624,7 @@ impl NetworkHandler {
                                 error!(
                                     "[{}] Unexpected message on channel `{}`",
                                     self.tag,
-                                    String::from_utf8_lossy(channel_or_pattern)
+                                    String::from_utf8_lossy(&channel_or_pattern)
                                 );
                             }
                         }
@@ -641,7 +638,7 @@ impl NetworkHandler {
                                 if self
                                     .subscriptions
                                     .insert(
-                                        channel_or_pattern.to_vec(),
+                                        channel_or_pattern.clone(),
                                         (pending_sub.subscription_type, pending_sub.sender),
                                     )
                                     .is_some()
@@ -649,7 +646,7 @@ impl NetworkHandler {
                                     return Some(Err(Error::Client(
                                         format!(
                                             "There is already a subscription on channel `{}`",
-                                            String::from_utf8_lossy(channel_or_pattern)
+                                            String::from_utf8_lossy(&channel_or_pattern)
                                         )
                                         .to_string(),
                                     )));
@@ -662,14 +659,14 @@ impl NetworkHandler {
                                 error!(
                                     "[{}] Unexpected subscription confirmation on channel `{}`",
                                     self.tag,
-                                    String::from_utf8_lossy(channel_or_pattern)
+                                    String::from_utf8_lossy(&channel_or_pattern)
                                 );
                             }
                         } else {
                             error!(
                                 "[{}] Cannot find pending subscription for channel `{}`",
                                 self.tag,
-                                String::from_utf8_lossy(channel_or_pattern)
+                                String::from_utf8_lossy(&channel_or_pattern)
                             );
                         }
                         Some(Ok(RespBuf::ok()))
@@ -677,14 +674,14 @@ impl NetworkHandler {
                     RefPubSubMessage::Unsubscribe(channel_or_pattern)
                     | RefPubSubMessage::PUnsubscribe(channel_or_pattern)
                     | RefPubSubMessage::SUnsubscribe(channel_or_pattern) => {
-                        self.subscriptions.remove(channel_or_pattern);
+                        self.subscriptions.remove(&channel_or_pattern);
                         if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
                             if remaining.len() > 1 {
-                                if remaining.remove(channel_or_pattern).is_none() {
+                                if remaining.remove(&channel_or_pattern).is_none() {
                                     error!(
                                         "[{}] Cannot find channel or pattern to remove: `{}`",
                                         self.tag,
-                                        String::from_utf8_lossy(channel_or_pattern)
+                                        String::from_utf8_lossy(&channel_or_pattern)
                                     );
                                 }
                                 None
@@ -695,15 +692,15 @@ impl NetworkHandler {
                                     error!(
                                         "[{}] Cannot find channel or pattern to remove: `{}`",
                                         self.tag,
-                                        String::from_utf8_lossy(channel_or_pattern)
+                                        String::from_utf8_lossy(&channel_or_pattern)
                                     );
                                     return None;
                                 };
-                                if remaining.remove(channel_or_pattern).is_none() {
+                                if remaining.remove(&channel_or_pattern).is_none() {
                                     error!(
                                         "[{}] Cannot find channel or pattern to remove: `{}`",
                                         self.tag,
-                                        String::from_utf8_lossy(channel_or_pattern)
+                                        String::from_utf8_lossy(&channel_or_pattern)
                                     );
                                     return None;
                                 }
@@ -714,7 +711,7 @@ impl NetworkHandler {
                         }
                     }
                     RefPubSubMessage::PMessage(pattern, channel, _) => {
-                        match self.subscriptions.get_mut(pattern) {
+                        match self.subscriptions.get_mut(&pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
                                 if let Err(e) = pub_sub_sender.send(value).await {
                                     warn!(
@@ -727,8 +724,8 @@ impl NetworkHandler {
                                 error!(
                                     "[{}] Unexpected message on channel `{}` for pattern `{}`",
                                     self.tag,
-                                    String::from_utf8_lossy(channel),
-                                    String::from_utf8_lossy(pattern)
+                                    String::from_utf8_lossy(&channel),
+                                    String::from_utf8_lossy(&pattern)
                                 );
                             }
                         }
@@ -866,19 +863,13 @@ impl NetworkHandler {
             for (channel_or_pattern, (subscription_type, _)) in &self.subscriptions {
                 match subscription_type {
                     SubscriptionType::Channel => {
-                        self.connection
-                            .subscribe(channel_or_pattern.clone())
-                            .await?;
+                        self.connection.subscribe(channel_or_pattern).await?;
                     }
                     SubscriptionType::Pattern => {
-                        self.connection
-                            .psubscribe(channel_or_pattern.clone())
-                            .await?;
+                        self.connection.psubscribe(channel_or_pattern).await?;
                     }
                     SubscriptionType::ShardChannel => {
-                        self.connection
-                            .ssubscribe(channel_or_pattern.clone())
-                            .await?;
+                        self.connection.ssubscribe(channel_or_pattern).await?;
                     }
                 }
             }
@@ -942,7 +933,7 @@ impl NetworkHandler {
 
     async fn auto_remonitor(&mut self, old_status: Status) -> Result<()> {
         if let Status::Monitor | Status::EnteringMonitor = old_status {
-            self.connection.send(&cmd("MONITOR")).await?;
+            self.connection.send(&cmd("MONITOR").into()).await?;
         }
 
         Ok(())

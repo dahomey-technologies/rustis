@@ -1,10 +1,11 @@
+use bytes::Bytes;
 use log::warn;
 use smallvec::SmallVec;
 
 use crate::{
     Error, PubSubSender, PushSender, RetryReason,
     network::{ResultSender, ResultsSender},
-    resp::Command,
+    resp::NetworkCommand,
 };
 
 #[cfg(debug_assertions)]
@@ -17,8 +18,8 @@ static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 pub(crate) enum Commands {
     None,
-    Single(Command, Option<ResultSender>),
-    Batch(Vec<Command>, ResultsSender),
+    Single(NetworkCommand, Option<ResultSender>),
+    Batch(Vec<NetworkCommand>, ResultsSender),
 }
 
 impl Commands {
@@ -52,7 +53,7 @@ impl Commands {
 }
 
 impl IntoIterator for Commands {
-    type Item = Command;
+    type Item = NetworkCommand;
     type IntoIter = CommandsIterator;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -65,7 +66,7 @@ impl IntoIterator for Commands {
 }
 
 impl<'a> IntoIterator for &'a Commands {
-    type Item = &'a Command;
+    type Item = &'a NetworkCommand;
     type IntoIter = RefCommandsIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -78,7 +79,7 @@ impl<'a> IntoIterator for &'a Commands {
 }
 
 impl<'a> IntoIterator for &'a mut Commands {
-    type Item = &'a mut Command;
+    type Item = &'a mut NetworkCommand;
     type IntoIter = CommandsIteratorMut<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -92,12 +93,12 @@ impl<'a> IntoIterator for &'a mut Commands {
 
 #[allow(clippy::large_enum_variant)]
 pub enum CommandsIterator {
-    Single(Option<Command>),
-    Batch(std::vec::IntoIter<Command>),
+    Single(Option<NetworkCommand>),
+    Batch(std::vec::IntoIter<NetworkCommand>),
 }
 
 impl Iterator for CommandsIterator {
-    type Item = Command;
+    type Item = NetworkCommand;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -108,12 +109,12 @@ impl Iterator for CommandsIterator {
 }
 
 pub enum RefCommandsIterator<'a> {
-    Single(Option<&'a Command>),
-    Batch(std::slice::Iter<'a, Command>),
+    Single(Option<&'a NetworkCommand>),
+    Batch(std::slice::Iter<'a, NetworkCommand>),
 }
 
 impl<'a> Iterator for RefCommandsIterator<'a> {
-    type Item = &'a Command;
+    type Item = &'a NetworkCommand;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -124,12 +125,12 @@ impl<'a> Iterator for RefCommandsIterator<'a> {
 }
 
 pub enum CommandsIteratorMut<'a> {
-    Single(Option<&'a mut Command>),
-    Batch(std::slice::IterMut<'a, Command>),
+    Single(Option<&'a mut NetworkCommand>),
+    Batch(std::slice::IterMut<'a, NetworkCommand>),
 }
 
 impl<'a> Iterator for CommandsIteratorMut<'a> {
-    type Item = &'a mut Command;
+    type Item = &'a mut NetworkCommand;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -142,7 +143,7 @@ impl<'a> Iterator for CommandsIteratorMut<'a> {
 #[derive(Debug)]
 pub(crate) struct Message {
     pub commands: Commands,
-    pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
+    pub pub_sub_senders: Option<Vec<(Bytes, PubSubSender)>>,
     pub push_sender: Option<PushSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
     pub retry_on_error: bool,
@@ -153,7 +154,11 @@ pub(crate) struct Message {
 
 impl Message {
     #[inline(always)]
-    pub fn single(command: Command, result_sender: ResultSender, retry_on_error: bool) -> Self {
+    pub fn single(
+        command: NetworkCommand,
+        result_sender: ResultSender,
+        retry_on_error: bool,
+    ) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
             pub_sub_senders: None,
@@ -166,7 +171,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn single_forget(command: Command, retry_on_error: bool) -> Self {
+    pub fn single_forget(command: NetworkCommand, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command, None),
             pub_sub_senders: None,
@@ -180,7 +185,7 @@ impl Message {
 
     #[inline(always)]
     pub fn batch(
-        commands: Vec<Command>,
+        commands: Vec<NetworkCommand>,
         results_sender: ResultsSender,
         retry_on_error: bool,
     ) -> Self {
@@ -197,9 +202,9 @@ impl Message {
 
     #[inline(always)]
     pub fn pub_sub(
-        command: Command,
+        command: NetworkCommand,
         result_sender: ResultSender,
-        pub_sub_senders: Vec<(Vec<u8>, PubSubSender)>,
+        pub_sub_senders: Vec<(Bytes, PubSubSender)>,
     ) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
@@ -213,7 +218,11 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn monitor(command: Command, result_sender: ResultSender, push_sender: PushSender) -> Self {
+    pub fn monitor(
+        command: NetworkCommand,
+        result_sender: ResultSender,
+        push_sender: PushSender,
+    ) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
             pub_sub_senders: None,

@@ -20,7 +20,7 @@ async fn geoadd() -> Result<()> {
     let len = client
         .geoadd(
             "key",
-            Default::default(),
+            None,
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -30,7 +30,7 @@ async fn geoadd() -> Result<()> {
     let len = client
         .geoadd(
             "key",
-            Default::default(),
+            None,
             false,
             [(1.0, 1.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -40,7 +40,7 @@ async fn geoadd() -> Result<()> {
     let len = client
         .geoadd(
             "key",
-            Default::default(),
+            None,
             true,
             [(2.0, 2.0, "location1"), (2.0, 2.0, "location2")],
         )
@@ -90,7 +90,7 @@ async fn geodist() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -135,7 +135,7 @@ async fn geohash() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -165,7 +165,7 @@ async fn geopos() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -198,7 +198,7 @@ async fn geosearch() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -211,7 +211,7 @@ async fn geosearch() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (12.758489, 38.788135, "edge1"),
@@ -224,14 +224,8 @@ async fn geosearch() -> Result<()> {
     let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "Sicily",
-            GeoSearchFrom::FromLonLat::<String> {
-                longitude: 15.0,
-                latitude: 37.0,
-            },
-            GeoSearchBy::ByRadius {
-                radius: 200.0,
-                unit: GeoUnit::Kilometers,
-            },
+            GeoSearchFrom::from_longitude_latitude(15.0, 37.0),
+            GeoSearchBy::by_radius(200.0, GeoUnit::Kilometers),
             GeoSearchOptions::default(),
         )
         .await?;
@@ -242,15 +236,8 @@ async fn geosearch() -> Result<()> {
     let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "Sicily",
-            GeoSearchFrom::FromLonLat::<String> {
-                longitude: 15.0,
-                latitude: 37.0,
-            },
-            GeoSearchBy::ByBox {
-                width: 400.0,
-                height: 400.0,
-                unit: GeoUnit::Kilometers,
-            },
+            GeoSearchFrom::from_longitude_latitude(15.0, 37.0),
+            GeoSearchBy::by_box(400.0, 400.0, GeoUnit::Kilometers),
             GeoSearchOptions::default()
                 .order(GeoSearchOrder::Asc)
                 .with_coord()
@@ -303,7 +290,7 @@ async fn geosearchstore() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (13.361389, 38.115556, "Palermo"),
@@ -316,7 +303,7 @@ async fn geosearchstore() -> Result<()> {
     let len = client
         .geoadd(
             "Sicily",
-            Default::default(),
+            None,
             false,
             [
                 (12.758489, 38.788135, "edge1"),
@@ -330,15 +317,8 @@ async fn geosearchstore() -> Result<()> {
         .geosearchstore(
             "out",
             "Sicily",
-            GeoSearchFrom::FromLonLat::<String> {
-                longitude: 15.0,
-                latitude: 37.0,
-            },
-            GeoSearchBy::ByBox {
-                width: 400.0,
-                height: 400.0,
-                unit: GeoUnit::Kilometers,
-            },
+            GeoSearchFrom::from_longitude_latitude(15.0, 37.0),
+            GeoSearchBy::by_box(400.0, 400.0, GeoUnit::Kilometers),
             GeoSearchStoreOptions::default()
                 .order(GeoSearchOrder::Asc)
                 .count(3, false),
@@ -349,15 +329,8 @@ async fn geosearchstore() -> Result<()> {
     let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "out",
-            GeoSearchFrom::FromLonLat::<String> {
-                longitude: 15.0,
-                latitude: 37.0,
-            },
-            GeoSearchBy::ByBox {
-                width: 400.0,
-                height: 400.0,
-                unit: GeoUnit::Kilometers,
-            },
+            GeoSearchFrom::from_longitude_latitude(15.0, 37.0),
+            GeoSearchBy::by_box(400.0, 400.0, GeoUnit::Kilometers),
             GeoSearchOptions::default()
                 .order(GeoSearchOrder::Asc)
                 .with_coord()

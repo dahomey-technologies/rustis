@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd, serialize_flag},
 };
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Streams`](https://redis.io/docs/data-types/streams/)
@@ -22,9 +22,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xack/>](https://redis.io/commands/xack/)
     fn xack(
         self,
-        key: impl Args,
-        group: impl Args,
-        ids: impl Args,
+        key: impl Serialize,
+        group: impl Serialize,
+        ids: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("XACK").arg(key).arg(group).arg(ids))
     }
@@ -43,9 +43,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xadd/>](https://redis.io/commands/xadd/)
     fn xadd<R: Response>(
         self,
-        key: impl Args,
-        stream_id: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        stream_id: impl Serialize,
+        items: impl Serialize,
         options: XAddOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -63,11 +63,11 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xautoclaim/>](https://redis.io/commands/xautoclaim/)
     fn xautoclaim<R: Response + DeserializeOwned>(
         self,
-        key: impl Args,
-        group: impl Args,
-        consumer: impl Args,
+        key: impl Serialize,
+        group: impl Serialize,
+        consumer: impl Serialize,
         min_idle_time: u64,
-        start: impl Args,
+        start: impl Serialize,
         options: XAutoClaimOptions,
     ) -> PreparedCommand<'a, Self, XAutoClaimResult<R>> {
         prepare_command(
@@ -97,11 +97,11 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xclaim/>](https://redis.io/commands/xclaim/)
     fn xclaim<R: Response>(
         self,
-        key: impl Args,
-        group: impl Args,
-        consumer: impl Args,
+        key: impl Serialize,
+        group: impl Serialize,
+        consumer: impl Serialize,
         min_idle_time: u64,
-        ids: impl Args,
+        ids: impl Serialize,
         options: XClaimOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -123,7 +123,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xdel/>](https://redis.io/commands/xdel/)
-    fn xdel(self, key: impl Args, ids: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn xdel(self, key: impl Serialize, ids: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("XDEL").arg(key).arg(ids))
     }
 
@@ -137,9 +137,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xgroup-create/>](https://redis.io/commands/xgroup-create/)
     fn xgroup_create(
         self,
-        key: impl Args,
-        groupname: impl Args,
-        id: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
+        id: impl Serialize,
         options: XGroupCreateOptions,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
@@ -164,9 +164,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xgroup-createconsumer/>](https://redis.io/commands/xgroup-createconsumer/)
     fn xgroup_createconsumer(
         self,
-        key: impl Args,
-        groupname: impl Args,
-        consumername: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
+        consumername: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
@@ -187,9 +187,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xgroup-delconsumer/>](https://redis.io/commands/xgroup-delconsumer/)
     fn xgroup_delconsumer(
         self,
-        key: impl Args,
-        groupname: impl Args,
-        consumername: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
+        consumername: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
@@ -211,8 +211,8 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xgroup-destroy/>](https://redis.io/commands/xgroup-destroy/)
     fn xgroup_destroy(
         self,
-        key: impl Args,
-        groupname: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
     }
@@ -256,9 +256,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xgroup-setid/>](https://redis.io/commands/xgroup-setid/)
     fn xgroup_setid(
         self,
-        key: impl Args,
-        groupname: impl Args,
-        id: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
+        id: impl Serialize,
         entries_read: Option<usize>,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
@@ -281,8 +281,8 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xinfo-consumers/>](https://redis.io/commands/xinfo-consumers/)
     fn xinfo_consumers(
         self,
-        key: impl Args,
-        groupname: impl Args,
+        key: impl Serialize,
+        groupname: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<XConsumerInfo>> {
         prepare_command(self, cmd("XINFO").arg("CONSUMERS").arg(key).arg(groupname))
     }
@@ -295,7 +295,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xinfo-groups/>](https://redis.io/commands/xinfo-groups/)
-    fn xinfo_groups(self, key: impl Args) -> PreparedCommand<'a, Self, Vec<XGroupInfo>> {
+    fn xinfo_groups(self, key: impl Serialize) -> PreparedCommand<'a, Self, Vec<XGroupInfo>> {
         prepare_command(self, cmd("XINFO").arg("GROUPS").arg(key))
     }
 
@@ -341,7 +341,7 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xinfo-stream/>](https://redis.io/commands/xinfo-stream/)
     fn xinfo_stream(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: XInfoStreamOptions,
     ) -> PreparedCommand<'a, Self, XStreamInfo> {
         prepare_command(self, cmd("XINFO").arg("STREAM").arg(key).arg(options))
@@ -354,7 +354,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
-    fn xlen(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn xlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("XLEN").arg(key))
     }
 
@@ -364,8 +364,8 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
     fn xpending(
         self,
-        key: impl Args,
-        group: impl Args,
+        key: impl Serialize,
+        group: impl Serialize,
     ) -> PreparedCommand<'a, Self, XPendingResult> {
         prepare_command(self, cmd("XPENDING").arg(key).arg(group))
     }
@@ -380,8 +380,8 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
     fn xpending_with_options<R: Response>(
         self,
-        key: impl Args,
-        group: impl Args,
+        key: impl Serialize,
+        group: impl Serialize,
         options: XPendingOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("XPENDING").arg(key).arg(group).arg(options))
@@ -400,9 +400,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
     fn xrange<R: Response>(
         self,
-        key: impl Args,
-        start: impl Args,
-        end: impl Args,
+        key: impl Serialize,
+        start: impl Serialize,
+        end: impl Serialize,
         count: Option<usize>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -426,8 +426,8 @@ pub trait StreamCommands<'a>: Sized {
     fn xread<R: Response>(
         self,
         options: XReadOptions,
-        keys: impl Args,
-        ids: impl Args,
+        keys: impl Serialize,
+        ids: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
@@ -445,11 +445,11 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xreadgroup/>](https://redis.io/commands/xreadgroup/)
     fn xreadgroup<R: Response>(
         self,
-        group: impl Args,
-        consumer: impl Args,
+        group: impl Serialize,
+        consumer: impl Serialize,
         options: XReadGroupOptions,
-        keys: impl Args,
-        ids: impl Args,
+        keys: impl Serialize,
+        ids: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
@@ -475,9 +475,9 @@ pub trait StreamCommands<'a>: Sized {
     /// [<https://redis.io/commands/xrevrange/>](https://redis.io/commands/xrevrange/)
     fn xrevrange<R: Response>(
         self,
-        key: impl Args,
-        end: impl Args,
-        start: impl Args,
+        key: impl Serialize,
+        end: impl Serialize,
+        start: impl Serialize,
         count: Option<usize>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -497,134 +497,135 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xtrim/>](https://redis.io/commands/xtrim/)
-    fn xtrim(self, key: impl Args, options: XTrimOptions) -> PreparedCommand<'a, Self, usize> {
+    fn xtrim(self, key: impl Serialize, options: XTrimOptions) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("XTRIM").arg(key).arg(options))
     }
 }
 
-/// Stream Add options for the [`xadd`](StreamCommands::xadd) command.
-#[derive(Default)]
-pub struct XAddOptions {
-    command_args: CommandArgs,
+/// Consumer group options for the [`xadd`](StreamCommands::xadd) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ConsumerGroupOptions {
+    /// When trimming, removes entries from the stream according to the specified strategy (MAXLEN or MINID),
+    /// regardless of whether they are referenced by any consumer groups, but preserves existing references
+    /// to these entries in all consumer groups' PEL (Pending Entries List).
+    KeepRef,
+    /// When trimming, removes entries from the stream according to the specified strategy
+    /// and also removes all references to these entries from all consumer groups' PEL.
+    DelRef,
+    /// When trimming, only removes entries that were read and acknowledged by all consumer groups.
+    /// Note that if the number of referenced entries is larger than MAXLEN,
+    /// trimming will still stop at the limit.
+    Acked,
 }
 
-impl XAddOptions {
+/// Stream Add options for the [`xadd`](StreamCommands::xadd) command.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct XAddOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nomkstream: bool,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    consumer_group_options: Option<ConsumerGroupOptions>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    trim_options: Option<XTrimOptions<'a>>,
+}
+
+impl<'a> XAddOptions<'a> {
     #[must_use]
     pub fn no_mk_stream(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOMKSTREAM").build(),
-        }
+        self.nomkstream = true;
+        self
     }
 
     #[must_use]
-    pub fn trim_options(mut self, trim_options: XTrimOptions) -> Self {
-        Self {
-            command_args: self.command_args.arg(trim_options).build(),
-        }
+    pub fn consumer_group_options(mut self, consumer_group_options: ConsumerGroupOptions) -> Self {
+        self.consumer_group_options = Some(consumer_group_options);
+        self
     }
-}
 
-impl Args for XAddOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    #[must_use]
+    pub fn trim_options(mut self, trim_options: XTrimOptions<'a>) -> Self {
+        self.trim_options = Some(trim_options);
+        self
     }
 }
 
 /// Stream Trim operator for the [`xadd`](StreamCommands::xadd)
 /// and [`xtrim`](StreamCommands::xtrim) commands
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum XTrimOperator {
-    #[default]
-    None,
     /// =
     Equal,
     /// ~
     Approximately,
 }
 
-impl Args for XTrimOperator {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            XTrimOperator::None => {}
-            XTrimOperator::Equal => {
-                args.arg("=");
-            }
-            XTrimOperator::Approximately => {
-                args.arg("~");
-            }
-        }
-    }
-}
-
 /// Stream Trim options for the [`xadd`](StreamCommands::xadd)
 /// and [`xtrim`](StreamCommands::xtrim) commands
-#[derive(Default)]
-pub struct XTrimOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct XTrimOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxlen: Option<(Option<XTrimOperator>, i64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minid: Option<(Option<XTrimOperator>, &'a str)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<u32>,
 }
 
-impl XTrimOptions {
+impl<'a> XTrimOptions<'a> {
     #[must_use]
-    pub fn max_len(operator: XTrimOperator, threshold: i64) -> Self {
+    pub fn max_len(operator: impl Into<Option<XTrimOperator>>, threshold: i64) -> Self {
         Self {
-            command_args: CommandArgs::default()
-                .arg("MAXLEN")
-                .arg(operator)
-                .arg(threshold)
-                .build(),
+            maxlen: Some((operator.into(), threshold)),
+            ..Default::default()
         }
     }
 
     #[must_use]
-    pub fn min_id(operator: XTrimOperator, threshold_id: impl Args) -> Self {
+    pub fn min_id(operator: impl Into<Option<XTrimOperator>>, threshold_id: &'a str) -> Self {
         Self {
-            command_args: CommandArgs::default()
-                .arg("MINID")
-                .arg(operator)
-                .arg(threshold_id)
-                .build(),
+            minid: Some((operator.into(), threshold_id)),
+            ..Default::default()
         }
     }
 
     #[must_use]
-    pub fn limit(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("LIMIT").arg(count).build(),
-        }
-    }
-}
-
-impl Args for XTrimOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn limit(mut self, count: u32) -> Self {
+        self.limit = Some(count);
+        self
     }
 }
 
 /// Options for the [`xautoclaim`](StreamCommands::xautoclaim) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XAutoClaimOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    justid: bool,
 }
 
 impl XAutoClaimOptions {
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 
     #[must_use]
     pub fn just_id(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("JUSTID").build(),
-        }
-    }
-}
-
-impl Args for XAutoClaimOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.justid = true;
+        self
     }
 }
 
@@ -661,39 +662,48 @@ where
 }
 
 /// Options for the [`xclaim`](StreamCommands::xclaim) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XClaimOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idle: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    time: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retrycount: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    force: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    justid: bool,
 }
 
 impl XClaimOptions {
     /// Set the idle time (last time it was delivered) of the message.
     #[must_use]
-    pub fn idle_time(mut self, idle_time_millis: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg("IDLE").arg(idle_time_millis).build(),
-        }
+    pub fn idle_time(mut self, ms: u64) -> Self {
+        self.idle = Some(ms);
+        self
     }
 
     ///  This is the same as `idle_time` but instead of a relative amount of milliseconds,
     /// it sets the idle time to a specific Unix time (in milliseconds).
     #[must_use]
     pub fn time(mut self, unix_time_milliseconds: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("TIME")
-                .arg(unix_time_milliseconds)
-                .build(),
-        }
+        self.time = Some(unix_time_milliseconds);
+        self
     }
 
     /// Set the retry counter to the specified value.
     #[must_use]
-    pub fn retry_count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("RETRYCOUNT").arg(count).build(),
-        }
+    pub fn retry_count(mut self, count: u32) -> Self {
+        self.retrycount = Some(count);
+        self
     }
 
     /// Creates the pending message entry in the PEL
@@ -701,31 +711,30 @@ impl XClaimOptions {
     /// in the PEL assigned to a different client.
     #[must_use]
     pub fn force(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("FORCE").build(),
-        }
+        self.force = true;
+        self
     }
 
-    ///  Return just an array of IDs of messages successfully claimed,
+    /// Return just an array of IDs of messages successfully claimed,
     /// without returning the actual message.
     #[must_use]
     pub fn just_id(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("JUSTID").build(),
-        }
-    }
-}
-
-impl Args for XClaimOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.justid = true;
+        self
     }
 }
 
 /// Options for the [`xgroup_create`](StreamCommands::xgroup_create) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XGroupCreateOptions {
-    command_args: CommandArgs,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    mkstream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entriesread: Option<u32>,
 }
 
 impl XGroupCreateOptions {
@@ -734,9 +743,8 @@ impl XGroupCreateOptions {
     /// to automatically create the stream (with length of 0) if it doesn't exist
     #[must_use]
     pub fn mk_stream(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("MKSTREAM").build(),
-        }
+        self.mkstream = true;
+        self
     }
 
     /// The optional entries_read named argument can be specified to enable consumer group lag tracking for an arbitrary ID.
@@ -744,20 +752,9 @@ impl XGroupCreateOptions {
     /// This can be useful you know exactly how many entries are between the arbitrary ID (excluding it) and the stream's last entry.
     /// In such cases, the entries_read can be set to the stream's entries_added subtracted with the number of entries.
     #[must_use]
-    pub fn entries_read(mut self, entries_read: usize) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("ENTRIESREAD")
-                .arg(entries_read)
-                .build(),
-        }
-    }
-}
-
-impl Args for XGroupCreateOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn entries_read(mut self, entries_read: u32) -> Self {
+        self.entriesread = Some(entries_read);
+        self
     }
 }
 
@@ -803,33 +800,34 @@ pub struct XGroupInfo {
 }
 
 /// Options for the [`xinfo_stream`](StreamCommands::xinfo_stream) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XInfoStreamOptions {
-    command_args: CommandArgs,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    full: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
 }
 
 impl XInfoStreamOptions {
     /// The optional FULL modifier provides a more verbose reply.
     #[must_use]
-    pub fn full(mut self) -> Self {
+    pub fn full() -> Self {
         Self {
-            command_args: self.command_args.arg("FULL").build(),
+            full: true,
+            ..Default::default()
         }
     }
 
     /// The COUNT option can be used to limit the number of stream and PEL entries that are returned
     /// (The first `count` entries are returned).
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
-    }
-}
-
-impl Args for XInfoStreamOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 }
 
@@ -868,114 +866,129 @@ pub struct XStreamInfo {
 }
 
 /// Options for the [`xread`](StreamCommands::xread) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XReadOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block: Option<u64>,
 }
 
 impl XReadOptions {
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 
     #[must_use]
     pub fn block(mut self, milliseconds: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg("BLOCK").arg(milliseconds).build(),
-        }
-    }
-}
-
-impl Args for XReadOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.block = Some(milliseconds);
+        self
     }
 }
 
 /// Options for the [`xreadgroup`](StreamCommands::xreadgroup) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct XReadGroupOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    claim: Option<u64>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    noack: bool,
 }
 
 impl XReadGroupOptions {
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 
     #[must_use]
     pub fn block(mut self, milliseconds: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg("BLOCK").arg(milliseconds).build(),
-        }
+        self.block = Some(milliseconds);
+        self
     }
 
+    /// When CLAIM min-idle-time is specified, Redis will first try to claim messages which have been pending
+    /// for at least min-idle-time milliseconds from the consumer group of each specified stream key.
+    /// The pending messages with the highest idle time would be claimed first. Note that the CLAIM min-idle-time
+    /// condition may become true for some pending entries during the BLOCK milliseconds period (if specified).
+    ///
+    /// If there are no such messages, Redis will continue as normal (consume incoming messages).
+    ///
+    /// CLAIM min-idle-time is ignored if the specified id is not >.
+    #[must_use]
+    pub fn claim(mut self, min_idle_time: u64) -> Self {
+        self.claim = Some(min_idle_time);
+        self
+    }
+
+    /// The NOACK subcommand can be used to avoid adding the message to the PEL in cases where reliability
+    /// is not a requirement and the occasional message loss is acceptable.
+    /// This is equivalent to acknowledging the message when it is read.
+    /// When used together with CLAIM, NOACK does not apply for retrieved pending entries.
     #[must_use]
     pub fn no_ack(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOACK").build(),
-        }
-    }
-}
-
-impl Args for XReadGroupOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.noack = true;
+        self
     }
 }
 
 /// Options for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
-#[derive(Default)]
-pub struct XPendingOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct XPendingOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idle: Option<u64>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    start: Option<&'a str>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    end: Option<&'a str>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    consumer: Option<&'a str>,
 }
 
-impl XPendingOptions {
+impl<'a> XPendingOptions<'a> {
     #[must_use]
     pub fn idle(mut self, min_idle_time: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg("IDLE").arg(min_idle_time).build(),
-        }
+        self.idle = Some(min_idle_time);
+        self
     }
 
     #[must_use]
-    pub fn start(mut self, start: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(start).build(),
-        }
+    pub fn start(mut self, start: &'a str) -> Self {
+        self.start = Some(start);
+        self
     }
 
     #[must_use]
-    pub fn end(mut self, end: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(end).build(),
-        }
+    pub fn end(mut self, end: &'a str) -> Self {
+        self.end = Some(end);
+        self
     }
 
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg(count).build(),
-        }
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 
     #[must_use]
-    pub fn consumer(mut self, consumer: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(consumer).build(),
-        }
-    }
-}
-
-impl Args for XPendingOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn consumer(mut self, consumer: &'a str) -> Self {
+        self.consumer = Some(consumer);
+        self
     }
 }
 

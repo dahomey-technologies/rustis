@@ -33,7 +33,7 @@ redis-graph = []
 async-std = { version = "1.13", features = ["attributes"], optional = true }
 futures-util = { version = "0.3", features = ["sink", "io"] }
 futures-channel = { version = "0.3", features = ["sink"] }
-bytes = "1.10"
+bytes = { version = "1.11", features = ["serde"] }
 tokio = { version = "1.46", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 atoi = "2.0"

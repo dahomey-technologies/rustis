@@ -2,7 +2,7 @@ use crate::{
     Error, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
-    resp::{Command, RespBuf},
+    resp::{NetworkCommand, RespBuf},
     sleep,
 };
 use log::debug;
@@ -16,14 +16,14 @@ pub struct SentinelConnection {
 
 impl SentinelConnection {
     #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
         self.inner_connection.write(command).await
     }
 
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
+        commands: SmallVec<[&mut NetworkCommand; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.inner_connection

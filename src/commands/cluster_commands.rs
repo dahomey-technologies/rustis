@@ -2,10 +2,10 @@ use std::{collections::HashMap, fmt};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd, deserialize_vec_of_pairs},
+    resp::{Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{
-    Deserialize,
+    Deserialize, Serialize,
     de::{self},
 };
 
@@ -34,7 +34,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslots/>](https://redis.io/commands/cluster-addslots/)
     #[must_use]
-    fn cluster_addslots<S>(self, slots: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_addslots<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTS").arg(slots))
     }
 
@@ -48,7 +48,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslotsrange/>](https://redis.io/commands/cluster-addslotsrange/)
     #[must_use]
-    fn cluster_addslotsrange<S>(self, slots: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_addslotsrange<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTSRANGE").arg(slots))
     }
 
@@ -75,7 +75,7 @@ pub trait ClusterCommands<'a>: Sized {
     #[must_use]
     fn cluster_count_failure_reports<I>(
         self,
-        node_id: impl Args,
+        node_id: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
@@ -102,7 +102,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslots/>](https://redis.io/commands/cluster-delslots/)
     #[must_use]
-    fn cluster_delslots<S>(self, slots: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_delslots<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTS").arg(slots))
     }
 
@@ -115,7 +115,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslotsrange/>](https://redis.io/commands/cluster-delslotsrange/)
     #[must_use]
-    fn cluster_delslotsrange<S>(self, slots: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_delslotsrange<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTSRANGE").arg(slots))
     }
 
@@ -129,7 +129,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-failover/>](https://redis.io/commands/cluster-failover/)
     #[must_use]
-    fn cluster_failover(self, option: ClusterFailoverOption) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_failover(self, option: Option<ClusterFailoverOption>) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("FAILOVER").arg(option))
     }
 
@@ -149,7 +149,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-forget/>](https://redis.io/commands/cluster-forget/)
     #[must_use]
-    fn cluster_forget<I>(self, node_id: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_forget<I>(self, node_id: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("FORGET").arg(node_id))
     }
 
@@ -189,7 +189,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-keyslot/>](https://redis.io/commands/cluster-keyslot/)
     #[must_use]
-    fn cluster_keyslot(self, key: impl Args) -> PreparedCommand<'a, Self, u16> {
+    fn cluster_keyslot(self, key: impl Serialize) -> PreparedCommand<'a, Self, u16> {
         prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").arg(key))
     }
 
@@ -220,7 +220,7 @@ pub trait ClusterCommands<'a>: Sized {
     #[must_use]
     fn cluster_meet(
         self,
-        ip: impl Args,
+        ip: impl Serialize,
         port: u16,
         cluster_bus_port: Option<u16>,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -273,7 +273,10 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicas/>](https://redis.io/commands/cluster-replicas/)
     #[must_use]
-    fn cluster_replicas<R: Response>(self, node_id: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn cluster_replicas<R: Response>(
+        self,
+        node_id: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("REPLICAS").arg(node_id))
     }
 
@@ -283,7 +286,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicate/>](https://redis.io/commands/cluster-replicate/)
     #[must_use]
-    fn cluster_replicate(self, node_id: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_replicate(self, node_id: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("REPLICATE").arg(node_id))
     }
 
@@ -387,29 +390,13 @@ pub enum ClusterBumpEpochResult {
 }
 
 /// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClusterFailoverOption {
-    /// No option
-    #[default]
-    Default,
     /// FORCE option: manual failover when the master is down
     Force,
     /// TAKEOVER option: manual failover without cluster consensus
     Takeover,
-}
-
-impl Args for ClusterFailoverOption {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ClusterFailoverOption::Default => {}
-            ClusterFailoverOption::Force => {
-                args.arg("FORCE");
-            }
-            ClusterFailoverOption::Takeover => {
-                args.arg("TAKEOVER");
-            }
-        }
-    }
 }
 
 /// Cluster state used in the `cluster_state` field of [`ClusterInfo`](ClusterInfo)
@@ -575,21 +562,16 @@ pub struct ClusterLinkInfo {
 }
 
 /// Type of [`cluster reset`](ClusterCommands::cluster_reset)
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClusterResetType {
     Hard,
     Soft,
 }
 
-impl Args for ClusterResetType {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ClusterResetType::Hard => args.arg("HARD"),
-            ClusterResetType::Soft => args.arg("SOFT"),
-        };
-    }
-}
-
 /// Subcommand for the [`cluster_setslot`](ClusterCommands::cluster_setslot) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClusterSetSlotSubCommand {
     /// Set a hash slot in importing state.
     Importing { node_id: String },
@@ -599,17 +581,6 @@ pub enum ClusterSetSlotSubCommand {
     Node { node_id: String },
     /// Clear any importing / migrating state from hash slot.
     Stable,
-}
-
-impl Args for ClusterSetSlotSubCommand {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ClusterSetSlotSubCommand::Importing { node_id } => args.arg("IMPORTING").arg(node_id),
-            ClusterSetSlotSubCommand::Migrating { node_id } => args.arg("MIGRATING").arg(node_id),
-            ClusterSetSlotSubCommand::Node { node_id } => args.arg("NODE").arg(node_id),
-            ClusterSetSlotSubCommand::Stable => args.arg("STABLE"),
-        };
-    }
 }
 
 /// Result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.

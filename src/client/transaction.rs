@@ -1,15 +1,22 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
-    Error, Result,
+    Error,
+    Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
         GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands, ListCommands,
         ScriptingCommands, SearchCommands, ServerCommands, SetCommands, SortedSetCommands,
-        StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
-        VectorSetCommands,
+        StreamCommands, StringCommands, VectorSetCommands,
     },
+    // commands::{
+    //     BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
+    //     GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands, ListCommands,
+    //     ScriptingCommands, SearchCommands, ServerCommands, SetCommands, SortedSetCommands,
+    //     StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
+    //     VectorSetCommands,
+    // },
     resp::{Command, RespDeserializer, Response, cmd},
 };
 use serde::{
@@ -272,9 +279,9 @@ impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}
 impl<'a> CuckooCommands<'a> for &'a mut Transaction {}
 impl<'a> GenericCommands<'a> for &'a mut Transaction {}
 impl<'a> GeoCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-impl<'a> GraphCommands<'a> for &'a mut Transaction {}
+// #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
+// #[cfg(feature = "redis-graph")]
+// impl<'a> GraphCommands<'a> for &'a mut Transaction {}
 impl<'a> HashCommands<'a> for &'a mut Transaction {}
 impl<'a> HyperLogLogCommands<'a> for &'a mut Transaction {}
 impl<'a> JsonCommands<'a> for &'a mut Transaction {}
@@ -286,7 +293,7 @@ impl<'a> ServerCommands<'a> for &'a mut Transaction {}
 impl<'a> SortedSetCommands<'a> for &'a mut Transaction {}
 impl<'a> StreamCommands<'a> for &'a mut Transaction {}
 impl<'a> StringCommands<'a> for &'a mut Transaction {}
-impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
-impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
-impl<'a> TopKCommands<'a> for &'a mut Transaction {}
+// impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
+// impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
+// impl<'a> TopKCommands<'a> for &'a mut Transaction {}
 impl<'a> VectorSetCommands<'a> for &'a Transaction {}

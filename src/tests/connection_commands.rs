@@ -5,7 +5,7 @@ use crate::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
         ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus,
         ClientUnblockMode, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
-        PingOptions, ServerCommands, StringCommands,
+        ServerCommands, StringCommands,
     },
     network::spawn,
     resp::cmd,
@@ -127,7 +127,7 @@ async fn client_list() -> Result<()> {
     let current_client_id = client.client_id().await?;
 
     let _result = client
-        .client_list(ClientListOptions::default().client_ids(current_client_id))
+        .client_list(ClientListOptions::default().client_id(current_client_id))
         .await?;
 
     Ok(())
@@ -404,9 +404,9 @@ async fn hello_v3() -> Result<()> {
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: String = client.ping(PingOptions::default()).await?;
+    let result: String = client.ping(None::<&str>).await?;
     assert_eq!("PONG", result);
-    let result: String = client.ping(PingOptions::default().message("value")).await?;
+    let result: String = client.ping(Some("value")).await?;
     assert_eq!("value", result);
 
     Ok(())

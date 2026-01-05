@@ -2,10 +2,10 @@ use crate::{
     Result,
     commands::{
         FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
-        XAutoClaimResult, XGroupCreateOptions, XInfoStreamOptions, XPendingMessageResult,
-        XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOperator, XTrimOptions,
+        XAutoClaimResult, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions,
+        XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOptions,
     },
-    tests::get_test_client,
+    tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
 
@@ -744,6 +744,23 @@ async fn xautoclaim() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn xautoclaim_args() -> Result<()> {
+    let cmd = TestClient
+        .xclaim::<()>(
+            "key",
+            "group",
+            "consumer",
+            1000,
+            "1526569498055-0",
+            XClaimOptions::default().idle_time(100).time(1000).retry_count(12).force().just_id(),
+        )
+        .command;
+    assert_eq!("XCLAIM key group consumer 1000 1526569498055-0 IDLE 100 TIME 1000 RETRYCOUNT 12 FORCE JUSTID", &cmd.to_string());
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -818,7 +835,7 @@ async fn xtrim() -> Result<()> {
         .await?;
 
     let deleted = client
-        .xtrim("mystream", XTrimOptions::max_len(XTrimOperator::None, 1))
+        .xtrim("mystream", XTrimOptions::max_len(None, 1))
         .await?;
     assert_eq!(1, deleted);
 

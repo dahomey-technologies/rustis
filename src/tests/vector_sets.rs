@@ -3,9 +3,10 @@ use std::{collections::HashSet, hash::Hash};
 use crate::{
     Result,
     commands::{
-        FlushingMode, ServerCommands, VAddOptions, VSimOptions, VectorOrElement, VectorSetCommands,
+        FlushingMode, QuantizationOptions, ServerCommands, VAddOptions, VSimOptions,
+        VectorOrElement, VectorSetCommands,
     },
-    tests::get_test_client,
+    tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
 
@@ -26,6 +27,30 @@ async fn vadd() -> Result<()> {
             VAddOptions::default(),
         )
         .await?;
+
+    Ok(())
+}
+
+#[test]
+fn vadd_args() -> Result<()> {
+    let cmd = TestClient
+        .vadd(
+            "key",
+            12,
+            &[1.0, 2.0, 3.0],
+            "element",
+            VAddOptions::default()
+                .cas()
+                .quantization(QuantizationOptions::NoQuant)
+                .ef(12)
+                .set_attr("{\"type\": \"fruit\", \"color\": \"red\"}")
+                .m(12),
+        )
+        .command;
+    assert_eq!(
+        "VADD key 12 FP32 \0\0�?\0\0\0@\0\0@@ element CAS NOQUANT EF 12 SETATTR {\"type\": \"fruit\", \"color\": \"red\"} M 12",
+        &cmd.to_string()
+    );
 
     Ok(())
 }
@@ -387,10 +412,10 @@ async fn vsim() -> Result<()> {
     assert!(result[1] == "apple" || result[1] == "apples" || result[1] == "pear");
 
     let result: Vec<(String, f64)> = client
-        .vsim_with_scores(
+        .vsim(
             "key",
             VectorOrElement::Element("apple"),
-            VSimOptions::default(),
+            VSimOptions::default().with_scores(),
         )
         .await?;
     assert_eq!(3, result.len());

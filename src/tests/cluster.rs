@@ -100,7 +100,7 @@ async fn all_shards_one_succeeded() -> Result<()> {
             let client = get_cluster_test_client().await?;
 
             let _ = client
-                .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
+                .evalsha::<String>(CallBuilder::sha1(&sha1).args("hello"))
                 .await?;
 
             Ok(())
@@ -174,7 +174,7 @@ async fn all_nodes_all_succeeded() -> Result<()> {
     let sha1: String = client.script_load("return 12").await?;
     assert!(!sha1.is_empty());
 
-    let value: i64 = client.evalsha(CallBuilder::sha1(sha1)).await?;
+    let value: i64 = client.evalsha(CallBuilder::sha1(&sha1)).await?;
     assert_eq!(12, value);
 
     Ok(())

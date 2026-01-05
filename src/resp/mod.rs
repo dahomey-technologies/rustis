@@ -107,7 +107,27 @@ The different command traits implementations ([`Client`](crate::client::Client),
  in order to deserialize it automatically from a RESP Buffer.
 */
 
-mod args;
+pub(crate) use arg_counter::*;
+pub(crate) use arg_serializer::*;
+pub(crate) use buffer_decoder::*;
+pub use bulk_string::*;
+pub use command::*;
+pub use command_args::*;
+pub(crate) use command_encoder::*;
+#[cfg(feature = "json")]
+pub use json::*;
+pub(crate) use network_command::*;
+pub(crate) use resp_batch_deserializer::*;
+pub use resp_buf::*;
+pub use resp_deserializer::*;
+pub use resp_serializer::*;
+pub use response::*;
+pub use util::*;
+pub use value::*;
+pub(crate) use value_deserialize::*;
+
+mod arg_counter;
+mod arg_serializer;
 mod buffer_decoder;
 mod bulk_string;
 mod command;
@@ -115,6 +135,7 @@ mod command_args;
 mod command_encoder;
 #[cfg(feature = "json")]
 mod json;
+mod network_command;
 mod resp_batch_deserializer;
 mod resp_buf;
 mod resp_deserializer;
@@ -125,20 +146,3 @@ mod value;
 mod value_deserialize;
 mod value_deserializer;
 mod value_serialize;
-
-pub use args::*;
-pub(crate) use buffer_decoder::*;
-pub use bulk_string::*;
-pub use command::*;
-pub use command_args::*;
-pub(crate) use command_encoder::*;
-#[cfg(feature = "json")]
-pub use json::*;
-pub(crate) use resp_batch_deserializer::*;
-pub use resp_buf::*;
-pub use resp_deserializer::*;
-pub use resp_serializer::*;
-pub use response::*;
-pub use util::*;
-pub use value::*;
-pub(crate) use value_deserialize::*;

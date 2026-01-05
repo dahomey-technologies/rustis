@@ -1,6 +1,7 @@
 use crate::{
     Result,
     client::{Client, Config, IntoConfig},
+    commands::{StreamCommands, VectorSetCommands},
 };
 #[cfg(feature = "native-tls")]
 use native_tls::Certificate;
@@ -171,3 +172,7 @@ pub fn log_try_init() {
         .parse_default_env()
         .try_init();
 }
+
+pub struct TestClient;
+impl<'a> StreamCommands<'a> for TestClient {}
+impl<'a> VectorSetCommands<'a> for TestClient {}

@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, cmd},
+    resp::cmd,
 };
+use serde::Serialize;
 
 /// A group of Redis commands related to Transactions
 /// # See Also
@@ -12,7 +13,7 @@ pub trait TransactionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
-    fn watch(self, keys: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn watch(self, keys: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("WATCH").arg(keys))
     }
 

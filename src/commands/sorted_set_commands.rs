@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd, deserialize_vec_of_pairs},
+    resp::{Response, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Sorted Sets`](https://redis.io/docs/data-types/sorted-sets/)
 ///
@@ -21,8 +21,8 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zadd(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
         options: ZAddOptions,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZADD").arg(key).arg(options).arg(items))
@@ -40,19 +40,19 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zadd_incr(
         self,
-        key: impl Args,
-        condition: ZAddCondition,
-        comparison: ZAddComparison,
+        key: impl Serialize,
+        condition: impl Into<Option<ZAddCondition>>,
+        comparison: impl Into<Option<ZAddComparison>>,
         change: bool,
         score: f64,
-        member: impl Args,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(
             self,
             cmd("ZADD")
                 .arg(key)
-                .arg(condition)
-                .arg(comparison)
+                .arg(condition.into())
+                .arg(comparison.into())
                 .arg_if(change, "CH")
                 .arg(score)
                 .arg(member),
@@ -68,7 +68,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zcard/>](https://redis.io/commands/zcard/)
     #[must_use]
-    fn zcard(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn zcard(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZCARD").arg(key))
     }
 
@@ -82,9 +82,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zcount(
         self,
-        key: impl Args,
-        min: impl Args,
-        max: impl Args,
+        key: impl Serialize,
+        min: impl Serialize,
+        max: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZCOUNT").arg(key).arg(min).arg(max))
     }
@@ -98,8 +98,8 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZDIFF").arg(keys.num_args()).arg(keys))
+    fn zdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("ZDIFF").arg_with_count(keys))
     }
 
     /// This command is similar to [zdiffstore](SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
@@ -111,14 +111,8 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff_with_scores<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
-        prepare_command(
-            self,
-            cmd("ZDIFF")
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg("WITHSCORES"),
-        )
+    fn zdiff_with_scores<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("ZDIFF").arg_with_count(keys).arg("WITHSCORES"))
     }
 
     /// Computes the difference between the first and all successive
@@ -132,15 +126,12 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zdiffstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
+        destination: impl Serialize,
+        keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("ZDIFFSTORE")
-                .arg(destination)
-                .arg(keys.num_args())
-                .arg(keys),
+            cmd("ZDIFFSTORE").arg(destination).arg_with_count(keys),
         )
     }
 
@@ -154,9 +145,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zincrby(
         self,
-        key: impl Args,
+        key: impl Serialize,
         increment: f64,
-        member: impl Args,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, f64> {
         prepare_command(self, cmd("ZINCRBY").arg(key).arg(increment).arg(member))
     }
@@ -172,17 +163,16 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zinter<R: Response>(
         self,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ZINTER")
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate),
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into()),
         )
     }
 
@@ -197,17 +187,16 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zinter_with_scores<R: Response>(
         self,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ZINTER")
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate)
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into())
                 .arg("WITHSCORES"),
         )
     }
@@ -221,12 +210,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zintercard/>](https://redis.io/commands/zintercard/)
     #[must_use]
-    fn zintercard(self, keys: impl Args, limit: usize) -> PreparedCommand<'a, Self, usize> {
+    fn zintercard(self, keys: impl Serialize, limit: usize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("ZINTERCARD")
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg("LIMIT")
                 .arg(limit),
         )
@@ -243,19 +231,18 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zinterstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        destination: impl Serialize,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("ZINTERSTORE")
                 .arg(destination)
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate),
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into()),
         )
     }
 
@@ -271,9 +258,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zlexcount(
         self,
-        key: impl Args,
-        min: impl Args,
-        max: impl Args,
+        key: impl Serialize,
+        min: impl Serialize,
+        max: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZLEXCOUNT").arg(key).arg(min).arg(max))
     }
@@ -292,15 +279,14 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zmpop<R: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         where_: ZWhere,
         count: usize,
     ) -> PreparedCommand<'a, Self, Option<ZMPopResult<R>>> {
         prepare_command(
             self,
             cmd("ZMPOP")
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -319,8 +305,8 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zmscore<R: Response>(
         self,
-        key: impl Args,
-        members: impl Args,
+        key: impl Serialize,
+        members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZMSCORE").arg(key).arg(members))
     }
@@ -333,7 +319,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zpopmax/>](https://redis.io/commands/zpopmax/)
     #[must_use]
-    fn zpopmax<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn zpopmax<R: Response>(
+        self,
+        key: impl Serialize,
+        count: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZPOPMAX").arg(key).arg(count))
     }
 
@@ -345,7 +335,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zpopmin/>](https://redis.io/commands/zpopmin/)
     #[must_use]
-    fn zpopmin<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn zpopmin<R: Response>(
+        self,
+        key: impl Serialize,
+        count: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZPOPMIN").arg(key).arg(count))
     }
 
@@ -357,7 +351,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmember<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn zrandmember<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key))
     }
 
@@ -375,7 +369,7 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrandmembers<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZRANDMEMBER").arg(key).arg(count))
@@ -395,7 +389,7 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrandmembers_with_scores<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -414,9 +408,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrange<R: Response>(
         self,
-        key: impl Args,
-        start: impl Args,
-        stop: impl Args,
+        key: impl Serialize,
+        start: impl Serialize,
+        stop: impl Serialize,
         options: ZRangeOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -435,9 +429,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrange_with_scores<R: Response>(
         self,
-        key: impl Args,
-        start: impl Args,
-        stop: impl Args,
+        key: impl Serialize,
+        start: impl Serialize,
+        stop: impl Serialize,
         options: ZRangeOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -462,10 +456,10 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrangestore(
         self,
-        dst: impl Args,
-        src: impl Args,
-        start: impl Args,
-        stop: impl Args,
+        dst: impl Serialize,
+        src: impl Serialize,
+        start: impl Serialize,
+        stop: impl Serialize,
         options: ZRangeOptions,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
@@ -489,7 +483,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrank/>](https://redis.io/commands/zrank/)
     #[must_use]
-    fn zrank(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, Option<usize>> {
+    fn zrank(
+        self,
+        key: impl Serialize,
+        member: impl Serialize,
+    ) -> PreparedCommand<'a, Self, Option<usize>> {
         prepare_command(self, cmd("ZRANK").arg(key).arg(member))
     }
 
@@ -505,8 +503,8 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrank_with_score(
         self,
-        key: impl Args,
-        member: impl Args,
+        key: impl Serialize,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<(usize, f64)>> {
         prepare_command(self, cmd("ZRANK").arg(key).arg(member).arg("WITHSCORE"))
     }
@@ -519,7 +517,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrem/>](https://redis.io/commands/zrem/)
     #[must_use]
-    fn zrem(self, key: impl Args, members: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn zrem(
+        self,
+        key: impl Serialize,
+        members: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZREM").arg(key).arg(members))
     }
 
@@ -536,9 +538,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zremrangebylex(
         self,
-        key: impl Args,
-        start: impl Args,
-        stop: impl Args,
+        key: impl Serialize,
+        start: impl Serialize,
+        stop: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZREMRANGEBYLEX").arg(key).arg(start).arg(stop))
     }
@@ -553,7 +555,7 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zremrangebyrank(
         self,
-        key: impl Args,
+        key: impl Serialize,
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, usize> {
@@ -570,9 +572,9 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zremrangebyscore(
         self,
-        key: impl Args,
-        start: impl Args,
-        stop: impl Args,
+        key: impl Serialize,
+        start: impl Serialize,
+        stop: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ZREMRANGEBYSCORE").arg(key).arg(start).arg(stop))
     }
@@ -588,8 +590,8 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrevrank(
         self,
-        key: impl Args,
-        member: impl Args,
+        key: impl Serialize,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
         prepare_command(self, cmd("ZREVRANK").arg(key).arg(member))
     }
@@ -605,8 +607,8 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zrevrank_with_score(
         self,
-        key: impl Args,
-        member: impl Args,
+        key: impl Serialize,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<(usize, f64)>> {
         prepare_command(self, cmd("ZREVRANK").arg(key).arg(member).arg("WITHSCORE"))
     }
@@ -623,7 +625,7 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zscan<R: Response + DeserializeOwned>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         cursor: usize,
         options: ZScanOptions,
     ) -> PreparedCommand<'a, Self, ZScanResult<R>> {
@@ -638,7 +640,11 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zscore/>](https://redis.io/commands/zscore/)
     #[must_use]
-    fn zscore(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, Option<f64>> {
+    fn zscore(
+        self,
+        key: impl Serialize,
+        member: impl Serialize,
+    ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(self, cmd("ZSCORE").arg(key).arg(member))
     }
 
@@ -653,17 +659,16 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zunion<R: Response>(
         self,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ZUNION")
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate),
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into()),
         )
     }
 
@@ -678,17 +683,16 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zunion_with_scores<R: Response>(
         self,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ZUNION")
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate)
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into())
                 .arg("WITHSCORES"),
         )
     }
@@ -704,55 +708,36 @@ pub trait SortedSetCommands<'a>: Sized {
     #[must_use]
     fn zunionstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
-        weights: Option<impl Args>,
-        aggregate: ZAggregate,
+        destination: impl Serialize,
+        keys: impl Serialize,
+        weights: impl Serialize,
+        aggregate: impl Into<Option<ZAggregate>>,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("ZUNIONSTORE")
                 .arg(destination)
-                .arg(keys.num_args())
-                .arg(keys)
-                .arg(weights.map(|w| ("WEIGHTS", w)))
-                .arg(aggregate),
+                .arg_with_count(keys)
+                .arg_labeled("WEIGHTS", weights)
+                .arg(aggregate.into()),
         )
     }
 }
 
 /// Condition option for the [`zadd`](SortedSetCommands::zadd) command
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ZAddCondition {
-    /// No condition
-    #[default]
-    None,
     /// Only update elements that already exist. Don't add new elements.
     NX,
     /// Only add new elements. Don't update already existing elements.
     XX,
 }
 
-impl Args for ZAddCondition {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ZAddCondition::None => {}
-            ZAddCondition::NX => {
-                args.arg("NX");
-            }
-            ZAddCondition::XX => {
-                args.arg("XX");
-            }
-        }
-    }
-}
-
 /// Comparison option for the [`zadd`](SortedSetCommands::zadd) command
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ZAddComparison {
-    /// No comparison
-    #[default]
-    None,
     /// Only update existing elements if the new score is greater than the current score.
     ///
     /// This flag doesn't prevent adding new elements.
@@ -763,46 +748,16 @@ pub enum ZAddComparison {
     LT,
 }
 
-impl Args for ZAddComparison {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ZAddComparison::None => {}
-            ZAddComparison::GT => {
-                args.arg("GT");
-            }
-            ZAddComparison::LT => {
-                args.arg("LT");
-            }
-        }
-    }
-}
-
 /// sort by option of the [`zrange`](SortedSetCommands::zrange) command
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ZRangeSortBy {
-    /// No sort by
-    #[default]
-    None,
     /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
     /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
     ByScore,
     /// When the `ByLex` option is used, the command behaves like `ZRANGEBYLEX` and returns the range
     /// of elements from the sorted set between the `start` and `stop` lexicographical closed range intervals.
     ByLex,
-}
-
-impl Args for ZRangeSortBy {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ZRangeSortBy::None => {}
-            ZRangeSortBy::ByScore => {
-                args.arg("BYSCORE");
-            }
-            ZRangeSortBy::ByLex => {
-                args.arg("BYLEX");
-            }
-        }
-    }
 }
 
 /// Option that specify how results of an union or intersection are aggregated
@@ -812,11 +767,9 @@ impl Args for ZRangeSortBy {
 /// [zinterstore](SortedSetCommands::zinterstore)
 /// [zunion](SortedSetCommands::zunion)
 /// [zunionstore](SortedSetCommands::zunionstore)
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ZAggregate {
-    /// No aggregation
-    #[default]
-    None,
     /// The score of an element is summed across the inputs where it exists.
     Sum,
     /// The minimum score of an element across the inputs where it exists.
@@ -825,24 +778,9 @@ pub enum ZAggregate {
     Max,
 }
 
-impl Args for ZAggregate {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ZAggregate::None => {}
-            ZAggregate::Sum => {
-                args.arg("SUM");
-            }
-            ZAggregate::Min => {
-                args.arg("MIN");
-            }
-            ZAggregate::Max => {
-                args.arg("MAX");
-            }
-        }
-    }
-}
-
 /// Where option of the [`zmpop`](SortedSetCommands::zmpop) command
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ZWhere {
     /// When the MIN modifier is used, the elements popped are those
     /// with the lowest scores from the first non-empty sorted set.
@@ -851,47 +789,38 @@ pub enum ZWhere {
     Max,
 }
 
-impl Args for ZWhere {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ZWhere::Min => args.arg("MIN"),
-            ZWhere::Max => args.arg("MAX"),
-        };
-    }
-}
-
 /// Options for the [`zadd`](SortedSetCommands::zadd) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct ZAddOptions {
-    command_args: CommandArgs,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    condition: Option<ZAddCondition>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    comparison: Option<ZAddComparison>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    change: bool,
 }
 
 impl ZAddOptions {
     #[must_use]
     pub fn condition(mut self, condition: ZAddCondition) -> Self {
-        Self {
-            command_args: self.command_args.arg(condition).build(),
-        }
+        self.condition = Some(condition);
+        self
     }
 
     #[must_use]
     pub fn comparison(mut self, comparison: ZAddComparison) -> Self {
-        Self {
-            command_args: self.command_args.arg(comparison).build(),
-        }
+        self.comparison = Some(comparison);
+        self
     }
 
     #[must_use]
     pub fn change(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("CH").build(),
-        }
-    }
-}
-
-impl Args for ZAddOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        self.command_args.write_args(args);
+        self.change = true;
+        self
     }
 }
 
@@ -900,70 +829,61 @@ pub type ZMPopResult<E> = (String, Vec<(E, f64)>);
 
 /// Options for the [`zrange`](SortedSetCommands::zrange)
 /// and [`zrangestore`](SortedSetCommands::zrangestore) commands
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct ZRangeOptions {
-    command_args: CommandArgs,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    sort_by: Option<ZRangeSortBy>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    reverse: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<(u32, i32)>,
 }
 
 impl ZRangeOptions {
     #[must_use]
     pub fn sort_by(mut self, sort_by: ZRangeSortBy) -> Self {
-        Self {
-            command_args: self.command_args.arg(sort_by).build(),
-        }
+        self.sort_by = Some(sort_by);
+        self
     }
 
     #[must_use]
     pub fn reverse(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("REV").build(),
-        }
+        self.reverse = true;
+        self
     }
 
     #[must_use]
-    pub fn limit(mut self, offset: usize, count: isize) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("LIMIT")
-                .arg(offset)
-                .arg(count)
-                .build(),
-        }
-    }
-}
-
-impl Args for ZRangeOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn limit(mut self, offset: u32, count: i32) -> Self {
+        self.limit = Some((offset, count));
+        self
     }
 }
 
 /// Options for the [`zscan`](SortedSetCommands::zscan) command
-#[derive(Default)]
-pub struct ZScanOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct ZScanOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#match: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
 }
 
-impl ZScanOptions {
+impl<'a> ZScanOptions<'a> {
     #[must_use]
-    pub fn match_pattern(mut self, match_pattern: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
-        }
+    pub fn match_pattern(mut self, match_pattern: &'a str) -> Self {
+        self.r#match = Some(match_pattern);
+        self
     }
 
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
-    }
-}
-
-impl Args for ZScanOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 }
 

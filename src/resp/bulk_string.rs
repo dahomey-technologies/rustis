@@ -15,8 +15,8 @@ pub struct BulkString(
 impl BulkString {
     /// Constructs a new `BulkString` from a bytes buffer
     #[inline]
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
+    pub fn new(bytes: impl Into<Vec<u8>>) -> Self {
+        Self(bytes.into())
     }
 
     /// Returns the internal buffer as a byte slice

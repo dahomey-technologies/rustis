@@ -1,12 +1,13 @@
 use crate::{
     Error, Result,
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{CommandArgsMut, Response, cmd, serialize_flag},
 };
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{self, SeqAccess, Visitor},
 };
+use smallvec::SmallVec;
 use std::{collections::HashMap, fmt, str::FromStr};
 
 /// A group of Redis commands related to Server Management
@@ -38,7 +39,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-deluser/>](https://redis.io/commands/acl-deluser/)
-    fn acl_deluser(self, usernames: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn acl_deluser(self, usernames: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
     }
 
@@ -95,8 +96,8 @@ pub trait ServerCommands<'a>: Sized {
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
     fn acl_dryrun<R: Response>(
         self,
-        username: impl Args,
-        command: impl Args,
+        username: impl Serialize,
+        command: impl Serialize,
         options: AclDryRunOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -131,7 +132,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-getuser/>](https://redis.io/commands/acl-getuser/)
-    fn acl_getuser<R: Response>(self, username: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn acl_getuser<R: Response>(self, username: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
 
@@ -243,7 +244,11 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-setuser/>](https://redis.io/commands/acl-setuser/)
-    fn acl_setuser(self, username: impl Args, rules: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn acl_setuser(
+        self,
+        username: impl Serialize,
+        rules: impl Serialize,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
     }
 
@@ -371,7 +376,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
-    fn command_docs<R: Response>(self, command_names: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn command_docs<R: Response>(
+        self,
+        command_names: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("DOCS").arg(command_names))
     }
 
@@ -382,7 +390,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
-    fn command_getkeys<R: Response>(self, args: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn command_getkeys<R: Response>(self, args: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
 
@@ -393,7 +401,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<R: Response>(self, args: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn command_getkeysandflags<R: Response>(
+        self,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYSANDFLAGS").arg(args))
     }
 
@@ -436,7 +447,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-info/>](https://redis.io/commands/command-info/)
-    fn command_info(self, command_names: impl Args) -> PreparedCommand<'a, Self, Vec<CommandInfo>> {
+    fn command_info(
+        self,
+        command_names: impl Serialize,
+    ) -> PreparedCommand<'a, Self, Vec<CommandInfo>> {
         prepare_command(self, cmd("COMMAND").arg("INFO").arg(command_names))
     }
 
@@ -465,7 +479,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
-    fn config_get<R: Response>(self, params: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn config_get<R: Response>(self, params: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
 
@@ -533,7 +547,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/config-set/>](https://redis.io/commands/config-set/)
     #[must_use]
-    fn config_set(self, configs: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn config_set(self, configs: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
     }
 
@@ -567,11 +581,14 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/flushdb/>](https://redis.io/commands/flushdb/)
     #[must_use]
-    fn flushdb(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
+    fn flushdb(
+        self,
+        flushing_mode: impl Into<Option<FlushingMode>>,
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FLUSHDB").arg(flushing_mode))
+        prepare_command(self, cmd("FLUSHDB").arg(flushing_mode.into()))
     }
 
     /// Delete all the keys of all the existing databases, not just the currently selected one.
@@ -579,11 +596,14 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/flushall/>](https://redis.io/commands/flushall/)
     #[must_use]
-    fn flushall(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()>
+    fn flushall(
+        self,
+        flushing_mode: impl Into<Option<FlushingMode>>,
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FLUSHALL").arg(flushing_mode))
+        prepare_command(self, cmd("FLUSHALL").arg(flushing_mode.into()))
     }
 
     /// This command returns information and statistics about the server
@@ -592,7 +612,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<R: Response>(self, sections: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn info<R: Response>(self, sections: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("INFO").arg(sections))
     }
 
@@ -678,7 +698,10 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<R: Response>(self, commands: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn latency_histogram<R: Response>(
+        self,
+        commands: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
     }
 
@@ -727,7 +750,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_reset(self, events: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn latency_reset(self, events: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
     }
 
@@ -848,7 +871,7 @@ pub trait ServerCommands<'a>: Sized {
     #[must_use]
     fn memory_usage(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: MemoryUsageOptions,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
         prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
@@ -898,28 +921,6 @@ pub trait ServerCommands<'a>: Sized {
         Self: Sized,
     {
         prepare_command(self, cmd("MODULE").arg("HELP"))
-    }
-
-    /// Loads a module from a dynamic library at runtime.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/module-load/>](https://redis.io/commands/module-load/)
-    #[must_use]
-    fn module_load(
-        self,
-        path: impl Args,
-        options: ModuleLoadOptions,
-    ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
-    }
-
-    /// Unloads a module.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
-    #[must_use]
-    fn module_unload(self, name: impl Args) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
 
     /// This command can change the replication settings of a replica on the fly.
@@ -977,7 +978,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/slowlog-get/>](https://redis.io/commands/slowlog-get/)
     #[must_use]
-    fn slowlog_get(self, options: SlowLogOptions) -> PreparedCommand<'a, Self, Vec<SlowLogEntry>>
+    fn slowlog_get(self, options: SlowLogGetOptions) -> PreparedCommand<'a, Self, Vec<SlowLogEntry>>
     where
         Self: Sized,
     {
@@ -1070,77 +1071,42 @@ pub trait ServerCommands<'a>: Sized {
 }
 
 /// Database flushing mode
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub enum FlushingMode {
-    #[default]
-    Default,
     /// Flushes the database(s) asynchronously
     Async,
     /// Flushed the database(s) synchronously
     Sync,
 }
 
-impl Args for FlushingMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            FlushingMode::Default => {}
-            FlushingMode::Async => {
-                args.arg("ASYNC");
-            }
-            FlushingMode::Sync => {
-                args.arg("SYNC");
-            }
-        }
-    }
-}
-
 /// Options for the [`acl_cat`](ServerCommands::acl_cat) command
-#[derive(Default)]
-pub struct AclCatOptions {
-    command_args: CommandArgs,
-}
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct AclCatOptions<'a>(#[serde(skip_serializing_if = "Option::is_none")] Option<&'a str>);
 
-impl AclCatOptions {
+impl<'a> AclCatOptions<'a> {
     #[must_use]
-    pub fn category_name(mut self, category_name: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(category_name).build(),
-        }
-    }
-}
-
-impl Args for AclCatOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn category_name(category_name: &'a str) -> Self {
+        Self(Some(category_name))
     }
 }
 
 /// Options for the [`acl_dryrun`](ServerCommands::acl_dryrun) command
-#[derive(Default)]
-pub struct AclDryRunOptions {
-    command_args: CommandArgs,
-}
+#[derive(Default, Serialize)]
+pub struct AclDryRunOptions(CommandArgsMut);
 
 impl AclDryRunOptions {
     #[must_use]
-    pub fn arg(mut self, args: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(args).build(),
-        }
-    }
-}
-
-impl Args for AclDryRunOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn arg(self, args: impl Serialize) -> Self {
+        Self(self.0.arg(args))
     }
 }
 
 /// Options for the [`acl_genpass`](ServerCommands::acl_genpass) command
-#[derive(Default)]
-pub struct AclGenPassOptions {
-    command_args: CommandArgs,
-}
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct AclGenPassOptions(#[serde(skip_serializing_if = "Option::is_none")] Option<u32>);
 
 impl AclGenPassOptions {
     /// The command output is a hexadecimal representation of a binary string.
@@ -1149,54 +1115,54 @@ impl AclGenPassOptions {
     /// Note that the number of bits provided is always rounded to the next multiple of 4.
     /// So for instance asking for just 1 bit password will result in 4 bits to be emitted, in the form of a single hex character.
     #[must_use]
-    pub fn bits(mut self, bits: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg(bits).build(),
-        }
-    }
-}
-
-impl Args for AclGenPassOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn bits(bits: u32) -> Self {
+        Self(Some(bits))
     }
 }
 
 /// Options for the [`acl_log`](ServerCommands::acl_log) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct AclLogOptions {
-    command_args: CommandArgs,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    pub reset: bool,
 }
 
 impl AclLogOptions {
     /// This optional argument specifies how many entries to show.
     /// By default up to ten failures are returned.
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
+    pub fn count(count: u32) -> Self {
         Self {
-            command_args: self.command_args.arg(count).build(),
+            count: Some(count),
+            reset: false,
         }
     }
 
     /// The special RESET argument clears the log.
     #[must_use]
-    pub fn reset(mut self) -> Self {
+    pub fn reset() -> Self {
         Self {
-            command_args: self.command_args.arg("RESET").build(),
+            count: None,
+            reset: true,
         }
     }
 }
 
-impl Args for AclLogOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
-}
-
 /// Options for the [`bgsave`](ServerCommands::bgsave) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct BgsaveOptions {
-    command_args: CommandArgs,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    schedule: bool,
 }
 
 impl BgsaveOptions {
@@ -1205,15 +1171,8 @@ impl BgsaveOptions {
     /// to run at the next opportunity.
     #[must_use]
     pub fn schedule(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("SCHEDULE").build(),
-        }
-    }
-}
-
-impl Args for BgsaveOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.schedule = true;
+        self
     }
 }
 
@@ -1612,81 +1571,71 @@ pub enum ArgumentFlag {
     MultipleToken,
 }
 
-/// Options for the [`command_list`](ServerCommands::command_list) command.
-#[derive(Default)]
-pub struct CommandListOptions {
-    command_args: CommandArgs,
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+enum FilterBy<'a> {
+    Module(&'a str),
+    AclCat(&'a str),
+    Pattern(&'a str),
 }
 
-impl CommandListOptions {
+/// Options for the [`command_list`](ServerCommands::command_list) command.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct CommandListOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filterby: Option<FilterBy<'a>>,
+}
+
+impl<'a> CommandListOptions<'a> {
     /// get the commands that belong to the module specified by `module-name`.
     #[must_use]
-    pub fn filter_by_module_name(mut self, module_name: impl Args) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTERBY")
-                .arg("MODULE")
-                .arg(module_name)
-                .build(),
-        }
+    pub fn filter_by_module_name(mut self, module_name: &'a str) -> Self {
+        self.filterby = Some(FilterBy::Module(module_name));
+        self
     }
 
     /// get the commands in the [`ACL category`](https://redis.io/docs/manual/security/acl/#command-categories) specified by `category`.
     #[must_use]
-    pub fn filter_by_acl_category(mut self, category: impl Args) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTERBY")
-                .arg("ACLCAT")
-                .arg(category)
-                .build(),
-        }
+    pub fn filter_by_acl_category(mut self, acl_category: &'a str) -> Self {
+        self.filterby = Some(FilterBy::AclCat(acl_category));
+        self
     }
 
     /// get the commands that match the given glob-like `pattern`.
     #[must_use]
-    pub fn filter_by_pattern(mut self, pattern: impl Args) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTERBY")
-                .arg("PATTERN")
-                .arg(pattern)
-                .build(),
-        }
-    }
-}
-
-impl Args for CommandListOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn filter_by_pattern(mut self, pattern: &'a str) -> Self {
+        self.filterby = Some(FilterBy::Pattern(pattern));
+        self
     }
 }
 
 /// Options for the [`failover`](ServerCommands::failover) command.
-#[derive(Default)]
-pub struct FailOverOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct FailOverOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<(&'a str, u16)>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    force: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    abort: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout: Option<u64>,
 }
 
-impl FailOverOptions {
+impl<'a> FailOverOptions<'a> {
     /// This option allows designating a specific replica, by its host and port, to failover to.
     #[must_use]
-    pub fn to(mut self, host: impl Args, port: u16) -> Self {
-        Self {
-            command_args: self.command_args.arg("TO").arg(host).arg(port).build(),
-        }
-    }
-
-    /// This option allows specifying a maximum time a master will wait in the waiting-for-sync state
-    /// before aborting the failover attempt and rolling back.
-    #[must_use]
-    pub fn timeout(mut self, milliseconds: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg("TIMEOUT").arg(milliseconds).build(),
-        }
+    pub fn to(mut self, host: &'a str, port: u16) -> Self {
+        self.to = Some((host, port));
+        self
     }
 
     /// If both the [`timeout`](FailOverOptions::timeout) and [`to`](FailOverOptions::to) options are set,
@@ -1694,27 +1643,29 @@ impl FailOverOptions {
     /// the master should failover to the target replica instead of rolling back.
     #[must_use]
     pub fn force(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("FORCE").build(),
-        }
+        self.force = true;
+        self
     }
 
     /// This command will abort an ongoing failover and return the master to its normal state.
     #[must_use]
     pub fn abort(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("ABORT").build(),
-        }
+        self.abort = true;
+        self
     }
-}
 
-impl Args for FailOverOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    /// This option allows specifying a maximum time a master will wait in the waiting-for-sync state
+    /// before aborting the failover attempt and rolling back.
+    #[must_use]
+    pub fn timeout(mut self, milliseconds: u64) -> Self {
+        self.timeout = Some(milliseconds);
+        self
     }
 }
 
 /// Section for the [`info`](ServerCommands::info) command.
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum InfoSection {
     Server,
     Clients,
@@ -1734,31 +1685,10 @@ pub enum InfoSection {
     Everything,
 }
 
-impl Args for InfoSection {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            InfoSection::Server => "server",
-            InfoSection::Clients => "clients",
-            InfoSection::Memory => "memory",
-            InfoSection::Persistence => "persistence",
-            InfoSection::Stats => "stats",
-            InfoSection::Replication => "replication",
-            InfoSection::Cpu => "cpu",
-            InfoSection::Commandstats => "commandstats",
-            InfoSection::Latencystats => "latencystats",
-            InfoSection::Cluster => "cluster",
-            InfoSection::Keyspace => "keyspace",
-            InfoSection::Modules => "modules",
-            InfoSection::Errorstats => "errorstats",
-            InfoSection::All => "all",
-            InfoSection::Default => "default",
-            InfoSection::Everything => "everything",
-        });
-    }
-}
-
 /// Latency history event for the [`latency_graph`](ServerCommands::latency_graph)
 /// & [`latency_history`](ServerCommands::latency_history) commands.
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum LatencyHistoryEvent {
     ActiveDefragCycle,
     AofFsyncAlways,
@@ -1778,29 +1708,6 @@ pub enum LatencyHistoryEvent {
     RdbUnlinkTempFile,
 }
 
-impl Args for LatencyHistoryEvent {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            LatencyHistoryEvent::ActiveDefragCycle => "active-defrag-cycle",
-            LatencyHistoryEvent::AofFsyncAlways => "aof-fsync-always",
-            LatencyHistoryEvent::AofStat => "aof-stat",
-            LatencyHistoryEvent::AofRewriteDiffWrite => "aof-rewrite-diff-write",
-            LatencyHistoryEvent::AofRename => "aof-rename",
-            LatencyHistoryEvent::AofWrite => "aof-write",
-            LatencyHistoryEvent::AofWriteActiveChild => "aof-write-active-child",
-            LatencyHistoryEvent::AofWriteAlone => "aof-write-alone",
-            LatencyHistoryEvent::AofWritePendingFsync => "aof-write-pending-fsync",
-            LatencyHistoryEvent::Command => "command",
-            LatencyHistoryEvent::ExpireCycle => "expire-cycle",
-            LatencyHistoryEvent::EvictionCycle => "eviction-cycle",
-            LatencyHistoryEvent::EvictionDel => "eviction-del",
-            LatencyHistoryEvent::FastCommand => "fast-command",
-            LatencyHistoryEvent::Fork => "fork",
-            LatencyHistoryEvent::RdbUnlinkTempFile => "rdb-unlink-temp-file",
-        });
-    }
-}
-
 /// Command Histogram for the [`latency_histogram`](ServerCommands::latency_histogram) commands.
 #[derive(Default, Deserialize)]
 pub struct CommandHistogram {
@@ -1818,30 +1725,26 @@ pub struct CommandHistogram {
 }
 
 /// Options for the [`lolwut`](ServerCommands::lolwut) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct LolWutOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<u32>,
+    #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
+    optional_arguments: SmallVec<[u32; 5]>,
 }
 
 impl LolWutOptions {
     #[must_use]
-    pub fn version(mut self, version: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("VERSION").arg(version).build(),
-        }
+    pub fn version(mut self, version: u32) -> Self {
+        self.version = Some(version);
+        self
     }
 
     #[must_use]
-    pub fn optional_arg(mut self, arg: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(arg).build(),
-        }
-    }
-}
-
-impl Args for LolWutOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn optional_arg(mut self, arg: u32) -> Self {
+        self.optional_arguments.push(arg);
+        self
     }
 }
 
@@ -1991,9 +1894,11 @@ pub struct DatabaseOverhead {
 }
 
 /// Options for the [`memory_usage`](ServerCommands::memory_usage) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct MemoryUsageOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    samples: Option<u32>,
 }
 
 impl MemoryUsageOptions {
@@ -2002,16 +1907,9 @@ impl MemoryUsageOptions {
     /// By default, this option is set to 5.
     /// To sample the all of the nested values, use samples(0).
     #[must_use]
-    pub fn samples(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("SAMPLES").arg(count).build(),
-        }
-    }
-}
-
-impl Args for MemoryUsageOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn samples(mut self, count: u32) -> Self {
+        self.samples = Some(count);
+        self
     }
 }
 
@@ -2025,83 +1923,28 @@ pub struct ModuleInfo {
     pub version: u64,
 }
 
-/// Options for the [`module_load`](ServerCommands::module_load) command
-#[derive(Default)]
-pub struct ModuleLoadOptions {
-    command_args: CommandArgs,
-    args_added: bool,
-}
-
-impl ModuleLoadOptions {
-    /// You can use this optional associated function to provide the module with configuration directives.
-    /// This associated function can be called multiple times
-    #[must_use]
-    pub fn config(mut self, name: impl Args, value: impl Args) -> Self {
-        if self.args_added {
-            panic!(
-                "associated function `config` should be called before associated function `arg`"
-            );
-        }
-
-        Self {
-            command_args: self.command_args.arg("CONFIG").arg(name).arg(value).build(),
-            args_added: false,
-        }
-    }
-
-    /// Any additional arguments are passed unmodified to the module.
-    /// This associated function can be called multiple times
-    #[must_use]
-    pub fn arg(mut self, arg: impl Args) -> Self {
-        if !self.args_added {
-            Self {
-                command_args: self.command_args.arg("ARGS").arg(arg).build(),
-                args_added: true,
-            }
-        } else {
-            Self {
-                command_args: self.command_args.arg(arg).build(),
-                args_added: false,
-            }
-        }
-    }
-}
-
-impl Args for ModuleLoadOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
-}
-
 /// options for the [`replicaof`](ServerCommands::replicaof) command.
-pub struct ReplicaOfOptions {
-    command_args: CommandArgs,
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum ReplicaOfOptions<'a> {
+    Master((&'a str, u16)),
+    NoOne(&'static str, &'static str),
 }
 
-impl ReplicaOfOptions {
+impl<'a> ReplicaOfOptions<'a> {
     /// If a Redis server is already acting as replica,
     /// the command REPLICAOF NO ONE will turn off the replication,
     /// turning the Redis server into a MASTER.
     #[must_use]
     pub fn no_one() -> Self {
-        Self {
-            command_args: CommandArgs::default().arg("NO").arg("ONE").build(),
-        }
+        Self::NoOne("NO", "ONE")
     }
 
     /// In the proper form REPLICAOF hostname port will make the server
     /// a replica of another server listening at the specified hostname and port.
     #[must_use]
-    pub fn master(host: impl Args, port: u16) -> Self {
-        Self {
-            command_args: CommandArgs::default().arg(host).arg(port).build(),
-        }
-    }
-}
-
-impl Args for ReplicaOfOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn master(host: &'a str, port: u16) -> Self {
+        Self::Master((host, port))
     }
 }
 
@@ -2245,9 +2088,34 @@ pub enum ReplicationState {
 }
 
 /// options for the [`shutdown`](ServerCommands::shutdown) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct ShutdownOptions {
-    command_args: CommandArgs,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    save: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nosave: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    now: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    force: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    abort: bool,
 }
 
 impl ShutdownOptions {
@@ -2255,64 +2123,42 @@ impl ShutdownOptions {
     /// - if save is false, will prevent a DB saving operation even if one or more save points are configured.
     #[must_use]
     pub fn save(mut self, save: bool) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg(if save { "SAVE" } else { "NOSAVE" })
-                .build(),
-        }
+        self.save = save;
+        self.nosave = !save;
+        self
     }
 
     /// skips waiting for lagging replicas, i.e. it bypasses the first step in the shutdown sequence.
     #[must_use]
     pub fn now(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOW").build(),
-        }
+        self.now = true;
+        self
     }
 
     /// ignores any errors that would normally prevent the server from exiting.
     #[must_use]
     pub fn force(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("FORCE").build(),
-        }
+        self.force = true;
+        self
     }
 
     /// cancels an ongoing shutdown and cannot be combined with other flags.
     #[must_use]
     pub fn abort(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("ABORT").build(),
-        }
-    }
-}
-
-impl Args for ShutdownOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.abort = true;
+        self
     }
 }
 
 /// options for the [`slowlog_get`](ServerCommands::slowlog_get) command.
-#[derive(Default)]
-pub struct SlowLogOptions {
-    command_args: CommandArgs,
-}
+#[derive(Default, Serialize)]
+pub struct SlowLogGetOptions(#[serde(skip_serializing_if = "Option::is_none")] Option<u32>);
 
-impl SlowLogOptions {
+impl SlowLogGetOptions {
     /// limits the number of returned entries, so the command returns at most up to `count` entries.
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg(count).build(),
-        }
-    }
-}
-
-impl Args for SlowLogOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn count(count: u32) -> Self {
+        Self(Some(count))
     }
 }
 

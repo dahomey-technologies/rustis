@@ -1,9 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd},
 };
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{self, SeqAccess, Visitor},
 };
 use std::fmt;
@@ -23,7 +23,11 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/append/>](https://redis.io/commands/append/)
     #[must_use]
-    fn append(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn append(
+        self,
+        key: impl Serialize,
+        value: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("APPEND").arg(key).arg(value))
     }
 
@@ -40,7 +44,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
-    fn decr(self, key: impl Args) -> PreparedCommand<'a, Self, i64> {
+    fn decr(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("DECR").arg(key))
     }
 
@@ -57,7 +61,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
-    fn decrby(self, key: impl Args, decrement: i64) -> PreparedCommand<'a, Self, i64> {
+    fn decrby(self, key: impl Serialize, decrement: i64) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
     }
 
@@ -106,7 +110,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn get<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GET").arg(key))
     }
 
@@ -121,7 +125,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn getdel<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETDEL").arg(key))
     }
 
@@ -167,7 +171,7 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn getex<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: GetExOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETEX").arg(key).arg(options))
@@ -212,7 +216,7 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn getrange<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -229,7 +233,11 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
     #[must_use]
-    fn getset<R: Response>(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn getset<R: Response>(
+        self,
+        key: impl Serialize,
+        value: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETSET").arg(key).arg(value))
     }
 
@@ -252,7 +260,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
-    fn incr(self, key: impl Args) -> PreparedCommand<'a, Self, i64> {
+    fn incr(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("INCR").arg(key))
     }
 
@@ -271,7 +279,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
-    fn incrby(self, key: impl Args, increment: i64) -> PreparedCommand<'a, Self, i64> {
+    fn incrby(self, key: impl Serialize, increment: i64) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
     }
 
@@ -301,7 +309,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
-    fn incrbyfloat(self, key: impl Args, increment: f64) -> PreparedCommand<'a, Self, f64> {
+    fn incrbyfloat(self, key: impl Serialize, increment: f64) -> PreparedCommand<'a, Self, f64> {
         prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
     }
 
@@ -313,7 +321,11 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<R: Response>(self, key1: impl Args, key2: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn lcs<R: Response>(
+        self,
+        key1: impl Serialize,
+        key2: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2))
     }
 
@@ -325,7 +337,11 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs_len(self, key1: impl Args, key2: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn lcs_len(
+        self,
+        key1: impl Serialize,
+        key2: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
     }
 
@@ -341,8 +357,8 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn lcs_idx(
         self,
-        key1: impl Args,
-        key2: impl Args,
+        key1: impl Serialize,
+        key2: impl Serialize,
         min_match_len: Option<usize>,
         with_match_len: bool,
     ) -> PreparedCommand<'a, Self, LcsResult> {
@@ -368,7 +384,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn mget<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("MGET").arg(keys))
     }
 
@@ -380,7 +396,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
-    fn mset(self, items: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn mset(self, items: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("MSET").arg(items))
     }
 
@@ -402,7 +418,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
-    fn msetnx(self, items: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn msetnx(self, items: impl Serialize) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("MSETNX").arg(items))
     }
 
@@ -417,9 +433,9 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn psetex(
         self,
-        key: impl Args,
+        key: impl Serialize,
         milliseconds: u64,
-        value: impl Args,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
     }
@@ -432,7 +448,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn set(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SET").arg(key).arg(value))
     }
 
@@ -446,22 +462,20 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set_with_options(
+    fn set_with_options<'b>(
         self,
-        key: impl Args,
-        value: impl Args,
-        condition: SetCondition,
-        expiration: SetExpiration,
-        keep_ttl: bool,
+        key: impl Serialize,
+        value: impl Serialize,
+        condition: impl Into<Option<SetCondition<'b>>>,
+        expiration: impl Into<Option<SetExpiration>>,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
             cmd("SET")
                 .arg(key)
                 .arg(value)
-                .arg(condition)
-                .arg(expiration)
-                .arg_if(keep_ttl, "KEEPTTL"),
+                .arg(condition.into())
+                .arg(expiration.into()),
         )
     }
 
@@ -470,23 +484,21 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set_get_with_options<R: Response>(
+    fn set_get_with_options<'b, R: Response>(
         self,
-        key: impl Args,
-        value: impl Args,
-        condition: SetCondition,
-        expiration: SetExpiration,
-        keep_ttl: bool,
+        key: impl Serialize,
+        value: impl Serialize,
+        condition: impl Into<Option<SetCondition<'b>>>,
+        expiration: impl Into<Option<SetExpiration>>,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("SET")
                 .arg(key)
                 .arg(value)
-                .arg(condition)
+                .arg(condition.into())
                 .arg("GET")
-                .arg(expiration)
-                .arg_if(keep_ttl, "KEEPTTL"),
+                .arg(expiration.into())
         )
     }
 
@@ -497,9 +509,9 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn setex(
         self,
-        key: impl Args,
+        key: impl Serialize,
         seconds: u64,
-        value: impl Args,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
     }
@@ -518,7 +530,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
-    fn setnx(self, key: impl Args, value: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn setnx(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SETNX").arg(key).arg(value))
     }
 
@@ -534,9 +546,9 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn setrange(
         self,
-        key: impl Args,
+        key: impl Serialize,
         offset: usize,
-        value: impl Args,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
     }
@@ -551,7 +563,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
-    fn strlen(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn strlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("STRLEN").arg(key))
     }
 
@@ -594,7 +606,7 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn substr<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -603,6 +615,8 @@ pub trait StringCommands<'a>: Sized {
 }
 
 /// Options for the [`getex`](StringCommands::getex) and the [`hgetex`](crate::commands::HashCommands::hgetex) commands
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -614,18 +628,6 @@ pub enum GetExOptions {
     Pxat(u64),
     /// Remove the time to live associated with the key.
     Persist,
-}
-
-impl Args for GetExOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            GetExOptions::Ex(duration) => args.arg(("EX", *duration)),
-            GetExOptions::Px(duration) => args.arg(("PX", *duration)),
-            GetExOptions::Exat(timestamp) => args.arg(("EXAT", *timestamp)),
-            GetExOptions::Pxat(timestamp) => args.arg(("PXAT", *timestamp)),
-            GetExOptions::Persist => args.arg("PERSIST"),
-        };
-    }
 }
 
 /// Part of the result for the [`lcs`](StringCommands::lcs) command
@@ -676,11 +678,9 @@ pub struct LcsResult {
 }
 
 /// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](crate::commands::HashCommands::hsetex) commands
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum SetExpiration {
-    /// No expiration
-    #[default]
-    None,
     /// Set the specified expire time, in seconds.
     Ex(u64),
     /// Set the specified expire time, in milliseconds.
@@ -689,50 +689,22 @@ pub enum SetExpiration {
     Exat(u64),
     /// Set the specified Unix time at which the key will expire, in milliseconds.
     Pxat(u64),
-}
-
-impl Args for SetExpiration {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            SetExpiration::None => {}
-            SetExpiration::Ex(duration) => {
-                args.arg(("EX", *duration));
-            }
-            SetExpiration::Px(duration) => {
-                args.arg(("PX", *duration));
-            }
-            SetExpiration::Exat(timestamp) => {
-                args.arg(("EXAT", *timestamp));
-            }
-            SetExpiration::Pxat(timestamp) => {
-                args.arg(("PXAT", *timestamp));
-            }
-        };
-    }
+    /// Retain the time to live associated with the key.
+    KeepTtl,
 }
 
 /// Condition option for the [`set_with_options`](StringCommands::set_with_options) command
-#[derive(Default)]
-pub enum SetCondition {
-    /// No condition
-    #[default]
-    None,
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum SetCondition<'a> {
     /// Only set the key if it does not already exist.
     NX,
     /// Only set the key if it already exist.
     XX,
-}
-
-impl Args for SetCondition {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            SetCondition::None => {}
-            SetCondition::NX => {
-                args.arg("NX");
-            }
-            SetCondition::XX => {
-                args.arg("XX");
-            }
-        }
-    }
+    /// Set the key’s value and expiration only if the hash digest of its current value is equal to the provided value.
+    /// If the key doesn’t exist, it won’t be created.
+    IFEQ(&'a str),
+    /// Set the key’s value and expiration only if the hash digest of its current value is not equal to the provided value.
+    /// If the key doesn’t exist, it will be created.
+    IFDNE(&'a str),
 }

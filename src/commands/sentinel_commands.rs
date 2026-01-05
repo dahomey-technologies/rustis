@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, Value, cmd},
+    resp::{Response, Value, cmd},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
 /// # See Also
@@ -13,7 +13,10 @@ pub trait SentinelCommands<'a>: Sized {
     /// The specified name may be a wildcard.
     /// Similar to the Redis [`config_get`](crate::commands::ServerCommands::config_get) command.
     #[must_use]
-    fn sentinel_config_get<R: Response>(self, name: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn sentinel_config_get<R: Response>(
+        self,
+        name: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SENTINEL").arg("CONFIG").arg("GET").arg(name))
     }
 
@@ -21,8 +24,8 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_config_set(
         self,
-        name: impl Args,
-        value: impl Args,
+        name: impl Serialize,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
@@ -39,7 +42,7 @@ pub trait SentinelCommands<'a>: Sized {
     ///
     /// This command should be used in monitoring systems to check if a Sentinel deployment is ok.
     #[must_use]
-    fn sentinel_ckquorum(self, master_name: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_ckquorum(self, master_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("CKQUORUM").arg(master_name))
     }
 
@@ -48,7 +51,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// (however a new version of the configuration will be published
     /// so that the other Sentinels will update their configurations).
     #[must_use]
-    fn sentinel_failover<N>(self, master_name: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_failover<N>(self, master_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("FAILOVER").arg(master_name))
     }
 
@@ -81,7 +84,7 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_get_master_addr_by_name(
         self,
-        master_name: impl Args,
+        master_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<(String, u16)>> {
         prepare_command(
             self,
@@ -95,7 +98,7 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_info_cache<R: Response>(
         self,
-        master_names: impl Args,
+        master_names: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SENTINEL").arg("INFO-CACHE").arg(master_names))
     }
@@ -104,7 +107,7 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_master(
         self,
-        master_name: impl Args,
+        master_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, SentinelMasterInfo> {
         prepare_command(self, cmd("SENTINEL").arg("MASTER").arg(master_name))
     }
@@ -127,8 +130,8 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_monitor(
         self,
-        name: impl Args,
-        ip: impl Args,
+        name: impl Serialize,
+        ip: impl Serialize,
         port: u16,
         quorum: usize,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -149,7 +152,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// and will totally be removed from the internal state of the Sentinel,
     /// so it will no longer listed by [`sentinel_masters`](SentinelCommands::sentinel_masters) and so forth.
     #[must_use]
-    fn sentinel_remove(self, name: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_remove(self, name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("REMOVE").arg(name))
     }
 
@@ -160,7 +163,11 @@ pub trait SentinelCommands<'a>: Sized {
     /// All the configuration parameters that can be configured via `sentinel.conf`
     /// are also configurable using this command.
     #[must_use]
-    fn sentinel_set(self, name: impl Args, configs: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_set(
+        self,
+        name: impl Serialize,
+        configs: impl Serialize,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("SET").arg(name).arg(configs))
     }
 
@@ -180,7 +187,7 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_replicas(
         self,
-        master_name: impl Args,
+        master_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<SentinelReplicaInfo>> {
         prepare_command(self, cmd("SENTINEL").arg("REPLICAS").arg(master_name))
     }
@@ -194,7 +201,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// # Return
     /// The number of reset masters
     #[must_use]
-    fn sentinel_reset(self, pattern: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn sentinel_reset(self, pattern: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SENTINEL").arg("RESET").arg(pattern))
     }
 
@@ -202,7 +209,7 @@ pub trait SentinelCommands<'a>: Sized {
     #[must_use]
     fn sentinel_sentinels(
         self,
-        master_name: impl Args,
+        master_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<SentinelInfo>> {
         prepare_command(self, cmd("SENTINEL").arg("SENTINELS").arg(master_name))
     }
@@ -295,16 +302,9 @@ pub struct SentinelInfo {
 
 /// Different crash simulation scenario modes for
 /// the [`sentinel_simulate_failure`](SentinelCommands::sentinel_simulate_failure) command
+#[derive(Serialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
 pub enum SentinelSimulateFailureMode {
     CrashAfterElection,
     CrashAfterPromotion,
-}
-
-impl Args for SentinelSimulateFailureMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            SentinelSimulateFailureMode::CrashAfterElection => "CRASH-AFTER-ELECTION",
-            SentinelSimulateFailureMode::CrashAfterPromotion => "CRASH-AFTER-PROMOTION",
-        });
-    }
 }

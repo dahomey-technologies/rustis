@@ -1,9 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd, serialize_flag},
 };
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{
         self, Unexpected, Visitor,
         value::{BytesDeserializer, SeqAccessDeserializer},
@@ -27,16 +27,16 @@ pub trait GeoCommands<'a>: Sized {
     #[must_use]
     fn geoadd(
         self,
-        key: impl Args,
-        condition: GeoAddCondition,
+        key: impl Serialize,
+        condition: impl Into<Option<GeoAddCondition>>,
         change: bool,
-        items: impl Args,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("GEOADD")
                 .arg(key)
-                .arg(condition)
+                .arg(condition.into())
                 .arg_if(change, "CH")
                 .arg(items),
         )
@@ -53,9 +53,9 @@ pub trait GeoCommands<'a>: Sized {
     #[must_use]
     fn geodist(
         self,
-        key: impl Args,
-        member1: impl Args,
-        member2: impl Args,
+        key: impl Serialize,
+        member1: impl Serialize,
+        member2: impl Serialize,
         unit: GeoUnit,
     ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(
@@ -75,8 +75,8 @@ pub trait GeoCommands<'a>: Sized {
     #[must_use]
     fn geohash<R: Response>(
         self,
-        key: impl Args,
-        members: impl Args,
+        key: impl Serialize,
+        members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
     }
@@ -94,8 +94,8 @@ pub trait GeoCommands<'a>: Sized {
     #[must_use]
     fn geopos(
         self,
-        key: impl Args,
-        members: impl Args,
+        key: impl Serialize,
+        members: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>> {
         prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
     }
@@ -110,10 +110,10 @@ pub trait GeoCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
-    fn geosearch<F: Args, R: Response>(
+    fn geosearch<'b, R: Response>(
         self,
-        key: impl Args,
-        from: GeoSearchFrom<F>,
+        key: impl Serialize,
+        from: GeoSearchFrom<'b>,
         by: GeoSearchBy,
         options: GeoSearchOptions,
     ) -> PreparedCommand<'a, Self, R> {
@@ -131,14 +131,14 @@ pub trait GeoCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/geosearchstore/>](https://redis.io/commands/geosearchstore/)
     #[must_use]
-    fn geosearchstore<F: Args>(
+    fn geosearchstore<'b>(
         self,
-        destination: impl Args,
-        source: impl Args,
-        from: GeoSearchFrom<F>,
+        destination: impl Serialize,
+        source: impl Serialize,
+        from: GeoSearchFrom<'b>,
         by: GeoSearchBy,
         options: GeoSearchStoreOptions,
-    ) -> PreparedCommand<'a, Self, usize> {
+    ) -> PreparedCommand<'a, Self, u32> {
         prepare_command(
             self,
             cmd("GEOSEARCHSTORE")
@@ -152,103 +152,72 @@ pub trait GeoCommands<'a>: Sized {
 }
 
 /// Condition for the [`geoadd`](GeoCommands::geoadd) command
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum GeoAddCondition {
-    /// No option
-    #[default]
-    None,
     /// Don't update already existing elements. Always add new elements.
     NX,
     /// Only update elements that already exist. Never add elements.
     XX,
 }
 
-impl Args for GeoAddCondition {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            GeoAddCondition::None => {}
-            GeoAddCondition::NX => {
-                args.arg("NX");
-            }
-            GeoAddCondition::XX => {
-                args.arg("XX");
-            }
-        }
-    }
-}
-
 /// Distance Unit
+#[derive(Serialize)]
 pub enum GeoUnit {
+    #[serde(rename = "M")]
     Meters,
+    #[serde(rename = "KM")]
     Kilometers,
+    #[serde(rename = "MI")]
     Miles,
+    #[serde(rename = "FT")]
     Feet,
 }
 
-impl Args for GeoUnit {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            GeoUnit::Meters => "m",
-            GeoUnit::Kilometers => "km",
-            GeoUnit::Miles => "mi",
-            GeoUnit::Feet => "ft",
-        });
-    }
-}
-
 /// The query's center point is provided by one of these mandatory options:
-pub enum GeoSearchFrom<M: Args> {
+#[derive(Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub enum GeoSearchFrom<'a> {
     /// Use the position of the given existing `member` in the sorted set.
-    FromMember { member: M },
+    FromMember(&'a str),
     /// Use the given `longitude` and `latitude` position.
-    FromLonLat { longitude: f64, latitude: f64 },
+    FromLonLat(f64, f64),
 }
 
-impl<M: Args> Args for GeoSearchFrom<M> {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            GeoSearchFrom::FromMember { member } => args.arg("FROMMEMBER").arg_ref(member),
-            GeoSearchFrom::FromLonLat {
-                longitude,
-                latitude,
-            } => args.arg("FROMLONLAT").arg(*longitude).arg(*latitude),
-        };
+impl<'a> GeoSearchFrom<'a> {
+    pub fn from_member(member: &'a str) -> Self {
+        Self::FromMember(member)
+    }
+
+    pub fn from_longitude_latitude(longitude: f64, latitude: f64) -> Self {
+        Self::FromLonLat(longitude, latitude)
     }
 }
 
 /// The query's shape is provided by one of these mandatory options:
+#[derive(Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub enum GeoSearchBy {
     /// Search inside circular area according to given `radius` in the specified `unit`.
-    ByRadius { radius: f64, unit: GeoUnit },
+    ByRadius(f64, GeoUnit),
     /// Search inside an axis-aligned rectangle, determined by `height` and `width` in the specified `unit`.
-    ByBox {
-        width: f64,
-        height: f64,
-        unit: GeoUnit,
-    },
+    ByBox(f64, f64, GeoUnit),
 }
 
-impl Args for GeoSearchBy {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            GeoSearchBy::ByRadius { radius, unit } => {
-                args.arg("BYRADIUS").arg_ref(radius).arg_ref(unit)
-            }
-            GeoSearchBy::ByBox {
-                width,
-                height,
-                unit,
-            } => args
-                .arg("BYBOX")
-                .arg_ref(width)
-                .arg_ref(height)
-                .arg_ref(unit),
-        };
+impl GeoSearchBy {
+    pub fn by_radius(radius: f64, unit: GeoUnit) -> Self {
+        Self::ByRadius(radius, unit)
+    }
+
+    pub fn by_box(width: f64, height: f64, unit: GeoUnit) -> Self {
+        Self::ByBox(width, height, unit)
     }
 }
 
 /// Matching items are returned unsorted by default.
 /// To sort them, use one of the following two options:
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum GeoSearchOrder {
     /// Sort returned items from the nearest to the farthest, relative to the center point.
     Asc,
@@ -256,66 +225,66 @@ pub enum GeoSearchOrder {
     Desc,
 }
 
-impl Args for GeoSearchOrder {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            GeoSearchOrder::Asc => args.arg("ASC"),
-            GeoSearchOrder::Desc => args.arg("DESC"),
-        };
-    }
-}
-
 /// Options for the [`geosearch`](GeoCommands::geosearch) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct GeoSearchOptions {
-    command_args: CommandArgs,
+    #[serde(rename="", skip_serializing_if = "Option::is_none")]
+    order: Option<GeoSearchOrder>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    any: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withcoord: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withdist: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withhash: bool,
 }
 
 impl GeoSearchOptions {
     #[must_use]
     pub fn order(mut self, order: GeoSearchOrder) -> Self {
-        Self {
-            command_args: self.command_args.arg(order).build(),
-        }
+        self.order = Some(order);
+        self
     }
 
     #[must_use]
-    pub fn count(mut self, count: usize, any: bool) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("COUNT")
-                .arg(count)
-                .arg_if(any, "ANY")
-                .build(),
-        }
+    pub fn count(mut self, count: u32, any: bool) -> Self {
+        self.count = Some(count);
+        self.any = any;
+        self
     }
 
     #[must_use]
     pub fn with_coord(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHCOORD").build(),
-        }
+        self.withcoord = true;
+        self
     }
 
     #[must_use]
     pub fn with_dist(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHDIST").build(),
-        }
+        self.withdist = true;
+        self
     }
 
     #[must_use]
     pub fn with_hash(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHHASH").build(),
-        }
-    }
-}
-
-impl Args for GeoSearchOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.withhash = true;
+        self
     }
 }
 
@@ -464,41 +433,42 @@ impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R
 }
 
 /// Options for the [`geosearchstore`](GeoCommands::geosearchstore) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct GeoSearchStoreOptions {
-    command_args: CommandArgs,
+    #[serde(rename="", skip_serializing_if = "Option::is_none")]
+    order: Option<GeoSearchOrder>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    any: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    storedist: bool,
 }
 
 impl GeoSearchStoreOptions {
     #[must_use]
     pub fn order(mut self, order: GeoSearchOrder) -> Self {
-        Self {
-            command_args: self.command_args.arg(order).build(),
-        }
+        self.order = Some(order);
+        self
     }
 
     #[must_use]
-    pub fn count(mut self, count: usize, any: bool) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("COUNT")
-                .arg(count)
-                .arg_if(any, "ANY")
-                .build(),
-        }
+    pub fn count(mut self, count: u32, any: bool) -> Self {
+        self.count = Some(count);
+        self.any = any;
+        self
     }
 
     #[must_use]
     pub fn store_dist(mut self, store_dist: bool) -> Self {
-        Self {
-            command_args: self.command_args.arg_if(store_dist, "STOREDIST").build(),
-        }
-    }
-}
-
-impl Args for GeoSearchStoreOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.storedist = store_dist;
+        self
     }
 }

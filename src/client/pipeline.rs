@@ -1,17 +1,21 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
-use crate::commands::{
-    BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-    TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
-};
 use crate::{
     Result,
     client::{Client, PreparedCommand},
     commands::{
-        BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
-        HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
-        SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+        BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands, CountMinSketchCommands,
+        CuckooCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
+        JsonCommands, ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, VectorSetCommands,
     },
+    // commands::{
+    //     BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
+    //     TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
+    //     BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
+    //     HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
+    //     SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+    // },
     resp::{Command, RespBatchDeserializer, Response},
 };
 use serde::de::DeserializeOwned;
@@ -147,9 +151,9 @@ impl<'a> CountMinSketchCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> CuckooCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> GenericCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> GeoCommands<'a> for &'a mut Pipeline<'_> {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-impl<'a> GraphCommands<'a> for &'a mut Pipeline<'_> {}
+// #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
+// #[cfg(feature = "redis-graph")]
+// impl<'a> GraphCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> HashCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> HyperLogLogCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> JsonCommands<'a> for &'a mut Pipeline<'_> {}
@@ -161,7 +165,7 @@ impl<'a> ServerCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> SortedSetCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> StreamCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> StringCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
+// impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
+// impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
+// impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> VectorSetCommands<'a> for &'a Pipeline<'_> {}

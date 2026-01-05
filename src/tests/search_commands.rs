@@ -2,12 +2,12 @@ use crate::{
     Result,
     client::{BatchPreparedCommand, Client},
     commands::{
-        ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtCreateOptions,
-        FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtIndexDataType, FtLanguage,
-        FtLoadAttribute, FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult, FtSortBy,
-        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
-        FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
-        SearchCommands, ServerCommands, SetCondition, SortOrder,
+        ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
+        FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtGroupBy,
+        FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult,
+        FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions,
+        FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
+        FtWithCursorOptions, HashCommands, JsonCommands, SearchCommands, ServerCommands, SortOrder,
     },
     network::sleep,
     resp::Value,
@@ -47,7 +47,7 @@ async fn ft_aggregate() -> Result<()> {
             "doc:1",
             "$",
             r#"[{"arr": [1, 2, 3]}, {"val": "hello"}, {"val": "world"}]"#,
-            SetCondition::None,
+            None,
         )
         .await?;
 
@@ -74,7 +74,8 @@ async fn ft_aggregate() -> Result<()> {
             "idx",
             "*",
             FtAggregateOptions::default()
-                .load([FtLoadAttribute::new("arr"), FtLoadAttribute::new("val")]),
+                .load(FtAttribute::new("arr"))
+                .load(FtAttribute::new("val")),
         )
         .await?;
 
@@ -85,10 +86,12 @@ async fn ft_aggregate() -> Result<()> {
             FtAggregateOptions::default()
                 .apply("day(@timestamp)", "day")
                 .groupby(
-                    ["@day", "@country"],
-                    FtReducer::count().as_name("num_visits"),
+                    FtGroupBy::default()
+                        .property("@day")
+                        .property("@country")
+                        .reduce(FtReducer::count().as_name("num_visits")),
                 )
-                .sortby(FtSortBy::property("@day"), None),
+                .sortby(FtSortBy::default().property(FtSortByProperty::new("@day"))),
         )
         .await;
 
@@ -98,13 +101,13 @@ async fn ft_aggregate() -> Result<()> {
             "*",
             FtAggregateOptions::default()
                 .groupby(
-                    "@published_year",
-                    FtReducer::count().as_name("num_published"),
+                    FtGroupBy::default()
+                        .property("@published_year")
+                        .reduce(FtReducer::count().as_name("num_published")),
                 )
-                .groupby(
-                    Vec::<String>::new(),
+                .groupby(FtGroupBy::default().reduce(
                     FtReducer::max("@num_published").as_name("max_books_published_per_year"),
-                ),
+                )),
         )
         .await;
 
@@ -113,7 +116,7 @@ async fn ft_aggregate() -> Result<()> {
             "libraries-idx",
             "@location:[-73.982254 40.753181 10 km]",
             FtAggregateOptions::default()
-                .load(FtLoadAttribute::new("@location"))
+                .load(FtAttribute::new("@location"))
                 .apply("geodistance(@location, -73.982254, 40.753181)", "day"),
         )
         .await;
@@ -123,8 +126,16 @@ async fn ft_aggregate() -> Result<()> {
             "gh",
             "*",
             FtAggregateOptions::default()
-                .groupby("@actor", FtReducer::count().as_name("num"))
-                .sortby(FtSortBy::property("@day").desc(), Some(10)),
+                .groupby(
+                    FtGroupBy::default()
+                        .property("@actor")
+                        .reduce(FtReducer::count().as_name("num")),
+                )
+                .sortby(
+                    FtSortBy::default()
+                        .property(FtSortByProperty::new("@day").desc())
+                        .max(10),
+                ),
         )
         .await;
 
@@ -148,15 +159,14 @@ async fn ft_aggregate() -> Result<()> {
         .ft_aggregate(
             "idx2",
             "*",
-            FtAggregateOptions::default().groupby(
-                Vec::<String>::new(),
+            FtAggregateOptions::default().groupby(FtGroupBy::default().reduce(
                 FtReducer::first_value_by_order("@name", "@age", SortOrder::Desc),
-            ),
+            )),
         )
         .await;
 
     // example from Redis official documentation
-    // https://redis.io/docs/stack/search/reference/aggregations/#quick-example
+    // https://redis.io/docs/latest/develop/ai/search-and-query/advanced-concepts/aggregations/#example-1-unique-users-by-hour-ordered-chronologically
     client
         .hset(
             "log:1",
@@ -238,10 +248,11 @@ async fn ft_aggregate() -> Result<()> {
             FtAggregateOptions::default()
                 .apply("@timestamp - (@timestamp % 3600)", "hour")
                 .groupby(
-                    "@hour",
-                    FtReducer::count_distinct("@user_id").as_name("num_users"),
+                    FtGroupBy::default()
+                        .property("@hour")
+                        .reduce(FtReducer::count_distinct("@user_id").as_name("num_users")),
                 )
-                .sortby(FtSortBy::property("@hour").asc(), None)
+                .sortby(FtSortBy::default().property(FtSortByProperty::new("@hour").asc()))
                 .apply("timefmt(@hour)", "hour"),
         )
         .await?;
@@ -394,7 +405,8 @@ async fn ft_create() -> Result<()> {
             "author-books-idx",
             FtCreateOptions::default()
                 .on(FtIndexDataType::Hash)
-                .prefix(["author:details:", "book:details:"]),
+                .prefix("author:details:")
+                .prefix("book:details:"),
             [
                 FtFieldSchema::identifier("author_id").field_type(FtFieldType::Tag),
                 FtFieldSchema::identifier("title").field_type(FtFieldType::Text),
@@ -569,10 +581,11 @@ async fn ft_cursor() -> Result<()> {
             "*",
             FtAggregateOptions::default()
                 .groupby(
-                    "@url",
-                    FtReducer::count_distinct("@user_id").as_name("num_users"),
+                    FtGroupBy::default()
+                        .property("@url")
+                        .reduce(FtReducer::count_distinct("@user_id").as_name("num_users")),
                 )
-                .sortby(FtSortBy::property("@num_users").desc(), None)
+                .sortby(FtSortBy::default().property(FtSortByProperty::new("@num_users").desc()))
                 .limit(0, 100)
                 .withcursor(FtWithCursorOptions::default().count(10)),
         )
@@ -800,9 +813,11 @@ async fn ft_info() -> Result<()> {
                 .nohl()
                 .nofields()
                 .nofreqs()
-                .prefix(["log", "doc"])
+                .prefix("log")
+                .prefix("doc")
                 .skip_initial_scan()
-                .stop_words(["hello", "world"]),
+                .stop_word("hello")
+                .stop_word("world"),
             [
                 FtFieldSchema::identifier("text")
                     .field_type(FtFieldType::Text)
@@ -1049,7 +1064,7 @@ async fn ft_search() -> Result<()> {
                 .withscores()
                 .withsortkeys()
                 .withpayloads()
-                .sortby("title", SortOrder::Asc),
+                .sortby("title", SortOrder::Asc, false),
         )
         .await?;
     log::debug!("result: {result:?}");
@@ -1276,7 +1291,7 @@ async fn ft_sugadd() -> Result<()> {
             "key",
             "hello world",
             1.,
-            FtSugAddOptions::default().incr().payload("foo"),
+            FtSugAddOptions::default().incr().payload(b"foo"),
         )
         .await?;
 
@@ -1315,15 +1330,15 @@ async fn ft_sugget() -> Result<()> {
             "key",
             "hello",
             1.,
-            FtSugAddOptions::default().payload("world"),
+            FtSugAddOptions::default().payload(b"world"),
         )
         .await?;
     client
-        .ft_sugadd("key", "hell", 1., FtSugAddOptions::default().payload("42"))
+        .ft_sugadd("key", "hell", 1., FtSugAddOptions::default().payload(b"42"))
         .await?;
 
     let suggestions = client
-        .ft_sugget("key", "hell", FtSugGetOptions::default().withpayload())
+        .ft_sugget("key", "hell", FtSugGetOptions::default().withpayloads())
         .await?;
     assert_eq!("hell".to_owned(), suggestions[0].suggestion);
     assert_eq!("42".to_owned(), suggestions[0].payload);
@@ -1336,7 +1351,7 @@ async fn ft_sugget() -> Result<()> {
         .ft_sugget(
             "key",
             "hell",
-            FtSugGetOptions::default().withpayload().withscores(),
+            FtSugGetOptions::default().withpayloads().withscores(),
         )
         .await?;
     assert_eq!("hell".to_owned(), suggestions[0].suggestion);

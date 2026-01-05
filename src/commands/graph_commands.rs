@@ -318,12 +318,12 @@ impl GraphResultSet {
     where
         D: Deserializer<'de>,
     {
-        struct GraphResultSetVisitor<'a, 'b> {
+        struct GraphResultSetVisitor<'a> {
             client: &'a Client,
-            cache_key: &'b str,
+            cache_key: &'a str,
         }
 
-        impl<'a, 'b, 'de> Visitor<'de> for GraphResultSetVisitor<'a, 'b> {
+        impl<'a, 'de> Visitor<'de> for GraphResultSetVisitor<'a> {
             type Value = GraphResultSet;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

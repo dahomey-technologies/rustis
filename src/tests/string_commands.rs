@@ -4,7 +4,7 @@ use crate::{
         FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
         SetExpiration, StringCommands,
     },
-    resp::{Value, arg_ref_iter, key_value_args_ref_iter},
+    resp::Value,
     tests::get_test_client,
 };
 use serial_test::serial;
@@ -440,12 +440,12 @@ async fn mget_mset() -> Result<()> {
     let keys = ["key1", "key2", "key3", "key4"];
 
     // cleanup
-    client.del(arg_ref_iter(keys.iter())).await?;
+    client.del(keys).await?;
 
     let items = [("key1", "value1"), ("key2", "value2"), ("key3", "value3")];
-    client.mset(key_value_args_ref_iter(items.iter())).await?;
+    client.mset(items).await?;
 
-    let values: Vec<Option<String>> = client.mget(arg_ref_iter(keys.iter())).await?;
+    let values: Vec<Option<String>> = client.mget(keys).await?;
     assert_eq!(4, values.len());
     assert!(matches!(&values[0], Some(value) if value == "value1"));
     assert!(matches!(&values[1], Some(value) if value == "value2"));
@@ -528,9 +528,8 @@ async fn set_with_options() -> Result<()> {
         .set_with_options(
             "key",
             "value",
-            Default::default(),
-            SetExpiration::Ex(1),
-            false,
+            None,
+            Some(SetExpiration::Ex(1)),
         )
         .await?;
     let value: String = client.get("key").await?;
@@ -544,9 +543,8 @@ async fn set_with_options() -> Result<()> {
         .set_with_options(
             "key",
             "value",
-            Default::default(),
-            SetExpiration::Px(1000),
-            false,
+            None,
+            Some(SetExpiration::Px(1000)),
         )
         .await?;
     let value: String = client.get("key").await?;
@@ -567,9 +565,8 @@ async fn set_with_options() -> Result<()> {
         .set_with_options(
             "key",
             "value",
-            Default::default(),
-            SetExpiration::Exat(time),
-            false,
+            None,
+            Some(SetExpiration::Exat(time)),
         )
         .await?;
     let value: String = client.get("key").await?;
@@ -590,9 +587,8 @@ async fn set_with_options() -> Result<()> {
         .set_with_options(
             "key",
             "value",
-            Default::default(),
-            SetExpiration::Pxat(time as u64),
-            false,
+            None,
+            Some(SetExpiration::Pxat(time as u64)),
         )
         .await?;
     let value: String = client.get("key").await?;
@@ -604,23 +600,23 @@ async fn set_with_options() -> Result<()> {
     // NX
     client.del("key").await?;
     let result = client
-        .set_with_options("key", "value", SetCondition::NX, Default::default(), false)
+        .set_with_options("key", "value", Some(SetCondition::NX), None)
         .await?;
     assert!(result);
     let result = client
-        .set_with_options("key", "value", SetCondition::NX, Default::default(), false)
+        .set_with_options("key", "value", Some(SetCondition::NX), None)
         .await?;
     assert!(!result);
 
     // XX
     client.del("key").await?;
     let result = client
-        .set_with_options("key", "value", SetCondition::XX, Default::default(), false)
+        .set_with_options("key", "value", Some(SetCondition::XX), None)
         .await?;
     assert!(!result);
     client.set("key", "value").await?;
     let result = client
-        .set_with_options("key", "value", SetCondition::XX, Default::default(), false)
+        .set_with_options("key", "value", Some(SetCondition::XX), None)
         .await?;
     assert!(result);
 
@@ -630,9 +626,8 @@ async fn set_with_options() -> Result<()> {
         .set_get_with_options(
             "key",
             "value",
-            Default::default(),
-            Default::default(),
-            false,
+            None,
+            None,
         )
         .await?;
     assert!(result.is_none());
@@ -641,9 +636,8 @@ async fn set_with_options() -> Result<()> {
         .set_get_with_options(
             "key",
             "value1",
-            Default::default(),
-            Default::default(),
-            false,
+            None,
+            None,
         )
         .await?;
     assert_eq!("value", result);

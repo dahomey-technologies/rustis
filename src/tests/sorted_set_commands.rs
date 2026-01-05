@@ -2,8 +2,8 @@ use crate::{
     Result,
     commands::{
         BZpopMinMaxResult, BlockingCommands, FlushingMode, GenericCommands, ServerCommands,
-        SortedSetCommands, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions, ZScanResult,
-        ZWhere,
+        SortedSetCommands, ZAddCondition, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions,
+        ZScanResult, ZWhere,
     },
     sleep, spawn,
     tests::get_test_client,
@@ -263,6 +263,15 @@ async fn zadd() -> Result<()> {
     assert_eq!(2, len);
 
     let len = client
+        .zadd(
+            "key",
+            [(4.0, "four"), (5.0, "five")],
+            ZAddOptions::default().condition(ZAddCondition::XX),
+        )
+        .await?;
+    assert_eq!(0, len);
+
+    let len = client
         .zadd("key", (1.0, "uno"), ZAddOptions::default())
         .await?;
     assert_eq!(1, len);
@@ -434,14 +443,14 @@ async fn zinter() -> Result<()> {
         .await?;
 
     let result: Vec<String> = client
-        .zinter(["key1", "key2"], None as Option<f64>, Default::default())
+        .zinter(["key1", "key2"], None as Option<f64>, None)
         .await?;
     assert_eq!(2, result.len());
     assert_eq!("one".to_owned(), result[0]);
     assert_eq!("two".to_owned(), result[1]);
 
     let result: Vec<(String, f64)> = client
-        .zinter_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
+        .zinter_with_scores(["key1", "key2"], None as Option<f64>, None)
         .await?;
     assert_eq!(2, result.len());
     assert_eq!(("one".to_owned(), 2.0), result[0]);
@@ -471,12 +480,7 @@ async fn zinterstore() -> Result<()> {
         .await?;
 
     let len = client
-        .zinterstore(
-            "out",
-            ["key1", "key2"],
-            Some([2.0, 3.0]),
-            Default::default(),
-        )
+        .zinterstore("out", ["key1", "key2"], Some([2.0, 3.0]), None)
         .await?;
     assert_eq!(2, len);
 
@@ -1049,7 +1053,7 @@ async fn zunion() -> Result<()> {
         .await?;
 
     let result: Vec<String> = client
-        .zunion(["key1", "key2"], None as Option<f64>, Default::default())
+        .zunion(["key1", "key2"], None as Option<f64>, None)
         .await?;
     assert_eq!(3, result.len());
     assert_eq!("one".to_owned(), result[0]);
@@ -1057,7 +1061,7 @@ async fn zunion() -> Result<()> {
     assert_eq!("two".to_owned(), result[2]);
 
     let result: Vec<(String, f64)> = client
-        .zunion_with_scores(["key1", "key2"], None as Option<f64>, Default::default())
+        .zunion_with_scores(["key1", "key2"], None as Option<f64>, None)
         .await?;
     assert_eq!(3, result.len());
     assert_eq!(("one".to_owned(), 2.0), result[0]);
@@ -1088,12 +1092,7 @@ async fn zunionstore() -> Result<()> {
         .await?;
 
     let len = client
-        .zunionstore(
-            "out",
-            ["key1", "key2"],
-            Some([2.0, 3.0]),
-            Default::default(),
-        )
+        .zunionstore("out", ["key1", "key2"], Some([2.0, 3.0]), None)
         .await?;
     assert_eq!(3, len);
 

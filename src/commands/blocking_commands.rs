@@ -2,11 +2,10 @@ use crate::{
     Result,
     client::{MonitorStream, PreparedCommand, prepare_command},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{Args, Response, cmd, deserialize_vec_of_triplets},
+    resp::{Response, cmd, deserialize_vec_of_triplets},
 };
 use serde::{
-    Deserialize, Deserializer,
-    de::{DeserializeOwned, Visitor},
+    Deserialize, Deserializer, Serialize, de::{DeserializeOwned, Visitor}
 };
 use std::{fmt, marker::PhantomData};
 
@@ -77,8 +76,8 @@ pub trait BlockingCommands<'a>: Sized {
     #[must_use]
     fn blmove<R: Response>(
         self,
-        source: impl Args,
-        destination: impl Args,
+        source: impl Serialize,
+        destination: impl Serialize,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
         timeout: f64,
@@ -106,7 +105,7 @@ pub trait BlockingCommands<'a>: Sized {
     fn blmpop<R: Response + DeserializeOwned>(
         self,
         timeout: f64,
-        keys: impl Args,
+        keys: impl Serialize,
         where_: LMoveWhere,
         count: usize,
     ) -> PreparedCommand<'a, Self, Option<(String, R)>> {
@@ -114,8 +113,7 @@ pub trait BlockingCommands<'a>: Sized {
             self,
             cmd("BLMPOP")
                 .arg(timeout)
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -140,7 +138,7 @@ pub trait BlockingCommands<'a>: Sized {
     #[must_use]
     fn blpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
         prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
@@ -164,7 +162,7 @@ pub trait BlockingCommands<'a>: Sized {
     #[must_use]
     fn brpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
         prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
@@ -184,7 +182,7 @@ pub trait BlockingCommands<'a>: Sized {
     fn bzmpop<R: Response + DeserializeOwned>(
         self,
         timeout: f64,
-        keys: impl Args,
+        keys: impl Serialize,
         where_: ZWhere,
         count: usize,
     ) -> PreparedCommand<'a, Self, Option<ZMPopResult<R>>> {
@@ -192,8 +190,7 @@ pub trait BlockingCommands<'a>: Sized {
             self,
             cmd("BZMPOP")
                 .arg(timeout)
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -214,7 +211,7 @@ pub trait BlockingCommands<'a>: Sized {
     #[must_use]
     fn bzpopmax<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
         prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
@@ -234,7 +231,7 @@ pub trait BlockingCommands<'a>: Sized {
     #[must_use]
     fn bzpopmin<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
         prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))

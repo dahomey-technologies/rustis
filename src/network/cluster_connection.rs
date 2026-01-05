@@ -6,7 +6,7 @@ use crate::{
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::{CommandInfoManager, Version},
-    resp::{Command, RespBuf, RespDeserializer, RespSerializer},
+    resp::{Command, NetworkCommand, RespBuf, RespDeserializer, RespSerializer},
 };
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
@@ -130,15 +130,15 @@ impl ClusterConnection {
         })
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
         self.internal_write(command, &[]).await
     }
 
     async fn internal_write(
         &mut self,
-        command: &Command,
+        command: &NetworkCommand,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
+    ) -> Result<()> {/*
         debug!("[{}] Analyzing command {command:?}", self.tag);
 
         let command_info = self.command_info_manager.get_command_info(command);
@@ -148,7 +148,7 @@ impl ClusterConnection {
         } else {
             return Err(Error::Client(format!(
                 "[{}] Unknown command {}",
-                self.tag, command.name
+                self.tag, String::from_utf8_lossy(command.get_name())
             )));
         };
 
@@ -198,16 +198,16 @@ impl ClusterConnection {
         } else {
             self.no_request_policy(command, command_name, keys, slots, ask_reasons)
                 .await?;
-        }
+        }*/
 
         Ok(())
     }
 
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
+        commands: SmallVec<[&mut NetworkCommand; 10]>,
         retry_reasons: &[RetryReason],
-    ) -> Result<()> {
+    ) -> Result<()> {/*
         if retry_reasons.iter().any(|r| {
             matches!(
                 r,
@@ -264,7 +264,7 @@ impl ClusterConnection {
             for command in commands {
                 self.internal_write(command, &ask_reasons).await?;
             }
-        }
+        }*/
 
         Ok(())
     }
@@ -274,7 +274,7 @@ impl ClusterConnection {
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(
         &mut self,
-        command: &Command,
+        command: &NetworkCommand,
         command_name: &str,
         keys: SmallVec<[String; 10]>,
     ) -> Result<()> {
@@ -308,7 +308,7 @@ impl ClusterConnection {
     /// The command operates atomically per shard.
     async fn request_policy_all_nodes(
         &mut self,
-        command: &Command,
+        command: &NetworkCommand,
         command_name: &str,
         keys: SmallVec<[String; 10]>,
     ) -> Result<()> {
@@ -350,7 +350,7 @@ impl ClusterConnection {
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
+    ) -> Result<()> {/*
         let mut node_slot_keys_ask = (0..keys.len())
             .map(|i| {
                 let (node_index, should_ask) = self
@@ -429,7 +429,7 @@ impl ClusterConnection {
 
         trace!("{request_info:?}");
 
-        self.pending_requests.push_back(request_info);
+        self.pending_requests.push_back(request_info);*/
 
         Ok(())
     }
@@ -441,7 +441,7 @@ impl ClusterConnection {
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
+    ) -> Result<()> {/*
         // test if all slots are equal
         if slots.windows(2).all(|s| s[0] == s[1]) {
             let (node_idx, should_ask) = if slots.is_empty() {
@@ -477,7 +477,7 @@ impl ClusterConnection {
                 "[{}] Cannot send command {} with mismatched key slots",
                 self.tag, command_name
             )));
-        }
+        }*/
 
         Ok(())
     }

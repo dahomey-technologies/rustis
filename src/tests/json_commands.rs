@@ -19,7 +19,7 @@ async fn json_arrappend() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":[1,2,3]},{"bar":[3,4,5]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -47,7 +47,7 @@ async fn json_arrindex() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":[1,2,3]},{"bar":[3,4,5]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -92,7 +92,7 @@ async fn json_arrinsert() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":[1,2,3]},{"bar":[3,4,5]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -129,7 +129,7 @@ async fn json_arrlen() -> Result<()> {
             "key",
             "$",
             r#"{"prop1":12,"prop2":"foo","prop3":["foo","bar"],"prop4":[12,13,14]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -155,7 +155,7 @@ async fn json_arrpop() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":[1,2,3]},{"bar":[3,4,5]}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -169,7 +169,7 @@ async fn json_arrpop() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -193,7 +193,7 @@ async fn json_arrtrim() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -222,7 +222,7 @@ async fn json_clear() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -248,7 +248,7 @@ async fn json_debug_memory() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -272,7 +272,7 @@ async fn json_del() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -297,7 +297,7 @@ async fn json_forget() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":["a","b","c"]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -322,7 +322,7 @@ async fn json_get() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":[1,2,3]},{"bar":[3,4,5]},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -346,7 +346,7 @@ async fn json_mget() -> Result<()> {
             "key1",
             "$",
             r#"{"a":1, "b": 2, "nested": {"a": 3}, "c": null}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -355,7 +355,7 @@ async fn json_mget() -> Result<()> {
             "key2",
             "$",
             r#"{"a":4, "b": 5, "nested": {"a": 6}, "c": null}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -379,7 +379,7 @@ async fn json_numincrby() -> Result<()> {
             "key",
             "$",
             r#"{"a":"b","b":[{"a":2}, {"a":5}, {"a":"c"}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -404,7 +404,7 @@ async fn json_nummultby() -> Result<()> {
             "key",
             "$",
             r#"{"a":"b","b":[{"a":2}, {"a":5}, {"a":"c"}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -429,7 +429,7 @@ async fn json_objkeys() -> Result<()> {
             "key",
             "$",
             r#"{"a":[3], "nested": {"a": {"b":2, "c": 1}}}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -455,7 +455,7 @@ async fn json_objlen() -> Result<()> {
             "key",
             "$",
             r#"{"a":[3], "nested": {"a": {"b":2, "c": 1}}}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -479,7 +479,7 @@ async fn json_resp() -> Result<()> {
             "key",
             "$",
             r#"{"prop1":12,"prop2":"foo","prop3": true,"prop4":null,"prop5":["foo","bar"],"prop6":{"prop1": "foo", "prop2": 12}}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -529,7 +529,7 @@ async fn json_strappend() -> Result<()> {
             "key",
             "$",
             r#"{"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -554,7 +554,7 @@ async fn json_strlen() -> Result<()> {
             "key",
             "$",
             r#"{"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -579,7 +579,7 @@ async fn json_toggle() -> Result<()> {
             "key",
             "$",
             r#"{"foo":[{"bar":true},{"bar":12}]}"#,
-            Default::default(),
+            None,
         )
         .await?;
 
@@ -614,7 +614,7 @@ async fn json_type() -> Result<()> {
             "key",
             "$",
             r#"{"a":2, "nested": {"a": true}, "foo": "bar"}"#,
-            Default::default(),
+            None,
         )
         .await?;
 

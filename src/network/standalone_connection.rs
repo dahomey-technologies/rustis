@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
-    resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
+    resp::{BufferDecoder, CommandEncoder, NetworkCommand, RespBuf},
     tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -88,9 +88,9 @@ impl StandaloneConnection {
         Ok(connection)
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
         if log_enabled!(Level::Debug) {
-            debug!("[{}] Sending {command:?}", self.tag);
+            debug!("[{}] Sending command: {command}", self.tag);
         }
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
@@ -101,7 +101,7 @@ impl StandaloneConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
+        commands: SmallVec<[&mut NetworkCommand; 10]>,
         _retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.buffer.clear();
@@ -117,7 +117,7 @@ impl StandaloneConnection {
 
         for command in commands {
             if log_enabled!(Level::Debug) {
-                debug!("[{}] Sending {command:?}", self.tag);
+                debug!("[{}] Sending command: {command}", self.tag);
             }
 
             #[cfg(debug_assertions)]
@@ -184,20 +184,24 @@ impl StandaloneConnection {
         // RESP3
         let mut hello_options = HelloOptions::new(3);
 
+        let config_username = self.config.username.clone();
+        let config_password = self.config.password.clone();
+        let config_connection_name = self.config.connection_name.clone();
+
         // authentication
-        if let Some(ref password) = self.config.password {
+        if let Some(password) = &config_password {
             hello_options = hello_options.auth(
-                match &self.config.username {
-                    Some(username) => username.clone(),
-                    None => "default".to_owned(),
+                match &config_username {
+                    Some(username) => username,
+                    None => "default",
                 },
-                password.clone(),
+                password,
             );
         }
 
         // connection name
-        if !self.config.connection_name.is_empty() {
-            hello_options = hello_options.set_name(self.config.connection_name.clone());
+        if !config_connection_name.is_empty() {
+            hello_options = hello_options.set_name(&config_connection_name);
         }
 
         let hello_result = self.hello(hello_options).await?;
@@ -229,7 +233,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            self.executor.write(&self.command).await?;
+            self.executor.write(&self.command.into()).await?;
 
             let resp_buf = self.executor.read().await.ok_or_else(|| {
                 Error::Client(format!("[{}] disconnected by peer", self.executor.tag()))

@@ -1,9 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::FlushingMode,
-    resp::{Args, CommandArgs, Response, cmd, deserialize_byte_buf},
+    resp::{BulkString, CommandArgsMut, Response, cmd, serialize_flag},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to Scripting and Functions
@@ -91,7 +91,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-delete/>](https://redis.io/commands/function-delete/)
     #[must_use]
-    fn function_delete(self, library_name: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn function_delete(self, library_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("FUNCTION").arg("DELETE").arg(library_name))
     }
 
@@ -105,7 +105,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-dump/>](https://redis.io/commands/function-dump/)
     #[must_use]
-    fn function_dump(self) -> PreparedCommand<'a, Self, FunctionDumpResult> {
+    fn function_dump(self) -> PreparedCommand<'a, Self, BulkString> {
         prepare_command(self, cmd("FUNCTION").arg("DUMP"))
     }
 
@@ -180,7 +180,7 @@ pub trait ScriptingCommands<'a>: Sized {
     fn function_load<R: Response>(
         self,
         replace: bool,
-        function_code: impl Args,
+        function_code: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
@@ -198,15 +198,15 @@ pub trait ScriptingCommands<'a>: Sized {
     #[must_use]
     fn function_restore(
         self,
-        serialized_payload: impl Args,
-        policy: FunctionRestorePolicy,
+        serialized_payload: &BulkString,
+        policy: impl Into<Option<FunctionRestorePolicy>>,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("FUNCTION")
                 .arg("RESTORE")
                 .arg(serialized_payload)
-                .arg(policy),
+                .arg(policy.into()),
         )
     }
 
@@ -236,7 +236,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-exists/>](https://redis.io/commands/script-exists/)
     #[must_use]
-    fn script_exists(self, sha1s: impl Args) -> PreparedCommand<'a, Self, Vec<bool>> {
+    fn script_exists(self, sha1s: impl Serialize) -> PreparedCommand<'a, Self, Vec<bool>> {
         prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
     }
 
@@ -267,7 +267,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
-    fn script_load<R: Response>(self, script: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn script_load<R: Response>(self, script: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
     }
 }
@@ -279,85 +279,66 @@ pub trait ScriptingCommands<'a>: Sized {
 /// * [`evalsha_readonly`](ScriptingCommands::evalsha_readonly)
 /// * [`fcall`](ScriptingCommands::fcall)
 /// * [`fcall_readonly`](ScriptingCommands::fcall_readonly)
-pub struct CallBuilder {
-    command_args: CommandArgs,
-    keys_added: bool,
-}
+#[derive(Serialize)]
+pub struct CallBuilder<'a>(&'a str, usize, CommandArgsMut, CommandArgsMut);
 
-impl CallBuilder {
+impl<'a> CallBuilder<'a> {
     /// Script name when used with [`eval`](ScriptingCommands::eval)
     /// and [`eval_readonly`](ScriptingCommands::eval_readonly) commands
     #[must_use]
-    pub fn script(script: impl Args) -> Self {
-        Self {
-            command_args: CommandArgs::default().arg(script).build(),
-            keys_added: false,
-        }
+    pub fn script(script: &'a str) -> Self {
+        Self(
+            script,
+            0,
+            CommandArgsMut::default(),
+            CommandArgsMut::default(),
+        )
     }
 
     /// Sha1 haxadecimal string when used with [`eval`](ScriptingCommands::evalsha)
     /// and [`evalsha_readonly`](ScriptingCommands::evalsha_readonly) commands
     #[must_use]
-    pub fn sha1(sha1: impl Args) -> Self {
-        Self {
-            command_args: CommandArgs::default().arg(sha1).build(),
-            keys_added: false,
-        }
+    pub fn sha1(sha1: &'a str) -> Self {
+        Self(
+            sha1,
+            0,
+            CommandArgsMut::default(),
+            CommandArgsMut::default(),
+        )
     }
 
     /// Sha1 haxadecimal string when used with [`fcall`](ScriptingCommands::fcall)
     /// and [`fcall_readonly`](ScriptingCommands::fcall_readonly) commands
     #[must_use]
-    pub fn function(function: impl Args) -> Self {
-        Self {
-            command_args: CommandArgs::default().arg(function).build(),
-            keys_added: false,
-        }
+    pub fn function(function: &'a str) -> Self {
+        Self(
+            function,
+            0,
+            CommandArgsMut::default(),
+            CommandArgsMut::default(),
+        )
     }
 
     /// All the keys accessed by the script.
     #[must_use]
-    pub fn keys(mut self, keys: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(keys.num_args()).arg(keys).build(),
-            keys_added: true,
-        }
+    pub fn keys(mut self, keys: impl Serialize) -> Self {
+        self.2 = self.2.arg(keys);
+        self.1 = self.2.len();
+        self
     }
 
     /// Additional input arguments that should not represent names of keys.
     #[must_use]
-    pub fn args(mut self, args: impl Args) -> Self {
-        let command_args = if self.keys_added {
-            self.command_args.arg(args).build()
-        } else {
-            // numkeys = 0
-            self.command_args.arg(0).arg(args).build()
-        };
-
-        Self {
-            command_args,
-            keys_added: true,
-        }
-    }
-}
-
-impl Args for CallBuilder {
-    fn write_args(&self, args: &mut CommandArgs) {
-        // no keys, no args
-        if self.command_args.len() == 1 {
-            args.arg(&self.command_args).arg(0);
-        } else {
-            args.arg(&self.command_args);
-        }
+    pub fn args(mut self, args: impl Serialize) -> Self {
+        self.3 = self.3.arg(args);
+        self
     }
 }
 
 /// Policy option for the [`function_restore`](ScriptingCommands::function_restore) command.
-#[derive(Default)]
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum FunctionRestorePolicy {
-    /// Append
-    #[default]
-    Default,
     /// Appends the restored libraries to the existing libraries and aborts on collision.
     /// This is the default policy.
     Append,
@@ -367,23 +348,6 @@ pub enum FunctionRestorePolicy {
     /// replacing any existing ones in case of name collisions.
     /// Note that this policy doesn't prevent function name collisions, only libraries.
     Replace,
-}
-
-impl Args for FunctionRestorePolicy {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            FunctionRestorePolicy::Default => {}
-            FunctionRestorePolicy::Append => {
-                args.arg("APPEND");
-            }
-            FunctionRestorePolicy::Flush => {
-                args.arg("FLUSH");
-            }
-            FunctionRestorePolicy::Replace => {
-                args.arg("REPLACE");
-            }
-        }
-    }
 }
 
 /// Result for the [`function_list`](ScriptingCommands::function_list) command.
@@ -442,6 +406,8 @@ pub struct EngineStats {
 }
 
 /// Options for the [`script_debug`](ScriptingCommands::script_debug) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ScriptDebugMode {
     /// Enable non-blocking asynchronous debugging of Lua scripts (changes are discarded).
     Yes,
@@ -451,50 +417,31 @@ pub enum ScriptDebugMode {
     No,
 }
 
-impl Args for ScriptDebugMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            ScriptDebugMode::Yes => args.arg("YES"),
-            ScriptDebugMode::Sync => args.arg("SYNC"),
-            ScriptDebugMode::No => args.arg("NO"),
-        };
-    }
-}
-
 /// Options for the [`function_list`](ScriptingCommands::function_list) command
-#[derive(Default)]
-pub struct FunctionListOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct FunctionListOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    libraryname: Option<&'a str>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withcode: bool,
 }
 
-impl FunctionListOptions {
+impl<'a> FunctionListOptions<'a> {
     /// specifies a pattern for matching library names.
     #[must_use]
-    pub fn library_name_pattern(mut self, library_name_pattern: impl Args) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("LIBRARYNAME")
-                .arg(library_name_pattern)
-                .build(),
-        }
+    pub fn library_name_pattern(mut self, library_name_pattern: &'a str) -> Self {
+        self.libraryname = Some(library_name_pattern);
+        self
     }
 
     /// will cause the server to include the libraries source implementation in the reply.
     #[must_use]
     pub fn with_code(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHCODE").build(),
-        }
+        self.withcode = true;
+        self
     }
 }
-
-impl Args for FunctionListOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
-}
-
-/// Result for the [`function_dump`](ScriptingCommands::function_dump) command.
-#[derive(Deserialize)]
-pub struct FunctionDumpResult(#[serde(deserialize_with = "deserialize_byte_buf")] pub Vec<u8>);

@@ -3,7 +3,7 @@ use crate::{
     StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
-    resp::{Command, RespBuf},
+    resp::{NetworkCommand, RespBuf},
 };
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
@@ -33,7 +33,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.write(command).await,
             Connection::Sentinel(connection) => connection.write(command).await,
@@ -44,7 +44,7 @@ impl Connection {
     #[inline]
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
+        commands: SmallVec<[&mut NetworkCommand; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         match self {
@@ -79,7 +79,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
+    pub async fn send(&mut self, command: &NetworkCommand) -> Result<RespBuf> {
         self.write(command).await?;
         self.read()
             .await
@@ -105,7 +105,7 @@ where
     #[inline]
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let result = self.executor.send(&self.command).await?;
+            let result = self.executor.send(&self.command.into()).await?;
             result.to()
         })
     }

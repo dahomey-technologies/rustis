@@ -70,7 +70,7 @@ impl RefPubSubMessage {
             type Value = Option<RefPubSubMessage>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Option<RefPubSubMessage>")
+                formatter.write_str("RefPubSubMessage")
             }
 
             fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>

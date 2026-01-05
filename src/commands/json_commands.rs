@@ -440,7 +440,11 @@ pub trait JsonCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
-            cmd("JSON.SET").arg(key).arg(path).arg(value).arg(condition.into()),
+            cmd("JSON.SET")
+                .arg(key)
+                .arg(path)
+                .arg(value)
+                .arg(condition.into()),
         )
     }
 

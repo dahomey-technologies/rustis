@@ -51,40 +51,28 @@ async fn hexpire() -> Result<()> {
 
     // xx
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hexpire("key", 10, ExpireOption::Xx, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Xx, "field").await?;
     assert_eq!(result, vec![0]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![-1]);
 
     // nx
-    let result: Vec<i64> = client
-        .hexpire("key", 10, ExpireOption::Nx, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 10, ExpireOption::Nx, "field").await?;
     assert_eq!(result, vec![1]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
     // gt
-    let result: Vec<i64> = client
-        .hexpire("key", 5, ExpireOption::Gt, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Gt, "field").await?;
     assert_eq!(result, vec![0]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
-    let result: Vec<i64> = client
-        .hexpire("key", 15, ExpireOption::Gt, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 15, ExpireOption::Gt, "field").await?;
     assert_eq!(result, vec![1]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
 
     // lt
-    let result: Vec<i64> = client
-        .hexpire("key", 20, ExpireOption::Lt, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 20, ExpireOption::Lt, "field").await?;
     assert_eq!(result, vec![0]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
-    let result: Vec<i64> = client
-        .hexpire("key", 5, ExpireOption::Lt, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 5, ExpireOption::Lt, "field").await?;
     assert_eq!(result, vec![1]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![5]);
 
@@ -625,12 +613,7 @@ async fn hsetex() -> Result<()> {
 
     // PX
     client
-        .hsetex(
-            "key",
-            None,
-            SetExpiration::Px(1000),
-            ("field", "value"),
-        )
+        .hsetex("key", None, SetExpiration::Px(1000), ("field", "value"))
         .await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
@@ -647,12 +630,7 @@ async fn hsetex() -> Result<()> {
         .unwrap()
         .as_secs();
     client
-        .hsetex(
-            "key",
-            None,
-            SetExpiration::Exat(time),
-            ("field", "value"),
-        )
+        .hsetex("key", None, SetExpiration::Exat(time), ("field", "value"))
         .await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
@@ -685,43 +663,23 @@ async fn hsetex() -> Result<()> {
     // FNX
     client.del("key").await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FNX,
-            None,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FNX, None, ("field", "value"))
         .await?;
     assert!(result);
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FNX,
-            None,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FNX, None, ("field", "value"))
         .await?;
     assert!(!result);
 
     // FXX
     client.del("key").await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FXX,
-            None,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FXX, None, ("field", "value"))
         .await?;
     assert!(!result);
     client.hset("key", ("field", "value")).await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FXX,
-            None,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FXX, None, ("field", "value"))
         .await?;
     assert!(result);
 

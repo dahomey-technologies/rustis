@@ -697,9 +697,9 @@ pub struct SortOptions<'a> {
     by: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<(u32, i32)>,
-    #[serde(rename="", skip_serializing_if = "CommandArgsMut::is_empty")]
+    #[serde(rename = "", skip_serializing_if = "CommandArgsMut::is_empty")]
     get: CommandArgsMut,
-    #[serde(rename="", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     order: Option<SortOrder>,
     #[serde(
         skip_serializing_if = "std::ops::Not::not",

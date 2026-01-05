@@ -753,10 +753,18 @@ fn xautoclaim_args() -> Result<()> {
             "consumer",
             1000,
             "1526569498055-0",
-            XClaimOptions::default().idle_time(100).time(1000).retry_count(12).force().just_id(),
+            XClaimOptions::default()
+                .idle_time(100)
+                .time(1000)
+                .retry_count(12)
+                .force()
+                .just_id(),
         )
         .command;
-    assert_eq!("XCLAIM key group consumer 1000 1526569498055-0 IDLE 100 TIME 1000 RETRYCOUNT 12 FORCE JUSTID", &cmd.to_string());
+    assert_eq!(
+        "XCLAIM key group consumer 1000 1526569498055-0 IDLE 100 TIME 1000 RETRYCOUNT 12 FORCE JUSTID",
+        &cmd.to_string()
+    );
 
     Ok(())
 }

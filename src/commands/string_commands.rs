@@ -498,7 +498,7 @@ pub trait StringCommands<'a>: Sized {
                 .arg(value)
                 .arg(condition.into())
                 .arg("GET")
-                .arg(expiration.into())
+                .arg(expiration.into()),
         )
     }
 

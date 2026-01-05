@@ -204,9 +204,7 @@ async fn pub_sub_channels() -> Result<()> {
     assert!(channels.contains("mychannel3"));
     assert!(channels.contains("otherchannel"));
 
-    let channels: HashSet<String> = regular_client
-        .pub_sub_channels("mychannel*")
-        .await?;
+    let channels: HashSet<String> = regular_client.pub_sub_channels("mychannel*").await?;
     assert_eq!(3, channels.len());
     assert!(channels.contains("mychannel1"));
     assert!(channels.contains("mychannel2"));
@@ -382,18 +380,14 @@ async fn pub_sub_shardchannels() -> Result<()> {
         ])
         .await?;
 
-    let channels: HashSet<String> = master_client
-        .pub_sub_shardchannels(())
-        .await?;
+    let channels: HashSet<String> = master_client.pub_sub_shardchannels(()).await?;
     assert_eq!(4, channels.len());
     assert!(channels.contains("mychannel1{1}"));
     assert!(channels.contains("mychannel2{1}"));
     assert!(channels.contains("mychannel3{1}"));
     assert!(channels.contains("otherchannel{1}"));
 
-    let channels: HashSet<String> = master_client
-        .pub_sub_shardchannels("mychannel*")
-        .await?;
+    let channels: HashSet<String> = master_client.pub_sub_shardchannels("mychannel*").await?;
     assert_eq!(3, channels.len());
     assert!(channels.contains("mychannel1{1}"));
     assert!(channels.contains("mychannel2{1}"));
@@ -401,9 +395,7 @@ async fn pub_sub_shardchannels() -> Result<()> {
 
     pub_sub_stream.close().await?;
 
-    let channels: HashSet<String> = master_client
-        .pub_sub_shardchannels(())
-        .await?;
+    let channels: HashSet<String> = master_client.pub_sub_shardchannels(()).await?;
     assert_eq!(0, channels.len());
 
     Ok(())

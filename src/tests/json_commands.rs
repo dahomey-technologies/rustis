@@ -575,12 +575,7 @@ async fn json_toggle() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     client
-        .json_set(
-            "key",
-            "$",
-            r#"{"foo":[{"bar":true},{"bar":12}]}"#,
-            None,
-        )
+        .json_set("key", "$", r#"{"foo":[{"bar":true},{"bar":12}]}"#, None)
         .await?;
 
     let result: Vec<Option<usize>> = client.json_toggle("key", "$.foo[*].bar").await?;

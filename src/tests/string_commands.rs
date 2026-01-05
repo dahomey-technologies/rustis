@@ -525,12 +525,7 @@ async fn set_with_options() -> Result<()> {
 
     // EX
     client
-        .set_with_options(
-            "key",
-            "value",
-            None,
-            Some(SetExpiration::Ex(1)),
-        )
+        .set_with_options("key", "value", None, Some(SetExpiration::Ex(1)))
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -540,12 +535,7 @@ async fn set_with_options() -> Result<()> {
 
     // PX
     client
-        .set_with_options(
-            "key",
-            "value",
-            None,
-            Some(SetExpiration::Px(1000)),
-        )
+        .set_with_options("key", "value", None, Some(SetExpiration::Px(1000)))
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -562,12 +552,7 @@ async fn set_with_options() -> Result<()> {
         .unwrap()
         .as_secs();
     client
-        .set_with_options(
-            "key",
-            "value",
-            None,
-            Some(SetExpiration::Exat(time)),
-        )
+        .set_with_options("key", "value", None, Some(SetExpiration::Exat(time)))
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -584,12 +569,7 @@ async fn set_with_options() -> Result<()> {
         .unwrap()
         .as_millis();
     client
-        .set_with_options(
-            "key",
-            "value",
-            None,
-            Some(SetExpiration::Pxat(time as u64)),
-        )
+        .set_with_options("key", "value", None, Some(SetExpiration::Pxat(time as u64)))
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -623,22 +603,12 @@ async fn set_with_options() -> Result<()> {
     // GET
     client.del("key").await?;
     let result: Option<String> = client
-        .set_get_with_options(
-            "key",
-            "value",
-            None,
-            None,
-        )
+        .set_get_with_options("key", "value", None, None)
         .await?;
     assert!(result.is_none());
     client.set("key", "value").await?;
     let result: String = client
-        .set_get_with_options(
-            "key",
-            "value1",
-            None,
-            None,
-        )
+        .set_get_with_options("key", "value1", None, None)
         .await?;
     assert_eq!("value", result);
     let value: String = client.get("key").await?;

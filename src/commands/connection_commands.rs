@@ -862,10 +862,7 @@ pub enum ClientUnblockMode {
 
 /// Options for the [`hello`](ConnectionCommands::hello) command.
 #[derive(Default, Serialize)]
-pub struct HelloOptions<'a>(
-    u32, 
-    HelloKeywords<'a>
-);
+pub struct HelloOptions<'a>(u32, HelloKeywords<'a>);
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]

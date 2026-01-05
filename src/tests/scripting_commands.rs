@@ -196,9 +196,7 @@ async fn function_dump() -> Result<()> {
 
     client.function_delete("mylib").await?;
 
-    client
-        .function_restore(&serialized_payload, None)
-        .await?;
+    client.function_restore(&serialized_payload, None).await?;
 
     let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))

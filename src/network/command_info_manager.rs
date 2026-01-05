@@ -67,7 +67,8 @@ impl CommandInfoManager {
         &self,
         command: &Command,
         connection: &mut StandaloneConnection,
-    ) -> Result<SmallVec<[String; 10]>> {/*
+    ) -> Result<SmallVec<[String; 10]>> {
+        /*
         let command_info = if let Some(command_info) = self.command_info_map.get(command.name) {
             command_info
         } else {
@@ -217,10 +218,14 @@ impl CommandInfoManager {
         command: &NetworkCommand,
         shard_keys: impl Iterator<Item = &'a String>,
     ) -> Result<NetworkCommand> {
-        let command_info = if let Some(command_info) = self.command_info_map.get(command.get_name()) {
+        let command_info = if let Some(command_info) = self.command_info_map.get(command.get_name())
+        {
             command_info
         } else {
-            return Err(Error::Client(format!("Unknown command {}", String::from_utf8_lossy(command.get_name()))));
+            return Err(Error::Client(format!(
+                "Unknown command {}",
+                String::from_utf8_lossy(command.get_name())
+            )));
         };
 
         if let Some(key_spec) = command_info.key_specifications.first() {

@@ -1,8 +1,11 @@
- use crate::{
-    Result, commands::{
+use crate::{
+    Result,
+    commands::{
         BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
         StringCommands,
-    }, resp::BulkString, tests::get_test_client
+    },
+    resp::BulkString,
+    tests::get_test_client,
 };
 use serial_test::serial;
 
@@ -142,12 +145,16 @@ async fn bitop() -> Result<()> {
 async fn bitpos() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("mykey", BulkString::new(b"\xff\xf0\x00")).await?;
+    client
+        .set("mykey", BulkString::new(b"\xff\xf0\x00"))
+        .await?;
 
     let pos = client.bitpos("mykey", 1, BitRange::default()).await?;
     assert_eq!(0, pos);
 
-    client.set("mykey", BulkString::new(b"\x00\xff\xf0")).await?;
+    client
+        .set("mykey", BulkString::new(b"\x00\xff\xf0"))
+        .await?;
     let pos = client.bitpos("mykey", 0, BitRange::range(0, -1)).await?;
     assert_eq!(0, pos);
 

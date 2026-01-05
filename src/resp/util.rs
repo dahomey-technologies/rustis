@@ -253,10 +253,7 @@ pub(crate) fn serialize_flag<S: serde::Serializer>(
 
 /// Serializes a slice prefixed by its length.
 /// Use with #[serde(serialize_with = "serialize_slice_with_len")]
-pub(crate) fn serialize_slice_with_len<S, T>(
-    slice: &[T],
-    serializer: S,
-) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_slice_with_len<S, T>(slice: &[T], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     T: Serialize,

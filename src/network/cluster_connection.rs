@@ -138,7 +138,8 @@ impl ClusterConnection {
         &mut self,
         command: &NetworkCommand,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {/*
+    ) -> Result<()> {
+        /*
         debug!("[{}] Analyzing command {command:?}", self.tag);
 
         let command_info = self.command_info_manager.get_command_info(command);
@@ -207,7 +208,8 @@ impl ClusterConnection {
         &mut self,
         commands: SmallVec<[&mut NetworkCommand; 10]>,
         retry_reasons: &[RetryReason],
-    ) -> Result<()> {/*
+    ) -> Result<()> {
+        /*
         if retry_reasons.iter().any(|r| {
             matches!(
                 r,
@@ -350,7 +352,8 @@ impl ClusterConnection {
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {/*
+    ) -> Result<()> {
+        /*
         let mut node_slot_keys_ask = (0..keys.len())
             .map(|i| {
                 let (node_index, should_ask) = self
@@ -441,7 +444,8 @@ impl ClusterConnection {
         keys: SmallVec<[String; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {/*
+    ) -> Result<()> {
+        /*
         // test if all slots are equal
         if slots.windows(2).all(|s| s[0] == s[1]) {
             let (node_idx, should_ask) = if slots.is_empty() {

@@ -129,7 +129,10 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-failover/>](https://redis.io/commands/cluster-failover/)
     #[must_use]
-    fn cluster_failover(self, option: Option<ClusterFailoverOption>) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_failover(
+        self,
+        option: Option<ClusterFailoverOption>,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("FAILOVER").arg(option))
     }
 

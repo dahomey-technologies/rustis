@@ -229,7 +229,7 @@ pub enum GeoSearchOrder {
 #[derive(Default, Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct GeoSearchOptions {
-    #[serde(rename="", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     order: Option<GeoSearchOrder>,
     #[serde(skip_serializing_if = "Option::is_none")]
     count: Option<u32>,
@@ -436,7 +436,7 @@ impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R
 #[derive(Default, Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct GeoSearchStoreOptions {
-    #[serde(rename="", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     order: Option<GeoSearchOrder>,
     #[serde(skip_serializing_if = "Option::is_none")]
     count: Option<u32>,

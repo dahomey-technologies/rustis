@@ -170,42 +170,30 @@ async fn expireat() -> Result<()> {
 
     // xx
     client.set("key", "value").await?;
-    let result = client
-        .expireat("key", now + 10, ExpireOption::Xx)
-        .await?;
+    let result = client.expireat("key", now + 10, ExpireOption::Xx).await?;
     assert!(!result);
     assert_eq!(-1, client.ttl("key").await?);
 
     // nx
-    let result = client
-        .expireat("key", now + 10, ExpireOption::Nx)
-        .await?;
+    let result = client.expireat("key", now + 10, ExpireOption::Nx).await?;
     assert!(result);
     assert!((9..=10).contains(&ttl));
 
     // gt
-    let result = client
-        .expireat("key", now + 5, ExpireOption::Gt)
-        .await?;
+    let result = client.expireat("key", now + 5, ExpireOption::Gt).await?;
     assert!(!result);
     assert!((9..=10).contains(&ttl));
-    let result = client
-        .expireat("key", now + 15, ExpireOption::Gt)
-        .await?;
+    let result = client.expireat("key", now + 15, ExpireOption::Gt).await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
     assert!((14..=15).contains(&ttl));
 
     // lt
-    let result = client
-        .expireat("key", now + 20, ExpireOption::Lt)
-        .await?;
+    let result = client.expireat("key", now + 20, ExpireOption::Lt).await?;
     assert!(!result);
     let ttl = client.ttl("key").await?;
     assert!((14..=15).contains(&ttl));
-    let result = client
-        .expireat("key", now + 5, ExpireOption::Lt)
-        .await?;
+    let result = client.expireat("key", now + 5, ExpireOption::Lt).await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
     assert!((4..=5).contains(&ttl));
@@ -481,11 +469,7 @@ async fn pexpiretime() -> Result<()> {
     let client = get_test_client().await?;
 
     client.set("key", "value").await?;
-    assert!(
-        client
-            .pexpireat("key", 33177117420000, None)
-            .await?
-    );
+    assert!(client.pexpireat("key", 33177117420000, None).await?);
     let time = client.pexpiretime("key").await?;
     assert_eq!(time, 33177117420000);
 

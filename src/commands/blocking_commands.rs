@@ -5,7 +5,8 @@ use crate::{
     resp::{Response, cmd, deserialize_vec_of_triplets},
 };
 use serde::{
-    Deserialize, Deserializer, Serialize, de::{DeserializeOwned, Visitor}
+    Deserialize, Deserializer, Serialize,
+    de::{DeserializeOwned, Visitor},
 };
 use std::{fmt, marker::PhantomData};
 

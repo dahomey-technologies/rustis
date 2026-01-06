@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
-    resp::{BufferDecoder, CommandEncoder, NetworkCommand, RespBuf},
+    resp::{BufferDecoder, CommandEncoder, Command, RespBuf},
     tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -88,7 +88,7 @@ impl StandaloneConnection {
         Ok(connection)
     }
 
-    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
         if log_enabled!(Level::Debug) {
             debug!("[{}] Sending command: {command}", self.tag);
         }
@@ -101,7 +101,7 @@ impl StandaloneConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut NetworkCommand; 10]>,
+        commands: SmallVec<[&mut Command; 10]>,
         _retry_reasons: &[RetryReason],
     ) -> Result<()> {
         self.buffer.clear();
@@ -233,7 +233,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            self.executor.write(&self.command.into()).await?;
+            self.executor.write(&self.command).await?;
 
             let resp_buf = self.executor.read().await.ok_or_else(|| {
                 Error::Client(format!("[{}] disconnected by peer", self.executor.tag()))

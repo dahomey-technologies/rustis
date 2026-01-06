@@ -6,7 +6,7 @@ use crate::{
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::{CommandInfoManager, Version},
-    resp::{Command, NetworkCommand, RespBuf, RespDeserializer, RespSerializer},
+    resp::{Command, RespBuf, RespDeserializer, RespSerializer},
 };
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
@@ -130,13 +130,13 @@ impl ClusterConnection {
         })
     }
 
-    pub async fn write(&mut self, command: &NetworkCommand) -> Result<()> {
+    pub async fn write(&mut self, command: &Command) -> Result<()> {
         self.internal_write(command, &[]).await
     }
 
     async fn internal_write(
         &mut self,
-        command: &NetworkCommand,
+        command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
         /*
@@ -206,7 +206,7 @@ impl ClusterConnection {
 
     pub async fn write_batch(
         &mut self,
-        commands: SmallVec<[&mut NetworkCommand; 10]>,
+        commands: SmallVec<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
         /*
@@ -276,7 +276,7 @@ impl ClusterConnection {
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(
         &mut self,
-        command: &NetworkCommand,
+        command: &Command,
         command_name: &str,
         keys: SmallVec<[String; 10]>,
     ) -> Result<()> {
@@ -310,7 +310,7 @@ impl ClusterConnection {
     /// The command operates atomically per shard.
     async fn request_policy_all_nodes(
         &mut self,
-        command: &NetworkCommand,
+        command: &Command,
         command_name: &str,
         keys: SmallVec<[String; 10]>,
     ) -> Result<()> {

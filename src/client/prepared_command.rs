@@ -65,7 +65,7 @@ where
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
 pub(crate) fn prepare_command<'a, E, R: Response>(
     executor: E,
-    command: Command,
+    command: impl Into<Command>,
 ) -> PreparedCommand<'a, E, R> {
-    PreparedCommand::new(executor, command)
+    PreparedCommand::new(executor, command.into())
 }

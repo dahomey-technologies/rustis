@@ -40,14 +40,14 @@ impl Pipeline<'_> {
     }
 
     /// Queue a command
-    pub fn queue(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn queue(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(false);
     }
 
     /// Queue a command and forget its response
-    pub fn forget(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn forget(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(true);
     }
 

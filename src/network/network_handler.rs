@@ -3,7 +3,7 @@ use crate::{
     Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Commands, Config, Message},
     commands::InternalPubSubCommands,
-    resp::{NetworkCommand, RespBuf, cmd},
+    resp::{Command, RespBuf, cmd},
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -330,7 +330,7 @@ impl NetworkHandler {
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&mut NetworkCommand; 10]>::new();
+        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::new();
         let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 

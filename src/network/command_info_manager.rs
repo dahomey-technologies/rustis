@@ -2,13 +2,14 @@ use crate::{
     Error, Result, StandaloneConnection,
     commands::{BeginSearch, CommandInfo, FindKeys, ServerCommands},
     network::Version,
-    resp::{Command, CommandArgsMut, NetworkCommand, cmd},
+    resp::{Command, CommandArgsMut, cmd},
 };
+use bytes::Bytes;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
 pub(crate) struct CommandInfoManager {
-    command_info_map: HashMap<Vec<u8>, CommandInfo>,
+    command_info_map: HashMap<Bytes, CommandInfo>,
     legacy: bool,
 }
 
@@ -35,7 +36,7 @@ impl CommandInfoManager {
                 .into_iter()
                 .map(|mut c| {
                     c.name = c.name.to_uppercase();
-                    (c.name.as_bytes().to_vec(), c)
+                    (Bytes::copy_from_slice(c.name.as_bytes()), c)
                 })
                 .collect(),
             legacy: version.major < 7,
@@ -46,7 +47,7 @@ impl CommandInfoManager {
         self.command_info_map.get(command_name.as_bytes())
     }
 
-    pub fn get_command_info(&self, command: &NetworkCommand) -> Option<&CommandInfo> {
+    pub fn get_command_info(&self, command: &Command) -> Option<&CommandInfo> {
         // let command_info = self.command_info_map.get(command.get_name());
         // if let Some(command_info) = command_info
         //     && command_info.arity == -2
@@ -215,9 +216,9 @@ impl CommandInfoManager {
     ///  We will only support this configuration for the first implementation
     pub fn prepare_command_for_shard<'a>(
         &self,
-        command: &NetworkCommand,
+        command: &Command,
         shard_keys: impl Iterator<Item = &'a String>,
-    ) -> Result<NetworkCommand> {
+    ) -> Result<Command> {
         let command_info = if let Some(command_info) = self.command_info_map.get(command.get_name())
         {
             command_info

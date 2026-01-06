@@ -116,7 +116,6 @@ pub use command_args::*;
 pub(crate) use command_encoder::*;
 #[cfg(feature = "json")]
 pub use json::*;
-pub(crate) use network_command::*;
 pub(crate) use resp_batch_deserializer::*;
 pub use resp_buf::*;
 pub use resp_deserializer::*;
@@ -135,7 +134,6 @@ mod command_args;
 mod command_encoder;
 #[cfg(feature = "json")]
 mod json;
-mod network_command;
 mod resp_batch_deserializer;
 mod resp_buf;
 mod resp_deserializer;

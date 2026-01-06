@@ -3068,15 +3068,13 @@ impl FtSuggestion {
             {
                 let mut with_scores = false;
                 let mut with_payloads = false;
-                for i in 0..self.command.num_args() {
-                    if let Some(arg) = self.command.get_arg(i) {
-                        if arg == b"WITHSCORES" {
-                            with_scores = true;
-                        }
+                for arg in self.command.args() {
+                    if arg.as_ref() == b"WITHSCORES" {
+                        with_scores = true;
+                    }
 
-                        if arg == b"WITHPAYLOADS" {
-                            with_payloads = true;
-                        }
+                    if arg.as_ref() == b"WITHPAYLOADS" {
+                        with_payloads = true;
                     }
                 }
 

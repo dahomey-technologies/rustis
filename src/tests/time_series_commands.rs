@@ -4,7 +4,7 @@ use crate::{
         FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
         TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsGetOptions, TsGroupByOptions,
         TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsRangeSample,
-        TsSample,
+        TsSample, TsTimestamp,
     },
     tests::get_test_client,
 };
@@ -21,7 +21,7 @@ async fn ts_add() -> Result<()> {
     let timestamp = client
         .ts_add(
             "temperature:3:11",
-            1548149183000u64,
+            TsTimestamp::Value(1548149183000),
             27.,
             TsAddOptions::default().retention(31536000000),
         )
@@ -29,7 +29,7 @@ async fn ts_add() -> Result<()> {
     assert_eq!(1548149183000u64, timestamp);
 
     let _timestamp = client
-        .ts_add("temperature:3:11", "*", 30., TsAddOptions::default())
+        .ts_add("temperature:3:11", TsTimestamp::ServerClock, 30., TsAddOptions::default())
         .await?;
 
     Ok(())
@@ -48,7 +48,7 @@ async fn ts_create() -> Result<()> {
             TsCreateOptions::default()
                 .retention(60000)
                 .duplicate_policy(TsDuplicatePolicy::Max)
-                .labels([("sensor_id", 2), ("area_id", 32)]),
+                .labels([("sensor_id", "2"), ("area_id", "32")]),
         )
         .await?;
 
@@ -68,7 +68,7 @@ async fn ts_alter() -> Result<()> {
             TsCreateOptions::default()
                 .retention(60000)
                 .duplicate_policy(TsDuplicatePolicy::Max)
-                .labels([("sensor_id", 2), ("area_id", 32)]),
+                .labels([("sensor_id", "2"), ("area_id", "32")]),
         )
         .await?;
 
@@ -76,9 +76,9 @@ async fn ts_alter() -> Result<()> {
         .ts_alter(
             "temperature:2:32",
             TsCreateOptions::default().labels([
-                ("sensor_id", 2),
-                ("area_id", 32),
-                ("sub_area_id", 15),
+                ("sensor_id", "2"),
+                ("area_id", "32"),
+                ("sub_area_id", "15"),
             ]),
         )
         .await?;
@@ -149,19 +149,19 @@ async fn ts_del() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     client
-        .ts_add("key", 10, 1., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(10), 1., TsAddOptions::default())
         .await?;
     client
-        .ts_add("key", 20, 1., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(20), 1., TsAddOptions::default())
         .await?;
     client
-        .ts_add("key", 30, 1., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(30), 1., TsAddOptions::default())
         .await?;
     client
-        .ts_add("key", 40, 1., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(40), 1., TsAddOptions::default())
         .await?;
     client
-        .ts_add("key", 50, 1., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(50), 1., TsAddOptions::default())
         .await?;
 
     let deleted = client.ts_del("key", 20, 40).await?;
@@ -188,16 +188,16 @@ async fn ts_get() -> Result<()> {
     assert_eq!(None, result);
 
     client
-        .ts_add("temp:JLM", 1005, 30., TsAddOptions::default())
+        .ts_add("temp:JLM", TsTimestamp::Value(1005), 30., TsAddOptions::default())
         .await?;
     client
-        .ts_add("temp:JLM", 1015, 35., TsAddOptions::default())
+        .ts_add("temp:JLM", TsTimestamp::Value(1015), 35., TsAddOptions::default())
         .await?;
     client
-        .ts_add("temp:JLM", 1025, 9999., TsAddOptions::default())
+        .ts_add("temp:JLM", TsTimestamp::Value(1025), 9999., TsAddOptions::default())
         .await?;
     client
-        .ts_add("temp:JLM", 1035, 40., TsAddOptions::default())
+        .ts_add("temp:JLM", TsTimestamp::Value(1035), 40., TsAddOptions::default())
         .await?;
 
     let result = client.ts_get("temp:JLM", TsGetOptions::default()).await?;
@@ -217,7 +217,7 @@ async fn ts_incrby() -> Result<()> {
         .ts_incrby(
             "a",
             232.,
-            TsIncrByDecrByOptions::default().timestamp(1657811829000u64),
+            TsIncrByDecrByOptions::default().timestamp(TsTimestamp::Value(1657811829000)),
         )
         .await?;
     assert_eq!(1657811829000u64, timestamp);
@@ -226,7 +226,7 @@ async fn ts_incrby() -> Result<()> {
         .ts_incrby(
             "a",
             157.,
-            TsIncrByDecrByOptions::default().timestamp(1657811829000u64),
+            TsIncrByDecrByOptions::default().timestamp(TsTimestamp::Value(1657811829000)),
         )
         .await?;
     assert_eq!(1657811829000u64, timestamp);
@@ -235,7 +235,7 @@ async fn ts_incrby() -> Result<()> {
         .ts_incrby(
             "a",
             432.,
-            TsIncrByDecrByOptions::default().timestamp(1657811829000u64),
+            TsIncrByDecrByOptions::default().timestamp(TsTimestamp::Value(1657811829000u64)),
         )
         .await?;
     assert_eq!(1657811829000u64, timestamp);
@@ -284,10 +284,10 @@ async fn ts_info() -> Result<()> {
         .await?;
 
     client
-        .ts_add("key", 1000, 10., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(1000), 10., TsAddOptions::default())
         .await?;
     client
-        .ts_add("key", 1010, 20., TsAddOptions::default())
+        .ts_add("key", TsTimestamp::Value(1010), 20., TsAddOptions::default())
         .await?;
 
     let info = client.ts_info("key", true).await?;
@@ -448,18 +448,18 @@ async fn ts_mrange() -> Result<()> {
     client
         .ts_add(
             "ts1",
-            1548149180000u64,
+            TsTimestamp::Value(1548149180000),
             90.,
             TsAddOptions::default().labels([("metric", "cpu"), ("metric_name", "system")]),
         )
         .await?;
     client
-        .ts_add("ts1", 1548149185000u64, 45., TsAddOptions::default())
+        .ts_add("ts1", TsTimestamp::Value(1548149185000), 45., TsAddOptions::default())
         .await?;
     client
         .ts_add(
             "ts2",
-            1548149180000u64,
+            TsTimestamp::Value(1548149180000),
             99.,
             TsAddOptions::default().labels([("metric", "cpu"), ("metric_name", "user")]),
         )
@@ -547,18 +547,18 @@ async fn ts_mrevrange() -> Result<()> {
     client
         .ts_add(
             "ts1",
-            1548149180000u64,
+            TsTimestamp::Value(1548149180000),
             90.,
             TsAddOptions::default().labels([("metric", "cpu"), ("metric_name", "system")]),
         )
         .await?;
     client
-        .ts_add("ts1", 1548149185000u64, 45., TsAddOptions::default())
+        .ts_add("ts1", TsTimestamp::Value(1548149185000), 45., TsAddOptions::default())
         .await?;
     client
         .ts_add(
             "ts2",
-            1548149180000u64,
+            TsTimestamp::Value(1548149180000),
             99.,
             TsAddOptions::default().labels([("metric", "cpu"), ("metric_name", "user")]),
         )

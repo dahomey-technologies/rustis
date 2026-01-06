@@ -15,16 +15,9 @@ use crate::{
         CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
         HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
         ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TransactionCommands, VectorSetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+        TopKCommands, TransactionCommands, VectorSetCommands,
     },
-    // commands::{
-    //     BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
-    //     CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
-    //     HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
-    //     ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
-    //     SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
-    //     TopKCommands, TransactionCommands, VectorSetCommands,
-    // },
     network::{
         JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
@@ -447,9 +440,9 @@ impl<'a> ConnectionCommands<'a> for &'a Client {}
 impl<'a> DebugCommands<'a> for &'a Client {}
 impl<'a> GenericCommands<'a> for &'a Client {}
 impl<'a> GeoCommands<'a> for &'a Client {}
-// #[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-// #[cfg(feature = "redis-graph")]
-// impl<'a> GraphCommands<'a> for &'a Client {}
+#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
+#[cfg(feature = "redis-graph")]
+impl<'a> GraphCommands<'a> for &'a Client {}
 impl<'a> HashCommands<'a> for &'a Client {}
 impl<'a> HyperLogLogCommands<'a> for &'a Client {}
 impl<'a> InternalPubSubCommands<'a> for &'a Client {}
@@ -463,10 +456,10 @@ impl<'a> SetCommands<'a> for &'a Client {}
 impl<'a> SortedSetCommands<'a> for &'a Client {}
 impl<'a> StreamCommands<'a> for &'a Client {}
 impl<'a> StringCommands<'a> for &'a Client {}
-// impl<'a> TDigestCommands<'a> for &'a Client {}
-// impl<'a> TimeSeriesCommands<'a> for &'a Client {}
+impl<'a> TDigestCommands<'a> for &'a Client {}
+impl<'a> TimeSeriesCommands<'a> for &'a Client {}
 impl<'a> TransactionCommands<'a> for &'a Client {}
-// impl<'a> TopKCommands<'a> for &'a Client {}
+impl<'a> TopKCommands<'a> for &'a Client {}
 impl<'a> VectorSetCommands<'a> for &'a Client {}
 
 impl<'a> PubSubCommands<'a> for &'a Client {

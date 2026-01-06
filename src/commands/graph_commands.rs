@@ -2,10 +2,10 @@ use crate::{
     Error, Future, Result,
     client::{Client, PreparedCommand, prepare_command},
     commands::{GraphCache, GraphValue, GraphValueArraySeed},
-    resp::{Args, Command, CommandArgs, RespBuf, RespDeserializer, Response, cmd},
+    resp::{Command, RespBuf, RespDeserializer, Response, cmd},
 };
 use serde::{
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
     de::{self, DeserializeSeed, Visitor},
 };
 use smallvec::SmallVec;
@@ -28,7 +28,7 @@ pub trait GraphCommands<'a>: Sized {
     /// * [<https://redis.io/commands/graph.config-get/>](https://redis.io/commands/graph.config-get/)
     /// * [`Configuration Parameters`](https://redis.io/docs/stack/graph/configuration/)
     #[must_use]
-    fn graph_config_get<R: Response>(self, name: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn graph_config_get<R: Response>(self, name: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("GET").arg(name))
     }
 
@@ -45,7 +45,11 @@ pub trait GraphCommands<'a>: Sized {
     /// # Note
     /// As detailed in the link above, not all RedisGraph configuration parameters can be set at run-time.
     #[must_use]
-    fn graph_config_set(self, name: impl Args, value: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn graph_config_set(
+        self,
+        name: impl Serialize,
+        value: impl Serialize,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("GRAPH.CONFIG").arg("SET").arg(name).arg(value))
     }
 
@@ -57,7 +61,7 @@ pub trait GraphCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/graph.delete/>](https://redis.io/commands/graph.delete/)
     #[must_use]
-    fn graph_delete(self, graph: impl Args) -> PreparedCommand<'a, Self, String> {
+    fn graph_delete(self, graph: impl Serialize) -> PreparedCommand<'a, Self, String> {
         prepare_command(self, cmd("GRAPH.DELETE").arg(graph))
     }
 
@@ -77,8 +81,8 @@ pub trait GraphCommands<'a>: Sized {
     #[must_use]
     fn graph_explain<R: Response>(
         self,
-        graph: impl Args,
-        query: impl Args,
+        graph: impl Serialize,
+        query: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.EXPLAIN").arg(graph).arg(query))
     }
@@ -110,8 +114,8 @@ pub trait GraphCommands<'a>: Sized {
     #[must_use]
     fn graph_profile<R: Response>(
         self,
-        graph: impl Args,
-        query: impl Args,
+        graph: impl Serialize,
+        query: impl Serialize,
         options: GraphQueryOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.LIST").arg(graph).arg(query).arg(options))
@@ -133,8 +137,8 @@ pub trait GraphCommands<'a>: Sized {
     #[must_use]
     fn graph_query(
         self,
-        graph: impl Args,
-        query: impl Args,
+        graph: impl Serialize,
+        query: impl Serialize,
         options: GraphQueryOptions,
     ) -> PreparedCommand<'a, Self, GraphResultSet> {
         prepare_command(
@@ -163,8 +167,8 @@ pub trait GraphCommands<'a>: Sized {
     #[must_use]
     fn graph_ro_query(
         self,
-        graph: impl Args,
-        query: impl Args,
+        graph: impl Serialize,
+        query: impl Serialize,
         options: GraphQueryOptions,
     ) -> PreparedCommand<'a, Self, GraphResultSet> {
         prepare_command(
@@ -189,15 +193,17 @@ pub trait GraphCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/graph.slowlog/>](https://redis.io/commands/graph.slowlog/)
     #[must_use]
-    fn graph_slowlog<R: Response>(self, graph: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn graph_slowlog<R: Response>(self, graph: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GRAPH.SLOWLOG").arg(graph))
     }
 }
 
 /// Options for the [`graph_query`](GraphCommands::graph_query) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct GraphQueryOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout: Option<u64>,
 }
 
 impl GraphQueryOptions {
@@ -205,14 +211,8 @@ impl GraphQueryOptions {
     #[must_use]
     pub fn timeout(timeout: u64) -> Self {
         Self {
-            command_args: CommandArgs::default().arg("TIMEOUT").arg(timeout).build(),
+            timeout: Some(timeout),
         }
-    }
-}
-
-impl Args for GraphQueryOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
     }
 }
 
@@ -230,7 +230,7 @@ impl GraphResultSet {
         command: Command,
         client: &Client,
     ) -> Future<'_, Self> {
-        let Some(graph_name) = command.args.iter().next() else {
+        let Some(graph_name) = command.get_arg(0) else {
             return Box::pin(future::ready(Err(Error::Client(
                 "Cannot parse graph command".to_owned(),
             ))));

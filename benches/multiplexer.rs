@@ -46,7 +46,7 @@ fn bench_redis_parallel(b: &mut Bencher) {
     let client = get_redis_client();
     let runtime = current_thread_runtime();
     let con = runtime
-        .block_on(client.get_multiplexed_tokio_connection())
+        .block_on(client.get_multiplexed_async_connection())
         .unwrap();
 
     b.iter(|| {

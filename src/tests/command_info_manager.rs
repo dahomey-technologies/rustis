@@ -29,7 +29,7 @@ async fn extract_keys() -> Result<()> {
         .await?;
     assert_eq!(1, keys.len());
     assert_eq!("key", keys[0]);
-
+ 
     // MSET
     let keys = command_info_manager
         .extract_keys(
@@ -89,7 +89,7 @@ async fn extract_keys() -> Result<()> {
                     "",
                     0,
                     5000,
-                    MigrateOptions::default().keys(["key1", "key2", "key3"]),
+                    MigrateOptions::default().key(["key1", "key2", "key3"]),
                 )
                 .command(),
             &mut connection,

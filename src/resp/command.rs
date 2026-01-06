@@ -63,14 +63,18 @@ impl Command {
         &self.buffer
     }
 
-    pub fn get_name(&self) -> &[u8] {
+    pub fn get_name(&self) -> Bytes {
         let (start, len) = self.name_layout;
-        &self.buffer[start..start + len]
+        self.buffer.slice(start..start + len)
     }
 
-    pub fn get_arg(&self, index: usize) -> Option<&[u8]> {
+    pub fn get_arg(&self, index: usize) -> Option<Bytes> {
         let (start, len) = *self.args_layout.get(index)?;
-        Some(&self.buffer[start..start + len])
+        Some(self.buffer.slice(start..start + len))
+    }
+
+    pub fn num_args(&self) -> usize {
+        self.args_layout.len()
     }
 
     pub fn args<'a>(&'a self) -> CommandArgsIterator<'a> {
@@ -95,7 +99,7 @@ impl Hash for Command {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        String::from_utf8_lossy(self.get_name()).fmt(f)?;
+        String::from_utf8_lossy(&self.get_name()).fmt(f)?;
         for arg in self.args() {
             f.write_char(' ')?;
             String::from_utf8_lossy(&arg).fmt(f)?;
@@ -279,19 +283,19 @@ mod tests {
     use crate::resp::{Command, cmd};
 
     #[test]
-    fn builder() {
+    fn command() {
         let command: Command = cmd("SET").arg("key").arg("value").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"SET", command.get_name());
-        assert_eq!(Some(&b"key"[..]), command.get_arg(0));
-        assert_eq!(Some(&b"value"[..]), command.get_arg(1));
+        assert_eq!(b"SET", command.get_name().as_ref());
+        assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
+        assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
         assert_eq!(None, command.get_arg(2));
 
         let command: Command = cmd("EVAL").arg("return ARGV[1]").arg(0).arg("HELLO").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"EVAL", command.get_name());
-        assert_eq!(Some(&b"return ARGV[1]"[..]), command.get_arg(0));
-        assert_eq!(Some(&b"0"[..]), command.get_arg(1));
-        assert_eq!(Some(&b"HELLO"[..]), command.get_arg(2));
+        assert_eq!(b"EVAL", command.get_name().as_ref());
+        assert_eq!(Some(&b"return ARGV[1]"[..]), command.get_arg(0).as_deref());
+        assert_eq!(Some(&b"0"[..]), command.get_arg(1).as_deref());
+        assert_eq!(Some(&b"HELLO"[..]), command.get_arg(2).as_deref());
     }
 }

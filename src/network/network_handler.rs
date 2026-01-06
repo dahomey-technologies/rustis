@@ -200,7 +200,7 @@ impl NetworkHandler {
         let pub_sub_senders = msg.pub_sub_senders.take();
         if let Some(pub_sub_senders) = pub_sub_senders {
             let subscription_type = match &msg.commands {
-                Commands::Single(command, _) => match command.get_name() {
+                Commands::Single(command, _) => match command.get_name().as_ref() {
                     b"SUBSCRIBE" => SubscriptionType::Channel,
                     b"PSUBSCRIBE" => SubscriptionType::Pattern,
                     b"SSUBSCRIBE" => SubscriptionType::ShardChannel,
@@ -253,7 +253,7 @@ impl NetworkHandler {
         match &self.status {
             Status::Connected => {
                 for command in &msg.commands {
-                    match command.get_name() {
+                    match command.get_name().as_ref() {
                         b"MONITOR" => {
                             self.status = Status::EnteringMonitor;
                         }
@@ -307,7 +307,7 @@ impl NetworkHandler {
             Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
             Status::Monitor => {
                 for command in &msg.commands {
-                    if command.get_name() == b"RESET" {
+                    if command.get_name().as_ref() == b"RESET" {
                         self.status = Status::LeavingMonitor;
                     }
                 }
@@ -340,7 +340,7 @@ impl NetworkHandler {
             let mut num_commands_to_receive: usize = 0;
 
             for command in commands.into_iter() {
-                if command.get_name() == b"CLIENT" {
+                if command.get_name().as_ref() == b"CLIENT" {
                     let mut args = command.args();
 
                     match (args.next().as_deref(), args.next().as_deref()) {

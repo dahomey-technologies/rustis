@@ -371,6 +371,14 @@ async fn get_loop() -> Result<()> {
 
 #[test]
 fn cluster_selslot_command() {
-    let cmd = TestClient.cluster_setslot(12539, ClusterSetSlotSubCommand::Migrating("37618c7eec0dd58e946e1ef0df02d8c5a9a14235")).command;
-    assert_eq!("CLUSTER SETSLOT 12539 MIGRATING 37618c7eec0dd58e946e1ef0df02d8c5a9a14235", cmd.to_string());
+    let cmd = TestClient
+        .cluster_setslot(
+            12539,
+            ClusterSetSlotSubCommand::Migrating("37618c7eec0dd58e946e1ef0df02d8c5a9a14235"),
+        )
+        .command;
+    assert_eq!(
+        "CLUSTER SETSLOT 12539 MIGRATING 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
+        cmd.to_string()
+    );
 }

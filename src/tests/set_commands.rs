@@ -284,9 +284,15 @@ async fn sscan() -> Result<()> {
 
     client.sadd("key", ["value1", "value2", "value3"]).await?;
 
-    let result: (u64, Vec<String>) = client.sscan("key", 0, SScanOptions::default()).await?;
-    assert_eq!(0, result.0);
-    assert_eq!(3, result.1.len());
+    let (cursor, members): (u64, Vec<String>) = client
+        .sscan(
+            "key",
+            0,
+            SScanOptions::default().match_pattern("value*").count(3),
+        )
+        .await?;
+    assert_eq!(0, cursor);
+    assert_eq!(3, members.len());
 
     Ok(())
 }

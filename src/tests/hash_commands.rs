@@ -45,9 +45,7 @@ async fn hexpire() -> Result<()> {
 
     // no option
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hexpire("key", 10, ExpireOption::None, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpire("key", 10, None, "field").await?;
     assert_eq!(result, vec![1]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
@@ -97,9 +95,7 @@ async fn hexpireat() -> Result<()> {
 
     // no option
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hexpireat("key", now + 10, ExpireOption::None, "field")
-        .await?;
+    let result: Vec<i64> = client.hexpireat("key", now + 10, None, "field").await?;
     assert_eq!(result, vec![1]);
     assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
 
@@ -152,9 +148,7 @@ async fn hexpiretime() -> Result<()> {
     let client = get_test_client().await?;
 
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hexpireat("key", 33177117420, ExpireOption::default(), "field")
-        .await?;
+    let result: Vec<i64> = client.hexpireat("key", 33177117420, None, "field").await?;
     assert_eq!(result, vec![1]);
     let time: Vec<i64> = client.hexpiretime("key", "field").await?;
     assert_eq!(time, vec![33177117420]);
@@ -395,9 +389,7 @@ async fn hpexpire() -> Result<()> {
 
     // no option
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hpexpire("key", 10000, ExpireOption::None, "field")
-        .await?;
+    let result: Vec<i64> = client.hpexpire("key", 10000, None, "field").await?;
     assert_eq!(result, vec![1]);
     assert!(client.hpttl::<Vec<i64>>("key", "field").await?[0] <= 10000);
 
@@ -459,9 +451,7 @@ async fn hpexpireat() -> Result<()> {
 
     // no option
     client.hset("key", ("field", "value")).await?;
-    let result: Vec<i64> = client
-        .hpexpireat("key", now + 10000, ExpireOption::None, "field")
-        .await?;
+    let result: Vec<i64> = client.hpexpireat("key", now + 10000, None, "field").await?;
     assert_eq!(result, vec![1]);
     assert!(client.hpttl::<Vec<i64>>("key", "field").await?[0] <= 10000);
 
@@ -515,7 +505,7 @@ async fn hpexpiretime() -> Result<()> {
 
     client.hset("key", ("field", "value")).await?;
     let result: Vec<i64> = client
-        .hpexpireat("key", 33177117420000, ExpireOption::default(), "field")
+        .hpexpireat("key", 33177117420000, None, "field")
         .await?;
     assert_eq!(result, vec![1]);
     let time: Vec<i64> = client.hpexpiretime("key", "field").await?;
@@ -613,13 +603,7 @@ async fn hsetex() -> Result<()> {
 
     // EX
     client
-        .hsetex(
-            "key",
-            Default::default(),
-            SetExpiration::Ex(1),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", None, Some(SetExpiration::Ex(1)), ("field", "value"))
         .await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
@@ -629,13 +613,7 @@ async fn hsetex() -> Result<()> {
 
     // PX
     client
-        .hsetex(
-            "key",
-            Default::default(),
-            SetExpiration::Px(1000),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", None, SetExpiration::Px(1000), ("field", "value"))
         .await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
@@ -652,13 +630,7 @@ async fn hsetex() -> Result<()> {
         .unwrap()
         .as_secs();
     client
-        .hsetex(
-            "key",
-            Default::default(),
-            SetExpiration::Exat(time),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", None, SetExpiration::Exat(time), ("field", "value"))
         .await?;
     let value: String = client.hget("key", "field").await?;
     assert_eq!("value", value);
@@ -677,9 +649,8 @@ async fn hsetex() -> Result<()> {
     client
         .hsetex(
             "key",
-            Default::default(),
+            None,
             SetExpiration::Pxat(time as u64),
-            false,
             ("field", "value"),
         )
         .await?;
@@ -692,47 +663,23 @@ async fn hsetex() -> Result<()> {
     // FNX
     client.del("key").await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FNX,
-            Default::default(),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FNX, None, ("field", "value"))
         .await?;
     assert!(result);
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FNX,
-            Default::default(),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FNX, None, ("field", "value"))
         .await?;
     assert!(!result);
 
     // FXX
     client.del("key").await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FXX,
-            Default::default(),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FXX, None, ("field", "value"))
         .await?;
     assert!(!result);
     client.hset("key", ("field", "value")).await?;
     let result = client
-        .hsetex(
-            "key",
-            HSetExCondition::FXX,
-            Default::default(),
-            false,
-            ("field", "value"),
-        )
+        .hsetex("key", HSetExCondition::FXX, None, ("field", "value"))
         .await?;
     assert!(result);
 

@@ -1,152 +1,189 @@
+use crate::resp::ArgSerializer;
+use bytes::{Bytes, BytesMut};
+use serde::{Serialize, ser::SerializeSeq};
 use smallvec::SmallVec;
 
-use crate::resp::Args;
-use std::fmt;
+/// A specialized buffer for Redis command arguments.
+///
+/// This structure acts as a "RESP Writer". It holds the raw bytes of the arguments
+/// and maintains a layout index to allow random access to arguments before the
+/// command is finalized.
+#[derive(Default)]
+pub struct CommandArgsMut {
+    /// The raw buffer containing the serialized arguments (in RESP format).
+    pub(crate) buffer: BytesMut,
+    /// An ephemeral index of argument positions (Start Offset, Length).
+    ///
+    /// This allows the `Client` to extract keys (for Cluster sharding) or
+    /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
+    /// This index is dropped when the command is sent to the network layer.
+    pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
+}
 
-/// Collection of arguments of [`Command`](crate::resp::Command).
-#[derive(Clone, Default, PartialEq, Eq, Hash)]
+impl CommandArgsMut {
+    #[inline(always)]
+    pub fn arg(mut self, arg: impl Serialize) -> Self {
+        let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
+        arg.serialize(&mut serializer)
+            .expect("Arg serialization failed");
+        self
+    }
+
+    /// Retrieves an argument by its index without parsing.
+    ///
+    /// Used by `CommandInfoManager` to calculate hash slots or extract Pub/Sub channels.
+    #[inline]
+    pub fn get_arg(&self, index: usize) -> Option<&[u8]> {
+        let (start, len) = *self.args_layout.get(index)?;
+        Some(&self.buffer[start..start + len])
+    }
+
+    /// Returns the number of arguments currently written.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.args_layout.len()
+    }
+
+    /// Returns `true` if there is no argument
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.args_layout.is_empty()
+    }
+
+    #[inline]
+    pub fn freeze(self) -> CommandArgs {
+        CommandArgs {
+            buffer: self.buffer.freeze(),
+            args_layout: self.args_layout,
+        }
+    }
+}
+
+impl Serialize for CommandArgsMut {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        struct RawBytes<'a>(&'a [u8]);
+
+        impl<'a> Serialize for RawBytes<'a> {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.serialize_bytes(self.0)
+            }
+        }
+
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+
+        for (start, len) in &self.args_layout {
+            let arg_bytes = &self.buffer[*start..*start + *len];
+            seq.serialize_element(&RawBytes(arg_bytes))?;
+        }
+
+        seq.end()
+    }
+}
+
+/// A specialized buffer for Redis command arguments.
+///
+/// This structure acts as a "RESP Writer". It holds the raw bytes of the arguments
+/// and maintains a layout index to allow random access to arguments before the
+/// command is finalized.
+#[derive(Default)]
 pub struct CommandArgs {
-    args: SmallVec<[Vec<u8>; 10]>,
+    /// The raw buffer containing the serialized arguments (in RESP format).
+    pub(crate) buffer: Bytes,
+    /// An ephemeral index of argument positions (Start Offset, Length).
+    ///
+    /// This allows the `Client` to extract keys (for Cluster sharding) or
+    /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
+    /// This index is dropped when the command is sent to the network layer.
+    pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
 }
 
 impl CommandArgs {
-    /// Builder function to add an argument to an existing command collection.
+    /// Retrieves an argument by its index without parsing.
+    ///
+    /// Used by `CommandInfoManager` to calculate hash slots or extract Pub/Sub channels.
     #[inline]
-    pub fn arg<A>(&mut self, args: A) -> &mut Self
-    where
-        A: Args,
-    {
-        args.write_args(self);
-        self
+    pub fn get_arg(&self, index: usize) -> Option<&[u8]> {
+        let (start, len) = *self.args_layout.get(index)?;
+        Some(&self.buffer[start..start + len])
     }
 
-    /// Builder function to add an argument by ref to an existing command collection.
-    #[inline]
-    pub fn arg_ref<A>(&mut self, args: &A) -> &mut Self
-    where
-        A: Args,
-    {
-        args.write_args(self);
-        self
-    }
-
-    /// Builder function to add an argument to an existing command collection,
-    /// only if a condition is `true`.
-    #[inline]
-    pub fn arg_if<A>(&mut self, condition: bool, args: A) -> &mut Self
-    where
-        A: Args,
-    {
-        if condition { self.arg(args) } else { self }
-    }
-
-    /// helper to build a CommandArgs in one line.
-    #[inline]
-    pub fn build(&mut self) -> Self {
-        let mut args = CommandArgs::default();
-        std::mem::swap(&mut args.args, &mut self.args);
-        args
-    }
-
-    /// Number of arguments of the collection
-    #[must_use]
+    /// Returns the number of arguments currently written.
     #[inline]
     pub fn len(&self) -> usize {
-        self.args.len()
+        self.args_layout.len()
     }
 
-    /// Check if the collection is empty
-    #[must_use]
+    /// Returns `true` if there is no argument
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.args_layout.is_empty()
     }
 
-    #[inline]
-    pub(crate) fn write_arg(&mut self, buf: Vec<u8>) {
-        self.args.push(buf);
+    pub fn iter(&self) -> CommandArgsIterator<'_> {
+        self.into_iter()
     }
+}
 
-    pub(crate) fn retain<F>(&mut self, mut f: F)
+impl Serialize for CommandArgs {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        F: FnMut(&[u8]) -> bool,
+        S: serde::Serializer,
     {
-        self.args.retain(|arg| f(arg))
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+
+        for arg in self {
+            seq.serialize_element(&arg)?;
+        }
+
+        seq.end()
     }
 }
 
 impl<'a> IntoIterator for &'a CommandArgs {
-    type Item = &'a [u8];
+    type Item = Bytes;
     type IntoIter = CommandArgsIterator<'a>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         CommandArgsIterator {
-            iter: self.args.iter(),
+            buffer: self.buffer.clone(),
+            layout_iter: self.args_layout.iter(),
         }
     }
 }
 
 /// [`CommandArgs`] iterator
 pub struct CommandArgsIterator<'a> {
-    iter: std::slice::Iter<'a, Vec<u8>>,
+    pub(crate) buffer: Bytes,
+    pub(crate) layout_iter: std::slice::Iter<'a, (usize, usize)>,
 }
 
 impl<'a> Iterator for CommandArgsIterator<'a> {
-    type Item = &'a [u8];
+    type Item = Bytes;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|v| v.as_slice())
+        let (start, len) = self.layout_iter.next()?;
+        Some(self.buffer.slice(*start..*start + *len))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.layout_iter.size_hint()
     }
 }
 
-impl IntoIterator for CommandArgs {
-    type Item = Vec<u8>;
-    type IntoIter = CommandArgsIntoIterator;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        CommandArgsIntoIterator {
-            iter: self.args.into_iter(),
-        }
+impl<'a> DoubleEndedIterator for CommandArgsIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (start, len) = self.layout_iter.next_back()?;
+        Some(self.buffer.slice(*start..*start + *len))
     }
 }
 
-/// [`CommandArgs`] into iterator
-pub struct CommandArgsIntoIterator {
-    iter: <SmallVec<[Vec<u8>; 10]> as IntoIterator>::IntoIter,
-}
-
-impl Iterator for CommandArgsIntoIterator {
-    type Item = Vec<u8>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-impl std::ops::Deref for CommandArgs {
-    type Target = [Vec<u8>];
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.args
-    }
-}
-
-impl fmt::Debug for CommandArgs {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CommandArgs")
-            .field(
-                "args",
-                &self
-                    .args
-                    .iter()
-                    .map(|a| String::from_utf8_lossy(a.as_slice()))
-                    .collect::<Vec<_>>(),
-            )
-            .finish()
+impl<'a> ExactSizeIterator for CommandArgsIterator<'a> {
+    fn len(&self) -> usize {
+        self.layout_iter.len()
     }
 }

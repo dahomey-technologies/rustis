@@ -98,7 +98,7 @@ async fn evalsha() -> Result<()> {
     let sha1: String = client.script_load("return ARGV[1]").await?;
 
     let result: String = client
-        .evalsha(CallBuilder::sha1(sha1).args("hello"))
+        .evalsha(CallBuilder::sha1(&sha1).args("hello"))
         .await?;
     assert_eq!("hello", result);
 
@@ -192,13 +192,11 @@ async fn function_dump() -> Result<()> {
     assert_eq!("hello", result);
 
     let serialized_payload = client.function_dump().await?;
-    assert!(!serialized_payload.0.is_empty());
+    assert!(!serialized_payload.is_empty());
 
     client.function_delete("mylib").await?;
 
-    client
-        .function_restore(serialized_payload.0, Default::default())
-        .await?;
+    client.function_restore(&serialized_payload, None).await?;
 
     let result: String = client
         .fcall(CallBuilder::function("myfunc").args("hello"))
@@ -369,7 +367,7 @@ async fn script_kill() -> Result<()> {
             let client = get_test_client().await?;
 
             let _ = client
-                .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
+                .evalsha::<String>(CallBuilder::sha1(&sha1).args("hello"))
                 .await?;
 
             Ok(())

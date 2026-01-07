@@ -1,8 +1,8 @@
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd},
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
@@ -18,7 +18,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lindex/>](https://redis.io/commands/lindex/)
     #[must_use]
-    fn lindex<R: Response>(self, key: impl Args, index: isize) -> PreparedCommand<'a, Self, R> {
+    fn lindex<R: Response>(
+        self,
+        key: impl Serialize,
+        index: isize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LINDEX").arg(key).arg(index))
     }
 
@@ -32,10 +36,10 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn linsert(
         self,
-        key: impl Args,
+        key: impl Serialize,
         where_: LInsertWhere,
-        pivot: impl Args,
-        element: impl Args,
+        pivot: impl Serialize,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
@@ -51,7 +55,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
-    fn llen(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn llen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LLEN").arg(key))
     }
 
@@ -67,8 +71,8 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lmove<R: Response>(
         self,
-        source: impl Args,
-        destination: impl Args,
+        source: impl Serialize,
+        destination: impl Serialize,
         where_from: LMoveWhere,
         where_to: LMoveWhere,
     ) -> PreparedCommand<'a, Self, R> {
@@ -92,15 +96,14 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lmpop<R: Response + DeserializeOwned>(
         self,
-        keys: impl Args,
+        keys: impl Serialize,
         where_: LMoveWhere,
         count: usize,
     ) -> PreparedCommand<'a, Self, (String, Vec<R>)> {
         prepare_command(
             self,
             cmd("LMPOP")
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -115,7 +118,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
-    fn lpop<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn lpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("LPOP").arg(key).arg(count))
     }
 
@@ -129,8 +132,8 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lpos(
         self,
-        key: impl Args,
-        element: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
         rank: Option<usize>,
         max_len: Option<usize>,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
@@ -155,8 +158,8 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lpos_with_count<R: Response>(
         self,
-        key: impl Args,
-        element: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
         num_matches: usize,
         rank: Option<usize>,
         max_len: Option<usize>,
@@ -181,7 +184,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpush/>](https://redis.io/commands/lpush/)
     #[must_use]
-    fn lpush(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn lpush(
+        self,
+        key: impl Serialize,
+        elements: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LPUSH").arg(key).arg(elements))
     }
 
@@ -194,7 +201,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpushx/>](https://redis.io/commands/lpushx/)
     #[must_use]
-    fn lpushx(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn lpushx(
+        self,
+        key: impl Serialize,
+        elements: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LPUSHX").arg(key).arg(elements))
     }
 
@@ -208,7 +219,7 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lrange<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -225,9 +236,9 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lrem(
         self,
-        key: impl Args,
+        key: impl Serialize,
         count: isize,
-        element: impl Args,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("LREM").arg(key).arg(count).arg(element))
     }
@@ -239,9 +250,9 @@ pub trait ListCommands<'a>: Sized {
     #[must_use]
     fn lset(
         self,
-        key: impl Args,
+        key: impl Serialize,
         index: isize,
-        element: impl Args,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("LSET").arg(key).arg(index).arg(element))
     }
@@ -251,7 +262,12 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ltrim/>](https://redis.io/commands/ltrim/)
     #[must_use]
-    fn ltrim(self, key: impl Args, start: isize, stop: isize) -> PreparedCommand<'a, Self, ()> {
+    fn ltrim(
+        self,
+        key: impl Serialize,
+        start: isize,
+        stop: isize,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("LTRIM").arg(key).arg(start).arg(stop))
     }
 
@@ -263,7 +279,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
-    fn rpop<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn rpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("RPOP").arg(key).arg(count))
     }
 
@@ -275,7 +291,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/rpush/>](https://redis.io/commands/rpush/)
     #[must_use]
-    fn rpush(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn rpush(
+        self,
+        key: impl Serialize,
+        elements: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("RPUSH").arg(key).arg(elements))
     }
 
@@ -288,37 +308,27 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/rpushx/>](https://redis.io/commands/rpushx/)
     #[must_use]
-    fn rpushx(self, key: impl Args, elements: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn rpushx(
+        self,
+        key: impl Serialize,
+        elements: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("RPUSHX").arg(key).arg(elements))
     }
 }
 
 /// Where option for the [`linsert`](ListCommands::linsert) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum LInsertWhere {
     Before,
     After,
 }
 
-impl Args for LInsertWhere {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            LInsertWhere::Before => "BEFORE",
-            LInsertWhere::After => "AFTER",
-        });
-    }
-}
-
 /// Where option for the [`lmove`](ListCommands::lmove) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum LMoveWhere {
     Left,
     Right,
-}
-
-impl Args for LMoveWhere {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            LMoveWhere::Left => "LEFT",
-            LMoveWhere::Right => "RIGHT",
-        });
-    }
 }

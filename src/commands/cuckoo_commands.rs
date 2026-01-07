@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, Value, cmd, deserialize_byte_buf},
+    resp::{BulkString, Response, Value, cmd, serialize_flag},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to [`Cuckoo filters`](https://redis.io/docs/stack/bloom/)
@@ -23,7 +23,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.add/>](https://redis.io/commands/cf.add/)
     #[must_use]
-    fn cf_add(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn cf_add(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CF.ADD").arg(key).arg(item))
     }
 
@@ -48,7 +48,11 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.addnx/>](https://redis.io/commands/cf.addnx/)
     #[must_use]
-    fn cf_addnx(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn cf_addnx(
+        self,
+        key: impl Serialize,
+        item: impl Serialize,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("CF.ADDNX").arg(key).arg(item))
     }
 
@@ -69,7 +73,11 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.count/>](https://redis.io/commands/cf.count/)
     #[must_use]
-    fn cf_count(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn cf_count(
+        self,
+        key: impl Serialize,
+        item: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("CF.COUNT").arg(key).arg(item))
     }
 
@@ -95,7 +103,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.del/>](https://redis.io/commands/cf.del/)
     #[must_use]
-    fn cf_del(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn cf_del(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("CF.DEL").arg(key).arg(item))
     }
 
@@ -112,7 +120,11 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.exists/>](https://redis.io/commands/cf.exists/)
     #[must_use]
-    fn cf_exists(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn cf_exists(
+        self,
+        key: impl Serialize,
+        item: impl Serialize,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("CF.EXISTS").arg(key).arg(item))
     }
 
@@ -127,7 +139,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.info/>](https://redis.io/commands/cf.info/)
     #[must_use]
-    fn cf_info(self, key: impl Args) -> PreparedCommand<'a, Self, CfInfoResult> {
+    fn cf_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, CfInfoResult> {
         prepare_command(self, cmd("CF.INFO").arg(key))
     }
 
@@ -145,9 +157,9 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_insert(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: CfInsertOptions,
-        item: impl Args,
+        item: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<bool>> {
         prepare_command(
             self,
@@ -190,9 +202,9 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_insertnx<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: CfInsertOptions,
-        item: impl Args,
+        item: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
@@ -221,9 +233,9 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_loadchunk(
         self,
-        key: impl Args,
+        key: impl Serialize,
         iterator: i64,
-        data: impl Args,
+        data: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CF.LOADCHUNK").arg(key).arg(iterator).arg(data))
     }
@@ -243,8 +255,8 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_mexists<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CF.MEXISTS").arg(key).arg(items))
     }
@@ -279,7 +291,7 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_reserve(
         self,
-        key: impl Args,
+        key: impl Serialize,
         capacity: usize,
         options: CfReserveOptions,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -303,7 +315,7 @@ pub trait CuckooCommands<'a>: Sized {
     #[must_use]
     fn cf_scandump(
         self,
-        key: impl Args,
+        key: impl Serialize,
         iterator: i64,
     ) -> PreparedCommand<'a, Self, CfScanDumpResult> {
         prepare_command(self, cmd("CF.SCANDUMP").arg(key).arg(iterator))
@@ -343,9 +355,16 @@ pub struct CfInfoResult {
 }
 
 /// Options for the [`cf_insert`](CuckooCommands::cf_insert) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct CfInsertOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    capacity: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nocreate: bool,
 }
 
 impl CfInsertOptions {
@@ -356,10 +375,9 @@ impl CfInsertOptions {
     /// then the filter is created with the module-level default capacity which is `1024`.
     /// See [`cf_reserve`](CuckooCommands::cf_reserve) for more information on cuckoo filter capacities.
     #[must_use]
-    pub fn capacity(mut self, capacity: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("CAPACITY").arg(capacity).build(),
-        }
+    pub fn capacity(mut self, capacity: u32) -> Self {
+        self.capacity = Some(capacity);
+        self
     }
 
     /// If specified, prevents automatic filter creation if the filter does not exist.
@@ -368,22 +386,21 @@ impl CfInsertOptions {
     /// This option is mutually exclusive with [`capacity`](CfInsertOptions::capacity).
     #[must_use]
     pub fn nocreate(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOCREATE").build(),
-        }
-    }
-}
-
-impl Args for CfInsertOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.nocreate = true;
+        self
     }
 }
 
 /// Options for the [`cf_reserve`](CuckooCommands::cf_reserve) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct CfReserveOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bucketsize: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxiterations: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<u32>,
 }
 
 impl CfReserveOptions {
@@ -392,40 +409,27 @@ impl CfReserveOptions {
     /// A higher bucket size value improves the fill rate but also causes a higher error rate and slightly slower performance.
     /// The default value is 2.
     #[must_use]
-    pub fn bucketsize(mut self, bucketsize: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("BUCKETSIZE").arg(bucketsize).build(),
-        }
+    pub fn bucketsize(mut self, bucket_size: u32) -> Self {
+        self.bucketsize = Some(bucket_size);
+        self
     }
 
     /// Number of attempts to swap items between buckets before declaring filter as full and creating an additional filter.
     ///
     ///  A low value is better for performance and a higher number is better for filter fill rate.
     /// The default value is 20.
-    pub fn maxiterations(mut self, maxiterations: usize) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("MAXITERATIONS")
-                .arg(maxiterations)
-                .build(),
-        }
+    pub fn maxiterations(mut self, max_iterations: u32) -> Self {
+        self.maxiterations = Some(max_iterations);
+        self
     }
 
     /// When a new filter is created, its size is the size of the current filter multiplied by `expansion`.
     /// Expansion is rounded to the next `2^n` number.
     /// The default value is 1.
     #[must_use]
-    pub fn expansion(mut self, expansion: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
-        }
-    }
-}
-
-impl Args for CfReserveOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn expansion(mut self, expansion: u32) -> Self {
+        self.expansion = Some(expansion);
+        self
     }
 }
 
@@ -433,6 +437,5 @@ impl Args for CfReserveOptions {
 #[derive(Debug, Deserialize)]
 pub struct CfScanDumpResult {
     pub iterator: i64,
-    #[serde(deserialize_with = "deserialize_byte_buf")]
-    pub data: Vec<u8>,
+    pub data: BulkString,
 }

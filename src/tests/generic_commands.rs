@@ -79,7 +79,7 @@ async fn dump() -> Result<()> {
     client.set("key", "value").await?;
 
     let dump = client.dump("key").await?;
-    assert!(!dump.0.is_empty());
+    assert!(!dump.is_empty());
 
     Ok(())
 }
@@ -115,7 +115,7 @@ async fn expire() -> Result<()> {
 
     // no option
     client.set("key", "value").await?;
-    let result = client.expire("key", 10, ExpireOption::None).await?;
+    let result = client.expire("key", 10, None).await?;
     assert!(result);
     assert_eq!(10, client.ttl("key").await?);
 
@@ -163,9 +163,7 @@ async fn expireat() -> Result<()> {
 
     // no option
     client.set("key", "value").await?;
-    let result = client
-        .expireat("key", now + 10, ExpireOption::default())
-        .await?;
+    let result = client.expireat("key", now + 10, None).await?;
     assert!(result);
     let ttl = client.ttl("key").await?;
     assert!((9..=10).contains(&ttl));
@@ -210,11 +208,7 @@ async fn expiretime() -> Result<()> {
     let client = get_test_client().await?;
 
     client.set("key", "value").await?;
-    assert!(
-        client
-            .expireat("key", 33177117420, ExpireOption::default())
-            .await?
-    );
+    assert!(client.expireat("key", 33177117420, None).await?);
     let time = client.expiretime("key").await?;
     assert_eq!(time, 33177117420);
 
@@ -358,7 +352,7 @@ async fn persist() -> Result<()> {
     let client = get_test_client().await?;
 
     client.set("key", "value").await?;
-    assert!(client.expire("key", 10, ExpireOption::None).await?);
+    assert!(client.expire("key", 10, None).await?);
     assert_eq!(10, client.ttl("key").await?);
     assert!(client.persist("key").await?);
     assert_eq!(-1, client.ttl("key").await?);
@@ -374,9 +368,7 @@ async fn pexpire() -> Result<()> {
 
     // no option
     client.set("key", "value").await?;
-    let result = client
-        .pexpire("key", 10000, ExpireOption::default())
-        .await?;
+    let result = client.pexpire("key", 10000, None).await?;
     assert!(result);
     assert_eq!(10, client.ttl("key").await?);
 
@@ -424,9 +416,7 @@ async fn pexpireat() -> Result<()> {
 
     // no option
     client.set("key", "value").await?;
-    let result = client
-        .pexpireat("key", now + 10000, ExpireOption::default())
-        .await?;
+    let result = client.pexpireat("key", now + 10000, None).await?;
     assert!(result);
     assert!(10000 >= client.pttl("key").await?);
 
@@ -479,11 +469,7 @@ async fn pexpiretime() -> Result<()> {
     let client = get_test_client().await?;
 
     client.set("key", "value").await?;
-    assert!(
-        client
-            .pexpireat("key", 33177117420000, ExpireOption::default())
-            .await?
-    );
+    assert!(client.pexpireat("key", 33177117420000, None).await?);
     let time = client.pexpiretime("key").await?;
     assert_eq!(time, 33177117420000);
 
@@ -558,7 +544,7 @@ async fn restore() -> Result<()> {
     let dump = client.dump("key").await?;
     client.del("key").await?;
     client
-        .restore("key", 0, dump.0, RestoreOptions::default())
+        .restore("key", 0, &dump, RestoreOptions::default())
         .await?;
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
@@ -647,13 +633,13 @@ async fn type_() -> Result<()> {
     client.lpush("key2", "value").await?;
     client.sadd("key3", "value").await?;
 
-    let result = client.type_("key1").await?;
+    let result: String = client.type_("key1").await?;
     assert_eq!(&result, "string");
 
-    let result = client.type_("key2").await?;
+    let result: String = client.type_("key2").await?;
     assert_eq!(&result, "list");
 
-    let result = client.type_("key3").await?;
+    let result: String = client.type_("key3").await?;
     assert_eq!(&result, "set");
 
     Ok(())

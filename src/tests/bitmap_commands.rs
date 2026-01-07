@@ -4,6 +4,7 @@ use crate::{
         BitFieldOverflow, BitFieldSubCommand, BitOperation, BitRange, BitUnit, BitmapCommands,
         StringCommands,
     },
+    resp::BulkString,
     tests::get_test_client,
 };
 use serial_test::serial;
@@ -52,8 +53,8 @@ async fn bitfield() -> Result<()> {
         .bitfield(
             "mykey",
             [
-                BitFieldSubCommand::incr_by("i5", 100, 1),
-                BitFieldSubCommand::get("u4", 0),
+                BitFieldSubCommand::incr_by("i5", "100", 1),
+                BitFieldSubCommand::get("u4", "0"),
             ],
         )
         .await?;
@@ -108,7 +109,7 @@ async fn bitfield_readonly() -> Result<()> {
     client.set("mykey", "foobar").await?;
 
     let results = client
-        .bitfield_readonly("mykey", [BitFieldSubCommand::get("i8", 0)])
+        .bitfield_readonly("mykey", [BitFieldSubCommand::get("i8", "0")])
         .await?;
     assert_eq!(1, results.len());
     assert_eq!(b'f' as u64, results[0]);
@@ -144,12 +145,16 @@ async fn bitop() -> Result<()> {
 async fn bitpos() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.set("mykey", vec![0xFFu8, 0xF0u8, 0x00u8]).await?;
+    client
+        .set("mykey", BulkString::new(b"\xff\xf0\x00"))
+        .await?;
 
     let pos = client.bitpos("mykey", 1, BitRange::default()).await?;
     assert_eq!(0, pos);
 
-    client.set("mykey", vec![0x00u8, 0xFFu8, 0xF0u8]).await?;
+    client
+        .set("mykey", BulkString::new(b"\x00\xff\xf0"))
+        .await?;
     let pos = client.bitpos("mykey", 0, BitRange::range(0, -1)).await?;
     assert_eq!(0, pos);
 

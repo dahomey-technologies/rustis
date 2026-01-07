@@ -33,8 +33,8 @@ redis-graph = []
 async-std = { version = "1.13", features = ["attributes"], optional = true }
 futures-util = { version = "0.3", features = ["sink", "io"] }
 futures-channel = { version = "0.3", features = ["sink"] }
-bytes = "1.10"
-tokio = { version = "1.46", features = ["time", "io-util", "sync"] }
+bytes = { version = "1.11", features = ["serde"] }
+tokio = { version = "1.49", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 atoi = "2.0"
 itoa = "1.0"
@@ -60,16 +60,16 @@ moka = { version = "0.12", features = ["future"], optional = true }
 dashmap = { version = "6.1", optional = true }
 
 [dev-dependencies]
-serial_test = "3.2"
-tokio = { version = "1.46", features = ["rt-multi-thread"] }
+serial_test = "3.3"
+tokio = { version = "1.49", features = ["rt-multi-thread"] }
 rand = "0.9"
 env_logger = "0.11"
 smallvec = { version = "1.15", features = ["serde"] }
-criterion = "0.6"
-redis = { version = "0.32", features = ["aio", "tokio-comp"] }
+criterion = "0.8"
+redis = { version = "1.0", features = ["aio", "tokio-comp"] }
 fred = "10.1"
 axum = "0.8"
-actix-web = "4.11"
+actix-web = "4.12"
 rustls-pemfile = "2.2"
 
 [package.metadata.docs.rs]

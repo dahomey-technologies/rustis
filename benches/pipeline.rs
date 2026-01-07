@@ -136,7 +136,7 @@ fn bench_redis_multiplexed_async_long_pipeline(b: &mut Bencher) {
     let client = get_redis_client();
     let runtime = current_thread_runtime();
     let mut con = runtime
-        .block_on(client.get_multiplexed_tokio_connection())
+        .block_on(client.get_multiplexed_async_connection())
         .unwrap();
 
     b.iter(|| {

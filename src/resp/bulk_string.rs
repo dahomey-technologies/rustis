@@ -1,4 +1,5 @@
 use crate::resp::{deserialize_byte_buf, serialize_byte_buf};
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{fmt, ops::Deref};
 
@@ -15,8 +16,8 @@ pub struct BulkString(
 impl BulkString {
     /// Constructs a new `BulkString` from a bytes buffer
     #[inline]
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
+    pub fn new(bytes: impl Into<Vec<u8>>) -> Self {
+        Self(bytes.into())
     }
 
     /// Returns the internal buffer as a byte slice
@@ -46,6 +47,13 @@ impl From<Vec<u8>> for BulkString {
     #[inline]
     fn from(bytes: Vec<u8>) -> Self {
         BulkString(bytes)
+    }
+}
+
+impl From<Bytes> for BulkString {
+    #[inline]
+    fn from(bytes: Bytes) -> Self {
+        BulkString(bytes.to_vec())
     }
 }
 

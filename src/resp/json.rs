@@ -1,4 +1,3 @@
-use crate::resp::{Args, CommandArgs};
 use serde::{
     Deserialize,
     de::{self},
@@ -142,13 +141,18 @@ where
 #[must_use]
 pub struct JsonRef<'a, T>(pub &'a T);
 
-impl<'a, T> Args for JsonRef<'a, T>
+impl<'a, T> Serialize for JsonRef<'a, T>
 where
     T: Serialize,
 {
-    fn write_args(&self, args: &mut CommandArgs) {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
         if let Ok(bytes) = serde_json::to_vec(&self.0) {
-            args.write_arg(bytes);
+            serializer.serialize_bytes(&bytes)
+        } else {
+            serializer.serialize_unit()
         }
     }
 }

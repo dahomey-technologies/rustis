@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use log::warn;
 use smallvec::SmallVec;
 
@@ -142,7 +143,7 @@ impl<'a> Iterator for CommandsIteratorMut<'a> {
 #[derive(Debug)]
 pub(crate) struct Message {
     pub commands: Commands,
-    pub pub_sub_senders: Option<Vec<(Vec<u8>, PubSubSender)>>,
+    pub pub_sub_senders: Option<Vec<(Bytes, PubSubSender)>>,
     pub push_sender: Option<PushSender>,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
     pub retry_on_error: bool,
@@ -199,7 +200,7 @@ impl Message {
     pub fn pub_sub(
         command: Command,
         result_sender: ResultSender,
-        pub_sub_senders: Vec<(Vec<u8>, PubSubSender)>,
+        pub_sub_senders: Vec<(Bytes, PubSubSender)>,
     ) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),

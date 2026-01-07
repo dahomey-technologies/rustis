@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, cmd},
+    resp::cmd,
 };
+use serde::Serialize;
 
 /// A group of Redis commands related to [`Bitmaps`](https://redis.io/docs/data-types/bitmaps/)
 /// & [`Bitfields`](https://redis.io/docs/data-types/bitfields/)
@@ -52,13 +53,16 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
-    fn bitcount(self, key: impl Args, range: BitRange) -> PreparedCommand<'a, Self, usize> {
+    fn bitcount(self, key: impl Serialize, range: BitRange) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("BITCOUNT").arg(key).arg(range))
     }
 
     /// The command treats a Redis string as an array of bits,
     /// and is capable of addressing specific integer fields
     /// of varying bit widths and arbitrary non (necessary) aligned offset.
+    ///
+    /// # Arguments
+    /// * `sub_commands` - A collection of [`BitFieldSubCommand`](BitFieldSubCommand)
     ///
     /// # Return
     /// A collection with each entry being the corresponding result of the sub command
@@ -67,10 +71,10 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitfield/>](https://redis.io/commands/bitfield/)
     #[must_use]
-    fn bitfield(
+    fn bitfield<'b>(
         self,
-        key: impl Args,
-        sub_commands: impl Args,
+        key: impl Serialize,
+        sub_commands: impl IntoIterator<Item = BitFieldSubCommand<'b>> + Serialize,
     ) -> PreparedCommand<'a, Self, Vec<u64>> {
         prepare_command(self, cmd("BITFIELD").arg(key).arg(sub_commands))
     }
@@ -79,6 +83,9 @@ pub trait BitmapCommands<'a>: Sized {
     /// It is like the original BITFIELD but only accepts GET subcommand
     /// and can safely be used in read-only replicas.
     ///
+    /// # Arguments
+    /// * `sub_commands` - A single or collection of [`BitFieldSubCommand`](BitFieldSubCommand)
+    ///
     /// # Return
     /// A collection with each entry being the corresponding result of the sub command
     /// given at the same position.
@@ -86,12 +93,12 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitfield_ro/>](https://redis.io/commands/bitfield_ro/)
     #[must_use]
-    fn bitfield_readonly(
+    fn bitfield_readonly<'b>(
         self,
-        key: impl Args,
-        get_commands: impl Args,
+        key: impl Serialize,
+        sub_commands: impl IntoIterator<Item = BitFieldSubCommand<'b>> + Serialize,
     ) -> PreparedCommand<'a, Self, Vec<u64>> {
-        prepare_command(self, cmd("BITFIELD_RO").arg(key).arg(get_commands))
+        prepare_command(self, cmd("BITFIELD_RO").arg(key).arg(sub_commands))
     }
 
     /// Perform a bitwise operation between multiple keys (containing string values)
@@ -107,8 +114,8 @@ pub trait BitmapCommands<'a>: Sized {
     fn bitop(
         self,
         operation: BitOperation,
-        dest_key: impl Args,
-        keys: impl Args,
+        dest_key: impl Serialize,
+        keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("BITOP").arg(operation).arg(dest_key).arg(keys))
     }
@@ -122,7 +129,12 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitpos/>](https://redis.io/commands/bitpos/)
     #[must_use]
-    fn bitpos(self, key: impl Args, bit: u64, range: BitRange) -> PreparedCommand<'a, Self, usize> {
+    fn bitpos(
+        self,
+        key: impl Serialize,
+        bit: u64,
+        range: BitRange,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("BITPOS").arg(key).arg(bit).arg(range))
     }
 
@@ -134,7 +146,7 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getbit/>](https://redis.io/commands/getbit/)
     #[must_use]
-    fn getbit(self, key: impl Args, offset: u64) -> PreparedCommand<'a, Self, u64> {
+    fn getbit(self, key: impl Serialize, offset: u64) -> PreparedCommand<'a, Self, u64> {
         prepare_command(self, cmd("GETBIT").arg(key).arg(offset))
     }
 
@@ -146,132 +158,96 @@ pub trait BitmapCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/setbit/>](https://redis.io/commands/setbit/)
     #[must_use]
-    fn setbit(self, key: impl Args, offset: u64, value: u64) -> PreparedCommand<'a, Self, u64> {
+    fn setbit(
+        self,
+        key: impl Serialize,
+        offset: u64,
+        value: u64,
+    ) -> PreparedCommand<'a, Self, u64> {
         prepare_command(self, cmd("SETBIT").arg(key).arg(offset).arg(value))
     }
 }
 
 /// Interval options for the [`bitcount`](BitmapCommands::bitcount) command
-#[derive(Default)]
-pub struct BitRange {
-    command_args: CommandArgs,
-}
+#[derive(Default, Serialize)]
+pub struct BitRange(
+    #[serde(skip_serializing_if = "Option::is_none")] Option<(isize, isize)>,
+    #[serde(skip_serializing_if = "Option::is_none")] Option<BitUnit>,
+);
 
 impl BitRange {
     #[must_use]
     pub fn range(start: isize, end: isize) -> Self {
-        Self {
-            command_args: CommandArgs::default().arg(start).arg(end).build(),
-        }
+        Self(Some((start, end)), None)
     }
 
     /// Unit of the range, bit or byte
     #[must_use]
     pub fn unit(mut self, unit: BitUnit) -> Self {
-        Self {
-            command_args: self.command_args.arg(unit).build(),
-        }
-    }
-}
-
-impl Args for BitRange {
-    fn write_args(&self, args: &mut CommandArgs) {
-        self.command_args.write_args(args);
+        self.1 = Some(unit);
+        self
     }
 }
 
 /// Unit of a [`range`](BitRange), bit or byte
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum BitUnit {
     Byte,
     Bit,
 }
 
-impl Args for BitUnit {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            BitUnit::Byte => "BYTE",
-            BitUnit::Bit => "BIT",
-        });
-    }
-}
-
 /// Sub-command for the [`bitfield`](BitmapCommands::bitfield) command
-pub struct BitFieldSubCommand {
-    args: CommandArgs,
+#[derive(Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub enum BitFieldSubCommand<'a> {
+    Get((&'a str, &'a str)),
+    Set((&'a str, &'a str, u64)),
+    IncrBy((&'a str, &'a str, i64)),
+    Overflow(BitFieldOverflow),
 }
 
-impl BitFieldSubCommand {
+impl<'a> BitFieldSubCommand<'a> {
     /// Returns the specified bit field.
     #[must_use]
-    pub fn get(encoding: impl Args, offset: impl Args) -> Self {
-        let mut args = CommandArgs::default();
-        args.arg("GET").arg(encoding).arg(offset);
-        Self { args }
+    pub fn get(encoding: &'a str, offset: &'a str) -> Self {
+        Self::Get((encoding, offset))
     }
 
     /// Set the specified bit field and returns its old value.
     #[must_use]
-    pub fn set(encoding: impl Args, offset: impl Args, value: u64) -> Self {
-        let mut args = CommandArgs::default();
-        args.arg("SET").arg(encoding).arg(offset).arg(value);
-        Self { args }
+    pub fn set(encoding: &'a str, offset: &'a str, value: u64) -> Self {
+        Self::Set((encoding, offset, value))
     }
 
     ///  Increments or decrements (if a negative increment is given)
     /// the specified bit field and returns the new value.
     #[must_use]
-    pub fn incr_by(encoding: impl Args, offset: impl Args, increment: i64) -> Self {
-        let mut args = CommandArgs::default();
-        args.arg("INCRBY").arg(encoding).arg(offset).arg(increment);
-        Self { args }
+    pub fn incr_by(encoding: &'a str, offset: &'a str, increment: i64) -> Self {
+        Self::IncrBy((encoding, offset, increment))
     }
 
     #[must_use]
     pub fn overflow(overflow: BitFieldOverflow) -> Self {
-        let mut args = CommandArgs::default();
-        args.arg("OVERFLOW").arg(overflow);
-        Self { args }
-    }
-}
-
-impl Args for BitFieldSubCommand {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.args);
+        Self::Overflow(overflow)
     }
 }
 
 /// Option for the [`BitFieldSubCommand`](BitFieldSubCommand) sub-command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum BitFieldOverflow {
     Wrap,
     Sat,
     Fail,
 }
 
-impl Args for BitFieldOverflow {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            BitFieldOverflow::Wrap => "WRAP",
-            BitFieldOverflow::Sat => "SAT",
-            BitFieldOverflow::Fail => "FAIL",
-        });
-    }
-}
-
 /// Bit operation for the [`bitop`](BitmapCommands::bitop) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum BitOperation {
     And,
     Or,
     Xor,
     Not,
-}
-
-impl Args for BitOperation {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            BitOperation::And => "AND",
-            BitOperation::Or => "OR",
-            BitOperation::Xor => "XOR",
-            BitOperation::Not => "NOT",
-        });
-    }
 }

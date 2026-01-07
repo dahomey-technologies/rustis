@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, Response, cmd, deserialize_vec_of_pairs},
+    resp::{Response, cmd, deserialize_vec_of_pairs},
 };
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Top-K`](https://redis.io/docs/stack/bloom/)
 ///
@@ -27,8 +27,8 @@ pub trait TopKCommands<'a>: Sized {
     #[must_use]
     fn topk_add<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.ADD").arg(key).arg(items))
     }
@@ -54,8 +54,8 @@ pub trait TopKCommands<'a>: Sized {
     #[must_use]
     fn topk_incrby<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.INCRBY").arg(key).arg(items))
     }
@@ -71,7 +71,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
-    fn topk_info(self, key: impl Args) -> PreparedCommand<'a, Self, TopKInfoResult> {
+    fn topk_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, TopKInfoResult> {
         prepare_command(self, cmd("TOPK.INFO").arg(key))
     }
 
@@ -86,7 +86,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn topk_list<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.LIST").arg(key))
     }
 
@@ -105,7 +105,7 @@ pub trait TopKCommands<'a>: Sized {
     #[must_use]
     fn topk_list_with_count<R: Response + DeserializeOwned>(
         self,
-        key: impl Args,
+        key: impl Serialize,
     ) -> PreparedCommand<'a, Self, TopKListWithCountResult<R>> {
         prepare_command(self, cmd("TOPK.LIST").arg(key).arg("WITHCOUNT"))
     }
@@ -126,8 +126,8 @@ pub trait TopKCommands<'a>: Sized {
     #[must_use]
     fn topk_query<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.QUERY").arg(key).arg(items))
     }
@@ -149,7 +149,7 @@ pub trait TopKCommands<'a>: Sized {
     #[must_use]
     fn topk_reserve(
         self,
-        key: impl Args,
+        key: impl Serialize,
         topk: usize,
         width_depth_decay: Option<(usize, usize, f64)>,
     ) -> PreparedCommand<'a, Self, ()> {

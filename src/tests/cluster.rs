@@ -3,13 +3,13 @@ use crate::{
     client::Client,
     commands::{
         CallBuilder, ClusterCommands, ClusterNodeResult,
-        ClusterSetSlotSubCommand::{Importing, Migrating, Node},
+        ClusterSetSlotSubCommand::{self, Importing, Migrating, Node},
         ClusterShardResult, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
         MigrateOptions, ScriptingCommands, ServerCommands, StringCommands,
     },
     network::{ClusterConnection, Version},
     sleep, spawn,
-    tests::{get_cluster_test_client, get_cluster_test_client_with_command_timeout},
+    tests::{TestClient, get_cluster_test_client, get_cluster_test_client_with_command_timeout},
 };
 use futures_util::try_join;
 use serial_test::serial;
@@ -100,7 +100,7 @@ async fn all_shards_one_succeeded() -> Result<()> {
             let client = get_cluster_test_client().await?;
 
             let _ = client
-                .evalsha::<String>(CallBuilder::sha1(sha1).args("hello"))
+                .evalsha::<String>(CallBuilder::sha1(&sha1).args("hello"))
                 .await?;
 
             Ok(())
@@ -174,7 +174,7 @@ async fn all_nodes_all_succeeded() -> Result<()> {
     let sha1: String = client.script_load("return 12").await?;
     assert!(!sha1.is_empty());
 
-    let value: i64 = client.evalsha(CallBuilder::sha1(sha1)).await?;
+    let value: i64 = client.evalsha(CallBuilder::sha1(&sha1)).await?;
     assert_eq!(12, value);
 
     Ok(())
@@ -214,41 +214,13 @@ async fn moved() -> Result<()> {
     let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
 
     // migrate
-    dst_client
-        .cluster_setslot(
-            slot,
-            Importing {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Migrating {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
 
-    dst_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
 
     // issue command on migrated slot
     client.set("key", "value").await?;
@@ -257,41 +229,13 @@ async fn moved() -> Result<()> {
     client.del("key").await?;
 
     // migrate back
-    src_client
-        .cluster_setslot(
-            slot,
-            Importing {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
 
-    dst_client
-        .cluster_setslot(
-            slot,
-            Migrating {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Node(src_id)).await?;
 
-    dst_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Node(src_id)).await?;
 
     Ok(())
 }
@@ -335,23 +279,9 @@ async fn ask() -> Result<()> {
     client.set("key", "value").await?;
 
     // migrate
-    dst_client
-        .cluster_setslot(
-            slot,
-            Importing {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Migrating {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
 
     // migrate key
     src_client
@@ -371,23 +301,9 @@ async fn ask() -> Result<()> {
     client.del("key").await?;
 
     // finish migration
-    dst_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
 
     client.set("key", "value").await?;
     let value: String = client.get("key").await?;
@@ -395,41 +311,13 @@ async fn ask() -> Result<()> {
     client.del("key").await?;
 
     // migrate back
-    src_client
-        .cluster_setslot(
-            slot,
-            Importing {
-                node_id: dst_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
 
-    dst_client
-        .cluster_setslot(
-            slot,
-            Migrating {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
 
-    src_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    src_client.cluster_setslot(slot, Node(src_id)).await?;
 
-    dst_client
-        .cluster_setslot(
-            slot,
-            Node {
-                node_id: src_id.clone(),
-            },
-        )
-        .await?;
+    dst_client.cluster_setslot(slot, Node(src_id)).await?;
 
     client.set("key", "value").await?;
     let value: String = client.get("key").await?;
@@ -479,4 +367,18 @@ async fn get_loop() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn cluster_selslot_command() {
+    let cmd = TestClient
+        .cluster_setslot(
+            12539,
+            ClusterSetSlotSubCommand::Migrating("37618c7eec0dd58e946e1ef0df02d8c5a9a14235"),
+        )
+        .command;
+    assert_eq!(
+        "CLUSTER SETSLOT 12539 MIGRATING 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
+        cmd.to_string()
+    );
 }

@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::SetCondition,
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{CommandArgsMut, Response, cmd},
 };
+use serde::Serialize;
 
 /// A group of Redis commands related to [`RedisJson`](https://redis.io/docs/stack/json/)
 ///
@@ -25,9 +26,9 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrappend<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
-        values: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
+        values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.ARRAPPEND").arg(key).arg(path).arg(values))
     }
@@ -50,9 +51,9 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrindex<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
-        value: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
         options: JsonArrIndexOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -86,10 +87,10 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrinsert<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
         index: isize,
-        values: impl Args,
+        values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
@@ -116,8 +117,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrlen<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.ARRLEN").arg(key).arg(path))
     }
@@ -141,8 +142,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrpop<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
         index: isize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.ARRPOP").arg(key).arg(path).arg(index))
@@ -166,8 +167,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_arrtrim<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -189,7 +190,11 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.clear/>](https://redis.io/commands/json.clear/)
     #[must_use]
-    fn json_clear(self, key: impl Args, path: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn json_clear(
+        self,
+        key: impl Serialize,
+        path: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("JSON.CLEAR").arg(key).arg(path))
     }
 
@@ -207,8 +212,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_debug_memory<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.DEBUG").arg("MEMORY").arg(key).arg(path))
     }
@@ -225,7 +230,11 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.del/>](https://redis.io/commands/json.del/)
     #[must_use]
-    fn json_del(self, key: impl Args, path: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn json_del(
+        self,
+        key: impl Serialize,
+        path: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("JSON.DEL").arg(key).arg(path))
     }
 
@@ -241,7 +250,11 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.forget/>](https://redis.io/commands/json.forget/)
     #[must_use]
-    fn json_forget(self, key: impl Args, path: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn json_forget(
+        self,
+        key: impl Serialize,
+        path: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("JSON.FORGET").arg(key).arg(path))
     }
 
@@ -259,7 +272,7 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_get<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: JsonGetOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.GET").arg(key).arg(options))
@@ -279,8 +292,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_mget<R: Response>(
         self,
-        keys: impl Args,
-        path: impl Args,
+        keys: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.MGET").arg(keys).arg(path))
     }
@@ -301,9 +314,9 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_numincrby<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
-        value: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.NUMINCRBY").arg(key).arg(path).arg(value))
     }
@@ -324,9 +337,9 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_nummultby<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
-        value: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.NUMMULTBY").arg(key).arg(path).arg(value))
     }
@@ -347,8 +360,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_objkeys<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.OBJKEYS").arg(key).arg(path))
     }
@@ -368,8 +381,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_objlen<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.OBJLEN").arg(key).arg(path))
     }
@@ -398,8 +411,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_resp<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.RESP").arg(key).arg(path))
     }
@@ -418,16 +431,20 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.set/>](https://redis.io/commands/json.set/)
     #[must_use]
-    fn json_set(
+    fn json_set<'b>(
         self,
-        key: impl Args,
-        path: impl Args,
-        value: impl Args,
-        condition: SetCondition,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
+        condition: impl Into<Option<SetCondition<'b>>>,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
-            cmd("JSON.SET").arg(key).arg(path).arg(value).arg(condition),
+            cmd("JSON.SET")
+                .arg(key)
+                .arg(path)
+                .arg(value)
+                .arg(condition.into()),
         )
     }
 
@@ -446,9 +463,9 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_strappend<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
-        value: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.STRAPPEND").arg(key).arg(path).arg(value))
     }
@@ -468,8 +485,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_strlen<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.STRLEN").arg(key).arg(path))
     }
@@ -489,8 +506,8 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_toggle<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.TOGGLE").arg(key).arg(path))
     }
@@ -509,63 +526,65 @@ pub trait JsonCommands<'a>: Sized {
     #[must_use]
     fn json_type<R: Response>(
         self,
-        key: impl Args,
-        path: impl Args,
+        key: impl Serialize,
+        path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("JSON.TYPE").arg(key).arg(path))
     }
 }
 
 /// Options for the [`json_get`](JsonCommands::json_get) command
-#[derive(Default)]
-pub struct JsonGetOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct JsonGetOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    indent: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    newline: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    space: Option<&'a str>,
+    #[serde(rename = "", skip_serializing_if = "CommandArgsMut::is_empty")]
+    path: CommandArgsMut,
 }
 
-impl JsonGetOptions {
+impl<'a> JsonGetOptions<'a> {
     /// Sets the indentation string for nested levels.
     #[must_use]
-    pub fn indent(mut self, indent: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("INDENT").arg(indent).build(),
-        }
+    pub fn indent(mut self, indent: &'a str) -> Self {
+        self.indent = Some(indent);
+        self
     }
 
     /// Sets the string that's printed at the end of each line.
     #[must_use]
-    pub fn newline(mut self, newline: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("NEWLINE").arg(newline).build(),
-        }
+    pub fn newline(mut self, newline: &'a str) -> Self {
+        self.newline = Some(newline);
+        self
     }
 
     /// Sets the string that's put between a key and a value.
     #[must_use]
-    pub fn space(mut self, space: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("SPACE").arg(space).build(),
-        }
+    pub fn space(mut self, space: &'a str) -> Self {
+        self.space = Some(space);
+        self
     }
 
     /// JSONPath to specify
     #[must_use]
-    pub fn path(mut self, paths: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(paths).build(),
-        }
-    }
-}
-
-impl Args for JsonGetOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn path(mut self, paths: impl Serialize) -> Self {
+        self.path = self.path.arg(paths);
+        self
     }
 }
 
 /// Options for the [`json_arrindex`](JsonCommands::json_arrindex) command
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct JsonArrIndexOptions {
-    command_args: CommandArgs,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    start: Option<u32>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    stop: Option<i32>,
 }
 
 impl JsonArrIndexOptions {
@@ -573,10 +592,9 @@ impl JsonArrIndexOptions {
     ///
     /// Default is 0.
     #[must_use]
-    pub fn start(mut self, start: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg(start).build(),
-        }
+    pub fn start(mut self, start: u32) -> Self {
+        self.start = Some(start);
+        self
     }
 
     /// Exclusive stop value to specify in a slice of the array to search, including the last element.
@@ -584,15 +602,8 @@ impl JsonArrIndexOptions {
     /// Default is 0.
     /// Negative values are interpreted as starting from the end.
     #[must_use]
-    pub fn stop(mut self, stop: isize) -> Self {
-        Self {
-            command_args: self.command_args.arg(stop).build(),
-        }
-    }
-}
-
-impl Args for JsonArrIndexOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn stop(mut self, stop: i32) -> Self {
+        self.stop = Some(stop);
+        self
     }
 }

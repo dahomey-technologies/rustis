@@ -5,8 +5,8 @@ use crate::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
         CommandListOptions, ConnectionCommands, FailOverOptions, FlushingMode, InfoSection,
-        LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ModuleLoadOptions, ReplicaOfOptions,
-        RoleResult, ServerCommands, SlowLogOptions, StringCommands,
+        LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ReplicaOfOptions, RoleResult,
+        ServerCommands, SlowLogGetOptions, StringCommands,
     },
     resp::{Value, cmd},
     spawn,
@@ -29,7 +29,7 @@ async fn acl_cat() -> Result<()> {
     assert!(categories.contains(&"dangerous".to_owned()));
 
     let dangerous_commands: HashSet<String> = client
-        .acl_cat(AclCatOptions::default().category_name("dangerous"))
+        .acl_cat(AclCatOptions::category_name("dangerous"))
         .await?;
     assert!(dangerous_commands.contains("flushdb"));
 
@@ -91,14 +91,10 @@ async fn acl_genpass() -> Result<()> {
     let password: String = client.acl_genpass(AclGenPassOptions::default()).await?;
     assert_eq!(64, password.len());
 
-    let password: String = client
-        .acl_genpass(AclGenPassOptions::default().bits(32))
-        .await?;
+    let password: String = client.acl_genpass(AclGenPassOptions::bits(32)).await?;
     assert_eq!(8, password.len());
 
-    let password: String = client
-        .acl_genpass(AclGenPassOptions::default().bits(5))
-        .await?;
+    let password: String = client.acl_genpass(AclGenPassOptions::bits(5)).await?;
     assert_eq!(2, password.len());
 
     Ok(())
@@ -176,8 +172,7 @@ async fn acl_log() -> Result<()> {
     let result = client.auth(Some("someuser"), "wrongpassword").await;
     assert!(result.is_err());
 
-    let logs: Vec<HashMap<String, Value>> =
-        client.acl_log(AclLogOptions::default().count(1)).await?;
+    let logs: Vec<HashMap<String, Value>> = client.acl_log(AclLogOptions::count(1)).await?;
     assert_eq!(1, logs.len());
     assert!(matches!(logs[0].get("reason"), Some(Value::BulkString(reason)) if reason == b"auth"));
     let client_info: String = logs[0].get("client-info").unwrap().to_string();
@@ -598,7 +593,7 @@ async fn flushdb() -> Result<()> {
     client1.set("key1", "value1").await?;
     client1.set("key2", "value2").await?;
 
-    client0.flushdb(FlushingMode::Default).await?;
+    client0.flushdb(None).await?;
 
     let value: Value = client0.get("key1").await?;
     assert!(matches!(value, Value::Nil));
@@ -629,7 +624,7 @@ async fn flushall() -> Result<()> {
     client1.set("key1", "value1").await?;
     client1.set("key2", "value2").await?;
 
-    client0.flushall(FlushingMode::Default).await?;
+    client0.flushall(None).await?;
 
     let value: Value = client0.get("key1").await?;
     assert!(matches!(value, Value::Nil));
@@ -964,53 +959,6 @@ async fn module_list() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn module_load() -> Result<()> {
-    let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).await?;
-
-    let result = client
-        .module_load(
-            "path",
-            ModuleLoadOptions::default()
-                .config("name", "value")
-                .config("name2", "value2")
-                .arg("arg1")
-                .arg(23),
-        )
-        .await;
-    assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description
-        })) if description.starts_with("MODULE command not allowed.")
-    ));
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-async fn module_unload() -> Result<()> {
-    let client = get_test_client().await?;
-    client.flushdb(FlushingMode::Sync).await?;
-
-    let result = client.module_unload("mymodule").await;
-    assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description
-        })) if description.starts_with("MODULE command not allowed.")
-    ));
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
 async fn monitor() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
@@ -1191,7 +1139,8 @@ async fn save() -> Result<()> {
 async fn slowlog_get() -> Result<()> {
     let client = get_test_client().await?;
 
-    let _entries = client.slowlog_get(SlowLogOptions::default()).await?;
+    let _entries = client.slowlog_get(SlowLogGetOptions::default()).await?;
+    let _entries = client.slowlog_get(SlowLogGetOptions::count(2)).await?;
 
     Ok(())
 }

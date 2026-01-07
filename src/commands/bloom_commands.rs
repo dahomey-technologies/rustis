@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd, deserialize_byte_buf},
+    resp::{BulkString, Response, cmd, serialize_flag},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
 ///
@@ -22,7 +22,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/bf.add/>](https://redis.io/commands/bf.add/)
     #[must_use]
-    fn bf_add(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn bf_add(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("BF.ADD").arg(key).arg(item))
     }
 
@@ -39,7 +39,11 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/bf.exists/>](https://redis.io/commands/bf.exists/)
     #[must_use]
-    fn bf_exists(self, key: impl Args, item: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn bf_exists(
+        self,
+        key: impl Serialize,
+        item: impl Serialize,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("BF.EXISTS").arg(key).arg(item))
     }
 
@@ -54,7 +58,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info_all(self, key: impl Args) -> PreparedCommand<'a, Self, BfInfoResult> {
+    fn bf_info_all(self, key: impl Serialize) -> PreparedCommand<'a, Self, BfInfoResult> {
         prepare_command(self, cmd("BF.INFO").arg(key))
     }
 
@@ -72,7 +76,7 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_info<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         param: BfInfoParameter,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.INFO").arg(key).arg(param))
@@ -98,8 +102,8 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_insert<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
         options: BfInsertOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -129,9 +133,9 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_loadchunk(
         self,
-        key: impl Args,
+        key: impl Serialize,
         iterator: i64,
-        data: impl Args,
+        data: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("BF.LOADCHUNK").arg(key).arg(iterator).arg(data))
     }
@@ -153,8 +157,8 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_madd<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.MADD").arg(key).arg(items))
     }
@@ -174,8 +178,8 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_mexists<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BF.MEXISTS").arg(key).arg(items))
     }
@@ -213,7 +217,7 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_reserve(
         self,
-        key: impl Args,
+        key: impl Serialize,
         error_rate: f64,
         capacity: usize,
         options: BfReserveOptions,
@@ -245,7 +249,7 @@ pub trait BloomCommands<'a>: Sized {
     #[must_use]
     fn bf_scandump(
         self,
-        key: impl Args,
+        key: impl Serialize,
         iterator: i64,
     ) -> PreparedCommand<'a, Self, BfScanDumpResult> {
         prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator))
@@ -255,24 +259,18 @@ pub trait BloomCommands<'a>: Sized {
 /// Optional parameter for the [`bf_info`](BloomCommands::bf_info) command.
 ///
 /// Used to query a specific parameter.
+#[derive(Serialize)]
 pub enum BfInfoParameter {
+    #[serde(rename = "CAPACITY")]
     Capacity,
+    #[serde(rename = "SIZE")]
     Size,
+    #[serde(rename = "FILTERS")]
     NumFilters,
+    #[serde(rename = "ITEMS")]
     NumItemsInserted,
+    #[serde(rename = "EXPANSION")]
     ExpansionRate,
-}
-
-impl Args for BfInfoParameter {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            BfInfoParameter::Capacity => args.arg("CAPACITY"),
-            BfInfoParameter::Size => args.arg("SIZE"),
-            BfInfoParameter::NumFilters => args.arg("FILTERS"),
-            BfInfoParameter::NumItemsInserted => args.arg("ITEMS"),
-            BfInfoParameter::ExpansionRate => args.arg("EXPANSION"),
-        };
-    }
 }
 
 /// Result for the [`bf_info`](BloomCommands::bf_info) command.
@@ -291,9 +289,25 @@ pub struct BfInfoResult {
 }
 
 /// Options for the [`bf_insert`](BloomCommands::bf_insert) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct BfInsertOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    capacity: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nocreate: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nonscaling: bool,
 }
 
 impl BfInsertOptions {
@@ -304,10 +318,9 @@ impl BfInsertOptions {
     /// then the module-level capacity is used.
     /// See [`bf_reserve`](BloomCommands::bf_reserve) for more information about the impact of this value.
     #[must_use]
-    pub fn capacity(mut self, capacity: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("CAPACITY").arg(capacity).build(),
-        }
+    pub fn capacity(mut self, capacity: u32) -> Self {
+        self.capacity = Some(capacity);
+        self
     }
 
     /// Specifies the error ratio of the newly created filter if it does not yet exist.
@@ -316,9 +329,8 @@ impl BfInsertOptions {
     /// See [`bf_reserve`](BloomCommands::bf_reserve) for more information about the format of this value.
     #[must_use]
     pub fn error(mut self, error_rate: f64) -> Self {
-        Self {
-            command_args: self.command_args.arg("ERROR").arg(error_rate).build(),
-        }
+        self.error = Some(error_rate);
+        self
     }
 
     /// When `capacity` is reached, an additional sub-filter is created.
@@ -328,10 +340,9 @@ impl BfInsertOptions {
     /// Otherwise, we recommend that you use an `expansion` of 1 to reduce memory consumption.
     /// The default expansion value is 2.
     #[must_use]
-    pub fn expansion(mut self, expansion: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
-        }
+    pub fn expansion(mut self, expansion: u32) -> Self {
+        self.expansion = Some(expansion);
+        self
     }
 
     /// Indicates that the filter should not be created if it does not already exist.
@@ -341,9 +352,8 @@ impl BfInsertOptions {
     /// It is an error to specify `nocreate` together with either [`capacity`](BfInsertOptions::capacity) or [`error`](BfInsertOptions::error).
     #[must_use]
     pub fn nocreate(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOCREATE").build(),
-        }
+        self.nocreate = true;
+        self
     }
 
     /// Prevents the filter from creating additional sub-filters if initial capacity is reached.
@@ -352,22 +362,22 @@ impl BfInsertOptions {
     /// The filter returns an error when `capacity` is reached.
     #[must_use]
     pub fn nonscaling(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NONSCALING").build(),
-        }
-    }
-}
-
-impl Args for BfInsertOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.nonscaling = true;
+        self
     }
 }
 
 /// Options for the [`bf_reserve`](BloomCommands::bf_reserve) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct BfReserveOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nonscaling: bool,
 }
 
 impl BfReserveOptions {
@@ -378,10 +388,9 @@ impl BfReserveOptions {
     /// Otherwise, we recommend that you use an `expansion` of 1 to reduce memory consumption.
     /// The default expansion value is 2.
     #[must_use]
-    pub fn expansion(mut self, expansion: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("EXPANSION").arg(expansion).build(),
-        }
+    pub fn expansion(mut self, expansion: u32) -> Self {
+        self.expansion = Some(expansion);
+        self
     }
 
     /// Prevents the filter from creating additional sub-filters if initial capacity is reached.
@@ -390,15 +399,8 @@ impl BfReserveOptions {
     /// The filter returns an error when `capacity` is reached.
     #[must_use]
     pub fn nonscaling(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NONSCALING").build(),
-        }
-    }
-}
-
-impl Args for BfReserveOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.nonscaling = true;
+        self
     }
 }
 
@@ -406,6 +408,5 @@ impl Args for BfReserveOptions {
 #[derive(Debug, Deserialize)]
 pub struct BfScanDumpResult {
     pub iterator: i64,
-    #[serde(deserialize_with = "deserialize_byte_buf")]
-    pub data: Vec<u8>,
+    pub data: BulkString,
 }

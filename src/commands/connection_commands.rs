@@ -2,9 +2,9 @@ use crate::{
     Result,
     client::{PreparedCommand, prepare_command},
     commands::ModuleInfo,
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd, serialize_flag},
 };
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to connection management
@@ -14,6 +14,12 @@ use std::collections::HashMap;
 pub trait ConnectionCommands<'a>: Sized {
     /// Authenticates the current connection.
     ///
+    /// This method supports both the legacy authentication (password only) and
+    /// the Redis 6+ ACL authentication (username and password).
+    ///
+    /// * `username` - The username. Pass `()` to use the default user (legacy behavior).
+    /// * `password` - The password.
+    ///
     /// # Errors
     /// a Redis error if the password, or username/password pair, is invalid.
     ///
@@ -22,8 +28,8 @@ pub trait ConnectionCommands<'a>: Sized {
     #[must_use]
     fn auth(
         self,
-        username: Option<impl Args>,
-        password: impl Args,
+        username: impl Serialize,
+        password: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("AUTH").arg(username).arg(password))
     }
@@ -221,7 +227,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
-    fn client_setname(self, connection_name: impl Args) -> PreparedCommand<'a, Self, ()> {
+    fn client_setname(self, connection_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
     }
 
@@ -263,7 +269,7 @@ pub trait ConnectionCommands<'a>: Sized {
     fn client_setinfo(
         self,
         attr: ClientInfoAttribute,
-        info: impl Args,
+        info: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLIENT").arg("SETINFO").arg(attr).arg(info))
     }
@@ -326,7 +332,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<R: Response>(self, message: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn echo<R: Response>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ECHO").arg(message))
     }
 
@@ -343,11 +349,14 @@ pub trait ConnectionCommands<'a>: Sized {
 
     /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk.
     ///
+    /// * `message` - if the argument is provided, the command returns a copy of the argument.
+    ///   pass `()` to ignore.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R: Response>(self, options: PingOptions) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("PING").arg(options))
+    fn ping<R: Response>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("PING").arg(message))
     }
 
     /// Ask the server to close the connection.
@@ -380,18 +389,11 @@ pub trait ConnectionCommands<'a>: Sized {
 }
 
 /// Client caching mode for the [`client_caching`](ConnectionCommands::client_caching) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientCachingMode {
     Yes,
     No,
-}
-
-impl Args for ClientCachingMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientCachingMode::Yes => "YES",
-            ClientCachingMode::No => "NO",
-        });
-    }
 }
 
 /// Client info results for the [`client_info`](ConnectionCommands::client_info)
@@ -596,6 +598,8 @@ impl<'de> Deserialize<'de> for ClientInfo {
 }
 
 /// Client type options for the [`client_list`](ConnectionCommands::client_list) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientType {
     Normal,
     Master,
@@ -603,41 +607,30 @@ pub enum ClientType {
     PubSub,
 }
 
-impl Args for ClientType {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientType::Normal => "NORMAL",
-            ClientType::Master => "MASTER",
-            ClientType::Replica => "REPLICA",
-            ClientType::PubSub => "PUBSUB",
-        });
-    }
-}
-
 /// Options for the [client_list](ConnectionCommands::client_list) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct ClientListOptions {
-    command_args: CommandArgs,
-}
-
-impl Args for ClientListOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
+    #[serde(rename = "TYPE", skip_serializing_if = "Option::is_none")]
+    client_type: Option<ClientType>,
+    #[serde(rename = "ID", skip_serializing_if = "Vec::is_empty")]
+    client_ids: Vec<i64>,
 }
 
 impl ClientListOptions {
     #[must_use]
     pub fn client_type(mut self, client_type: ClientType) -> Self {
-        Self {
-            command_args: self.command_args.arg("TYPE").arg(client_type).build(),
-        }
+        self.client_type = Some(client_type);
+        self
     }
 
-    pub fn client_ids(mut self, client_ids: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("ID").arg(client_ids).build(),
-        }
+    pub fn client_ids(mut self, client_ids: impl IntoIterator<Item = i64>) -> Self {
+        self.client_ids.extend(client_ids);
+        self
+    }
+
+    pub fn client_id(mut self, client_id: i64) -> Self {
+        self.client_ids.push(client_id);
+        self
     }
 }
 
@@ -662,32 +655,50 @@ impl<'de> Deserialize<'de> for ClientListResult {
     }
 }
 
-/// Options for the [`client-kill`](ConnectionCommands::client-kill) command.
-#[derive(Default)]
-pub struct ClientKillOptions {
-    command_args: CommandArgs,
+#[derive(Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+enum YesNo {
+    Yes,
+    No,
 }
 
-impl ClientKillOptions {
+/// Options for the [`client-kill`](ConnectionCommands::client-kill) command.
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct ClientKillOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<i64>,
+    #[serde(rename = "TYPE", skip_serializing_if = "Option::is_none")]
+    client_type: Option<ClientType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    username: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    addr: Option<(&'a str, u16)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    laddr: Option<(&'a str, u16)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skipme: Option<YesNo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxage: Option<u64>,
+}
+
+impl<'a> ClientKillOptions<'a> {
     #[must_use]
     pub fn id(mut self, client_id: i64) -> Self {
-        Self {
-            command_args: self.command_args.arg("ID").arg(client_id).build(),
-        }
+        self.id = Some(client_id);
+        self
     }
 
     #[must_use]
     pub fn client_type(mut self, client_type: ClientType) -> Self {
-        Self {
-            command_args: self.command_args.arg("TYPE").arg(client_type).build(),
-        }
+        self.client_type = Some(client_type);
+        self
     }
 
     #[must_use]
-    pub fn user(mut self, username: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("USER").arg(username).build(),
-        }
+    pub fn user(mut self, username: &'a str) -> Self {
+        self.username = Some(username);
+        self
     }
 
     /// Address in the format of `ip:port`
@@ -695,42 +706,37 @@ impl ClientKillOptions {
     /// The ip:port should match a line returned by the
     /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
-    pub fn addr(mut self, addr: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("ADDR").arg(addr).build(),
-        }
+    pub fn addr(mut self, ip: &'a str, port: u16) -> Self {
+        self.addr = Some((ip, port));
+        self
     }
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
-    pub fn laddr(mut self, laddr: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("LADDR").arg(laddr).build(),
-        }
+    pub fn laddr(mut self, ip: &'a str, port: u16) -> Self {
+        self.laddr = Some((ip, port));
+        self
     }
 
     /// By default this option is set to yes, that is, the client calling the command will not get killed,
     /// however setting this option to no will have the effect of also killing the client calling the command.
     #[must_use]
     pub fn skip_me(mut self, skip_me: bool) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("SKIPME")
-                .arg(if skip_me { "YES" } else { "NO" })
-                .build(),
-        }
+        self.skipme = Some(if skip_me { YesNo::Yes } else { YesNo::No });
+        self
     }
-}
 
-impl Args for ClientKillOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    ///  Closes all the connections that are older than the specified age, in seconds.
+    #[must_use]
+    pub fn max_age(mut self, seconds: u64) -> Self {
+        self.maxage = Some(seconds);
+        self
     }
 }
 
 /// Mode options for the [`client_pause`](ConnectionCommands::client_pause) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientPauseMode {
     /// Clients are only blocked if they attempt to execute a write command.
     Write,
@@ -739,106 +745,94 @@ pub enum ClientPauseMode {
     All,
 }
 
-impl Args for ClientPauseMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientPauseMode::Write => "WRITE",
-            ClientPauseMode::All => "ALL",
-        });
-    }
-}
-
 /// Mode options for the [`client_reply`](ConnectionCommands::client_reply) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientReplyMode {
     On,
     Off,
     Skip,
 }
 
-impl Args for ClientReplyMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientReplyMode::On => "ON",
-            ClientReplyMode::Off => "OFF",
-            ClientReplyMode::Skip => "SKIP",
-        });
-    }
-}
-
 /// Status options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientTrackingStatus {
     On,
     Off,
 }
 
-impl Args for ClientTrackingStatus {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientTrackingStatus::On => "ON",
-            ClientTrackingStatus::Off => "OFF",
-        });
-    }
-}
-
 /// Options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct ClientTrackingOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    redirect: Option<i64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    prefix: Vec<String>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    bcast: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    optin: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    optout: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    noloop: bool,
 }
 
 impl ClientTrackingOptions {
     #[must_use]
     /// send invalidation messages to the connection with the specified ID.
     pub fn redirect(mut self, client_id: i64) -> Self {
-        Self {
-            command_args: self.command_args.arg("REDIRECT").arg(client_id).build(),
-        }
+        self.redirect = Some(client_id);
+        self
     }
 
     /// enable tracking in broadcasting mode.
     pub fn broadcasting(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("BCAST").build(),
-        }
+        self.bcast = true;
+        self
     }
 
     /// for broadcasting, register a given key prefix, so that notifications
     /// will be provided only for keys starting with this string.
     ///
     /// This option can be given multiple times to register multiple prefixes.
-    pub fn prefix(mut self, prefix: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("PREFIX").arg(prefix).build(),
-        }
+    pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix.push(prefix.into());
+        self
     }
 
     /// when broadcasting is NOT active, normally don't track keys in read only commands,
     /// unless they are called immediately after a `CLIENT CACHING yes` command.
     pub fn optin(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("OPTIN").build(),
-        }
+        self.optin = true;
+        self
     }
 
     /// when broadcasting is NOT active, normally track keys in read only commands,
     /// unless they are called immediately after a `CLIENT CACHING no` command.
     pub fn optout(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("OPTOUT").build(),
-        }
+        self.optout = true;
+        self
     }
 
     /// don't send notifications about keys modified by this connection itself.
-    pub fn no_loop(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOLOOP").build(),
-        }
-    }
-}
-
-impl Args for ClientTrackingOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn noloop(mut self) -> Self {
+        self.noloop = true;
+        self
     }
 }
 
@@ -856,7 +850,8 @@ pub struct ClientTrackingInfo {
 }
 
 /// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum ClientUnblockMode {
     /// By default the client is unblocked as if the timeout of the command was reached,
     #[default]
@@ -865,52 +860,39 @@ pub enum ClientUnblockMode {
     Error,
 }
 
-impl Args for ClientUnblockMode {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientUnblockMode::Timeout => "TIMEOUT",
-            ClientUnblockMode::Error => "ERROR",
-        });
-    }
-}
-
 /// Options for the [`hello`](ConnectionCommands::hello) command.
-#[derive(Default)]
-pub struct HelloOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct HelloOptions<'a> {
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    protover: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auth: Option<(&'a str, &'a str)>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setname: Option<&'a str>,
 }
 
-impl HelloOptions {
+impl<'a> HelloOptions<'a> {
     #[must_use]
-    pub fn new(protover: usize) -> Self {
+    pub fn new(protover: u32) -> Self {
         Self {
-            command_args: CommandArgs::default().arg(protover).build(),
+            protover: Some(protover),
+            ..Default::default()
         }
     }
 
     #[must_use]
-    pub fn auth(mut self, username: impl Args, password: impl Args) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("AUTH")
-                .arg(username)
-                .arg(password)
-                .build(),
-        }
+    pub fn auth(mut self, username: &'a str, password: &'a str) -> Self {
+        self.auth = Some((username, password));
+        self
     }
 
     #[must_use]
-    pub fn set_name(mut self, client_name: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("SETNAME").arg(client_name).build(),
-        }
-    }
-}
-
-impl Args for HelloOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn set_name(mut self, client_name: &'a str) -> Self {
+        self.setname = Some(client_name);
+        self
     }
 }
 
@@ -928,38 +910,10 @@ pub struct HelloResult {
     pub modules: Vec<ModuleInfo>,
 }
 
-/// Options for the [`ping`](ConnectionCommands::ping) command.
-#[derive(Default)]
-pub struct PingOptions {
-    command_args: CommandArgs,
-}
-
-impl PingOptions {
-    #[must_use]
-    pub fn message(mut self, message: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg(message).build(),
-        }
-    }
-}
-
-impl Args for PingOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
-}
-
 // Info options for the [`client_setinfo`](ConnectionCommands::client_setinfo) command.
+#[derive(Serialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
 pub enum ClientInfoAttribute {
     LibName,
     LibVer,
-}
-
-impl Args for ClientInfoAttribute {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            ClientInfoAttribute::LibName => "LIB-NAME",
-            ClientInfoAttribute::LibVer => "LIB-VER",
-        });
-    }
 }

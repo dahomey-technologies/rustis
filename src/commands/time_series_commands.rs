@@ -1,11 +1,12 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, Value, cmd},
+    resp::{Response, Value, cmd, serialize_flag},
 };
 use serde::{
-    Deserialize,
+    Deserialize, Serialize,
     de::{self, value::SeqAccessDeserializer},
 };
+use smallvec::SmallVec;
 use std::{collections::HashMap, fmt};
 
 /// A group of Redis commands related to [`Time Series`](https://redis.io/docs/stack/timeseries/)
@@ -50,8 +51,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_add(
         self,
-        key: impl Args,
-        timestamp: impl Args,
+        key: impl Serialize,
+        timestamp: TsTimestamp,
         value: f64,
         options: TsAddOptions,
     ) -> PreparedCommand<'a, Self, u64> {
@@ -78,7 +79,11 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.alter/>](https://redis.io/commands/ts.alter/)
     #[must_use]
-    fn ts_alter(self, key: impl Args, options: TsCreateOptions) -> PreparedCommand<'a, Self, ()> {
+    fn ts_alter(
+        self,
+        key: impl Serialize,
+        options: TsCreateOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.ALTER").arg(key).arg(options))
     }
 
@@ -96,7 +101,11 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.create/>](https://redis.io/commands/ts.create/)
     #[must_use]
-    fn ts_create(self, key: impl Args, options: TsCreateOptions) -> PreparedCommand<'a, Self, ()> {
+    fn ts_create(
+        self,
+        key: impl Serialize,
+        options: TsCreateOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.CREATE").arg(key).arg(options))
     }
 
@@ -125,8 +134,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_createrule(
         self,
-        src_key: impl Args,
-        dst_key: impl Args,
+        src_key: impl Serialize,
+        dst_key: impl Serialize,
         aggregator: TsAggregationType,
         bucket_duration: u64,
         options: TsCreateRuleOptions,
@@ -164,7 +173,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_decrby(
         self,
-        key: impl Args,
+        key: impl Serialize,
         value: f64,
         options: TsIncrByDecrByOptions,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -190,7 +199,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_del(
         self,
-        key: impl Args,
+        key: impl Serialize,
         from_timestamp: u64,
         to_timestamp: u64,
     ) -> PreparedCommand<'a, Self, usize> {
@@ -214,8 +223,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_deleterule(
         self,
-        src_key: impl Args,
-        dst_key: impl Args,
+        src_key: impl Serialize,
+        dst_key: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("TS.DELETERULE").arg(src_key).arg(dst_key))
     }
@@ -236,7 +245,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_get(
         self,
-        key: impl Args,
+        key: impl Serialize,
         options: TsGetOptions,
     ) -> PreparedCommand<'a, Self, Option<(u64, f64)>> {
         prepare_command(self, cmd("TS.GET").arg(key).arg(options))
@@ -264,7 +273,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_incrby(
         self,
-        key: impl Args,
+        key: impl Serialize,
         value: f64,
         options: TsIncrByDecrByOptions,
     ) -> PreparedCommand<'a, Self, u64> {
@@ -283,7 +292,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.info/>](https://redis.io/commands/ts.info/)
     #[must_use]
-    fn ts_info(self, key: impl Args, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult> {
+    fn ts_info(self, key: impl Serialize, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult> {
         prepare_command(self, cmd("TS.INFO").arg(key).arg_if(debug, "DEBUG"))
     }
 
@@ -312,7 +321,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
-    fn ts_madd<R: Response>(self, items: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn ts_madd<R: Response>(self, items: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.MADD").arg(items))
     }
 
@@ -343,7 +352,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     fn ts_mget<R: Response>(
         self,
         options: TsMGetOptions,
-        filters: impl Args,
+        filters: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.MGET").arg(options).arg("FILTER").arg(filters))
     }
@@ -376,10 +385,10 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_mrange<R: Response>(
         self,
-        from_timestamp: impl Args,
-        to_timestamp: impl Args,
+        from_timestamp: impl Serialize,
+        to_timestamp: impl Serialize,
         options: TsMRangeOptions,
-        filters: impl Args,
+        filters: impl Serialize,
         groupby_options: TsGroupByOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -422,10 +431,10 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_mrevrange<R: Response>(
         self,
-        from_timestamp: impl Args,
-        to_timestamp: impl Args,
+        from_timestamp: impl Serialize,
+        to_timestamp: impl Serialize,
         options: TsMRangeOptions,
-        filters: impl Args,
+        filters: impl Serialize,
         groupby_options: TsGroupByOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -463,7 +472,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<R: Response>(self, filters: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn ts_queryindex<R: Response>(self, filters: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.QUERYINDEX").arg(filters))
     }
 
@@ -491,9 +500,9 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_range<R: Response>(
         self,
-        key: impl Args,
-        from_timestamp: impl Args,
-        to_timestamp: impl Args,
+        key: impl Serialize,
+        from_timestamp: impl Serialize,
+        to_timestamp: impl Serialize,
         options: TsRangeOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -530,9 +539,9 @@ pub trait TimeSeriesCommands<'a>: Sized {
     #[must_use]
     fn ts_revrange<R: Response>(
         self,
-        key: impl Args,
-        from_timestamp: impl Args,
-        to_timestamp: impl Args,
+        key: impl Serialize,
+        from_timestamp: impl Serialize,
+        to_timestamp: impl Serialize,
         options: TsRangeOptions,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
@@ -554,12 +563,22 @@ pub trait TimeSeriesCommands<'a>: Sized {
 ///   [`chunk_size`](TsAddOptions::chunk_size), [`on_duplicate`](TsAddOptions::on_duplicate),
 ///   and [`labels`](TsAddOptions::labels) are optional arguments.
 /// * Setting [`retention`](TsAddOptions::retention) and [`labels`](TsAddOptions::labels) introduces additional time complexity.
-#[derive(Default)]
-pub struct TsAddOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsAddOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retention: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encoding: Option<TsEncoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunk_size: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_duplicate: Option<TsDuplicatePolicy>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    labels: SmallVec<[(&'a str, &'a str); 10]>,
 }
 
-impl TsAddOptions {
+impl<'a> TsAddOptions<'a> {
     /// maximum retention period, compared to the maximum existing timestamp, in milliseconds.
     ///
     /// Use it only if you are creating a new time series.
@@ -567,13 +586,8 @@ impl TsAddOptions {
     /// See [`retention`](TsCreateOptions::retention).
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("RETENTION")
-                .arg(retention_period)
-                .build(),
-        }
+        self.retention = Some(retention_period);
+        self
     }
 
     /// specifies the series sample's encoding format.
@@ -583,9 +597,8 @@ impl TsAddOptions {
     /// See [`encoding`](TsCreateOptions::encoding).
     #[must_use]
     pub fn encoding(mut self, encoding: TsEncoding) -> Self {
-        Self {
-            command_args: self.command_args.arg("ENCODING").arg(encoding).build(),
-        }
+        self.encoding = Some(encoding);
+        self
     }
 
     /// memory size, in bytes, allocated for each data chunk.
@@ -594,19 +607,17 @@ impl TsAddOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`chunk_size`](TsCreateOptions::chunk_size).
     #[must_use]
-    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
-        }
+    pub fn chunk_size(mut self, chunk_size: u32) -> Self {
+        self.chunk_size = Some(chunk_size);
+        self
     }
 
     /// overwrite key and database configuration for
     /// [`DUPLICATE_POLICY`](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy)
     #[must_use]
     pub fn on_duplicate(mut self, policy: TsDuplicatePolicy) -> Self {
-        Self {
-            command_args: self.command_args.arg("ON_DUPLICATE").arg(policy).build(),
-        }
+        self.on_duplicate = Some(policy);
+        self
     }
 
     /// set of label-value pairs that represent metadata labels of the time series.
@@ -619,16 +630,9 @@ impl TsAddOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels(mut self, labels: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("LABELS").arg(labels).build(),
-        }
-    }
-}
-
-impl Args for TsAddOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn labels(mut self, labels: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+        self.labels.extend(labels);
+        self
     }
 }
 
@@ -639,6 +643,8 @@ impl Args for TsAddOptions {
 /// It can result in about 90% memory reduction. The exception are highly irregular timestamps or values, which occur rarely.
 ///
 /// When not specified, the option is set to `Compressed`.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum TsEncoding {
     /// applies compression to the series samples.
     Compressed,
@@ -648,20 +654,11 @@ pub enum TsEncoding {
     Uncompressed,
 }
 
-impl Args for TsEncoding {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            TsEncoding::Compressed => "COMPRESSED",
-            TsEncoding::Uncompressed => "UNCOMPRESSED",
-        });
-    }
-}
-
 /// [`Policy`](https://redis.io/docs/stack/timeseries/configuration/#duplicate_policy)
 /// for handling samples with identical timestamps
 ///
 ///  It is used with one of the following values:
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TsDuplicatePolicy {
     /// ignore any newly reported value and reply with an error
@@ -679,26 +676,23 @@ pub enum TsDuplicatePolicy {
     Sum,
 }
 
-impl Args for TsDuplicatePolicy {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            TsDuplicatePolicy::Block => "BLOCK",
-            TsDuplicatePolicy::First => "FIRST",
-            TsDuplicatePolicy::Last => "LAST",
-            TsDuplicatePolicy::Min => "MIN",
-            TsDuplicatePolicy::Max => "MAX",
-            TsDuplicatePolicy::Sum => "SUM",
-        });
-    }
-}
-
 /// Options for the [`ts_add`](TimeSeriesCommands::ts_create) command.
-#[derive(Default)]
-pub struct TsCreateOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsCreateOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retention: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encoding: Option<TsEncoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunk_size: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duplicate_policy: Option<TsDuplicatePolicy>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    labels: SmallVec<[(&'a str, &'a str); 10]>,
 }
 
-impl TsCreateOptions {
+impl<'a> TsCreateOptions<'a> {
     /// maximum age for samples compared to the highest reported timestamp, in milliseconds.
     ///
     /// Samples are expired based solely on the difference between their timestamp
@@ -711,21 +705,15 @@ impl TsCreateOptions {
     /// configuration of the database, which by default is 0.
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("RETENTION")
-                .arg(retention_period)
-                .build(),
-        }
+        self.retention = Some(retention_period);
+        self
     }
 
     /// specifies the series sample's encoding format.
     #[must_use]
     pub fn encoding(mut self, encoding: TsEncoding) -> Self {
-        Self {
-            command_args: self.command_args.arg("ENCODING").arg(encoding).build(),
-        }
+        self.encoding = Some(encoding);
+        self
     }
 
     /// initial allocation size, in bytes, for the data part of each new chunk. Actual chunks may consume more memory.
@@ -748,23 +736,17 @@ impl TsCreateOptions {
     ///
     /// If you are unsure about your use case, select the default.
     #[must_use]
-    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
-        }
+    pub fn chunk_size(mut self, chunk_size: u32) -> Self {
+        self.chunk_size = Some(chunk_size);
+        self
     }
 
     /// policy for handling insertion ([`ts_add`](TimeSeriesCommands::ts_add) and [`ts_madd`](TimeSeriesCommands::ts_madd))
     /// of multiple samples with identical timestamps
     #[must_use]
     pub fn duplicate_policy(mut self, policy: TsDuplicatePolicy) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("DUPLICATE_POLICY")
-                .arg(policy)
-                .build(),
-        }
+        self.duplicate_policy = Some(policy);
+        self
     }
 
     /// set of label-value pairs that represent metadata labels of the time series.
@@ -777,22 +759,15 @@ impl TsCreateOptions {
     /// and [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands operate on multiple time series based on their labels.
     /// The [`ts_queryindex`](TimeSeriesCommands::ts_queryindex) command returns all time series keys matching a given filter based on their labels.
     #[must_use]
-    pub fn labels(mut self, labels: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("LABELS").arg(labels).build(),
-        }
-    }
-}
-
-impl Args for TsCreateOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn labels(mut self, labels: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+        self.labels.extend(labels);
+        self
     }
 }
 
 /// Aggregation type for the [`ts_createrule`](TimeSeriesCommands::ts_createrule)
 /// and [`ts_mrange`](TimeSeriesCommands::ts_mrange) commands.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TsAggregationType {
     /// Arithmetic mean of all values
@@ -827,30 +802,12 @@ pub enum TsAggregationType {
     Twa,
 }
 
-impl Args for TsAggregationType {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(match self {
-            TsAggregationType::Avg => "avg",
-            TsAggregationType::Sum => "sum",
-            TsAggregationType::Min => "min",
-            TsAggregationType::Max => "max",
-            TsAggregationType::Range => "range",
-            TsAggregationType::Count => "count",
-            TsAggregationType::First => "first",
-            TsAggregationType::Last => "last",
-            TsAggregationType::StdP => "std.p",
-            TsAggregationType::StdS => "std.s",
-            TsAggregationType::VarP => "var.p",
-            TsAggregationType::VarS => "var.s",
-            TsAggregationType::Twa => "twa",
-        });
-    }
-}
-
 /// Options for the [`ts_createrule`](TimeSeriesCommands::ts_createrule) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct TsCreateRuleOptions {
-    command_args: CommandArgs,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    align_timestamp: Option<u64>,
 }
 
 impl TsCreateRuleOptions {
@@ -863,15 +820,8 @@ impl TsCreateRuleOptions {
     /// to 6 hours after the epoch (`6 * 3600 * 1000`) ensures that each bucket’s timeframe is `[06:00 .. 06:00)`.
     #[must_use]
     pub fn align_timestamp(mut self, align_timestamp: u64) -> Self {
-        Self {
-            command_args: self.command_args.arg(align_timestamp).build(),
-        }
-    }
-}
-
-impl Args for TsCreateRuleOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.align_timestamp = Some(align_timestamp);
+        self
     }
 }
 
@@ -883,12 +833,25 @@ impl Args for TsCreateRuleOptions {
 ///   This is why `retention`, `uncompressed`, `chunk_size`, and `labels` are optional arguments.
 /// * When specified and the key doesn't exist, a new time series is created.
 ///   Setting the `retention` and `labels` options introduces additional time complexity.
-#[derive(Default)]
-pub struct TsIncrByDecrByOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsIncrByDecrByOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timestamp: Option<TsTimestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retention: Option<u64>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    uncompressed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunk_size: Option<u32>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    labels: SmallVec<[(&'a str, &'a str); 10]>,
 }
 
-impl TsIncrByDecrByOptions {
+impl<'a> TsIncrByDecrByOptions<'a> {
     /// is (integer) UNIX sample timestamp in milliseconds or * to set the timestamp according to the server clock.
     ///
     /// timestamp must be equal to or higher than the maximum existing timestamp.
@@ -900,10 +863,9 @@ impl TsIncrByDecrByOptions {
     ///
     /// When not specified, the timestamp is set according to the server clock.
     #[must_use]
-    pub fn timestamp(mut self, timestamp: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("TIMESTAMP").arg(timestamp).build(),
-        }
+    pub fn timestamp(mut self, timestamp: TsTimestamp) -> Self {
+        self.timestamp = Some(timestamp);
+        self
     }
 
     /// maximum age for samples compared to the highest reported timestamp, in milliseconds.
@@ -914,13 +876,8 @@ impl TsIncrByDecrByOptions {
     /// See [`retention`](TsCreateOptions::retention).
     #[must_use]
     pub fn retention(mut self, retention_period: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("RETENTION")
-                .arg(retention_period)
-                .build(),
-        }
+        self.retention = Some(retention_period);
+        self
     }
 
     /// changes data storage from compressed (default) to uncompressed.
@@ -930,9 +887,8 @@ impl TsIncrByDecrByOptions {
     /// See [`encoding`](TsCreateOptions::encoding).
     #[must_use]
     pub fn uncompressed(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("UNCOMPRESSED").build(),
-        }
+        self.uncompressed = true;
+        self
     }
 
     /// memory size, in bytes, allocated for each data chunk.
@@ -941,10 +897,9 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`chunk_size`](TsCreateOptions::chunk_size).
     #[must_use]
-    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("CHUNK_SIZE").arg(chunk_size).build(),
-        }
+    pub fn chunk_size(mut self, chunk_size: u32) -> Self {
+        self.chunk_size = Some(chunk_size);
+        self
     }
 
     /// set of label-value pairs that represent metadata labels of the time series.
@@ -953,23 +908,21 @@ impl TsIncrByDecrByOptions {
     /// It is ignored if you are adding samples to an existing time series.
     /// See [`labels`](TsCreateOptions::labels).
     #[must_use]
-    pub fn labels(mut self, labels: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("LABELS").arg(labels).build(),
-        }
-    }
-}
-
-impl Args for TsIncrByDecrByOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn labels(mut self, label: &'a str, value: &'a str) -> Self {
+        self.labels.push((label, value));
+        self
     }
 }
 
 /// Options for the [`ts_get`](TimeSeriesCommands::ts_get) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct TsGetOptions {
-    command_args: CommandArgs,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    latest: bool,
 }
 
 impl TsGetOptions {
@@ -988,15 +941,8 @@ impl TsGetOptions {
     /// In such a case, use `latest`.
     #[must_use]
     pub fn latest(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("LATEST").build(),
-        }
-    }
-}
-
-impl Args for TsGetOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.latest = true;
+        self
     }
 }
 
@@ -1144,12 +1090,24 @@ where
 // }
 
 /// Options for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
-#[derive(Default)]
-pub struct TsMGetOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsMGetOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    latest: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withlabels: bool,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    selected_labels: SmallVec<[&'a str; 10]>,
 }
 
-impl TsMGetOptions {
+impl<'a> TsMGetOptions<'a> {
     /// Used when a time series is a compaction.
     ///
     /// With `latest`, [`ts_mget`](TimeSeriesCommands::ts_mget)
@@ -1165,9 +1123,8 @@ impl TsMGetOptions {
     /// In such a case, use `latest`.
     #[must_use]
     pub fn latest(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("LATEST").build(),
-        }
+        self.latest = true;
+        self
     }
 
     /// Includes in the reply all label-value pairs representing metadata labels of the time series.
@@ -1175,9 +1132,8 @@ impl TsMGetOptions {
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
     pub fn withlabels(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHLABELS").build(),
-        }
+        self.withlabels = true;
+        self
     }
 
     /// returns a subset of the label-value pairs that represent metadata labels of the time series.
@@ -1185,16 +1141,9 @@ impl TsMGetOptions {
     /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
     /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
     #[must_use]
-    pub fn selected_labels(mut self, labels: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
-        }
-    }
-}
-
-impl Args for TsMGetOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn selected_label(mut self, label: &'a str) -> Self {
+        self.selected_labels.push(label);
+        self
     }
 }
 
@@ -1213,9 +1162,164 @@ pub struct TsSample {
 
 /// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
 /// [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands.
-#[derive(Default)]
-pub struct TsMRangeOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsMRangeOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    latest: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter_by_ts: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter_by_value: Option<(f64, f64)>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withlabels: bool,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    selected_labels: SmallVec<[&'a str; 10]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    align: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aggregation: Option<(TsAggregationType, u64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    buckettimestamp: Option<u64>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    empty: bool,
+}
+
+impl<'a> TsMRangeOptions<'a> {
+    /// Used when a time series is a compaction.
+    ///
+    /// With `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
+    /// also reports the compacted value of the latest possibly partial bucket,
+    /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
+    /// Without `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
+    /// does not report the latest possibly partial bucket.
+    /// When a time series is not a compaction, `latest` is ignored.
+    ///
+    /// The data in the latest bucket of a compaction is possibly partial.
+    /// A bucket is closed and compacted only upon arrival of a new sample that opens a new latest bucket.
+    /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
+    /// In such a case, use `latest`.
+    #[must_use]
+    pub fn latest(mut self) -> Self {
+        self.latest = true;
+        self
+    }
+
+    /// filters samples by a list of specific timestamps.
+    ///
+    /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
+    #[must_use]
+    pub fn filter_by_ts(mut self, ts: &'a str) -> Self {
+        self.filter_by_ts = Some(ts);
+        self
+    }
+
+    /// filters samples by minimum and maximum values.
+    #[must_use]
+    pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
+        self.filter_by_value = Some((min, max));
+        self
+    }
+
+    /// Includes in the reply all label-value pairs representing metadata labels of the time series.
+    ///
+    /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
+    #[must_use]
+    pub fn withlabels(mut self) -> Self {
+        self.withlabels = true;
+        self
+    }
+
+    /// returns a subset of the label-value pairs that represent metadata labels of the time series.
+    ///
+    /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
+    /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
+    #[must_use]
+    pub fn selected_label(mut self, label: &'a str) -> Self {
+        self.selected_labels.push(label);
+        self
+    }
+
+    /// limits the number of returned samples.
+    #[must_use]
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    /// A time bucket alignment control for `aggregation`.
+    ///
+    /// It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
+    ///
+    /// Values include:
+    /// * `start` or `-`: The reference timestamp will be the query start interval time (`from_timestamp`) which can't be `-`
+    /// * `end` or `+`: The reference timestamp will be the query end interval time (`to_timestamp`) which can't be `+`
+    /// * A specific timestamp: align the reference timestamp to a specific time
+    ///
+    /// # Note
+    /// When not provided, alignment is set to 0.
+    #[must_use]
+    pub fn align(mut self, align: &'a str) -> Self {
+        self.align = Some(align);
+        self
+    }
+
+    /// Aggregates results into time buckets, where:
+    /// * `aggregator` - takes a value of [`TsAggregationType`](TsAggregationType)
+    /// * `bucket_duration` - is duration of each bucket, in milliseconds.
+    ///
+    /// Without `align`, bucket start times are multiples of `bucket_duration`.
+    ///
+    /// With `align`, bucket start times are multiples of `bucket_duration` with remainder `align` % `bucket_duration`.
+    ///
+    /// The first bucket start time is less than or equal to `from_timestamp`.
+    #[must_use]
+    pub fn aggregation(mut self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
+        self.aggregation = Some((aggregator, bucket_duration));
+        self
+    }
+
+    /// controls how bucket timestamps are reported.
+    /// `bucket_timestamp` values include:
+    /// * `-` or `low` - Timestamp reported for each bucket is the bucket's start time (default)
+    /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
+    /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
+    #[must_use]
+    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
+        self.buckettimestamp = Some(bucket_timestamp);
+        self
+    }
+
+    /// A flag, which, when specified, reports aggregations also for empty buckets.
+    /// when `aggregator` values are:
+    /// * `sum`, `count` - the value reported for each empty bucket is `0`
+    /// * `last` - the value reported for each empty bucket is the value
+    ///   of the last sample before the bucket's start.
+    ///   `NaN` when no such sample.
+    /// * `twa` - the value reported for each empty bucket is the average value
+    ///   over the bucket's timeframe based on linear interpolation
+    ///   of the last sample before the bucket's start and the first sample after the bucket's end.
+    ///   `NaN` when no such samples.
+    /// * `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` - the value reported for each empty bucket is `NaN`
+    ///
+    /// Regardless of the values of `from_timestamp` and `to_timestamp`,
+    /// no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
+    #[must_use]
+    pub fn empty(mut self) -> Self {
+        self.empty = true;
+        self
+    }
 }
 
 /// Result for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
@@ -1343,169 +1447,15 @@ impl<'de> de::Deserialize<'de> for TsRangeSample {
     }
 }
 
-impl TsMRangeOptions {
-    /// Used when a time series is a compaction.
-    ///
-    /// With `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
-    /// also reports the compacted value of the latest possibly partial bucket,
-    /// given that this bucket's start time falls within [`from_timestamp`, `to_timestamp`].
-    /// Without `latest`, [`ts_mrange`](TimeSeriesCommands::ts_mrange)
-    /// does not report the latest possibly partial bucket.
-    /// When a time series is not a compaction, `latest` is ignored.
-    ///
-    /// The data in the latest bucket of a compaction is possibly partial.
-    /// A bucket is closed and compacted only upon arrival of a new sample that opens a new latest bucket.
-    /// There are cases, however, when the compacted value of the latest possibly partial bucket is also required.
-    /// In such a case, use `latest`.
-    #[must_use]
-    pub fn latest(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("LATEST").build(),
-        }
-    }
-
-    /// filters samples by a list of specific timestamps.
-    ///
-    /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
-    #[must_use]
-    pub fn filter_by_ts(mut self, ts: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
-        }
-    }
-
-    /// filters samples by minimum and maximum values.
-    #[must_use]
-    pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTER_BY_VALUE")
-                .arg(min)
-                .arg(max)
-                .build(),
-        }
-    }
-
-    /// Includes in the reply all label-value pairs representing metadata labels of the time series.
-    ///
-    /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
-    #[must_use]
-    pub fn withlabels(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("WITHLABELS").build(),
-        }
-    }
-
-    /// returns a subset of the label-value pairs that represent metadata labels of the time series.
-    ///
-    /// Use when a large number of labels exists per series, but only the values of some of the labels are required.
-    /// If `withlabels` or `selected_labels` are not specified, by default, an empty list is reported as label-value pairs.
-    #[must_use]
-    pub fn selected_labels(mut self, labels: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("SELECTED_LABELS").arg(labels).build(),
-        }
-    }
-
-    /// limits the number of returned samples.
-    #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
-    }
-
-    /// A time bucket alignment control for `aggregation`.
-    ///
-    /// It controls the time bucket timestamps by changing the reference timestamp on which a bucket is defined.
-    ///
-    /// Values include:
-    /// * `start` or `-`: The reference timestamp will be the query start interval time (`from_timestamp`) which can't be `-`
-    /// * `end` or `+`: The reference timestamp will be the query end interval time (`to_timestamp`) which can't be `+`
-    /// * A specific timestamp: align the reference timestamp to a specific time
-    ///
-    /// # Note
-    /// When not provided, alignment is set to 0.
-    #[must_use]
-    pub fn align(mut self, align: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("ALIGN").arg(align).build(),
-        }
-    }
-
-    /// Aggregates results into time buckets, where:
-    /// * `aggregator` - takes a value of [`TsAggregationType`](TsAggregationType)
-    /// * `bucket_duration` - is duration of each bucket, in milliseconds.
-    ///
-    /// Without `align`, bucket start times are multiples of `bucket_duration`.
-    ///
-    /// With `align`, bucket start times are multiples of `bucket_duration` with remainder `align` % `bucket_duration`.
-    ///
-    /// The first bucket start time is less than or equal to `from_timestamp`.
-    #[must_use]
-    pub fn aggregation(mut self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("AGGREGATION")
-                .arg(aggregator)
-                .arg(bucket_duration)
-                .build(),
-        }
-    }
-
-    /// controls how bucket timestamps are reported.
-    /// `bucket_timestamp` values include:
-    /// * `-` or `low` - Timestamp reported for each bucket is the bucket's start time (default)
-    /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
-    /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
-    #[must_use]
-    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("BUCKETTIMESTAMP")
-                .arg(bucket_timestamp)
-                .build(),
-        }
-    }
-
-    /// A flag, which, when specified, reports aggregations also for empty buckets.
-    /// when `aggregator` values are:
-    /// * `sum`, `count` - the value reported for each empty bucket is `0`
-    /// * `last` - the value reported for each empty bucket is the value
-    ///   of the last sample before the bucket's start.
-    ///   `NaN` when no such sample.
-    /// * `twa` - the value reported for each empty bucket is the average value
-    ///   over the bucket's timeframe based on linear interpolation
-    ///   of the last sample before the bucket's start and the first sample after the bucket's end.
-    ///   `NaN` when no such samples.
-    /// * `min`, `max`, `range`, `avg`, `first`, `std.p`, `std.s` - the value reported for each empty bucket is `NaN`
-    ///
-    /// Regardless of the values of `from_timestamp` and `to_timestamp`,
-    /// no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
-    #[must_use]
-    pub fn empty(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("EMPTY").build(),
-        }
-    }
-}
-
-impl Args for TsMRangeOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
-    }
-}
-
 /// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) command.
-#[derive(Default)]
-pub struct TsGroupByOptions {
-    command_args: CommandArgs,
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsGroupByOptions<'a> {
+    groupby: &'a str,
+    reduce: TsAggregationType,
 }
 
-impl TsGroupByOptions {
+impl<'a> TsGroupByOptions<'a> {
     /// aggregates results across different time series, grouped by the provided label name.
     ///
     /// When combined with [`aggregation`](TsMRangeOptions::aggregation) the groupby/reduce is applied post aggregation stage.
@@ -1520,32 +1470,44 @@ impl TsGroupByOptions {
     ///   * `reducer`, the reducer used
     ///   * `source`, the time series keys used to compute the grouped series (key1,key2,key3,...)
     #[must_use]
-    pub fn new(label: impl Args, reducer: TsAggregationType) -> Self {
+    pub fn new(label: &'a str, reducer: TsAggregationType) -> Self {
         Self {
-            command_args: CommandArgs::default()
-                .arg("GROUPBY")
-                .arg(label)
-                .arg("REDUCE")
-                .arg(reducer)
-                .build(),
+            groupby: label,
+            reduce: reducer,
         }
-    }
-}
-
-impl Args for TsGroupByOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
     }
 }
 
 /// Options for the [`ts_range`](TimeSeriesCommands::ts_range) and
 /// [`ts_revrange`](TimeSeriesCommands::ts_revrange) commands.
-#[derive(Default)]
-pub struct TsRangeOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct TsRangeOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    latest: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter_by_ts: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter_by_value: Option<(f64, f64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    align: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aggregation: Option<(TsAggregationType, u64)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    buckettimestamp: Option<u64>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    empty: bool,
 }
 
-impl TsRangeOptions {
+impl<'a> TsRangeOptions<'a> {
     /// Used when a time series is a compaction.
     ///
     /// With `latest`, [`ts_range`](TimeSeriesCommands::ts_range)
@@ -1561,40 +1523,31 @@ impl TsRangeOptions {
     /// In such a case, use `latest`.
     #[must_use]
     pub fn latest(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("LATEST").build(),
-        }
+        self.latest = true;
+        self
     }
 
     /// filters samples by a list of specific timestamps.
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(mut self, ts: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("FILTER_BY_TS").arg(ts).build(),
-        }
+    pub fn filter_by_ts(mut self, ts: &'a str) -> Self {
+        self.filter_by_ts = Some(ts);
+        self
     }
 
     /// filters samples by minimum and maximum values.
     #[must_use]
     pub fn filter_by_value(mut self, min: f64, max: f64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTER_BY_VALUE")
-                .arg(min)
-                .arg(max)
-                .build(),
-        }
+        self.filter_by_value = Some((min, max));
+        self
     }
 
     /// limits the number of returned samples.
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 
     /// A time bucket alignment control for `aggregation`.
@@ -1609,10 +1562,9 @@ impl TsRangeOptions {
     /// # Note
     /// When not provided, alignment is set to 0.
     #[must_use]
-    pub fn align(mut self, align: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("ALIGN").arg(align).build(),
-        }
+    pub fn align(mut self, align: &'a str) -> Self {
+        self.align = Some(align);
+        self
     }
 
     /// Aggregates results into time buckets, where:
@@ -1626,14 +1578,8 @@ impl TsRangeOptions {
     /// The first bucket start time is less than or equal to `from_timestamp`.
     #[must_use]
     pub fn aggregation(mut self, aggregator: TsAggregationType, bucket_duration: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("AGGREGATION")
-                .arg(aggregator)
-                .arg(bucket_duration)
-                .build(),
-        }
+        self.aggregation = Some((aggregator, bucket_duration));
+        self
     }
 
     /// controls how bucket timestamps are reported.
@@ -1643,13 +1589,8 @@ impl TsRangeOptions {
     /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
     #[must_use]
     pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("BUCKETTIMESTAMP")
-                .arg(bucket_timestamp)
-                .build(),
-        }
+        self.buckettimestamp = Some(bucket_timestamp);
+        self
     }
 
     /// A flag, which, when specified, reports aggregations also for empty buckets.
@@ -1668,14 +1609,27 @@ impl TsRangeOptions {
     /// no data is reported for buckets that end before the earliest sample or begin after the latest sample in the time series.
     #[must_use]
     pub fn empty(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("EMPTY").build(),
-        }
+        self.empty = true;
+        self
     }
 }
 
-impl Args for TsRangeOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+/// Timeseries Timestamp
+pub enum TsTimestamp {
+    /// User specified timestamp
+    Value(u64),
+    /// Unix time of the server clock (*)
+    ServerClock,
+}
+
+impl Serialize for TsTimestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            TsTimestamp::Value(ts) => serializer.serialize_u64(*ts),
+            TsTimestamp::ServerClock => serializer.serialize_str("*"),
+        }
     }
 }

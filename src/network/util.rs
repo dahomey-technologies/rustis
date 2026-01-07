@@ -1,20 +1,21 @@
-use crate::resp::{BytesSeed, RespBuf, RespDeserializer};
+use crate::resp::{RespBuf, RespDeserializer};
+use bytes::Bytes;
 use serde::{Deserializer, de::Visitor};
 use std::fmt;
 
-pub enum RefPubSubMessage<'a> {
-    Subscribe(&'a [u8]),
-    PSubscribe(&'a [u8]),
-    SSubscribe(&'a [u8]),
-    Unsubscribe(&'a [u8]),
-    PUnsubscribe(&'a [u8]),
-    SUnsubscribe(&'a [u8]),
-    Message(&'a [u8], &'a [u8]),
-    PMessage(&'a [u8], &'a [u8], &'a [u8]),
-    SMessage(&'a [u8], &'a [u8]),
+pub enum RefPubSubMessage {
+    Subscribe(Bytes),
+    PSubscribe(Bytes),
+    SSubscribe(Bytes),
+    Unsubscribe(Bytes),
+    PUnsubscribe(Bytes),
+    SUnsubscribe(Bytes),
+    Message(Bytes, Bytes),
+    PMessage(Bytes, Bytes, Bytes),
+    SMessage(Bytes, Bytes),
 }
 
-impl std::fmt::Debug for RefPubSubMessage<'_> {
+impl std::fmt::Debug for RefPubSubMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Subscribe(arg0) => f
@@ -61,12 +62,12 @@ impl std::fmt::Debug for RefPubSubMessage<'_> {
     }
 }
 
-impl<'a> RefPubSubMessage<'a> {
-    pub fn from_resp(resp_buffer: &'a RespBuf) -> Option<RefPubSubMessage<'a>> {
+impl RefPubSubMessage {
+    pub fn from_resp(resp_buffer: &RespBuf) -> Option<RefPubSubMessage> {
         struct RefPubSubMessageVisitor;
 
         impl<'de> Visitor<'de> for RefPubSubMessageVisitor {
-            type Value = Option<RefPubSubMessage<'de>>;
+            type Value = Option<RefPubSubMessage>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("RefPubSubMessage")
@@ -80,7 +81,7 @@ impl<'a> RefPubSubMessage<'a> {
                     return Ok(None);
                 };
 
-                let Ok(Some(channel_or_pattern)) = seq.next_element_seed(BytesSeed) else {
+                let Ok(Some(channel_or_pattern)) = seq.next_element::<Bytes>() else {
                     return Ok(None);
                 };
 
@@ -92,18 +93,18 @@ impl<'a> RefPubSubMessage<'a> {
                     "punsubscribe" => Ok(Some(RefPubSubMessage::PUnsubscribe(channel_or_pattern))),
                     "sunsubscribe" => Ok(Some(RefPubSubMessage::SUnsubscribe(channel_or_pattern))),
                     "message" => {
-                        let Ok(Some(payload)) = seq.next_element_seed(BytesSeed) else {
+                        let Ok(Some(payload)) = seq.next_element::<Bytes>() else {
                             return Ok(None);
                         };
 
                         Ok(Some(RefPubSubMessage::Message(channel_or_pattern, payload)))
                     }
                     "pmessage" => {
-                        let Ok(Some(channel)) = seq.next_element_seed(BytesSeed) else {
+                        let Ok(Some(channel)) = seq.next_element::<Bytes>() else {
                             return Ok(None);
                         };
 
-                        let Ok(Some(payload)) = seq.next_element_seed(BytesSeed) else {
+                        let Ok(Some(payload)) = seq.next_element::<Bytes>() else {
                             return Ok(None);
                         };
 
@@ -114,7 +115,7 @@ impl<'a> RefPubSubMessage<'a> {
                         )))
                     }
                     "smessage" => {
-                        let Ok(Some(payload)) = seq.next_element_seed(BytesSeed) else {
+                        let Ok(Some(payload)) = seq.next_element::<Bytes>() else {
                             return Ok(None);
                         };
 

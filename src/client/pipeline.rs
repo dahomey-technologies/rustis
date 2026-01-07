@@ -1,16 +1,14 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
-use crate::commands::{
-    BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-    TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
-};
 use crate::{
     Result,
     client::{Client, PreparedCommand},
     commands::{
-        BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
-        HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
-        SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+        BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands, CountMinSketchCommands,
+        CuckooCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
+        JsonCommands, ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+        TopKCommands, VectorSetCommands,
     },
     resp::{Command, RespBatchDeserializer, Response},
 };
@@ -42,14 +40,14 @@ impl Pipeline<'_> {
     }
 
     /// Queue a command
-    pub fn queue(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn queue(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(false);
     }
 
     /// Queue a command and forget its response
-    pub fn forget(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn forget(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(true);
     }
 

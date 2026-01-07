@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, Value, cmd},
+    resp::{Response, Value, cmd, serialize_flag},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A group of Redis commands related to [`T-Digest`](https://redis.io/docs/stack/bloom/)
@@ -19,7 +19,11 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.add/>](https://redis.io/commands/tdigest.add/)
     #[must_use]
-    fn tdigest_add(self, key: impl Args, values: impl Args) -> PreparedCommand<'a, Self, ()>
+    fn tdigest_add(
+        self,
+        key: impl Serialize,
+        values: impl Serialize,
+    ) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -48,8 +52,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_byrank<R: Response>(
         self,
-        key: impl Args,
-        ranks: impl Args,
+        key: impl Serialize,
+        ranks: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -79,8 +83,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_byrevrank<R: Response>(
         self,
-        key: impl Args,
-        ranks: impl Args,
+        key: impl Serialize,
+        ranks: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -107,8 +111,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_cdf<R: Response>(
         self,
-        key: impl Args,
-        values: impl Args,
+        key: impl Serialize,
+        values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -131,7 +135,7 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_create(
         self,
-        key: impl Args,
+        key: impl Serialize,
         compression: Option<i64>,
     ) -> PreparedCommand<'a, Self, ()>
     where
@@ -156,7 +160,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.info/>](https://redis.io/commands/tdigest.info/)
     #[must_use]
-    fn tdigest_info(self, key: impl Args) -> PreparedCommand<'a, Self, TDigestInfoResult>
+    fn tdigest_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, TDigestInfoResult>
     where
         Self: Sized,
     {
@@ -175,7 +179,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.max/>](https://redis.io/commands/tdigest.max/)
     #[must_use]
-    fn tdigest_max(self, key: impl Args) -> PreparedCommand<'a, Self, f64>
+    fn tdigest_max(self, key: impl Serialize) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
     {
@@ -196,8 +200,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_merge(
         self,
-        destination: impl Args,
-        sources: impl Args,
+        destination: impl Serialize,
+        sources: impl Serialize,
         options: TDigestMergeOptions,
     ) -> PreparedCommand<'a, Self, ()>
     where
@@ -207,8 +211,7 @@ pub trait TDigestCommands<'a> {
             self,
             cmd("TDIGEST.MERGE")
                 .arg(destination)
-                .arg(sources.num_args())
-                .arg(sources)
+                .arg_with_count(sources)
                 .arg(options),
         )
     }
@@ -225,7 +228,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.min/>](https://redis.io/commands/tdigest.min/)
     #[must_use]
-    fn tdigest_min(self, key: impl Args) -> PreparedCommand<'a, Self, f64>
+    fn tdigest_min(self, key: impl Serialize) -> PreparedCommand<'a, Self, f64>
     where
         Self: Sized,
     {
@@ -253,8 +256,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_quantile<R: Response>(
         self,
-        key: impl Args,
-        quantiles: impl Args,
+        key: impl Serialize,
+        quantiles: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -288,8 +291,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_rank<R: Response>(
         self,
-        key: impl Args,
-        values: impl Args,
+        key: impl Serialize,
+        values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -305,7 +308,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.reset/>](https://redis.io/commands/tdigest.reset/)
     #[must_use]
-    fn tdigest_reset(self, key: impl Args) -> PreparedCommand<'a, Self, ()>
+    fn tdigest_reset(self, key: impl Serialize) -> PreparedCommand<'a, Self, ()>
     where
         Self: Sized,
     {
@@ -338,8 +341,8 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_revrank<R: Response>(
         self,
-        key: impl Args,
-        values: impl Args,
+        key: impl Serialize,
+        values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
@@ -366,7 +369,7 @@ pub trait TDigestCommands<'a> {
     #[must_use]
     fn tdigest_trimmed_mean(
         self,
-        key: impl Args,
+        key: impl Serialize,
         low_cut_quantile: f64,
         high_cut_quantile: f64,
     ) -> PreparedCommand<'a, Self, f64>
@@ -419,9 +422,16 @@ pub struct TDigestInfoResult {
 }
 
 /// Options for the [`tdigest_merge`](TDigestCommands::tdigest_merge) command.
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct TDigestMergeOptions {
-    command_args: CommandArgs,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    compression: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    r#override: bool,
 }
 
 impl TDigestMergeOptions {
@@ -439,27 +449,15 @@ impl TDigestMergeOptions {
     /// * If `destination` already exists and [`override`](TDigestMergeOptions::_override) is not specified, \
     ///   its compression is not changed.
     #[must_use]
-    pub fn compression(mut self, compression: usize) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("COMPRESSION")
-                .arg(compression)
-                .build(),
-        }
+    pub fn compression(mut self, compression: u32) -> Self {
+        self.compression = Some(compression);
+        self
     }
 
     /// When specified, if `destination` already exists, it is overwritten.
     #[must_use]
     pub fn _override(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("OVERRIDE").build(),
-        }
-    }
-}
-
-impl Args for TDigestMergeOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+        self.r#override = true;
+        self
     }
 }

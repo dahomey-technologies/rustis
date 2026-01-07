@@ -1,7 +1,8 @@
 use serde::{
-    Deserializer, Serializer,
+    Deserializer, Serialize, Serializer,
     de::{self, DeserializeOwned, DeserializeSeed, Visitor},
 };
+use smallvec::SmallVec;
 use std::{fmt, marker::PhantomData};
 
 /// Deserialize a Vec of pairs from a sequence
@@ -154,6 +155,18 @@ where
     serializer.serialize_bytes(bytes)
 }
 
+/// Serialize a byte buffer (&\[u8\]) option
+pub fn serialize_byte_buf_option<S>(bytes: &Option<&[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if let Some(bytes) = bytes {
+        serializer.serialize_bytes(bytes)
+    } else {
+        serializer.serialize_none()
+    }
+}
+
 pub(crate) struct ByteBufSeed;
 
 impl<'de> DeserializeSeed<'de> for ByteBufSeed {
@@ -192,19 +205,6 @@ where
     deserializer.deserialize_bytes(ByteBufVisitor)
 }
 
-pub(crate) struct BytesSeed;
-
-impl<'de> DeserializeSeed<'de> for BytesSeed {
-    type Value = &'de [u8];
-
-    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserialize_bytes(deserializer)
-    }
-}
-
 #[derive(Default)]
 pub(crate) struct VecOfPairsSeed<T1, T2>
 where
@@ -240,5 +240,33 @@ where
         D: Deserializer<'de>,
     {
         deserialize_vec_of_pairs(deserializer)
+    }
+}
+
+/// Serialize field name only and skip the boolean value
+pub(crate) fn serialize_flag<S: serde::Serializer>(
+    _: &bool,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    serializer.serialize_unit()
+}
+
+/// Serializes a slice prefixed by its length.
+/// Use with #[serde(serialize_with = "serialize_slice_with_len")]
+pub(crate) fn serialize_slice_with_len<S, T>(slice: &[T], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    // Astuce : Le tuple (usize, &[T]) est sérialisé séquentiellement
+    (slice.len(), slice).serialize(serializer)
+}
+
+pub struct SmallVecWithCounter<T, const N: usize>(usize, SmallVec<[T; N]>);
+
+impl<T, const N: usize> SmallVecWithCounter<T, N> {
+    pub fn push(&mut self, value: T) {
+        self.0 += 1;
+        self.1.push(value);
     }
 }

@@ -31,7 +31,7 @@ impl Transaction {
     pub(crate) fn new(client: Client) -> Self {
         Self {
             client,
-            commands: vec![cmd("MULTI")],
+            commands: vec![cmd("MULTI").into()],
             forget_flags: Vec::new(),
             retry_on_error: None,
         }
@@ -45,14 +45,14 @@ impl Transaction {
     }
 
     /// Queue a command into the transaction.
-    pub fn queue(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn queue(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(false);
     }
 
     /// Queue a command into the transaction and forget its response.
-    pub fn forget(&mut self, command: Command) {
-        self.commands.push(command);
+    pub fn forget(&mut self, command: impl Into<Command>) {
+        self.commands.push(command.into());
         self.forget_flags.push(true);
     }
 
@@ -92,7 +92,7 @@ impl Transaction {
     /// }
     /// ```
     pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
-        self.commands.push(cmd("EXEC"));
+        self.commands.push(cmd("EXEC").into());
 
         let num_commands = self.commands.len();
 

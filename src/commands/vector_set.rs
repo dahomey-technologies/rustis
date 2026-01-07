@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, BulkString, CommandArgs, Response, cmd},
+    resp::{Response, cmd, serialize_flag},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 /// A group of Redis commands related to [`Vector Sets`](https://redis.io/docs/data-types/vector-sets/)
 ///
@@ -30,19 +31,19 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vadd(
         self,
-        key: impl Args,
-        reduce_dim: Option<usize>,
+        key: impl Serialize,
+        reduce_dim: impl Into<Option<u32>>,
         values: &[f32],
-        element: impl Args,
+        element: impl Serialize,
         options: VAddOptions,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(
             self,
             cmd("VADD")
                 .arg(key)
-                .arg(reduce_dim)
+                .arg(reduce_dim.into())
                 .arg("FP32")
-                .arg(to_fp32(values))
+                .arg(Fp32Vector(values))
                 .arg(element)
                 .arg(options),
         )
@@ -53,7 +54,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vcard/>](https://redis.io/commands/vcard/)
     #[must_use]
-    fn vcard(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn vcard(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
         prepare_command(self, cmd("VCARD").arg(key))
     }
 
@@ -62,7 +63,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vdim/>](https://redis.io/commands/vdim/)
     #[must_use]
-    fn vdim(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn vdim(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
         prepare_command(self, cmd("VDIM").arg(key))
     }
 
@@ -71,7 +72,11 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vemb<R: Response>(self, key: impl Args, element: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn vemb<R: Response>(
+        self,
+        key: impl Serialize,
+        element: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VEMB").arg(key).arg(element))
     }
 
@@ -82,8 +87,8 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vgetattr<R: Response>(
         self,
-        key: impl Args,
-        element: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VGETATTR").arg(key).arg(element))
     }
@@ -94,7 +99,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vinfo/>](https://redis.io/commands/vinfo/)
     #[must_use]
-    fn vinfo(self, key: impl Args) -> PreparedCommand<'a, Self, VInfoResult> {
+    fn vinfo(self, key: impl Serialize) -> PreparedCommand<'a, Self, VInfoResult> {
         prepare_command(self, cmd("VINFO").arg(key))
     }
 
@@ -109,8 +114,8 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vlinks<R: Response>(
         self,
-        key: impl Args,
-        element: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VLINKS").arg(key).arg(element))
     }
@@ -127,8 +132,8 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vlinks_with_score<R: Response>(
         self,
-        key: impl Args,
-        element: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VLINKS").arg(key).arg(element))
     }
@@ -153,7 +158,7 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vrandmember<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("VRANDMEMBER").arg(key).arg(count))
@@ -173,7 +178,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vrem/>](https://redis.io/commands/vrem/)
     #[must_use]
-    fn vrem(self, key: impl Args, element: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn vrem(self, key: impl Serialize, element: impl Serialize) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("VREM").arg(key).arg(element))
     }
 
@@ -188,9 +193,9 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vsetattr(
         self,
-        key: impl Args,
-        element: impl Args,
-        json: impl Args,
+        key: impl Serialize,
+        element: impl Serialize,
+        json: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("VSETATTR").arg(key).arg(element).arg(json))
     }
@@ -203,7 +208,7 @@ pub trait VectorSetCommands<'a>: Sized {
     #[must_use]
     fn vsim<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         vector_or_element: VectorOrElement,
         options: VSimOptions,
     ) -> PreparedCommand<'a, Self, R> {
@@ -212,82 +217,59 @@ pub trait VectorSetCommands<'a>: Sized {
             cmd("VSIM").arg(key).arg(vector_or_element).arg(options),
         )
     }
-
-    /// Return elements similar to a given vector or element.
-    /// Use this command to perform approximate or exact similarity searches within a vector set.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/vsim/>](https://redis.io/commands/vsim/)
-    #[must_use]
-    fn vsim_with_scores<R: Response>(
-        self,
-        key: impl Args,
-        vector_or_element: VectorOrElement,
-        options: VSimOptions,
-    ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(
-            self,
-            cmd("VSIM")
-                .arg(key)
-                .arg(vector_or_element)
-                .arg("WITHSCORES")
-                .arg(options),
-        )
-    }
 }
 
-fn to_fp32(values: &[f32]) -> BulkString {
-    let mut buf = Vec::with_capacity(values.len() * 4);
-    for f in values {
-        buf.extend_from_slice(&f.to_le_bytes()); // little endian
+struct Fp32Vector<'a>(&'a [f32]);
+
+impl<'a> Serialize for Fp32Vector<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut buf = SmallVec::<[u8; 64]>::with_capacity(self.0.len() * 4);
+        for f in self.0 {
+            buf.extend_from_slice(&f.to_le_bytes()); // little endian
+        }
+        serializer.serialize_bytes(&buf)
     }
-    buf.into()
 }
 
 /// Options for the [`vadd`](VectorSetCommands::vadd) command.
-#[derive(Default)]
-pub struct VAddOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct VAddOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    cas: bool,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    quantization: Option<QuantizationOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ef: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setattr: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    m: Option<u32>,
 }
 
-impl VAddOptions {
+impl<'a> VAddOptions<'a> {
     /// performs the operation partially using threads, in a check-and-set style.
     /// The neighbor candidates collection, which is slow, is performed in the background,
     ///  while the command is executed in the main thread.
     #[must_use]
     pub fn cas(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("CAS").build(),
-        }
+        self.cas = true;
+        self
     }
 
     /// in the first VADD call for a given key,
     /// NOQUANT forces the vector to be created without int8 quantization,
     /// which is otherwise the default.
     #[must_use]
-    pub fn noquant(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOQUANT").build(),
-        }
-    }
-
-    /// forces the vector to use binary quantization instead of int8.
-    /// This is much faster and uses less memory, but impacts the recall quality.
-    #[must_use]
-    pub fn bin(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("BIN").build(),
-        }
-    }
-
-    /// forces the vector to use signed 8-bit quantization.
-    /// This is the default, and the option only exists to make sure to check at insertion time
-    /// that the vector set is of the same format.
-    #[must_use]
-    pub fn q8(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("Q8").build(),
-        }
+    pub fn quantization(mut self, quantization: QuantizationOptions) -> Self {
+        self.quantization = Some(quantization);
+        self
     }
 
     /// plays a role in the effort made to find good candidates when connecting the new node
@@ -296,23 +278,17 @@ impl VAddOptions {
     /// To improve the recall it is also possible to increase EF during VSIM searches.
     #[must_use]
     pub fn ef(mut self, build_exploration_factor: u32) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("EF")
-                .arg(build_exploration_factor)
-                .build(),
-        }
+        self.ef = Some(build_exploration_factor);
+        self
     }
 
     /// associates attributes in the form of a JavaScript object to the newly created entry
     /// or updates the attributes (if they already exist).
     /// It is the same as calling the VSETATTR command separately.
     #[must_use]
-    pub fn setattr(mut self, attributes: &str) -> Self {
-        Self {
-            command_args: self.command_args.arg("SETATTR").arg(attributes).build(),
-        }
+    pub fn set_attr(mut self, attributes: &'a str) -> Self {
+        self.setattr = Some(attributes);
+        self
     }
 
     /// is the maximum number of connections that each node of the graph
@@ -335,17 +311,26 @@ impl VAddOptions {
     /// If you don't have a recall quality problem, the default is acceptable,
     /// and uses a minimal amount of memory.
     #[must_use]
-    pub fn m(mut self, numlinks: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("SMETATTR").arg(numlinks).build(),
-        }
+    pub fn m(mut self, num_links: u32) -> Self {
+        self.m = Some(num_links);
+        self
     }
 }
 
-impl Args for VAddOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        self.command_args.write_args(args);
-    }
+/// Quantization options for [`vadd`](VectorSetCommands::vadd) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum QuantizationOptions {
+    /// in the first VADD call for a given key, NOQUANT forces the vector to be created without int8 quantization,
+    /// which is otherwise the default.
+    NoQuant,
+    /// forces the vector to use binary quantization instead of int8.
+    /// This is much faster and uses less memory, but impacts the recall quality.
+    Bin,
+    /// forces the vector to use signed 8-bit quantization.
+    /// This is the default, and the option only exists to make sure to check
+    /// at insertion time that the vector set is of the same format.
+    Q8,
 }
 
 /// Result for the [`vinfo`](VectorSetCommands::vinfo) command.
@@ -354,10 +339,10 @@ pub struct VInfoResult {
     #[serde(rename = "quant-type")]
     pub quant_type: String,
     #[serde(rename = "vector-dim")]
-    pub vector_dim: usize,
-    pub size: usize,
+    pub vector_dim: u32,
+    pub size: u32,
     #[serde(rename = "max-level")]
-    pub max_level: usize,
+    pub max_level: u32,
     #[serde(rename = "vset-uid")]
     pub vset_uid: u32,
     #[serde(rename = "hnsw-max-node-uid")]
@@ -365,75 +350,112 @@ pub struct VInfoResult {
 }
 
 /// Argument of the [`vsim`](VectorSetCommands::vsim) command
+#[derive(Serialize)]
 pub enum VectorOrElement<'a> {
+    #[serde(rename = "FP32")]
     Vector(&'a [f32]),
+    #[serde(rename = "ELE")]
     Element(&'a str),
 }
 
-impl<'a> Args for VectorOrElement<'a> {
-    fn write_args(&self, args: &mut CommandArgs) {
-        match self {
-            VectorOrElement::Vector(vector) => {
-                args.arg("FP32").arg(to_fp32(vector));
-            }
-            VectorOrElement::Element(element) => {
-                args.arg("ELE").arg(*element);
-            }
-        }
-    }
-}
-
 /// Options for the [`vsim`](VectorSetCommands::vsim) command.
-#[derive(Default)]
-pub struct VSimOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+pub struct VSimOptions<'a> {
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withscores: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    withattributes: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    epsilon: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ef: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filter_ef: Option<u32>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    truth: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    nothread: bool,
 }
 
-impl VSimOptions {
+impl<'a> VSimOptions<'a> {
+    /// returns the similarity score (from 1 to 0) alongside each result.
+    /// A score of 1 is identical; 0 is the opposite.
+    #[must_use]
+    pub fn with_scores(mut self) -> Self {
+        self.withscores = true;
+        self
+    }
+
+    /// returns, for each element, the JSON attribute associated with the element
+    /// or NULL when no attributes are present.
+    #[must_use]
+    pub fn with_attributes(mut self) -> Self {
+        self.withattributes = true;
+        self
+    }
+
     /// Limits the number of returned results to num.
     #[must_use]
-    pub fn count(mut self, num: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(num).build(),
-        }
+    pub fn count(mut self, num: u32) -> Self {
+        self.count = Some(num);
+        self
     }
 
+    /// is a floating point number between 0 and 1.
+    ///  It is used to retrieve elements that have a distance that is no further than the specified delta.
+    /// In vector sets, returned elements have a similarity score (when compared to the query vector)
+    /// that is between 1 and 0, where 1 means identical and 0 means opposite vectors.
+    /// For example, if the EPSILON option is specified with an argument of 0.2,
+    /// it means only elements that have a similarity of 0.8 or better (a distance < 0.2) are returned.
+    /// This is useful when you specify a large COUNT,
+    /// but you don't want elements that are too far away from the query vector.
+    #[must_use]
+    pub fn epsilon(mut self, delta: f32) -> Self {
+        self.epsilon = Some(delta);
+        self
+    }
     /// Controls the search effort.
     ///
     /// Higher values explore more nodes, improving recall at the cost of speed.
     /// Typical values range from 50 to 1000.
     #[must_use]
     pub fn ef(mut self, search_exploration_factor: u32) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("EF")
-                .arg(search_exploration_factor)
-                .build(),
-        }
+        self.ef = Some(search_exploration_factor);
+        self
     }
 
     /// Applies a filter expression to restrict matching elements.
     /// See the filtered search section for syntax details.
     #[must_use]
-    pub fn filter(mut self, expression: &str) -> Self {
-        Self {
-            command_args: self.command_args.arg("FILTER").arg(expression).build(),
-        }
+    pub fn filter(mut self, expression: &'a str) -> Self {
+        self.filter = Some(expression);
+        self
     }
 
     /// Limits the number of filtering attempts for the FILTER expression.
     ///
     /// See the [filtered search](https://redis.io/docs/data-types/vector-sets/filtered-search/) section for more.
     #[must_use]
-    pub fn filter_ef(mut self, max_filtering_effort: usize) -> Self {
-        Self {
-            command_args: self
-                .command_args
-                .arg("FILTER-EF")
-                .arg(max_filtering_effort)
-                .build(),
-        }
+    pub fn filter_ef(mut self, max_filtering_effort: u32) -> Self {
+        self.filter_ef = Some(max_filtering_effort);
+        self
     }
 
     /// Forces an exact linear scan of all elements, bypassing the HNSW graph.
@@ -442,9 +464,8 @@ impl VSimOptions {
     /// This is significantly slower (O(N)).
     #[must_use]
     pub fn truth(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("TRUTH").build(),
-        }
+        self.truth = true;
+        self
     }
 
     /// Executes the search in the main thread instead of a background thread.
@@ -452,15 +473,8 @@ impl VSimOptions {
     /// Useful for small vector sets or benchmarks.
     /// This may block the server during execution.
     #[must_use]
-    pub fn nothread(mut self) -> Self {
-        Self {
-            command_args: self.command_args.arg("NOTHREAD").build(),
-        }
-    }
-}
-
-impl Args for VSimOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        self.command_args.write_args(args);
+    pub fn no_thread(mut self) -> Self {
+        self.nothread = true;
+        self
     }
 }

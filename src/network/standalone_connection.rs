@@ -90,7 +90,7 @@ impl StandaloneConnection {
 
     pub async fn write(&mut self, command: &Command) -> Result<()> {
         if log_enabled!(Level::Debug) {
-            debug!("[{}] Sending {command:?}", self.tag);
+            debug!("[{}] Sending command: {command}", self.tag);
         }
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
@@ -117,7 +117,7 @@ impl StandaloneConnection {
 
         for command in commands {
             if log_enabled!(Level::Debug) {
-                debug!("[{}] Sending {command:?}", self.tag);
+                debug!("[{}] Sending command: {command}", self.tag);
             }
 
             #[cfg(debug_assertions)]
@@ -184,20 +184,24 @@ impl StandaloneConnection {
         // RESP3
         let mut hello_options = HelloOptions::new(3);
 
+        let config_username = self.config.username.clone();
+        let config_password = self.config.password.clone();
+        let config_connection_name = self.config.connection_name.clone();
+
         // authentication
-        if let Some(ref password) = self.config.password {
+        if let Some(password) = &config_password {
             hello_options = hello_options.auth(
-                match &self.config.username {
-                    Some(username) => username.clone(),
-                    None => "default".to_owned(),
+                match &config_username {
+                    Some(username) => username,
+                    None => "default",
                 },
-                password.clone(),
+                password,
             );
         }
 
         // connection name
-        if !self.config.connection_name.is_empty() {
-            hello_options = hello_options.set_name(self.config.connection_name.clone());
+        if !config_connection_name.is_empty() {
+            hello_options = hello_options.set_name(&config_connection_name);
         }
 
         let hello_result = self.hello(hello_options).await?;

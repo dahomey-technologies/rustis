@@ -1,8 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, Response, cmd},
+    resp::{Response, cmd},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [`Count-min Sketch`](https://redis.io/docs/stack/bloom/)
 ///
@@ -27,8 +27,8 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_incrby<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CMS.INCRBY").arg(key).arg(items))
     }
@@ -41,7 +41,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
-    fn cms_info(self, key: impl Args) -> PreparedCommand<'a, Self, CmsInfoResult> {
+    fn cms_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, CmsInfoResult> {
         prepare_command(self, cmd("CMS.INFO").arg(key))
     }
 
@@ -59,7 +59,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_initbydim(
         self,
-        key: impl Args,
+        key: impl Serialize,
         width: usize,
         depth: usize,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -84,7 +84,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_initbyprob(
         self,
-        key: impl Args,
+        key: impl Serialize,
         error: f64,
         probability: f64,
     ) -> PreparedCommand<'a, Self, ()> {
@@ -110,16 +110,15 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_merge(
         self,
-        destination: impl Args,
-        sources: impl Args,
-        weights: Option<impl Args>,
+        destination: impl Serialize,
+        sources: impl Serialize,
+        weights: Option<impl Serialize>,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
             cmd("CMS.MERGE")
                 .arg(destination)
-                .arg(sources.num_args())
-                .arg(sources)
+                .arg_with_count(sources)
                 .arg(weights.map(|w| ("WEIGHTS", w))),
         )
     }
@@ -142,8 +141,8 @@ pub trait CountMinSketchCommands<'a>: Sized {
     #[must_use]
     fn cms_query<R: Response>(
         self,
-        key: impl Args,
-        items: impl Args,
+        key: impl Serialize,
+        items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CMS.QUERY").arg(key).arg(items))
     }

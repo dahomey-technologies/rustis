@@ -1,9 +1,8 @@
-use serde::de::DeserializeOwned;
-
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Args, CommandArgs, Response, cmd},
+    resp::{Response, cmd},
 };
+use serde::{Serialize, de::DeserializeOwned};
 
 /// A group of Redis commands related to [`Sets`](https://redis.io/docs/data-types/sets/)
 /// # See Also
@@ -17,7 +16,11 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sadd/>](https://redis.io/commands/sadd/)
     #[must_use]
-    fn sadd(self, key: impl Args, members: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn sadd(
+        self,
+        key: impl Serialize,
+        members: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SADD").arg(key).arg(members))
     }
 
@@ -29,7 +32,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/scard/>](https://redis.io/commands/scard/)
     #[must_use]
-    fn scard(self, key: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn scard(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SCARD").arg(key))
     }
 
@@ -42,7 +45,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sdiff/>](https://redis.io/commands/sdiff/)
     #[must_use]
-    fn sdiff<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn sdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SDIFF").arg(keys))
     }
 
@@ -57,8 +60,8 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn sdiffstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
+        destination: impl Serialize,
+        keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
     }
@@ -71,7 +74,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sinter/>](https://redis.io/commands/sinter/)
     #[must_use]
-    fn sinter<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn sinter<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SINTER").arg(keys))
     }
 
@@ -87,12 +90,11 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sintercard/>](https://redis.io/commands/sintercard/)
     #[must_use]
-    fn sintercard(self, keys: impl Args, limit: usize) -> PreparedCommand<'a, Self, usize> {
+    fn sintercard(self, keys: impl Serialize, limit: usize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
             cmd("SINTERCARD")
-                .arg(keys.num_args())
-                .arg(keys)
+                .arg_with_count(keys)
                 .arg("LIMIT")
                 .arg(limit),
         )
@@ -109,8 +111,8 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn sinterstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
+        destination: impl Serialize,
+        keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
     }
@@ -124,7 +126,11 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sismember/>](https://redis.io/commands/sismember/)
     #[must_use]
-    fn sismember(self, key: impl Args, member: impl Args) -> PreparedCommand<'a, Self, bool> {
+    fn sismember(
+        self,
+        key: impl Serialize,
+        member: impl Serialize,
+    ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SISMEMBER").arg(key).arg(member))
     }
 
@@ -133,7 +139,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/smembers/>](https://redis.io/commands/smembers/)
     #[must_use]
-    fn smembers<R: Response>(self, key: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn smembers<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SMEMBERS").arg(key))
     }
 
@@ -147,8 +153,8 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn smismember<R: Response>(
         self,
-        key: impl Args,
-        members: impl Args,
+        key: impl Serialize,
+        members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
     }
@@ -164,9 +170,9 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn smove(
         self,
-        source: impl Args,
-        destination: impl Args,
-        member: impl Args,
+        source: impl Serialize,
+        destination: impl Serialize,
+        member: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
         prepare_command(self, cmd("SMOVE").arg(source).arg(destination).arg(member))
     }
@@ -179,7 +185,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/spop/>](https://redis.io/commands/spop/)
     #[must_use]
-    fn spop<R: Response>(self, key: impl Args, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn spop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SPOP").arg(key).arg(count))
     }
 
@@ -193,7 +199,7 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn srandmember<R: Response>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         count: usize,
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
@@ -207,7 +213,11 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/srem/>](https://redis.io/commands/srem/)
     #[must_use]
-    fn srem(self, key: impl Args, members: impl Args) -> PreparedCommand<'a, Self, usize> {
+    fn srem(
+        self,
+        key: impl Serialize,
+        members: impl Serialize,
+    ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SREM").arg(key).arg(members))
     }
 
@@ -221,7 +231,7 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn sscan<R: Response + DeserializeOwned>(
         self,
-        key: impl Args,
+        key: impl Serialize,
         cursor: u64,
         options: SScanOptions,
     ) -> PreparedCommand<'a, Self, (u64, R)> {
@@ -236,7 +246,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sunion/>](https://redis.io/commands/sunion/)
     #[must_use]
-    fn sunion<R: Response>(self, keys: impl Args) -> PreparedCommand<'a, Self, R> {
+    fn sunion<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SUNION").arg(keys))
     }
 
@@ -251,37 +261,33 @@ pub trait SetCommands<'a>: Sized {
     #[must_use]
     fn sunionstore(
         self,
-        destination: impl Args,
-        keys: impl Args,
+        destination: impl Serialize,
+        keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
     }
 }
 
 /// Options for the [`sscan`](SetCommands::sscan) command
-#[derive(Default)]
-pub struct SScanOptions {
-    command_args: CommandArgs,
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct SScanOptions<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#match: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
 }
 
-impl SScanOptions {
+impl<'a> SScanOptions<'a> {
     #[must_use]
-    pub fn match_pattern(mut self, match_pattern: impl Args) -> Self {
-        Self {
-            command_args: self.command_args.arg("MATCH").arg(match_pattern).build(),
-        }
+    pub fn match_pattern(mut self, match_pattern: &'a str) -> Self {
+        self.r#match = Some(match_pattern);
+        self
     }
 
     #[must_use]
-    pub fn count(mut self, count: usize) -> Self {
-        Self {
-            command_args: self.command_args.arg("COUNT").arg(count).build(),
-        }
-    }
-}
-
-impl Args for SScanOptions {
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(&self.command_args);
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
     }
 }

@@ -189,7 +189,7 @@ impl Cache {
                 .await
                 .value()
                 .insert(
-                    cmd("GET").arg(key),
+                    cmd("GET").arg(key).into(),
                     RespBuf::new(serializer.get_output().into()),
                 );
         }

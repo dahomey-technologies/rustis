@@ -49,7 +49,7 @@ type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, Mo
 /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
 /// async fn main() -> Result<()> {
 ///     let client = Client::connect("127.0.0.1:6379").await?;
-///     let tracking_opts = ClientTrackingOptions::default().broadcasting().no_loop();
+///     let tracking_opts = ClientTrackingOptions::default().broadcasting().noloop();
 ///
 ///     let cache = Cache::new(client.clone(), 60, tracking_opts).await?;
 ///

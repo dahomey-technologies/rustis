@@ -29,7 +29,12 @@ async fn ts_add() -> Result<()> {
     assert_eq!(1548149183000u64, timestamp);
 
     let _timestamp = client
-        .ts_add("temperature:3:11", TsTimestamp::ServerClock, 30., TsAddOptions::default())
+        .ts_add(
+            "temperature:3:11",
+            TsTimestamp::ServerClock,
+            30.,
+            TsAddOptions::default(),
+        )
         .await?;
 
     Ok(())
@@ -188,16 +193,36 @@ async fn ts_get() -> Result<()> {
     assert_eq!(None, result);
 
     client
-        .ts_add("temp:JLM", TsTimestamp::Value(1005), 30., TsAddOptions::default())
+        .ts_add(
+            "temp:JLM",
+            TsTimestamp::Value(1005),
+            30.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
-        .ts_add("temp:JLM", TsTimestamp::Value(1015), 35., TsAddOptions::default())
+        .ts_add(
+            "temp:JLM",
+            TsTimestamp::Value(1015),
+            35.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
-        .ts_add("temp:JLM", TsTimestamp::Value(1025), 9999., TsAddOptions::default())
+        .ts_add(
+            "temp:JLM",
+            TsTimestamp::Value(1025),
+            9999.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
-        .ts_add("temp:JLM", TsTimestamp::Value(1035), 40., TsAddOptions::default())
+        .ts_add(
+            "temp:JLM",
+            TsTimestamp::Value(1035),
+            40.,
+            TsAddOptions::default(),
+        )
         .await?;
 
     let result = client.ts_get("temp:JLM", TsGetOptions::default()).await?;
@@ -284,10 +309,20 @@ async fn ts_info() -> Result<()> {
         .await?;
 
     client
-        .ts_add("key", TsTimestamp::Value(1000), 10., TsAddOptions::default())
+        .ts_add(
+            "key",
+            TsTimestamp::Value(1000),
+            10.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
-        .ts_add("key", TsTimestamp::Value(1010), 20., TsAddOptions::default())
+        .ts_add(
+            "key",
+            TsTimestamp::Value(1010),
+            20.,
+            TsAddOptions::default(),
+        )
         .await?;
 
     let info = client.ts_info("key", true).await?;
@@ -454,7 +489,12 @@ async fn ts_mrange() -> Result<()> {
         )
         .await?;
     client
-        .ts_add("ts1", TsTimestamp::Value(1548149185000), 45., TsAddOptions::default())
+        .ts_add(
+            "ts1",
+            TsTimestamp::Value(1548149185000),
+            45.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
         .ts_add(
@@ -553,7 +593,12 @@ async fn ts_mrevrange() -> Result<()> {
         )
         .await?;
     client
-        .ts_add("ts1", TsTimestamp::Value(1548149185000), 45., TsAddOptions::default())
+        .ts_add(
+            "ts1",
+            TsTimestamp::Value(1548149185000),
+            45.,
+            TsAddOptions::default(),
+        )
         .await?;
     client
         .ts_add(

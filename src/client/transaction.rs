@@ -1,8 +1,7 @@
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
-    Error,
-    Result,
+    Error, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,

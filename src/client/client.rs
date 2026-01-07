@@ -3,9 +3,7 @@ use crate::commands::DebugCommands;
 #[cfg(feature = "redis-graph")]
 use crate::commands::GraphCommands;
 use crate::{
-    Error,
-    Future,
-    Result,
+    Error, Future, Result,
     client::{
         ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
         Pipeline, PreparedCommand, PubSubStream, Transaction,
@@ -198,7 +196,11 @@ impl Client {
     /// }
     /// ```
     #[inline]
-    pub async fn send(&self, command: impl Into<Command>, retry_on_error: Option<bool>) -> Result<RespBuf> {
+    pub async fn send(
+        &self,
+        command: impl Into<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<RespBuf> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let message = Message::single(
             command.into(),
@@ -226,7 +228,11 @@ impl Client {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub fn send_and_forget(&self, command: impl Into<Command>, retry_on_error: Option<bool>) -> Result<()> {
+    pub fn send_and_forget(
+        &self,
+        command: impl Into<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<()> {
         let message = Message::single_forget(
             command.into(),
             retry_on_error.unwrap_or(self.retry_on_error),

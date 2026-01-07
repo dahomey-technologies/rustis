@@ -4,11 +4,11 @@ use crate::{
     Result,
     client::{Client, PreparedCommand},
     commands::{
-        BloomCommands, CountMinSketchCommands, CuckooCommands, JsonCommands, SearchCommands,
-        TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
-        BitmapCommands, ClusterCommands, ConnectionCommands, GenericCommands, GeoCommands,
-        HashCommands, HyperLogLogCommands, ListCommands, ScriptingCommands, ServerCommands,
-        SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+        BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands, CountMinSketchCommands,
+        CuckooCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
+        JsonCommands, ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+        TopKCommands, VectorSetCommands,
     },
     resp::{Command, RespBatchDeserializer, Response},
 };

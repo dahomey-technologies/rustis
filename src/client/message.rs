@@ -154,11 +154,7 @@ pub(crate) struct Message {
 
 impl Message {
     #[inline(always)]
-    pub fn single(
-        command: Command,
-        result_sender: ResultSender,
-        retry_on_error: bool,
-    ) -> Self {
+    pub fn single(command: Command, result_sender: ResultSender, retry_on_error: bool) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
             pub_sub_senders: None,
@@ -218,11 +214,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn monitor(
-        command: Command,
-        result_sender: ResultSender,
-        push_sender: PushSender,
-    ) -> Self {
+    pub fn monitor(command: Command, result_sender: ResultSender, push_sender: PushSender) -> Self {
         Message {
             commands: Commands::Single(command, Some(result_sender)),
             pub_sub_senders: None,

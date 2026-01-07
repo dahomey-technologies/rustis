@@ -575,13 +575,13 @@ pub enum ClusterResetType {
 /// Subcommand for the [`cluster_setslot`](ClusterCommands::cluster_setslot) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
-pub enum ClusterSetSlotSubCommand {
+pub enum ClusterSetSlotSubCommand<'a> {
     /// Set a hash slot in importing state.
-    Importing { node_id: String },
+    Importing(&'a str),
     /// Set a hash slot in migrating state.
-    Migrating { node_id: String },
+    Migrating(&'a str),
     /// Bind the hash slot to a different node.
-    Node { node_id: String },
+    Node(&'a str),
     /// Clear any importing / migrating state from hash slot.
     Stable,
 }

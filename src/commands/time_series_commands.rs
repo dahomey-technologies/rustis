@@ -1625,7 +1625,8 @@ pub enum TsTimestamp {
 impl Serialize for TsTimestamp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         match self {
             TsTimestamp::Value(ts) => serializer.serialize_u64(*ts),
             TsTimestamp::ServerClock => serializer.serialize_str("*"),

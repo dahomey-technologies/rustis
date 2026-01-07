@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
-    resp::{BufferDecoder, CommandEncoder, Command, RespBuf},
+    resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
     tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]

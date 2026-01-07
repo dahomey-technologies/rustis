@@ -17,52 +17,22 @@ This conversion is easily accessible through the associate function [`Value::int
 # Command arguments
 
 **rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
-Basically a [`Command`] is a builder which accepts a command name and one ore more command arguments.
+Basically a [`Command`] is a built through a builder which accepts a command name and one ore more command arguments.
 
-You will notice that each built-in command expects arguments through a set of traits defined in this module.
-
-For each trait, you can add your own implementations for your custom types
-or request additional implementation for standard types.
-
-### Args
-
-The trait [`Args`] allows to convert a complex type into one ore multiple argumentss.
-Basically, the conversion function can add multiple arguments to an existing argument collection: the [`CommandArgs`] struct.
-
-Current implementation provides the following conversions:
-* `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`, `usize`, `isize`,
-* `f32`, `f64`,
-* `bool`,
-* `String`, `&String`, `char`, `&str`, [`BulkString`], `Vec<u8>`, `&[u8; N]`, `[u8; N]`, `&[u8]`
-* `Option<T>` where `T: Arg`
-* `(T, U)`
-* `(T, U, V)`
-* `Vec<T>`
-* `[T;N]`
-* `SmallVec<A>`
-* `BTreeSet<T>`
-* `HashSet<T, S>`
-* `BTreeMap<K, V>`
-* `HashMap<K, V, S>`
-* [`CommandArgs`]
+The only requirement for the command argument is that they must implement the serde [`Serialize`] trait.
+It gives to **rustis** a great flexibility to accept many type of arguments for the same command.
 
 #### Example
 ```
 use rustis::{
     client::Client,
     commands::{FlushingMode, ServerCommands, StringCommands},
-    resp::{CommandArgs, Args},
     Result,
 };
+use serde::Serialize;
 
+#[derive(Serialize)]
 pub struct MyI32(i32);
-
- impl Args for MyI32 {
-    #[inline]
-    fn write_args(&self, args: &mut CommandArgs) {
-        args.arg(self.0);
-    }
-}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::main)]
 #[cfg_attr(feature = "async-std-runtime", async_std::main)]
@@ -77,13 +47,9 @@ async fn main() -> Result<()> {
     client.set("key", 12i64).await?;
     client.set("key", 12.12).await?;
     client.set("key", true).await?;
-    client.set("key", true).await?;
     client.set("key", "value").await?;
     client.set("key", "value".to_owned()).await?;
     client.set("key", 'c').await?;
-    client.set("key", b"value").await?;
-    client.set("key", &b"value"[..]).await?;
-    client.set("key", b"value".to_vec()).await?;
     client.set("key", MyI32(12)).await?;
 
     Ok(())

@@ -862,11 +862,11 @@ pub enum ClientUnblockMode {
 
 /// Options for the [`hello`](ConnectionCommands::hello) command.
 #[derive(Default, Serialize)]
-pub struct HelloOptions<'a>(u32, HelloKeywords<'a>);
-
-#[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
-struct HelloKeywords<'a> {
+pub struct HelloOptions<'a> {
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    protover: Option<u32>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     auth: Option<(&'a str, &'a str)>,
 
@@ -877,18 +877,21 @@ struct HelloKeywords<'a> {
 impl<'a> HelloOptions<'a> {
     #[must_use]
     pub fn new(protover: u32) -> Self {
-        Self(protover, HelloKeywords::default())
+        Self {
+            protover: Some(protover),
+            ..Default::default()
+        }
     }
 
     #[must_use]
     pub fn auth(mut self, username: &'a str, password: &'a str) -> Self {
-        self.1.auth = Some((username, password));
+        self.auth = Some((username, password));
         self
     }
 
     #[must_use]
     pub fn set_name(mut self, client_name: &'a str) -> Self {
-        self.1.setname = Some(client_name);
+        self.setname = Some(client_name);
         self
     }
 }

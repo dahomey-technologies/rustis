@@ -43,8 +43,8 @@ impl CommandInfoManager {
         })
     }
 
-    pub fn get_command_info_by_name(&self, command_name: &str) -> Option<&CommandInfo> {
-        self.command_info_map.get(command_name.as_bytes())
+    pub fn get_command_info_by_name(&self, command_name: &[u8]) -> Option<&CommandInfo> {
+        self.command_info_map.get(command_name)
     }
 
     pub fn get_command_info(&self, command: &Command) -> Option<&CommandInfo> {
@@ -210,7 +210,7 @@ impl CommandInfoManager {
     pub fn prepare_command_for_shard<'a>(
         &self,
         command: &Command,
-        shard_keys: impl Iterator<Item = Bytes>,
+        shard_keys: impl Iterator<Item = &'a Bytes>,
     ) -> Result<Command> {
         let command_info =
             if let Some(command_info) = self.command_info_map.get(&command.get_name()) {

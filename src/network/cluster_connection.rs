@@ -8,8 +8,10 @@ use crate::{
     network::{CommandInfoManager, Version},
     resp::{Command, RespBuf, RespDeserializer, RespSerializer},
 };
+use bytes::Bytes;
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
+use memchr::memchr;
 use rand::Rng;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -68,14 +70,14 @@ struct SlotRange {
 #[derive(Debug)]
 struct SubRequest {
     pub node_id: NodeId,
-    pub keys: SmallVec<[String; 10]>,
+    pub keys: SmallVec<[Bytes; 10]>,
     pub result: Option<Option<Result<RespBuf>>>,
 }
 
 #[derive(Debug)]
 struct RequestInfo {
-    pub command_name: String,
-    pub keys: SmallVec<[String; 10]>,
+    pub command_name: Bytes,
+    pub keys: SmallVec<[Bytes; 10]>,
     pub sub_requests: SmallVec<[SubRequest; 10]>,
     #[allow(unused)]
     #[cfg(debug_assertions)]
@@ -139,7 +141,6 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        /*
         debug!("[{}] Analyzing command {command:?}", self.tag);
 
         let command_info = self.command_info_manager.get_command_info(command);
@@ -149,11 +150,12 @@ impl ClusterConnection {
         } else {
             return Err(Error::Client(format!(
                 "[{}] Unknown command {}",
-                self.tag, String::from_utf8_lossy(command.get_name())
+                self.tag,
+                String::from_utf8_lossy(&command.get_name())
             )));
         };
 
-        let command_name = command_info.name.clone();
+        let command_name = Bytes::copy_from_slice(command_info.name.as_bytes());
 
         let node_idx = self.get_random_node_index();
         let keys = self
@@ -175,17 +177,17 @@ impl ClusterConnection {
         if let Some(request_policy) = request_policy {
             match request_policy {
                 RequestPolicy::AllNodes => {
-                    self.request_policy_all_nodes(command, &command_name, keys)
+                    self.request_policy_all_nodes(command, command_name, keys)
                         .await?;
                 }
                 RequestPolicy::AllShards => {
-                    self.request_policy_all_shards(command, &command_name, keys)
+                    self.request_policy_all_shards(command, command_name, keys)
                         .await?;
                 }
                 RequestPolicy::MultiShard => {
                     self.request_policy_multi_shard(
                         command,
-                        &command_name,
+                        command_name,
                         keys,
                         slots,
                         ask_reasons,
@@ -199,7 +201,7 @@ impl ClusterConnection {
         } else {
             self.no_request_policy(command, command_name, keys, slots, ask_reasons)
                 .await?;
-        }*/
+        }
 
         Ok(())
     }
@@ -209,7 +211,6 @@ impl ClusterConnection {
         commands: SmallVec<[&mut Command; 10]>,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
-        /*
         if retry_reasons.iter().any(|r| {
             matches!(
                 r,
@@ -233,7 +234,7 @@ impl ClusterConnection {
             })
             .collect::<Vec<_>>();
 
-        if commands.len() > 1 && commands[0].name == "MULTI" {
+        if commands.len() > 1 && commands[0].get_name() == "MULTI" {
             let node_idx = self.get_random_node_index();
             let keys = self
                 .command_info_manager
@@ -255,7 +256,7 @@ impl ClusterConnection {
                     .await?;
                 self.no_request_policy(
                     command,
-                    command.name.to_string(),
+                    command.get_name(),
                     keys,
                     SmallVec::from_slice(&[ref_slot]),
                     &ask_reasons,
@@ -266,7 +267,7 @@ impl ClusterConnection {
             for command in commands {
                 self.internal_write(command, &ask_reasons).await?;
             }
-        }*/
+        }
 
         Ok(())
     }
@@ -277,8 +278,8 @@ impl ClusterConnection {
     async fn request_policy_all_shards(
         &mut self,
         command: &Command,
-        command_name: &str,
-        keys: SmallVec<[String; 10]>,
+        command_name: Bytes,
+        keys: SmallVec<[Bytes; 10]>,
     ) -> Result<()> {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
@@ -292,7 +293,7 @@ impl ClusterConnection {
         }
 
         let request_info = RequestInfo {
-            command_name: command_name.to_string(),
+            command_name,
             sub_requests,
             keys,
             #[cfg(debug_assertions)]
@@ -311,8 +312,8 @@ impl ClusterConnection {
     async fn request_policy_all_nodes(
         &mut self,
         command: &Command,
-        command_name: &str,
-        keys: SmallVec<[String; 10]>,
+        command_name: Bytes,
+        keys: SmallVec<[Bytes; 10]>,
     ) -> Result<()> {
         if self.nodes.iter().all(|n| n.is_master) {
             self.connect_replicas().await?;
@@ -329,7 +330,7 @@ impl ClusterConnection {
         }
 
         let request_info = RequestInfo {
-            command_name: command_name.to_string(),
+            command_name,
             sub_requests,
             keys,
             #[cfg(debug_assertions)]
@@ -348,12 +349,11 @@ impl ClusterConnection {
     async fn request_policy_multi_shard(
         &mut self,
         command: &Command,
-        command_name: &str,
-        keys: SmallVec<[String; 10]>,
+        command_name: Bytes,
+        keys: SmallVec<[Bytes; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        /*
         let mut node_slot_keys_ask = (0..keys.len())
             .map(|i| {
                 let (node_index, should_ask) = self
@@ -367,7 +367,7 @@ impl ClusterConnection {
         trace!("[{}] shard_slot_keys_ask: {node_slot_keys_ask:?}", self.tag);
 
         let mut last_slot = u16::MAX;
-        let mut current_slot_keys = SmallVec::<[String; 10]>::new();
+        let mut current_slot_keys = SmallVec::<[Bytes; 10]>::new();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
         let mut last_node_index: usize = 0;
         let mut last_should_ask = false;
@@ -423,7 +423,7 @@ impl ClusterConnection {
         });
 
         let request_info = RequestInfo {
-            command_name: command_name.to_string(),
+            command_name,
             keys,
             sub_requests,
             #[cfg(debug_assertions)]
@@ -432,7 +432,7 @@ impl ClusterConnection {
 
         trace!("{request_info:?}");
 
-        self.pending_requests.push_back(request_info);*/
+        self.pending_requests.push_back(request_info);
 
         Ok(())
     }
@@ -440,12 +440,11 @@ impl ClusterConnection {
     async fn no_request_policy(
         &mut self,
         command: &Command,
-        command_name: String,
-        keys: SmallVec<[String; 10]>,
+        command_name: Bytes,
+        keys: SmallVec<[Bytes; 10]>,
         slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        /*
         // test if all slots are equal
         if slots.windows(2).all(|s| s[0] == s[1]) {
             let (node_idx, should_ask) = if slots.is_empty() {
@@ -464,7 +463,7 @@ impl ClusterConnection {
             connection.write(command).await?;
 
             let request_info = RequestInfo {
-                command_name: command_name.to_string(),
+                command_name,
                 sub_requests: smallvec![SubRequest {
                     node_id: node.id.clone(),
                     keys: keys.clone(),
@@ -479,9 +478,10 @@ impl ClusterConnection {
         } else {
             return Err(Error::Client(format!(
                 "[{}] Cannot send command {} with mismatched key slots",
-                self.tag, command_name
+                self.tag,
+                String::from_utf8_lossy(&command_name)
             )));
-        }*/
+        }
 
         Ok(())
     }
@@ -489,8 +489,8 @@ impl ClusterConnection {
     fn request_policy_special(
         &mut self,
         _command: &Command,
-        _command_name: String,
-        _keys: SmallVec<[String; 10]>,
+        _command_name: Bytes,
+        _keys: SmallVec<[Bytes; 10]>,
         _slots: SmallVec<[u16; 10]>,
     ) {
         todo!("[{}] Command not yet supported in cluster mode", self.tag)
@@ -604,7 +604,8 @@ impl ClusterConnection {
         } else {
             return Some(Err(Error::Client(format!(
                 "[{}] Unknown command {}",
-                self.tag, command_name
+                self.tag,
+                String::from_utf8_lossy(command_name)
             ))));
         };
 
@@ -824,7 +825,7 @@ impl ClusterConnection {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
             // For example, MGET's aggregated reply.
-            let mut results = SmallVec::<[(&String, &[u8]); 10]>::new();
+            let mut results = SmallVec::<[(&Bytes, &[u8]); 10]>::new();
 
             for (sub_result, sub_request) in zip(&sub_results, &request_info.sub_requests) {
                 match sub_result {
@@ -1174,19 +1175,19 @@ impl ClusterConnection {
         }
     }
 
-    fn hash_slots(keys: &[String]) -> SmallVec<[u16; 10]> {
+    fn hash_slots(keys: &[Bytes]) -> SmallVec<[u16; 10]> {
         keys.iter().map(|k| Self::hash_slot(k)).collect()
     }
 
     /// Implement hash_slot algorithm
     /// see. https://redis.io/docs/reference/cluster-spec/#hash-tags
-    fn hash_slot(key: &str) -> u16 {
+    fn hash_slot(key: &[u8]) -> u16 {
         let mut key = key;
 
         // { found
-        if let Some(s) = key.find('{') {
+        if let Some(s) = memchr(b'{', key) {
             // } found
-            if let Some(e) = key[s + 1..].find('}') {
+            if let Some(e) = memchr(b'}', &key[s + 1..]) {
                 // hash tag non empty
                 if e != 0 {
                     key = &key[s + 1..s + 1 + e];
@@ -1197,8 +1198,8 @@ impl ClusterConnection {
         Self::crc16(key) % 16384
     }
 
-    fn crc16(str: &str) -> u16 {
-        crc16::State::<crc16::XMODEM>::calculate(str.as_bytes())
+    fn crc16(str: &[u8]) -> u16 {
+        crc16::State::<crc16::XMODEM>::calculate(str)
     }
 
     pub(crate) fn convert_from_legacy_shard_description(

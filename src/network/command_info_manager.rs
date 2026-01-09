@@ -275,7 +275,7 @@ impl CommandInfoManager {
                     } else {
                         return Err(Error::Client(format!(
                             "Cannot find key {}",
-                            String::from_utf8_lossy(&shard_key)
+                            String::from_utf8_lossy(shard_key)
                         )));
                     };
 

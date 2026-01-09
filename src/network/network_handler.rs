@@ -330,8 +330,15 @@ impl NetworkHandler {
             }
         }
 
-        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::new();
-        let mut commands_to_receive = SmallVec::<[usize; 10]>::new();
+        let num_commands: usize = self
+            .messages_to_send
+            .iter()
+            .map(|m| m.message.commands.len())
+            .sum();
+
+        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::with_capacity(num_commands);
+        let mut commands_to_receive =
+            SmallVec::<[usize; 10]>::with_capacity(self.messages_to_send.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
         for message_to_send in self.messages_to_send.iter_mut() {

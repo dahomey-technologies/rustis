@@ -23,8 +23,8 @@ use std::{fmt, marker::PhantomData};
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
     client: Client,
-    commands: SmallVec<[Command;10]>,
-    forget_flags: SmallVec<[bool;10]>,
+    commands: SmallVec<[Command; 10]>,
+    forget_flags: SmallVec<[bool; 10]>,
     retry_on_error: Option<bool>,
 }
 
@@ -129,11 +129,11 @@ impl Transaction {
 
 struct TransactionResultSeed<T: DeserializeOwned> {
     phantom: PhantomData<T>,
-    forget_flags: SmallVec<[bool;10]>,
+    forget_flags: SmallVec<[bool; 10]>,
 }
 
 impl<T: DeserializeOwned> TransactionResultSeed<T> {
-    pub fn new(forget_flags: SmallVec<[bool;10]>) -> Self {
+    pub fn new(forget_flags: SmallVec<[bool; 10]>) -> Self {
         Self {
             phantom: PhantomData,
             forget_flags,
@@ -198,7 +198,7 @@ impl<'de, T: DeserializeOwned> Visitor<'de> for TransactionResultSeed<T> {
 }
 
 struct SeqAccessDeserializer<A> {
-    forget_flags: smallvec::IntoIter<[bool;10]>,
+    forget_flags: smallvec::IntoIter<[bool; 10]>,
     seq_access: A,
 }
 

@@ -58,6 +58,7 @@ socket2 = "0.6"
 memchr = "2.7"
 moka = { version = "0.12", features = ["future"], optional = true }
 dashmap = { version = "6.1", optional = true }
+mimalloc = "0.1"
 
 [dev-dependencies]
 serial_test = "3.3"

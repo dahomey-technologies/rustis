@@ -76,7 +76,11 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
 }
 
 fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
-    use rustis::{Error, client::BatchPreparedCommand, commands::{GenericCommands, StringCommands}};
+    use rustis::{
+        Error,
+        client::BatchPreparedCommand,
+        commands::{GenericCommands, StringCommands},
+    };
 
     let runtime = current_thread_runtime();
     let client = runtime.block_on(get_rustis_client());

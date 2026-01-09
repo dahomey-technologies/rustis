@@ -1,4 +1,4 @@
-use rustis::resp::{ RespDeserializer}; 
+use rustis::resp::RespDeserializer;
 use serde::Deserialize;
 
 fn main() -> rustis::Result<()> {

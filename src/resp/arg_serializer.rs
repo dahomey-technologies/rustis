@@ -10,6 +10,7 @@ pub struct ArgSerializer<'a> {
 }
 
 impl<'a> ArgSerializer<'a> {
+    #[inline]
     pub fn new(
         buffer: &'a mut BytesMut,
         args_layout: &'a mut SmallVec<[(usize, usize); 10]>,
@@ -20,6 +21,7 @@ impl<'a> ArgSerializer<'a> {
         }
     }
 
+    #[inline]
     pub fn from_buffer(buffer: &'a mut BytesMut) -> Self {
         Self {
             buffer,
@@ -27,11 +29,13 @@ impl<'a> ArgSerializer<'a> {
         }
     }
 
+    #[inline]
     fn serialize_integer<I: Integer>(&mut self, i: I) {
         let mut buf = itoa::Buffer::new();
         self.write_arg(buf.format(i).as_bytes());
     }
 
+    #[inline]
     fn serialize_float<F: Float>(&mut self, f: F) {
         let mut buf = dtoa::Buffer::new();
         self.write_arg(buf.format(f).as_bytes());
@@ -40,15 +44,18 @@ impl<'a> ArgSerializer<'a> {
     /// Serializes a raw argument into the buffer using RESP format (BulkString).
     ///
     /// # Format
-    /// `$Length\r\nData\r\n`
+    /// `$Length\r\n Data\r\n`
     #[inline]
     pub fn write_arg(&mut self, data: &[u8]) {
         // 1. Write the RESP BulkString header ($Len\r\n)
+        let data_len = data.len();
+        let mut len_buf = itoa::Buffer::new();
+        let len_str = len_buf.format(data_len);
+        let len_bytes = len_str.as_bytes();
+        let total_size = 1 + len_bytes.len() + 2 + data_len + 2;
+        self.buffer.reserve(total_size);
         self.buffer.put_u8(b'$');
-
-        let mut itoa_buf = itoa::Buffer::new();
-        let len_str = itoa_buf.format(data.len());
-        self.buffer.put_slice(len_str.as_bytes());
+        self.buffer.put_slice(len_bytes);
         self.buffer.put_slice(b"\r\n");
 
         // 2. Capture the absolute position of the data for the index
@@ -59,8 +66,8 @@ impl<'a> ArgSerializer<'a> {
         self.buffer.put_slice(b"\r\n");
 
         // 5. Update the layout index
-        if let Some(args_layout) = &mut self.args_layout {
-            args_layout.push((start_pos, data.len()));
+        if let Some(ref mut layout) = self.args_layout {
+            layout.push((start_pos, data_len));
         }
     }
 }
@@ -77,61 +84,74 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
+    #[inline]
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        self.write_arg(if v { b"1" } else { b"0" });
+        const BOOL_VALS: [&[u8]; 2] = [b"0", b"1"];
+        self.write_arg(BOOL_VALS[v as usize]);
         Ok(())
     }
 
+    #[inline]
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        self.serialize_integer(v);
-        Ok(())
-    }
-
+    #[inline]
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
+    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
+        self.serialize_integer(v);
+        Ok(())
+    }
+
+    #[inline]
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         self.serialize_float(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
         self.serialize_float(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0; 4];
         let str = v.encode_utf8(&mut buf);
@@ -139,21 +159,25 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         Ok(())
     }
 
+    #[inline]
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         self.write_arg(v.as_bytes());
         Ok(())
     }
 
+    #[inline]
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.write_arg(v);
         Ok(())
     }
 
+    #[inline]
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         // No-Op
         Ok(())
     }
 
+    #[inline]
     fn serialize_some<T: ?Sized + ser::Serialize>(
         self,
         value: &T,
@@ -161,14 +185,17 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         value.serialize(self)
     }
 
+    #[inline]
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.serialize_none()
+        Ok(())
     }
 
+    #[inline]
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        self.serialize_none()
+        Ok(())
     }
 
+    #[inline]
     fn serialize_unit_variant(
         self,
         _name: &'static str,
@@ -178,6 +205,7 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         self.serialize_str(variant)
     }
 
+    #[inline]
     fn serialize_newtype_struct<T>(
         self,
         _name: &'static str,
@@ -189,6 +217,7 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         value.serialize(self)
     }
 
+    #[inline]
     fn serialize_newtype_variant<T>(
         self,
         _name: &'static str,
@@ -200,18 +229,21 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         T: ?Sized + ser::Serialize,
     {
         self.serialize_str(variant)?;
-        value.serialize(&mut *self)?;
+        value.serialize(self)?;
         Ok(())
     }
 
+    #[inline]
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_tuple_struct(
         self,
         _name: &'static str,
@@ -220,6 +252,7 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_tuple_variant(
         self,
         _name: &'static str,
@@ -231,10 +264,12 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_struct(
         self,
         _name: &'static str,
@@ -243,6 +278,7 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
         Ok(self)
     }
 
+    #[inline]
     fn serialize_struct_variant(
         self,
         _name: &'static str,
@@ -259,6 +295,7 @@ impl<'a> ser::SerializeSeq for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_element<T: ?Sized + ser::Serialize>(
         &mut self,
         value: &T,
@@ -266,6 +303,7 @@ impl<'a> ser::SerializeSeq for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -275,6 +313,7 @@ impl<'a> ser::SerializeTuple for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -282,6 +321,7 @@ impl<'a> ser::SerializeTuple for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -291,6 +331,7 @@ impl<'a> ser::SerializeTupleStruct for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -298,6 +339,7 @@ impl<'a> ser::SerializeTupleStruct for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -307,6 +349,7 @@ impl<'a> ser::SerializeTupleVariant for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -314,6 +357,7 @@ impl<'a> ser::SerializeTupleVariant for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -323,6 +367,7 @@ impl<'a> ser::SerializeMap for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -330,6 +375,7 @@ impl<'a> ser::SerializeMap for &mut ArgSerializer<'a> {
         key.serialize(&mut **self)
     }
 
+    #[inline]
     fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -337,6 +383,7 @@ impl<'a> ser::SerializeMap for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -346,6 +393,7 @@ impl<'a> ser::SerializeStruct for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -357,6 +405,7 @@ impl<'a> ser::SerializeStruct for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
@@ -366,6 +415,7 @@ impl<'a> ser::SerializeStructVariant for &mut ArgSerializer<'a> {
     type Ok = ();
     type Error = crate::Error;
 
+    #[inline]
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + ser::Serialize,
@@ -377,6 +427,7 @@ impl<'a> ser::SerializeStructVariant for &mut ArgSerializer<'a> {
         value.serialize(&mut **self)
     }
 
+    #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }

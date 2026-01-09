@@ -22,7 +22,7 @@ pub(crate) const PUSH_TAG: u8 = b'>';
 pub(crate) const BLOB_ERROR_TAG: u8 = b'!';
 
 #[inline(always)]
-fn eof<T>() -> Result<T> {
+const fn eof<T>() -> Result<T> {
     Err(Error::EOF)
 }
 
@@ -36,7 +36,7 @@ pub struct RespDeserializer<'de> {
 impl<'de> RespDeserializer<'de> {
     /// Creates a new `RespDeserializer`
     #[inline]
-    pub fn new(buf: &'de [u8]) -> Self {
+    pub const fn new(buf: &'de [u8]) -> Self {
         RespDeserializer {
             buf,
             pos: 0,
@@ -46,42 +46,52 @@ impl<'de> RespDeserializer<'de> {
 
     /// Get current position in the input byte buffer
     #[inline]
-    pub fn get_pos(&self) -> usize {
+    pub const fn get_pos(&self) -> usize {
         self.pos
+    }
+
+    /// Returns remaining buffer length for bounds checking
+    #[inline(always)]
+    const fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
+
+    /// Check if we have at least n bytes remaining
+    #[inline(always)]
+    const fn has_bytes(&self, n: usize) -> bool {
+        self.remaining() >= n
     }
 
     // Look at the first byte in the input without consuming it.
     #[inline]
     fn peek(&mut self) -> Result<u8> {
-        if let Some(&byte) = self.buf.get(self.pos) {
-            if self.eat_error {
-                match byte {
-                    ERROR_TAG => {
-                        self.advance();
-                        let str = self.parse_string()?;
-                        Err(Error::Redis(RedisError::from_str(str)?))
-                    }
-                    BLOB_ERROR_TAG => {
-                        self.advance();
-                        let bs = self.parse_bulk_string()?;
-                        let str = str::from_utf8(bs)?;
-                        Err(Error::Redis(RedisError::from_str(str)?))
-                    }
-                    _ => Ok(byte),
+        let byte = *self.buf.get(self.pos).ok_or(Error::EOF)?;
+
+        if self.eat_error {
+            match byte {
+                ERROR_TAG => {
+                    self.advance();
+                    let str = self.parse_string()?;
+                    Err(Error::Redis(RedisError::from_str(str)?))
                 }
-            } else {
-                Ok(byte)
+                BLOB_ERROR_TAG => {
+                    self.advance();
+                    let bs = self.parse_bulk_string()?;
+                    let str = str::from_utf8(bs)?;
+                    Err(Error::Redis(RedisError::from_str(str)?))
+                }
+                _ => Ok(byte),
             }
         } else {
-            eof()
+            Ok(byte)
         }
     }
 
     #[inline(always)]
     fn next(&mut self) -> Result<u8> {
-        self.peek().inspect(|_v| {
-            self.advance();
-        })
+        let byte = self.peek()?;
+        self.advance();
+        Ok(byte)
     }
 
     #[inline(always)]
@@ -91,32 +101,29 @@ impl<'de> RespDeserializer<'de> {
 
     #[inline]
     fn next_line(&mut self) -> Result<&'de [u8]> {
-        let sub_buf = &self.buf[self.pos..];
-        match memchr(b'\r', sub_buf) {
-            Some(idx) => {
-                if sub_buf.get(idx + 1) == Some(&b'\n') {
-                    let slice = &sub_buf[..idx];
-                    self.pos += idx + 2;
-                    Ok(slice)
-                } else {
-                    eof()
-                }
-            }
-            _ => eof(),
+        let remaining = &self.buf[self.pos..];
+        let idx = memchr(b'\r', remaining).ok_or(Error::EOF)?;
+
+        // Bounds check optimized
+        if idx + 1 >= remaining.len() || remaining[idx + 1] != b'\n' {
+            return eof();
         }
+
+        let slice = &remaining[..idx];
+        self.pos += idx + 2;
+        Ok(slice)
     }
 
     #[inline]
     fn peek_line(&self) -> Result<&'de [u8]> {
-        match memchr(b'\r', &self.buf[self.pos..]) {
-            Some(idx)
-                if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
-            {
-                let slice = &self.buf[self.pos..self.pos + idx];
-                Ok(slice)
-            }
-            _ => eof(),
+        let remaining = &self.buf[self.pos..];
+        let idx = memchr(b'\r', remaining).ok_or(Error::EOF)?;
+
+        if idx + 1 >= remaining.len() || remaining[idx + 1] != b'\n' {
+            return eof();
         }
+
+        Ok(&remaining[..idx])
     }
 
     #[inline]
@@ -124,11 +131,11 @@ impl<'de> RespDeserializer<'de> {
     where
         T: fast_float2::FastFloat,
     {
-        let next_line = self.next_line()?;
-        fast_float2::parse(next_line).map_err(|_| {
+        let line = self.next_line()?;
+        fast_float2::parse(line).map_err(|_| {
             Error::Client(format!(
                 "Cannot parse number from {}",
-                String::from_utf8_lossy(next_line)
+                String::from_utf8_lossy(line)
             ))
         })
     }
@@ -138,11 +145,11 @@ impl<'de> RespDeserializer<'de> {
     where
         T: atoi::FromRadix10SignedChecked,
     {
-        let next_line = self.next_line()?;
-        atoi::atoi(next_line).ok_or_else(|| {
+        let line = self.next_line()?;
+        atoi::atoi(line).ok_or_else(|| {
             Error::Client(format!(
                 "Cannot parse integer from {}",
-                String::from_utf8_lossy(next_line)
+                String::from_utf8_lossy(line)
             ))
         })
     }
@@ -152,11 +159,11 @@ impl<'de> RespDeserializer<'de> {
     where
         T: atoi::FromRadix10SignedChecked,
     {
-        let next_line = self.peek_line()?;
-        atoi::atoi(&next_line[1..]).ok_or_else(|| {
+        let line = self.peek_line()?;
+        atoi::atoi(&line[1..]).ok_or_else(|| {
             Error::Client(format!(
                 "Cannot parse integer from {}",
-                String::from_utf8_lossy(next_line)
+                String::from_utf8_lossy(line)
             ))
         })
     }
@@ -164,19 +171,26 @@ impl<'de> RespDeserializer<'de> {
     #[inline]
     fn parse_bulk_string(&mut self) -> Result<&'de [u8]> {
         let len = self.parse_integer::<usize>()?;
-        if self.buf.len() - self.pos < len + 2 {
-            eof()
-        } else if self.buf[self.pos + len] != b'\r' || self.buf[self.pos + len + 1] != b'\n' {
-            Err(Error::Client(format!(
-                "Expected \\r\\n after bulk string. Got '{}''{}'",
-                self.buf[self.pos + len] as char,
-                self.buf[self.pos + len + 1] as char
-            )))
-        } else {
-            let result = &self.buf[self.pos..self.pos + len];
-            self.pos += len + 2;
-            Ok(result)
+
+        // Optimized bounds check
+        if !self.has_bytes(len + 2) {
+            return eof();
         }
+
+        let end = self.pos + len;
+
+        // Validate \r\n terminator
+        if self.buf[end] != b'\r' || self.buf[end + 1] != b'\n' {
+            return Err(Error::Client(format!(
+                "Expected \\r\\n after bulk string. Got '{}''{}'",
+                self.buf[end] as char,
+                self.buf[end + 1] as char
+            )));
+        }
+
+        let result = &self.buf[self.pos..end];
+        self.pos = end + 2;
+        Ok(result)
     }
 
     /// The first three bytes provide information about the format of the following string,
@@ -184,22 +198,24 @@ impl<'de> RespDeserializer<'de> {
     /// The fourth byte is always :. Then the real string follows.
     #[inline]
     fn parse_verbatim_string(&mut self) -> Result<&'de [u8]> {
-        Ok(&self.parse_bulk_string()?[4..])
+        let full = self.parse_bulk_string()?;
+        if full.len() < 4 {
+            return Err(Error::Client("Verbatim string too short".to_owned()));
+        }
+        Ok(&full[4..])
     }
 
     #[inline(always)]
     fn parse_string(&mut self) -> Result<&'de str> {
-        let next_line = self.next_line()?;
-        let str = str::from_utf8(next_line)?;
-        Ok(str)
+        let line = self.next_line()?;
+        str::from_utf8(line).map_err(Into::into)
     }
 
     #[inline(always)]
     fn peek_string(&self) -> Result<Option<&'de str>> {
-        let next_line = self.peek_line()?;
-        if let Some(&SIMPLE_STRING_TAG) = next_line.first() {
-            let str = str::from_utf8(&next_line[1..])?;
-            Ok(Some(str))
+        let line = self.peek_line()?;
+        if line.first() == Some(&SIMPLE_STRING_TAG) {
+            Ok(Some(str::from_utf8(&line[1..])?))
         } else {
             Ok(None)
         }
@@ -207,26 +223,26 @@ impl<'de> RespDeserializer<'de> {
 
     #[inline]
     fn parse_nil(&mut self) -> Result<()> {
-        let next_line = self.next_line()?;
-        if next_line.is_empty() {
+        let line = self.next_line()?;
+        if line.is_empty() {
             Ok(())
         } else {
             Err(Error::Client(format!(
                 "Expected \\r\\n after null. Got '{}'",
-                String::from_utf8_lossy(next_line)
+                String::from_utf8_lossy(line)
             )))
         }
     }
 
     #[inline]
     fn parse_boolean(&mut self) -> Result<bool> {
-        let next_line = self.next_line()?;
-        match next_line {
+        let line = self.next_line()?;
+        match line {
             b"t" => Ok(true),
             b"f" => Ok(false),
             _ => Err(Error::Client(format!(
                 "Expected boolean. Got '{}'",
-                String::from_utf8_lossy(next_line)
+                String::from_utf8_lossy(line)
             ))),
         }
     }
@@ -237,16 +253,15 @@ impl<'de> RespDeserializer<'de> {
         T: atoi::FromRadix10SignedChecked + Default,
     {
         match self.next()? {
-            INTEGER_TAG => self.parse_integer::<T>(),
-            DOUBLE_TAG => self.parse_integer::<T>(),
+            INTEGER_TAG | DOUBLE_TAG => self.parse_integer::<T>(),
             NIL_TAG => {
                 self.parse_nil()?;
-                Ok(Default::default())
+                Ok(T::default())
             }
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
                 if bs.is_empty() {
-                    Ok(Default::default())
+                    Ok(T::default())
                 } else {
                     atoi::atoi(bs).ok_or_else(|| {
                         Error::Client(format!(
@@ -257,11 +272,11 @@ impl<'de> RespDeserializer<'de> {
                 }
             }
             SIMPLE_STRING_TAG => {
-                let next_line = self.next_line()?;
-                atoi::atoi(next_line).ok_or_else(|| {
+                let line = self.next_line()?;
+                atoi::atoi(line).ok_or_else(|| {
                     Error::Client(format!(
                         "Cannot parse number from {}",
-                        String::from_utf8_lossy(next_line)
+                        String::from_utf8_lossy(line)
                     ))
                 })
             }
@@ -275,9 +290,9 @@ impl<'de> RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _tag => Err(Error::Client(format!(
+            tag => Err(Error::Client(format!(
                 "Cannot parse number from `{}`",
-                _tag as char
+                tag as char
             ))),
         }
     }
@@ -291,20 +306,20 @@ impl<'de> RespDeserializer<'de> {
             INTEGER_TAG | DOUBLE_TAG => self.parse_float::<T>(),
             NIL_TAG => {
                 self.parse_nil()?;
-                Ok(Default::default())
+                Ok(T::default())
             }
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
                 if bs.is_empty() {
-                    Ok(Default::default())
+                    Ok(T::default())
                 } else {
                     fast_float2::parse(bs)
                         .map_err(|_| Error::Client("Cannot parse number".to_owned()))
                 }
             }
             SIMPLE_STRING_TAG => {
-                let next_line = self.next_line()?;
-                fast_float2::parse(next_line)
+                let line = self.next_line()?;
+                fast_float2::parse(line)
                     .map_err(|_| Error::Client("Cannot parse number".to_owned()))
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
@@ -328,32 +343,37 @@ impl<'de> RespDeserializer<'de> {
 
     #[inline]
     fn ignore_line(&mut self) -> Result<()> {
-        match memchr(b'\r', &self.buf[self.pos..]) {
-            Some(idx)
-                if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
-            {
-                self.pos += idx + 2;
-                Ok(())
-            }
-            _ => eof(),
+        let remaining = &self.buf[self.pos..];
+        let idx = memchr(b'\r', remaining).ok_or(Error::EOF)?;
+
+        if idx + 1 >= remaining.len() || remaining[idx + 1] != b'\n' {
+            return eof();
         }
+
+        self.pos += idx + 2;
+        Ok(())
     }
 
     #[inline]
     fn ignore_bulk_string(&mut self) -> Result<()> {
         let len = self.parse_integer::<usize>()?;
-        if self.buf.len() - self.pos < len + 2 {
-            eof()
-        } else if self.buf[self.pos + len] != b'\r' || self.buf[self.pos + len + 1] != b'\n' {
-            Err(Error::Client(format!(
-                "Expected \\r\\n after bulk string. Got '{}''{}'",
-                self.buf[self.pos + len] as char,
-                self.buf[self.pos + len + 1] as char
-            )))
-        } else {
-            self.pos += len + 2;
-            Ok(())
+
+        if !self.has_bytes(len + 2) {
+            return eof();
         }
+
+        let end = self.pos + len;
+
+        if self.buf[end] != b'\r' || self.buf[end + 1] != b'\n' {
+            return Err(Error::Client(format!(
+                "Expected \\r\\n after bulk string. Got '{}''{}'",
+                self.buf[end] as char,
+                self.buf[end + 1] as char
+            )));
+        }
+
+        self.pos = end + 2;
+        Ok(())
     }
 
     #[inline]
@@ -383,7 +403,7 @@ impl<'de> RespDeserializer<'de> {
     }
 
     /// Returns an iterator over a RESP Array in byte slices
-    pub fn array_chunks<'a>(&'a mut self) -> Result<RespArrayChunks<'de, 'a>> {
+    pub fn array_chunks(&mut self) -> Result<RespArrayChunks<'de, '_>> {
         match self.next()? {
             ARRAY_TAG | SET_TAG | PUSH_TAG => {
                 let len = self.parse_integer::<usize>()?;
@@ -401,9 +421,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let first_byte = self.peek()?;
-
-        match first_byte {
+        match self.peek()? {
             BULK_STRING_TAG => self.deserialize_bytes(visitor),
             ARRAY_TAG => self.deserialize_seq(visitor),
             MAP_TAG => self.deserialize_map(visitor),
@@ -417,9 +435,9 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             PUSH_TAG => visitor.visit_map(PushMapAccess::new(self)),
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client(format!(
+            byte => Err(Error::Client(format!(
                 "Unknown data type '{}' (0x{:02x})",
-                first_byte as char, first_byte
+                byte as char, byte
             ))),
         }
     }
@@ -433,11 +451,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             DOUBLE_TAG => self.parse_float::<f64>()? != 0.,
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
-                match bs {
-                    b"1" | b"true" => true,
-                    b"0" | b"false" => false,
-                    _ => return Err(Error::Client("Cannot parse to bool".to_owned())),
-                }
+                matches!(bs, b"1" | b"true")
             }
             SIMPLE_STRING_TAG => self.parse_string()? == "OK",
             BOOL_TAG => self.parse_boolean()?,
@@ -541,18 +555,18 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             BULK_STRING_TAG => {
                 let bs = self.parse_bulk_string()?;
                 let str = str::from_utf8(bs)?;
-                if str.len() == 1 {
-                    str.chars().next().unwrap()
-                } else {
-                    return Err(Error::Client("Cannot parse to char".to_owned()));
+                let mut chars = str.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) => c,
+                    _ => return Err(Error::Client("Cannot parse to char".to_owned())),
                 }
             }
             SIMPLE_STRING_TAG => {
                 let str = self.parse_string()?;
-                if str.len() == 1 {
-                    str.chars().next().unwrap()
-                } else {
-                    return Err(Error::Client("Cannot parse to char".to_owned()));
+                let mut chars = str.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) => c,
+                    _ => return Err(Error::Client("Cannot parse to char".to_owned())),
                 }
             }
             NIL_TAG => {
@@ -572,14 +586,8 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.next()? {
-            BULK_STRING_TAG => {
-                let bs = self.parse_bulk_string()?;
-                str::from_utf8(bs)?
-            }
-            VERBATIM_STRING_TAG => {
-                let bs = self.parse_verbatim_string()?;
-                str::from_utf8(bs)?
-            }
+            BULK_STRING_TAG => str::from_utf8(self.parse_bulk_string()?)?,
+            VERBATIM_STRING_TAG => str::from_utf8(self.parse_verbatim_string()?)?,
             SIMPLE_STRING_TAG => self.parse_string()?,
             NIL_TAG => {
                 self.parse_nil()?;
@@ -604,17 +612,11 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     {
         let result = match self.next()? {
             DOUBLE_TAG => self.parse_float::<f64>()?.to_string(),
-            BULK_STRING_TAG => {
-                let bs = self.parse_bulk_string()?;
-                str::from_utf8(bs)?.to_owned()
-            }
-            VERBATIM_STRING_TAG => {
-                let bs = self.parse_verbatim_string()?;
-                str::from_utf8(bs)?.to_owned()
-            }
+            BULK_STRING_TAG => str::from_utf8(self.parse_bulk_string()?)?.to_owned(),
+            VERBATIM_STRING_TAG => str::from_utf8(self.parse_verbatim_string()?)?.to_owned(),
             NIL_TAG => {
                 self.parse_nil()?;
-                String::from("")
+                String::new()
             }
             SIMPLE_STRING_TAG => self.parse_string()?.to_owned(),
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
@@ -659,7 +661,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             VERBATIM_STRING_TAG => self.parse_verbatim_string()?.to_vec(),
             NIL_TAG => {
                 self.parse_nil()?;
-                vec![]
+                Vec::new()
             }
             SIMPLE_STRING_TAG => self.parse_string()?.as_bytes().to_vec(),
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
@@ -700,8 +702,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let byte = self.peek()?;
-        match byte {
+        match self.peek()? {
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
             _ => {
@@ -784,7 +785,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     {
         match self.next()? {
             ARRAY_TAG => {
-                let len: usize = self.parse_integer()?;
+                let len = self.parse_integer()?;
                 visitor.visit_map(SeqAccess { de: self, len })
             }
             MAP_TAG => {
@@ -799,9 +800,9 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                     "Cannot parse map from simple string `{str}`"
                 )))
             }
-            _c => Err(Error::Client(format!(
+            c => Err(Error::Client(format!(
                 "Cannot parse map from {}",
-                _c as char
+                c as char
             ))),
         }
     }
@@ -815,6 +816,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        #[inline]
         fn check_resp2_array(
             de: &mut RespDeserializer,
             array_len: usize,
@@ -831,7 +833,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
 
         match self.next()? {
             ARRAY_TAG => {
-                let len: usize = self.parse_integer()?;
+                let len = self.parse_integer()?;
                 if check_resp2_array(self, len, fields)? {
                     visitor.visit_map(SeqAccess { de: self, len })
                 } else {
@@ -923,10 +925,7 @@ impl<'de> serde::de::SeqAccess<'de> for NilSeqAccess {
     type Error = Error;
 
     #[inline]
-    fn next_element_seed<T>(
-        &mut self,
-        _seed: T,
-    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    fn next_element_seed<T>(&mut self, _seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
     {
@@ -1039,10 +1038,7 @@ impl<'de> serde::de::MapAccess<'de> for MapAccess<'_, 'de> {
 impl<'de> serde::de::SeqAccess<'de> for MapAccess<'_, 'de> {
     type Error = Error;
 
-    fn next_element_seed<T>(
-        &mut self,
-        seed: T,
-    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
     {
@@ -1063,7 +1059,7 @@ impl<'de> Deserializer<'de> for PairDeserializer<'_, 'de> {
     type Error = Error;
 
     #[inline]
-    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -1076,15 +1072,11 @@ impl<'de> Deserializer<'de> for PairDeserializer<'_, 'de> {
         tuple_struct map struct enum identifier ignored_any
     }
 
-    fn deserialize_tuple<V>(
-        self,
-        len: usize,
-        visitor: V,
-    ) -> std::result::Result<V::Value, Self::Error>
+    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        pub struct PairSeqAccess<'a, 'de: 'a> {
+        struct PairSeqAccess<'a, 'de: 'a> {
             de: &'a mut RespDeserializer<'de>,
             len: usize,
         }
@@ -1092,10 +1084,7 @@ impl<'de> Deserializer<'de> for PairDeserializer<'_, 'de> {
         impl<'de> serde::de::SeqAccess<'de> for PairSeqAccess<'_, 'de> {
             type Error = Error;
 
-            fn next_element_seed<T>(
-                &mut self,
-                seed: T,
-            ) -> std::result::Result<Option<T::Value>, Self::Error>
+            fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
             where
                 T: DeserializeSeed<'de>,
             {
@@ -1178,7 +1167,7 @@ struct PushMapAccess<'de, 'a> {
 
 impl<'de, 'a> PushMapAccess<'de, 'a> {
     #[inline]
-    fn new(de: &'a mut RespDeserializer<'de>) -> Self {
+    const fn new(de: &'a mut RespDeserializer<'de>) -> Self {
         Self { de, visited: false }
     }
 }
@@ -1220,7 +1209,7 @@ impl<'de> Deserializer<'de> for PushFieldDeserializer {
         visitor.visit_borrowed_str(PUSH_FAKE_FIELD)
     }
 
-    serde::forward_to_deserialize_any! {
+    forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq
         bytes byte_buf map struct option unit newtype_struct
         ignored_any unit_struct tuple_struct tuple enum identifier
@@ -1242,7 +1231,7 @@ impl<'de> Deserializer<'de> for PushDeserializer<'de, '_> {
         self.de.deserialize_seq(visitor)
     }
 
-    serde::forward_to_deserialize_any! {
+    forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq
         bytes byte_buf map struct option unit newtype_struct
         ignored_any unit_struct tuple_struct tuple enum identifier
@@ -1261,7 +1250,8 @@ pub struct RespArrayChunks<'de, 'a> {
 }
 
 impl<'de, 'a> RespArrayChunks<'de, 'a> {
-    pub(crate) fn new(de: &'a mut RespDeserializer<'de>, len: usize) -> Self {
+    #[inline]
+    pub(crate) const fn new(de: &'a mut RespDeserializer<'de>, len: usize) -> Self {
         let pos = de.get_pos();
         Self {
             de,
@@ -1276,7 +1266,7 @@ impl<'de> Iterator for RespArrayChunks<'de, '_> {
     type Item = &'de [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx >= self.len() {
+        if self.idx >= self.len {
             return None;
         }
 

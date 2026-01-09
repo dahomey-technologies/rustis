@@ -44,13 +44,9 @@ fn bench_redis_simple_getsetdel_pipeline(b: &mut Bencher) {
     b.iter(|| {
         let key = "test_key";
         let _result: ((), i64, usize) = redis::pipe()
-            .cmd("SET")
-            .arg(key)
-            .arg(42)
-            .cmd("GET")
-            .arg(key)
-            .cmd("DEL")
-            .arg(key)
+            .set(key, 42)
+            .get(key)
+            .del(key)
             .query(&mut con)
             .unwrap();
     });
@@ -70,7 +66,7 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
                 let pipeline = client.pipeline();
                 pipeline.set::<(), _, _>(key, 42, None, None, false).await?;
                 pipeline.get::<i64, _>(key).await?;
-                pipeline.del::<usize, _>(key).await?;
+                pipeline.del::<u32, _>(key).await?;
                 let _result: ((), i64, usize) = pipeline.all().await?;
 
                 Ok::<_, Error>(())
@@ -80,7 +76,7 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
 }
 
 fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
-    use rustis::{Error, resp::cmd};
+    use rustis::{Error, client::BatchPreparedCommand, commands::{GenericCommands, StringCommands}};
 
     let runtime = current_thread_runtime();
     let client = runtime.block_on(get_rustis_client());
@@ -91,9 +87,9 @@ fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
                 let key = "test_key";
 
                 let mut pipeline = client.create_pipeline();
-                pipeline.queue(cmd("SET").arg(key).arg(42));
-                pipeline.queue(cmd("GET").arg(key));
-                pipeline.queue(cmd("DEL").arg(key));
+                pipeline.set(key, 42).queue();
+                pipeline.get::<i64>(key).queue();
+                pipeline.del(key).queue();
                 let _result: ((), i64, usize) = pipeline.execute().await?;
 
                 Ok::<_, Error>(())
@@ -116,7 +112,7 @@ fn bench_redis_async_long_pipeline(b: &mut Bencher) {
     b.iter(|| {
         runtime
             .block_on(async {
-                let mut pipe = redis::pipe();
+                let mut pipe = redis::Pipeline::with_capacity(PIPELINE_QUERIES);
 
                 for i in 0..PIPELINE_QUERIES {
                     pipe.set(format!("foo{i}"), "bar");
@@ -142,7 +138,7 @@ fn bench_redis_multiplexed_async_long_pipeline(b: &mut Bencher) {
     b.iter(|| {
         runtime
             .block_on(async {
-                let mut pipe = redis::pipe();
+                let mut pipe = redis::Pipeline::with_capacity(PIPELINE_QUERIES);
 
                 for i in 0..PIPELINE_QUERIES {
                     pipe.set(format!("foo{i}"), "bar");
@@ -190,6 +186,8 @@ fn bench_rustis_long_pipeline(b: &mut Bencher) {
         runtime
             .block_on(async {
                 let mut pipeline = client.create_pipeline();
+                pipeline.reserve(PIPELINE_QUERIES);
+
                 for i in 0..PIPELINE_QUERIES {
                     pipeline.set(format!("foo{i}"), "bar").queue();
                 }

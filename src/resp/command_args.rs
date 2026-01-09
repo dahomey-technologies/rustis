@@ -8,7 +8,6 @@ use smallvec::SmallVec;
 /// This structure acts as a "RESP Writer". It holds the raw bytes of the arguments
 /// and maintains a layout index to allow random access to arguments before the
 /// command is finalized.
-#[derive(Default)]
 pub struct CommandArgsMut {
     /// The raw buffer containing the serialized arguments (in RESP format).
     pub(crate) buffer: BytesMut,
@@ -18,6 +17,15 @@ pub struct CommandArgsMut {
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
     pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
+}
+
+impl Default for CommandArgsMut {
+    fn default() -> Self {
+        Self {
+            buffer: BytesMut::with_capacity(1024),
+            args_layout: Default::default(),
+        }
+    }
 }
 
 impl CommandArgsMut {

@@ -17,13 +17,14 @@ use serde::{
     de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
     forward_to_deserialize_any,
 };
+use smallvec::{SmallVec, smallvec};
 use std::{fmt, marker::PhantomData};
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
     client: Client,
-    commands: Vec<Command>,
-    forget_flags: Vec<bool>,
+    commands: SmallVec<[Command;10]>,
+    forget_flags: SmallVec<[bool;10]>,
     retry_on_error: Option<bool>,
 }
 
@@ -31,8 +32,8 @@ impl Transaction {
     pub(crate) fn new(client: Client) -> Self {
         Self {
             client,
-            commands: vec![cmd("MULTI").into()],
-            forget_flags: Vec::new(),
+            commands: smallvec![cmd("MULTI").into()],
+            forget_flags: SmallVec::new(),
             retry_on_error: None,
         }
     }
@@ -128,11 +129,11 @@ impl Transaction {
 
 struct TransactionResultSeed<T: DeserializeOwned> {
     phantom: PhantomData<T>,
-    forget_flags: Vec<bool>,
+    forget_flags: SmallVec<[bool;10]>,
 }
 
 impl<T: DeserializeOwned> TransactionResultSeed<T> {
-    pub fn new(forget_flags: Vec<bool>) -> Self {
+    pub fn new(forget_flags: SmallVec<[bool;10]>) -> Self {
         Self {
             phantom: PhantomData,
             forget_flags,
@@ -197,7 +198,7 @@ impl<'de, T: DeserializeOwned> Visitor<'de> for TransactionResultSeed<T> {
 }
 
 struct SeqAccessDeserializer<A> {
-    forget_flags: std::vec::IntoIter<bool>,
+    forget_flags: smallvec::IntoIter<[bool;10]>,
     seq_access: A,
 }
 

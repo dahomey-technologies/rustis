@@ -26,6 +26,7 @@ use crate::{
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
 use serde::{Serialize, de::DeserializeOwned};
+use smallvec::SmallVec;
 use std::{
     future::IntoFuture,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -255,7 +256,7 @@ impl Client {
     #[inline]
     pub async fn send_batch(
         &self,
-        commands: Vec<Command>,
+        commands: SmallVec<[Command; 10]>,
         retry_on_error: Option<bool>,
     ) -> Result<Vec<RespBuf>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =

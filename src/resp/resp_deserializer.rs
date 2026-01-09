@@ -91,13 +91,16 @@ impl<'de> RespDeserializer<'de> {
 
     #[inline]
     fn next_line(&mut self) -> Result<&'de [u8]> {
-        match memchr(b'\r', &self.buf[self.pos..]) {
-            Some(idx)
-                if self.buf.len() > self.pos + idx + 1 && self.buf[self.pos + idx + 1] == b'\n' =>
-            {
-                let slice = &self.buf[self.pos..self.pos + idx];
-                self.pos += idx + 2;
-                Ok(slice)
+        let sub_buf = &self.buf[self.pos..];
+        match memchr(b'\r', sub_buf) {
+            Some(idx) => {
+                if sub_buf.get(idx + 1) == Some(&b'\n') {
+                    let slice = &sub_buf[..idx];
+                    self.pos += idx + 2;
+                    Ok(slice)
+                } else {
+                    eof()
+                }
             }
             _ => eof(),
         }

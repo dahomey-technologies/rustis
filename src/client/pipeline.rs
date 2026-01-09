@@ -13,13 +13,14 @@ use crate::{
     resp::{Command, RespBatchDeserializer, Response},
 };
 use serde::de::DeserializeOwned;
+use smallvec::SmallVec;
 use std::iter::zip;
 
 /// Represents a Redis command pipeline.
 pub struct Pipeline<'a> {
     client: &'a Client,
-    commands: Vec<Command>,
-    forget_flags: Vec<bool>,
+    commands: SmallVec<[Command; 10]>,
+    forget_flags: SmallVec<[bool; 10]>,
     retry_on_error: Option<bool>,
 }
 
@@ -27,11 +28,17 @@ impl Pipeline<'_> {
     pub(crate) fn new<'a>(client: &'a Client) -> Pipeline<'a> {
         Pipeline {
             client,
-            commands: Vec::new(),
-            forget_flags: Vec::new(),
+            commands: SmallVec::new(),
+            forget_flags: SmallVec::new(),
             retry_on_error: None,
         }
     }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.commands.reserve(additional);
+        self.forget_flags.reserve(additional);
+    }
+
     /// Set a flag to override default `retry_on_error` behavior.
     ///
     /// See [Config::retry_on_error](crate::client::Config::retry_on_error)

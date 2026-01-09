@@ -19,7 +19,7 @@ static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub(crate) enum Commands {
     None,
     Single(Command, Option<ResultSender>),
-    Batch(Vec<Command>, ResultsSender),
+    Batch(SmallVec<[Command;10]>, ResultsSender),
 }
 
 impl Commands {
@@ -94,7 +94,7 @@ impl<'a> IntoIterator for &'a mut Commands {
 #[allow(clippy::large_enum_variant)]
 pub enum CommandsIterator {
     Single(Option<Command>),
-    Batch(std::vec::IntoIter<Command>),
+    Batch(smallvec::IntoIter<[Command;10]>),
 }
 
 impl Iterator for CommandsIterator {
@@ -181,7 +181,7 @@ impl Message {
 
     #[inline(always)]
     pub fn batch(
-        commands: Vec<Command>,
+        commands: SmallVec<[Command;10]>,
         results_sender: ResultsSender,
         retry_on_error: bool,
     ) -> Self {

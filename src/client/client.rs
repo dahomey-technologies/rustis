@@ -21,7 +21,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Command, CommandArgs, CommandArgsMut, RespBuf, Response, cmd},
+    resp::{Command, CommandArgs, CommandArgsMut, RespBuf, Response, SubscriptionType, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
@@ -331,11 +331,12 @@ impl Client {
         let pub_sub_senders = channels
             .into_iter()
             .map(|c| (c, pub_sub_sender.clone()))
-            .collect::<Vec<_>>();
+            .collect();
 
         let message = Message::pub_sub(
             cmd("SUBSCRIBE").arg(channels).into(),
             result_sender,
+            SubscriptionType::Channel,
             pub_sub_senders,
         );
 
@@ -354,11 +355,12 @@ impl Client {
         let pub_sub_senders = patterns
             .into_iter()
             .map(|c| (c, pub_sub_sender.clone()))
-            .collect::<Vec<_>>();
+            .collect();
 
         let message = Message::pub_sub(
             cmd("PSUBSCRIBE").arg(patterns).into(),
             result_sender,
+            SubscriptionType::Pattern,
             pub_sub_senders,
         );
 
@@ -377,11 +379,12 @@ impl Client {
         let pub_sub_senders = shardchannels
             .into_iter()
             .map(|c| (c, pub_sub_sender.clone()))
-            .collect::<Vec<_>>();
+            .collect();
 
         let message = Message::pub_sub(
             cmd("SSUBSCRIBE").arg(shardchannels).into(),
             result_sender,
+            SubscriptionType::ShardChannel,
             pub_sub_senders,
         );
 

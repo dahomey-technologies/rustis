@@ -26,10 +26,51 @@ pub fn cmd(name: &'static str) -> CommandBuilder {
     CommandBuilder::new(name.as_bytes())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SubscriptionType {
+    Channel,
+    Pattern,
+    ShardChannel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClientReplyMode {
+    On,
+    Off,
+    Skip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommandKind {
+    Other,
+    Unsbuscribe(SubscriptionType),
+    ClientReply(ClientReplyMode),
+    Reset,
+}
+
+impl<'a> From<&'a Command> for CommandKind {
+    fn from(command: &'a Command) -> Self {
+        match command.get_name().as_ref() {
+            b"UNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Channel),
+            b"PUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Pattern),
+            b"SUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::ShardChannel),
+            b"CLIENT" => match (command.get_arg(0).as_deref(), command.get_arg(1).as_deref()) {
+                (Some(b"REPLY"), Some(b"ON")) => CommandKind::ClientReply(ClientReplyMode::On),
+                (Some(b"REPLY"), Some(b"OFF")) => CommandKind::ClientReply(ClientReplyMode::Off),
+                (Some(b"REPLY"), Some(b"SKIPP")) => CommandKind::ClientReply(ClientReplyMode::Skip),
+                _ => CommandKind::Other,
+            },
+            b"RESET" => CommandKind::Reset,
+            _ => CommandKind::Other,
+        }
+    }
+}
+
 /// Generic command meant to be sent to the Redis Server
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct Command {
     buffer: Bytes,
+    kind: CommandKind,
     name_layout: (usize, usize),
     args_layout: SmallVec<[(usize, usize); 10]>,
     #[doc(hidden)]
@@ -48,19 +89,27 @@ impl Command {
         #[cfg(debug_assertions)] kill_connection_on_write: usize,
         #[cfg(debug_assertions)] command_seq: usize,
     ) -> Self {
-        Self {
+        let mut this = Self {
             buffer,
+            kind: CommandKind::Other,
             name_layout,
             args_layout,
             #[cfg(debug_assertions)]
             kill_connection_on_write,
             #[cfg(debug_assertions)]
             command_seq,
-        }
+        };
+
+        this.kind = CommandKind::from(&this);
+        this
     }
 
     pub fn get_bytes(&self) -> &Bytes {
         &self.buffer
+    }
+
+    pub(crate) fn get_kind(&self) -> &CommandKind {
+        &self.kind
     }
 
     pub fn get_name(&self) -> Bytes {
@@ -90,6 +139,8 @@ impl PartialEq for Command {
         self.buffer == other.buffer
     }
 }
+
+impl Eq for Command {}
 
 impl Hash for Command {
     fn hash<H: Hasher>(&self, state: &mut H) {

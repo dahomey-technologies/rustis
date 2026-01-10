@@ -1,9 +1,9 @@
 use super::util::RefPubSubMessage;
 use crate::{
     Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
-    client::{Commands, Config, Message},
+    client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
-    resp::{Command, RespBuf, cmd},
+    resp::{ClientReplyMode, Command, CommandKind, RespBuf, SubscriptionType, cmd},
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -37,13 +37,6 @@ enum Status {
     EnteringMonitor,
     Monitor,
     LeavingMonitor,
-}
-
-#[derive(Clone, Copy)]
-enum SubscriptionType {
-    Channel,
-    Pattern,
-    ShardChannel,
 }
 
 struct MessageToSend {
@@ -197,108 +190,98 @@ impl NetworkHandler {
             "[{}][{:?}] Will handle message: {msg:?}",
             self.tag, self.status
         );
-        let pub_sub_senders = msg.pub_sub_senders.take();
-        if let Some(pub_sub_senders) = pub_sub_senders {
-            let subscription_type = match &msg.commands {
-                Commands::Single(command, _) => match command.get_name().as_ref() {
-                    b"SUBSCRIBE" => SubscriptionType::Channel,
-                    b"PSUBSCRIBE" => SubscriptionType::Pattern,
-                    b"SSUBSCRIBE" => SubscriptionType::ShardChannel,
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            };
 
-            for (channel_or_pattern, _sender) in pub_sub_senders.iter() {
-                if self.subscriptions.contains_key(channel_or_pattern) {
-                    debug!(
-                        "[{}][{:?}] There is already a subscription on channel `{}`",
-                        self.tag,
-                        self.status,
-                        String::from_utf8_lossy(channel_or_pattern)
-                    );
-                    msg.commands.send_error(
-                        &self.tag,
-                        Error::Client(
-                            format!(
-                                "There is already a subscription on channel `{}`",
-                                String::from_utf8_lossy(channel_or_pattern)
-                            )
-                            .to_string(),
-                        ),
-                    );
-                    return;
-                }
-            }
-
-            let num_pending_subscriptions = pub_sub_senders.len();
-            let pending_subscriptions = pub_sub_senders.into_iter().enumerate().map(
-                |(index, (channel_or_pattern, sender))| PendingSubscription {
-                    channel_or_pattern,
-                    subscription_type,
-                    sender,
-                    more_to_come: index < num_pending_subscriptions - 1,
-                },
-            );
-
-            self.pending_subscriptions.extend(pending_subscriptions);
-        }
-
-        let push_sender = msg.push_sender.take();
-        if let Some(push_sender) = push_sender {
-            debug!("[{}] Registering push_sender", self.tag);
-            self.push_sender = Some(push_sender);
-        }
+        let mut collision_error = None;
 
         match &self.status {
             Status::Connected => {
-                for command in &msg.commands {
-                    match command.get_name().as_ref() {
-                        b"MONITOR" => {
-                            self.status = Status::EnteringMonitor;
+                match &mut msg.kind {
+                    MessageKind::PubSub {
+                        subscription_type,
+                        subscriptions,
+                        ..
+                    } => {
+                        for (channel_or_pattern, _sender) in subscriptions.iter() {
+                            if self.subscriptions.contains_key(channel_or_pattern) {
+                                debug!(
+                                    "[{}][{:?}] There is already a subscription on channel `{}`",
+                                    self.tag,
+                                    self.status,
+                                    String::from_utf8_lossy(channel_or_pattern)
+                                );
+                                collision_error = Some(Error::Client(
+                                    format!(
+                                        "There is already a subscription on channel `{}`",
+                                        String::from_utf8_lossy(channel_or_pattern)
+                                    )
+                                    .to_string(),
+                                ));
+                                break;
+                            }
                         }
-                        b"UNSUBSCRIBE" => {
-                            self.pending_unsubscriptions.push_back(
-                                command
-                                    .args()
-                                    .map(|a| (a, SubscriptionType::Channel))
-                                    .collect(),
+
+                        if collision_error.is_none() {
+                            let subscriptions = std::mem::take(subscriptions);
+                            let num_pending_subscriptions = subscriptions.len();
+                            let pending_subscriptions = subscriptions.into_iter().enumerate().map(
+                                |(index, (channel_or_pattern, sender))| PendingSubscription {
+                                    channel_or_pattern,
+                                    subscription_type: *subscription_type,
+                                    sender,
+                                    more_to_come: index < num_pending_subscriptions - 1,
+                                },
                             );
+
+                            self.pending_subscriptions.extend(pending_subscriptions);
                         }
-                        b"PUNSUBSCRIBE" => {
-                            self.pending_unsubscriptions.push_back(
-                                command
-                                    .args()
-                                    .map(|a| (a, SubscriptionType::Pattern))
-                                    .collect(),
-                            );
-                        }
-                        b"SUNSUBSCRIBE" => {
-                            self.pending_unsubscriptions.push_back(
-                                command
-                                    .args()
-                                    .map(|a| (a, SubscriptionType::ShardChannel))
-                                    .collect(),
-                            );
-                        }
-                        _ => (),
                     }
+                    MessageKind::Monitor { push_sender, .. } => {
+                        self.status = Status::EnteringMonitor;
+                        let push_sender = push_sender.take();
+                        if let Some(push_sender) = push_sender {
+                            debug!("[{}] Registering MONITOR push_sender", self.tag);
+                            self.push_sender = Some(push_sender);
+                        }
+                    }
+                    MessageKind::Invalidation { push_sender } => {
+                        let push_sender = push_sender.take();
+                        if let Some(push_sender) = push_sender {
+                            debug!("[{}] Registering Invalidation push_sender", self.tag);
+                            self.push_sender = Some(push_sender);
+                        }
+                    }
+                    MessageKind::Single { command, .. } => {
+                        if let CommandKind::Unsbuscribe(subscription_type) = command.get_kind() {
+                            self.pending_unsubscriptions.push_back(
+                                command.args().map(|a| (a, *subscription_type)).collect(),
+                            );
+                        }
+                    }
+
+                    _ => (),
                 }
-                self.messages_to_send.push_back(MessageToSend::new(msg));
+
+                if let Some(err) = collision_error {
+                    msg.send_error(&self.tag, err);
+                } else {
+                    self.messages_to_send.push_back(MessageToSend::new(msg));
+                }
             }
             Status::Disconnected => {
                 if msg.retry_on_error {
                     debug!(
                         "[{}] network disconnected, queuing command: {:?}",
-                        self.tag, msg.commands
+                        self.tag,
+                        msg.commands()
                     );
                     self.messages_to_send.push_back(MessageToSend::new(msg));
                 } else {
                     debug!(
-                        "[{}] network disconnected, ending command in error: {:?}",
-                        self.tag, msg.commands
+                        "[{}] network disconnected, sending command in error: {:?}",
+                        self.tag,
+                        msg.commands()
                     );
-                    msg.commands.send_error(
+                    msg.send_error(
                         &self.tag,
                         Error::Client("Disconnected from server".to_string()),
                     );
@@ -306,8 +289,8 @@ impl NetworkHandler {
             }
             Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
             Status::Monitor => {
-                for command in &msg.commands {
-                    if command.get_name().as_ref() == b"RESET" {
+                for command in msg.commands() {
+                    if matches!(command.get_kind(), CommandKind::Reset) {
                         self.status = Status::LeavingMonitor;
                     }
                 }
@@ -324,7 +307,7 @@ impl NetworkHandler {
             let num_commands = self
                 .messages_to_send
                 .iter()
-                .fold(0, |sum, msg| sum + msg.message.commands.len());
+                .fold(0, |sum, msg| sum + msg.message.num_commands());
             if num_commands > 1 {
                 debug!("[{}] sending batch of {} commands", self.tag, num_commands);
             }
@@ -333,7 +316,7 @@ impl NetworkHandler {
         let num_commands: usize = self
             .messages_to_send
             .iter()
-            .map(|m| m.message.commands.len())
+            .map(|m| m.message.num_commands())
             .sum();
 
         let mut commands_to_write = SmallVec::<[&mut Command; 10]>::with_capacity(num_commands);
@@ -343,19 +326,21 @@ impl NetworkHandler {
 
         for message_to_send in self.messages_to_send.iter_mut() {
             let msg = &mut message_to_send.message;
-            let commands = &mut msg.commands;
+
+            let reasons = msg.retry_reasons.take();
+            if let Some(reasons) = reasons {
+                retry_reasons.extend(reasons);
+            }
+
             let mut num_commands_to_receive: usize = 0;
 
-            for command in commands.into_iter() {
-                if command.get_name().as_ref() == b"CLIENT" {
-                    let mut args = command.args();
-
-                    match (args.next().as_deref(), args.next().as_deref()) {
-                        (Some(b"REPLY"), Some(b"OFF")) => self.is_reply_on = false,
-                        (Some(b"REPLY"), Some(b"SKIP")) => self.is_reply_on = false,
-                        (Some(b"REPLY"), Some(b"ON")) => self.is_reply_on = true,
-                        _ => (),
+            for command in msg.commands_mut() {
+                match command.get_kind() {
+                    CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,
+                    CommandKind::ClientReply(ClientReplyMode::Off | ClientReplyMode::Skip) => {
+                        self.is_reply_on = false
                     }
+                    _ => (),
                 }
 
                 if self.is_reply_on {
@@ -366,11 +351,6 @@ impl NetworkHandler {
             }
 
             commands_to_receive.push(num_commands_to_receive);
-
-            let reasons = msg.retry_reasons.take();
-            if let Some(reasons) = reasons {
-                retry_reasons.extend(reasons);
-            }
         }
 
         if let Err(e) = self
@@ -383,7 +363,7 @@ impl NetworkHandler {
             let mut idx: usize = 0;
             while let Some(msg) = self.messages_to_send.pop_front() {
                 if commands_to_receive[idx] > 0 {
-                    msg.message.commands.send_error(&self.tag, e.clone());
+                    msg.message.send_error(&self.tag, e.clone());
                 }
                 idx += 1;
             }
@@ -505,8 +485,14 @@ impl NetworkHandler {
                                 "[{}] Will respond to: {:?}",
                                 self.tag, message_to_receive.message
                             );
-                            match message_to_receive.message.commands {
-                                Commands::Single(_, Some(result_sender)) => {
+
+                            match message_to_receive.message.kind {
+                                MessageKind::Single {
+                                    result_sender: Some(result_sender),
+                                    ..
+                                }
+                                | MessageKind::PubSub { result_sender, .. }
+                                | MessageKind::Monitor { result_sender, .. } => {
                                     if let Err(e) = result_sender.send(result) {
                                         warn!(
                                             "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
@@ -514,7 +500,7 @@ impl NetworkHandler {
                                         );
                                     }
                                 }
-                                Commands::Batch(_, results_sender) => match result {
+                                MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
                                         let pending_replies = self.pending_replies.take();
 
@@ -545,7 +531,11 @@ impl NetworkHandler {
                                         }
                                     }
                                 },
-                                Commands::None | Commands::Single(_, None) => {
+                                MessageKind::Invalidation { .. }
+                                | MessageKind::Single {
+                                    result_sender: None,
+                                    ..
+                                } => {
                                     debug!("[{}] forget value {result:?}", self.tag)
                                     // fire & forget
                                 }
@@ -746,7 +736,7 @@ impl NetworkHandler {
         while let Some(message_to_receive) = self.messages_to_receive.front() {
             if !message_to_receive.message.retry_on_error {
                 if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive.message.commands.send_error(
+                    message_to_receive.message.send_error(
                         &self.tag,
                         Error::Client("Disconnected from server".to_string()),
                     );
@@ -759,7 +749,7 @@ impl NetworkHandler {
         while let Some(message_to_send) = self.messages_to_send.front() {
             if !message_to_send.message.retry_on_error {
                 if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send.message.commands.send_error(
+                    message_to_send.message.send_error(
                         &self.tag,
                         Error::Client("Disconnected from server".to_string()),
                     );
@@ -791,13 +781,13 @@ impl NetworkHandler {
             } else {
                 warn!("[{}] Max reconnection attempts reached", self.tag);
                 while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive.message.commands.send_error(
+                    message_to_receive.message.send_error(
                         &self.tag,
                         Error::Client("Disconnected from server".to_string()),
                     );
                 }
                 while let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send.message.commands.send_error(
+                    message_to_send.message.send_error(
                         &self.tag,
                         Error::Client("Disconnected from server".to_string()),
                     );

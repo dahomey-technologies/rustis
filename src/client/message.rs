@@ -93,6 +93,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -106,6 +107,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -123,6 +125,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -143,6 +146,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: true,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -157,6 +161,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: true,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -169,6 +174,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: false,
+            #[cfg(debug_assertions)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }

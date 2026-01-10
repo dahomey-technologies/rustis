@@ -52,6 +52,7 @@ fn bench_redis_simple_getsetdel_pipeline(b: &mut Bencher) {
     });
 }
 
+#[allow(dead_code)]
 fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
     use fred::prelude::*;
 
@@ -212,10 +213,10 @@ fn bench_simple(c: &mut Criterion) {
             "redis_simple_getsetdel_pipeline",
             bench_redis_simple_getsetdel_pipeline,
         )
-        .bench_function(
-            "fred_simple_getsetdel_pipeline",
-            bench_fred_simple_getsetdel_pipeline,
-        )
+        // .bench_function(
+        //     "fred_simple_getsetdel_pipeline",
+        //     bench_fred_simple_getsetdel_pipeline,
+        // )
         .bench_function(
             "rustis_simple_getsetdel_pipeline",
             bench_rustis_simple_getsetdel_pipeline,

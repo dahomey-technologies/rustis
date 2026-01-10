@@ -1,11 +1,9 @@
 #[cfg(test)]
 use crate::commands::DebugCommands;
-#[cfg(feature = "redis-graph")]
-use crate::commands::GraphCommands;
 use crate::{
     Error, Future, Result,
     client::{
-        ClientState, ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
+        ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
         Pipeline, PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
@@ -29,7 +27,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use smallvec::SmallVec;
 use std::{
     future::IntoFuture,
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc},
     time::Duration,
 };
 
@@ -39,7 +37,6 @@ pub struct Client {
     msg_sender: Arc<Option<MsgSender>>,
     network_task_join_handle: Arc<Option<JoinHandle<()>>>,
     reconnect_sender: ReconnectSender,
-    client_state: Arc<RwLock<ClientState>>,
     command_timeout: Duration,
     retry_on_error: bool,
     connection_tag: String,
@@ -85,7 +82,6 @@ impl Client {
             msg_sender: Arc::new(Some(msg_sender)),
             network_task_join_handle: Arc::new(Some(network_task_join_handle)),
             reconnect_sender,
-            client_state: Arc::new(RwLock::new(ClientState::new())),
             command_timeout,
             retry_on_error,
             connection_tag,
@@ -129,16 +125,6 @@ impl Client {
     /// [`BroadcastStream`](https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.BroadcastStream.html) wrapper.
     pub fn on_reconnect(&self) -> ReconnectReceiver {
         self.reconnect_sender.subscribe()
-    }
-
-    /// Give an immutable generic access to attach any state to a client instance
-    pub fn get_client_state<'a>(&'a self) -> RwLockReadGuard<'a, ClientState> {
-        self.client_state.read().unwrap()
-    }
-
-    /// Give a mutable generic access to attach any state to a client instance
-    pub fn get_client_state_mut<'a>(&'a self) -> RwLockWriteGuard<'a, ClientState> {
-        self.client_state.write().unwrap()
     }
 
     /// Send an arbitrary command to the server.
@@ -449,9 +435,6 @@ impl<'a> ConnectionCommands<'a> for &'a Client {}
 impl<'a> DebugCommands<'a> for &'a Client {}
 impl<'a> GenericCommands<'a> for &'a Client {}
 impl<'a> GeoCommands<'a> for &'a Client {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-impl<'a> GraphCommands<'a> for &'a Client {}
 impl<'a> HashCommands<'a> for &'a Client {}
 impl<'a> HyperLogLogCommands<'a> for &'a Client {}
 impl<'a> InternalPubSubCommands<'a> for &'a Client {}

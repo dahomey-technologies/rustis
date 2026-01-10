@@ -39,7 +39,6 @@ These is the list of existing command traits:
 * [`TDigestCommands`](TDigestCommands): [T-Digest](https://redis.io/docs/stack/bloom/)
 * [`TimeSeriesCommands`](TimeSeriesCommands): [Time Series](https://redis.io/docs/stack/timeseries/)
 * [`TopKCommands`](TopKCommands): [Top-K](https://redis.io/docs/stack/bloom/)
-* [`GraphCommands`](GraphCommands): [RedisGraph](https://redis.io/docs/stack/graph/)
 
 # Example
 
@@ -92,15 +91,6 @@ mod cuckoo_commands;
 mod debug_commands;
 mod generic_commands;
 mod geo_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-mod graph_cache;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-mod graph_commands;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-mod graph_value;
 mod hash_commands;
 mod hyper_log_log_commands;
 mod internal_pub_sub_commands;
@@ -132,15 +122,6 @@ pub use cuckoo_commands::*;
 pub use debug_commands::*;
 pub use generic_commands::*;
 pub use geo_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-pub(crate) use graph_cache::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-pub use graph_commands::*;
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-pub use graph_value::*;
 pub use hash_commands::*;
 pub use hyper_log_log_commands::*;
 pub(crate) use internal_pub_sub_commands::*;

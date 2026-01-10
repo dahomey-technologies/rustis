@@ -415,7 +415,6 @@ async fn main() -> Result<()> {
 
 #[allow(clippy::module_inception)]
 mod client;
-mod client_state;
 mod client_tracking_invalidation_stream;
 mod config;
 mod message;
@@ -429,7 +428,6 @@ mod pub_sub_stream;
 mod transaction;
 
 pub use client::*;
-pub use client_state::*;
 pub(crate) use client_tracking_invalidation_stream::*;
 pub use config::*;
 pub(crate) use message::*;

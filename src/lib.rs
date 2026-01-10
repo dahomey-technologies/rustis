@@ -26,7 +26,6 @@ rustis is a Redis client for Rust.
 * [LUA Scripts/Functions](https://redis.io/docs/manual/programmability/) support
 * [Cluster](https://redis.io/docs/manual/scaling/) support
 * [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
-* [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support
 
 # Optional Features
 | Feature | Description |
@@ -39,7 +38,6 @@ rustis is a Redis client for Rust.
 | `json` | Enables JSON (de)serialization support via `serde_json` |
 | `client-cache` | Enables client-side caching support |
 | `pool` | Pooled client manager (optional) |
-| `redis-graph` | [RedisGraph v2.10](https://redis.io/docs/stack/graph/) support (optional) |
 
 # Protocol Compatibility
 

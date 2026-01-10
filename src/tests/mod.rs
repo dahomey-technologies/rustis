@@ -17,8 +17,6 @@ mod error;
 mod from_value;
 mod generic_commands;
 mod geo_commands;
-#[cfg(feature = "redis-graph")]
-mod graph_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
 #[cfg(feature = "json")]

@@ -27,7 +27,6 @@ native-tls = ["dep:native-tls"]
 rustls = ["dep:rustls"]
 json = ["dep:serde_json"]
 client-cache = ["dep:moka", "dep:dashmap"]
-redis-graph = []
 
 [dependencies]
 async-std = { version = "1.13", features = ["attributes"], optional = true }

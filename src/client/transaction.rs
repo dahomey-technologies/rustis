@@ -1,5 +1,3 @@
-#[cfg(feature = "redis-graph")]
-use crate::commands::GraphCommands;
 use crate::{
     Error, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
@@ -273,9 +271,6 @@ impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}
 impl<'a> CuckooCommands<'a> for &'a mut Transaction {}
 impl<'a> GenericCommands<'a> for &'a mut Transaction {}
 impl<'a> GeoCommands<'a> for &'a mut Transaction {}
-#[cfg_attr(docsrs, doc(cfg(feature = "redis-graph")))]
-#[cfg(feature = "redis-graph")]
-impl<'a> GraphCommands<'a> for &'a mut Transaction {}
 impl<'a> HashCommands<'a> for &'a mut Transaction {}
 impl<'a> HyperLogLogCommands<'a> for &'a mut Transaction {}
 impl<'a> JsonCommands<'a> for &'a mut Transaction {}

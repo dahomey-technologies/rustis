@@ -3,8 +3,8 @@ use crate::commands::DebugCommands;
 use crate::{
     Error, Future, Result,
     client::{
-        ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream,
-        Pipeline, PreparedCommand, PubSubStream, Transaction,
+        ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
+        PreparedCommand, PubSubStream, Transaction,
     },
     commands::{
         BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
@@ -25,11 +25,7 @@ use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
 use serde::{Serialize, de::DeserializeOwned};
 use smallvec::SmallVec;
-use std::{
-    future::IntoFuture,
-    sync::{Arc},
-    time::Duration,
-};
+use std::{future::IntoFuture, sync::Arc, time::Duration};
 
 /// Client with a unique connection to a Redis server.
 #[derive(Clone)]

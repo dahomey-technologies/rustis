@@ -37,15 +37,6 @@ impl CommandArgsMut {
         self
     }
 
-    /// Retrieves an argument by its index without parsing.
-    ///
-    /// Used by `CommandInfoManager` to calculate hash slots or extract Pub/Sub channels.
-    #[inline]
-    pub fn get_arg(&self, index: usize) -> Option<&[u8]> {
-        let (start, len) = *self.args_layout.get(index)?;
-        Some(&self.buffer[start..start + len])
-    }
-
     /// Returns the number of arguments currently written.
     #[inline]
     pub fn len(&self) -> usize {
@@ -109,15 +100,6 @@ pub struct CommandArgs {
 }
 
 impl CommandArgs {
-    /// Retrieves an argument by its index without parsing.
-    ///
-    /// Used by `CommandInfoManager` to calculate hash slots or extract Pub/Sub channels.
-    #[inline]
-    pub fn get_arg(&self, index: usize) -> Option<&[u8]> {
-        let (start, len) = *self.args_layout.get(index)?;
-        Some(&self.buffer[start..start + len])
-    }
-
     /// Returns the number of arguments currently written.
     #[inline]
     pub fn len(&self) -> usize {

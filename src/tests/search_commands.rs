@@ -1398,29 +1398,27 @@ async fn ft_sugget() -> Result<()> {
         .ft_sugadd("key", "hell", 1., FtSugAddOptions::default().payload(b"42"))
         .await?;
 
-    let suggestions = client
+    let suggestions: Vec<Value> = client
         .ft_sugget("key", "hell", FtSugGetOptions::default().withpayloads())
         .await?;
-    assert_eq!("hell".to_owned(), suggestions[0].suggestion);
-    assert_eq!("42".to_owned(), suggestions[0].payload);
-    assert_eq!(0.0, suggestions[0].score);
-    assert_eq!("hello".to_owned(), suggestions[1].suggestion);
-    assert_eq!("world".to_owned(), suggestions[1].payload);
-    assert_eq!(0.0, suggestions[1].score);
+    assert_eq!(Value::BulkString(b"hell".to_vec()), suggestions[0]);
+    assert_eq!(Value::BulkString(b"42".to_vec()), suggestions[1]);
+    assert_eq!(Value::BulkString(b"hello".to_vec()), suggestions[2]);
+    assert_eq!(Value::BulkString(b"world".to_vec()), suggestions[3]);
 
-    let suggestions = client
+    let suggestions: Vec<Value> = client
         .ft_sugget(
             "key",
             "hell",
             FtSugGetOptions::default().withpayloads().withscores(),
         )
         .await?;
-    assert_eq!("hell".to_owned(), suggestions[0].suggestion);
-    assert_eq!("42".to_owned(), suggestions[0].payload);
-    assert!(suggestions[0].score > 0.);
-    assert_eq!("hello".to_owned(), suggestions[1].suggestion);
-    assert_eq!("world".to_owned(), suggestions[1].payload);
-    assert!(suggestions[1].score > 0.);
+    assert_eq!(Value::BulkString(b"hell".to_vec()), suggestions[0]);
+    assert!(matches!(suggestions[1], Value::Double(d) if d > 0.));
+    assert_eq!(Value::BulkString(b"42".to_vec()), suggestions[2]);
+    assert_eq!(Value::BulkString(b"hello".to_vec()), suggestions[3]);
+    assert!(matches!(suggestions[4], Value::Double(d) if d > 0.));
+    assert_eq!(Value::BulkString(b"world".to_vec()), suggestions[5]);
 
     Ok(())
 }

@@ -2,8 +2,7 @@ use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        Command, RespDeserializer, Response, Value, cmd, serialize_byte_buf_option, serialize_flag,
-        serialize_slice_with_len,
+        Response, Value, cmd, serialize_byte_buf_option, serialize_flag, serialize_slice_with_len,
     },
 };
 use serde::{
@@ -12,7 +11,7 @@ use serde::{
     ser::SerializeSeq,
 };
 use smallvec::SmallVec;
-use std::{collections::HashMap, fmt, future};
+use std::{collections::HashMap, fmt};
 
 /// A group of Redis commands related to [`RedisSearch`](https://redis.io/docs/stack/search/)
 ///
@@ -636,21 +635,13 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
     #[must_use]
-    fn ft_sugget(
+    fn ft_sugget<R: Response>(
         self,
         key: impl Serialize,
         prefix: impl Serialize,
         options: FtSugGetOptions,
-    ) -> PreparedCommand<'a, Self, Vec<FtSuggestion>> {
-        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options)).custom_converter(
-            Box::new(|resp_buffer, command, _client| {
-                let mut deserializer = RespDeserializer::new(&resp_buffer);
-                Box::pin(future::ready(FtSuggestion::deserialize(
-                    &mut deserializer,
-                    command,
-                )))
-            }),
-        )
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options))
     }
 
     /// Get the size of an auto-complete suggestion dictionary
@@ -3032,88 +3023,5 @@ impl FtSugGetOptions {
     pub fn max(mut self, num: u32) -> Self {
         self.max = Some(num);
         self
-    }
-}
-
-/// Sugestion for the [`ft_sugget`](SearchCommands::ft_sugget) command.
-#[derive(Deserialize)]
-pub struct FtSuggestion {
-    pub suggestion: String,
-    pub score: f64,
-    pub payload: String,
-}
-
-impl FtSuggestion {
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-        command: Command,
-    ) -> std::result::Result<Vec<FtSuggestion>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct FtSuggestionVecVisitor {
-            command: Command,
-        }
-
-        impl<'de> Visitor<'de> for FtSuggestionVecVisitor {
-            type Value = Vec<FtSuggestion>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Vec<FtSuggestion>")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                let mut with_scores = false;
-                let mut with_payloads = false;
-                for arg in self.command.args() {
-                    if arg.as_ref() == b"WITHSCORES" {
-                        with_scores = true;
-                    }
-
-                    if arg.as_ref() == b"WITHPAYLOADS" {
-                        with_payloads = true;
-                    }
-                }
-
-                let mut suggestions = if let Some(size) = seq.size_hint() {
-                    Vec::with_capacity(size)
-                } else {
-                    Vec::new()
-                };
-
-                while let Some(suggestion) = seq.next_element()? {
-                    let score = if with_scores {
-                        let Some(score) = seq.next_element()? else {
-                            return Err(de::Error::custom("Cannot parse FtSuggestion"));
-                        };
-                        score
-                    } else {
-                        0.
-                    };
-
-                    let payload = if with_payloads {
-                        let Some(payload) = seq.next_element()? else {
-                            return Err(de::Error::custom("Cannot parse FtSuggestion"));
-                        };
-                        payload
-                    } else {
-                        String::from("")
-                    };
-
-                    suggestions.push(FtSuggestion {
-                        suggestion,
-                        score,
-                        payload,
-                    });
-                }
-
-                Ok(suggestions)
-            }
-        }
-
-        deserializer.deserialize_seq(FtSuggestionVecVisitor { command })
     }
 }

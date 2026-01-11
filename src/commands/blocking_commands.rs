@@ -86,8 +86,8 @@ pub trait BlockingCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("BLMOVE")
-                .arg(source)
-                .arg(destination)
+                .key(source)
+                .key(destination)
                 .arg(where_from)
                 .arg(where_to)
                 .arg(timeout),
@@ -114,7 +114,7 @@ pub trait BlockingCommands<'a>: Sized {
             self,
             cmd("BLMPOP")
                 .arg(timeout)
-                .arg_with_count(keys)
+                .key_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -142,7 +142,7 @@ pub trait BlockingCommands<'a>: Sized {
         keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
-        prepare_command(self, cmd("BLPOP").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BLPOP").key(keys).arg(timeout))
     }
 
     /// This command is a blocking list pop primitive.
@@ -166,7 +166,7 @@ pub trait BlockingCommands<'a>: Sized {
         keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, Option<(R1, R2)>> {
-        prepare_command(self, cmd("BRPOP").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BRPOP").key(keys).arg(timeout))
     }
 
     /// This command is the blocking variant of [`zmpop`](crate::commands::SortedSetCommands::zmpop).
@@ -191,7 +191,7 @@ pub trait BlockingCommands<'a>: Sized {
             self,
             cmd("BZMPOP")
                 .arg(timeout)
-                .arg_with_count(keys)
+                .key_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -215,7 +215,7 @@ pub trait BlockingCommands<'a>: Sized {
         keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
-        prepare_command(self, cmd("BZPOPMAX").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BZPOPMAX").key(keys).arg(timeout))
     }
 
     /// This command is the blocking variant of [`zpopmin`](crate::commands::SortedSetCommands::zpopmin).
@@ -235,7 +235,7 @@ pub trait BlockingCommands<'a>: Sized {
         keys: impl Serialize,
         timeout: f64,
     ) -> PreparedCommand<'a, Self, BZpopMinMaxResult<R1, R2>> {
-        prepare_command(self, cmd("BZPOPMIN").arg(keys).arg(timeout))
+        prepare_command(self, cmd("BZPOPMIN").key(keys).arg(timeout))
     }
 
     /// Debugging command that streams back every command processed by the Redis server.

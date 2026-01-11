@@ -24,7 +24,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// * [<https://redis.io/commands/cf.add/>](https://redis.io/commands/cf.add/)
     #[must_use]
     fn cf_add(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CF.ADD").arg(key).arg(item))
+        prepare_command(self, cmd("CF.ADD").key(key).arg(item))
     }
 
     /// Adds an item to a cuckoo filter if the item did not exist previously.
@@ -53,7 +53,7 @@ pub trait CuckooCommands<'a>: Sized {
         key: impl Serialize,
         item: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("CF.ADDNX").arg(key).arg(item))
+        prepare_command(self, cmd("CF.ADDNX").key(key).arg(item))
     }
 
     /// Returns the number of times an item may be in the filter.
@@ -78,7 +78,7 @@ pub trait CuckooCommands<'a>: Sized {
         key: impl Serialize,
         item: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("CF.COUNT").arg(key).arg(item))
+        prepare_command(self, cmd("CF.COUNT").key(key).arg(item))
     }
 
     /// Deletes an item once from the filter.
@@ -104,7 +104,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// * [<https://redis.io/commands/cf.del/>](https://redis.io/commands/cf.del/)
     #[must_use]
     fn cf_del(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("CF.DEL").arg(key).arg(item))
+        prepare_command(self, cmd("CF.DEL").key(key).arg(item))
     }
 
     /// Check if an `item` exists in a Cuckoo Filter `key`
@@ -125,7 +125,7 @@ pub trait CuckooCommands<'a>: Sized {
         key: impl Serialize,
         item: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("CF.EXISTS").arg(key).arg(item))
+        prepare_command(self, cmd("CF.EXISTS").key(key).arg(item))
     }
 
     /// Return information about `key`
@@ -140,7 +140,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// * [<https://redis.io/commands/cf.info/>](https://redis.io/commands/cf.info/)
     #[must_use]
     fn cf_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, CfInfoResult> {
-        prepare_command(self, cmd("CF.INFO").arg(key))
+        prepare_command(self, cmd("CF.INFO").key(key))
     }
 
     /// Adds one or more items to a cuckoo filter, allowing the filter to be created with a custom capacity if it does not exist yet.
@@ -164,7 +164,7 @@ pub trait CuckooCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("CF.INSERT")
-                .arg(key)
+                .key(key)
                 .arg(options)
                 .arg("ITEMS")
                 .arg(item),
@@ -209,7 +209,7 @@ pub trait CuckooCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("CF.INSERTNX")
-                .arg(key)
+                .key(key)
                 .arg(options)
                 .arg("ITEMS")
                 .arg(item),
@@ -237,7 +237,7 @@ pub trait CuckooCommands<'a>: Sized {
         iterator: i64,
         data: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CF.LOADCHUNK").arg(key).arg(iterator).arg(data))
+        prepare_command(self, cmd("CF.LOADCHUNK").key(key).arg(iterator).arg(data))
     }
 
     /// Check if one or more `items` exists in a Cuckoo Filter `key`
@@ -258,7 +258,7 @@ pub trait CuckooCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("CF.MEXISTS").arg(key).arg(items))
+        prepare_command(self, cmd("CF.MEXISTS").key(key).arg(items))
     }
 
     /// Create a Cuckoo Filter as `key` with a single sub-filter for the initial amount of `capacity` for items.
@@ -295,7 +295,7 @@ pub trait CuckooCommands<'a>: Sized {
         capacity: usize,
         options: CfReserveOptions,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CF.RESERVE").arg(key).arg(capacity).arg(options))
+        prepare_command(self, cmd("CF.RESERVE").key(key).arg(capacity).arg(options))
     }
 
     /// Begins an incremental save of the cuckoo filter.
@@ -318,7 +318,7 @@ pub trait CuckooCommands<'a>: Sized {
         key: impl Serialize,
         iterator: i64,
     ) -> PreparedCommand<'a, Self, CfScanDumpResult> {
-        prepare_command(self, cmd("CF.SCANDUMP").arg(key).arg(iterator))
+        prepare_command(self, cmd("CF.SCANDUMP").key(key).arg(iterator))
     }
 }
 

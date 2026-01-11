@@ -59,7 +59,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TS.ADD")
-                .arg(key)
+                .key(key)
                 .arg(timestamp)
                 .arg(value)
                 .arg(options),
@@ -84,7 +84,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         key: impl Serialize,
         options: TsCreateOptions,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("TS.ALTER").arg(key).arg(options))
+        prepare_command(self, cmd("TS.ALTER").key(key).arg(options))
     }
 
     /// Create a new time series
@@ -106,7 +106,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         key: impl Serialize,
         options: TsCreateOptions,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("TS.CREATE").arg(key).arg(options))
+        prepare_command(self, cmd("TS.CREATE").key(key).arg(options))
     }
 
     /// Create a compaction rule
@@ -143,8 +143,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TS.CREATERULE")
-                .arg(src_key)
-                .arg(dst_key)
+                .key(src_key)
+                .key(dst_key)
                 .arg("AGGREGATION")
                 .arg(aggregator)
                 .arg(bucket_duration)
@@ -177,7 +177,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         value: f64,
         options: TsIncrByDecrByOptions,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("TS.DECRBY").arg(key).arg(value).arg(options))
+        prepare_command(self, cmd("TS.DECRBY").key(key).arg(value).arg(options))
     }
 
     /// Delete all samples between two timestamps for a given time series
@@ -205,7 +205,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("TS.DEL").arg(key).arg(from_timestamp).arg(to_timestamp),
+            cmd("TS.DEL").key(key).arg(from_timestamp).arg(to_timestamp),
         )
     }
 
@@ -226,7 +226,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         src_key: impl Serialize,
         dst_key: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("TS.DELETERULE").arg(src_key).arg(dst_key))
+        prepare_command(self, cmd("TS.DELETERULE").key(src_key).key(dst_key))
     }
 
     /// Get the last sample
@@ -248,7 +248,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         key: impl Serialize,
         options: TsGetOptions,
     ) -> PreparedCommand<'a, Self, Option<(u64, f64)>> {
-        prepare_command(self, cmd("TS.GET").arg(key).arg(options))
+        prepare_command(self, cmd("TS.GET").key(key).arg(options))
     }
 
     /// Increase the value of the sample with the maximum existing timestamp,
@@ -277,7 +277,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         value: f64,
         options: TsIncrByDecrByOptions,
     ) -> PreparedCommand<'a, Self, u64> {
-        prepare_command(self, cmd("TS.INCRBY").arg(key).arg(value).arg(options))
+        prepare_command(self, cmd("TS.INCRBY").key(key).arg(value).arg(options))
     }
 
     /// Return information and statistics for a time series.
@@ -293,7 +293,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// * [<https://redis.io/commands/ts.info/>](https://redis.io/commands/ts.info/)
     #[must_use]
     fn ts_info(self, key: impl Serialize, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult> {
-        prepare_command(self, cmd("TS.INFO").arg(key).arg_if(debug, "DEBUG"))
+        prepare_command(self, cmd("TS.INFO").key(key).arg_if(debug, "DEBUG"))
     }
 
     /// Append new samples to one or more time series
@@ -322,13 +322,17 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
     fn ts_madd<R: Response>(self, items: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TS.MADD").arg(items))
+        prepare_command(
+            self,
+            cmd("TS.MADD")
+                .key_with_step(items, 3)
+                .cluster_info(None, None, 3),
+        )
     }
 
     /// Get the last samples matching a specific filter
     ///
     /// # Arguments
-    /// * `key` - key name for the time series.
     /// * `options` - See [`TsMGetOptions`](TsMGetOptions)
     /// * `filters` - filters time series based on their labels and label values, with these options:
     ///   * `label=value`, where `label` equals `value`
@@ -508,7 +512,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TS.RANGE")
-                .arg(key)
+                .key(key)
                 .arg(from_timestamp)
                 .arg(to_timestamp)
                 .arg(options),
@@ -547,7 +551,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TS.REVRANGE")
-                .arg(key)
+                .key(key)
                 .arg(from_timestamp)
                 .arg(to_timestamp)
                 .arg(options),

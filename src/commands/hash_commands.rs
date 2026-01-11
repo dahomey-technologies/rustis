@@ -19,7 +19,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hdel/>](https://redis.io/commands/hdel/)
     #[must_use]
     fn hdel(self, key: impl Serialize, fields: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("HDEL").arg(key).arg(fields))
+        prepare_command(self, cmd("HDEL").key(key).arg(fields))
     }
 
     /// Returns if field is an existing field in the hash stored at key.
@@ -36,7 +36,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         field: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("HEXISTS").arg(key).arg(field))
+        prepare_command(self, cmd("HEXISTS").key(key).arg(field))
     }
 
     /// Set an expiration (TTL or time to live) on one or more fields of a given hash key.
@@ -69,7 +69,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HEXPIRE")
-                .arg(key)
+                .key(key)
                 .arg(seconds)
                 .arg(option.into())
                 .arg("FIELDS")
@@ -109,7 +109,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HEXPIREAT")
-                .arg(key)
+                .key(key)
                 .arg(unix_time_seconds)
                 .arg(option.into())
                 .arg("FIELDS")
@@ -140,7 +140,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HEXPIRETIME")
-                .arg(key)
+                .key(key)
                 .arg("FIELDS")
                 .arg_with_count(fields),
         )
@@ -159,7 +159,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         field: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HGET").arg(key).arg(field))
+        prepare_command(self, cmd("HGET").key(key).arg(field))
     }
 
     /// Returns all fields and values of the hash stored at key.
@@ -171,7 +171,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hgetall/>](https://redis.io/commands/hgetall/)
     #[must_use]
     fn hgetall<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HGETALL").arg(key))
+        prepare_command(self, cmd("HGETALL").key(key))
     }
 
     /// Get and delete the value of one or more fields of a given hash key.
@@ -195,7 +195,7 @@ pub trait HashCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("HGETDEL").arg(key).arg("FIELDS").arg_with_count(fields),
+            cmd("HGETDEL").key(key).arg("FIELDS").arg_with_count(fields),
         )
     }
 
@@ -222,7 +222,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HGETEX")
-                .arg(key)
+                .key(key)
                 .arg(options)
                 .arg("FIELDS")
                 .arg_with_count(fields),
@@ -243,7 +243,7 @@ pub trait HashCommands<'a>: Sized {
         field: impl Serialize,
         increment: i64,
     ) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("HINCRBY").arg(key).arg(field).arg(increment))
+        prepare_command(self, cmd("HINCRBY").key(key).arg(field).arg(increment))
     }
 
     /// Increment the specified field of a hash stored at key,
@@ -261,7 +261,7 @@ pub trait HashCommands<'a>: Sized {
         field: impl Serialize,
         increment: f64,
     ) -> PreparedCommand<'a, Self, f64> {
-        prepare_command(self, cmd("HINCRBYFLOAT").arg(key).arg(field).arg(increment))
+        prepare_command(self, cmd("HINCRBYFLOAT").key(key).arg(field).arg(increment))
     }
 
     /// Returns all field names in the hash stored at key.
@@ -273,7 +273,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hkeys/>](https://redis.io/commands/hkeys/)
     #[must_use]
     fn hkeys<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HKEYS").arg(key))
+        prepare_command(self, cmd("HKEYS").key(key))
     }
 
     /// Returns the number of fields contained in the hash stored at key.
@@ -285,7 +285,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hlen/)
     #[must_use]
     fn hlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("HLEN").arg(key))
+        prepare_command(self, cmd("HLEN").key(key))
     }
 
     /// Returns the values associated with the specified fields in the hash stored at key.
@@ -301,7 +301,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         fields: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HMGET").arg(key).arg(fields))
+        prepare_command(self, cmd("HMGET").key(key).arg(fields))
     }
 
     /// Remove the existing expiration on a hash key's field(s),
@@ -322,7 +322,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         fields: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HPERSIST").arg(key).arg(fields))
+        prepare_command(self, cmd("HPERSIST").key(key).arg(fields))
     }
 
     /// This command works like [`hexpire`](HashCommands::hexpire), but the expiration of a field is specified in milliseconds instead of seconds.
@@ -353,7 +353,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HPEXPIRE")
-                .arg(key)
+                .key(key)
                 .arg(milliseconds)
                 .arg(option.into())
                 .arg("FIELDS")
@@ -391,7 +391,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HPEXPIREAT")
-                .arg(key)
+                .key(key)
                 .arg(unix_time_milliseconds)
                 .arg(option.into())
                 .arg("FIELDS")
@@ -423,7 +423,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HPEXPIRETIME")
-                .arg(key)
+                .key(key)
                 .arg("FIELDS")
                 .arg_with_count(fields),
         )
@@ -451,7 +451,7 @@ pub trait HashCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("HPTTL").arg(key).arg("FIELDS").arg_with_count(fields),
+            cmd("HPTTL").key(key).arg("FIELDS").arg_with_count(fields),
         )
     }
 
@@ -464,7 +464,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
     fn hrandfield<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HRANDFIELD").arg(key))
+        prepare_command(self, cmd("HRANDFIELD").key(key))
     }
 
     /// return random fields from the hash value stored at key.
@@ -483,7 +483,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HRANDFIELD").arg(key).arg(count))
+        prepare_command(self, cmd("HRANDFIELD").key(key).arg(count))
     }
 
     /// return random fields from the hash value stored at key.
@@ -505,7 +505,7 @@ pub trait HashCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("HRANDFIELD").arg(key).arg(count).arg("WITHVALUES"),
+            cmd("HRANDFIELD").key(key).arg(count).arg("WITHVALUES"),
         )
     }
 
@@ -524,7 +524,7 @@ pub trait HashCommands<'a>: Sized {
         cursor: u64,
         options: HScanOptions,
     ) -> PreparedCommand<'a, Self, HScanResult<F, V>> {
-        prepare_command(self, cmd("HSCAN").arg(key).arg(cursor).arg(options))
+        prepare_command(self, cmd("HSCAN").key(key).arg(cursor).arg(options))
     }
 
     /// Sets field in the hash stored at key to value.
@@ -536,7 +536,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hset/>](https://redis.io/commands/hset/)
     #[must_use]
     fn hset(self, key: impl Serialize, items: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("HSET").arg(key).arg(items))
+        prepare_command(self, cmd("HSET").key(key).arg(items))
     }
 
     /// Set the value of one or more fields of a given hash key,
@@ -562,7 +562,7 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("HSETEX")
-                .arg(key)
+                .key(key)
                 .arg(condition.into())
                 .arg(expiration.into())
                 .arg("FIELDS")
@@ -586,7 +586,7 @@ pub trait HashCommands<'a>: Sized {
         field: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("HSETNX").arg(key).arg(field).arg(value))
+        prepare_command(self, cmd("HSETNX").key(key).arg(field).arg(value))
     }
 
     /// Returns the string length of the value associated with field in the hash stored at key.
@@ -603,7 +603,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         field: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("HSTRLEN").arg(key).arg(field))
+        prepare_command(self, cmd("HSTRLEN").key(key).arg(field))
     }
 
     /// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
@@ -629,7 +629,7 @@ pub trait HashCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("HTTL").arg(key).arg("FIELDS").arg_with_count(fields),
+            cmd("HTTL").key(key).arg("FIELDS").arg_with_count(fields),
         )
     }
 
@@ -642,7 +642,7 @@ pub trait HashCommands<'a>: Sized {
     /// [<https://redis.io/commands/hvals/>](https://redis.io/commands/hvals/)
     #[must_use]
     fn hvals<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HVALS").arg(key))
+        prepare_command(self, cmd("HVALS").key(key))
     }
 }
 

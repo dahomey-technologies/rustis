@@ -30,7 +30,7 @@ pub trait JsonCommands<'a>: Sized {
         path: impl Serialize,
         values: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.ARRAPPEND").arg(key).arg(path).arg(values))
+        prepare_command(self, cmd("JSON.ARRAPPEND").key(key).arg(path).arg(values))
     }
 
     /// Search for the first occurrence of a scalar JSON value in an array
@@ -59,7 +59,7 @@ pub trait JsonCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("JSON.ARRINDEX")
-                .arg(key)
+                .key(key)
                 .arg(path)
                 .arg(value)
                 .arg(options),
@@ -95,7 +95,7 @@ pub trait JsonCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("JSON.ARRINSERT")
-                .arg(key)
+                .key(key)
                 .arg(path)
                 .arg(index)
                 .arg(values),
@@ -120,7 +120,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.ARRLEN").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.ARRLEN").key(key).arg(path))
     }
 
     /// Remove and return an element from the index in the array
@@ -146,7 +146,7 @@ pub trait JsonCommands<'a>: Sized {
         path: impl Serialize,
         index: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.ARRPOP").arg(key).arg(path).arg(index))
+        prepare_command(self, cmd("JSON.ARRPOP").key(key).arg(path).arg(index))
     }
 
     /// Remove and return an element from the index in the array
@@ -174,7 +174,7 @@ pub trait JsonCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("JSON.ARRTRIM").arg(key).arg(path).arg(start).arg(stop),
+            cmd("JSON.ARRTRIM").key(key).arg(path).arg(start).arg(stop),
         )
     }
 
@@ -195,7 +195,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("JSON.CLEAR").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.CLEAR").key(key).arg(path))
     }
 
     /// Report a value's memory usage in bytes
@@ -215,7 +215,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.DEBUG").arg("MEMORY").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.DEBUG").arg("MEMORY").key(key).arg(path))
     }
 
     /// Delete a value
@@ -235,7 +235,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("JSON.DEL").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.DEL").key(key).arg(path))
     }
 
     /// See [`json_del`](JsonCommands::json_del)
@@ -255,7 +255,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("JSON.FORGET").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.FORGET").key(key).arg(path))
     }
 
     /// Return the value at path in JSON serialized form
@@ -275,7 +275,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         options: JsonGetOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.GET").arg(key).arg(options))
+        prepare_command(self, cmd("JSON.GET").key(key).arg(options))
     }
 
     /// Return the values at `path` from multiple `key` arguments
@@ -295,7 +295,24 @@ pub trait JsonCommands<'a>: Sized {
         keys: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.MGET").arg(keys).arg(path))
+        prepare_command(self, cmd("JSON.MGET").key(keys).arg(path))
+    }
+
+    /// Set or update one or more JSON values according to the specified key-path-value triplets
+    ///
+    /// # Arguments
+    /// key-path-value triplets
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/json.mset/>](https://redis.io/commands/json.mset/)
+    #[must_use]
+    fn json_mset(self, key_path_values: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(
+            self,
+            cmd("JSON.MSET")
+                .key_with_step(key_path_values, 3)
+                .cluster_info(None, None, 3),
+        )
     }
 
     /// Increment the number value stored at path by number
@@ -318,7 +335,7 @@ pub trait JsonCommands<'a>: Sized {
         path: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.NUMINCRBY").arg(key).arg(path).arg(value))
+        prepare_command(self, cmd("JSON.NUMINCRBY").key(key).arg(path).arg(value))
     }
 
     /// Multiply the number value stored at path by number
@@ -341,7 +358,7 @@ pub trait JsonCommands<'a>: Sized {
         path: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.NUMMULTBY").arg(key).arg(path).arg(value))
+        prepare_command(self, cmd("JSON.NUMMULTBY").key(key).arg(path).arg(value))
     }
 
     /// Return the keys in the object that's referenced by `path`
@@ -363,7 +380,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.OBJKEYS").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.OBJKEYS").key(key).arg(path))
     }
 
     /// Report the number of keys in the JSON object at `path` in `key`
@@ -384,7 +401,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.OBJLEN").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.OBJLEN").key(key).arg(path))
     }
 
     /// Return the JSON in key in
@@ -414,7 +431,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.RESP").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.RESP").key(key).arg(path))
     }
 
     /// Set the JSON value at `path` in `key`
@@ -441,7 +458,7 @@ pub trait JsonCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("JSON.SET")
-                .arg(key)
+                .key(key)
                 .arg(path)
                 .arg(value)
                 .arg(condition.into()),
@@ -467,7 +484,7 @@ pub trait JsonCommands<'a>: Sized {
         path: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.STRAPPEND").arg(key).arg(path).arg(value))
+        prepare_command(self, cmd("JSON.STRAPPEND").key(key).arg(path).arg(value))
     }
 
     /// Report the length of the JSON String at `path` in `key`
@@ -488,7 +505,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.STRLEN").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.STRLEN").key(key).arg(path))
     }
 
     /// Toggle a Boolean value stored at `path`
@@ -509,7 +526,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.TOGGLE").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.TOGGLE").key(key).arg(path))
     }
 
     /// Report the type of JSON value at `path`
@@ -529,7 +546,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.TYPE").arg(key).arg(path))
+        prepare_command(self, cmd("JSON.TYPE").key(key).arg(path))
     }
 }
 

@@ -30,7 +30,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("CMS.INCRBY").arg(key).arg(items))
+        prepare_command(self, cmd("CMS.INCRBY").key(key).arg(items))
     }
 
     /// Returns width, depth and total count of the sketch.
@@ -42,7 +42,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
     fn cms_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, CmsInfoResult> {
-        prepare_command(self, cmd("CMS.INFO").arg(key))
+        prepare_command(self, cmd("CMS.INFO").key(key))
     }
 
     /// Initializes a Count-Min Sketch to dimensions specified by user.
@@ -63,7 +63,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
         width: usize,
         depth: usize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CMS.INITBYDIM").arg(key).arg(width).arg(depth))
+        prepare_command(self, cmd("CMS.INITBYDIM").key(key).arg(width).arg(depth))
     }
 
     /// Initializes a Count-Min Sketch to accommodate requested tolerances.
@@ -90,7 +90,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
-            cmd("CMS.INITBYPROB").arg(key).arg(error).arg(probability),
+            cmd("CMS.INITBYPROB").key(key).arg(error).arg(probability),
         )
     }
 
@@ -117,8 +117,8 @@ pub trait CountMinSketchCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("CMS.MERGE")
-                .arg(destination)
-                .arg_with_count(sources)
+                .key(destination)
+                .key_with_count(sources)
                 .arg(weights.map(|w| ("WEIGHTS", w))),
         )
     }
@@ -144,7 +144,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("CMS.QUERY").arg(key).arg(items))
+        prepare_command(self, cmd("CMS.QUERY").key(key).arg(items))
     }
 }
 

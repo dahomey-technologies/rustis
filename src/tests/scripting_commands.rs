@@ -2,8 +2,8 @@ use crate::{
     Result,
     client::ClientPreparedCommand,
     commands::{
-        CallBuilder, FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands,
-        ServerCommands, StringCommands,
+        FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands, ServerCommands,
+        StringCommands,
     },
     error::{Error, RedisErrorKind},
     sleep, spawn,
@@ -17,23 +17,21 @@ use serial_test::serial;
 async fn eval() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: String = client
-        .eval(CallBuilder::script("return ARGV[1]").args("hello"))
-        .await?;
+    let result: String = client.eval("return ARGV[1]", (), "hello").await?;
     assert_eq!("hello", result);
 
     client.set("key", "hello").await?;
     let result: String = client
-        .eval(CallBuilder::script("return redis.call('GET', KEYS[1])").keys("key"))
+        .eval("return redis.call('GET', KEYS[1])", "key", ())
         .await?;
     assert_eq!("hello", result);
 
     client.set("key", "hello").await?;
     let result: String = client
         .eval(
-            CallBuilder::script("return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"")
-                .keys("key")
-                .args("world"),
+            "return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"",
+            "key",
+            "world",
         )
         .await?;
     assert_eq!("hello world!", result);
@@ -54,9 +52,8 @@ local arr = redis.call("SMEMBERS", "key");
 redis.call("DEL", "key");
 return { ARGV[1], ARGV[2], 42, arr }
     "#;
-    let result: (String, String, i32, Vec<i64>) = client
-        .eval(CallBuilder::script(lua_script).args("Hello").args("world"))
-        .await?;
+    let result: (String, String, i32, Vec<i64>) =
+        client.eval(lua_script, (), ["Hello", "world"]).await?;
 
     assert_eq!(result.0, "Hello");
     assert_eq!(result.1, "world");
@@ -74,9 +71,7 @@ async fn evalsha_noscript() -> Result<()> {
 
     // SHA1("") == da39a3ee5e6b4b0d3255bfef95601890afd80709
     let result = client
-        .evalsha::<()>(CallBuilder::sha1(
-            "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-        ))
+        .evalsha::<()>("da39a3ee5e6b4b0d3255bfef95601890afd80709", (), ())
         .await
         .unwrap_err();
 
@@ -97,9 +92,7 @@ async fn evalsha() -> Result<()> {
 
     let sha1: String = client.script_load("return ARGV[1]").await?;
 
-    let result: String = client
-        .evalsha(CallBuilder::sha1(&sha1).args("hello"))
-        .await?;
+    let result: String = client.evalsha(sha1, (), "hello").await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -114,9 +107,7 @@ async fn fcall() -> Result<()> {
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
 
-    let result: String = client
-        .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+    let result: String = client.fcall("myfunc", (), "hello").await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -139,9 +130,8 @@ end)
     "#;
     let library: String = client.function_load(true, lua_lib).await?;
     assert_eq!("mylib", library);
-    let result: (String, String, i32, Vec<i64>) = client
-        .fcall(CallBuilder::function("myfunc").args("Hello").args("world"))
-        .await?;
+    let result: (String, String, i32, Vec<i64>) =
+        client.fcall("myfunc", (), ["Hello", "world"]).await?;
 
     assert_eq!(result.0, "Hello");
     assert_eq!(result.1, "world");
@@ -160,16 +150,12 @@ async fn function_delete() -> Result<()> {
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
 
-    let result: String = client
-        .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+    let result: String = client.fcall("myfunc", (), "hello").await?;
     assert_eq!("hello", result);
 
     client.function_delete("mylib").await?;
 
-    let result: Result<String> = client
-        .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await;
+    let result: Result<String> = client.fcall("myfunc", (), "hello").await;
     assert!(result.is_err());
 
     Ok(())
@@ -186,9 +172,7 @@ async fn function_dump() -> Result<()> {
     let library: String = client.function_load(true, "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)").await?;
     assert_eq!("mylib", library);
 
-    let result: String = client
-        .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+    let result: String = client.fcall("myfunc", (), "hello").await?;
     assert_eq!("hello", result);
 
     let serialized_payload = client.function_dump().await?;
@@ -198,9 +182,7 @@ async fn function_dump() -> Result<()> {
 
     client.function_restore(&serialized_payload, None).await?;
 
-    let result: String = client
-        .fcall(CallBuilder::function("myfunc").args("hello"))
-        .await?;
+    let result: String = client.fcall("myfunc", (), "hello").await?;
     assert_eq!("hello", result);
 
     Ok(())
@@ -280,9 +262,7 @@ async fn function_stats() -> Result<()> {
         async fn blocking_fcall() -> Result<()> {
             let client = get_test_client().await?;
 
-            let _ = client
-                .fcall::<String>(CallBuilder::function("myfunc").args("hello"))
-                .await?;
+            let _ = client.fcall::<String>("myfunc", (), "hello").await?;
 
             Ok(())
         }
@@ -366,9 +346,7 @@ async fn script_kill() -> Result<()> {
         async fn blocking_script(sha1: String) -> Result<()> {
             let client = get_test_client().await?;
 
-            let _ = client
-                .evalsha::<String>(CallBuilder::sha1(&sha1).args("hello"))
-                .await?;
+            let _ = client.evalsha::<String>(sha1, (), "hello").await?;
 
             Ok(())
         }

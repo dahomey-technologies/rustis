@@ -35,7 +35,7 @@ pub trait GeoCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("GEOADD")
-                .arg(key)
+                .key(key)
                 .arg(condition.into())
                 .arg_if(change, "CH")
                 .arg(items),
@@ -60,7 +60,7 @@ pub trait GeoCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(
             self,
-            cmd("GEODIST").arg(key).arg(member1).arg(member2).arg(unit),
+            cmd("GEODIST").key(key).arg(member1).arg(member2).arg(unit),
         )
     }
 
@@ -78,7 +78,7 @@ pub trait GeoCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GEOHASH").arg(key).arg(members))
+        prepare_command(self, cmd("GEOHASH").key(key).arg(members))
     }
 
     /// Return the positions (longitude,latitude) of all the specified members
@@ -97,7 +97,7 @@ pub trait GeoCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>> {
-        prepare_command(self, cmd("GEOPOS").arg(key).arg(members))
+        prepare_command(self, cmd("GEOPOS").key(key).arg(members))
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](GeoCommands::geoadd),
@@ -119,7 +119,7 @@ pub trait GeoCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("GEOSEARCH").arg(key).arg(from).arg(by).arg(options),
+            cmd("GEOSEARCH").key(key).arg(from).arg(by).arg(options),
         )
     }
 
@@ -142,8 +142,8 @@ pub trait GeoCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("GEOSEARCHSTORE")
-                .arg(destination)
-                .arg(source)
+                .key(destination)
+                .key(source)
                 .arg(from)
                 .arg(by)
                 .arg(options),

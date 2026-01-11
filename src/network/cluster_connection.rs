@@ -2,16 +2,15 @@ use crate::{
     Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config},
     commands::{
-        ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult, CommandTip,
+        ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
-    network::{CommandInfoManager, Version},
-    resp::{Command, RespBuf, RespDeserializer, RespSerializer},
+    network::Version,
+    resp::{Command, CommandBuilder, RespBuf, RespDeserializer, RespSerializer},
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
-use memchr::memchr;
 use rand::Rng;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -76,7 +75,7 @@ struct SubRequest {
 
 #[derive(Debug)]
 struct RequestInfo {
-    pub command_name: Bytes,
+    pub response_policy: Option<ResponsePolicy>,
     pub keys: SmallVec<[Bytes; 10]>,
     pub sub_requests: SmallVec<[SubRequest; 10]>,
     #[allow(unused)]
@@ -102,7 +101,6 @@ pub struct ClusterConnection {
     config: Config,
     nodes: Vec<Node>,
     slot_ranges: Vec<SlotRange>,
-    command_info_manager: CommandInfoManager,
     pending_requests: VecDeque<RequestInfo>,
     tag: String,
 }
@@ -117,8 +115,6 @@ impl ClusterConnection {
             .get_mut(0)
             .ok_or_else(|| Error::Client("No cluster nodes".to_owned()))?;
 
-        let command_info_manager =
-            CommandInfoManager::initialize(&mut first_node.connection).await?;
         let tag = first_node.connection.tag().to_owned();
 
         Ok(ClusterConnection {
@@ -126,7 +122,6 @@ impl ClusterConnection {
             config: config.clone(),
             nodes,
             slot_ranges,
-            command_info_manager,
             pending_requests: VecDeque::new(),
             tag,
         })
@@ -142,63 +137,28 @@ impl ClusterConnection {
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
         debug!("[{}] Analyzing command {command:?}", self.tag);
-
-        let command_info = self.command_info_manager.get_command_info(command);
-
-        let command_info = if let Some(command_info) = command_info {
-            command_info
-        } else {
-            return Err(Error::Client(format!(
-                "[{}] Unknown command {}",
-                self.tag,
-                String::from_utf8_lossy(&command.get_name())
-            )));
-        };
-
-        let command_name = Bytes::copy_from_slice(command_info.name.as_bytes());
-
-        let node_idx = self.get_random_node_index();
-        let keys = self
-            .command_info_manager
-            .extract_keys(command, &mut self.nodes[node_idx].connection)
-            .await?;
-        let slots = Self::hash_slots(&keys);
-
-        debug!("[{}] keys: {keys:?}, slots: {slots:?}", self.tag);
-
-        let request_policy = command_info.command_tips.iter().find_map(|tip| {
-            if let CommandTip::RequestPolicy(request_policy) = tip {
-                Some(request_policy)
-            } else {
-                None
-            }
-        });
+        let request_policy = command.request_policy();
 
         if let Some(request_policy) = request_policy {
             match request_policy {
                 RequestPolicy::AllNodes => {
-                    self.request_policy_all_nodes(command, command_name, keys)
-                        .await?;
+                    self.request_policy_all_nodes(command).await?;
                 }
                 RequestPolicy::AllShards => {
-                    self.request_policy_all_shards(command, command_name, keys)
-                        .await?;
+                    self.request_policy_all_shards(command).await?;
                 }
                 RequestPolicy::MultiShard => {
-                    self.request_policy_multi_shard(
-                        command,
-                        command_name,
-                        keys,
-                        slots,
-                        ask_reasons,
-                    )
-                    .await?;
+                    self.request_policy_multi_shard(command, ask_reasons)
+                        .await?;
                 }
                 RequestPolicy::Special => {
-                    self.request_policy_special(command, command_name, keys, slots);
+                    self.request_policy_special(command)?;
                 }
             }
         } else {
+            let command_name = command.name();
+            let keys = command.keys().collect();
+            let slots = command.slots().collect();
             self.no_request_policy(command, command_name, keys, slots, ask_reasons)
                 .await?;
         }
@@ -234,29 +194,26 @@ impl ClusterConnection {
             })
             .collect::<Vec<_>>();
 
-        if commands.len() > 1 && commands[0].get_name() == "MULTI" {
-            let node_idx = self.get_random_node_index();
-            let keys = self
-                .command_info_manager
-                .extract_keys(commands[1], &mut self.nodes[node_idx].connection)
-                .await?;
-            let slots = Self::hash_slots(&keys);
-            if slots.is_empty() || !slots.windows(2).all(|s| s[0] == s[1]) {
-                return Err(Error::Client(format!(
-                    "[{}] Cannot execute transaction with mismatched key slots",
-                    self.tag
-                )));
-            }
-            let ref_slot = slots[0];
+        if commands.len() > 1 && commands[0].name() == "MULTI" {
+            let mut slots = commands[1].slots();
+            let ref_slot = if let Some(ref_slot) = slots.next() {
+                if !slots.all(|x| x == ref_slot) {
+                    return Err(Error::Client(format!(
+                        "[{}] Cannot execute transaction with mismatched key slots",
+                        self.tag
+                    )));
+                }
+                ref_slot
+            } else {
+                0
+            };
+            drop(slots);
 
             for command in commands {
-                let keys = self
-                    .command_info_manager
-                    .extract_keys(command, &mut self.nodes[node_idx].connection)
-                    .await?;
+                let keys = command.keys().collect();
                 self.no_request_policy(
                     command,
-                    command.get_name(),
+                    command.name(),
                     keys,
                     SmallVec::from_slice(&[ref_slot]),
                     &ask_reasons,
@@ -275,12 +232,7 @@ impl ClusterConnection {
     /// The client should execute the command on all master shards (e.g., the DBSIZE command).
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
-    async fn request_policy_all_shards(
-        &mut self,
-        command: &Command,
-        command_name: Bytes,
-        keys: SmallVec<[Bytes; 10]>,
-    ) -> Result<()> {
+    async fn request_policy_all_shards(&mut self, command: &Command) -> Result<()> {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for node in self.nodes.iter_mut().filter(|n| n.is_master) {
@@ -293,9 +245,9 @@ impl ClusterConnection {
         }
 
         let request_info = RequestInfo {
-            command_name,
+            response_policy: command.response_policy(),
             sub_requests,
-            keys,
+            keys: command.keys().collect(),
             #[cfg(debug_assertions)]
             command_seq: command.command_seq,
         };
@@ -309,12 +261,7 @@ impl ClusterConnection {
     /// An example is the CONFIG SET command.
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
-    async fn request_policy_all_nodes(
-        &mut self,
-        command: &Command,
-        command_name: Bytes,
-        keys: SmallVec<[Bytes; 10]>,
-    ) -> Result<()> {
+    async fn request_policy_all_nodes(&mut self, command: &Command) -> Result<()> {
         if self.nodes.iter().all(|n| n.is_master) {
             self.connect_replicas().await?;
         }
@@ -330,9 +277,9 @@ impl ClusterConnection {
         }
 
         let request_info = RequestInfo {
-            command_name,
+            response_policy: command.response_policy(),
             sub_requests,
-            keys,
+            keys: command.keys().collect(),
             #[cfg(debug_assertions)]
             command_seq: command.command_seq,
         };
@@ -349,82 +296,73 @@ impl ClusterConnection {
     async fn request_policy_multi_shard(
         &mut self,
         command: &Command,
-        command_name: Bytes,
-        keys: SmallVec<[Bytes; 10]>,
-        slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        let mut node_slot_keys_ask = (0..keys.len())
-            .map(|i| {
-                let (node_index, should_ask) = self
-                    .get_master_node_index_by_slot(slots[i], ask_reasons)
-                    .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?;
-                Ok((node_index, slots[i], keys[i].clone(), should_ask))
+        let mut node_keys_ask = command
+            .args_for_cluster()
+            .filter_map(|(arg, is_key, slot)| {
+                is_key.then(|| {
+                    let (node_index, should_ask) = self
+                        .get_master_node_index_by_slot(slot, ask_reasons)
+                        .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?;
+                    Ok((node_index, arg, should_ask))
+                })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        node_slot_keys_ask.sort();
-        trace!("[{}] shard_slot_keys_ask: {node_slot_keys_ask:?}", self.tag);
+        if node_keys_ask.is_empty() {
+            return Ok(());
+        }
 
-        let mut last_slot = u16::MAX;
-        let mut current_slot_keys = SmallVec::<[Bytes; 10]>::new();
+        node_keys_ask.sort();
+        trace!("[{}] node_slot_keys_ask: {node_keys_ask:?}", self.tag);
+
+        let mut current_node_keys = SmallVec::<[Bytes; 10]>::new();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
-        let mut last_node_index: usize = 0;
+        let mut last_node_index: usize = usize::MAX;
         let mut last_should_ask = false;
 
-        let mut node = &mut self.nodes[last_node_index];
+        let mut node = &mut self.nodes[0];
 
-        for (node_index, slot, key, should_ask) in &node_slot_keys_ask {
-            if *slot != last_slot {
-                if !current_slot_keys.is_empty() {
+        for (node_index, key, should_ask) in node_keys_ask {
+            if node_index != last_node_index {
+                if !current_node_keys.is_empty() {
                     if last_should_ask {
                         node.connection.asking().await?;
                     }
 
-                    let shard_command = self
-                        .command_info_manager
-                        .prepare_command_for_shard(command, current_slot_keys.iter())?;
+                    let shard_command = prepare_command_for_shard(command, &current_node_keys);
                     node.connection.write(&shard_command).await?;
                     sub_requests.push(SubRequest {
                         node_id: node.id.clone(),
-                        keys: current_slot_keys.clone(),
+                        keys: std::mem::take(&mut current_node_keys),
                         result: None,
                     });
-
-                    current_slot_keys.clear();
                 }
 
-                last_slot = *slot;
-                last_should_ask = *should_ask;
+                last_node_index = node_index;
+                last_should_ask = should_ask;
+                node = &mut self.nodes[node_index];
             }
 
-            current_slot_keys.push(key.clone());
-
-            if *node_index != last_node_index {
-                node = &mut self.nodes[*node_index];
-                last_node_index = *node_index;
-            }
+            current_node_keys.push(key);
         }
 
         if last_should_ask {
             node.connection.asking().await?;
         }
 
-        let shard_command = self
-            .command_info_manager
-            .prepare_command_for_shard(command, current_slot_keys.iter())?;
-
+        let shard_command = prepare_command_for_shard(command, &current_node_keys);
         node.connection.write(&shard_command).await?;
-
         sub_requests.push(SubRequest {
             node_id: node.id.clone(),
-            keys: current_slot_keys.clone(),
+            keys: std::mem::take(&mut current_node_keys),
             result: None,
         });
 
         let request_info = RequestInfo {
-            command_name,
-            keys,
+            response_policy: command.response_policy(),
+            keys: command.keys().collect(),
             sub_requests,
             #[cfg(debug_assertions)]
             command_seq: command.command_seq,
@@ -463,7 +401,7 @@ impl ClusterConnection {
             connection.write(command).await?;
 
             let request_info = RequestInfo {
-                command_name,
+                response_policy: command.response_policy(),
                 sub_requests: smallvec![SubRequest {
                     node_id: node.id.clone(),
                     keys: keys.clone(),
@@ -486,14 +424,12 @@ impl ClusterConnection {
         Ok(())
     }
 
-    fn request_policy_special(
-        &mut self,
-        _command: &Command,
-        _command_name: Bytes,
-        _keys: SmallVec<[Bytes; 10]>,
-        _slots: SmallVec<[u16; 10]>,
-    ) {
-        todo!("[{}] Command not yet supported in cluster mode", self.tag)
+    fn request_policy_special(&mut self, command: &Command) -> Result<()> {
+        Err(Error::Client(format!(
+            "[{}] Command {} not yet supported in cluster mode",
+            String::from_utf8_lossy(&command.name()),
+            self.tag
+        )))
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
@@ -594,32 +530,9 @@ impl ClusterConnection {
             return Some(Err(Error::Retry(retry_reasons)));
         }
 
-        let command_name = &request_info.command_name;
-        let command_info = self
-            .command_info_manager
-            .get_command_info_by_name(command_name);
-
-        let command_info = if let Some(command_info) = command_info {
-            command_info
-        } else {
-            return Some(Err(Error::Client(format!(
-                "[{}] Unknown command {}",
-                self.tag,
-                String::from_utf8_lossy(command_name)
-            ))));
-        };
-
-        let response_policy = command_info.command_tips.iter().find_map(|tip| {
-            if let CommandTip::ResponsePolicy(response_policy) = tip {
-                Some(response_policy)
-            } else {
-                None
-            }
-        });
-
         // The response_policy tip is set for commands that reply with scalar data types,
         // or when it's expected that clients implement a non-default aggregate.
-        if let Some(response_policy) = response_policy {
+        if let Some(response_policy) = &request_info.response_policy {
             match response_policy {
                 ResponsePolicy::OneSucceeded => self.response_policy_one_succeeded(sub_results),
                 ResponsePolicy::AllSucceeded => self.response_policy_all_succeeded(sub_results),
@@ -780,7 +693,10 @@ impl ClusterConnection {
         &mut self,
         _sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
-        todo!("[{}] Command not yet supported in cluster mode", self.tag);
+        Some(Err(Error::Client(format!(
+            "[{}] Command not yet supported in cluster mode",
+            self.tag
+        ))))
     }
 
     fn no_response_policy(
@@ -1175,33 +1091,6 @@ impl ClusterConnection {
         }
     }
 
-    fn hash_slots(keys: &[Bytes]) -> SmallVec<[u16; 10]> {
-        keys.iter().map(|k| Self::hash_slot(k)).collect()
-    }
-
-    /// Implement hash_slot algorithm
-    /// see. https://redis.io/docs/reference/cluster-spec/#hash-tags
-    fn hash_slot(key: &[u8]) -> u16 {
-        let mut key = key;
-
-        // { found
-        if let Some(s) = memchr(b'{', key) {
-            // } found
-            if let Some(e) = memchr(b'}', &key[s + 1..]) {
-                // hash tag non empty
-                if e != 0 {
-                    key = &key[s + 1..s + 1 + e];
-                }
-            }
-        }
-
-        Self::crc16(key) % 16384
-    }
-
-    fn crc16(str: &[u8]) -> u16 {
-        crc16::State::<crc16::XMODEM>::calculate(str)
-    }
-
     pub(crate) fn convert_from_legacy_shard_description(
         mut legacy_shards: Vec<LegacyClusterShardResult>,
     ) -> Vec<ClusterShardResult> {
@@ -1247,4 +1136,36 @@ impl ClusterConnection {
     pub(crate) fn tag(&self) -> &str {
         &self.tag
     }
+}
+
+pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Command {
+    // Initialize a new command with the same base name
+    let mut shard_command = CommandBuilder::new(&command.name());
+
+    // Tracks how many subsequent arguments to keep after a valid key
+    let mut keep_next = 0;
+
+    // The step defines how many arguments form a logical group (e.g., 2 for MSET)
+    let step = command.key_step();
+
+    // Iterate through all arguments using the cluster helper
+    for (arg, is_key, _) in command.args_for_cluster() {
+        if is_key {
+            // If the current argument is a key, check if it exists in our shard group
+            if shard_keys.contains(&arg) {
+                shard_command = shard_command.arg(arg);
+                // Keep the next (step - 1) arguments associated with this key
+                keep_next = step - 1;
+            } else {
+                // Key belongs to another shard
+                keep_next = 0;
+            }
+        } else if keep_next > 0 {
+            // This is a value/path associated with an accepted key
+            shard_command = shard_command.arg(arg);
+            keep_next -= 1;
+        }
+    }
+
+    shard_command.into()
 }

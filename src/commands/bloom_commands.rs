@@ -23,7 +23,7 @@ pub trait BloomCommands<'a>: Sized {
     /// * [<https://redis.io/commands/bf.add/>](https://redis.io/commands/bf.add/)
     #[must_use]
     fn bf_add(self, key: impl Serialize, item: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("BF.ADD").arg(key).arg(item))
+        prepare_command(self, cmd("BF.ADD").key(key).arg(item))
     }
 
     /// Determines whether an item may exist in the Bloom Filter or not.
@@ -44,7 +44,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         item: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("BF.EXISTS").arg(key).arg(item))
+        prepare_command(self, cmd("BF.EXISTS").key(key).arg(item))
     }
 
     /// Return information about key filter.
@@ -59,7 +59,7 @@ pub trait BloomCommands<'a>: Sized {
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
     fn bf_info_all(self, key: impl Serialize) -> PreparedCommand<'a, Self, BfInfoResult> {
-        prepare_command(self, cmd("BF.INFO").arg(key))
+        prepare_command(self, cmd("BF.INFO").key(key))
     }
 
     /// Return information about key filter for a specific information parameter
@@ -79,7 +79,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         param: BfInfoParameter,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("BF.INFO").arg(key).arg(param))
+        prepare_command(self, cmd("BF.INFO").key(key).arg(param))
     }
 
     /// `bf_insert` is a sugarcoated combination of [`bf_reserve`](BloomCommands::bf_reserve) and [`bf_add`](BloomCommands::bf_add).
@@ -109,7 +109,7 @@ pub trait BloomCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("BF.INSERT")
-                .arg(key)
+                .key(key)
                 .arg(options)
                 .arg("ITEMS")
                 .arg(items),
@@ -137,7 +137,7 @@ pub trait BloomCommands<'a>: Sized {
         iterator: i64,
         data: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("BF.LOADCHUNK").arg(key).arg(iterator).arg(data))
+        prepare_command(self, cmd("BF.LOADCHUNK").key(key).arg(iterator).arg(data))
     }
 
     /// Adds one or more items to the Bloom Filter and creates the filter if it does not exist yet.
@@ -160,7 +160,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("BF.MADD").arg(key).arg(items))
+        prepare_command(self, cmd("BF.MADD").key(key).arg(items))
     }
 
     /// Determines if one or more items may exist in the filter or not.
@@ -181,7 +181,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("BF.MEXISTS").arg(key).arg(items))
+        prepare_command(self, cmd("BF.MEXISTS").key(key).arg(items))
     }
 
     /// Creates an empty Bloom Filter with a single sub-filter
@@ -225,7 +225,7 @@ pub trait BloomCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("BF.RESERVE")
-                .arg(key)
+                .key(key)
                 .arg(error_rate)
                 .arg(capacity)
                 .arg(options),
@@ -252,7 +252,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         iterator: i64,
     ) -> PreparedCommand<'a, Self, BfScanDumpResult> {
-        prepare_command(self, cmd("BF.SCANDUMP").arg(key).arg(iterator))
+        prepare_command(self, cmd("BF.SCANDUMP").key(key).arg(iterator))
     }
 }
 

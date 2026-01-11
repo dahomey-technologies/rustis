@@ -1,4 +1,4 @@
-use crate::resp::ArgSerializer;
+use crate::resp::{ArgLayout, ArgSerializer};
 use bytes::{Bytes, BytesMut};
 use serde::{Serialize, ser::SerializeSeq};
 use smallvec::SmallVec;
@@ -16,7 +16,7 @@ pub struct CommandArgsMut {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
+    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
 }
 
 impl Default for CommandArgsMut {
@@ -73,8 +73,8 @@ impl Serialize for CommandArgsMut {
 
         let mut seq = serializer.serialize_seq(Some(self.len()))?;
 
-        for (start, len) in &self.args_layout {
-            let arg_bytes = &self.buffer[*start..*start + *len];
+        for arg_layout in &self.args_layout {
+            let arg_bytes = &self.buffer[arg_layout.range()];
             seq.serialize_element(&RawBytes(arg_bytes))?;
         }
 
@@ -96,7 +96,7 @@ pub struct CommandArgs {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
+    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
 }
 
 impl CommandArgs {
@@ -148,7 +148,7 @@ impl<'a> IntoIterator for &'a CommandArgs {
 /// [`CommandArgs`] iterator
 pub struct CommandArgsIterator<'a> {
     pub(crate) buffer: Bytes,
-    pub(crate) layout_iter: std::slice::Iter<'a, (usize, usize)>,
+    pub(crate) layout_iter: std::slice::Iter<'a, ArgLayout>,
 }
 
 impl<'a> Iterator for CommandArgsIterator<'a> {
@@ -156,8 +156,8 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let (start, len) = self.layout_iter.next()?;
-        Some(self.buffer.slice(*start..*start + *len))
+        let arg_layout = self.layout_iter.next()?;
+        Some(self.buffer.slice(arg_layout.range()))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -167,8 +167,8 @@ impl<'a> Iterator for CommandArgsIterator<'a> {
 
 impl<'a> DoubleEndedIterator for CommandArgsIterator<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (start, len) = self.layout_iter.next_back()?;
-        Some(self.buffer.slice(*start..*start + *len))
+        let arg_layout = self.layout_iter.next_back()?;
+        Some(self.buffer.slice(arg_layout.range()))
     }
 }
 

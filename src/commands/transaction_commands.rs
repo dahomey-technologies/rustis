@@ -14,7 +14,7 @@ pub trait TransactionCommands<'a>: Sized {
     /// [<https://redis.io/commands/watch/>](https://redis.io/commands/watch/)
     #[must_use]
     fn watch(self, keys: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("WATCH").arg(keys))
+        prepare_command(self, cmd("WATCH").key(keys))
     }
 
     /// Flushes all the previously watched keys for a transaction.

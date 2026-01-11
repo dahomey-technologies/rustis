@@ -40,7 +40,7 @@ pub trait VectorSetCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("VADD")
-                .arg(key)
+                .key(key)
                 .arg(reduce_dim.into())
                 .arg("FP32")
                 .arg(Fp32Vector(values))
@@ -55,7 +55,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vcard/>](https://redis.io/commands/vcard/)
     #[must_use]
     fn vcard(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
-        prepare_command(self, cmd("VCARD").arg(key))
+        prepare_command(self, cmd("VCARD").key(key))
     }
 
     /// Return the number of dimensions of the vectors in the specified vector set.
@@ -64,7 +64,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vdim/>](https://redis.io/commands/vdim/)
     #[must_use]
     fn vdim(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
-        prepare_command(self, cmd("VDIM").arg(key))
+        prepare_command(self, cmd("VDIM").key(key))
     }
 
     /// Return the approximate vector associated with a given element in the vector set.
@@ -77,7 +77,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VEMB").arg(key).arg(element))
+        prepare_command(self, cmd("VEMB").key(key).arg(element))
     }
 
     /// Return the JSON attributes associated with an element in a vector set.
@@ -90,7 +90,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VGETATTR").arg(key).arg(element))
+        prepare_command(self, cmd("VGETATTR").key(key).arg(element))
     }
 
     /// Return metadata and internal details about a vector set,
@@ -100,7 +100,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vinfo/>](https://redis.io/commands/vinfo/)
     #[must_use]
     fn vinfo(self, key: impl Serialize) -> PreparedCommand<'a, Self, VInfoResult> {
-        prepare_command(self, cmd("VINFO").arg(key))
+        prepare_command(self, cmd("VINFO").key(key))
     }
 
     /// Return the neighbors of a specified element in a vector set.
@@ -117,7 +117,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VLINKS").arg(key).arg(element))
+        prepare_command(self, cmd("VLINKS").key(key).arg(element))
     }
 
     /// Return the neighbors of a specified element in a vector set.
@@ -135,7 +135,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VLINKS").arg(key).arg(element))
+        prepare_command(self, cmd("VLINKS").key(key).arg(element))
     }
 
     /// Return one or more random elements from a vector set.
@@ -161,7 +161,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VRANDMEMBER").arg(key).arg(count))
+        prepare_command(self, cmd("VRANDMEMBER").key(key).arg(count))
     }
 
     /// Remove an element from a vector set.
@@ -179,7 +179,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vrem/>](https://redis.io/commands/vrem/)
     #[must_use]
     fn vrem(self, key: impl Serialize, element: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("VREM").arg(key).arg(element))
+        prepare_command(self, cmd("VREM").key(key).arg(element))
     }
 
     /// Associate a JSON object with an element in a vector set.
@@ -197,7 +197,7 @@ pub trait VectorSetCommands<'a>: Sized {
         element: impl Serialize,
         json: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("VSETATTR").arg(key).arg(element).arg(json))
+        prepare_command(self, cmd("VSETATTR").key(key).arg(element).arg(json))
     }
 
     /// Return elements similar to a given vector or element.
@@ -214,7 +214,7 @@ pub trait VectorSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("VSIM").arg(key).arg(vector_or_element).arg(options),
+            cmd("VSIM").key(key).arg(vector_or_element).arg(options),
         )
     }
 }

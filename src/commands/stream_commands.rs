@@ -26,7 +26,7 @@ pub trait StreamCommands<'a>: Sized {
         group: impl Serialize,
         ids: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("XACK").arg(key).arg(group).arg(ids))
+        prepare_command(self, cmd("XACK").key(key).arg(group).arg(ids))
     }
 
     /// Appends the specified stream entry to the stream at the specified key.
@@ -50,7 +50,7 @@ pub trait StreamCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("XADD").arg(key).arg(options).arg(stream_id).arg(items),
+            cmd("XADD").key(key).arg(options).arg(stream_id).arg(items),
         )
     }
 
@@ -73,7 +73,7 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("XAUTOCLAIM")
-                .arg(key)
+                .key(key)
                 .arg(group)
                 .arg(consumer)
                 .arg(min_idle_time)
@@ -107,7 +107,7 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("XCLAIM")
-                .arg(key)
+                .key(key)
                 .arg(group)
                 .arg(consumer)
                 .arg(min_idle_time)
@@ -124,7 +124,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xdel/>](https://redis.io/commands/xdel/)
     fn xdel(self, key: impl Serialize, ids: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("XDEL").arg(key).arg(ids))
+        prepare_command(self, cmd("XDEL").key(key).arg(ids))
     }
 
     /// This command creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
@@ -146,7 +146,7 @@ pub trait StreamCommands<'a>: Sized {
             self,
             cmd("XGROUP")
                 .arg("CREATE")
-                .arg(key)
+                .key(key)
                 .arg(groupname)
                 .arg(id)
                 .arg(options),
@@ -172,7 +172,7 @@ pub trait StreamCommands<'a>: Sized {
             self,
             cmd("XGROUP")
                 .arg("CREATECONSUMER")
-                .arg(key)
+                .key(key)
                 .arg(groupname)
                 .arg(consumername),
         )
@@ -195,7 +195,7 @@ pub trait StreamCommands<'a>: Sized {
             self,
             cmd("XGROUP")
                 .arg("DELCONSUMER")
-                .arg(key)
+                .key(key)
                 .arg(groupname)
                 .arg(consumername),
         )
@@ -214,7 +214,7 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         groupname: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("XGROUP").arg("DESTROY").arg(key).arg(groupname))
+        prepare_command(self, cmd("XGROUP").arg("DESTROY").key(key).arg(groupname))
     }
 
     /// The command returns a helpful text describing the different XGROUP subcommands.
@@ -265,7 +265,7 @@ pub trait StreamCommands<'a>: Sized {
             self,
             cmd("XGROUP")
                 .arg("SETID")
-                .arg(key)
+                .key(key)
                 .arg(groupname)
                 .arg(id)
                 .arg(entries_read.map(|e| ("ENTRIESREAD", e))),
@@ -284,7 +284,7 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         groupname: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<XConsumerInfo>> {
-        prepare_command(self, cmd("XINFO").arg("CONSUMERS").arg(key).arg(groupname))
+        prepare_command(self, cmd("XINFO").arg("CONSUMERS").key(key).arg(groupname))
     }
 
     /// This command returns the list of consumers that belong
@@ -296,7 +296,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xinfo-groups/>](https://redis.io/commands/xinfo-groups/)
     fn xinfo_groups(self, key: impl Serialize) -> PreparedCommand<'a, Self, Vec<XGroupInfo>> {
-        prepare_command(self, cmd("XINFO").arg("GROUPS").arg(key))
+        prepare_command(self, cmd("XINFO").arg("GROUPS").key(key))
     }
 
     /// The command returns a helpful text describing the different XINFO subcommands.
@@ -344,7 +344,7 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         options: XInfoStreamOptions,
     ) -> PreparedCommand<'a, Self, XStreamInfo> {
-        prepare_command(self, cmd("XINFO").arg("STREAM").arg(key).arg(options))
+        prepare_command(self, cmd("XINFO").arg("STREAM").key(key).arg(options))
     }
 
     /// Returns the number of entries inside a stream.
@@ -355,7 +355,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
     fn xlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("XLEN").arg(key))
+        prepare_command(self, cmd("XLEN").key(key))
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
@@ -367,7 +367,7 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         group: impl Serialize,
     ) -> PreparedCommand<'a, Self, XPendingResult> {
-        prepare_command(self, cmd("XPENDING").arg(key).arg(group))
+        prepare_command(self, cmd("XPENDING").key(key).arg(group))
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
@@ -384,7 +384,7 @@ pub trait StreamCommands<'a>: Sized {
         group: impl Serialize,
         options: XPendingOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("XPENDING").arg(key).arg(group).arg(options))
+        prepare_command(self, cmd("XPENDING").key(key).arg(group).arg(options))
     }
 
     /// The command returns the stream entries matching a given range of IDs.
@@ -408,7 +408,7 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("XRANGE")
-                .arg(key)
+                .key(key)
                 .arg(start)
                 .arg(end)
                 .arg(count.map(|c| ("COUNT", c))),
@@ -431,7 +431,7 @@ pub trait StreamCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("XREAD").arg(options).arg("STREAMS").arg(keys).arg(ids),
+            cmd("XREAD").arg(options).arg("STREAMS").key(keys).arg(ids),
         )
     }
 
@@ -459,7 +459,7 @@ pub trait StreamCommands<'a>: Sized {
                 .arg(consumer)
                 .arg(options)
                 .arg("STREAMS")
-                .arg(keys)
+                .key(keys)
                 .arg(ids),
         )
     }
@@ -483,7 +483,7 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("XREVRANGE")
-                .arg(key)
+                .key(key)
                 .arg(end)
                 .arg(start)
                 .arg(count.map(|c| ("COUNT", c))),
@@ -498,7 +498,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xtrim/>](https://redis.io/commands/xtrim/)
     fn xtrim(self, key: impl Serialize, options: XTrimOptions) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("XTRIM").arg(key).arg(options))
+        prepare_command(self, cmd("XTRIM").key(key).arg(options))
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::{PreparedCommand, prepare_command},
-    commands::ModuleInfo,
+    commands::{ModuleInfo, RequestPolicy, ResponsePolicy},
     resp::{Response, cmd, serialize_flag},
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
@@ -228,7 +228,13 @@ pub trait ConnectionCommands<'a>: Sized {
     /// [<https://redis.io/commands/client-setname/>](https://redis.io/commands/client-setname/)
     #[must_use]
     fn client_setname(self, connection_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CLIENT").arg("SETNAME").arg(connection_name))
+        prepare_command(
+            self,
+            cmd("CLIENT")
+                .arg("SETNAME")
+                .arg(connection_name)
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// Assigns various info attributes to the current connection.
@@ -271,7 +277,14 @@ pub trait ConnectionCommands<'a>: Sized {
         attr: ClientInfoAttribute,
         info: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CLIENT").arg("SETINFO").arg(attr).arg(info))
+        prepare_command(
+            self,
+            cmd("CLIENT")
+                .arg("SETINFO")
+                .arg(attr)
+                .arg(info)
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// This command enables the tracking feature of the Redis server,
@@ -356,7 +369,14 @@ pub trait ConnectionCommands<'a>: Sized {
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
     fn ping<R: Response>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("PING").arg(message))
+        prepare_command(
+            self,
+            cmd("PING").arg(message).cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Ask the server to close the connection.

@@ -9,7 +9,7 @@ impl Encoder<&Command> for CommandEncoder {
 
     #[inline]
     fn encode(&mut self, command: &Command, buf: &mut BytesMut) -> Result<()> {
-        let bytes = command.get_bytes();
+        let bytes = command.bytes();
         buf.reserve(bytes.len());
         buf.put(bytes.as_ref());
         Ok(())

@@ -595,7 +595,7 @@ pub trait SearchCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("FT.SUGADD")
-                .arg(key)
+                .key(key)
                 .arg(string)
                 .arg(score)
                 .arg(options),
@@ -619,7 +619,7 @@ pub trait SearchCommands<'a>: Sized {
         key: impl Serialize,
         string: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("FT.SUGDEL").arg(key).arg(string))
+        prepare_command(self, cmd("FT.SUGDEL").key(key).arg(string))
     }
 
     /// Get completion suggestions for a prefix
@@ -641,7 +641,7 @@ pub trait SearchCommands<'a>: Sized {
         prefix: impl Serialize,
         options: FtSugGetOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.SUGGET").arg(key).arg(prefix).arg(options))
+        prepare_command(self, cmd("FT.SUGGET").key(key).arg(prefix).arg(options))
     }
 
     /// Get the size of an auto-complete suggestion dictionary
@@ -656,7 +656,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
     #[must_use]
     fn ft_suglen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("FT.SUGLEN").arg(key))
+        prepare_command(self, cmd("FT.SUGLEN").key(key))
     }
 }
 

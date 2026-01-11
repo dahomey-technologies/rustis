@@ -251,7 +251,7 @@ impl NetworkHandler {
                         }
                     }
                     MessageKind::Single { command, .. } => {
-                        if let CommandKind::Unsbuscribe(subscription_type) = command.get_kind() {
+                        if let CommandKind::Unsbuscribe(subscription_type) = command.kind() {
                             self.pending_unsubscriptions.push_back(
                                 command.args().map(|a| (a, *subscription_type)).collect(),
                             );
@@ -290,7 +290,7 @@ impl NetworkHandler {
             Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
             Status::Monitor => {
                 for command in msg.commands() {
-                    if matches!(command.get_kind(), CommandKind::Reset) {
+                    if matches!(command.kind(), CommandKind::Reset) {
                         self.status = Status::LeavingMonitor;
                     }
                 }
@@ -335,7 +335,7 @@ impl NetworkHandler {
             let mut num_commands_to_receive: usize = 0;
 
             for command in msg.commands_mut() {
-                match command.get_kind() {
+                match command.kind() {
                     CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,
                     CommandKind::ClientReply(ClientReplyMode::Off | ClientReplyMode::Skip) => {
                         self.is_reply_on = false

@@ -22,7 +22,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
         key: impl Serialize,
         elements: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("PFADD").arg(key).arg(elements))
+        prepare_command(self, cmd("PFADD").key(key).arg(elements))
     }
 
     /// Return the approximated cardinality of the set(s)
@@ -34,7 +34,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
     fn pfcount(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("PFCOUNT").arg(keys))
+        prepare_command(self, cmd("PFCOUNT").key(keys))
     }
 
     /// Merge N different HyperLogLogs into a single one.
@@ -46,6 +46,6 @@ pub trait HyperLogLogCommands<'a>: Sized {
         dest_key: impl Serialize,
         source_keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("PFMERGE").arg(dest_key).arg(source_keys))
+        prepare_command(self, cmd("PFMERGE").key(dest_key).key(source_keys))
     }
 }

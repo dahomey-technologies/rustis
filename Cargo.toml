@@ -27,6 +27,8 @@ native-tls = ["dep:native-tls"]
 rustls = ["dep:rustls"]
 json = ["dep:serde_json"]
 client-cache = ["dep:moka", "dep:dashmap"]
+bench = ["dep:criterion", "dep:fred", "dep:redis"]
+web_examples = ["dep:axum", "dep:actix-web"]
 
 [dependencies]
 async-std = { version = "1.13", features = ["attributes"], optional = true }
@@ -58,6 +60,12 @@ memchr = "2.7"
 moka = { version = "0.12", features = ["future"], optional = true }
 dashmap = { version = "6.1", optional = true }
 mimalloc = "0.1"
+# optional dev dependencies
+criterion = { version = "0.8", optional = true }
+fred = { version = "10.1", optional = true }
+redis = { version = "1.0", features = ["aio", "tokio-comp"], optional = true }
+axum = { version = "0.8", optional = true }
+actix-web = { version = "4.12", optional = true }
 
 [dev-dependencies]
 serial_test = "3.3"
@@ -65,11 +73,6 @@ tokio = { version = "1.49", features = ["rt-multi-thread"] }
 rand = "0.9"
 env_logger = "0.11"
 smallvec = { version = "1.15", features = ["serde"] }
-criterion = "0.8"
-redis = { version = "1.0", features = ["aio", "tokio-comp"] }
-fred = "10.1"
-axum = "0.8"
-actix-web = "4.12"
 rustls-pemfile = "2.2"
 
 [package.metadata.docs.rs]
@@ -79,27 +82,50 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "generic_api"
 harness = false
-
-[[bench]]
-name = "native_api"
-harness = false
-
-[[bench]]
-name = "pipeline"
-harness = false
+required-features = ["bench"]
 
 [[bench]]
 name = "multiplexer"
 harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "native_api"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "pipeline"
+harness = false
+required-features = ["bench"]
 
 [[example]]
-name = "simple"
+name = "actix_crud"
+required-features = ["web-examples"]
+
+[[example]]
+name = "actix_long_polling_pubsub"
+required-features = ["web-examples"]
+
+[[example]]
+name = "axum_crud"
+required-features = ["web-examples"]
+
+[[example]]
+name = "axum_long_polling_pubsub"
+required-features = ["web-examples"]
 
 [[example]]
 name = "cbor"
 
 [[example]]
-name = "axum_crud"
+name = "loop"
+
+[[example]]
+name = "resp_profiling"
+
+[[example]]
+name = "simple"
 
 [profile.dev]
 opt-level = 0

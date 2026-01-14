@@ -298,65 +298,70 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        let mut node_keys_ask = command
+        let mut node_slot_keys_ask = command
             .args_for_cluster()
             .filter_map(|(arg, is_key, slot)| {
                 is_key.then(|| {
                     let (node_index, should_ask) = self
                         .get_master_node_index_by_slot(slot, ask_reasons)
                         .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?;
-                    Ok((node_index, arg, should_ask))
+                    Ok((node_index, slot, arg, should_ask))
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if node_keys_ask.is_empty() {
+        if node_slot_keys_ask.is_empty() {
             return Ok(());
         }
 
-        node_keys_ask.sort();
-        trace!("[{}] node_slot_keys_ask: {node_keys_ask:?}", self.tag);
+        node_slot_keys_ask.sort();
+        trace!("[{}] node_slot_keys_ask: {node_slot_keys_ask:?}", self.tag);
 
-        let mut current_node_keys = SmallVec::<[Bytes; 10]>::new();
+        let mut current_slot_keys = SmallVec::<[Bytes; 10]>::new();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
+        let mut last_slot = u16::MAX;
         let mut last_node_index: usize = usize::MAX;
         let mut last_should_ask = false;
 
         let mut node = &mut self.nodes[0];
 
-        for (node_index, key, should_ask) in node_keys_ask {
-            if node_index != last_node_index {
-                if !current_node_keys.is_empty() {
+        for (node_index, slot, key, should_ask) in node_slot_keys_ask {
+            if slot != last_slot {
+                if !current_slot_keys.is_empty() {
                     if last_should_ask {
                         node.connection.asking().await?;
                     }
 
-                    let shard_command = prepare_command_for_shard(command, &current_node_keys);
+                    let shard_command = prepare_command_for_shard(command, &current_slot_keys);
                     node.connection.write(&shard_command).await?;
                     sub_requests.push(SubRequest {
                         node_id: node.id.clone(),
-                        keys: std::mem::take(&mut current_node_keys),
+                        keys: std::mem::take(&mut current_slot_keys),
                         result: None,
                     });
                 }
 
-                last_node_index = node_index;
+                last_slot = slot;
                 last_should_ask = should_ask;
-                node = &mut self.nodes[node_index];
             }
 
-            current_node_keys.push(key);
+            current_slot_keys.push(key);
+
+            if node_index != last_node_index {
+                node = &mut self.nodes[node_index];
+                last_node_index = node_index;
+            }
         }
 
         if last_should_ask {
             node.connection.asking().await?;
         }
 
-        let shard_command = prepare_command_for_shard(command, &current_node_keys);
+        let shard_command = prepare_command_for_shard(command, &current_slot_keys);
         node.connection.write(&shard_command).await?;
         sub_requests.push(SubRequest {
             node_id: node.id.clone(),
-            keys: std::mem::take(&mut current_node_keys),
+            keys: std::mem::take(&mut current_slot_keys),
             result: None,
         });
 
@@ -593,68 +598,7 @@ impl ClusterConnection {
     where
         F: Fn(i64, i64) -> i64,
     {
-        enum Integer {
-            Single(i64),
-            Array(Vec<i64>),
-            Nil,
-        }
-
-        struct Visitor<F: Fn(i64, i64) -> i64> {
-            integer: Integer,
-            f: F,
-        }
-
-        impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut Visitor<F> {
-            type Value = ();
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("()")
-            }
-
-            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                match &self.integer {
-                    Integer::Nil => self.integer = Integer::Single(v),
-                    Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
-                    _ => {
-                        return Err(de::Error::custom("Unexpected value".to_owned()));
-                    }
-                }
-
-                Ok(())
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                match &mut self.integer {
-                    Integer::Nil => {
-                        self.integer = Integer::Array(Vec::<i64>::deserialize(
-                            SeqAccessDeserializer::new(seq),
-                        )?)
-                    }
-                    Integer::Array(a) => {
-                        for i in a {
-                            let Some(next_i) = seq.next_element()? else {
-                                return Err(de::Error::custom("Unexpected value".to_owned()));
-                            };
-
-                            *i = (self.f)(*i, next_i);
-                        }
-                    }
-                    _ => {
-                        return Err(de::Error::custom("Unexpected value".to_owned()));
-                    }
-                }
-
-                Ok(())
-            }
-        }
-
-        let mut visitor = Visitor {
+        let mut visitor = AggVisitor {
             integer: Integer::Nil,
             f,
         };
@@ -1168,4 +1112,64 @@ pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Com
     }
 
     shard_command.into()
+}
+
+enum Integer {
+    Single(i64),
+    Array(Vec<i64>),
+    Nil,
+}
+
+struct AggVisitor<F: Fn(i64, i64) -> i64> {
+    integer: Integer,
+    f: F,
+}
+
+impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut AggVisitor<F> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("()")
+    }
+
+    fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        match &self.integer {
+            Integer::Nil => self.integer = Integer::Single(v),
+            Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
+            _ => {
+                return Err(de::Error::custom("Unexpected value".to_owned()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        match &mut self.integer {
+            Integer::Nil => {
+                self.integer =
+                    Integer::Array(Vec::<i64>::deserialize(SeqAccessDeserializer::new(seq))?)
+            }
+            Integer::Array(a) => {
+                for i in a {
+                    let Some(next_i) = seq.next_element()? else {
+                        return Err(de::Error::custom("Unexpected value".to_owned()));
+                    };
+
+                    *i = (self.f)(*i, next_i);
+                }
+            }
+            _ => {
+                return Err(de::Error::custom("Unexpected value".to_owned()));
+            }
+        }
+
+        Ok(())
+    }
 }

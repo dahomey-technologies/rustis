@@ -23,7 +23,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         index: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LINDEX").arg(key).arg(index))
+        prepare_command(self, cmd("LINDEX").key(key).arg(index))
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -43,7 +43,7 @@ pub trait ListCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("LINSERT").arg(key).arg(where_).arg(pivot).arg(element),
+            cmd("LINSERT").key(key).arg(where_).arg(pivot).arg(element),
         )
     }
 
@@ -56,7 +56,7 @@ pub trait ListCommands<'a>: Sized {
     /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
     fn llen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LLEN").arg(key))
+        prepare_command(self, cmd("LLEN").key(key))
     }
 
     /// Atomically returns and removes the first/last element (head/tail depending on the wherefrom argument)
@@ -79,8 +79,8 @@ pub trait ListCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("LMOVE")
-                .arg(source)
-                .arg(destination)
+                .key(source)
+                .key(destination)
                 .arg(where_from)
                 .arg(where_to),
         )
@@ -103,7 +103,7 @@ pub trait ListCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("LMPOP")
-                .arg_with_count(keys)
+                .key_with_count(keys)
                 .arg(where_)
                 .arg("COUNT")
                 .arg(count),
@@ -119,7 +119,7 @@ pub trait ListCommands<'a>: Sized {
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
     fn lpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LPOP").arg(key).arg(count))
+        prepare_command(self, cmd("LPOP").key(key).arg(count))
     }
 
     /// Returns the index of matching elements inside a Redis list.
@@ -140,7 +140,7 @@ pub trait ListCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("LPOS")
-                .arg(key)
+                .key(key)
                 .arg(element)
                 .arg(rank.map(|r| ("RANK", r)))
                 .arg(max_len.map(|l| ("MAXLEN", l))),
@@ -167,7 +167,7 @@ pub trait ListCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("LPOS")
-                .arg(key)
+                .key(key)
                 .arg(element)
                 .arg(rank.map(|r| ("RANK", r)))
                 .arg("COUNT")
@@ -189,7 +189,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         elements: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LPUSH").arg(key).arg(elements))
+        prepare_command(self, cmd("LPUSH").key(key).arg(elements))
     }
 
     /// Inserts specified values at the head of the list stored at key,
@@ -206,7 +206,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         elements: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LPUSHX").arg(key).arg(elements))
+        prepare_command(self, cmd("LPUSHX").key(key).arg(elements))
     }
 
     /// Returns the specified elements of the list stored at key.
@@ -223,7 +223,7 @@ pub trait ListCommands<'a>: Sized {
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LRANGE").arg(key).arg(start).arg(stop))
+        prepare_command(self, cmd("LRANGE").key(key).arg(start).arg(stop))
     }
 
     /// Removes the first count occurrences of elements equal to element from the list stored at key.
@@ -240,7 +240,7 @@ pub trait ListCommands<'a>: Sized {
         count: isize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LREM").arg(key).arg(count).arg(element))
+        prepare_command(self, cmd("LREM").key(key).arg(count).arg(element))
     }
 
     /// Sets the list element at index to element.
@@ -254,7 +254,7 @@ pub trait ListCommands<'a>: Sized {
         index: isize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("LSET").arg(key).arg(index).arg(element))
+        prepare_command(self, cmd("LSET").key(key).arg(index).arg(element))
     }
 
     /// Trim an existing list so that it will contain only the specified range of elements specified.
@@ -268,7 +268,7 @@ pub trait ListCommands<'a>: Sized {
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("LTRIM").arg(key).arg(start).arg(stop))
+        prepare_command(self, cmd("LTRIM").key(key).arg(start).arg(stop))
     }
 
     /// Removes and returns the first elements of the list stored at key.
@@ -280,7 +280,7 @@ pub trait ListCommands<'a>: Sized {
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
     fn rpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("RPOP").arg(key).arg(count))
+        prepare_command(self, cmd("RPOP").key(key).arg(count))
     }
 
     /// Insert all the specified values at the tail of the list stored at key
@@ -296,7 +296,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         elements: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("RPUSH").arg(key).arg(elements))
+        prepare_command(self, cmd("RPUSH").key(key).arg(elements))
     }
 
     /// Inserts specified values at the tail of the list stored at key,
@@ -313,7 +313,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         elements: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("RPUSHX").arg(key).arg(elements))
+        prepare_command(self, cmd("RPUSHX").key(key).arg(elements))
     }
 }
 

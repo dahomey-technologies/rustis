@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    commands::FlushingMode,
-    resp::{BulkString, CommandArgsMut, Response, cmd, serialize_flag},
+    commands::{FlushingMode, RequestPolicy, ResponsePolicy},
+    resp::{BulkString, Response, cmd, serialize_flag},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -20,8 +20,13 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn eval<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("EVAL").arg(builder))
+    fn eval<R: Response>(
+        self,
+        script: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("EVAL").arg(script).key_with_count(keys).arg(args))
     }
 
     /// This is a read-only variant of the [eval](ScriptingCommands::eval)]
@@ -33,8 +38,16 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval_ro/>](https://redis.io/commands/eval_ro/)
     #[must_use]
-    fn eval_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("EVAL_RO").arg(builder))
+    fn eval_readonly<R: Response>(
+        self,
+        script: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("EVAL_RO").arg(script).key_with_count(keys).arg(args),
+        )
     }
 
     /// Evaluate a script from the server's cache by its SHA1 digest.
@@ -45,8 +58,16 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn evalsha<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("EVALSHA").arg(builder))
+    fn evalsha<R: Response>(
+        self,
+        sha1: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("EVALSHA").arg(sha1).key_with_count(keys).arg(args),
+        )
     }
 
     /// This is a read-only variant of the [evalsha](ScriptingCommands::evalsha)
@@ -58,8 +79,16 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/evalsha_ro/>](https://redis.io/commands/evalsha_ro/)
     #[must_use]
-    fn evalsha_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("EVALSHA_RO").arg(builder))
+    fn evalsha_readonly<R: Response>(
+        self,
+        sha1: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("EVALSHA_RO").arg(sha1).key_with_count(keys).arg(args),
+        )
     }
 
     /// Invoke a function.
@@ -70,8 +99,16 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FCALL").arg(builder))
+    fn fcall<R: Response>(
+        self,
+        function: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("FCALL").arg(function).key_with_count(keys).arg(args),
+        )
     }
 
     /// Invoke a function.
@@ -82,8 +119,16 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R: Response>(self, builder: CallBuilder) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FCALL_RO").arg(builder))
+    fn fcall_readonly<R: Response>(
+        self,
+        function: impl Serialize,
+        keys: impl Serialize,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("FCALL_RO").arg(function).key_with_count(keys).arg(args),
+        )
     }
 
     /// Delete a library and all its functions.
@@ -92,7 +137,13 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/function-delete/>](https://redis.io/commands/function-delete/)
     #[must_use]
     fn function_delete(self, library_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("FUNCTION").arg("DELETE").arg(library_name))
+        prepare_command(
+            self,
+            cmd("FUNCTION")
+                .arg("DELETE")
+                .arg(library_name)
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// Return the serialized payload of loaded libraries.
@@ -115,7 +166,13 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/function-flush/>](https://redis.io/commands/function-flush/)
     #[must_use]
     fn function_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("FUNCTION").arg("FLUSH").arg(flushing_mode))
+        prepare_command(
+            self,
+            cmd("FUNCTION")
+                .arg("FLUSH")
+                .arg(flushing_mode)
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// The command returns a helpful text describing the different FUNCTION subcommands.
@@ -154,7 +211,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/function-kill/>](https://redis.io/commands/function-kill/)
     #[must_use]
     fn function_kill(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("FUNCTION").arg("KILL"))
+        prepare_command(
+            self,
+            cmd("FUNCTION").arg("KILL").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::OneSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Return information about the functions and libraries.
@@ -187,7 +251,8 @@ pub trait ScriptingCommands<'a>: Sized {
             cmd("FUNCTION")
                 .arg("LOAD")
                 .arg_if(replace, "REPLACE")
-                .arg(function_code),
+                .arg(function_code)
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::AllSucceeded, 1),
         )
     }
 
@@ -206,7 +271,8 @@ pub trait ScriptingCommands<'a>: Sized {
             cmd("FUNCTION")
                 .arg("RESTORE")
                 .arg(serialized_payload)
-                .arg(policy.into()),
+                .arg(policy.into())
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::AllSucceeded, 1),
         )
     }
 
@@ -216,7 +282,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/function-stats/>](https://redis.io/commands/function-stats/)
     #[must_use]
     fn function_stats(self) -> PreparedCommand<'a, Self, FunctionStats> {
-        prepare_command(self, cmd("FUNCTION").arg("STATS"))
+        prepare_command(
+            self,
+            cmd("FUNCTION").arg("STATS").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// Set the debug mode for subsequent scripts executed with EVAL.
@@ -237,7 +310,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/script-exists/>](https://redis.io/commands/script-exists/)
     #[must_use]
     fn script_exists(self, sha1s: impl Serialize) -> PreparedCommand<'a, Self, Vec<bool>> {
-        prepare_command(self, cmd("SCRIPT").arg("EXISTS").arg(sha1s))
+        prepare_command(
+            self,
+            cmd("SCRIPT").arg("EXISTS").arg(sha1s).cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AggLogicalAnd,
+                1,
+            ),
+        )
     }
 
     /// Flush the Lua scripts cache.
@@ -246,7 +326,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/script-flush/>](https://redis.io/commands/script-flush/)
     #[must_use]
     fn script_flush(self, flushing_mode: FlushingMode) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SCRIPT").arg("FLUSH").arg(flushing_mode))
+        prepare_command(
+            self,
+            cmd("SCRIPT").arg("FLUSH").arg(flushing_mode).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Kills the currently executing EVAL script,
@@ -256,7 +343,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/script-kill/>](https://redis.io/commands/script-kill/)
     #[must_use]
     fn script_kill(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SCRIPT").arg("KILL"))
+        prepare_command(
+            self,
+            cmd("SCRIPT").arg("KILL").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::OneSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Load a script into the scripts cache, without executing it.
@@ -268,70 +362,14 @@ pub trait ScriptingCommands<'a>: Sized {
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
     fn script_load<R: Response>(self, script: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SCRIPT").arg("LOAD").arg(script))
-    }
-}
-
-/// Builder for calling a script/function for the following commands:
-/// * [`eval`](ScriptingCommands::eval)
-/// * [`eval_readonly`](ScriptingCommands::eval_readonly)
-/// * [`evalsha`](ScriptingCommands::evalsha)
-/// * [`evalsha_readonly`](ScriptingCommands::evalsha_readonly)
-/// * [`fcall`](ScriptingCommands::fcall)
-/// * [`fcall_readonly`](ScriptingCommands::fcall_readonly)
-#[derive(Serialize)]
-pub struct CallBuilder<'a>(&'a str, usize, CommandArgsMut, CommandArgsMut);
-
-impl<'a> CallBuilder<'a> {
-    /// Script name when used with [`eval`](ScriptingCommands::eval)
-    /// and [`eval_readonly`](ScriptingCommands::eval_readonly) commands
-    #[must_use]
-    pub fn script(script: &'a str) -> Self {
-        Self(
-            script,
-            0,
-            CommandArgsMut::default(),
-            CommandArgsMut::default(),
+        prepare_command(
+            self,
+            cmd("SCRIPT").arg("LOAD").arg(script).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
         )
-    }
-
-    /// Sha1 haxadecimal string when used with [`eval`](ScriptingCommands::evalsha)
-    /// and [`evalsha_readonly`](ScriptingCommands::evalsha_readonly) commands
-    #[must_use]
-    pub fn sha1(sha1: &'a str) -> Self {
-        Self(
-            sha1,
-            0,
-            CommandArgsMut::default(),
-            CommandArgsMut::default(),
-        )
-    }
-
-    /// Sha1 haxadecimal string when used with [`fcall`](ScriptingCommands::fcall)
-    /// and [`fcall_readonly`](ScriptingCommands::fcall_readonly) commands
-    #[must_use]
-    pub fn function(function: &'a str) -> Self {
-        Self(
-            function,
-            0,
-            CommandArgsMut::default(),
-            CommandArgsMut::default(),
-        )
-    }
-
-    /// All the keys accessed by the script.
-    #[must_use]
-    pub fn keys(mut self, keys: impl Serialize) -> Self {
-        self.2 = self.2.arg(keys);
-        self.1 = self.2.len();
-        self
-    }
-
-    /// Additional input arguments that should not represent names of keys.
-    #[must_use]
-    pub fn args(mut self, args: impl Serialize) -> Self {
-        self.3 = self.3.arg(args);
-        self
     }
 }
 

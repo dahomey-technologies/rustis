@@ -40,7 +40,14 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/acl-deluser/>](https://redis.io/commands/acl-deluser/)
     fn acl_deluser(self, usernames: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ACL").arg("DELUSER").arg(usernames))
+        prepare_command(
+            self,
+            cmd("ACL").arg("DELUSER").arg(usernames).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Simulate the execution of a given command by a given user.
@@ -234,7 +241,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("ACL").arg("SAVE"))
+        prepare_command(
+            self,
+            cmd("ACL").arg("SAVE").cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Create an ACL user with the specified rules or modify the rules of an existing user.
@@ -249,7 +263,14 @@ pub trait ServerCommands<'a>: Sized {
         username: impl Serialize,
         rules: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("ACL").arg("SETUSER").arg(username).arg(rules))
+        prepare_command(
+            self,
+            cmd("ACL")
+                .arg("SETUSER")
+                .arg(username)
+                .arg(rules)
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// The command shows a list of all the usernames of the currently configured users in the Redis ACL system.
@@ -524,7 +545,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("CONFIG").arg("RESETSTAT"))
+        prepare_command(
+            self,
+            cmd("CONFIG").arg("RESETSTAT").cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Rewrites the redis.conf file the server was started with,
@@ -548,7 +576,14 @@ pub trait ServerCommands<'a>: Sized {
     /// [<https://redis.io/commands/config-set/>](https://redis.io/commands/config-set/)
     #[must_use]
     fn config_set(self, configs: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CONFIG").arg("SET").arg(configs))
+        prepare_command(
+            self,
+            cmd("CONFIG").arg("SET").arg(configs).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Return the number of keys in the currently-selected database.
@@ -560,7 +595,10 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("DBSIZE"))
+        prepare_command(
+            self,
+            cmd("DBSIZE").cluster_info(RequestPolicy::AllShards, ResponsePolicy::AggSum, 1),
+        )
     }
 
     /// This command will start a coordinated failover between
@@ -588,7 +626,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FLUSHDB").arg(flushing_mode.into()))
+        prepare_command(
+            self,
+            cmd("FLUSHDB").arg(flushing_mode.into()).cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// Delete all the keys of all the existing databases, not just the currently selected one.
@@ -603,7 +648,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("FLUSHALL").arg(flushing_mode.into()))
+        prepare_command(
+            self,
+            cmd("FLUSHALL").arg(flushing_mode.into()).cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// This command returns information and statistics about the server
@@ -613,7 +665,14 @@ pub trait ServerCommands<'a>: Sized {
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
     fn info<R: Response>(self, sections: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("INFO").arg(sections))
+        prepare_command(
+            self,
+            cmd("INFO").arg(sections).cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// Return the UNIX TIME of the last DB save executed with success.
@@ -640,7 +699,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("LATENCY").arg("DOCTOR"))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("DOCTOR").cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// Produces an ASCII-art style graph for the specified event.
@@ -655,7 +721,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("LATENCY").arg("GRAPH").arg(event))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("GRAPH").arg(event).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// The command returns a helpful text describing the different LATENCY subcommands.
@@ -702,7 +775,14 @@ pub trait ServerCommands<'a>: Sized {
         self,
         commands: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LATENCY").arg("HISTOGRAM").arg(commands))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("HISTOGRAM").arg(commands).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// This command returns the raw data of the event's latency spikes time series.
@@ -719,7 +799,14 @@ pub trait ServerCommands<'a>: Sized {
         self,
         event: LatencyHistoryEvent,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LATENCY").arg("HISTORY").arg(event))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("HISTORY").arg(event).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// This command reports the latest latency events logged.
@@ -739,7 +826,14 @@ pub trait ServerCommands<'a>: Sized {
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
     fn latency_latest<R: Response>(self) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LATENCY").arg("LATEST"))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("LATEST").cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// This command resets the latency spikes time series of all, or only some, events.
@@ -751,7 +845,14 @@ pub trait ServerCommands<'a>: Sized {
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
     fn latency_reset(self, events: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LATENCY").arg("RESET").arg(events))
+        prepare_command(
+            self,
+            cmd("LATENCY").arg("RESET").arg(events).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AggSum,
+                1,
+            ),
+        )
     }
 
     /// The LOLWUT command displays the Redis version: however as a side effect of doing so,
@@ -783,7 +884,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("MEMORY").arg("DOCTOR"))
+        prepare_command(
+            self,
+            cmd("MEMORY").arg("DOCTOR").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// The command returns a helpful text describing the different MEMORY subcommands.
@@ -831,7 +939,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("MEMORY").arg("MALLOC-STATS"))
+        prepare_command(
+            self,
+            cmd("MEMORY").arg("MALLOC-STATS").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// This command attempts to purge dirty pages so these can be reclaimed by the allocator.
@@ -843,7 +958,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("MEMORY").arg("PURGE"))
+        prepare_command(
+            self,
+            cmd("MEMORY").arg("PURGE").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// This command returns information about the memory usage of the server.
@@ -858,7 +980,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("MEMORY").arg("STATS"))
+        prepare_command(
+            self,
+            cmd("MEMORY").arg("STATS").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::Special,
+                1,
+            ),
+        )
     }
 
     /// This command reports the number of bytes that a key and its value require to be stored in RAM.
@@ -874,7 +1003,7 @@ pub trait ServerCommands<'a>: Sized {
         key: impl Serialize,
         options: MemoryUsageOptions,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
-        prepare_command(self, cmd("MEMORY").arg("USAGE").arg(key).arg(options))
+        prepare_command(self, cmd("MEMORY").arg("USAGE").key(key).arg(options))
     }
 
     /// Returns information about the modules loaded to the server.
@@ -982,7 +1111,13 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("SLOWLOG").arg("GET").arg(options))
+        prepare_command(
+            self,
+            cmd("SLOWLOG")
+                .arg("GET")
+                .arg(options)
+                .cluster_info(RequestPolicy::AllNodes, None, 1),
+        )
     }
 
     /// The command returns a helpful text describing the different SLOWLOG subcommands.
@@ -1027,7 +1162,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("SLOWLOG").arg("LEN"))
+        prepare_command(
+            self,
+            cmd("SLOWLOG").arg("LEN").cluster_info(
+                RequestPolicy::AllShards,
+                ResponsePolicy::AggSum,
+                1,
+            ),
+        )
     }
 
     /// This command resets the slow log, clearing all entries in it.
@@ -1039,7 +1181,14 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("SLOWLOG").arg("RESET"))
+        prepare_command(
+            self,
+            cmd("SLOWLOG").arg("RESET").cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// This command swaps two Redis databases,

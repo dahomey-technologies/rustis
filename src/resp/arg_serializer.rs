@@ -1,3 +1,4 @@
+use crate::resp::ArgLayout;
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
@@ -6,14 +7,14 @@ use smallvec::SmallVec;
 
 pub struct ArgSerializer<'a> {
     buffer: &'a mut BytesMut,
-    args_layout: Option<&'a mut SmallVec<[(usize, usize); 10]>>,
+    args_layout: Option<&'a mut SmallVec<[ArgLayout; 10]>>,
 }
 
 impl<'a> ArgSerializer<'a> {
     #[inline]
-    pub fn new(
+    pub(crate) fn new(
         buffer: &'a mut BytesMut,
-        args_layout: &'a mut SmallVec<[(usize, usize); 10]>,
+        args_layout: &'a mut SmallVec<[ArgLayout; 10]>,
     ) -> Self {
         Self {
             buffer,
@@ -67,7 +68,12 @@ impl<'a> ArgSerializer<'a> {
 
         // 5. Update the layout index
         if let Some(ref mut layout) = self.args_layout {
-            layout.push((start_pos, data_len));
+            layout.push(ArgLayout {
+                start: start_pos as u64,
+                len: data_len as u32,
+                slot: 0,
+                flags: 0,
+            });
         }
     }
 }

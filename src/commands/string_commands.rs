@@ -1,5 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
+    commands::{RequestPolicy, ResponsePolicy},
     resp::{Response, cmd},
 };
 use serde::{
@@ -28,7 +29,7 @@ pub trait StringCommands<'a>: Sized {
         key: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("APPEND").arg(key).arg(value))
+        prepare_command(self, cmd("APPEND").key(key).arg(value))
     }
 
     /// Decrements the number stored at key by one.
@@ -45,7 +46,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/decr/>](https://redis.io/commands/decr/)
     #[must_use]
     fn decr(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("DECR").arg(key))
+        prepare_command(self, cmd("DECR").key(key))
     }
 
     /// Decrements the number stored at key by one.
@@ -62,7 +63,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/decrby/>](https://redis.io/commands/decrby/)
     #[must_use]
     fn decrby(self, key: impl Serialize, decrement: i64) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("DECRBY").arg(key).arg(decrement))
+        prepare_command(self, cmd("DECRBY").key(key).arg(decrement))
     }
 
     /// Get the value of key.
@@ -111,7 +112,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
     fn get<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GET").arg(key))
+        prepare_command(self, cmd("GET").key(key))
     }
 
     /// Get the value of key and delete the key.
@@ -126,7 +127,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
     fn getdel<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETDEL").arg(key))
+        prepare_command(self, cmd("GETDEL").key(key))
     }
 
     /// Get the value of key and optionally set its expiration. GETEX is similar to GET, but is a write command with additional options.
@@ -174,7 +175,7 @@ pub trait StringCommands<'a>: Sized {
         key: impl Serialize,
         options: GetExOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETEX").arg(key).arg(options))
+        prepare_command(self, cmd("GETEX").key(key).arg(options))
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -220,7 +221,7 @@ pub trait StringCommands<'a>: Sized {
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETRANGE").arg(key).arg(start).arg(end))
+        prepare_command(self, cmd("GETRANGE").key(key).arg(start).arg(end))
     }
 
     /// Atomically sets key to value and returns the old value stored at key.
@@ -238,7 +239,7 @@ pub trait StringCommands<'a>: Sized {
         key: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETSET").arg(key).arg(value))
+        prepare_command(self, cmd("GETSET").key(key).arg(value))
     }
 
     /// Increments the number stored at key by one.
@@ -261,7 +262,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/incr/>](https://redis.io/commands/incr/)
     #[must_use]
     fn incr(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("INCR").arg(key))
+        prepare_command(self, cmd("INCR").key(key))
     }
 
     /// Increments the number stored at key by increment.
@@ -280,7 +281,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/incrby/>](https://redis.io/commands/incrby/)
     #[must_use]
     fn incrby(self, key: impl Serialize, increment: i64) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("INCRBY").arg(key).arg(increment))
+        prepare_command(self, cmd("INCRBY").key(key).arg(increment))
     }
 
     ///Increment the string representing a floating point number stored at key by the specified increment.
@@ -310,7 +311,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/incrbyfloat/>](https://redis.io/commands/incrbyfloat/)
     #[must_use]
     fn incrbyfloat(self, key: impl Serialize, increment: f64) -> PreparedCommand<'a, Self, f64> {
-        prepare_command(self, cmd("INCRBYFLOAT").arg(key).arg(increment))
+        prepare_command(self, cmd("INCRBYFLOAT").key(key).arg(increment))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -326,7 +327,7 @@ pub trait StringCommands<'a>: Sized {
         key1: impl Serialize,
         key2: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LCS").arg(key1).arg(key2))
+        prepare_command(self, cmd("LCS").key(key1).arg(key2))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -342,7 +343,7 @@ pub trait StringCommands<'a>: Sized {
         key1: impl Serialize,
         key2: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LCS").arg(key1).arg(key2).arg("LEN"))
+        prepare_command(self, cmd("LCS").key(key1).key(key2).arg("LEN"))
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -365,8 +366,8 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("LCS")
-                .arg(key1)
-                .arg(key2)
+                .key(key1)
+                .key(key2)
                 .arg("IDX")
                 .arg(min_match_len.map(|len| ("MINMATCHLEN", len)))
                 .arg_if(with_match_len, "WITHMATCHLEN"),
@@ -385,7 +386,12 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
     fn mget<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("MGET").arg(keys))
+        prepare_command(
+            self,
+            cmd("MGET")
+                .key(keys)
+                .cluster_info(RequestPolicy::MultiShard, None, 1),
+        )
     }
 
     /// Sets the given keys to their respective values.
@@ -397,7 +403,39 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
     #[must_use]
     fn mset(self, items: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("MSET").arg(items))
+        prepare_command(
+            self,
+            cmd("MSET").key_with_step(items, 2).cluster_info(
+                RequestPolicy::MultiShard,
+                ResponsePolicy::AllSucceeded,
+                2,
+            ),
+        )
+    }
+
+    /// Atomically sets multiple string keys with an optional shared expiration in a single operation.
+    ///
+    /// # Return
+    /// * `false` - if none of the keys were set
+    /// * `true` - if all of the keys were set.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
+    #[must_use]
+    fn msetex<'b>(
+        self,
+        items: impl Serialize,
+        condition: impl Into<Option<SetCondition<'b>>>,
+        expiration: impl Into<Option<SetExpiration>>,
+    ) -> PreparedCommand<'a, Self, bool> {
+        prepare_command(
+            self,
+            cmd("MSETEX")
+                .key_with_step(items, 2)
+                .arg(condition.into())
+                .arg(expiration.into())
+                .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AllSucceeded, 2),
+        )
     }
 
     /// Sets the given keys to their respective values.
@@ -419,7 +457,12 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
     fn msetnx(self, items: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("MSETNX").arg(items))
+        prepare_command(
+            self,
+            cmd("MSETNX")
+                .key_with_step(items, 2)
+                .cluster_info(None, None, 2),
+        )
     }
 
     /// Works exactly like [setex](StringCommands::setex) with the sole
@@ -437,7 +480,7 @@ pub trait StringCommands<'a>: Sized {
         milliseconds: u64,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("PSETEX").arg(key).arg(milliseconds).arg(value))
+        prepare_command(self, cmd("PSETEX").key(key).arg(milliseconds).arg(value))
     }
 
     ///Set key to hold the string value.
@@ -449,7 +492,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SET").arg(key).arg(value))
+        prepare_command(self, cmd("SET").key(key).arg(value))
     }
 
     /// Set key to hold the string value.
@@ -472,7 +515,7 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("SET")
-                .arg(key)
+                .key(key)
                 .arg(value)
                 .arg(condition.into())
                 .arg(expiration.into()),
@@ -494,7 +537,7 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("SET")
-                .arg(key)
+                .key(key)
                 .arg(value)
                 .arg(condition.into())
                 .arg("GET")
@@ -513,7 +556,7 @@ pub trait StringCommands<'a>: Sized {
         seconds: u64,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SETEX").arg(key).arg(seconds).arg(value))
+        prepare_command(self, cmd("SETEX").key(key).arg(seconds).arg(value))
     }
 
     /// Set key to hold string value if key does not exist.
@@ -531,7 +574,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
     #[must_use]
     fn setnx(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("SETNX").arg(key).arg(value))
+        prepare_command(self, cmd("SETNX").key(key).arg(value))
     }
 
     /// Overwrites part of the string stored at key,
@@ -550,7 +593,7 @@ pub trait StringCommands<'a>: Sized {
         offset: usize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SETRANGE").arg(key).arg(offset).arg(value))
+        prepare_command(self, cmd("SETRANGE").key(key).arg(offset).arg(value))
     }
 
     /// Returns the length of the string value stored at key.
@@ -564,7 +607,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
     fn strlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("STRLEN").arg(key))
+        prepare_command(self, cmd("STRLEN").key(key))
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -610,7 +653,7 @@ pub trait StringCommands<'a>: Sized {
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SUBSTR").arg(key).arg(start).arg(end))
+        prepare_command(self, cmd("SUBSTR").key(key).arg(start).arg(end))
     }
 }
 

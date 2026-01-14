@@ -21,7 +21,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SADD").arg(key).arg(members))
+        prepare_command(self, cmd("SADD").key(key).arg(members))
     }
 
     /// Returns the set cardinality (number of elements) of the set stored at key.
@@ -33,7 +33,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/scard/>](https://redis.io/commands/scard/)
     #[must_use]
     fn scard(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SCARD").arg(key))
+        prepare_command(self, cmd("SCARD").key(key))
     }
 
     /// Returns the members of the set resulting from the difference
@@ -46,7 +46,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sdiff/>](https://redis.io/commands/sdiff/)
     #[must_use]
     fn sdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SDIFF").arg(keys))
+        prepare_command(self, cmd("SDIFF").key(keys))
     }
 
     /// This command is equal to [sdiff](SetCommands::sdiff), but instead of returning the resulting set,
@@ -63,7 +63,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SDIFFSTORE").arg(destination).arg(keys))
+        prepare_command(self, cmd("SDIFFSTORE").arg(destination).key(keys))
     }
 
     /// Returns the members of the set resulting from the intersection of all the given sets.
@@ -75,7 +75,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sinter/>](https://redis.io/commands/sinter/)
     #[must_use]
     fn sinter<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SINTER").arg(keys))
+        prepare_command(self, cmd("SINTER").key(keys))
     }
 
     /// This command is similar to [sinter](SetCommands::sinter), but instead of returning the result set,
@@ -94,7 +94,7 @@ pub trait SetCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("SINTERCARD")
-                .arg_with_count(keys)
+                .key_with_count(keys)
                 .arg("LIMIT")
                 .arg(limit),
         )
@@ -114,7 +114,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SINTERSTORE").arg(destination).arg(keys))
+        prepare_command(self, cmd("SINTERSTORE").arg(destination).key(keys))
     }
 
     /// Returns if member is a member of the set stored at key.
@@ -131,7 +131,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("SISMEMBER").arg(key).arg(member))
+        prepare_command(self, cmd("SISMEMBER").key(key).arg(member))
     }
 
     /// Returns all the members of the set value stored at key.
@@ -140,7 +140,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/smembers/>](https://redis.io/commands/smembers/)
     #[must_use]
     fn smembers<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SMEMBERS").arg(key))
+        prepare_command(self, cmd("SMEMBERS").key(key))
     }
 
     /// Returns whether each member is a member of the set stored at key.
@@ -156,7 +156,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SMISMEMBER").arg(key).arg(members))
+        prepare_command(self, cmd("SMISMEMBER").key(key).arg(members))
     }
 
     /// Move member from the set at source to the set at destination.
@@ -174,7 +174,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("SMOVE").arg(source).arg(destination).arg(member))
+        prepare_command(self, cmd("SMOVE").key(source).key(destination).arg(member))
     }
 
     /// Removes and returns one or more random members from the set value store at key.
@@ -186,7 +186,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/spop/>](https://redis.io/commands/spop/)
     #[must_use]
     fn spop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SPOP").arg(key).arg(count))
+        prepare_command(self, cmd("SPOP").key(key).arg(count))
     }
 
     /// Removes and returns one or more random members from the set value store at key.
@@ -202,7 +202,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         count: usize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SRANDMEMBER").arg(key).arg(count))
+        prepare_command(self, cmd("SRANDMEMBER").key(key).arg(count))
     }
 
     /// Remove the specified members from the set stored at key.
@@ -218,7 +218,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SREM").arg(key).arg(members))
+        prepare_command(self, cmd("SREM").key(key).arg(members))
     }
 
     /// Iterates elements of Sets types.
@@ -235,7 +235,7 @@ pub trait SetCommands<'a>: Sized {
         cursor: u64,
         options: SScanOptions,
     ) -> PreparedCommand<'a, Self, (u64, R)> {
-        prepare_command(self, cmd("SSCAN").arg(key).arg(cursor).arg(options))
+        prepare_command(self, cmd("SSCAN").key(key).arg(cursor).arg(options))
     }
 
     /// Returns the members of the set resulting from the union of all the given sets.
@@ -247,7 +247,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sunion/>](https://redis.io/commands/sunion/)
     #[must_use]
     fn sunion<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SUNION").arg(keys))
+        prepare_command(self, cmd("SUNION").key(keys))
     }
 
     /// This command is equal to [sunion](SetCommands::sunion), but instead of returning the resulting set,
@@ -264,7 +264,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SUNIONSTORE").arg(destination).arg(keys))
+        prepare_command(self, cmd("SUNIONSTORE").key(destination).key(keys))
     }
 }
 

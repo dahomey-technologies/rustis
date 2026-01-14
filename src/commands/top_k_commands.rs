@@ -30,7 +30,7 @@ pub trait TopKCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.ADD").arg(key).arg(items))
+        prepare_command(self, cmd("TOPK.ADD").key(key).arg(items))
     }
 
     /// Increase the score of an item in the data structure by increment.
@@ -57,7 +57,7 @@ pub trait TopKCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.INCRBY").arg(key).arg(items))
+        prepare_command(self, cmd("TOPK.INCRBY").key(key).arg(items))
     }
 
     /// Returns number of required items (k), width, depth and decay values.
@@ -72,7 +72,7 @@ pub trait TopKCommands<'a>: Sized {
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
     fn topk_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, TopKInfoResult> {
-        prepare_command(self, cmd("TOPK.INFO").arg(key))
+        prepare_command(self, cmd("TOPK.INFO").key(key))
     }
 
     /// Return full list of items in Top K list.
@@ -87,7 +87,7 @@ pub trait TopKCommands<'a>: Sized {
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
     fn topk_list<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.LIST").arg(key))
+        prepare_command(self, cmd("TOPK.LIST").key(key))
     }
 
     /// Return full list of items in Top K list.
@@ -107,7 +107,7 @@ pub trait TopKCommands<'a>: Sized {
         self,
         key: impl Serialize,
     ) -> PreparedCommand<'a, Self, TopKListWithCountResult<R>> {
-        prepare_command(self, cmd("TOPK.LIST").arg(key).arg("WITHCOUNT"))
+        prepare_command(self, cmd("TOPK.LIST").key(key).arg("WITHCOUNT"))
     }
 
     /// Return full list of items in Top K list.
@@ -129,7 +129,7 @@ pub trait TopKCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.QUERY").arg(key).arg(items))
+        prepare_command(self, cmd("TOPK.QUERY").key(key).arg(items))
     }
 
     /// Initializes a TopK with specified parameters.
@@ -156,7 +156,7 @@ pub trait TopKCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TOPK.RESERVE")
-                .arg(key)
+                .key(key)
                 .arg(topk)
                 .arg(width_depth_decay),
         )

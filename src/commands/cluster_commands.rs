@@ -193,7 +193,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// [<https://redis.io/commands/cluster-keyslot/>](https://redis.io/commands/cluster-keyslot/)
     #[must_use]
     fn cluster_keyslot(self, key: impl Serialize) -> PreparedCommand<'a, Self, u16> {
-        prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").arg(key))
+        prepare_command(self, cmd("CLUSTER").arg("KEYSLOT").key(key))
     }
 
     /// Each node in a Redis Cluster maintains a pair of long-lived TCP link with each peer in the cluster:

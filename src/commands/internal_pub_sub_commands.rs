@@ -33,7 +33,7 @@ pub(crate) trait InternalPubSubCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sunsubscribe//>](https://redis.io/commands/sunsubscribe//)            
     fn sunsubscribe(self, shardchannels: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SUNSUBSCRIBE").arg(shardchannels))
+        prepare_command(self, cmd("SUNSUBSCRIBE").key(shardchannels))
     }
 
     /// Unsubscribes the client from the given channels, or from all of them if none is given.

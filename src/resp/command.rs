@@ -1,5 +1,9 @@
-use crate::resp::{ArgCounter, ArgSerializer, CommandArgsIterator};
+use crate::{
+    commands::{RequestPolicy, ResponsePolicy},
+    resp::{ArgCounter, ArgSerializer},
+};
 use bytes::{BufMut, Bytes, BytesMut};
+use memchr::memchr;
 use serde::Serialize;
 use smallvec::SmallVec;
 #[cfg(debug_assertions)]
@@ -48,9 +52,48 @@ pub(crate) enum CommandKind {
     Reset,
 }
 
+/// Represents the memory layout and metadata of a single Redis command argument.
+///
+/// This structure is packed into 128 bits (16 bytes) to minimize its footprint.
+#[derive(Debug, Clone, Copy, Default)]
+#[repr(C)]
+pub(crate) struct ArgLayout {
+    /// The starting position of the argument data within the command's internal buffer.
+    pub start: u64,
+
+    /// The length of the argument data in bytes.
+    /// Redis limits bulk strings to 512MB, so `u32` is more than sufficient.
+    pub len: u32,
+
+    /// The CRC16 hash slot (0-16383) calculated for this argument.
+    /// This is pre-calculated by the client thread to allow O(1) routing
+    /// in Cluster mode without further CPU overhead in the network thread.
+    pub slot: u16,
+
+    /// Bitwise flags for argument properties.
+    /// - Bit 0: `IS_KEY` (indicates if the argument is a Redis key for routing).
+    /// - Remaining bits: Reserved for future use (e.g., compression, encryption).
+    pub flags: u16,
+}
+
+impl ArgLayout {
+    /// Flag indicating that this argument is a Redis key.
+    const IS_KEY: u16 = 1 << 0;
+
+    #[inline(always)]
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.start as usize..self.start as usize + self.len as usize
+    }
+
+    #[inline(always)]
+    pub fn is_key(&self) -> bool {
+        self.flags & Self::IS_KEY != 0
+    }
+}
+
 impl<'a> From<&'a Command> for CommandKind {
     fn from(command: &'a Command) -> Self {
-        match command.get_name().as_ref() {
+        match command.name().as_ref() {
             b"UNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Channel),
             b"PUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Pattern),
             b"SUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::ShardChannel),
@@ -72,22 +115,29 @@ pub struct Command {
     buffer: Bytes,
     kind: CommandKind,
     name_layout: (usize, usize),
-    args_layout: SmallVec<[(usize, usize); 10]>,
+    args_layout: SmallVec<[ArgLayout; 10]>,
     #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: usize,
     #[cfg(debug_assertions)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
+    request_policy: Option<RequestPolicy>,
+    response_policy: Option<ResponsePolicy>,
+    key_step: u8,
 }
 
 impl Command {
-    pub fn new(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
         buffer: Bytes,
         name_layout: (usize, usize),
-        args_layout: SmallVec<[(usize, usize); 10]>,
+        args_layout: SmallVec<[ArgLayout; 10]>,
         #[cfg(debug_assertions)] kill_connection_on_write: usize,
         #[cfg(debug_assertions)] command_seq: usize,
+        request_policy: Option<RequestPolicy>,
+        response_policy: Option<ResponsePolicy>,
+        key_step: u8,
     ) -> Self {
         let mut this = Self {
             buffer,
@@ -98,39 +148,73 @@ impl Command {
             kill_connection_on_write,
             #[cfg(debug_assertions)]
             command_seq,
+            request_policy,
+            response_policy,
+            key_step,
         };
 
         this.kind = CommandKind::from(&this);
         this
     }
 
-    pub fn get_bytes(&self) -> &Bytes {
+    pub fn bytes(&self) -> &Bytes {
         &self.buffer
     }
 
-    pub(crate) fn get_kind(&self) -> &CommandKind {
+    pub(crate) fn kind(&self) -> &CommandKind {
         &self.kind
     }
 
-    pub fn get_name(&self) -> Bytes {
+    pub fn name(&self) -> Bytes {
         let (start, len) = self.name_layout;
         self.buffer.slice(start..start + len)
     }
 
     pub fn get_arg(&self, index: usize) -> Option<Bytes> {
-        let (start, len) = *self.args_layout.get(index)?;
-        Some(self.buffer.slice(start..start + len))
+        let arg_layout = *self.args_layout.get(index)?;
+        Some(self.buffer.slice(arg_layout.range()))
     }
 
     pub fn num_args(&self) -> usize {
         self.args_layout.len()
     }
 
-    pub fn args<'a>(&'a self) -> CommandArgsIterator<'a> {
-        CommandArgsIterator {
-            buffer: self.buffer.clone(),
-            layout_iter: self.args_layout.iter(),
-        }
+    pub(crate) fn args_for_cluster(&self) -> impl Iterator<Item = (Bytes, bool, u16)> {
+        self.args_layout
+            .iter()
+            .map(|al| (self.buffer.slice(al.range()), al.is_key(), al.slot))
+    }
+
+    pub fn args(&self) -> impl DoubleEndedIterator<Item = Bytes> {
+        self.args_layout
+            .iter()
+            .map(|al| self.buffer.slice(al.range()))
+    }
+
+    pub fn keys(&self) -> impl DoubleEndedIterator<Item = Bytes> {
+        self.args_layout
+            .iter()
+            .filter(|&al| al.is_key())
+            .map(|al| self.buffer.slice(al.range()))
+    }
+
+    pub fn slots(&self) -> impl DoubleEndedIterator<Item = u16> {
+        self.args_layout
+            .iter()
+            .filter(|&al| al.is_key())
+            .map(|al| al.slot)
+    }
+
+    pub fn request_policy(&self) -> Option<RequestPolicy> {
+        self.request_policy.clone()
+    }
+
+    pub fn response_policy(&self) -> Option<ResponsePolicy> {
+        self.response_policy.clone()
+    }
+
+    pub fn key_step(&self) -> usize {
+        self.key_step as usize
     }
 }
 
@@ -150,7 +234,7 @@ impl Hash for Command {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        String::from_utf8_lossy(&self.get_name()).fmt(f)?;
+        String::from_utf8_lossy(&self.name()).fmt(f)?;
         for arg in self.args() {
             f.write_char(' ')?;
             String::from_utf8_lossy(&arg).fmt(f)?;
@@ -173,13 +257,16 @@ pub struct CommandBuilder {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[(usize, usize); 10]>,
+    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
     #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: usize,
     #[cfg(debug_assertions)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
+    pub(crate) request_policy: Option<RequestPolicy>,
+    pub(crate) response_policy: Option<ResponsePolicy>,
+    pub(crate) key_step: u8,
 }
 
 impl CommandBuilder {
@@ -211,6 +298,9 @@ impl CommandBuilder {
             kill_connection_on_write: 0,
             #[cfg(debug_assertions)]
             command_seq: COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
+            request_policy: None,
+            response_policy: None,
+            key_step: 0,
         }
     }
 
@@ -238,7 +328,8 @@ impl CommandBuilder {
     /// then writes the count, then writes the elements.
     ///
     /// Zero Allocation strategy.
-    #[inline]
+    #[must_use]
+    #[inline(always)]
     pub fn arg_with_count(mut self, arg: impl Serialize) -> Self {
         // 1. Dry Run (CPU only, No Alloc)
         let mut counter = ArgCounter::default();
@@ -251,6 +342,8 @@ impl CommandBuilder {
         self.arg(arg)
     }
 
+    #[must_use]
+    #[inline(always)]
     pub fn arg_labeled(self, label: &'static str, arg: impl Serialize) -> Self {
         // 1. Dry Run (CPU only, No Alloc)
         let mut counter = ArgCounter::default();
@@ -264,10 +357,81 @@ impl CommandBuilder {
         }
     }
 
+    /// Adds a Key argument and calculates its CRC16 slot immediately.
+    #[must_use]
+    #[inline(always)]
+    pub fn key(mut self, key: impl Serialize) -> Self {
+        let old_len = self.args_layout.len();
+        self = self.arg(key);
+        let new_len = self.args_layout.len();
+
+        for layout in &mut self.args_layout[old_len..new_len] {
+            layout.flags |= ArgLayout::IS_KEY;
+            let key_bytes = &self.buffer[layout.range()];
+            layout.slot = hash_slot(key_bytes);
+        }
+
+        self
+    }
+
+    /// Adds a collection or single key prefixed by its element count.
+    ///
+    /// Uses a "Dry Run" (ArgCounter) to calculate the exact number of RESP
+    /// arguments the collection produces (handling flattened maps/structs),
+    /// then writes the count, then writes the elements.
+    ///
+    /// Zero Allocation strategy.
+    #[must_use]
+    #[inline(always)]
+    pub fn key_with_count(mut self, keys: impl Serialize) -> Self {
+        let old_len = self.args_layout.len();
+        self = self.arg_with_count(keys);
+        let new_len = self.args_layout.len();
+
+        for layout in &mut self.args_layout[old_len + 1..new_len] {
+            layout.flags |= ArgLayout::IS_KEY;
+            let key_bytes = &self.buffer[layout.range()];
+            layout.slot = hash_slot(key_bytes);
+        }
+
+        self
+    }
+
+    /// Serializes a collection and marks elements as keys based on a step.
+    /// Example: for JSON.MSET, step is 3 (Key, Path, Value).
+    #[must_use]
+    #[inline(always)]
+    pub fn key_with_step(mut self, args: impl Serialize, step: usize) -> Self {
+        let old_len = self.args_layout.len();
+        self = self.arg(args);
+        let new_len = self.args_layout.len();
+
+        for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
+            layout.flags |= ArgLayout::IS_KEY;
+            let key_bytes = &self.buffer[layout.range()];
+            layout.slot = hash_slot(key_bytes);
+        }
+
+        self
+    }
+
     #[cfg(debug_assertions)]
-    #[inline]
+    #[inline(always)]
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {
         self.kill_connection_on_write = num_kills;
+        self
+    }
+
+    #[inline(always)]
+    pub fn cluster_info(
+        mut self,
+        request_policy: impl Into<Option<RequestPolicy>>,
+        response_policy: impl Into<Option<ResponsePolicy>>,
+        key_step: u8,
+    ) -> Self {
+        self.request_policy = request_policy.into();
+        self.response_policy = response_policy.into();
+        self.key_step = key_step;
         self
     }
 }
@@ -312,7 +476,7 @@ impl From<CommandBuilder> for Command {
         command_builder
             .args_layout
             .iter_mut()
-            .for_each(|(s, _l)| *s -= start_pos);
+            .for_each(|arg_layout| arg_layout.start -= start_pos as u64);
 
         Command::new(
             bytes,
@@ -325,8 +489,28 @@ impl From<CommandBuilder> for Command {
             command_builder.kill_connection_on_write,
             #[cfg(debug_assertions)]
             command_builder.command_seq,
+            command_builder.request_policy,
+            command_builder.response_policy,
+            command_builder.key_step,
         )
     }
+}
+
+/// Implement hash_slot algorithm
+/// see. https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags
+fn hash_slot(mut key: &[u8]) -> u16 {
+    // { found
+    if let Some(s) = memchr(b'{', key) {
+        // } found
+        if let Some(e) = memchr(b'}', &key[s + 1..]) {
+            // hash tag non empty
+            if e != 0 {
+                key = &key[s + 1..s + 1 + e];
+            }
+        }
+    }
+
+    crc16::State::<crc16::XMODEM>::calculate(key) % 16384
 }
 
 #[cfg(test)]
@@ -337,14 +521,14 @@ mod tests {
     fn command() {
         let command: Command = cmd("SET").arg("key").arg("value").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"SET", command.get_name().as_ref());
+        assert_eq!(b"SET", command.name().as_ref());
         assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
         assert_eq!(None, command.get_arg(2));
 
         let command: Command = cmd("EVAL").arg("return ARGV[1]").arg(0).arg("HELLO").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"EVAL", command.get_name().as_ref());
+        assert_eq!(b"EVAL", command.name().as_ref());
         assert_eq!(Some(&b"return ARGV[1]"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"0"[..]), command.get_arg(1).as_deref());
         assert_eq!(Some(&b"HELLO"[..]), command.get_arg(2).as_deref());

@@ -364,7 +364,7 @@ impl Client {
             .collect();
 
         let message = Message::pub_sub(
-            cmd("SSUBSCRIBE").arg(shardchannels).into(),
+            cmd("SSUBSCRIBE").key(shardchannels).into(),
             result_sender,
             SubscriptionType::ShardChannel,
             pub_sub_senders,

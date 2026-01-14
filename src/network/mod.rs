@@ -1,6 +1,5 @@
 mod async_executor_strategy;
 mod cluster_connection;
-mod command_info_manager;
 mod connection;
 mod network_handler;
 mod reconnection_state;
@@ -11,7 +10,6 @@ mod version;
 
 pub(crate) use async_executor_strategy::*;
 pub(crate) use cluster_connection::*;
-pub(crate) use command_info_manager::*;
 pub(crate) use connection::*;
 pub(crate) use network_handler::*;
 pub(crate) use reconnection_state::*;

@@ -40,8 +40,6 @@ services:
       interval: 1s
     command: >
       redis-server --port 6381
-      --replica-announce-ip host.docker.internal 
-      --replica-announce-port 6381
 
   redis-sentinel-replica:
     image: redis:alpine
@@ -53,45 +51,31 @@ services:
       test: ["CMD", "redis-cli", "-p", "6382", "ping"]
       interval: 1s
     command: >
-      redis-server --port 6382 
-      --replicaof host.docker.internal 6381 
-      --slave-announce-ip host.docker.internal
-      --replica-announce-port 6382
+      redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
     depends_on:
       redis-sentinel-master: { condition: service_healthy }
 
   redis-sentinel1:
     image: redis:alpine
     container_name: redis-sentinel1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: on-failure:20
     ports:
       - "26379:26379"
-    links:
-      - redis-sentinel-master:redis-sentinel-master
     depends_on:
       redis-sentinel-master: { condition: service_healthy }
     command: >
       sh -c "
-      echo 'Waiting for redis-sentinel-master DNS...';
-      until ping -c 1 redis-sentinel-master; do sleep 1; done;
-      echo 'DNS is ready!';
       echo 'port 26379' > /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice host.docker.internal 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26379' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-ip host.docker.internal' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-port 26379' >> /tmp/sentinel.conf;
-      echo 'sentinel resolve-hostnames yes' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-hostnames yes' >> /tmp/sentinel.conf;
       redis-sentinel /tmp/sentinel.conf"
 
   redis-sentinel2:
     image: redis:alpine
     container_name: redis-sentinel2
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: on-failure:20
     ports:
       - "26380:26380"
@@ -101,24 +85,17 @@ services:
       redis-sentinel-master: { condition: service_healthy }
     command: >
       sh -c "
-      echo 'Waiting for redis-sentinel-master DNS...';
-      until ping -c 1 redis-sentinel-master; do sleep 1; done;
-      echo 'DNS is ready!';
       echo 'port 26380' > /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice host.docker.internal 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26380' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-ip host.docker.internal' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-port 26380' >> /tmp/sentinel.conf;
-      echo 'sentinel resolve-hostnames yes' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-hostnames yes' >> /tmp/sentinel.conf;
-      redis-sentinel /tmp/sentinel.conf"
+      redis-server /tmp/sentinel.conf --sentinel"
 
   redis-sentinel3:
     image: redis:alpine
     container_name: redis-sentinel3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: on-failure:20
     ports:
       - "26381:26381"
@@ -128,24 +105,19 @@ services:
       redis-sentinel-master: { condition: service_healthy }
     command: >
       sh -c "
-      echo 'Waiting for redis-sentinel-master DNS...';
-      until ping -c 1 redis-sentinel-master; do sleep 1; done;
-      echo 'DNS is ready!';
       echo 'port 26381' > /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice host.docker.internal 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26381' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-ip host.docker.internal' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-port 26381' >> /tmp/sentinel.conf;
-      echo 'sentinel resolve-hostnames yes' >> /tmp/sentinel.conf;
-      echo 'sentinel announce-hostnames yes' >> /tmp/sentinel.conf;
-      redis-sentinel /tmp/sentinel.conf"
+      redis-server /tmp/sentinel.conf --sentinel"
 
 # Cluster
   cluster-init:
     image: redis:alpine
     container_name: cluster-init
-    extra_hosts: ["host.docker.internal:host-gateway"]
+    command: redis-cli --cluster create "${HOST_IP}":7000 "${HOST_IP}":7001 "${HOST_IP}":7002 "${HOST_IP}":7003 "${HOST_IP}":7004 "${HOST_IP}":7005 --cluster-replicas 1 --cluster-yes
     depends_on:
       redis-node1: { condition: service_healthy }
       redis-node2: { condition: service_healthy }
@@ -153,18 +125,10 @@ services:
       redis-node4: { condition: service_healthy }
       redis-node5: { condition: service_healthy }
       redis-node6: { condition: service_healthy }
-    command: >
-      sh -c "
-      echo 'Creating cluster...' &&
-      redis-cli --cluster create 
-      host.docker.internal:7000 host.docker.internal:7001 host.docker.internal:7002 
-      host.docker.internal:7003 host.docker.internal:7004 host.docker.internal:7005 
-      --cluster-replicas 1 --cluster-yes"
 
   redis-node1:
     image: redis:alpine
     container_name: redis-node1
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7000:7000", "17000:17000"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7000", "ping"]
@@ -174,13 +138,12 @@ services:
     command: >
       redis-server --port 7000 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7000 
-      --cluster-announce-bus-port 17000 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7000 
+      --cluster-announce-bus-port 17000 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node2:
     image: redis:alpine
     container_name: redis-node2
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7001:7001", "17001:17001"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7001", "ping"]
@@ -190,13 +153,12 @@ services:
     command: >
       redis-server --port 7001 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7001 
-      --cluster-announce-bus-port 17001 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7001 
+      --cluster-announce-bus-port 17001 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node3:
     image: redis:alpine
     container_name: redis-node3
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7002:7002", "17002:17002"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7002", "ping"]
@@ -206,13 +168,12 @@ services:
     command: >
       redis-server --port 7002 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7002 
-      --cluster-announce-bus-port 17002 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7002 
+      --cluster-announce-bus-port 17002 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node4:
     image: redis:alpine
     container_name: redis-node4
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7003:7003", "17003:17003"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7003", "ping"]
@@ -222,13 +183,12 @@ services:
     command: >
       redis-server --port 7003 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7003 
-      --cluster-announce-bus-port 17003 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7003 
+      --cluster-announce-bus-port 17003 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node5:
     image: redis:alpine
     container_name: redis-node5
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7004:7004", "17004:17004"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7004", "ping"]
@@ -238,13 +198,12 @@ services:
     command: >
       redis-server --port 7004 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7004 
-      --cluster-announce-bus-port 17004 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7004 
+      --cluster-announce-bus-port 17004 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node6:
     image: redis:alpine
     container_name: redis-node6
-    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["7005:7005", "17005:17005"]
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "7005", "ping"]
@@ -254,6 +213,6 @@ services:
     command: >
       redis-server --port 7005 --cluster-enabled yes 
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
-      --cluster-announce-ip host.docker.internal --cluster-announce-port 7005 
-      --cluster-announce-bus-port 17005 --appendonly yes
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7005 
+      --cluster-announce-bus-port 17005 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
       

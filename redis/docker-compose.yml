@@ -6,9 +6,12 @@ services:
     restart: on-failure:20
     ports:
       - "6379:6379"
-    volumes:
-      - .:/config
-    command: redis-server /config/standalone.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: redis-server --enable-debug-command yes
 
 # TLS
   redis-tls:
@@ -16,175 +19,201 @@ services:
     container_name: redis-tls
     restart: on-failure:20
     ports:
-      - "6380:6379"
+      - "6380:6380"
     volumes:
       - ./certs:/certs
-      - .:/config
-    command: redis-server /config/tls.conf
+    command: >
+      redis-server --port 0 --tls-port 6380
+      --tls-cert-file /certs/redis.crt
+      --tls-key-file /certs/redis.key
+      --tls-ca-cert-file /certs/ca.crt
+      --tls-auth-clients no
+      --requirepass pwd
 
 # Sentinel
-  redis-master:
+  redis-sentinel-master:
     image: redis:alpine
-    container_name: redis-master
-    restart: on-failure:20
-    ports:
+    container_name: redis-sentinel-master
+    ports: 
       - "6381:6381"
-    command: redis-server --port 6381
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6381", "ping"]
+      interval: 1s
+    command: >
+      redis-server --port 6381
 
-  redis-replica:
+  redis-sentinel-replica:
     image: redis:alpine
-    container_name: redis-replica
+    container_name: redis-sentinel-replica
     restart: on-failure:20
     ports:
       - "6382:6382"
-    command: redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6382", "ping"]
+      interval: 1s
+    command: >
+      redis-server --port 6382 --replicaof "${HOST_IP}" 6381 --slave-announce-ip "${HOST_IP}"
     depends_on:
-      - redis-master
+      redis-sentinel-master: { condition: service_healthy }
 
   redis-sentinel1:
-    build:
-      context: .
-      dockerfile: ./sentinel.dockerfile
-    image: redis-sentinel1
+    image: redis:alpine
     container_name: redis-sentinel1
     restart: on-failure:20
     ports:
       - "26379:26379"
     depends_on:
-      - redis-master
-    environment:
-      - PORT=26379
-      - HOST_IP="${HOST_IP}"
+      redis-sentinel-master: { condition: service_healthy }
+    command: >
+      sh -c "
+      echo 'port 26379' > /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26379' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
+      echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
+      redis-sentinel /tmp/sentinel.conf"
 
   redis-sentinel2:
-    build:
-      context: .
-      dockerfile: ./sentinel.dockerfile
-    image: redis-sentinel2
+    image: redis:alpine
     container_name: redis-sentinel2
     restart: on-failure:20
     ports:
-      - "26380:26379"
+      - "26380:26380"
+    links:
+      - redis-sentinel-master:redis-sentinel-master
     depends_on:
-      - redis-master
-    environment:
-      - PORT=26380
-      - HOST_IP="${HOST_IP}"
+      redis-sentinel-master: { condition: service_healthy }
+    command: >
+      sh -c "
+      echo 'port 26380' > /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26380' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
+      echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
+      redis-server /tmp/sentinel.conf --sentinel"
 
   redis-sentinel3:
-    build:
-      context: .
-      dockerfile: ./sentinel.dockerfile
-    image: redis-sentinel3
+    image: redis:alpine
     container_name: redis-sentinel3
     restart: on-failure:20
     ports:
-      - "26381:26379"
+      - "26381:26381"
+    links:
+      - redis-sentinel-master:redis-sentinel-master
     depends_on:
-      - redis-master
-    environment:
-      - PORT=26381
-      - HOST_IP="${HOST_IP}"
+      redis-sentinel-master: { condition: service_healthy }
+    command: >
+      sh -c "
+      echo 'port 26381' > /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26381' >> /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
+      echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
+      echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
+      redis-server /tmp/sentinel.conf --sentinel"
 
 # Cluster
-  redis-cluster:
-      image: 'redis:alpine'
-      command: redis-cli --cluster create "${HOST_IP}":7000 "${HOST_IP}":7001 "${HOST_IP}":7002 "${HOST_IP}":7003 "${HOST_IP}":7004 "${HOST_IP}":7005 --cluster-replicas 1 --cluster-yes
-      container_name: redis-cluster
-      depends_on:
-        - redis-node1
-        - redis-node2
-        - redis-node3
-        - redis-node4
-        - redis-node5
-        - redis-node6
+  cluster-init:
+    image: redis:alpine
+    container_name: cluster-init
+    command: redis-cli --cluster create "${HOST_IP}":7000 "${HOST_IP}":7001 "${HOST_IP}":7002 "${HOST_IP}":7003 "${HOST_IP}":7004 "${HOST_IP}":7005 --cluster-replicas 1 --cluster-yes
+    depends_on:
+      redis-node1: { condition: service_healthy }
+      redis-node2: { condition: service_healthy }
+      redis-node3: { condition: service_healthy }
+      redis-node4: { condition: service_healthy }
+      redis-node5: { condition: service_healthy }
+      redis-node6: { condition: service_healthy }
 
   redis-node1:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node1
+    image: redis:alpine
     container_name: redis-node1
-    restart: on-failure:20
-    ports:
-      - "7000:7000"
-      - "17000:17000"
-    environment:
-      - PORT=7000
-      - BUS_PORT=17000
-      - HOST_IP="${HOST_IP}"
+    ports: ["7000:7000", "17000:17000"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7000", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7000 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7000 
+      --cluster-announce-bus-port 17000 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node2:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node2
+    image: redis:alpine
     container_name: redis-node2
-    restart: on-failure:20
-    ports:
-      - "7001:7001"
-      - "17001:17001"
-    environment:
-      - PORT=7001
-      - BUS_PORT=17001
-      - HOST_IP="${HOST_IP}"
+    ports: ["7001:7001", "17001:17001"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7001", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7001 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7001 
+      --cluster-announce-bus-port 17001 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node3:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node3
+    image: redis:alpine
     container_name: redis-node3
-    restart: on-failure:20
-    ports:
-      - "7002:7002"
-      - "17002:17002"
-    environment:
-      - PORT=7002
-      - BUS_PORT=17002
-      - HOST_IP="${HOST_IP}"
+    ports: ["7002:7002", "17002:17002"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7002", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7002 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7002 
+      --cluster-announce-bus-port 17002 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node4:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node4
+    image: redis:alpine
     container_name: redis-node4
-    restart: on-failure:20
-    ports:
-      - "7003:7003"
-      - "17003:17003"
-    environment:
-      - PORT=7003
-      - BUS_PORT=17003
-      - HOST_IP="${HOST_IP}"
+    ports: ["7003:7003", "17003:17003"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7003", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7003 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7003 
+      --cluster-announce-bus-port 17003 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node5:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node5
+    image: redis:alpine
     container_name: redis-node5
-    restart: on-failure:20
-    ports:
-      - "7004:7004"
-      - "17004:17004"
-    environment:
-      - PORT=7004
-      - BUS_PORT=17004
-      - HOST_IP="${HOST_IP}"
+    ports: ["7004:7004", "17004:17004"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7004", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7004 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7004 
+      --cluster-announce-bus-port 17004 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node6:
-    build:
-      context: .
-      dockerfile: ./cluster.dockerfile
-    image: redis-node6
+    image: redis:alpine
     container_name: redis-node6
-    restart: on-failure:20
-    ports:
-      - "7005:7005"
-      - "17005:17005"
-    environment:
-      - PORT=7005
-      - BUS_PORT=17005
-      - HOST_IP="${HOST_IP}"
+    ports: ["7005:7005", "17005:17005"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7005", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7005 --cluster-enabled yes 
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000 
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7005 
+      --cluster-announce-bus-port 17005 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
+      

@@ -353,6 +353,7 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
 #[serial]
 async fn pub_sub_shardchannels() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
+    pub_sub_client.flushall(FlushingMode::Sync).await?;
 
     // find the master node matching the {1} hashtag
     let slot = pub_sub_client.cluster_keyslot("{1}").await?;

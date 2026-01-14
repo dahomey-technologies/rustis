@@ -28,7 +28,7 @@ rustls = ["dep:rustls"]
 json = ["dep:serde_json"]
 client-cache = ["dep:moka", "dep:dashmap"]
 bench = ["dep:criterion", "dep:fred", "dep:redis"]
-web_examples = ["dep:axum", "dep:actix-web"]
+web-examples = ["dep:axum", "dep:actix-web"]
 
 [dependencies]
 async-std = { version = "1.13", features = ["attributes"], optional = true }
@@ -101,7 +101,7 @@ required-features = ["bench"]
 
 [[example]]
 name = "actix_crud"
-required-features = ["web-examples"]
+required-features = ["webexamples"]
 
 [[example]]
 name = "actix_long_polling_pubsub"

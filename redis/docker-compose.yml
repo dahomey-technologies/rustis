@@ -11,6 +11,7 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+    command: redis-server --enable-debug-command yes
 
 # TLS
   redis-tls:

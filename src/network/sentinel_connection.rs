@@ -32,6 +32,16 @@ impl SentinelConnection {
     }
 
     #[inline]
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+        self.inner_connection.feed(command, retry_reasons).await
+    }
+
+    #[inline]
+    pub async fn flush(&mut self) -> Result<()> {
+        self.inner_connection.flush().await
+    }
+
+    #[inline]
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         self.inner_connection.read().await
     }

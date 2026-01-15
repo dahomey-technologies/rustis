@@ -3,7 +3,7 @@ use crate::{
     Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
-    resp::{ClientReplyMode, Command, CommandKind, RespBuf, SubscriptionType, cmd},
+    resp::{ClientReplyMode, CommandKind, RespBuf, SubscriptionType, cmd},
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -53,6 +53,7 @@ impl MessageToSend {
     }
 }
 
+#[derive(Debug)]
 struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
@@ -313,19 +314,12 @@ impl NetworkHandler {
             }
         }
 
-        let num_commands: usize = self
-            .messages_to_send
-            .iter()
-            .map(|m| m.message.num_commands())
-            .sum();
-
-        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::with_capacity(num_commands);
-        let mut commands_to_receive =
-            SmallVec::<[usize; 10]>::with_capacity(self.messages_to_send.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
-        for message_to_send in self.messages_to_send.iter_mut() {
-            let msg = &mut message_to_send.message;
+        let start_idx = self.messages_to_receive.len();
+
+        while let Some(message_to_send) = self.messages_to_send.pop_front() {
+            let mut msg = message_to_send.message;
 
             let reasons = msg.retry_reasons.take();
             if let Some(reasons) = reasons {
@@ -347,37 +341,27 @@ impl NetworkHandler {
                     num_commands_to_receive += 1;
                 }
 
-                commands_to_write.push(command);
+                if let Err(e) = self.connection.feed(command, &retry_reasons).await {
+                    error!("[{}] Feed error: {e}", self.tag);
+                    msg.send_error(&self.tag, e);
+                    return;
+                }
             }
 
-            commands_to_receive.push(num_commands_to_receive);
+            self.messages_to_receive.push_back(MessageToReceive::new(
+                msg,
+                num_commands_to_receive,
+                message_to_send.attempts,
+            ));
         }
 
-        if let Err(e) = self
-            .connection
-            .write_batch(commands_to_write, &retry_reasons)
-            .await
-        {
-            error!("[{}] Error while writing batch: {e}", self.tag);
+        if let Err(e) = self.connection.flush().await {
+            error!("[{}] Flush error: {e}", self.tag);
 
-            let mut idx: usize = 0;
-            while let Some(msg) = self.messages_to_send.pop_front() {
-                if commands_to_receive[idx] > 0 {
-                    msg.message.send_error(&self.tag, e.clone());
+            while self.messages_to_receive.len() > start_idx {
+                if let Some(msg_to_receive) = self.messages_to_receive.pop_back() {
+                    msg_to_receive.message.send_error(&self.tag, e.clone());
                 }
-                idx += 1;
-            }
-        } else {
-            let mut idx: usize = 0;
-            while let Some(msg) = self.messages_to_send.pop_front() {
-                if commands_to_receive[idx] > 0 {
-                    self.messages_to_receive.push_back(MessageToReceive::new(
-                        msg.message,
-                        commands_to_receive[idx],
-                        msg.attempts,
-                    ));
-                }
-                idx += 1;
             }
         }
     }

@@ -152,6 +152,28 @@ impl StandaloneConnection {
         Ok(())
     }
 
+    pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
+        if log_enabled!(Level::Debug) {
+            debug!("[{}] Sending command: {command}", self.tag);
+        }
+        match &mut self.streams {
+            Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(_, framed_write) => framed_write.feed(command).await,
+        }
+    }
+
+    pub async fn flush(&mut self) -> Result<()> {
+        if log_enabled!(Level::Debug) {
+            debug!("[{}] Flushing...", self.tag);
+        }
+        match &mut self.streams {
+            Streams::Tcp(_, framed_write) => framed_write.flush().await,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(_, framed_write) => framed_write.flush().await,
+        }
+    }
+
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         if let Some(result) = match &mut self.streams {
             Streams::Tcp(framed_read, _) => framed_read.next().await,

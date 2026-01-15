@@ -229,6 +229,16 @@ impl ClusterConnection {
         Ok(())
     }
 
+    #[inline]
+    pub async fn feed(&mut self, _command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
+        todo!()
+    }
+
+    #[inline]
+    pub async fn flush(&mut self) -> Result<()> {
+        todo!()
+    }
+
     /// The client should execute the command on all master shards (e.g., the DBSIZE command).
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.

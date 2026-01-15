@@ -61,6 +61,24 @@ impl Connection {
     }
 
     #[inline]
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+        match self {
+            Connection::Standalone(connection) => connection.feed(command, retry_reasons).await,
+            Connection::Sentinel(connection) => connection.feed(command, retry_reasons).await,
+            Connection::Cluster(connection) => connection.feed(command, retry_reasons).await,
+        }
+    }
+
+    #[inline]
+    pub async fn flush(&mut self) -> Result<()> {
+        match self {
+            Connection::Standalone(connection) => connection.flush().await,
+            Connection::Sentinel(connection) => connection.flush().await,
+            Connection::Cluster(connection) => connection.flush().await,
+        }
+    }
+
+    #[inline]
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,

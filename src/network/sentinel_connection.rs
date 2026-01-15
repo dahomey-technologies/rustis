@@ -47,6 +47,11 @@ impl SentinelConnection {
     }
 
     #[inline]
+    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+        self.inner_connection.try_read()
+    }
+
+    #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
         self.inner_connection =
             Self::connect_to_sentinel(&self.sentinel_config, &self.config).await?;

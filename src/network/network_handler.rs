@@ -150,6 +150,13 @@ impl NetworkHandler {
                 } ,
                 result = self.connection.read().fuse() => {
                     if !self.handle_result(result).await { break; }
+
+                    // OPTIMISATION : Drain the next available results in the buffer
+                    while let Some(result) = self.connection.try_read() {
+                        if !self.handle_result(Some(result)).await {
+                            break;
+                        }
+                    }
                 }
             }
         }

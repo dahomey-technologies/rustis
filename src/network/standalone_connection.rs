@@ -10,11 +10,15 @@ use crate::{
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
 use bytes::BytesMut;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
 use log::{Level, debug, log_enabled};
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
-use std::future::IntoFuture;
+use std::{
+    future::IntoFuture,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
 
@@ -190,6 +194,34 @@ impl StandaloneConnection {
         } else {
             debug!("[{}] Socked is closed", self.tag);
             None
+        }
+    }
+
+    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+        let waker = noop_waker_ref();
+        let mut cx = Context::from_waker(waker);
+
+        let poll_result = match &mut self.streams {
+            Streams::Tcp(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
+        };
+
+        match poll_result {
+            Poll::Ready(Some(result)) => {
+                if log_enabled!(Level::Debug) {
+                    match &result {
+                        Ok(bytes) => debug!("[{}] (try_read) Received result {bytes}", self.tag),
+                        Err(err) => debug!("[{}] (try_read) Received result {err:?}", self.tag),
+                    }
+                }
+                Some(result)
+            }
+            Poll::Ready(None) => {
+                debug!("[{}] Socket is closed", self.tag);
+                None
+            }
+            Poll::Pending => None, // Nothing to read right now
         }
     }
 

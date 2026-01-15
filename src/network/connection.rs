@@ -88,6 +88,15 @@ impl Connection {
     }
 
     #[inline]
+    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+        match self {
+            Connection::Standalone(connection) => connection.try_read(),
+            Connection::Sentinel(connection) => connection.try_read(),
+            Connection::Cluster(connection) => connection.try_read(),
+        }
+    }
+
+    #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.reconnect().await,

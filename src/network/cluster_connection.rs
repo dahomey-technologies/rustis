@@ -566,6 +566,10 @@ impl ClusterConnection {
         }
     }
 
+    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+        todo!()
+    }
+
     fn response_policy_one_succeeded(
         &mut self,
         sub_results: Vec<Result<RespBuf>>,

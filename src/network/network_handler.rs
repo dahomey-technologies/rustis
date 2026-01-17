@@ -13,6 +13,7 @@ use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, VecDeque},
+    sync::Arc,
     task::Poll,
     time::Duration,
 };
@@ -96,14 +97,14 @@ pub(crate) struct NetworkHandler {
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
-    tag: String,
+    tag: Arc<str>,
     reconnection_state: ReconnectionState,
 }
 
 impl NetworkHandler {
     pub async fn connect(
         config: Config,
-    ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, String)> {
+    ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, Arc<str>)> {
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;

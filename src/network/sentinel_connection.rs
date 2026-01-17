@@ -6,7 +6,7 @@ use crate::{
     sleep,
 };
 use log::debug;
-use std::task::Poll;
+use std::{sync::Arc, task::Poll};
 
 pub struct SentinelConnection {
     sentinel_config: SentinelConfig,
@@ -153,7 +153,7 @@ impl SentinelConnection {
         }
     }
 
-    pub(crate) fn tag(&self) -> &str {
+    pub(crate) fn tag(&self) -> Arc<str> {
         self.inner_connection.tag()
     }
 }

@@ -15,6 +15,7 @@ use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -62,7 +63,7 @@ pub struct StandaloneConnection {
     config: Config,
     streams: Streams,
     version: String,
-    tag: String,
+    tag: Arc<str>,
 }
 
 impl StandaloneConnection {
@@ -76,9 +77,9 @@ impl StandaloneConnection {
             streams,
             version: String::new(),
             tag: if config.connection_name.is_empty() {
-                format!("{host}:{port}")
+                format!("{host}:{port}").into()
             } else {
-                format!("{}:{}:{}", config.connection_name, host, port)
+                format!("{}:{}:{}", config.connection_name, host, port).into()
             },
         };
 
@@ -220,8 +221,8 @@ impl StandaloneConnection {
         &self.version
     }
 
-    pub(crate) fn tag(&self) -> &str {
-        &self.tag
+    pub(crate) fn tag(&self) -> Arc<str> {
+        self.tag.clone()
     }
 }
 

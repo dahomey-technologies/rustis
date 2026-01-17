@@ -121,7 +121,7 @@ pub struct ClusterConnection {
     nodes: Vec<Node>,
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
-    tag: String,
+    tag: Arc<str>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
 }
@@ -136,7 +136,7 @@ impl ClusterConnection {
             .get_mut(0)
             .ok_or_else(|| Error::Client("No cluster nodes".to_owned()))?;
 
-        let tag = first_node.connection.tag().to_owned();
+        let tag = first_node.connection.tag();
 
         Ok(ClusterConnection {
             cluster_config: cluster_config.clone(),
@@ -1192,8 +1192,8 @@ impl ClusterConnection {
         shards
     }
 
-    pub(crate) fn tag(&self) -> &str {
-        &self.tag
+    pub(crate) fn tag(&self) -> Arc<str> {
+        self.tag.clone()
     }
 }
 

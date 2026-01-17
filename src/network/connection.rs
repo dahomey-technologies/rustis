@@ -6,7 +6,7 @@ use crate::{
     resp::{Command, RespBuf},
 };
 use serde::de::DeserializeOwned;
-use std::{future::IntoFuture, task::Poll};
+use std::{future::IntoFuture, sync::Arc, task::Poll};
 
 #[allow(clippy::large_enum_variant)]
 pub enum Connection {
@@ -85,7 +85,7 @@ impl Connection {
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
     }
 
-    pub(crate) fn tag(&self) -> &str {
+    pub(crate) fn tag(&self) -> Arc<str> {
         match self {
             Connection::Standalone(connection) => connection.tag(),
             Connection::Sentinel(connection) => connection.tag(),

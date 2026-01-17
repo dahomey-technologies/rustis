@@ -35,7 +35,7 @@ pub struct Client {
     reconnect_sender: ReconnectSender,
     command_timeout: Duration,
     retry_on_error: bool,
-    connection_tag: String,
+    connection_tag: Arc<str>,
 }
 
 impl Drop for Client {

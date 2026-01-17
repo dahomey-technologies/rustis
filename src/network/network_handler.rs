@@ -3,7 +3,7 @@ use crate::{
     Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
-    resp::{ClientReplyMode, Command, CommandKind, RespBuf, SubscriptionType, cmd},
+    resp::{ClientReplyMode, CommandKind, RespBuf, SubscriptionType, cmd},
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -13,6 +13,7 @@ use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, VecDeque},
+    task::Poll,
     time::Duration,
 };
 use tokio::{sync::broadcast, time::Instant};
@@ -53,6 +54,7 @@ impl MessageToSend {
     }
 }
 
+#[derive(Debug)]
 struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
@@ -149,6 +151,13 @@ impl NetworkHandler {
                 } ,
                 result = self.connection.read().fuse() => {
                     if !self.handle_result(result).await { break; }
+
+                    // OPTIMISATION : Drain the next available results in the buffer
+                    while let Poll::Ready(result) = self.connection.try_read() {
+                        if !self.handle_result(result).await {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -162,7 +171,7 @@ impl NetworkHandler {
 
         loop {
             if let Some(msg) = msg {
-                self.handle_message(msg).await;
+                self.handle_message(msg);
             } else {
                 is_channel_closed = true;
                 break;
@@ -185,7 +194,7 @@ impl NetworkHandler {
         !is_channel_closed
     }
 
-    async fn handle_message(&mut self, mut msg: Message) {
+    fn handle_message(&mut self, mut msg: Message) {
         trace!(
             "[{}][{:?}] Will handle message: {msg:?}",
             self.tag, self.status
@@ -249,6 +258,7 @@ impl NetworkHandler {
                             debug!("[{}] Registering Invalidation push_sender", self.tag);
                             self.push_sender = Some(push_sender);
                         }
+                        return; // no message to send
                     }
                     MessageKind::Single { command, .. } => {
                         if let CommandKind::Unsbuscribe(subscription_type) = command.kind() {
@@ -313,19 +323,12 @@ impl NetworkHandler {
             }
         }
 
-        let num_commands: usize = self
-            .messages_to_send
-            .iter()
-            .map(|m| m.message.num_commands())
-            .sum();
-
-        let mut commands_to_write = SmallVec::<[&mut Command; 10]>::with_capacity(num_commands);
-        let mut commands_to_receive =
-            SmallVec::<[usize; 10]>::with_capacity(self.messages_to_send.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
-        for message_to_send in self.messages_to_send.iter_mut() {
-            let msg = &mut message_to_send.message;
+        let start_idx = self.messages_to_receive.len();
+
+        while let Some(message_to_send) = self.messages_to_send.pop_front() {
+            let mut msg = message_to_send.message;
 
             let reasons = msg.retry_reasons.take();
             if let Some(reasons) = reasons {
@@ -347,37 +350,29 @@ impl NetworkHandler {
                     num_commands_to_receive += 1;
                 }
 
-                commands_to_write.push(command);
+                if let Err(e) = self.connection.feed(command, &retry_reasons).await {
+                    error!("[{}] Feed error: {e}", self.tag);
+                    msg.send_error(&self.tag, e);
+                    return;
+                }
             }
 
-            commands_to_receive.push(num_commands_to_receive);
+            if num_commands_to_receive > 0 {
+                self.messages_to_receive.push_back(MessageToReceive::new(
+                    msg,
+                    num_commands_to_receive,
+                    message_to_send.attempts,
+                ));
+            }
         }
 
-        if let Err(e) = self
-            .connection
-            .write_batch(commands_to_write, &retry_reasons)
-            .await
-        {
-            error!("[{}] Error while writing batch: {e}", self.tag);
+        if let Err(e) = self.connection.flush().await {
+            error!("[{}] Flush error: {e}", self.tag);
 
-            let mut idx: usize = 0;
-            while let Some(msg) = self.messages_to_send.pop_front() {
-                if commands_to_receive[idx] > 0 {
-                    msg.message.send_error(&self.tag, e.clone());
+            while self.messages_to_receive.len() > start_idx {
+                if let Some(msg_to_receive) = self.messages_to_receive.pop_back() {
+                    msg_to_receive.message.send_error(&self.tag, e.clone());
                 }
-                idx += 1;
-            }
-        } else {
-            let mut idx: usize = 0;
-            while let Some(msg) = self.messages_to_send.pop_front() {
-                if commands_to_receive[idx] > 0 {
-                    self.messages_to_receive.push_back(MessageToReceive::new(
-                        msg.message,
-                        commands_to_receive[idx],
-                        msg.attempts,
-                    ));
-                }
-                idx += 1;
             }
         }
     }
@@ -453,6 +448,8 @@ impl NetworkHandler {
     fn receive_result(&mut self, result: Result<RespBuf>) {
         match self.messages_to_receive.front_mut() {
             Some(message_to_receive) => {
+                log::trace!("message_to_receive: {:?}", message_to_receive);
+
                 if message_to_receive.num_commands == 1 || result.is_err() {
                     if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
                         let mut should_retry = false;

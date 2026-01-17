@@ -9,14 +9,15 @@ use crate::{
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
-use bytes::BytesMut;
-use futures_util::{SinkExt, StreamExt};
-use log::{Level, debug, log_enabled};
+use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
+use log::{Level, debug, log_enabled, trace};
 use serde::de::DeserializeOwned;
-use smallvec::SmallVec;
-use std::future::IntoFuture;
-use tokio::io::AsyncWriteExt;
-use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
+use std::{
+    future::IntoFuture,
+    pin::Pin,
+    task::{Context, Poll},
+};
+use tokio_util::codec::{FramedRead, FramedWrite};
 
 pub(crate) enum Streams {
     Tcp(
@@ -60,7 +61,6 @@ pub struct StandaloneConnection {
     port: u16,
     config: Config,
     streams: Streams,
-    buffer: BytesMut,
     version: String,
     tag: String,
 }
@@ -74,7 +74,6 @@ impl StandaloneConnection {
             port,
             config: config.clone(),
             streams,
-            buffer: BytesMut::new(),
             version: String::new(),
             tag: if config.connection_name.is_empty() {
                 format!("{host}:{port}")
@@ -88,10 +87,8 @@ impl StandaloneConnection {
         Ok(connection)
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        if log_enabled!(Level::Debug) {
-            debug!("[{}] Sending command: {command}", self.tag);
-        }
+    async fn write(&mut self, command: &Command) -> Result<()> {
+        debug!("[{}] Sending command: {command}", self.tag);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -99,38 +96,11 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        _retry_reasons: &[RetryReason],
-    ) -> Result<()> {
-        self.buffer.clear();
-
-        let command_encoder = match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => framed_write.encoder_mut(),
-        };
+    pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
+        debug!("[{}] Sending command: {command}", self.tag);
 
         #[cfg(debug_assertions)]
-        let mut kill_connection = false;
-
-        for command in commands {
-            if log_enabled!(Level::Debug) {
-                debug!("[{}] Sending command: {command}", self.tag);
-            }
-
-            #[cfg(debug_assertions)]
-            if command.kill_connection_on_write > 0 {
-                kill_connection = true;
-                command.kill_connection_on_write -= 1;
-            }
-
-            command_encoder.encode(command, &mut self.buffer)?;
-        }
-
-        #[cfg(debug_assertions)]
-        if kill_connection {
+        if command.try_decrement_kill_connection_on_write() {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
             "killer".clone_into(&mut config.connection_name);
@@ -142,14 +112,19 @@ impl StandaloneConnection {
         }
 
         match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
+            Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => {
-                framed_write.get_mut().write_all(&self.buffer).await?
-            }
+            Streams::TcpTls(_, framed_write) => framed_write.feed(command).await,
         }
+    }
 
-        Ok(())
+    pub async fn flush(&mut self) -> Result<()> {
+        trace!("[{}] Flushing...", self.tag);
+        match &mut self.streams {
+            Streams::Tcp(_, framed_write) => framed_write.flush().await,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(_, framed_write) => framed_write.flush().await,
+        }
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
@@ -171,13 +146,39 @@ impl StandaloneConnection {
         }
     }
 
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        let waker = noop_waker_ref();
+        let mut cx = Context::from_waker(waker);
+
+        let poll_result = match &mut self.streams {
+            Streams::Tcp(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
+        };
+
+        match poll_result {
+            Poll::Ready(Some(result)) => {
+                if log_enabled!(Level::Debug) {
+                    match &result {
+                        Ok(bytes) => debug!("[{}] (try_read) Received result {bytes}", self.tag),
+                        Err(err) => debug!("[{}] (try_read) Received result {err:?}", self.tag),
+                    }
+                }
+                Poll::Ready(Some(result))
+            }
+            Poll::Ready(None) => {
+                debug!("[{}] Socket is closed", self.tag);
+                Poll::Ready(None)
+            }
+            Poll::Pending => Poll::Pending, // Nothing to read right now
+        }
+    }
+
     pub async fn reconnect(&mut self) -> Result<()> {
         self.streams = Streams::connect(&self.host, self.port, &self.config).await?;
         self.post_connect().await?;
 
         Ok(())
-
-        // TODO improve reconnection strategy with multiple retries
     }
 
     async fn post_connect(&mut self) -> Result<()> {

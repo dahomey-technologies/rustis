@@ -6,7 +6,7 @@ use crate::{
     sleep,
 };
 use log::debug;
-use smallvec::SmallVec;
+use std::task::Poll;
 
 pub struct SentinelConnection {
     sentinel_config: SentinelConfig,
@@ -16,24 +16,23 @@ pub struct SentinelConnection {
 
 impl SentinelConnection {
     #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        self.inner_connection.write(command).await
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+        self.inner_connection.feed(command, retry_reasons).await
     }
 
     #[inline]
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        retry_reasons: &[RetryReason],
-    ) -> Result<()> {
-        self.inner_connection
-            .write_batch(commands, retry_reasons)
-            .await
+    pub async fn flush(&mut self) -> Result<()> {
+        self.inner_connection.flush().await
     }
 
     #[inline]
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
         self.inner_connection.read().await
+    }
+
+    #[inline]
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        self.inner_connection.try_read()
     }
 
     #[inline]

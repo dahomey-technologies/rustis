@@ -196,16 +196,16 @@ async fn moved() -> Result<()> {
 
     let slot = client.cluster_keyslot("key").await?;
 
-    let src_node = &shard_info_list
+    let src_node = shard_info_list
         .iter()
         .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
-        .unwrap()
-        .nodes[0];
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
     let dst_node = &shard_info_list
         .iter()
         .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
-        .unwrap()
-        .nodes[0];
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
     let src_id = &src_node.id;
     let dst_id = &dst_node.id;
     let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
@@ -258,16 +258,16 @@ async fn ask() -> Result<()> {
 
     let slot = client.cluster_keyslot("key").await?;
 
-    let src_node: &ClusterNodeResult = &shard_info_list
+    let src_node: &ClusterNodeResult = shard_info_list
         .iter()
         .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
-        .unwrap()
-        .nodes[0];
-    let dst_node: &ClusterNodeResult = &shard_info_list
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
+    let dst_node: &ClusterNodeResult = shard_info_list
         .iter()
         .find(|s| s.slots.iter().any(|s| s.0 == 0))
-        .unwrap()
-        .nodes[0];
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for destination shard");
     let src_id = &src_node.id;
     let dst_id = &dst_node.id;
     let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;

@@ -6,8 +6,7 @@ use crate::{
     resp::{Command, RespBuf},
 };
 use serde::de::DeserializeOwned;
-use smallvec::SmallVec;
-use std::future::IntoFuture;
+use std::{future::IntoFuture, task::Poll};
 
 #[allow(clippy::large_enum_variant)]
 pub enum Connection {
@@ -33,30 +32,20 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
         match self {
-            Connection::Standalone(connection) => connection.write(command).await,
-            Connection::Sentinel(connection) => connection.write(command).await,
-            Connection::Cluster(connection) => connection.write(command).await,
+            Connection::Standalone(connection) => connection.feed(command, retry_reasons).await,
+            Connection::Sentinel(connection) => connection.feed(command, retry_reasons).await,
+            Connection::Cluster(connection) => connection.feed(command, retry_reasons).await,
         }
     }
 
     #[inline]
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        retry_reasons: &[RetryReason],
-    ) -> Result<()> {
+    pub async fn flush(&mut self) -> Result<()> {
         match self {
-            Connection::Standalone(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
-            Connection::Sentinel(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
-            Connection::Cluster(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
+            Connection::Standalone(connection) => connection.flush().await,
+            Connection::Sentinel(connection) => connection.flush().await,
+            Connection::Cluster(connection) => connection.flush().await,
         }
     }
 
@@ -66,6 +55,15 @@ impl Connection {
             Connection::Standalone(connection) => connection.read().await,
             Connection::Sentinel(connection) => connection.read().await,
             Connection::Cluster(connection) => connection.read().await,
+        }
+    }
+
+    #[inline]
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        match self {
+            Connection::Standalone(connection) => connection.try_read(),
+            Connection::Sentinel(connection) => connection.try_read(),
+            Connection::Cluster(connection) => connection.try_read(),
         }
     }
 
@@ -80,7 +78,8 @@ impl Connection {
 
     #[inline]
     pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
-        self.write(command).await?;
+        self.feed(command, &[]).await?;
+        self.flush().await?;
         self.read()
             .await
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?

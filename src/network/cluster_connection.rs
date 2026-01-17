@@ -23,6 +23,7 @@ use std::{
     fmt::{self, Debug, Formatter},
     iter::zip,
     sync::Arc,
+    task::Poll,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -46,6 +47,15 @@ struct Node {
     pub is_master: bool,
     pub address: (String, u16),
     pub connection: StandaloneConnection,
+    pub is_dirty: bool,
+}
+
+impl Node {
+    pub async fn feed(&mut self, command: &Command) -> Result<()> {
+        self.connection.feed(command, &[]).await?;
+        self.is_dirty = true;
+        Ok(())
+    }
 }
 
 impl Debug for Node {
@@ -83,6 +93,15 @@ struct RequestInfo {
     pub command_seq: usize,
 }
 
+/// Stores the state related to the current transaction (MULTI/EXEC block).
+#[derive(Debug, Default)]
+struct TransactionState {
+    /// Holds the MULTI command temporarily until we know which shard to send it to.
+    pending_multi: Option<Command>,
+    /// The index of the node currently locked for the transaction.
+    node_index: Option<usize>,
+}
+
 impl ClusterNodeResult {
     pub(crate) fn get_port(&self) -> Result<u16> {
         match (self.port, self.tls_port) {
@@ -103,6 +122,8 @@ pub struct ClusterConnection {
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
     tag: String,
+    /// State to manage the "Lazy MULTI" logic
+    transaction_state: TransactionState,
 }
 
 impl ClusterConnection {
@@ -124,53 +145,12 @@ impl ClusterConnection {
             slot_ranges,
             pending_requests: VecDeque::new(),
             tag,
+            transaction_state: TransactionState::default(),
         })
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        self.internal_write(command, &[]).await
-    }
-
-    async fn internal_write(
-        &mut self,
-        command: &Command,
-        ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
-        debug!("[{}] Analyzing command {command:?}", self.tag);
-        let request_policy = command.request_policy();
-
-        if let Some(request_policy) = request_policy {
-            match request_policy {
-                RequestPolicy::AllNodes => {
-                    self.request_policy_all_nodes(command).await?;
-                }
-                RequestPolicy::AllShards => {
-                    self.request_policy_all_shards(command).await?;
-                }
-                RequestPolicy::MultiShard => {
-                    self.request_policy_multi_shard(command, ask_reasons)
-                        .await?;
-                }
-                RequestPolicy::Special => {
-                    self.request_policy_special(command)?;
-                }
-            }
-        } else {
-            let command_name = command.name();
-            let keys = command.keys().collect();
-            let slots = command.slots().collect();
-            self.no_request_policy(command, command_name, keys, slots, ask_reasons)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        retry_reasons: &[RetryReason],
-    ) -> Result<()> {
+    #[inline]
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
         if retry_reasons.iter().any(|r| {
             matches!(
                 r,
@@ -194,36 +174,83 @@ impl ClusterConnection {
             })
             .collect::<Vec<_>>();
 
-        if commands.len() > 1 && commands[0].name() == "MULTI" {
-            let mut slots = commands[1].slots();
-            let ref_slot = if let Some(ref_slot) = slots.next() {
-                if !slots.all(|x| x == ref_slot) {
+        if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
+            let (node_idx, _) = self.get_no_request_policy_node(command, &ask_reasons)?;
+            self.feed_no_request_policy(&multi_cmd, node_idx, false)
+                .await?;
+            self.transaction_state.node_index = Some(node_idx);
+        }
+
+        match command.name().as_ref() {
+            b"MULTI" => {
+                // We do not send it to the network yet. We wait for the first key-based command
+                // to decide which shard owns this transaction.
+                self.transaction_state.pending_multi = Some(command.clone());
+            }
+            b"EXEC" => {
+                if let Some(node_idx) = self.transaction_state.node_index {
+                    self.feed_no_request_policy(command, node_idx, false)
+                        .await?;
+                    self.transaction_state = TransactionState::default();
+                } else {
                     return Err(Error::Client(format!(
-                        "[{}] Cannot execute transaction with mismatched key slots",
+                        "[{}] EXEC called without a preceding MULTI",
                         self.tag
                     )));
                 }
-                ref_slot
-            } else {
-                0
-            };
-            drop(slots);
+            }
+            _ => self.internal_feed(command, &ask_reasons).await?,
+        }
 
-            for command in commands {
-                let keys = command.keys().collect();
-                self.no_request_policy(
-                    command,
-                    command.name(),
-                    keys,
-                    SmallVec::from_slice(&[ref_slot]),
-                    &ask_reasons,
-                )
-                .await?;
+        Ok(())
+    }
+
+    async fn internal_feed(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, (String, u16))],
+    ) -> Result<()> {
+        trace!("[{}] Analyzing command {command:?}", self.tag);
+        let request_policy = command.request_policy();
+
+        if let Some(request_policy) = request_policy {
+            match request_policy {
+                RequestPolicy::AllNodes => {
+                    self.request_policy_all_nodes(command).await?;
+                }
+                RequestPolicy::AllShards => {
+                    self.request_policy_all_shards(command).await?;
+                }
+                RequestPolicy::MultiShard => {
+                    self.request_policy_multi_shard(command, ask_reasons)
+                        .await?;
+                }
+                RequestPolicy::Special => {
+                    self.request_policy_special(command)?;
+                }
             }
         } else {
-            for command in commands {
-                self.internal_write(command, &ask_reasons).await?;
+            self.no_request_policy(command, ask_reasons).await?;
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub async fn flush(&mut self) -> Result<()> {
+        let mut flush_futures = SmallVec::<[_; 16]>::new();
+
+        for node in self.nodes.iter_mut() {
+            if node.is_dirty {
+                node.is_dirty = false;
+                flush_futures.push(node.connection.flush());
             }
+        }
+
+        let results = future::join_all(flush_futures).await;
+
+        for res in results {
+            res?;
         }
 
         Ok(())
@@ -236,7 +263,7 @@ impl ClusterConnection {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for node in self.nodes.iter_mut().filter(|n| n.is_master) {
-            node.connection.write(command).await?;
+            node.feed(command).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -268,7 +295,7 @@ impl ClusterConnection {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for node in self.nodes.iter_mut() {
-            node.connection.write(command).await?;
+            node.feed(command).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -333,7 +360,7 @@ impl ClusterConnection {
                     }
 
                     let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-                    node.connection.write(&shard_command).await?;
+                    node.feed(&shard_command).await?;
                     sub_requests.push(SubRequest {
                         node_id: node.id.clone(),
                         keys: std::mem::take(&mut current_slot_keys),
@@ -358,7 +385,7 @@ impl ClusterConnection {
         }
 
         let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-        node.connection.write(&shard_command).await?;
+        node.feed(&shard_command).await?;
         sub_requests.push(SubRequest {
             node_id: node.id.clone(),
             keys: std::mem::take(&mut current_slot_keys),
@@ -383,49 +410,61 @@ impl ClusterConnection {
     async fn no_request_policy(
         &mut self,
         command: &Command,
-        command_name: Bytes,
-        keys: SmallVec<[Bytes; 10]>,
-        slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
-        // test if all slots are equal
-        if slots.windows(2).all(|s| s[0] == s[1]) {
-            let (node_idx, should_ask) = if slots.is_empty() {
-                (self.get_random_node_index(), false)
-            } else {
-                self.get_master_node_index_by_slot(slots[0], ask_reasons)
-                    .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?
-            };
+    ) -> Result<usize> {
+        let (node_idx, should_ask) = self.get_no_request_policy_node(command, ask_reasons)?;
+        self.feed_no_request_policy(command, node_idx, should_ask)
+            .await?;
+        Ok(node_idx)
+    }
 
-            let node = &mut self.nodes[node_idx];
-            let connection = &mut node.connection;
+    fn get_no_request_policy_node(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, (String, u16))],
+    ) -> Result<(usize, bool)> {
+        let mut slots = command.slots();
 
-            if should_ask {
-                connection.asking().await?;
+        if let Some(first_slot) = slots.next() {
+            if !slots.all(|s| s == first_slot) {
+                return Err(Error::Client(format!(
+                    "[{}] Cannot send command {} with mismatched key slots",
+                    self.tag,
+                    String::from_utf8_lossy(&command.name())
+                )));
             }
-            connection.write(command).await?;
 
-            let request_info = RequestInfo {
-                response_policy: command.response_policy(),
-                sub_requests: smallvec![SubRequest {
-                    node_id: node.id.clone(),
-                    keys: keys.clone(),
-                    result: None,
-                }],
-                keys,
-                #[cfg(debug_assertions)]
-                command_seq: command.command_seq,
-            };
-
-            self.pending_requests.push_back(request_info);
+            self.get_master_node_index_by_slot(first_slot, ask_reasons)
+                .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))
         } else {
-            return Err(Error::Client(format!(
-                "[{}] Cannot send command {} with mismatched key slots",
-                self.tag,
-                String::from_utf8_lossy(&command_name)
-            )));
+            Ok((self.get_random_node_index(), false))
         }
+    }
 
+    async fn feed_no_request_policy(
+        &mut self,
+        command: &Command,
+        node_idx: usize,
+        should_ask: bool,
+    ) -> Result<()> {
+        let node = &mut self.nodes[node_idx];
+        if should_ask {
+            node.connection.asking().await?;
+        }
+        node.feed(command).await?;
+        let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
+        let request_info = RequestInfo {
+            response_policy: command.response_policy(),
+            sub_requests: smallvec![SubRequest {
+                node_id: node.id.clone(),
+                keys: keys.clone(),
+                result: None,
+            }],
+            keys,
+            #[cfg(debug_assertions)]
+            command_seq: command.command_seq,
+        };
+        self.pending_requests.push_back(request_info);
         Ok(())
     }
 
@@ -438,7 +477,7 @@ impl ClusterConnection {
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
-        let mut request_info: RequestInfo;
+        let request_info: RequestInfo;
 
         loop {
             if let Some(ri) = self.pending_requests.front()
@@ -494,6 +533,79 @@ impl ClusterConnection {
             );
         }
 
+        self.internal_read(request_info)
+    }
+
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        let request_info: RequestInfo;
+
+        loop {
+            if let Some(ri) = self.pending_requests.front()
+                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
+            {
+                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                if let Some(ri) = self.pending_requests.pop_front() {
+                    request_info = ri;
+                    break;
+                }
+            }
+
+            let Some((node_idx, result)) =
+                self.nodes.iter_mut().enumerate().find_map(|(node_idx, n)| {
+                    match n.connection.try_read() {
+                        Poll::Ready(result) => Some((node_idx, result)),
+                        Poll::Pending => None,
+                    }
+                })
+            else {
+                return Poll::Pending;
+            };
+
+            if let Some(Ok(bytes)) = &result
+                && bytes.is_push_message()
+            {
+                return Poll::Ready(result);
+            }
+
+            let node = &self.nodes[node_idx];
+            let node_id = &node.id;
+
+            let Some((req_idx, sub_req_idx)) =
+                self.pending_requests
+                    .iter()
+                    .enumerate()
+                    .find_map(|(req_idx, req)| {
+                        let sub_req_idx = req
+                            .sub_requests
+                            .iter()
+                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
+                        Some((req_idx, sub_req_idx))
+                    })
+            else {
+                log::error!(
+                    "[{}] Received unexpected message: {result:?}",
+                    node.connection.tag()
+                );
+                return Poll::Ready(Some(Err(Error::Client(format!(
+                    "[{}] Received unexpected message",
+                    node.connection.tag()
+                )))));
+            };
+
+            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
+            trace!(
+                "[{}] Did store sub-request result into {:?}",
+                self.tag, self.pending_requests[req_idx]
+            );
+        }
+
+        Poll::Ready(self.internal_read(request_info))
+    }
+
+    fn internal_read(
+        &mut self,
+        mut request_info: RequestInfo,
+    ) -> Option<std::result::Result<RespBuf, Error>> {
         let mut sub_results =
             Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
@@ -648,7 +760,7 @@ impl ClusterConnection {
         sub_results: Vec<Result<RespBuf>>,
         request_info: &RequestInfo,
     ) -> Option<Result<RespBuf>> {
-        log::debug!("[{}] no_response_policy", self.tag);
+        log::trace!("[{}] no_response_policy", self.tag);
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
@@ -825,6 +937,7 @@ impl ClusterConnection {
                 is_master: true,
                 address: (master_info.ip, port),
                 connection,
+                is_dirty: false,
             });
         }
 
@@ -870,6 +983,7 @@ impl ClusterConnection {
                     is_master: false,
                     address: (node_info.ip.clone(), port),
                     connection,
+                    is_dirty: false,
                 });
             }
         }
@@ -956,6 +1070,7 @@ impl ClusterConnection {
                         is_master: node_info.role == "master",
                         address: (node_info.ip, port),
                         connection,
+                        is_dirty: false,
                     });
                 }
             }

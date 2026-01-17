@@ -7,7 +7,10 @@ use memchr::memchr;
 use serde::Serialize;
 use smallvec::SmallVec;
 #[cfg(debug_assertions)]
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::{
     fmt::{self, Write},
     hash::{Hash, Hasher},
@@ -118,7 +121,7 @@ pub struct Command {
     args_layout: SmallVec<[ArgLayout; 10]>,
     #[doc(hidden)]
     #[cfg(debug_assertions)]
-    pub kill_connection_on_write: usize,
+    pub kill_connection_on_write: Arc<AtomicUsize>,
     #[cfg(debug_assertions)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
@@ -145,7 +148,7 @@ impl Command {
             name_layout,
             args_layout,
             #[cfg(debug_assertions)]
-            kill_connection_on_write,
+            kill_connection_on_write: Arc::new(kill_connection_on_write.into()),
             #[cfg(debug_assertions)]
             command_seq,
             request_policy,
@@ -215,6 +218,15 @@ impl Command {
 
     pub fn key_step(&self) -> usize {
         self.key_step as usize
+    }
+
+    #[cfg(debug_assertions)]
+    pub(crate) fn try_decrement_kill_connection_on_write(&self) -> bool {
+        self.kill_connection_on_write
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                if current > 0 { Some(current - 1) } else { None }
+            })
+            .is_ok()
     }
 }
 

@@ -456,7 +456,7 @@ impl CommandBuilder {
 
         Command::new(
             buffer.freeze(),
-            (7, 3),
+            (8, 3),
             args_layout,
             #[cfg(debug_assertions)]
             0,

@@ -6,7 +6,7 @@ use crate::{
     resp::{Command, RespBuf},
 };
 use serde::de::DeserializeOwned;
-use std::future::IntoFuture;
+use std::{future::IntoFuture, task::Poll};
 
 #[allow(clippy::large_enum_variant)]
 pub enum Connection {
@@ -28,15 +28,6 @@ impl Connection {
             ServerConfig::Cluster(cluster_config) => Ok(Connection::Cluster(
                 ClusterConnection::connect(cluster_config, &config).await?,
             )),
-        }
-    }
-
-    #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        match self {
-            Connection::Standalone(connection) => connection.write(command).await,
-            Connection::Sentinel(connection) => connection.write(command).await,
-            Connection::Cluster(connection) => connection.write(command).await,
         }
     }
 
@@ -68,7 +59,7 @@ impl Connection {
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
         match self {
             Connection::Standalone(connection) => connection.try_read(),
             Connection::Sentinel(connection) => connection.try_read(),
@@ -87,7 +78,8 @@ impl Connection {
 
     #[inline]
     pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
-        self.write(command).await?;
+        self.feed(command, &[]).await?;
+        self.flush().await?;
         self.read()
             .await
             .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?

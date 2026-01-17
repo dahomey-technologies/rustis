@@ -13,6 +13,7 @@ use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, VecDeque},
+    task::Poll,
     time::Duration,
 };
 use tokio::{sync::broadcast, time::Instant};
@@ -152,8 +153,8 @@ impl NetworkHandler {
                     if !self.handle_result(result).await { break; }
 
                     // OPTIMISATION : Drain the next available results in the buffer
-                    while let Some(result) = self.connection.try_read() {
-                        if !self.handle_result(Some(result)).await {
+                    while let Poll::Ready(result) = self.connection.try_read() {
+                        if !self.handle_result(result).await {
                             break;
                         }
                     }

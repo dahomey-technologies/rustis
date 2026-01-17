@@ -139,7 +139,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
         let waker = noop_waker_ref();
         let mut cx = Context::from_waker(waker);
 
@@ -157,13 +157,13 @@ impl StandaloneConnection {
                         Err(err) => debug!("[{}] (try_read) Received result {err:?}", self.tag),
                     }
                 }
-                Some(result)
+                Poll::Ready(Some(result))
             }
             Poll::Ready(None) => {
                 debug!("[{}] Socket is closed", self.tag);
-                None
+                Poll::Ready(None)
             }
-            Poll::Pending => None, // Nothing to read right now
+            Poll::Pending => Poll::Pending, // Nothing to read right now
         }
     }
 

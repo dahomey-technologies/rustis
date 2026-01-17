@@ -23,6 +23,7 @@ use std::{
     fmt::{self, Debug, Formatter},
     iter::zip,
     sync::Arc,
+    task::Poll,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -46,6 +47,15 @@ struct Node {
     pub is_master: bool,
     pub address: (String, u16),
     pub connection: StandaloneConnection,
+    pub is_dirty: bool,
+}
+
+impl Node {
+    pub async fn feed(&mut self, command: &Command) -> Result<()> {
+        self.connection.feed(command, &[]).await?;
+        self.is_dirty = true;
+        Ok(())
+    }
 }
 
 impl Debug for Node {
@@ -83,6 +93,15 @@ struct RequestInfo {
     pub command_seq: usize,
 }
 
+/// Stores the state related to the current transaction (MULTI/EXEC block).
+#[derive(Debug, Default)]
+struct TransactionState {
+    /// Holds the MULTI command temporarily until we know which shard to send it to.
+    pending_multi: Option<Command>,
+    /// The index of the node currently locked for the transaction.
+    node_index: Option<usize>,
+}
+
 impl ClusterNodeResult {
     pub(crate) fn get_port(&self) -> Result<u16> {
         match (self.port, self.tls_port) {
@@ -103,6 +122,8 @@ pub struct ClusterConnection {
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
     tag: String,
+    /// State to manage the "Lazy MULTI" logic
+    transaction_state: TransactionState,
 }
 
 impl ClusterConnection {
@@ -124,14 +145,65 @@ impl ClusterConnection {
             slot_ranges,
             pending_requests: VecDeque::new(),
             tag,
+            transaction_state: TransactionState::default(),
         })
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        self.internal_write(command, &[]).await
+    #[inline]
+    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+        if retry_reasons.iter().any(|r| {
+            matches!(
+                r,
+                RetryReason::Moved {
+                    hash_slot: _,
+                    address: _
+                }
+            )
+        }) {
+            self.refresh_nodes_and_slot_ranges().await?;
+        }
+
+        let ask_reasons = retry_reasons
+            .iter()
+            .filter_map(|r| {
+                if let RetryReason::Ask { hash_slot, address } = r {
+                    Some((*hash_slot, address.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
+            let node_idx = self.no_request_policy(&multi_cmd, &ask_reasons).await?;
+            self.transaction_state.node_index = Some(node_idx);
+        }
+
+        match command.name().as_ref() {
+            b"MULTI" => {
+                // We do not send it to the network yet. We wait for the first key-based command
+                // to decide which shard owns this transaction.
+                self.transaction_state.pending_multi = Some(command.clone());
+            }
+            b"EXEC" => {
+                if let Some(node_index) = self.transaction_state.node_index {
+                    let node = &mut self.nodes[node_index];
+                    node.feed(command).await?;
+                    self.transaction_state = TransactionState::default();
+                } else {
+                    return Err(Error::Client(format!(
+                        "[{}] EXEC called without a preceding MULTI",
+                        self.tag
+                    )));
+                }
+            }
+            _ => self.internal_flush(command, &ask_reasons).await?,
+        }
+
+        Ok(())
     }
 
-    async fn internal_write(
+    async fn internal_flush(
         &mut self,
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
@@ -156,87 +228,29 @@ impl ClusterConnection {
                 }
             }
         } else {
-            let command_name = command.name();
-            let keys = command.keys().collect();
-            let slots = command.slots().collect();
-            self.no_request_policy(command, command_name, keys, slots, ask_reasons)
-                .await?;
+            self.no_request_policy(command, ask_reasons).await?;
         }
 
         Ok(())
-    }
-
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        retry_reasons: &[RetryReason],
-    ) -> Result<()> {
-        if retry_reasons.iter().any(|r| {
-            matches!(
-                r,
-                RetryReason::Moved {
-                    hash_slot: _,
-                    address: _
-                }
-            )
-        }) {
-            self.refresh_nodes_and_slot_ranges().await?;
-        }
-
-        let ask_reasons = retry_reasons
-            .iter()
-            .filter_map(|r| {
-                if let RetryReason::Ask { hash_slot, address } = r {
-                    Some((*hash_slot, address.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if commands.len() > 1 && commands[0].name() == "MULTI" {
-            let mut slots = commands[1].slots();
-            let ref_slot = if let Some(ref_slot) = slots.next() {
-                if !slots.all(|x| x == ref_slot) {
-                    return Err(Error::Client(format!(
-                        "[{}] Cannot execute transaction with mismatched key slots",
-                        self.tag
-                    )));
-                }
-                ref_slot
-            } else {
-                0
-            };
-            drop(slots);
-
-            for command in commands {
-                let keys = command.keys().collect();
-                self.no_request_policy(
-                    command,
-                    command.name(),
-                    keys,
-                    SmallVec::from_slice(&[ref_slot]),
-                    &ask_reasons,
-                )
-                .await?;
-            }
-        } else {
-            for command in commands {
-                self.internal_write(command, &ask_reasons).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[inline]
-    pub async fn feed(&mut self, _command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
-        todo!()
     }
 
     #[inline]
     pub async fn flush(&mut self) -> Result<()> {
-        todo!()
+        let mut flush_futures = SmallVec::<[_; 16]>::new();
+
+        for node in self.nodes.iter_mut() {
+            if node.is_dirty {
+                node.is_dirty = false;
+                flush_futures.push(node.connection.flush());
+            }
+        }
+
+        let results = future::join_all(flush_futures).await;
+
+        for res in results {
+            res?;
+        }
+        Ok(())
     }
 
     /// The client should execute the command on all master shards (e.g., the DBSIZE command).
@@ -246,7 +260,7 @@ impl ClusterConnection {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for node in self.nodes.iter_mut().filter(|n| n.is_master) {
-            node.connection.write(command).await?;
+            node.feed(command).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -278,7 +292,7 @@ impl ClusterConnection {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for node in self.nodes.iter_mut() {
-            node.connection.write(command).await?;
+            node.feed(command).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -343,7 +357,7 @@ impl ClusterConnection {
                     }
 
                     let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-                    node.connection.write(&shard_command).await?;
+                    node.feed(&shard_command).await?;
                     sub_requests.push(SubRequest {
                         node_id: node.id.clone(),
                         keys: std::mem::take(&mut current_slot_keys),
@@ -368,7 +382,7 @@ impl ClusterConnection {
         }
 
         let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-        node.connection.write(&shard_command).await?;
+        node.feed(&shard_command).await?;
         sub_requests.push(SubRequest {
             node_id: node.id.clone(),
             keys: std::mem::take(&mut current_slot_keys),
@@ -393,50 +407,48 @@ impl ClusterConnection {
     async fn no_request_policy(
         &mut self,
         command: &Command,
-        command_name: Bytes,
-        keys: SmallVec<[Bytes; 10]>,
-        slots: SmallVec<[u16; 10]>,
         ask_reasons: &[(u16, (String, u16))],
-    ) -> Result<()> {
-        // test if all slots are equal
-        if slots.windows(2).all(|s| s[0] == s[1]) {
-            let (node_idx, should_ask) = if slots.is_empty() {
-                (self.get_random_node_index(), false)
-            } else {
-                self.get_master_node_index_by_slot(slots[0], ask_reasons)
-                    .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?
-            };
+    ) -> Result<usize> {
+        let mut slots = command.slots();
+        let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
 
-            let node = &mut self.nodes[node_idx];
-            let connection = &mut node.connection;
-
-            if should_ask {
-                connection.asking().await?;
+        let (node_idx, should_ask) = if let Some(first_slot) = slots.next() {
+            if !slots.all(|s| s == first_slot) {
+                return Err(Error::Client(format!(
+                    "[{}] Cannot send command {} with mismatched key slots",
+                    self.tag,
+                    String::from_utf8_lossy(&command.name())
+                )));
             }
-            connection.write(command).await?;
 
-            let request_info = RequestInfo {
-                response_policy: command.response_policy(),
-                sub_requests: smallvec![SubRequest {
-                    node_id: node.id.clone(),
-                    keys: keys.clone(),
-                    result: None,
-                }],
-                keys,
-                #[cfg(debug_assertions)]
-                command_seq: command.command_seq,
-            };
-
-            self.pending_requests.push_back(request_info);
+            self.get_master_node_index_by_slot(first_slot, ask_reasons)
+                .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?
         } else {
-            return Err(Error::Client(format!(
-                "[{}] Cannot send command {} with mismatched key slots",
-                self.tag,
-                String::from_utf8_lossy(&command_name)
-            )));
-        }
+            (self.get_random_node_index(), false)
+        };
 
-        Ok(())
+        let node = &mut self.nodes[node_idx];
+
+        if should_ask {
+            node.connection.asking().await?;
+        }
+        node.feed(command).await?;
+
+        let request_info = RequestInfo {
+            response_policy: command.response_policy(),
+            sub_requests: smallvec![SubRequest {
+                node_id: node.id.clone(),
+                keys: keys.clone(),
+                result: None,
+            }],
+            keys,
+            #[cfg(debug_assertions)]
+            command_seq: command.command_seq,
+        };
+
+        self.pending_requests.push_back(request_info);
+
+        Ok(node_idx)
     }
 
     fn request_policy_special(&mut self, command: &Command) -> Result<()> {
@@ -566,8 +578,133 @@ impl ClusterConnection {
         }
     }
 
-    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
-        todo!()
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        let mut request_info: RequestInfo;
+
+        loop {
+            if let Some(ri) = self.pending_requests.front()
+                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
+            {
+                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                if let Some(ri) = self.pending_requests.pop_front() {
+                    request_info = ri;
+                    break;
+                }
+            }
+
+            let Some((node_idx, result)) =
+                self.nodes.iter_mut().enumerate().find_map(|(node_idx, n)| {
+                    match n.connection.try_read() {
+                        Poll::Ready(result) => Some((node_idx, result)),
+                        Poll::Pending => None,
+                    }
+                })
+            else {
+                return Poll::Pending;
+            };
+
+            if let Some(Ok(bytes)) = &result
+                && bytes.is_push_message()
+            {
+                return Poll::Ready(result);
+            }
+
+            let node_id = &self.nodes[node_idx].id;
+
+            let Some((req_idx, sub_req_idx)) =
+                self.pending_requests
+                    .iter()
+                    .enumerate()
+                    .find_map(|(req_idx, req)| {
+                        let sub_req_idx = req
+                            .sub_requests
+                            .iter()
+                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
+                        Some((req_idx, sub_req_idx))
+                    })
+            else {
+                log::error!(
+                    "[{}] Received unexpected message: {result:?} from {}",
+                    self.tag,
+                    self.nodes[node_idx].connection.tag()
+                );
+                return Poll::Ready(Some(Err(Error::Client(format!(
+                    "[{}] Received unexpected message",
+                    self.tag
+                )))));
+            };
+
+            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
+            trace!(
+                "[{}] Did store sub-request result into {:?}",
+                self.tag, self.pending_requests[req_idx]
+            );
+        }
+
+        let mut sub_results =
+            Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
+        let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
+
+        for sub_request in request_info.sub_requests.iter_mut() {
+            let Some(result) = sub_request.result.take() else {
+                return Poll::Ready(None);
+            };
+
+            if let Some(result) = result {
+                match &result {
+                    Ok(resp_buf) if resp_buf.is_error() => match resp_buf.to::<()>() {
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Ask { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Ask {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        Err(Error::Redis(RedisError {
+                            kind: RedisErrorKind::Moved { hash_slot, address },
+                            description: _,
+                        })) => retry_reasons.push(RetryReason::Moved {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        _ => sub_results.push(result),
+                    },
+                    _ => sub_results.push(result),
+                }
+            } else {
+                return Poll::Ready(None);
+            }
+        }
+
+        if !retry_reasons.is_empty() {
+            debug!(
+                "[{}] read failed and will be retried. reasons: {:?}",
+                self.tag, retry_reasons
+            );
+            return Poll::Ready(Some(Err(Error::Retry(retry_reasons))));
+        }
+
+        // The response_policy tip is set for commands that reply with scalar data types,
+        // or when it's expected that clients implement a non-default aggregate.
+        let result = if let Some(response_policy) = &request_info.response_policy {
+            match response_policy {
+                ResponsePolicy::OneSucceeded => self.response_policy_one_succeeded(sub_results),
+                ResponsePolicy::AllSucceeded => self.response_policy_all_succeeded(sub_results),
+                ResponsePolicy::AggLogicalAnd => {
+                    self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
+                }
+                ResponsePolicy::AggLogicalOr => self
+                    .response_policy_agg(sub_results, |a, b| if a == 0 && b == 0 { 0 } else { 1 }),
+                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
+                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
+                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
+                ResponsePolicy::Special => self.response_policy_special(sub_results),
+            }
+        } else {
+            self.no_response_policy(sub_results, &request_info)
+        };
+
+        Poll::Ready(result)
     }
 
     fn response_policy_one_succeeded(
@@ -839,6 +976,7 @@ impl ClusterConnection {
                 is_master: true,
                 address: (master_info.ip, port),
                 connection,
+                is_dirty: false,
             });
         }
 
@@ -884,6 +1022,7 @@ impl ClusterConnection {
                     is_master: false,
                     address: (node_info.ip.clone(), port),
                     connection,
+                    is_dirty: false,
                 });
             }
         }
@@ -970,6 +1109,7 @@ impl ClusterConnection {
                         is_master: node_info.role == "master",
                         address: (node_info.ip, port),
                         connection,
+                        is_dirty: false,
                     });
                 }
             }

@@ -6,6 +6,7 @@ use crate::{
     sleep,
 };
 use log::debug;
+use std::task::Poll;
 
 pub struct SentinelConnection {
     sentinel_config: SentinelConfig,
@@ -14,11 +15,6 @@ pub struct SentinelConnection {
 }
 
 impl SentinelConnection {
-    #[inline]
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
-        self.inner_connection.write(command).await
-    }
-
     #[inline]
     pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
         self.inner_connection.feed(command, retry_reasons).await
@@ -35,7 +31,7 @@ impl SentinelConnection {
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Option<Result<RespBuf>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
         self.inner_connection.try_read()
     }
 

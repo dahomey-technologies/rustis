@@ -10,7 +10,7 @@ use crate::{
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
 use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
-use log::{Level, debug, log_enabled};
+use log::{Level, debug, log_enabled, trace};
 use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
@@ -88,9 +88,7 @@ impl StandaloneConnection {
     }
 
     pub async fn write(&mut self, command: &Command) -> Result<()> {
-        if log_enabled!(Level::Debug) {
-            debug!("[{}] Sending command: {command}", self.tag);
-        }
+        debug!("[{}] Sending command: {command}", self.tag);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -99,9 +97,7 @@ impl StandaloneConnection {
     }
 
     pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
-        if log_enabled!(Level::Debug) {
-            debug!("[{}] Sending command: {command}", self.tag);
-        }
+        debug!("[{}] Sending command: {command}", self.tag);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -110,9 +106,7 @@ impl StandaloneConnection {
     }
 
     pub async fn flush(&mut self) -> Result<()> {
-        if log_enabled!(Level::Debug) {
-            debug!("[{}] Flushing...", self.tag);
-        }
+        trace!("[{}] Flushing...", self.tag);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.flush().await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]

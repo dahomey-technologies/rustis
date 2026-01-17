@@ -175,7 +175,9 @@ impl ClusterConnection {
             .collect::<Vec<_>>();
 
         if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
-            let node_idx = self.no_request_policy(&multi_cmd, &ask_reasons).await?;
+            let (node_idx, _) = self.get_no_request_policy_node(command, &ask_reasons)?;
+            self.feed_no_request_policy(&multi_cmd, node_idx, false)
+                .await?;
             self.transaction_state.node_index = Some(node_idx);
         }
 
@@ -186,9 +188,9 @@ impl ClusterConnection {
                 self.transaction_state.pending_multi = Some(command.clone());
             }
             b"EXEC" => {
-                if let Some(node_index) = self.transaction_state.node_index {
-                    let node = &mut self.nodes[node_index];
-                    node.feed(command).await?;
+                if let Some(node_idx) = self.transaction_state.node_index {
+                    self.feed_no_request_policy(command, node_idx, false)
+                        .await?;
                     self.transaction_state = TransactionState::default();
                 } else {
                     return Err(Error::Client(format!(
@@ -197,18 +199,18 @@ impl ClusterConnection {
                     )));
                 }
             }
-            _ => self.internal_flush(command, &ask_reasons).await?,
+            _ => self.internal_feed(command, &ask_reasons).await?,
         }
 
         Ok(())
     }
 
-    async fn internal_flush(
+    async fn internal_feed(
         &mut self,
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        debug!("[{}] Analyzing command {command:?}", self.tag);
+        trace!("[{}] Analyzing command {command:?}", self.tag);
         let request_policy = command.request_policy();
 
         if let Some(request_policy) = request_policy {
@@ -250,6 +252,7 @@ impl ClusterConnection {
         for res in results {
             res?;
         }
+
         Ok(())
     }
 
@@ -409,10 +412,20 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<usize> {
-        let mut slots = command.slots();
-        let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
+        let (node_idx, should_ask) = self.get_no_request_policy_node(command, ask_reasons)?;
+        self.feed_no_request_policy(command, node_idx, should_ask)
+            .await?;
+        Ok(node_idx)
+    }
 
-        let (node_idx, should_ask) = if let Some(first_slot) = slots.next() {
+    fn get_no_request_policy_node(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, (String, u16))],
+    ) -> Result<(usize, bool)> {
+        let mut slots = command.slots();
+
+        if let Some(first_slot) = slots.next() {
             if !slots.all(|s| s == first_slot) {
                 return Err(Error::Client(format!(
                     "[{}] Cannot send command {} with mismatched key slots",
@@ -422,18 +435,24 @@ impl ClusterConnection {
             }
 
             self.get_master_node_index_by_slot(first_slot, ask_reasons)
-                .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?
+                .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))
         } else {
-            (self.get_random_node_index(), false)
-        };
+            Ok((self.get_random_node_index(), false))
+        }
+    }
 
+    async fn feed_no_request_policy(
+        &mut self,
+        command: &Command,
+        node_idx: usize,
+        should_ask: bool,
+    ) -> Result<()> {
         let node = &mut self.nodes[node_idx];
-
         if should_ask {
             node.connection.asking().await?;
         }
         node.feed(command).await?;
-
+        let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
         let request_info = RequestInfo {
             response_policy: command.response_policy(),
             sub_requests: smallvec![SubRequest {
@@ -445,10 +464,8 @@ impl ClusterConnection {
             #[cfg(debug_assertions)]
             command_seq: command.command_seq,
         };
-
         self.pending_requests.push_back(request_info);
-
-        Ok(node_idx)
+        Ok(())
     }
 
     fn request_policy_special(&mut self, command: &Command) -> Result<()> {
@@ -460,7 +477,7 @@ impl ClusterConnection {
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
-        let mut request_info: RequestInfo;
+        let request_info: RequestInfo;
 
         loop {
             if let Some(ri) = self.pending_requests.front()
@@ -516,6 +533,79 @@ impl ClusterConnection {
             );
         }
 
+        self.internal_read(request_info)
+    }
+
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+        let request_info: RequestInfo;
+
+        loop {
+            if let Some(ri) = self.pending_requests.front()
+                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
+            {
+                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                if let Some(ri) = self.pending_requests.pop_front() {
+                    request_info = ri;
+                    break;
+                }
+            }
+
+            let Some((node_idx, result)) =
+                self.nodes.iter_mut().enumerate().find_map(|(node_idx, n)| {
+                    match n.connection.try_read() {
+                        Poll::Ready(result) => Some((node_idx, result)),
+                        Poll::Pending => None,
+                    }
+                })
+            else {
+                return Poll::Pending;
+            };
+
+            if let Some(Ok(bytes)) = &result
+                && bytes.is_push_message()
+            {
+                return Poll::Ready(result);
+            }
+
+            let node = &self.nodes[node_idx];
+            let node_id = &node.id;
+
+            let Some((req_idx, sub_req_idx)) =
+                self.pending_requests
+                    .iter()
+                    .enumerate()
+                    .find_map(|(req_idx, req)| {
+                        let sub_req_idx = req
+                            .sub_requests
+                            .iter()
+                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
+                        Some((req_idx, sub_req_idx))
+                    })
+            else {
+                log::error!(
+                    "[{}] Received unexpected message: {result:?}",
+                    node.connection.tag()
+                );
+                return Poll::Ready(Some(Err(Error::Client(format!(
+                    "[{}] Received unexpected message",
+                    node.connection.tag()
+                )))));
+            };
+
+            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
+            trace!(
+                "[{}] Did store sub-request result into {:?}",
+                self.tag, self.pending_requests[req_idx]
+            );
+        }
+
+        Poll::Ready(self.internal_read(request_info))
+    }
+
+    fn internal_read(
+        &mut self,
+        mut request_info: RequestInfo,
+    ) -> Option<std::result::Result<RespBuf, Error>> {
         let mut sub_results =
             Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
@@ -576,135 +666,6 @@ impl ClusterConnection {
         } else {
             self.no_response_policy(sub_results, &request_info)
         }
-    }
-
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
-        let mut request_info: RequestInfo;
-
-        loop {
-            if let Some(ri) = self.pending_requests.front()
-                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
-            {
-                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
-                if let Some(ri) = self.pending_requests.pop_front() {
-                    request_info = ri;
-                    break;
-                }
-            }
-
-            let Some((node_idx, result)) =
-                self.nodes.iter_mut().enumerate().find_map(|(node_idx, n)| {
-                    match n.connection.try_read() {
-                        Poll::Ready(result) => Some((node_idx, result)),
-                        Poll::Pending => None,
-                    }
-                })
-            else {
-                return Poll::Pending;
-            };
-
-            if let Some(Ok(bytes)) = &result
-                && bytes.is_push_message()
-            {
-                return Poll::Ready(result);
-            }
-
-            let node_id = &self.nodes[node_idx].id;
-
-            let Some((req_idx, sub_req_idx)) =
-                self.pending_requests
-                    .iter()
-                    .enumerate()
-                    .find_map(|(req_idx, req)| {
-                        let sub_req_idx = req
-                            .sub_requests
-                            .iter()
-                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
-                        Some((req_idx, sub_req_idx))
-                    })
-            else {
-                log::error!(
-                    "[{}] Received unexpected message: {result:?} from {}",
-                    self.tag,
-                    self.nodes[node_idx].connection.tag()
-                );
-                return Poll::Ready(Some(Err(Error::Client(format!(
-                    "[{}] Received unexpected message",
-                    self.tag
-                )))));
-            };
-
-            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
-            trace!(
-                "[{}] Did store sub-request result into {:?}",
-                self.tag, self.pending_requests[req_idx]
-            );
-        }
-
-        let mut sub_results =
-            Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
-        let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
-
-        for sub_request in request_info.sub_requests.iter_mut() {
-            let Some(result) = sub_request.result.take() else {
-                return Poll::Ready(None);
-            };
-
-            if let Some(result) = result {
-                match &result {
-                    Ok(resp_buf) if resp_buf.is_error() => match resp_buf.to::<()>() {
-                        Err(Error::Redis(RedisError {
-                            kind: RedisErrorKind::Ask { hash_slot, address },
-                            description: _,
-                        })) => retry_reasons.push(RetryReason::Ask {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        Err(Error::Redis(RedisError {
-                            kind: RedisErrorKind::Moved { hash_slot, address },
-                            description: _,
-                        })) => retry_reasons.push(RetryReason::Moved {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        _ => sub_results.push(result),
-                    },
-                    _ => sub_results.push(result),
-                }
-            } else {
-                return Poll::Ready(None);
-            }
-        }
-
-        if !retry_reasons.is_empty() {
-            debug!(
-                "[{}] read failed and will be retried. reasons: {:?}",
-                self.tag, retry_reasons
-            );
-            return Poll::Ready(Some(Err(Error::Retry(retry_reasons))));
-        }
-
-        // The response_policy tip is set for commands that reply with scalar data types,
-        // or when it's expected that clients implement a non-default aggregate.
-        let result = if let Some(response_policy) = &request_info.response_policy {
-            match response_policy {
-                ResponsePolicy::OneSucceeded => self.response_policy_one_succeeded(sub_results),
-                ResponsePolicy::AllSucceeded => self.response_policy_all_succeeded(sub_results),
-                ResponsePolicy::AggLogicalAnd => {
-                    self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
-                }
-                ResponsePolicy::AggLogicalOr => self
-                    .response_policy_agg(sub_results, |a, b| if a == 0 && b == 0 { 0 } else { 1 }),
-                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
-                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
-                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
-                ResponsePolicy::Special => self.response_policy_special(sub_results),
-            }
-        } else {
-            self.no_response_policy(sub_results, &request_info)
-        };
-
-        Poll::Ready(result)
     }
 
     fn response_policy_one_succeeded(
@@ -799,7 +760,7 @@ impl ClusterConnection {
         sub_results: Vec<Result<RespBuf>>,
         request_info: &RequestInfo,
     ) -> Option<Result<RespBuf>> {
-        log::debug!("[{}] no_response_policy", self.tag);
+        log::trace!("[{}] no_response_policy", self.tag);
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply

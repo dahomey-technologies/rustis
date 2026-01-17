@@ -87,7 +87,7 @@ impl StandaloneConnection {
         Ok(connection)
     }
 
-    pub async fn write(&mut self, command: &Command) -> Result<()> {
+    async fn write(&mut self, command: &Command) -> Result<()> {
         debug!("[{}] Sending command: {command}", self.tag);
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
@@ -98,6 +98,19 @@ impl StandaloneConnection {
 
     pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
         debug!("[{}] Sending command: {command}", self.tag);
+
+        #[cfg(debug_assertions)]
+        if command.try_decrement_kill_connection_on_write() {
+            let client_id = self.client_id().await?;
+            let mut config = self.config.clone();
+            "killer".clone_into(&mut config.connection_name);
+            let mut connection =
+                StandaloneConnection::connect(&self.host, self.port, &config).await?;
+            connection
+                .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
+                .await?;
+        }
+
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]

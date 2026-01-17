@@ -171,7 +171,7 @@ impl NetworkHandler {
 
         loop {
             if let Some(msg) = msg {
-                self.handle_message(msg).await;
+                self.handle_message(msg);
             } else {
                 is_channel_closed = true;
                 break;
@@ -194,7 +194,7 @@ impl NetworkHandler {
         !is_channel_closed
     }
 
-    async fn handle_message(&mut self, mut msg: Message) {
+    fn handle_message(&mut self, mut msg: Message) {
         trace!(
             "[{}][{:?}] Will handle message: {msg:?}",
             self.tag, self.status
@@ -258,6 +258,7 @@ impl NetworkHandler {
                             debug!("[{}] Registering Invalidation push_sender", self.tag);
                             self.push_sender = Some(push_sender);
                         }
+                        return; // no message to send
                     }
                     MessageKind::Single { command, .. } => {
                         if let CommandKind::Unsbuscribe(subscription_type) = command.kind() {
@@ -356,11 +357,13 @@ impl NetworkHandler {
                 }
             }
 
-            self.messages_to_receive.push_back(MessageToReceive::new(
-                msg,
-                num_commands_to_receive,
-                message_to_send.attempts,
-            ));
+            if num_commands_to_receive > 0 {
+                self.messages_to_receive.push_back(MessageToReceive::new(
+                    msg,
+                    num_commands_to_receive,
+                    message_to_send.attempts,
+                ));
+            }
         }
 
         if let Err(e) = self.connection.flush().await {
@@ -445,6 +448,8 @@ impl NetworkHandler {
     fn receive_result(&mut self, result: Result<RespBuf>) {
         match self.messages_to_receive.front_mut() {
             Some(message_to_receive) => {
+                log::trace!("message_to_receive: {:?}", message_to_receive);
+
                 if message_to_receive.num_commands == 1 || result.is_err() {
                     if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
                         let mut should_retry = false;

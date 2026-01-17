@@ -434,6 +434,39 @@ impl CommandBuilder {
         self.key_step = key_step;
         self
     }
+
+    /// Optimized version for GET command
+    #[inline(always)]
+    pub(crate) fn get(key: impl Serialize) -> Command {
+        let mut buffer = BytesMut::with_capacity(128);
+        buffer.put_slice(b"*2\r\n$3\r\nGET\r\n");
+
+        let mut args_layout = SmallVec::<[ArgLayout; 10]>::new();
+
+        {
+            let mut serializer = ArgSerializer::new(&mut buffer, &mut args_layout);
+            key.serialize(&mut serializer)
+                .expect("Key serialization failed");
+        }
+
+        let layout = &mut args_layout[0];
+        layout.flags |= ArgLayout::IS_KEY;
+        let key_bytes = &buffer[layout.range()];
+        layout.slot = hash_slot(key_bytes);
+
+        Command::new(
+            buffer.freeze(),
+            (7, 3),
+            args_layout,
+            #[cfg(debug_assertions)]
+            0,
+            #[cfg(debug_assertions)]
+            COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
+            None,
+            None,
+            0,
+        )
+    }
 }
 
 impl From<CommandBuilder> for Command {

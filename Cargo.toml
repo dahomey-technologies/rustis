@@ -101,7 +101,7 @@ required-features = ["bench"]
 
 [[example]]
 name = "actix_crud"
-required-features = ["webexamples"]
+required-features = ["web-examples"]
 
 [[example]]
 name = "actix_long_polling_pubsub"

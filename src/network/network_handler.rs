@@ -8,7 +8,7 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{FutureExt, SinkExt, StreamExt, select};
+use futures_util::{FutureExt, StreamExt, select};
 use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
@@ -151,13 +151,19 @@ impl NetworkHandler {
                     if !self.try_handle_message(msg).await { break; }
                 } ,
                 result = self.connection.read().fuse() => {
-                    if !self.handle_result(result).await { break; }
+                    let Some(result) = result else {
+                        if !self.reconnect().await { break; }
+                        continue;
+                    };
+                    self.handle_result(result);
 
                     // OPTIMISATION : Drain the next available results in the buffer
                     while let Poll::Ready(result) = self.connection.try_read() {
-                        if !self.handle_result(result).await {
-                            break;
-                        }
+                        let Some(result) = result else {
+                            if !self.reconnect().await { break; }
+                            continue;
+                        };
+                        self.handle_result(result);
                     }
                 }
             }
@@ -378,72 +384,66 @@ impl NetworkHandler {
         }
     }
 
-    async fn handle_result(&mut self, result: Option<Result<RespBuf>>) -> bool {
-        match result {
-            Some(result) => match self.status {
-                Status::Disconnected => (),
-                Status::Connected => match &result {
-                    Ok(resp_buf) if resp_buf.is_push_message() => {
-                        if let Some(resp_buf) = self.try_match_pubsub_message(result).await {
-                            if resp_buf.is_err() {
-                                self.receive_result(resp_buf);
-                            } else {
-                                match &mut self.push_sender {
-                                    Some(push_sender) => {
-                                        if let Err(e) = push_sender.send(resp_buf).await {
-                                            warn!(
-                                                "[{}] Cannot send push message result to caller: {e}",
-                                                self.tag
-                                            );
-                                        }
-                                    }
-                                    None => {
+    fn handle_result(&mut self, result: Result<RespBuf>) {
+        match self.status {
+            Status::Disconnected => (),
+            Status::Connected => match &result {
+                Ok(resp_buf) if resp_buf.is_push_message() => {
+                    if let Some(resp_buf) = self.try_match_pubsub_message(result) {
+                        if resp_buf.is_err() {
+                            self.receive_result(resp_buf);
+                        } else {
+                            match &mut self.push_sender {
+                                Some(push_sender) => {
+                                    if let Err(e) = push_sender.unbounded_send(resp_buf) {
                                         warn!(
-                                            "[{}] Received a push message with no sender configured: {resp_buf:?}",
+                                            "[{}] Cannot send push message result to caller: {e}",
                                             self.tag
-                                        )
+                                        );
                                     }
+                                }
+                                None => {
+                                    warn!(
+                                        "[{}] Received a push message with no sender configured: {resp_buf:?}",
+                                        self.tag
+                                    )
                                 }
                             }
                         }
                     }
-                    _ => {
-                        self.receive_result(result);
-                    }
-                },
-                Status::EnteringMonitor => {
-                    self.receive_result(result);
-                    self.status = Status::Monitor;
                 }
-                Status::Monitor => match &result {
-                    Ok(resp_buf) if resp_buf.is_monitor_message() => {
-                        if let Some(push_sender) = &mut self.push_sender
-                            && let Err(e) = push_sender.send(result).await
-                        {
-                            warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
-                        }
-                    }
-                    _ => self.receive_result(result),
-                },
-                Status::LeavingMonitor => match &result {
-                    Ok(resp_buf) if resp_buf.is_monitor_message() => {
-                        if let Some(push_sender) = &mut self.push_sender
-                            && let Err(e) = push_sender.send(result).await
-                        {
-                            warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
-                        }
-                    }
-                    _ => {
-                        self.receive_result(result);
-                        self.status = Status::Connected;
-                    }
-                },
+                _ => {
+                    self.receive_result(result);
+                }
             },
-            // disconnection
-            None => return self.reconnect().await,
+            Status::EnteringMonitor => {
+                self.receive_result(result);
+                self.status = Status::Monitor;
+            }
+            Status::Monitor => match &result {
+                Ok(resp_buf) if resp_buf.is_monitor_message() => {
+                    if let Some(push_sender) = &mut self.push_sender
+                        && let Err(e) = push_sender.unbounded_send(result)
+                    {
+                        warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
+                    }
+                }
+                _ => self.receive_result(result),
+            },
+            Status::LeavingMonitor => match &result {
+                Ok(resp_buf) if resp_buf.is_monitor_message() => {
+                    if let Some(push_sender) = &mut self.push_sender
+                        && let Err(e) = push_sender.unbounded_send(result)
+                    {
+                        warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
+                    }
+                }
+                _ => {
+                    self.receive_result(result);
+                    self.status = Status::Connected;
+                }
+            },
         }
-
-        true
     }
 
     fn receive_result(&mut self, result: Result<RespBuf>) {
@@ -577,10 +577,7 @@ impl NetworkHandler {
         }
     }
 
-    async fn try_match_pubsub_message(
-        &mut self,
-        value: Result<RespBuf>,
-    ) -> Option<Result<RespBuf>> {
+    fn try_match_pubsub_message(&mut self, value: Result<RespBuf>) -> Option<Result<RespBuf>> {
         if let Ok(ref_value) = &value {
             if let Some(pub_sub_message) = RefPubSubMessage::from_resp(ref_value) {
                 match pub_sub_message {
@@ -699,7 +696,7 @@ impl NetworkHandler {
                     RefPubSubMessage::PMessage(pattern, channel, _) => {
                         match self.subscriptions.get_mut(&pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
-                                if let Err(e) = pub_sub_sender.send(value).await {
+                                if let Err(e) = pub_sub_sender.unbounded_send(value) {
                                     warn!(
                                         "[{}] Cannot send pub/sub message to caller: {e}",
                                         self.tag

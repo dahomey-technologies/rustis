@@ -9,18 +9,15 @@ use crate::{
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
-use bytes::BytesMut;
 use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
 use log::{Level, debug, log_enabled};
 use serde::de::DeserializeOwned;
-use smallvec::SmallVec;
 use std::{
     future::IntoFuture,
     pin::Pin,
     task::{Context, Poll},
 };
-use tokio::io::AsyncWriteExt;
-use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
+use tokio_util::codec::{FramedRead, FramedWrite};
 
 pub(crate) enum Streams {
     Tcp(
@@ -64,7 +61,6 @@ pub struct StandaloneConnection {
     port: u16,
     config: Config,
     streams: Streams,
-    buffer: BytesMut,
     version: String,
     tag: String,
 }
@@ -78,7 +74,6 @@ impl StandaloneConnection {
             port,
             config: config.clone(),
             streams,
-            buffer: BytesMut::new(),
             version: String::new(),
             tag: if config.connection_name.is_empty() {
                 format!("{host}:{port}")
@@ -101,59 +96,6 @@ impl StandaloneConnection {
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
         }
-    }
-
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        _retry_reasons: &[RetryReason],
-    ) -> Result<()> {
-        self.buffer.clear();
-
-        let command_encoder = match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.encoder_mut(),
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => framed_write.encoder_mut(),
-        };
-
-        #[cfg(debug_assertions)]
-        let mut kill_connection = false;
-
-        for command in commands {
-            if log_enabled!(Level::Debug) {
-                debug!("[{}] Sending command: {command}", self.tag);
-            }
-
-            #[cfg(debug_assertions)]
-            if command.kill_connection_on_write > 0 {
-                kill_connection = true;
-                command.kill_connection_on_write -= 1;
-            }
-
-            command_encoder.encode(command, &mut self.buffer)?;
-        }
-
-        #[cfg(debug_assertions)]
-        if kill_connection {
-            let client_id = self.client_id().await?;
-            let mut config = self.config.clone();
-            "killer".clone_into(&mut config.connection_name);
-            let mut connection =
-                StandaloneConnection::connect(&self.host, self.port, &config).await?;
-            connection
-                .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
-                .await?;
-        }
-
-        match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.get_mut().write_all(&self.buffer).await?,
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => {
-                framed_write.get_mut().write_all(&self.buffer).await?
-            }
-        }
-
-        Ok(())
     }
 
     pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
@@ -230,8 +172,6 @@ impl StandaloneConnection {
         self.post_connect().await?;
 
         Ok(())
-
-        // TODO improve reconnection strategy with multiple retries
     }
 
     async fn post_connect(&mut self) -> Result<()> {

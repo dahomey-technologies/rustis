@@ -6,7 +6,6 @@ use crate::{
     resp::{Command, RespBuf},
 };
 use serde::de::DeserializeOwned;
-use smallvec::SmallVec;
 use std::future::IntoFuture;
 
 #[allow(clippy::large_enum_variant)]
@@ -38,25 +37,6 @@ impl Connection {
             Connection::Standalone(connection) => connection.write(command).await,
             Connection::Sentinel(connection) => connection.write(command).await,
             Connection::Cluster(connection) => connection.write(command).await,
-        }
-    }
-
-    #[inline]
-    pub async fn write_batch(
-        &mut self,
-        commands: SmallVec<[&mut Command; 10]>,
-        retry_reasons: &[RetryReason],
-    ) -> Result<()> {
-        match self {
-            Connection::Standalone(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
-            Connection::Sentinel(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
-            Connection::Cluster(connection) => {
-                connection.write_batch(commands, retry_reasons).await
-            }
         }
     }
 

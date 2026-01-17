@@ -408,3 +408,23 @@ async fn cluster_transaction() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cluster_pipeline() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let mut pipeline = client.create_pipeline();
+    pipeline.set("key1{1}", "value1").forget();
+    pipeline.set("key2{1}", "value2").forget();
+    pipeline.get::<()>("key1{1}").queue();
+    pipeline.get::<()>("key2{1}").queue();
+
+    let (value1, value2): (String, String) = pipeline.execute().await?;
+    assert_eq!("value1", value1);
+    assert_eq!("value2", value2);
+
+    Ok(())
+}

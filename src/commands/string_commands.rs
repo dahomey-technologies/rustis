@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{Response, cmd},
+    resp::{CommandBuilder, Response, cmd},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -112,7 +112,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
     fn get<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GET").key(key))
+        prepare_command(self, CommandBuilder::get(key))
     }
 
     /// Get the value of key and delete the key.

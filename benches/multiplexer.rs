@@ -1,137 +1,113 @@
-use criterion::{Bencher, Criterion, criterion_group, criterion_main};
-use futures_util::Future;
-use std::time::Duration;
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
-pub fn current_thread_runtime() -> tokio::runtime::Runtime {
-    let mut builder = tokio::runtime::Builder::new_current_thread();
-    builder.enable_io();
-    builder.enable_time();
-    builder.build().unwrap()
+use fred::prelude::*; // fred
+use redis::aio::MultiplexedConnection; // redis-rs
+use rustis::{client::Client as RustisClient, commands::StringCommands}; // rustis
+
+async fn setup_data(client: &RustisClient) {
+    let data: Vec<_> = (0..100)
+        .map(|i| (format!("key{i}"), format!("value{i}")))
+        .collect();
+    // On s'assure que les données sont bien là avant de commencer
+    let _: () = client.mset(data).await.unwrap();
 }
 
-pub fn block_on_all<F>(f: F) -> F::Output
-where
-    F: Future,
-{
-    current_thread_runtime().block_on(f)
+async fn bench_rustis(client: RustisClient, tasks: usize, reqs: usize, keys: Arc<Vec<String>>) {
+    let mut handles = vec![];
+    for _ in 0..tasks {
+        let client = client.clone();
+        let keys = keys.clone();
+        handles.push(tokio::spawn(async move {
+            for i in 0..reqs {
+                let _: String = rustis::commands::StringCommands::get(&client, &keys[i % 100])
+                    .await
+                    .unwrap();
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
 }
 
-fn get_redis_client() -> redis::Client {
-    redis::Client::open("redis://127.0.0.1:6379").unwrap()
+async fn bench_fred(client: fred::clients::Client, tasks: usize, reqs: usize, keys: Arc<Vec<String>>) {
+    let mut handles = vec![];
+    for _ in 0..tasks {
+        let client = client.clone();
+        let keys = keys.clone();
+        handles.push(tokio::spawn(async move {
+            for i in 0..reqs {
+                let _: String = client.get(&keys[i % 100]).await.unwrap();
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
 }
 
-async fn get_rustis_client() -> rustis::client::Client {
-    rustis::client::Client::connect("127.0.0.1:6379")
-        .await
-        .unwrap()
+async fn bench_redis_rs(conn: MultiplexedConnection, tasks: usize, reqs: usize, keys: Arc<Vec<String>>) {
+    let mut handles = vec![];
+    for _ in 0..tasks {
+        let mut conn = conn.clone();
+        let keys = keys.clone();
+        handles.push(tokio::spawn(async move {
+            for i in 0..reqs {
+                let _: String = redis::cmd("GET")
+                    .arg(&keys[i % 100])
+                    .query_async(&mut conn)
+                    .await
+                    .unwrap();
+            }
+        }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
 }
 
-async fn get_fred_client() -> fred::clients::Client {
-    use fred::prelude::*;
+fn compare_drivers(c: &mut Criterion) {
+    let rt = Runtime::new().unwrap();
+    let keys: Arc<Vec<String>> = Arc::new((0..100).map(|i| format!("key{i}")).collect());
 
-    let config = Config::default();
-    let client = Client::new(config, None, None, None);
-    client.connect();
-    client.wait_for_connect().await.unwrap();
+    // Initialisation des clients (Setup)
+    let (rustis, fred, redis_rs) = rt.block_on(async {
+        // rustis
+        let rustis = RustisClient::connect("127.0.0.1:6379").await.unwrap();
+        setup_data(&rustis).await;
+        // fred
+        let fred = fred::clients::Client::default();
+        fred.init().await.unwrap();
+        // redis-rs
+        let redis_rs = redis::Client::open("redis://127.0.0.1/").unwrap();
+        let redis_rs = redis_rs.get_multiplexed_async_connection().await.unwrap();
 
-    client
-}
-
-const PARALLEL_QUERIES: usize = 8;
-const ITERATIONS: usize = 100;
-
-fn bench_redis_parallel(b: &mut Bencher) {
-    use redis::{AsyncCommands, RedisError};
-
-    let client = get_redis_client();
-    let runtime = current_thread_runtime();
-    let con = runtime
-        .block_on(client.get_multiplexed_async_connection())
-        .unwrap();
-
-    b.iter(|| {
-        runtime.block_on(async {
-            let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .map(|i| {
-                    let mut con = con.clone();
-                    tokio::spawn(async move {
-                        for _ in 0..ITERATIONS {
-                            let key = format!("key{i}");
-                            let value = format!("value{i}");
-                            let _: Result<(), RedisError> = con.set(key, value).await;
-                        }
-                    })
-                })
-                .collect();
-
-            futures_util::future::join_all(tasks).await;
-        })
+        (rustis, fred, redis_rs)
     });
-}
 
-fn bench_fred_parallel(b: &mut Bencher) {
-    use fred::prelude::*;
+    let mut group = c.benchmark_group("Multiplexing Comparison");
+    let num_tasks = 12;
+    let reqs_per_task = 200;
 
-    let runtime = current_thread_runtime();
-    let client = runtime.block_on(get_fred_client());
-
-    b.iter(|| {
-        runtime.block_on(async {
-            let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .map(|i| {
-                    let client = client.clone();
-                    tokio::spawn(async move {
-                        for _ in 0..ITERATIONS {
-                            let key = format!("key{i}");
-                            let value = format!("value{i}");
-                            let _: Result<(), Error> =
-                                client.set(key, value, None, None, false).await;
-                        }
-                    })
-                })
-                .collect();
-
-            futures_util::future::join_all(tasks).await;
-        })
+    group.bench_function("rustis", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_rustis(rustis.clone(), num_tasks, reqs_per_task, keys.clone()));
     });
-}
 
-fn bench_rustis_parallel(b: &mut Bencher) {
-    use rustis::commands::StringCommands;
-
-    let runtime = current_thread_runtime();
-
-    let client = runtime.block_on(get_rustis_client());
-
-    b.iter(|| {
-        runtime.block_on(async {
-            let tasks: Vec<_> = (0..PARALLEL_QUERIES)
-                .map(|i| {
-                    let client = client.clone();
-                    tokio::spawn(async move {
-                        for _ in 0..ITERATIONS {
-                            let key = format!("key{i}");
-                            let value = format!("value{i}");
-                            let _ = client.set(key, value).await;
-                        }
-                    })
-                })
-                .collect();
-
-            futures_util::future::join_all(tasks).await;
-        })
+    group.bench_function("fred", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fred(fred.clone(), num_tasks, reqs_per_task, keys.clone()));
     });
-}
 
-fn bench_parallel(c: &mut Criterion) {
-    let mut group = c.benchmark_group("parallel");
-    group
-        .measurement_time(Duration::from_secs(15))
-        .bench_function("redis_parallel", bench_redis_parallel)
-        .bench_function("fred_parallel", bench_fred_parallel)
-        .bench_function("rustis_parallel", bench_rustis_parallel);
+    group.bench_function("redis-rs", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_redis_rs(redis_rs.clone(), num_tasks, reqs_per_task, keys.clone()));
+    });
+
     group.finish();
 }
 
-criterion_group!(bench, bench_parallel);
-criterion_main!(bench);
+criterion_group!(benches, compare_drivers);
+criterion_main!(benches);

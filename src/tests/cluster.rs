@@ -1,6 +1,6 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
-    client::Client,
+    client::{BatchPreparedCommand, Client},
     commands::{
         ClusterCommands, ClusterNodeResult,
         ClusterSetSlotSubCommand::{self, Importing, Migrating, Node},
@@ -379,4 +379,32 @@ fn cluster_selslot_command() {
         "CLUSTER SETSLOT 12539 MIGRATING 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
         cmd.to_string()
     );
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cluster_transaction() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+
+    let mut transaction = client.create_transaction();
+
+    transaction.set("key1{1}", "value1").forget();
+    transaction.set("key2{1}", "value2").forget();
+    transaction.get::<()>("key1{1}").queue();
+    transaction.get::<()>("key2{1}").queue();
+    let (value1, value2): (String, String) = transaction.execute().await?;
+
+    assert_eq!("value1", value1);
+    assert_eq!("value2", value2);
+
+    let mut transaction = client.create_transaction();
+
+    transaction.set("key{1}", "value").forget();
+    transaction.get::<()>("key{1}").queue();
+    let value: String = transaction.execute().await?;
+
+    assert_eq!("value", value);
+
+    Ok(())
 }

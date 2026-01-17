@@ -32,7 +32,12 @@ async fn bench_rustis(client: RustisClient, tasks: usize, reqs: usize, keys: Arc
     }
 }
 
-async fn bench_fred(client: fred::clients::Client, tasks: usize, reqs: usize, keys: Arc<Vec<String>>) {
+async fn bench_fred(
+    client: fred::clients::Client,
+    tasks: usize,
+    reqs: usize,
+    keys: Arc<Vec<String>>,
+) {
     let mut handles = vec![];
     for _ in 0..tasks {
         let client = client.clone();
@@ -48,7 +53,12 @@ async fn bench_fred(client: fred::clients::Client, tasks: usize, reqs: usize, ke
     }
 }
 
-async fn bench_redis_rs(conn: MultiplexedConnection, tasks: usize, reqs: usize, keys: Arc<Vec<String>>) {
+async fn bench_redis_rs(
+    conn: MultiplexedConnection,
+    tasks: usize,
+    reqs: usize,
+    keys: Arc<Vec<String>>,
+) {
     let mut handles = vec![];
     for _ in 0..tasks {
         let mut conn = conn.clone();

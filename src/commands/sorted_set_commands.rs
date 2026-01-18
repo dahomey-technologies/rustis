@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -149,7 +149,7 @@ pub trait SortedSetCommands<'a>: Sized {
         increment: f64,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, f64> {
-        prepare_command(self, cmd("ZINCRBY").key(key).arg(increment).arg(member))
+        prepare_command(self, FastPathCommandBuilder::zincrby(key, increment, member))
     }
 
     /// This command is similar to [zinterstore](SortedSetCommands::zinterstore),

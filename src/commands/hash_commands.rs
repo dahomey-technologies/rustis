@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{ArgCounter, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{ArgCounter, FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -159,7 +159,7 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         field: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HGET").key(key).arg(field))
+        prepare_command(self, FastPathCommandBuilder::hget(key, field))
     }
 
     /// Returns all fields and values of the hash stored at key.
@@ -243,7 +243,7 @@ pub trait HashCommands<'a>: Sized {
         field: impl Serialize,
         increment: i64,
     ) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("HINCRBY").key(key).arg(field).arg(increment))
+        prepare_command(self, FastPathCommandBuilder::hincrby(key, field, increment))
     }
 
     /// Increment the specified field of a hash stored at key,

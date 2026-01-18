@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{CommandBuilder, Response, cmd},
+    resp::{FastPathCommandBuilder, Response, cmd},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -112,7 +112,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
     fn get<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, CommandBuilder::get(key))
+        prepare_command(self, FastPathCommandBuilder::get(key))
     }
 
     /// Get the value of key and delete the key.
@@ -492,7 +492,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
     fn set(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SET").key(key).arg(value))
+        prepare_command(self, FastPathCommandBuilder::set(key, value))
     }
 
     /// Set key to hold the string value.

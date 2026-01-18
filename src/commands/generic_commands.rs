@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{BulkString, CommandArgsMut, Response, cmd, serialize_flag},
+    resp::{BulkString, CommandArgsMut, FastPathCommandBuilder, Response, cmd, serialize_flag},
 };
 use serde::{Deserialize, Serialize};
 
@@ -98,7 +98,11 @@ pub trait GenericCommands<'a>: Sized {
         seconds: u64,
         option: impl Into<Option<ExpireOption>>,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("EXPIRE").key(key).arg(seconds).arg(option.into()))
+        if let Some(option) = option.into() {
+            prepare_command(self, cmd("EXPIRE").key(key).arg(seconds).arg(option))
+        } else {
+            prepare_command(self, FastPathCommandBuilder::expire(key, seconds))
+        }
     }
 
     /// EXPIREAT has the same effect and semantic as EXPIRE,

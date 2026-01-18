@@ -84,6 +84,26 @@ impl ArgLayout {
     const IS_KEY: u16 = 1 << 0;
 
     #[inline(always)]
+    pub fn arg(range: std::ops::Range<usize>) -> Self {
+        Self {
+            start: range.start as u64,
+            len: range.end as u32 - range.start as u32,
+            slot: 0,
+            flags: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn key(range: std::ops::Range<usize>, slot: u16) -> Self {
+        Self {
+            start: range.start as u64,
+            len: range.end as u32 - range.start as u32,
+            slot,
+            flags: Self::IS_KEY,
+        }
+    }
+
+    #[inline(always)]
     pub fn range(&self) -> std::ops::Range<usize> {
         self.start as usize..self.start as usize + self.len as usize
     }
@@ -91,6 +111,11 @@ impl ArgLayout {
     #[inline(always)]
     pub fn is_key(&self) -> bool {
         self.flags & Self::IS_KEY != 0
+    }
+
+    #[inline(always)]
+    pub fn set_key(&mut self) {
+        self.flags |= Self::IS_KEY;
     }
 }
 
@@ -309,7 +334,7 @@ impl CommandBuilder {
             #[cfg(debug_assertions)]
             kill_connection_on_write: 0,
             #[cfg(debug_assertions)]
-            command_seq: COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
+            command_seq: next_sequence_counter(),
             request_policy: None,
             response_policy: None,
             key_step: 0,
@@ -378,7 +403,7 @@ impl CommandBuilder {
         let new_len = self.args_layout.len();
 
         for layout in &mut self.args_layout[old_len..new_len] {
-            layout.flags |= ArgLayout::IS_KEY;
+            layout.set_key();
             let key_bytes = &self.buffer[layout.range()];
             layout.slot = hash_slot(key_bytes);
         }
@@ -446,39 +471,6 @@ impl CommandBuilder {
         self.key_step = key_step;
         self
     }
-
-    /// Optimized version for GET command
-    #[inline(always)]
-    pub(crate) fn get(key: impl Serialize) -> Command {
-        let mut buffer = BytesMut::with_capacity(128);
-        buffer.put_slice(b"*2\r\n$3\r\nGET\r\n");
-
-        let mut args_layout = SmallVec::<[ArgLayout; 10]>::new();
-
-        {
-            let mut serializer = ArgSerializer::new(&mut buffer, &mut args_layout);
-            key.serialize(&mut serializer)
-                .expect("Key serialization failed");
-        }
-
-        let layout = &mut args_layout[0];
-        layout.flags |= ArgLayout::IS_KEY;
-        let key_bytes = &buffer[layout.range()];
-        layout.slot = hash_slot(key_bytes);
-
-        Command::new(
-            buffer.freeze(),
-            (8, 3),
-            args_layout,
-            #[cfg(debug_assertions)]
-            0,
-            #[cfg(debug_assertions)]
-            COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
-            None,
-            None,
-            0,
-        )
-    }
 }
 
 impl From<CommandBuilder> for Command {
@@ -543,7 +535,7 @@ impl From<CommandBuilder> for Command {
 
 /// Implement hash_slot algorithm
 /// see. https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags
-fn hash_slot(mut key: &[u8]) -> u16 {
+pub(crate) fn hash_slot(mut key: &[u8]) -> u16 {
     // { found
     if let Some(s) = memchr(b'{', key) {
         // } found
@@ -556,6 +548,12 @@ fn hash_slot(mut key: &[u8]) -> u16 {
     }
 
     crc16::State::<crc16::XMODEM>::calculate(key) % 16384
+}
+
+#[cfg(debug_assertions)]
+#[inline(always)]
+pub(crate) fn next_sequence_counter() -> usize {
+    COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
 #[cfg(test)]

@@ -99,6 +99,11 @@ name = "pipeline"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "fast_path"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["web-examples"]

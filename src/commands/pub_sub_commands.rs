@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::{PreparedCommand, PubSubStream, prepare_command},
-    resp::{Response, cmd},
+    resp::{FastPathCommandBuilder, Response, cmd},
 };
 use serde::Serialize;
 
@@ -64,7 +64,7 @@ pub trait PubSubCommands<'a>: Sized {
         channel: impl Serialize,
         message: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("PUBLISH").arg(channel).arg(message))
+        prepare_command(self, FastPathCommandBuilder::publish(channel, message))
     }
 
     /// Lists the currently active channels.

@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd},
+    resp::{FastPathCommandBuilder, Response, cmd},
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -131,7 +131,7 @@ pub trait SetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("SISMEMBER").key(key).arg(member))
+        prepare_command(self, FastPathCommandBuilder::sismember(key, member))
     }
 
     /// Returns all the members of the set value stored at key.

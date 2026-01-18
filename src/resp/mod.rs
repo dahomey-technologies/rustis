@@ -80,6 +80,7 @@ pub use bulk_string::*;
 pub use command::*;
 pub use command_args::*;
 pub(crate) use command_encoder::*;
+pub use fast_path_command_builder::*;
 #[cfg(feature = "json")]
 pub use json::*;
 pub(crate) use resp_batch_deserializer::*;
@@ -98,6 +99,7 @@ mod bulk_string;
 mod command;
 mod command_args;
 mod command_encoder;
+mod fast_path_command_builder;
 #[cfg(feature = "json")]
 mod json;
 mod resp_batch_deserializer;

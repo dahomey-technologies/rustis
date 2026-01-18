@@ -2,7 +2,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd},
+    resp::{FastPathCommandBuilder, Response, cmd},
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
@@ -118,8 +118,8 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
-    fn lpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LPOP").key(key).arg(count))
+    fn lpop<R: Response>(self, key: impl Serialize, count: u32) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, FastPathCommandBuilder::lpop(key, count))
     }
 
     /// Returns the index of matching elements inside a Redis list.
@@ -279,8 +279,8 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
-    fn rpop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("RPOP").key(key).arg(count))
+    fn rpop<R: Response>(self, key: impl Serialize, count: u32) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, FastPathCommandBuilder::rpop(key, count))
     }
 
     /// Insert all the specified values at the tail of the list stored at key

@@ -62,11 +62,11 @@ impl<'a> ArgSerializer<'a> {
         // 2. Capture the absolute position of the data for the index
         let start_pos = self.buffer.len();
 
-        // 4. Write the actual data
+        // 3. Write the actual data
         self.buffer.put_slice(data);
         self.buffer.put_slice(b"\r\n");
 
-        // 5. Update the layout index
+        // 4. Update the layout index
         if let Some(ref mut layout) = self.args_layout {
             layout.push(ArgLayout {
                 start: start_pos as u64,

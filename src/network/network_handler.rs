@@ -31,6 +31,8 @@ pub(crate) type PushSender = mpsc::UnboundedSender<Result<RespBuf>>;
 pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<RespBuf>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
+type PendingResult = (ResultSender, Result<RespBuf>);
+type PendingResultBatch = (ResultsSender, Result<Vec<RespBuf>>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
@@ -99,6 +101,8 @@ pub(crate) struct NetworkHandler {
     auto_remonitor: bool,
     tag: Arc<str>,
     reconnection_state: ReconnectionState,
+    pending_results: SmallVec<[PendingResult; 64]>,
+    pending_result_batches: SmallVec<[PendingResultBatch; 64]>,
 }
 
 impl NetworkHandler {
@@ -133,6 +137,8 @@ impl NetworkHandler {
             auto_remonitor,
             tag: tag.clone(),
             reconnection_state: ReconnectionState::new(reconnection_config),
+            pending_results: SmallVec::new(),
+            pending_result_batches: SmallVec::new(),
         };
 
         let join_handle = spawn(async move {
@@ -149,22 +155,9 @@ impl NetworkHandler {
             select! {
                 msg = self.msg_receiver.next().fuse() => {
                     if !self.try_handle_message(msg).await { break; }
-                } ,
+                },
                 result = self.connection.read().fuse() => {
-                    let Some(result) = result else {
-                        if !self.reconnect().await { break; }
-                        continue;
-                    };
-                    self.handle_result(result);
-
-                    // OPTIMISATION : Drain the next available results in the buffer
-                    while let Poll::Ready(result) = self.connection.try_read() {
-                        let Some(result) = result else {
-                            if !self.reconnect().await { break; }
-                            continue;
-                        };
-                        self.handle_result(result);
-                    }
+                    if !self.try_handle_result(result).await { break; }
                 }
             }
         }
@@ -384,6 +377,41 @@ impl NetworkHandler {
         }
     }
 
+    async fn try_handle_result(&mut self, result: Option<Result<RespBuf>>) -> bool {
+        let Some(result) = result else {
+            return self.reconnect().await;
+        };
+        self.handle_result(result);
+
+        // OPTIMISATION : Drain the next available results in the buffer
+        while let Poll::Ready(result) = self.connection.try_read() {
+            let Some(result) = result else {
+                return self.reconnect().await;
+            };
+            self.handle_result(result);
+        }
+
+        for (sender, result) in self.pending_results.drain(..) {
+            if let Err(e) = sender.send(result) {
+                warn!(
+                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                    self.tag
+                );
+            }
+        }
+
+        for (sender, results) in self.pending_result_batches.drain(..) {
+            if let Err(e) = sender.send(results) {
+                warn!(
+                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                    self.tag
+                );
+            }
+        }
+
+        true
+    }
+
     fn handle_result(&mut self, result: Result<RespBuf>) {
         match self.status {
             Status::Disconnected => (),
@@ -491,12 +519,7 @@ impl NetworkHandler {
                                 }
                                 | MessageKind::PubSub { result_sender, .. }
                                 | MessageKind::Monitor { result_sender, .. } => {
-                                    if let Err(e) = result_sender.send(result) {
-                                        warn!(
-                                            "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                            self.tag
-                                        );
-                                    }
+                                    self.pending_results.push((result_sender, result));
                                 }
                                 MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
@@ -504,29 +527,15 @@ impl NetworkHandler {
 
                                         if let Some(mut pending_replies) = pending_replies {
                                             pending_replies.push(resp_buf);
-                                            if let Err(e) = results_sender.send(Ok(pending_replies))
-                                            {
-                                                warn!(
-                                                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                                    self.tag
-                                                );
-                                            }
-                                        } else if let Err(e) =
-                                            results_sender.send(Ok(vec![resp_buf]))
-                                        {
-                                            warn!(
-                                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                                self.tag
-                                            );
+                                            self.pending_result_batches
+                                                .push((results_sender, Ok(pending_replies)));
+                                        } else {
+                                            self.pending_result_batches
+                                                .push((results_sender, Ok(vec![resp_buf])));
                                         }
                                     }
                                     Err(e) => {
-                                        if let Err(e) = results_sender.send(Err(e)) {
-                                            warn!(
-                                                "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                                                self.tag
-                                            );
-                                        }
+                                        self.pending_result_batches.push((results_sender, Err(e)));
                                     }
                                 },
                                 MessageKind::Invalidation { .. }

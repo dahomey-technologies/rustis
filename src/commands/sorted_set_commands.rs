@@ -149,7 +149,10 @@ pub trait SortedSetCommands<'a>: Sized {
         increment: f64,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, f64> {
-        prepare_command(self, FastPathCommandBuilder::zincrby(key, increment, member))
+        prepare_command(
+            self,
+            FastPathCommandBuilder::zincrby(key, increment, member),
+        )
     }
 
     /// This command is similar to [zinterstore](SortedSetCommands::zinterstore),

@@ -1,7 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{ArgCounter, FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{
+        ArgCounter, FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag,
+    },
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 

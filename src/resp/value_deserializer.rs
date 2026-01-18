@@ -1,4 +1,4 @@
-use crate::{Error, Result, resp::Value};
+use crate::{ClientError, Error, Result, resp::Value};
 use serde::{
     Deserialize, Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
@@ -46,9 +46,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Boolean(b) => *b,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to bool"
-                )));
+                return Err(Error::Client(ClientError::CannotParseBoolean));
             }
         };
 
@@ -67,7 +65,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to i8")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -86,7 +84,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to i16")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -105,7 +103,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to i32")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -126,7 +124,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to i64")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -145,7 +143,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to u8")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -164,7 +162,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to u16")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -183,7 +181,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to u32")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -203,7 +201,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to u64")));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -222,9 +220,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<f32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse result {self:?} to f32"
-                )));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -243,9 +239,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.parse::<f64>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse result {self:?} to f64"
-                )));
+                return Err(Error::Client(ClientError::CannotParseNumber));
             }
         };
 
@@ -262,19 +256,19 @@ impl<'de> Deserializer<'de> for &'de Value {
                 if str.len() == 1 {
                     str.chars().next().unwrap()
                 } else {
-                    return Err(Error::Client("Cannot parse to char".to_owned()));
+                    return Err(Error::Client(ClientError::CannotParseChar));
                 }
             }
             Value::SimpleString(str) => {
                 if str.len() == 1 {
                     str.chars().next().unwrap()
                 } else {
-                    return Err(Error::Client("Cannot parse to char".to_owned()));
+                    return Err(Error::Client(ClientError::CannotParseChar));
                 }
             }
             Value::Nil => '\0',
             Value::Error(e) => return Err(Error::Redis(e.clone())),
-            _ => return Err(Error::Client("Cannot parse to char".to_owned())),
+            _ => return Err(Error::Client(ClientError::CannotParseChar)),
         };
 
         visitor.visit_char(result)
@@ -290,7 +284,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.as_str(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!("Cannot parse value {self:?} to str")));
+                return Err(Error::Client(ClientError::CannotParseStr));
             }
         };
 
@@ -309,9 +303,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.clone(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to String"
-                )));
+                return Err(Error::Client(ClientError::CannotParseString));
             }
         };
 
@@ -328,9 +320,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.as_bytes(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to byte buffer"
-                )));
+                return Err(Error::Client(ClientError::CannotParseBytes));
             }
         };
 
@@ -347,9 +337,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => s.as_bytes().to_vec(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse value {self:?} to byte buffer"
-                )));
+                return Err(Error::Client(ClientError::CannotParseBytes));
             }
         };
 
@@ -383,7 +371,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Set(s) if s.is_empty() => visitor.visit_unit(),
             Value::Map(m) if m.is_empty() => visitor.visit_unit(),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client("Expected nil".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseNil)),
         }
     }
 
@@ -418,9 +406,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             }
             Value::Map(values) => visitor.visit_seq(MapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(format!(
-                "Cannot parse sequence from value `{self}`"
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseSequence)),
         }
     }
 
@@ -453,7 +439,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(values) => visitor.visit_map(SeqAccess::new(values)),
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client("Cannot parse map".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }
 
@@ -486,13 +472,13 @@ impl<'de> Deserializer<'de> for &'de Value {
             }
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client("Cannot parse struct".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseStruct)),
         }
     }
 
     fn deserialize_enum<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
@@ -515,9 +501,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 if a.len() == 2 {
                     visitor.visit_enum(Enum::from_array(a))
                 } else {
-                    Err(Error::Client(
-                        "Array len must be 2 to parse an enum".to_owned(),
-                    ))
+                    Err(Error::Client(ClientError::CannotParseEnum))
                 }
             }
             Value::Map(m) => {
@@ -526,15 +510,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 if m.len() == 1 {
                     visitor.visit_enum(Enum::from_map(m))
                 } else {
-                    Err(Error::Client(format!(
-                        "Map len must be 1 to parse enum {name} from {m:?}"
-                    )))
+                    Err(Error::Client(ClientError::CannotParseEnum))
                 }
             }
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(format!(
-                "Cannot parse enum `{name}` from `{self}`"
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseEnum)),
         }
     }
 
@@ -818,7 +798,7 @@ impl<'de> VariantAccess<'de> for &'de Value {
     // If the `Visitor` expected this variant to be a unit variant, the input
     // should have been the plain string case handled in `deserialize_enum`.
     fn unit_variant(self) -> Result<()> {
-        Err(Error::Client("Expected string or bulk string".to_owned()))
+        Err(Error::Client(ClientError::Unexpected))
     }
 
     // Newtype variants are represented as map so

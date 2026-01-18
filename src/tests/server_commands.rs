@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ClientError, Error, RedisError, RedisErrorKind, Result,
     client::{Client, ReconnectionConfig},
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
@@ -984,7 +984,7 @@ async fn monitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| Error::Client("fail".to_owned()))?;
+            .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
         assert!(result.unix_timestamp_millis > 0.0);
         assert_eq!(2, result.database);
         assert_eq!("SET", result.command);
@@ -1044,7 +1044,7 @@ async fn auto_remonitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| Error::Client("fail".to_owned()))?;
+            .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
 
         assert!(result.unix_timestamp_millis > 0.0);
         assert_eq!(2, result.database);

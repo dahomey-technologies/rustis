@@ -1,4 +1,4 @@
-use crate::{Error, RedisError, Result, resp::PUSH_FAKE_FIELD};
+use crate::{ClientError, Error, RedisError, Result, resp::PUSH_FAKE_FIELD};
 use memchr::memchr;
 use serde::{
     Deserializer,
@@ -133,10 +133,7 @@ impl<'de> RespDeserializer<'de> {
     {
         let line = self.next_line()?;
         fast_float2::parse(line).map_err(|_| {
-            Error::Client(format!(
-                "Cannot parse number from {}",
-                String::from_utf8_lossy(line)
-            ))
+            Error::Client(ClientError::CannotParseNumber)
         })
     }
 
@@ -147,10 +144,7 @@ impl<'de> RespDeserializer<'de> {
     {
         let line = self.next_line()?;
         atoi::atoi(line).ok_or_else(|| {
-            Error::Client(format!(
-                "Cannot parse integer from {}",
-                String::from_utf8_lossy(line)
-            ))
+            Error::Client(ClientError::CannotParseNumber)
         })
     }
 
@@ -161,10 +155,7 @@ impl<'de> RespDeserializer<'de> {
     {
         let line = self.peek_line()?;
         atoi::atoi(&line[1..]).ok_or_else(|| {
-            Error::Client(format!(
-                "Cannot parse integer from {}",
-                String::from_utf8_lossy(line)
-            ))
+            Error::Client(ClientError::CannotParseNumber)
         })
     }
 
@@ -181,11 +172,7 @@ impl<'de> RespDeserializer<'de> {
 
         // Validate \r\n terminator
         if self.buf[end] != b'\r' || self.buf[end + 1] != b'\n' {
-            return Err(Error::Client(format!(
-                "Expected \\r\\n after bulk string. Got '{}''{}'",
-                self.buf[end] as char,
-                self.buf[end + 1] as char
-            )));
+            return Err(Error::Client(ClientError::CannotParseBulkString));
         }
 
         let result = &self.buf[self.pos..end];
@@ -200,7 +187,7 @@ impl<'de> RespDeserializer<'de> {
     fn parse_verbatim_string(&mut self) -> Result<&'de [u8]> {
         let full = self.parse_bulk_string()?;
         if full.len() < 4 {
-            return Err(Error::Client("Verbatim string too short".to_owned()));
+            return Err(Error::Client(ClientError::VerbatimStringTooShort));
         }
         Ok(&full[4..])
     }
@@ -227,10 +214,7 @@ impl<'de> RespDeserializer<'de> {
         if line.is_empty() {
             Ok(())
         } else {
-            Err(Error::Client(format!(
-                "Expected \\r\\n after null. Got '{}'",
-                String::from_utf8_lossy(line)
-            )))
+            Err(Error::Client(ClientError::CannotParseNil))
         }
     }
 
@@ -240,10 +224,7 @@ impl<'de> RespDeserializer<'de> {
         match line {
             b"t" => Ok(true),
             b"f" => Ok(false),
-            _ => Err(Error::Client(format!(
-                "Expected boolean. Got '{}'",
-                String::from_utf8_lossy(line)
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseBoolean)),
         }
     }
 
@@ -264,20 +245,14 @@ impl<'de> RespDeserializer<'de> {
                     Ok(T::default())
                 } else {
                     atoi::atoi(bs).ok_or_else(|| {
-                        Error::Client(format!(
-                            "Cannot parse number from {}",
-                            String::from_utf8_lossy(bs)
-                        ))
+                        Error::Client(ClientError::CannotParseNumber)
                     })
                 }
             }
             SIMPLE_STRING_TAG => {
                 let line = self.next_line()?;
                 atoi::atoi(line).ok_or_else(|| {
-                    Error::Client(format!(
-                        "Cannot parse number from {}",
-                        String::from_utf8_lossy(line)
-                    ))
+                    Error::Client(ClientError::CannotParseNumber)
                 })
             }
             ARRAY_TAG => {
@@ -285,15 +260,12 @@ impl<'de> RespDeserializer<'de> {
                 if len == 1 && self.next()? == INTEGER_TAG {
                     self.parse_integer::<T>()
                 } else {
-                    Err(Error::Client("Cannot parse number from array".to_owned()))
+                    Err(Error::Client(ClientError::CannotParseNumber))
                 }
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            tag => Err(Error::Client(format!(
-                "Cannot parse number from `{}`",
-                tag as char
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseNumber)),
         }
     }
 
@@ -314,17 +286,17 @@ impl<'de> RespDeserializer<'de> {
                     Ok(T::default())
                 } else {
                     fast_float2::parse(bs)
-                        .map_err(|_| Error::Client("Cannot parse number".to_owned()))
+                        .map_err(|_| Error::Client(ClientError::CannotParseNumber))
                 }
             }
             SIMPLE_STRING_TAG => {
                 let line = self.next_line()?;
                 fast_float2::parse(line)
-                    .map_err(|_| Error::Client("Cannot parse number".to_owned()))
+                    .map_err(|_| Error::Client(ClientError::CannotParseNumber))
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client("Cannot parse number".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseNumber)),
         }
     }
 
@@ -365,11 +337,7 @@ impl<'de> RespDeserializer<'de> {
         let end = self.pos + len;
 
         if self.buf[end] != b'\r' || self.buf[end + 1] != b'\n' {
-            return Err(Error::Client(format!(
-                "Expected \\r\\n after bulk string. Got '{}''{}'",
-                self.buf[end] as char,
-                self.buf[end + 1] as char
-            )));
+            return Err(Error::Client(ClientError::CannotParseBulkString));
         }
 
         self.pos = end + 2;
@@ -398,7 +366,7 @@ impl<'de> RespDeserializer<'de> {
                 }
                 Ok(())
             }
-            _ => Err(Error::Client("Cannot parse tag".to_owned())),
+            tag => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         }
     }
 
@@ -409,7 +377,7 @@ impl<'de> RespDeserializer<'de> {
                 let len = self.parse_integer::<usize>()?;
                 Ok(RespArrayChunks::new(self, len))
             }
-            _ => Err(Error::Client("Cannot parse sequence".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseSequence)),
         }
     }
 }
@@ -435,10 +403,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             PUSH_TAG => visitor.visit_map(PushMapAccess::new(self)),
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            byte => Err(Error::Client(format!(
-                "Unknown data type '{}' (0x{:02x})",
-                byte as char, byte
-            ))),
+            byte => Err(Error::Client(ClientError::UnknownRespTag(byte as char))),
         }
     }
 
@@ -461,7 +426,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
-            _ => return Err(Error::Client("Cannot parse to bool".to_owned())),
+            _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
         };
 
         visitor.visit_bool(result)
@@ -558,7 +523,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 let mut chars = str.chars();
                 match (chars.next(), chars.next()) {
                     (Some(c), None) => c,
-                    _ => return Err(Error::Client("Cannot parse to char".to_owned())),
+                    _ => return Err(Error::Client(ClientError::CannotParseChar)),
                 }
             }
             SIMPLE_STRING_TAG => {
@@ -566,7 +531,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 let mut chars = str.chars();
                 match (chars.next(), chars.next()) {
                     (Some(c), None) => c,
-                    _ => return Err(Error::Client("Cannot parse to char".to_owned())),
+                    _ => return Err(Error::Client(ClientError::CannotParseChar)),
                 }
             }
             NIL_TAG => {
@@ -575,7 +540,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
-            _ => return Err(Error::Client("Cannot parse to char".to_owned())),
+            _ => return Err(Error::Client(ClientError::CannotParseChar)),
         };
 
         visitor.visit_char(result)
@@ -595,11 +560,8 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
-            tag => {
-                return Err(Error::Client(format!(
-                    "Cannot parse to str a RESP value starting with `{}`",
-                    tag as char
-                )));
+            _ => {
+                return Err(Error::Client(ClientError::CannotParseStr));
             }
         };
 
@@ -622,10 +584,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
             _ => {
-                return Err(Error::Client(format!(
-                    "Cannot parse to string: `{}`",
-                    String::from_utf8_lossy(self.next_line()?).replace("\r\n", "\\r\\n")
-                )));
+                return Err(Error::Client(ClientError::CannotParseString));
             }
         };
 
@@ -646,7 +605,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             SIMPLE_STRING_TAG => self.parse_string()?.as_bytes(),
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
-            _ => return Err(Error::Client("Cannot parse to bytes".to_owned())),
+            _ => return Err(Error::Client(ClientError::CannotParseBytes)),
         };
 
         visitor.visit_borrowed_bytes(result)
@@ -666,7 +625,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             SIMPLE_STRING_TAG => self.parse_string()?.as_bytes().to_vec(),
             ERROR_TAG => return Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => return Err(Error::Redis(self.parse_blob_error()?)),
-            _ => return Err(Error::Client("Cannot parse to byte buffer".to_owned())),
+            _ => return Err(Error::Client(ClientError::CannotParseBytes)),
         };
 
         visitor.visit_byte_buf(result)
@@ -751,10 +710,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            tag => Err(Error::Client(format!(
-                "Cannot parse to sequence a RESP value starting with {}",
-                tag as char
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseSequence)),
         }
     }
 
@@ -795,15 +751,9 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
             SIMPLE_STRING_TAG => {
-                let str = self.parse_string()?;
-                Err(Error::Client(format!(
-                    "Cannot parse map from simple string `{str}`"
-                )))
+                Err(Error::Client(ClientError::CannotParseMap))
             }
-            c => Err(Error::Client(format!(
-                "Cannot parse map from {}",
-                c as char
-            ))),
+            _ => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }
 
@@ -846,13 +796,13 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client("Cannot parse struct".to_owned())),
+            _ => Err(Error::Client(ClientError::CannotParseStruct)),
         }
     }
 
     fn deserialize_enum<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
@@ -878,9 +828,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 if len == 2 {
                     visitor.visit_enum(Enum { de: self })
                 } else {
-                    Err(Error::Client(
-                        "Array len must be 2 to parse an enum".to_owned(),
-                    ))
+                    Err(Error::Client(ClientError::CannotParseEnum))
                 }
             }
             MAP_TAG => {
@@ -890,14 +838,12 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
                 if len == 1 {
                     visitor.visit_enum(Enum { de: self })
                 } else {
-                    Err(Error::Client(
-                        "Map len must be 1 to parse an enum".to_owned(),
-                    ))
+                    Err(Error::Client(ClientError::CannotParseEnum))
                 }
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            _ => Err(Error::Client(format!("Cannot parse enum `{name}`"))),
+            _ => Err(Error::Client(ClientError::CannotParseEnum)),
         }
     }
 
@@ -1126,7 +1072,7 @@ impl<'de> VariantAccess<'de> for Enum<'_, 'de> {
     // should have been the plain string case handled in `deserialize_enum`.
     #[inline]
     fn unit_variant(self) -> Result<()> {
-        Err(Error::Client("Expected string or bulk string".to_owned()))
+        Err(Error::Client(ClientError::Unexpected))
     }
 
     // Newtype variants are represented as map so

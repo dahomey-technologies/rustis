@@ -1,5 +1,5 @@
 use super::RespDeserializer;
-use crate::{Error, Result, resp::RespBuf};
+use crate::{ClientError, Error, Result, resp::RespBuf};
 use bytes::BytesMut;
 use serde::{Deserialize, de::IgnoredAny};
 use tokio_util::codec::Decoder;
@@ -55,7 +55,7 @@ impl Decoder for BufferDecoder {
                     Err(e) => return Err(e),
                 }
             }
-            _ => return Err(Error::Client("Invalid TAG".to_string())),
+            tag => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         }
 
         Ok(None)
@@ -64,9 +64,6 @@ impl Decoder for BufferDecoder {
 
 fn parse_integer(input: &[u8]) -> Result<isize> {
     atoi::atoi(input).ok_or_else(|| {
-        Error::Client(format!(
-            "Cannot parse integer from {}",
-            String::from_utf8_lossy(input)
-        ))
+        Error::Client(ClientError::CannotParseNumber)
     })
 }

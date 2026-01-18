@@ -1,6 +1,6 @@
 use super::util::RefPubSubMessage;
 use crate::{
-    Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
+    ClientError, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
     resp::{ClientReplyMode, CommandKind, RespBuf, SubscriptionType, cmd},
@@ -218,13 +218,8 @@ impl NetworkHandler {
                                     self.status,
                                     String::from_utf8_lossy(channel_or_pattern)
                                 );
-                                collision_error = Some(Error::Client(
-                                    format!(
-                                        "There is already a subscription on channel `{}`",
-                                        String::from_utf8_lossy(channel_or_pattern)
-                                    )
-                                    .to_string(),
-                                ));
+                                collision_error =
+                                    Some(Error::Client(ClientError::AlreadySubscribed));
                                 break;
                             }
                         }
@@ -291,10 +286,7 @@ impl NetworkHandler {
                         self.tag,
                         msg.commands()
                     );
-                    msg.send_error(
-                        &self.tag,
-                        Error::Client("Disconnected from server".to_string()),
-                    );
+                    msg.send_error(&self.tag, Error::DisconnectedByPeer);
                 }
             }
             Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
@@ -634,11 +626,7 @@ impl NetworkHandler {
                                     .is_some()
                                 {
                                     return Some(Err(Error::Client(
-                                        format!(
-                                            "There is already a subscription on channel `{}`",
-                                            String::from_utf8_lossy(&channel_or_pattern)
-                                        )
-                                        .to_string(),
+                                        ClientError::AlreadySubscribed,
                                     )));
                                 }
 
@@ -740,10 +728,9 @@ impl NetworkHandler {
         while let Some(message_to_receive) = self.messages_to_receive.front() {
             if !message_to_receive.message.retry_on_error {
                 if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive.message.send_error(
-                        &self.tag,
-                        Error::Client("Disconnected from server".to_string()),
-                    );
+                    message_to_receive
+                        .message
+                        .send_error(&self.tag, Error::DisconnectedByPeer);
                 }
             } else {
                 break;
@@ -753,10 +740,9 @@ impl NetworkHandler {
         while let Some(message_to_send) = self.messages_to_send.front() {
             if !message_to_send.message.retry_on_error {
                 if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send.message.send_error(
-                        &self.tag,
-                        Error::Client("Disconnected from server".to_string()),
-                    );
+                    message_to_send
+                        .message
+                        .send_error(&self.tag, Error::DisconnectedByPeer);
                 }
             } else {
                 break;
@@ -785,16 +771,14 @@ impl NetworkHandler {
             } else {
                 warn!("[{}] Max reconnection attempts reached", self.tag);
                 while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive.message.send_error(
-                        &self.tag,
-                        Error::Client("Disconnected from server".to_string()),
-                    );
+                    message_to_receive
+                        .message
+                        .send_error(&self.tag, Error::DisconnectedByPeer);
                 }
                 while let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send.message.send_error(
-                        &self.tag,
-                        Error::Client("Disconnected from server".to_string()),
-                    );
+                    message_to_send
+                        .message
+                        .send_error(&self.tag, Error::DisconnectedByPeer);
                 }
                 return false;
             }

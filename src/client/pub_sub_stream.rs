@@ -1,5 +1,5 @@
 use crate::{
-    Error, PubSubReceiver, Result,
+    ClientError, Error, PubSubReceiver, Result,
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::PubSubSender,
@@ -110,10 +110,7 @@ impl PubSubSplitSink {
 
         for channel in &channels {
             if self.channels.contains(&channel) {
-                return Err(Error::Client(format!(
-                    "pub sub stream already subscribed to channel `{}`",
-                    String::from_utf8_lossy(&channel)
-                )));
+                return Err(Error::Client(ClientError::AlreadySubscribed));
             }
         }
 
@@ -132,10 +129,7 @@ impl PubSubSplitSink {
 
         for pattern in &patterns {
             if self.patterns.contains(&pattern) {
-                return Err(Error::Client(format!(
-                    "pub sub stream already subscribed to pattern `{}`",
-                    String::from_utf8_lossy(&pattern)
-                )));
+                return Err(Error::Client(ClientError::AlreadySubscribed));
             }
         }
 
@@ -154,10 +148,7 @@ impl PubSubSplitSink {
 
         for shardchannel in &shardchannels {
             if self.shardchannels.contains(&shardchannel) {
-                return Err(Error::Client(format!(
-                    "pub sub stream already subscribed to shard channel `{}`",
-                    String::from_utf8_lossy(&shardchannel)
-                )));
+                return Err(Error::Client(ClientError::AlreadySubscribed));
             }
         }
 

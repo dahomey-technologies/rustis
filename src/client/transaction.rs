@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result,
+    ClientError, Error, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
@@ -118,9 +118,7 @@ impl Transaction {
                 Err(e) => Err(e),
             }
         } else {
-            Err(Error::Client(
-                "Unexpected result for transaction".to_owned(),
-            ))
+            Err(Error::Client(ClientError::Unexpected))
         }
     }
 }

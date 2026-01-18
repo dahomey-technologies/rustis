@@ -237,9 +237,11 @@ where
         Box::pin(async move {
             self.executor.write(&self.command).await?;
 
-            let resp_buf = self.executor.read().await.ok_or_else(|| {
-                Error::Client(format!("[{}] disconnected by peer", self.executor.tag()))
-            })??;
+            let resp_buf = self
+                .executor
+                .read()
+                .await
+                .ok_or_else(|| Error::DisconnectedByPeer)??;
 
             resp_buf.to()
         })

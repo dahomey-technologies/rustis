@@ -194,7 +194,7 @@ impl<T> Future for JoinHandle<T> {
             #[cfg(feature = "tokio-runtime")]
             JoinHandle::Tokio(join_handle) => match join_handle.poll_unpin(cx) {
                 Poll::Ready(Ok(result)) => Poll::Ready(Ok(result)),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Client(format!("JoinError: {e}")))),
+                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::TokioJoin(e))),
                 Poll::Pending => Poll::Pending,
             },
             #[cfg(feature = "async-std-runtime")]
@@ -232,7 +232,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
     {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
+            .map_err(|_| Error::Timeout)
     }
     #[cfg(feature = "async-std-runtime")]
     {
@@ -243,7 +243,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
         } else {
             async_std::future::timeout(timeout, future)
                 .await
-                .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
+                .map_err(|_| Error::Timeout)
         }
     }
 }

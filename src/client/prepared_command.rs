@@ -1,11 +1,5 @@
-use crate::{
-    Future,
-    client::Client,
-    resp::{Command, RespBuf, Response},
-};
+use crate::resp::{Command, Response};
 use std::marker::PhantomData;
-
-type CustomConverter<'a, R> = dyn Fn(RespBuf, Command, &'a Client) -> Future<'a, R> + Send + Sync;
 
 /// Wrapper around a command about to be send with a marker for the response type
 /// and a few options to decide how the response send back by Redis should be processed.
@@ -14,14 +8,12 @@ where
     R: Response,
 {
     /// Marker of the type in which the command response will be transformed
-    phantom: PhantomData<R>,
+    phantom: PhantomData<fn(&'a ()) -> R>,
     /// Client, Transaction or Pipeline that will actually
     /// send the command to the Redis server.
     pub executor: E,
     /// Command to send
     pub command: Command,
-    /// Custom converter to transform a RESP Buffer in to `R` type
-    pub custom_converter: Option<Box<CustomConverter<'a, R>>>,
     /// Flag to retry sending the command on network error.
     pub retry_on_error: Option<bool>,
 }
@@ -37,15 +29,8 @@ where
             phantom: PhantomData,
             executor,
             command,
-            custom_converter: None,
             retry_on_error: None,
         }
-    }
-
-    /// Set the functor [`PreparedCommand::custom_converter`]
-    pub fn custom_converter(mut self, custom_converter: Box<CustomConverter<'a, R>>) -> Self {
-        self.custom_converter = Some(custom_converter);
-        self
     }
 
     /// Set a flag to override default `retry_on_error` behavior.

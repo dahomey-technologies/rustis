@@ -401,20 +401,11 @@ impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a,
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            if let Some(custom_converter) = self.custom_converter {
-                let command_for_result = self.command.clone();
-                let result = self
-                    .executor
-                    .send(self.command, self.retry_on_error)
-                    .await?;
-                custom_converter(result, command_for_result, self.executor).await
-            } else {
-                let result = self
-                    .executor
-                    .send(self.command, self.retry_on_error)
-                    .await?;
-                result.to()
-            }
+            let result = self
+                .executor
+                .send(self.command, self.retry_on_error)
+                .await?;
+            result.to()
         })
     }
 }

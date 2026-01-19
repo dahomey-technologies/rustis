@@ -759,13 +759,17 @@ impl NetworkHandler {
                 loop {
                     let delay = end.duration_since(Instant::now());
                     let result = timeout(delay, self.msg_receiver.next().fuse()).await;
-                    if let Ok(msg) = result {
-                        if !self.try_handle_message(msg).await {
+                    match result {
+                        Ok(Some(msg)) => {
+                            if !self.try_handle_message(Some(msg)).await {
+                                return false;
+                            }
+                        }
+                        Ok(None) => {
+                            debug!("[{}] Client dropped during reconnect backoff", self.tag);
                             return false;
                         }
-                    } else {
-                        // delay has expired
-                        break;
+                        Err(_) => break, // delay has expired
                     }
                 }
             } else {
@@ -783,9 +787,12 @@ impl NetworkHandler {
                 return false;
             }
 
-            if let Err(e) = self.connection.reconnect().await {
-                error!("[{}] Failed to reconnect: {e:?}", self.tag);
-                continue;
+            if self.msg_sender.is_closed() {
+                debug!(
+                    "[{}] Reconnected but client is gone. Shutting down.",
+                    self.tag
+                );
+                return false;
             }
 
             if self.auto_resubscribe
@@ -806,7 +813,8 @@ impl NetworkHandler {
                 debug!(
                     "[{}] Cannot send reconnect notification to clients: {e}",
                     self.tag
-                )
+                );
+                return false;
             }
 
             while let Some(message_to_receive) = self.messages_to_receive.pop_back() {

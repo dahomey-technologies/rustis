@@ -1,4 +1,4 @@
-use crate::resp::{Command, Response};
+use crate::resp::{CommandBuilder, Response};
 use std::marker::PhantomData;
 
 /// Wrapper around a command about to be send with a marker for the response type
@@ -13,7 +13,7 @@ where
     /// send the command to the Redis server.
     pub executor: E,
     /// Command to send
-    pub command: Command,
+    pub command: CommandBuilder,
     /// Flag to retry sending the command on network error.
     pub retry_on_error: Option<bool>,
 }
@@ -24,7 +24,7 @@ where
 {
     /// Create a new prepared command.
     #[must_use]
-    pub fn new(executor: E, command: Command) -> Self {
+    pub fn new(executor: E, command: CommandBuilder) -> Self {
         PreparedCommand {
             phantom: PhantomData,
             executor,
@@ -40,17 +40,19 @@ where
         self.retry_on_error = Some(retry_on_error);
         self
     }
-
-    /// Get a reference to the command to send
-    pub fn command(&self) -> &Command {
-        &self.command
-    }
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
 pub(crate) fn prepare_command<'a, E, R: Response>(
     executor: E,
-    command: impl Into<Command>,
+    command: CommandBuilder,
 ) -> PreparedCommand<'a, E, R> {
-    PreparedCommand::new(executor, command.into())
+    PreparedCommand::new(executor, command)
+}
+
+pub(crate) fn prepare_command2<'a, E, R: Response>(
+    command: CommandBuilder,
+    executor: E,
+) -> PreparedCommand<'a, E, R> {
+    PreparedCommand::new(executor, command)
 }

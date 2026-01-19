@@ -1,12 +1,10 @@
 use std::{collections::HashSet, hash::Hash};
 
 use crate::{
-    Result,
-    commands::{
+    Result, commands::{
         FlushingMode, QuantizationOptions, ServerCommands, VAddOptions, VSimOptions,
         VectorOrElement, VectorSetCommands,
-    },
-    tests::{TestClient, get_test_client},
+    }, resp::Command, tests::{TestClient, get_test_client}
 };
 use serial_test::serial;
 
@@ -33,7 +31,7 @@ async fn vadd() -> Result<()> {
 
 #[test]
 fn vadd_args() -> Result<()> {
-    let cmd = TestClient
+    let cmd: Command = TestClient
         .vadd(
             "key",
             12,
@@ -46,7 +44,7 @@ fn vadd_args() -> Result<()> {
                 .set_attr("{\"type\": \"fruit\", \"color\": \"red\"}")
                 .m(12),
         )
-        .command;
+        .command.into();
     assert_eq!(
         "VADD key 12 FP32 \0\0�?\0\0\0@\0\0@@ element CAS NOQUANT EF 12 SETATTR {\"type\": \"fruit\", \"color\": \"red\"} M 12",
         &cmd.to_string()

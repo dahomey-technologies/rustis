@@ -235,7 +235,7 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            self.executor.write(&self.command).await?;
+            self.executor.write(&self.command.into()).await?;
 
             let resp_buf = self
                 .executor

@@ -102,7 +102,7 @@ where
     #[inline]
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let result = self.executor.send(&self.command).await?;
+            let result = self.executor.send(&self.command.into()).await?;
             result.to()
         })
     }

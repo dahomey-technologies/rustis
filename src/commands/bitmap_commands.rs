@@ -1,5 +1,5 @@
 use crate::{
-    client::{CommandFactory, PreparedCommand, prepare_command},
+    client::{CommandFactory, PreparedCommand, prepare_command, prepare_command2},
     resp::cmd,
 };
 use serde::Serialize;
@@ -53,9 +53,8 @@ pub trait BitmapCommands<'a>: CommandFactory + Sized {
     /// # See Also
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
-    fn bitcount(&self, key: impl Serialize, range: BitRange) -> PreparedCommand<'a, Self, usize> {
-        let cmd = self.cmd("BITCOUNT").key(key).arg(range);
-        prepare_command(self, cmd)
+    fn bitcount(self, key: impl Serialize, range: BitRange) -> PreparedCommand<'a, Self, usize> {
+        prepare_command2(self.cmd("BITCOUNT").key(key).arg(range), self)
     }
 
     /// The command treats a Redis string as an array of bits,

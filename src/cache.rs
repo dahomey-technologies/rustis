@@ -134,12 +134,13 @@ impl Cache {
     /// Executes the `MGET` command with client-side caching.
     pub async fn mget<R: Response + DeserializeOwned>(&self, keys: impl Serialize) -> Result<R> {
         let prepared_command = self.client.mget::<R>(keys);
+        let command: Command = prepared_command.command.into();
         let mut collection_buf = BytesMut::new();
         let _ =
-            collection_buf.write_fmt(format_args!("*{}\r\n", prepared_command.command.num_args()));
+            collection_buf.write_fmt(format_args!("*{}\r\n", command.num_args()));
 
-        for arg in (0..prepared_command.command.num_args())
-            .filter_map(|i| prepared_command.command.get_arg(i))
+        for arg in (0..command.num_args())
+            .filter_map(|i| command.get_arg(i))
         {
             let key = BulkString::from(arg.to_vec());
 
@@ -149,7 +150,8 @@ impl Cache {
             };
 
             let prepared_command = self.client.get::<R>(arg);
-            let Some(buf) = values.get(&prepared_command.command) else {
+            let command: Command = prepared_command.command.into();
+            let Some(buf) = values.get(&command) else {
                 collection_buf.clear();
                 break;
             };
@@ -166,7 +168,7 @@ impl Cache {
 
         let buf = self
             .client
-            .send(prepared_command.command.clone(), None)
+            .send(command.clone(), None)
             .await?;
         let mut deserializer = RespDeserializer::new(&buf);
         let Value::Array(values) = Value::deserialize(&mut deserializer)? else {
@@ -174,8 +176,8 @@ impl Cache {
         };
 
         for (value, key) in values.iter().zip(
-            (0..prepared_command.command.num_args())
-                .filter_map(|i| prepared_command.command.get_arg(i)),
+            (0..command.num_args())
+                .filter_map(|i| command.get_arg(i)),
         ) {
             let mut serializer = RespSerializer::new();
             value.serialize(&mut serializer)?;
@@ -450,7 +452,7 @@ impl Cache {
     where
         R: Response + DeserializeOwned,
     {
-        self.process_command(key, prepared_command.command).await
+        self.process_command(key, prepared_command.command.into()).await
     }
 
     async fn process_command<R>(&self, key: BulkString, command: Command) -> Result<R>

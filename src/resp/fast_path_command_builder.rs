@@ -1,6 +1,6 @@
 #[cfg(debug_assertions)]
 use crate::resp::next_sequence_counter;
-use crate::resp::{ArgLayout, Command, hash_slot};
+use crate::resp::{ArgLayout, CommandBuilder, hash_slot};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
@@ -53,30 +53,29 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn build(self) -> Command {
-        Command::new(
-            self.buffer.freeze(),
-            self.name_layout,
-            self.args_layout,
-            #[cfg(debug_assertions)]
-            0,
-            #[cfg(debug_assertions)]
-            next_sequence_counter(),
-            None,
-            None,
-            0,
-        )
+    pub fn build(self) -> CommandBuilder {
+        CommandBuilder {
+            buffer: self.buffer,
+            name_layout:  self.name_layout,
+            args_layout: self.args_layout,
+            kill_connection_on_write: 0,
+            command_seq: next_sequence_counter(),
+            request_policy: None,
+            response_policy: None,
+            key_step: 0,
+            with_head_room: false,
+        }
     }
 
     #[inline(always)]
-    pub fn get(key: impl Serialize) -> Command {
+    pub fn get(key: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*2\r\n$3\r\nGET\r\n", (8, 3))
             .key(key)
             .build()
     }
 
     #[inline(always)]
-    pub fn set(key: impl Serialize, value: impl Serialize) -> Command {
+    pub fn set(key: impl Serialize, value: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$3\r\nSET\r\n", (8, 3))
             .key(key)
             .arg(value)
@@ -84,7 +83,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn expire(key: impl Serialize, seconds: u64) -> Command {
+    pub fn expire(key: impl Serialize, seconds: u64) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$6\r\nEXPIRE\r\n", (8, 6))
             .key(key)
             .arg(seconds)
@@ -92,7 +91,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn hget(key: impl Serialize, field: impl Serialize) -> Command {
+    pub fn hget(key: impl Serialize, field: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$4\r\nHGET\r\n", (8, 4))
             .key(key)
             .arg(field)
@@ -100,7 +99,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn hincrby(key: impl Serialize, field: impl Serialize, increment: i64) -> Command {
+    pub fn hincrby(key: impl Serialize, field: impl Serialize, increment: i64) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*4\r\n$7\r\nHINCRBY\r\n", (8, 7))
             .key(key)
             .arg(field)
@@ -109,7 +108,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn sismember(key: impl Serialize, member: impl Serialize) -> Command {
+    pub fn sismember(key: impl Serialize, member: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$9\r\nSISMEMBER\r\n", (8, 9))
             .key(key)
             .arg(member)
@@ -117,7 +116,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn zincrby(key: impl Serialize, increment: f64, member: impl Serialize) -> Command {
+    pub fn zincrby(key: impl Serialize, increment: f64, member: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*4\r\n$7\r\nZINCRBY\r\n", (8, 7))
             .key(key)
             .arg(increment)
@@ -126,7 +125,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn publish(channel: impl Serialize, message: impl Serialize) -> Command {
+    pub fn publish(channel: impl Serialize, message: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$7\r\nPUBLISH\r\n", (8, 7))
             .arg(channel)
             .arg(message)
@@ -134,7 +133,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn lpush(key: impl Serialize, element: impl Serialize) -> Command {
+    pub fn lpush(key: impl Serialize, element: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$5\r\nLPUSH\r\n", (8, 5))
             .key(key)
             .arg(element)
@@ -142,7 +141,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn rpush(key: impl Serialize, element: impl Serialize) -> Command {
+    pub fn rpush(key: impl Serialize, element: impl Serialize) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$5\r\nRPUSH\r\n", (8, 5))
             .key(key)
             .arg(element)
@@ -150,7 +149,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn lpop(key: impl Serialize, count: u32) -> Command {
+    pub fn lpop(key: impl Serialize, count: u32) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$4\r\nLPOP\r\n", (8, 4))
             .key(key)
             .arg(count)
@@ -158,7 +157,7 @@ impl FastPathCommandBuilder {
     }
 
     #[inline(always)]
-    pub fn rpop(key: impl Serialize, count: u32) -> Command {
+    pub fn rpop(key: impl Serialize, count: u32) -> CommandBuilder {
         FastPathCommandBuilder::new(b"*3\r\n$4\r\nRPOP\r\n", (8, 4))
             .key(key)
             .arg(count)

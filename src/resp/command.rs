@@ -304,6 +304,7 @@ pub struct CommandBuilder {
     pub(crate) request_policy: Option<RequestPolicy>,
     pub(crate) response_policy: Option<ResponsePolicy>,
     pub(crate) key_step: u8,
+    pub(crate) with_head_room: bool,
 }
 
 impl CommandBuilder {
@@ -338,6 +339,7 @@ impl CommandBuilder {
             request_policy: None,
             response_policy: None,
             key_step: 0,
+            with_head_room: true,
         }
     }
 
@@ -477,59 +479,74 @@ impl From<CommandBuilder> for Command {
     /// Finalizes the command into a raw RESP frame.
     /// Fills the HEADROOM with the header and freezes the buffer.
     fn from(mut command_builder: CommandBuilder) -> Self {
-        // Stack buffer helpers
-        fn write_u8(buf: &mut &mut [u8], val: u8) {
-            buf[0] = val;
-            *buf = &mut std::mem::take(buf)[1..];
+        if command_builder.with_head_room {
+            // Stack buffer helpers
+            fn write_u8(buf: &mut &mut [u8], val: u8) {
+                buf[0] = val;
+                *buf = &mut std::mem::take(buf)[1..];
+            }
+
+            fn write_slice(buf: &mut &mut [u8], val: &[u8]) {
+                let len: usize = val.len();
+                buf[..len].copy_from_slice(val);
+                *buf = &mut std::mem::take(buf)[len..];
+            }
+
+            let total_args = 1 + command_builder.args_layout.len();
+
+            // Temporary stack buffer for header formatting
+            let mut header_buf = [0u8; HEADROOM_SIZE];
+            let mut cursor = &mut header_buf[..];
+
+            // Write *N\r\n
+            write_u8(&mut cursor, b'*');
+            let mut itoa_buf = itoa::Buffer::new();
+            write_slice(&mut cursor, itoa_buf.format(total_args).as_bytes());
+            write_slice(&mut cursor, b"\r\n");
+
+            let header_len = HEADROOM_SIZE - cursor.len();
+            let written_header = &header_buf[..header_len];
+
+            // Copy header into HEADROOM
+            let start_pos = HEADROOM_SIZE - header_len;
+            command_builder.buffer[start_pos..HEADROOM_SIZE].copy_from_slice(written_header);
+
+            let bytes = command_builder.buffer.freeze().slice(start_pos..);
+
+            command_builder
+                .args_layout
+                .iter_mut()
+                .for_each(|arg_layout| arg_layout.start -= start_pos as u64);
+
+            Command::new(
+                bytes,
+                (
+                    command_builder.name_layout.0 - start_pos,
+                    command_builder.name_layout.1,
+                ),
+                command_builder.args_layout,
+                #[cfg(debug_assertions)]
+                command_builder.kill_connection_on_write,
+                #[cfg(debug_assertions)]
+                command_builder.command_seq,
+                command_builder.request_policy,
+                command_builder.response_policy,
+                command_builder.key_step,
+            )
+        } else {
+            Command::new(
+                command_builder.buffer.freeze(),
+                command_builder.name_layout,
+                command_builder.args_layout,
+                #[cfg(debug_assertions)]
+                command_builder.kill_connection_on_write,
+                #[cfg(debug_assertions)]
+                command_builder.command_seq,
+                command_builder.request_policy,
+                command_builder.response_policy,
+                command_builder.key_step,
+            )
         }
-
-        fn write_slice(buf: &mut &mut [u8], val: &[u8]) {
-            let len: usize = val.len();
-            buf[..len].copy_from_slice(val);
-            *buf = &mut std::mem::take(buf)[len..];
-        }
-
-        let total_args = 1 + command_builder.args_layout.len();
-
-        // Temporary stack buffer for header formatting
-        let mut header_buf = [0u8; HEADROOM_SIZE];
-        let mut cursor = &mut header_buf[..];
-
-        // Write *N\r\n
-        write_u8(&mut cursor, b'*');
-        let mut itoa_buf = itoa::Buffer::new();
-        write_slice(&mut cursor, itoa_buf.format(total_args).as_bytes());
-        write_slice(&mut cursor, b"\r\n");
-
-        let header_len = HEADROOM_SIZE - cursor.len();
-        let written_header = &header_buf[..header_len];
-
-        // Copy header into HEADROOM
-        let start_pos = HEADROOM_SIZE - header_len;
-        command_builder.buffer[start_pos..HEADROOM_SIZE].copy_from_slice(written_header);
-
-        let bytes = command_builder.buffer.freeze().slice(start_pos..);
-
-        command_builder
-            .args_layout
-            .iter_mut()
-            .for_each(|arg_layout| arg_layout.start -= start_pos as u64);
-
-        Command::new(
-            bytes,
-            (
-                command_builder.name_layout.0 - start_pos,
-                command_builder.name_layout.1,
-            ),
-            command_builder.args_layout,
-            #[cfg(debug_assertions)]
-            command_builder.kill_connection_on_write,
-            #[cfg(debug_assertions)]
-            command_builder.command_seq,
-            command_builder.request_policy,
-            command_builder.response_policy,
-            command_builder.key_step,
-        )
     }
 }
 

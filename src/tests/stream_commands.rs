@@ -5,6 +5,7 @@ use crate::{
         XAutoClaimResult, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions,
         XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOptions,
     },
+    resp::Command,
     tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
@@ -746,7 +747,7 @@ async fn xautoclaim() -> Result<()> {
 
 #[test]
 fn xautoclaim_args() -> Result<()> {
-    let cmd = TestClient
+    let cmd: Command = TestClient
         .xclaim::<()>(
             "key",
             "group",
@@ -760,7 +761,8 @@ fn xautoclaim_args() -> Result<()> {
                 .force()
                 .just_id(),
         )
-        .command;
+        .command
+        .into();
     assert_eq!(
         "XCLAIM key group consumer 1000 1526569498055-0 IDLE 100 TIME 1000 RETRYCOUNT 12 FORCE JUSTID",
         &cmd.to_string()

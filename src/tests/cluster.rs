@@ -8,6 +8,7 @@ use crate::{
         MigrateOptions, ScriptingCommands, ServerCommands, StringCommands,
     },
     network::{ClusterConnection, Version},
+    resp::Command,
     sleep, spawn,
     tests::{TestClient, get_cluster_test_client, get_cluster_test_client_with_command_timeout},
 };
@@ -369,12 +370,13 @@ async fn get_loop() -> Result<()> {
 
 #[test]
 fn cluster_selslot_command() {
-    let cmd = TestClient
+    let cmd: Command = TestClient
         .cluster_setslot(
             12539,
             ClusterSetSlotSubCommand::Migrating("37618c7eec0dd58e946e1ef0df02d8c5a9a14235"),
         )
-        .command;
+        .command
+        .into();
     assert_eq!(
         "CLUSTER SETSLOT 12539 MIGRATING 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
         cmd.to_string()

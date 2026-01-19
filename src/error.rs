@@ -225,6 +225,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
+#[cfg(feature = "rustls")]
 impl From<rustls::pki_types::InvalidDnsNameError> for Error {
     fn from(value: rustls::pki_types::InvalidDnsNameError) -> Self {
         Error::InvalidDnsName(Arc::new(value))

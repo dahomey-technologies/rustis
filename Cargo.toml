@@ -12,7 +12,7 @@ license-file = "LICENSE"
 edition = "2024"
 
 [features]
-default = ["tokio-runtime", "pool", "tokio-rustls", "json", "client-cache"]
+default = ["tokio-runtime"]
 tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]
 tokio-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "rustls"]
 tokio-native-tls = ["dep:tokio-native-tls", "native-tls"]

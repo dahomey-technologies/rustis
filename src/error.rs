@@ -8,7 +8,7 @@ use std::{
     fmt::{Display, Formatter},
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, Utf8Error},
-    string::FromUtf8Error,
+    string::FromUtf8Error, sync::Arc,
 };
 use thiserror::Error;
 
@@ -39,9 +39,6 @@ pub enum ClientError {
     /// Raised when an expected array result is not received for MGET command
     #[error("protocol: expected array result for MGET")]
     ExpectedArrayForMGet,
-    /// Raised when cannot parse integer from the RESP buffer
-    #[error("protocol: cannot parse integer")]
-    CannotParseInteger,
     /// Raised when cannot parse number from the RESP buffer
     #[error("protocol: cannot parse number")]
     CannotParseNumber,
@@ -141,7 +138,7 @@ pub enum ClientError {
 }
 
 /// All error kinds
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum Error {
     /// Raised if an error occurs within the driver
     #[error("client error: {0}")]
@@ -160,7 +157,7 @@ pub enum Error {
     Redis(#[from] RedisError),
     /// IO error when connecting the Redis server
     #[error("io error: {0}")]
-    IO(#[from] std::io::Error),
+    IO(Arc<std::io::Error>),
     /// Raised by the TLS library
     #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     #[cfg(feature = "native-tls")]
@@ -175,7 +172,7 @@ pub enum Error {
     #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     #[cfg(feature = "rustls")]
     #[error("invalid dns name: {0}")]
-    InvalidDnsName(#[from] rustls::pki_types::InvalidDnsNameError),
+    InvalidDnsName(Arc<rustls::pki_types::InvalidDnsNameError>),
     /// The I/O operation’s timeout expired
     #[error("The I/O operation’s timeout expired")]
     Timeout,
@@ -188,7 +185,7 @@ pub enum Error {
     EOF,
     /// Raised when a tokio join error occurs
     #[error("tokio join error: {0}")]
-    TokioJoin(#[from] tokio::task::JoinError),
+    TokioJoin(Arc<tokio::task::JoinError>),
     /// Raised when oneshot channel is canceled
     #[error("oneshot channel canceled")]
     OneshotCanceled(#[from] oneshot::Canceled),
@@ -209,10 +206,34 @@ pub enum Error {
     ParseInt(#[from] ParseIntError),
     /// Raised when tokio broadcast send error occurs
     #[error("Tokio broadcast send error: {0}")]
-    TokioBroadcastSend(#[from] tokio::sync::broadcast::error::SendError<()>),
+    TokioBroadcastSend(Arc<tokio::sync::broadcast::error::SendError<()>>),
     /// Disconnected by peer
     #[error("Disconnected by peer")]
     DisconnectedByPeer,
+}
+
+impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
+    fn from(value: tokio::sync::broadcast::error::SendError<()>) -> Self {
+        Error::TokioBroadcastSend(Arc::new(value))
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        Error::IO(Arc::new(value))
+    }
+}
+
+impl From<rustls::pki_types::InvalidDnsNameError> for Error {
+    fn from(value: rustls::pki_types::InvalidDnsNameError) -> Self {
+        Error::InvalidDnsName(Arc::new(value))
+    }
+}
+
+impl From<tokio::task::JoinError> for Error {
+    fn from(value: tokio::task::JoinError) -> Self {
+        Error::TokioJoin(Arc::new(value))
+    }
 }
 
 impl serde::de::Error for Error {

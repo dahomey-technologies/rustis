@@ -751,10 +751,10 @@ impl ClusterConnection {
             // For example, the array replies we get from calling KEYS against all shards.
             // These should be packed in a single array in no particular order.
             let mut results = Vec::<&[u8]>::new();
-            for sub_result in sub_results {
+            for sub_result in &sub_results {
                 match sub_result {
                     Ok(resp_buf) if !resp_buf.is_error() => {
-                        let mut deserializer = RespDeserializer::new(&resp_buf);
+                        let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
                         };
@@ -764,7 +764,7 @@ impl ClusterConnection {
                         }
                     }
                     _ => {
-                        return Some(sub_result);
+                        return Some(sub_result.clone());
                     }
                 }
             }
@@ -776,10 +776,10 @@ impl ClusterConnection {
             // For example, MGET's aggregated reply.
             let mut results = SmallVec::<[(&Bytes, &[u8]); 10]>::new();
 
-            for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
+            for (sub_result, sub_request) in zip(&sub_results, &request_info.sub_requests) {
                 match sub_result {
                     Ok(resp_buf) if !resp_buf.is_error() => {
-                        let mut deserializer = RespDeserializer::new(&resp_buf);
+                        let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
                             return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
                         };
@@ -791,7 +791,7 @@ impl ClusterConnection {
                         }
                     }
                     _ => {
-                        return Some(sub_result);
+                        return Some(sub_result.clone());
                     }
                 }
             }

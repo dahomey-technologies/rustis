@@ -1,13 +1,16 @@
 //! [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 use crate::{
-    ClientError, Error, Result, client::{Client, PreparedCommand}, commands::{
+    ClientError, Error, Result,
+    client::{Client, PreparedCommand},
+    commands::{
         BitFieldSubCommand, BitRange, BitmapCommands, ClientTrackingOptions, ClientTrackingStatus,
         ConnectionCommands, HashCommands, ListCommands, SetCommands, SortedSetCommands,
         StringCommands, ZRangeOptions,
-    }, resp::{
+    },
+    resp::{
         BulkString, Command, CommandArgsMut, RespBuf, RespDeserializer, RespSerializer, Response,
         Value, cmd,
-    }
+    },
 };
 use bytes::BytesMut;
 use dashmap::DashMap;

@@ -1,5 +1,7 @@
 use crate::{
-    ClientError, Error, Result, client::{PreparedCommand, prepare_command}, resp::{CommandArgsMut, Response, cmd, serialize_flag}
+    ClientError, Error, Result,
+    client::{PreparedCommand, prepare_command},
+    resp::{CommandArgsMut, Response, cmd, serialize_flag},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,

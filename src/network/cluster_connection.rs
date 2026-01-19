@@ -572,7 +572,9 @@ impl ClusterConnection {
                     "[{}] Received unexpected message: {result:?}",
                     node.connection.tag()
                 );
-                return Poll::Ready(Some(Err(Error::Client(ClientError::UnexpectedMessageReceived))));
+                return Poll::Ready(Some(Err(Error::Client(
+                    ClientError::UnexpectedMessageReceived,
+                ))));
             };
 
             self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
@@ -732,7 +734,9 @@ impl ClusterConnection {
         &mut self,
         _sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
-        Some(Err(Error::Client(ClientError::CommandNotSupportedInCluster)))
+        Some(Err(Error::Client(
+            ClientError::CommandNotSupportedInCluster,
+        )))
     }
 
     fn no_response_policy(
@@ -756,7 +760,9 @@ impl ClusterConnection {
                     Ok(resp_buf) if !resp_buf.is_error() => {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         };
 
                         for chunk in chunks {
@@ -781,13 +787,17 @@ impl ClusterConnection {
                     Ok(resp_buf) if !resp_buf.is_error() => {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         };
 
                         if sub_request.keys.len() == chunks.len() {
                             results.extend(zip(&sub_request.keys, chunks));
                         } else {
-                            return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         }
                     }
                     _ => {

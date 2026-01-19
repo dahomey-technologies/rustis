@@ -132,9 +132,7 @@ impl<'de> RespDeserializer<'de> {
         T: fast_float2::FastFloat,
     {
         let line = self.next_line()?;
-        fast_float2::parse(line).map_err(|_| {
-            Error::Client(ClientError::CannotParseNumber)
-        })
+        fast_float2::parse(line).map_err(|_| Error::Client(ClientError::CannotParseNumber))
     }
 
     #[inline]
@@ -143,9 +141,7 @@ impl<'de> RespDeserializer<'de> {
         T: atoi::FromRadix10SignedChecked,
     {
         let line = self.next_line()?;
-        atoi::atoi(line).ok_or_else(|| {
-            Error::Client(ClientError::CannotParseNumber)
-        })
+        atoi::atoi(line).ok_or_else(|| Error::Client(ClientError::CannotParseNumber))
     }
 
     #[inline]
@@ -154,9 +150,7 @@ impl<'de> RespDeserializer<'de> {
         T: atoi::FromRadix10SignedChecked,
     {
         let line = self.peek_line()?;
-        atoi::atoi(&line[1..]).ok_or_else(|| {
-            Error::Client(ClientError::CannotParseNumber)
-        })
+        atoi::atoi(&line[1..]).ok_or_else(|| Error::Client(ClientError::CannotParseNumber))
     }
 
     #[inline]
@@ -244,16 +238,12 @@ impl<'de> RespDeserializer<'de> {
                 if bs.is_empty() {
                     Ok(T::default())
                 } else {
-                    atoi::atoi(bs).ok_or_else(|| {
-                        Error::Client(ClientError::CannotParseNumber)
-                    })
+                    atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseNumber))
                 }
             }
             SIMPLE_STRING_TAG => {
                 let line = self.next_line()?;
-                atoi::atoi(line).ok_or_else(|| {
-                    Error::Client(ClientError::CannotParseNumber)
-                })
+                atoi::atoi(line).ok_or_else(|| Error::Client(ClientError::CannotParseNumber))
             }
             ARRAY_TAG => {
                 let len = self.parse_integer::<usize>()?;
@@ -291,8 +281,7 @@ impl<'de> RespDeserializer<'de> {
             }
             SIMPLE_STRING_TAG => {
                 let line = self.next_line()?;
-                fast_float2::parse(line)
-                    .map_err(|_| Error::Client(ClientError::CannotParseNumber))
+                fast_float2::parse(line).map_err(|_| Error::Client(ClientError::CannotParseNumber))
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
@@ -750,9 +739,7 @@ impl<'de> Deserializer<'de> for &mut RespDeserializer<'de> {
             }
             ERROR_TAG => Err(Error::Redis(self.parse_error()?)),
             BLOB_ERROR_TAG => Err(Error::Redis(self.parse_blob_error()?)),
-            SIMPLE_STRING_TAG => {
-                Err(Error::Client(ClientError::CannotParseMap))
-            }
+            SIMPLE_STRING_TAG => Err(Error::Client(ClientError::CannotParseMap)),
             _ => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }

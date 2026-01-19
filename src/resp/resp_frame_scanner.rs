@@ -1,8 +1,9 @@
 use crate::{
-    ClientError, Error, Result, resp::{
+    ClientError, Error, Result,
+    resp::{
         ARRAY_TAG, BLOB_ERROR_TAG, BOOL_TAG, BULK_STRING_TAG, DOUBLE_TAG, ERROR_TAG, INTEGER_TAG,
         MAP_TAG, NIL_TAG, PUSH_TAG, SET_TAG, SIMPLE_STRING_TAG, VERBATIM_STRING_TAG,
-    }
+    },
 };
 use memchr::memchr;
 

@@ -1,7 +1,8 @@
-use super::RespDeserializer;
-use crate::{ClientError, Error, Result, resp::RespBuf};
+use crate::{
+    Error, Result,
+    resp::{RespBuf, RespFrameScanner},
+};
 use bytes::BytesMut;
-use serde::{Deserialize, de::IgnoredAny};
 use tokio_util::codec::Decoder;
 
 pub(crate) struct BufferDecoder;
@@ -15,55 +16,10 @@ impl Decoder for BufferDecoder {
             return Ok(None);
         }
 
-        let bytes = src.as_ref();
-        let tag = bytes[0];
-
-        match tag {
-            // CATEGORY 1 : Simple scan of the next CRLF
-            b'+' | b'-' | b':' | b'_' | b',' | b'#' => {
-                if let Some(pos) = memchr::memchr(b'\n', bytes) {
-                    return Ok(Some(RespBuf::new(src.split_to(pos + 1).freeze())));
-                }
-            }
-            // CATEGORY 2 : Size reading + jump
-            b'$' | b'!' | b'=' => {
-                if let Some(pos) = memchr::memchr(b'\n', bytes) {
-                    let line = &bytes[1..pos];
-                    if let Ok(len) = parse_integer(line) {
-                        if len == -1 {
-                            // Null bulk strings
-                            return Ok(Some(RespBuf::new(src.split_to(pos + 1).freeze())));
-                        }
-                        let total_size = pos + 1 + (len as usize) + 2;
-                        if bytes.len() >= total_size {
-                            return Ok(Some(RespBuf::new(src.split_to(total_size).freeze())));
-                        }
-                    }
-                }
-            }
-            // CATEGORY 3 : Containers -> Fallback To Serde
-            b'*' | b'%' | b'~' | b'>' => {
-                let mut deserializer = RespDeserializer::new(bytes);
-                let result = IgnoredAny::deserialize(&mut deserializer);
-                match result {
-                    Ok(_) => {
-                        return Ok(Some(RespBuf::new(
-                            src.split_to(deserializer.get_pos()).freeze(),
-                        )));
-                    }
-                    Err(Error::EOF) => return Ok(None),
-                    Err(e) => return Err(e),
-                }
-            }
-            tag => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
+        match RespFrameScanner::new(src.as_ref()).scan() {
+            Ok(len) => Ok(Some(RespBuf::new(src.split_to(len).freeze()))),
+            Err(Error::EOF) => Ok(None),
+            Err(e) => Err(e),
         }
-
-        Ok(None)
     }
-}
-
-fn parse_integer(input: &[u8]) -> Result<isize> {
-    atoi::atoi(input).ok_or_else(|| {
-        Error::Client(ClientError::CannotParseNumber)
-    })
 }

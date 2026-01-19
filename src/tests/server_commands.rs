@@ -228,6 +228,11 @@ async fn acl_setuser() -> Result<()> {
     let _rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
     client.set("key", "value").await?;
 
+    client.close().await?;
+
+    // new connection with default user because 
+    // Redis close the connection when deleting the current user.
+    let client = get_test_client().await?;
     client.acl_deluser("foo").await?;
 
     Ok(())

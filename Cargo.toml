@@ -66,6 +66,7 @@ fred = { version = "10.1", optional = true }
 redis = { version = "1.0", features = ["aio", "tokio-comp"], optional = true }
 axum = { version = "0.8", optional = true }
 actix-web = { version = "4.12", optional = true }
+thiserror = "2.0"
 
 [dev-dependencies]
 serial_test = "3.3"

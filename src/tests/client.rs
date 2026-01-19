@@ -93,7 +93,7 @@ async fn command_timeout() -> Result<()> {
     // since the timeout is configured to 10ms, we should have a timeout error
     let result: Result<Option<(String, Vec<String>)>> =
         client.blmpop(5., "key", LMoveWhere::Left, 1).await;
-    assert!(matches!(result, Err(Error::Timeout(_))));
+    assert!(matches!(result, Err(Error::Timeout)));
 
     client.close().await?;
 

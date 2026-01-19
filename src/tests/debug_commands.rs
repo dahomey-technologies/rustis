@@ -36,7 +36,7 @@ async fn cluster_server_panic() -> Result<()> {
 
     let ping_result = client.ping::<()>(()).await;
 
-    assert!(matches!(ping_result, Err(err) if !matches!(err, Error::Timeout(_))));
+    assert!(matches!(ping_result, Err(err) if !matches!(err, Error::Timeout)));
 
     Ok(())
 }

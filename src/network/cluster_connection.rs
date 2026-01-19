@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
+    ClientError, Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
@@ -107,7 +107,7 @@ impl ClusterNodeResult {
         match (self.port, self.tls_port) {
             (None, Some(port)) => Ok(port),
             (Some(port), None) => Ok(port),
-            _ => Err(Error::Client("Cluster misconfiguration".to_owned())),
+            _ => Err(Error::Client(ClientError::ClusterConfig)),
         }
     }
 }
@@ -134,7 +134,7 @@ impl ClusterConnection {
         let (mut nodes, slot_ranges) = Self::connect_to_cluster(cluster_config, config).await?;
         let first_node = nodes
             .get_mut(0)
-            .ok_or_else(|| Error::Client("No cluster nodes".to_owned()))?;
+            .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
 
         let tag = first_node.connection.tag();
 
@@ -193,10 +193,7 @@ impl ClusterConnection {
                         .await?;
                     self.transaction_state = TransactionState::default();
                 } else {
-                    return Err(Error::Client(format!(
-                        "[{}] EXEC called without a preceding MULTI",
-                        self.tag
-                    )));
+                    return Err(Error::Client(ClientError::ExecCalledWithoutMulti));
                 }
             }
             _ => self.internal_feed(command, &ask_reasons).await?,
@@ -331,7 +328,7 @@ impl ClusterConnection {
                 is_key.then(|| {
                     let (node_index, should_ask) = self
                         .get_master_node_index_by_slot(slot, ask_reasons)
-                        .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))?;
+                        .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
                     Ok((node_index, slot, arg, should_ask))
                 })
             })
@@ -427,15 +424,11 @@ impl ClusterConnection {
 
         if let Some(first_slot) = slots.next() {
             if !slots.all(|s| s == first_slot) {
-                return Err(Error::Client(format!(
-                    "[{}] Cannot send command {} with mismatched key slots",
-                    self.tag,
-                    String::from_utf8_lossy(&command.name())
-                )));
+                return Err(Error::Client(ClientError::MismatchedKeySlots));
             }
 
             self.get_master_node_index_by_slot(first_slot, ask_reasons)
-                .ok_or_else(|| Error::Client("Cluster misconfiguration".to_owned()))
+                .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
         } else {
             Ok((self.get_random_node_index(), false))
         }
@@ -468,12 +461,8 @@ impl ClusterConnection {
         Ok(())
     }
 
-    fn request_policy_special(&mut self, command: &Command) -> Result<()> {
-        Err(Error::Client(format!(
-            "[{}] Command {} not yet supported in cluster mode",
-            String::from_utf8_lossy(&command.name()),
-            self.tag
-        )))
+    fn request_policy_special(&mut self, _command: &Command) -> Result<()> {
+        Err(Error::Client(ClientError::CommandNotSupportedInCluster))
     }
 
     pub async fn read(&mut self) -> Option<Result<RespBuf>> {
@@ -520,10 +509,7 @@ impl ClusterConnection {
                     self.tag,
                     self.nodes[node_idx].connection.tag()
                 );
-                return Some(Err(Error::Client(format!(
-                    "[{}] Received unexpected message",
-                    self.tag
-                ))));
+                return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
             };
 
             self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
@@ -586,10 +572,9 @@ impl ClusterConnection {
                     "[{}] Received unexpected message: {result:?}",
                     node.connection.tag()
                 );
-                return Poll::Ready(Some(Err(Error::Client(format!(
-                    "[{}] Received unexpected message",
-                    node.connection.tag()
-                )))));
+                return Poll::Ready(Some(Err(Error::Client(
+                    ClientError::UnexpectedMessageReceived,
+                ))));
             };
 
             self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
@@ -749,10 +734,9 @@ impl ClusterConnection {
         &mut self,
         _sub_results: Vec<Result<RespBuf>>,
     ) -> Option<Result<RespBuf>> {
-        Some(Err(Error::Client(format!(
-            "[{}] Command not yet supported in cluster mode",
-            self.tag
-        ))))
+        Some(Err(Error::Client(
+            ClientError::CommandNotSupportedInCluster,
+        )))
     }
 
     fn no_response_policy(
@@ -776,10 +760,9 @@ impl ClusterConnection {
                     Ok(resp_buf) if !resp_buf.is_error() => {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(format!(
-                                "[{}] Unexpected result {sub_result:?}",
-                                self.tag
-                            ))));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         };
 
                         for chunk in chunks {
@@ -804,19 +787,17 @@ impl ClusterConnection {
                     Ok(resp_buf) if !resp_buf.is_error() => {
                         let mut deserializer = RespDeserializer::new(resp_buf);
                         let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(format!(
-                                "[{}] Unexpected result {sub_result:?}",
-                                self.tag
-                            ))));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         };
 
                         if sub_request.keys.len() == chunks.len() {
                             results.extend(zip(&sub_request.keys, chunks));
                         } else {
-                            return Some(Err(Error::Client(format!(
-                                "[{}] Unexpected result {sub_result:?}",
-                                self.tag
-                            ))));
+                            return Some(Err(Error::Client(
+                                ClientError::UnexpectedMessageReceived,
+                            )));
                         }
                     }
                     _ => {
@@ -907,7 +888,7 @@ impl ClusterConnection {
         }
 
         let Some(shard_info_list) = shard_info_list else {
-            return Err(Error::Client("Cluster misconfiguration".to_owned()));
+            return Err(Error::Client(ClientError::ClusterConfig));
         };
 
         let mut nodes = Vec::<Node>::new();
@@ -919,7 +900,7 @@ impl ClusterConnection {
                 .into_iter()
                 .find(|n| n.role == "master" && n.health == ClusterHealthStatus::Online)
             else {
-                return Err(Error::Client("Cluster misconfiguration".to_owned()));
+                return Err(Error::Client(ClientError::ClusterConfig));
             };
             let master_id: NodeId = master_info.id.as_str().into();
 
@@ -1034,7 +1015,7 @@ impl ClusterConnection {
             if shard_info.nodes[0].role != "master" {
                 let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master")
                 else {
-                    return Err(Error::Client("Cluster misconfiguration".to_owned()));
+                    return Err(Error::Client(ClientError::ClusterConfig));
                 };
 
                 // swap first node & master node

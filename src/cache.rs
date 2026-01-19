@@ -1,6 +1,6 @@
 //! [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 use crate::{
-    Error, Result,
+    ClientError, Error, Result,
     client::{Client, PreparedCommand},
     commands::{
         BitFieldSubCommand, BitRange, BitmapCommands, ClientTrackingOptions, ClientTrackingStatus,
@@ -170,9 +170,7 @@ impl Cache {
             .await?;
         let mut deserializer = RespDeserializer::new(&buf);
         let Value::Array(values) = Value::deserialize(&mut deserializer)? else {
-            return Err(Error::Client(
-                "Expected array result for MGET command".to_string(),
-            ));
+            return Err(Error::Client(ClientError::ExpectedArrayForMGet));
         };
 
         for (value, key) in values.iter().zip(

@@ -4,6 +4,8 @@ use crate::{Error, Result, client::Config};
 use futures_util::{Future, FutureExt};
 use log::{debug, info};
 use socket2::TcpKeepalive;
+#[cfg(feature = "tokio-runtime")]
+use std::sync::Arc;
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -194,7 +196,7 @@ impl<T> Future for JoinHandle<T> {
             #[cfg(feature = "tokio-runtime")]
             JoinHandle::Tokio(join_handle) => match join_handle.poll_unpin(cx) {
                 Poll::Ready(Ok(result)) => Poll::Ready(Ok(result)),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Client(format!("JoinError: {e}")))),
+                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::TokioJoin(Arc::new(e)))),
                 Poll::Pending => Poll::Pending,
             },
             #[cfg(feature = "async-std-runtime")]
@@ -232,7 +234,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
     {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
+            .map_err(|_| Error::Timeout)
     }
     #[cfg(feature = "async-std-runtime")]
     {
@@ -243,7 +245,7 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
         } else {
             async_std::future::timeout(timeout, future)
                 .await
-                .map_err(|_| Error::Timeout("The I/O operation’s timeout expired".to_owned()))
+                .map_err(|_| Error::Timeout)
         }
     }
 }

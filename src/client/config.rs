@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{ClientError, Error, Result};
 #[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
 #[cfg(feature = "rustls")]
@@ -139,7 +139,7 @@ impl FromStr for Config {
         } else if let Some(addr) = Self::parse_addr(str) {
             addr.into_config()
         } else {
-            Err(Error::Config(format!("Cannot parse config from {str}")))
+            Err(Error::Client(ClientError::ConfigParseError))
         }
     }
 }

@@ -1,7 +1,7 @@
 #[cfg(test)]
 use crate::commands::DebugCommands;
 use crate::{
-    Error, Future, Result,
+    ClientError, Error, Future, Result,
     client::{
         ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
         PreparedCommand, PubSubStream, Transaction,
@@ -266,12 +266,10 @@ impl Client {
             );
             Ok(msg_sender.unbounded_send(message).map_err(|e| {
                 info!("{e}");
-                Error::Client("Disconnected from server".to_string())
+                Error::Client(ClientError::DisconnectedFromServer)
             })?)
         } else {
-            Err(Error::Client(
-                "Invalid channel to send messages to the network handler".to_owned(),
-            ))
+            Err(Error::Client(ClientError::InvalidChannel))
         }
     }
 

@@ -80,9 +80,7 @@ impl Connection {
     pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
         self.feed(command, &[]).await?;
         self.flush().await?;
-        self.read()
-            .await
-            .ok_or_else(|| Error::Client("Disconnected by peer".to_owned()))?
+        self.read().await.ok_or_else(|| Error::DisconnectedByPeer)?
     }
 
     pub(crate) fn tag(&self) -> Arc<str> {

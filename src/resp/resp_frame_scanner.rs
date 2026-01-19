@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result,
+    ClientError, Error, Result,
     resp::{
         ARRAY_TAG, BLOB_ERROR_TAG, BOOL_TAG, BULK_STRING_TAG, DOUBLE_TAG, ERROR_TAG, INTEGER_TAG,
         MAP_TAG, NIL_TAG, PUSH_TAG, SET_TAG, SIMPLE_STRING_TAG, VERBATIM_STRING_TAG,
@@ -40,7 +40,7 @@ impl<'a> RespFrameScanner<'a> {
         let start = self.pos;
         self.scan_crlf()?;
         atoi::atoi(&self.buf[start..(self.pos - 2)])
-            .ok_or_else(|| Error::Client("Invalid integer".into()))
+            .ok_or_else(|| Error::Client(ClientError::CannotParseNumber))
     }
 
     fn scan_value(&mut self) -> Result<()> {
@@ -63,14 +63,14 @@ impl<'a> RespFrameScanner<'a> {
                     return Ok(());
                 }
                 if len < 0 {
-                    return Err(Error::Client("Invalid bulk length".into()));
+                    return Err(Error::Client(ClientError::CannotParseBulkString));
                 }
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
                     return Err(Error::EOF);
                 }
                 if &self.buf[self.pos + len as usize..need] != b"\r\n" {
-                    return Err(Error::Client("Invalid bulk terminator".into()));
+                    return Err(Error::Client(ClientError::CannotParseBulkString));
                 }
                 self.pos = need;
                 Ok(())
@@ -90,7 +90,7 @@ impl<'a> RespFrameScanner<'a> {
                 Ok(())
             }
 
-            _ => Err(Error::Client("Invalid RESP tag".into())),
+            tag => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         }
     }
 }

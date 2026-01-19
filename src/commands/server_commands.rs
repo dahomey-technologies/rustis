@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result,
+    ClientError, Error, Result,
     client::{PreparedCommand, prepare_command},
     resp::{CommandArgsMut, Response, cmd, serialize_flag},
 };
@@ -1447,9 +1447,7 @@ impl FromStr for RequestPolicy {
             "all_shards" => Ok(RequestPolicy::AllShards),
             "multi_shard" => Ok(RequestPolicy::MultiShard),
             "special" => Ok(RequestPolicy::Special),
-            _ => Err(Error::Client(
-                "Cannot parse RequestPolicy from result".to_owned(),
-            )),
+            _ => Err(Error::Client(ClientError::CannotParseRequestPolicy)),
         }
     }
 }
@@ -1522,9 +1520,7 @@ impl FromStr for ResponsePolicy {
             "agg_max" => Ok(ResponsePolicy::AggMax),
             "agg_sum" => Ok(ResponsePolicy::AggSum),
             "special" => Ok(ResponsePolicy::Special),
-            _ => Err(Error::Client(
-                "Cannot parse ResponsePolicy from result".to_owned(),
-            )),
+            _ => Err(Error::Client(ClientError::CannotParseResponsePolicy)),
         }
     }
 }

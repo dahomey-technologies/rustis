@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    client::{Client, PreparedCommand},
+    client::{Client, CommandFactory, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands, CountMinSketchCommands,
         CuckooCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
@@ -8,7 +8,7 @@ use crate::{
         SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
         TopKCommands, VectorSetCommands,
     },
-    resp::{Command, RespBatchDeserializer, Response},
+    resp::{Command, CommandBuilder, RespBatchDeserializer, Response, cmd},
 };
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
@@ -139,6 +139,12 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipel
     #[inline]
     fn forget(self) {
         self.executor.forget(self.command)
+    }
+}
+
+impl CommandFactory for &mut Pipeline<'_> {
+    fn cmd(&self, name: &'static str) -> CommandBuilder {
+        cmd(name)
     }
 }
 

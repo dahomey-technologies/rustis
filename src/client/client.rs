@@ -3,8 +3,7 @@ use crate::commands::DebugCommands;
 use crate::{
     ClientError, Error, Future, Result,
     client::{
-        ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
-        PreparedCommand, PubSubStream, Transaction,
+        ClientTrackingInvalidationStream, CommandFactory, IntoConfig, Message, MonitorStream, Pipeline, PreparedCommand, PubSubStream, Transaction
     },
     commands::{
         BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
@@ -19,7 +18,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Command, CommandArgs, CommandArgsMut, RespBuf, Response, SubscriptionType, cmd},
+    resp::{Command, CommandArgs, CommandArgsMut, CommandBuilder, RespBuf, Response, SubscriptionType, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
@@ -416,6 +415,12 @@ impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a,
                 result.to()
             }
         })
+    }
+}
+
+impl CommandFactory for &Client  {
+    fn cmd(&self, name: &'static str) -> CommandBuilder {
+        cmd(name)
     }
 }
 

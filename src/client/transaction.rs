@@ -1,6 +1,6 @@
 use crate::{
     ClientError, Error, Result,
-    client::{BatchPreparedCommand, Client, PreparedCommand},
+    client::{BatchPreparedCommand, Client, CommandFactory, PreparedCommand},
     commands::{
         BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
         GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands, ListCommands,
@@ -8,7 +8,7 @@ use crate::{
         StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
         VectorSetCommands,
     },
-    resp::{Command, RespDeserializer, Response, cmd},
+    resp::{Command, CommandBuilder, RespDeserializer, Response, cmd},
 };
 use serde::{
     Deserializer,
@@ -260,6 +260,12 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Trans
     /// Queue a command into the transaction and forget its response.
     fn forget(self) {
         self.executor.forget(self.command)
+    }
+}
+
+impl CommandFactory for &mut Transaction {
+    fn cmd(&self, name: &'static str) -> CommandBuilder {
+        cmd(name)
     }
 }
 

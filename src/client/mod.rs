@@ -413,22 +413,9 @@ async fn main() -> Result<()> {
 ```
 */
 
-#[allow(clippy::module_inception)]
-mod client;
-mod client_tracking_invalidation_stream;
-mod config;
-mod message;
-mod monitor_stream;
-mod pipeline;
-#[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
-#[cfg(feature = "pool")]
-mod pooled_client_manager;
-mod prepared_command;
-mod pub_sub_stream;
-mod transaction;
-
 pub use client::*;
 pub(crate) use client_tracking_invalidation_stream::*;
+pub use command_factory::*;
 pub use config::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;
@@ -439,3 +426,18 @@ pub use pooled_client_manager::*;
 pub use prepared_command::*;
 pub use pub_sub_stream::*;
 pub use transaction::*;
+
+#[allow(clippy::module_inception)]
+mod client;
+mod client_tracking_invalidation_stream;
+mod command_factory;
+mod config;
+mod message;
+mod monitor_stream;
+mod pipeline;
+#[cfg_attr(docsrs, doc(cfg(feature = "pool")))]
+#[cfg(feature = "pool")]
+mod pooled_client_manager;
+mod prepared_command;
+mod pub_sub_stream;
+mod transaction;

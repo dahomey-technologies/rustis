@@ -8,7 +8,8 @@ use std::{
     fmt::{Display, Formatter},
     num::{ParseFloatError, ParseIntError},
     str::{FromStr, Utf8Error},
-    string::FromUtf8Error, sync::Arc,
+    string::FromUtf8Error,
+    sync::Arc,
 };
 use thiserror::Error;
 

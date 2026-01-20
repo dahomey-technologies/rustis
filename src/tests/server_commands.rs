@@ -230,7 +230,7 @@ async fn acl_setuser() -> Result<()> {
 
     client.close().await?;
 
-    // new connection with default user because 
+    // new connection with default user because
     // Redis close the connection when deleting the current user.
     let client = get_test_client().await?;
     client.acl_deluser("foo").await?;

@@ -601,10 +601,10 @@ async fn flushdb() -> Result<()> {
     client0.flushdb(None).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: String = client1.get("key1").await?;
     assert_eq!("value1", value);
@@ -632,16 +632,16 @@ async fn flushall() -> Result<()> {
     client0.flushall(None).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client1.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client1.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     Ok(())
 }

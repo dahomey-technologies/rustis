@@ -96,7 +96,7 @@ impl Pipeline<'_> {
         let num_commands = self.commands.len();
         let results = self
             .client
-            .send_batch(self.commands, self.retry_on_error)
+            .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
         if num_commands > 1 {

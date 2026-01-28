@@ -94,7 +94,7 @@ fn display() {
                 kind: RedisErrorKind::Err,
                 description: "MyError".to_owned()
             }),
-            Value::Nil,
+            Value::Null,
             Value::Map(HashMap::from([
                 (Value::BulkString(b"field1".to_vec()), Value::Integer(12)),
                 (Value::BulkString(b"field2".to_vec()), Value::Double(12.12))

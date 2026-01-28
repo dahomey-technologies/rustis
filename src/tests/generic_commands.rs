@@ -504,7 +504,7 @@ async fn rename() -> Result<()> {
 
     client.rename("key1", "key2").await?;
     let value: Value = client.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
     let value: String = client.get("key2").await?;
     assert_eq!("value1", value);
 

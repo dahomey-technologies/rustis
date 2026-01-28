@@ -5,7 +5,7 @@ mod network_handler;
 mod reconnection_state;
 mod sentinel_connection;
 mod standalone_connection;
-mod util;
+mod pub_sub_message;
 mod version;
 
 pub(crate) use async_executor_strategy::*;

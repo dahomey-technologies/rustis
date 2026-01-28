@@ -208,7 +208,7 @@ async fn lindex() -> Result<()> {
     assert_eq!("element3", element);
 
     let element: Value = client.lindex("mylist", 3).await?;
-    assert!(matches!(element, Value::Nil));
+    assert!(matches!(element, Value::Null));
 
     Ok(())
 }

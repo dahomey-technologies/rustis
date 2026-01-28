@@ -1,22 +1,23 @@
 use crate::{
     Result,
     resp::{
-        ARRAY_TAG, BLOB_ERROR_TAG, ERROR_TAG, PUSH_TAG, RespDeserializer, SIMPLE_STRING_TAG, Value,
+        ARRAY_TAG, BULK_ERROR_TAG, PUSH_TAG, RespDeserializer, RespFrameParser, RespResponse,
+        SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, Value,
     },
 };
 use bytes::{BufMut, Bytes, BytesMut};
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use std::{fmt, ops::Deref};
 
 /// Represents a [RESP](https://redis.io/docs/reference/protocol-spec/) Buffer incoming from the network
-#[derive(Clone)]
+#[derive(Clone, Default, PartialEq)]
 pub struct RespBuf(Bytes);
 
 impl RespBuf {
     /// Constructs a new `RespBuf` from a `Bytes` buffer
-    #[inline]
-    pub fn new(bytes: Bytes) -> Self {
-        Self(bytes)
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self(Bytes::new())
     }
 
     /// Constructs a new `RespBuf` as a RESP Array from a collection of chunks (byte slices)
@@ -58,20 +59,26 @@ impl RespBuf {
     /// Returns `true` if the RESP Buffer is a Redis error
     #[inline]
     pub fn is_error(&self) -> bool {
-        self.0.len() > 1 && (self.0[0] == ERROR_TAG || self.0[0] == BLOB_ERROR_TAG)
+        self.0.len() > 1 && (self.0[0] == SIMPLE_ERROR_TAG || self.0[0] == BULK_ERROR_TAG)
     }
 
     /// Convert the RESP Buffer to a Rust type `T` by using serde deserialization
     #[inline]
-    pub fn to<'de, T: Deserialize<'de>>(&'de self) -> Result<T> {
-        let mut deserializer = RespDeserializer::new(&self.0);
-        T::deserialize(&mut deserializer)
+    pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
+        let (frame, _) = RespFrameParser::new(&self.0).parse()?;
+        let response = RespResponse::new(self.clone(), frame);
+        T::deserialize(RespDeserializer::new(response.view()))
     }
 
-    /// Returns the internal buffer as a byte slice
-    #[inline]
-    pub fn as_bytes(&self) -> &[u8] {
+    #[inline(always)]
+    pub fn bytes(&self) -> &Bytes {
         &self.0
+    }
+
+    /// Transform into Bytes
+    #[inline(always)]
+    pub fn into_bytes(self) -> Bytes {
+        self.0
     }
 
     /// Constructs a new `RespBuf` as a RESP Ok message (+OK\r\n)
@@ -88,9 +95,9 @@ impl RespBuf {
 }
 
 impl Deref for RespBuf {
-    type Target = [u8];
+    type Target = Bytes;
 
-    #[inline]
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -118,5 +125,12 @@ impl fmt::Debug for RespBuf {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self, f)
+    }
+}
+
+impl From<Bytes> for RespBuf {
+    #[inline(always)]
+    fn from(value: Bytes) -> Self {
+        RespBuf(value)
     }
 }

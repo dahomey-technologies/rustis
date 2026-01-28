@@ -106,7 +106,7 @@ fn array() -> Result<()> {
     );
 
     let result = deserialize_value("*0\r\n")?; // []
-    assert_eq!(Value::Nil, result);
+    assert_eq!(Value::Null, result);
 
     Ok(())
 }
@@ -116,7 +116,7 @@ fn nil() -> Result<()> {
     log_try_init();
 
     let result = deserialize_value("_\r\n")?;
-    assert_eq!(Value::Nil, result);
+    assert_eq!(Value::Null, result);
 
     Ok(())
 }
@@ -138,7 +138,7 @@ fn map() -> Result<()> {
     );
 
     let result = deserialize_value("%0\r\n")?; // {}
-    assert_eq!(Value::Nil, result);
+    assert_eq!(Value::Null, result);
 
     Ok(())
 }
@@ -163,7 +163,7 @@ fn set() -> Result<()> {
     );
 
     let result = deserialize_value("~0\r\n")?; // []
-    assert_eq!(Value::Nil, result);
+    assert_eq!(Value::Null, result);
 
     Ok(())
 }
@@ -183,7 +183,7 @@ fn push() -> Result<()> {
     );
 
     let result = deserialize_value(">0\r\n")?; // []
-    assert_eq!(Value::Nil, result);
+    assert_eq!(Value::Null, result);
 
     Ok(())
 }

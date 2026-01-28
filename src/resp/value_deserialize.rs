@@ -59,7 +59,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
     #[inline]
     fn visit_none<E>(self) -> std::result::Result<Value, E> {
-        Ok(Value::Nil)
+        Ok(Value::Null)
     }
 
     fn visit_borrowed_bytes<E>(self, v: &[u8]) -> Result<Value, E> {
@@ -82,7 +82,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = seq.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Nil)
+            Ok(Value::Null)
         } else {
             let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
             loop {
@@ -102,7 +102,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let len = map.size_hint();
 
         if let Some(0) = len {
-            Ok(Value::Nil)
+            Ok(Value::Null)
         } else {
             let mut values: HashMap<Value, Value> = HashMap::with_capacity(len.unwrap_or_default());
             loop {
@@ -111,7 +111,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                     Some(PushOrKey::Push) => {
                         let values: Vec<Value> = map.next_value()?;
                         if values.is_empty() {
-                            return Ok(Value::Nil);
+                            return Ok(Value::Null);
                         } else {
                             return Ok(Value::Push(values));
                         }
@@ -122,7 +122,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                 values.insert(key, map.next_value()?);
             }
             if values.is_empty() {
-                Ok(Value::Nil)
+                Ok(Value::Null)
             } else {
                 Ok(Value::Map(values))
             }

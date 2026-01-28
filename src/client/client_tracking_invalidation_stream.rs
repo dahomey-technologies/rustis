@@ -20,9 +20,9 @@ impl Stream for ClientTrackingInvalidationStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.get_mut().receiver.poll_next_unpin(cx) {
-            Poll::Ready(resp_buffer) => match resp_buffer {
-                Some(resp_buffer) => match resp_buffer {
-                    Ok(resp_buffer) => match resp_buffer.to::<(&str, Vec<String>)>() {
+            Poll::Ready(response) => match response {
+                Some(response) => match response {
+                    Ok(response) => match response.to::<((), Vec<String>)>() {
                         Ok((_invalidate, keys)) => Poll::Ready(Some(keys)),
                         Err(_) => Poll::Ready(None),
                     },

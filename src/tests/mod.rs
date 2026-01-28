@@ -28,7 +28,7 @@ mod pipeline;
 mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
-//mod resp_deserializer;
+mod resp_deserializer;
 //mod resp_serializer;
 mod scripting_commands;
 mod search_commands;

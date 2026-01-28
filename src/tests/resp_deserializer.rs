@@ -1,17 +1,22 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result, resp::RespDeserializer, tests::log_try_init,
+    Error, RedisError, RedisErrorKind, Result,
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse},
+    tests::log_try_init,
 };
+use bytes::Bytes;
 use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-fn deserialize<'a, T>(str: &'a str) -> Result<T>
+fn deserialize<T>(str: &str) -> Result<T>
 where
-    T: serde::Deserialize<'a>,
+    T: serde::de::DeserializeOwned,
 {
     let buf = str.as_bytes();
-    let mut deserializer = RespDeserializer::new(buf);
-    T::deserialize(&mut deserializer)
+    let (frame, _) = RespFrameParser::new(buf).parse()?;
+    let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
+    let deserializer = RespDeserializer::new(response.view());
+    T::deserialize(deserializer)
 }
 
 #[test]
@@ -64,7 +69,7 @@ fn bool() -> Result<()> {
 }
 
 #[test]
-fn integer() -> Result<()> {
+fn integer() {
     log_try_init();
 
     let result: Result<i64> = deserialize("-ERR error\r\n"); // error
@@ -76,25 +81,23 @@ fn integer() -> Result<()> {
         }))
     ));
 
-    let result: i64 = deserialize(":12\r\n")?; // 12
+    let result: i64 = deserialize(":12\r\n").unwrap(); // 12
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("_\r\n")?; // null
+    let result: i64 = deserialize("_\r\n").unwrap(); // null
     assert_eq!(0, result);
 
-    let result: i64 = deserialize("$2\r\n12\r\n")?; // b"12"
+    let result: i64 = deserialize("$2\r\n12\r\n").unwrap(); // b"12"
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("+12\r\n")?; // "12"
+    let result: i64 = deserialize("+12\r\n").unwrap(); // "12"
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    let result: i64 = deserialize("*1\r\n:12\r\n").unwrap(); // [12]
     assert_eq!(12, result);
 
-    let result: u64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    let result: u64 = deserialize("*1\r\n:12\r\n").unwrap(); // [12]
     assert_eq!(12, result);
-
-    Ok(())
 }
 
 #[test]
@@ -146,31 +149,6 @@ fn char() -> Result<()> {
 
     let result: char = deserialize("+m\r\n")?; // "m"
     assert_eq!('m', result);
-
-    Ok(())
-}
-
-#[test]
-fn str() -> Result<()> {
-    log_try_init();
-
-    let result: Result<&str> = deserialize("-ERR error\r\n"); // error
-    assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description: _
-        }))
-    ));
-
-    let result: &str = deserialize("$5\r\nhello\r\n")?; // b"hello"
-    assert_eq!("hello", result);
-
-    let result: &str = deserialize("+hello\r\n")?; // "hello"
-    assert_eq!("hello", result);
-
-    let result: &str = deserialize("$0\r\n\r\n")?; // b""
-    assert_eq!("", result);
 
     Ok(())
 }
@@ -363,8 +341,8 @@ fn tuple() -> Result<()> {
     let result: (i32, i32) = deserialize("*2\r\n:12\r\n:13\r\n")?; // [12, 13]
     assert_eq!((12, 13), result);
 
-    let result: (&str, &str) = deserialize("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello", b"world"]
-    assert_eq!(("hello", "world"), result);
+    let result: (String, String) = deserialize("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello", b"world"]
+    assert_eq!(("hello".to_string(), "world".to_string()), result);
 
     Ok(())
 }
@@ -545,24 +523,6 @@ fn _enum() -> Result<()> {
             b: 14
         },
         result
-    );
-
-    Ok(())
-}
-
-#[test]
-fn array_chunks() -> Result<()> {
-    let resp = "*3\r\n:1\r\n:12\r\n:123\r\n";
-    let mut deserializer = RespDeserializer::new(resp.as_bytes());
-    let chunks = deserializer.array_chunks()?.collect::<Vec<_>>();
-
-    assert_eq!(
-        vec![
-            ":1\r\n".as_bytes(),
-            ":12\r\n".as_bytes(),
-            ":123\r\n".as_bytes()
-        ],
-        chunks
     );
 
     Ok(())

@@ -20,7 +20,7 @@ impl Decoder for BufferDecoder {
             Ok((frame, frame_len)) => {
                 let bytes = src.split_to(frame_len).freeze();
                 Ok(Some(RespResponse::new(RespBuf::from(bytes), frame)))
-            },
+            }
             Err(Error::EOF) => Ok(None),
             Err(e) => Err(e),
         }

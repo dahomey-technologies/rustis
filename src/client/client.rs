@@ -19,7 +19,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{Command, CommandArgs, CommandArgsMut, RespBuf, Response, SubscriptionType, cmd},
+    resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
@@ -150,7 +150,7 @@ impl Client {
     ///     client.flushall(FlushingMode::Sync).await?;
     ///
     ///     client
-    ///         .send(
+    ///         .send::<()>(
     ///             cmd("MSET")
     ///                 .arg("key1")
     ///                 .arg("value1")
@@ -162,16 +162,14 @@ impl Client {
     ///                 .arg("value4"),
     ///             None,
     ///         )
-    ///         .await?
-    ///         .to::<()>()?;
+    ///         .await?;
     ///
     ///     let values: Vec<String> = client
     ///         .send(
     ///             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
     ///             None,
     ///         )
-    ///         .await?
-    ///         .to()?;
+    ///         .await?;
     ///
     ///     assert_eq!(vec!["value1".to_owned(), "value2".to_owned(), "value3".to_owned(), "value4".to_owned()], values);
     ///
@@ -179,11 +177,21 @@ impl Client {
     /// }
     /// ```
     #[inline]
-    pub async fn send(
+    pub async fn send<T: DeserializeOwned>(
         &self,
         command: impl Into<Command>,
         retry_on_error: Option<bool>,
-    ) -> Result<RespBuf> {
+    ) -> Result<T> {
+        let response = self.internal_send(command, retry_on_error).await?;
+        response.to()
+    }
+
+    #[inline]
+    pub(crate) async fn internal_send(
+        &self,
+        command: impl Into<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<RespResponse> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
         let message = Message::single(
             command.into(),
@@ -236,11 +244,11 @@ impl Client {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     #[inline]
-    pub async fn send_batch(
+    pub(crate) async fn internal_send_batch(
         &self,
         commands: SmallVec<[Command; 10]>,
         retry_on_error: Option<bool>,
-    ) -> Result<Vec<RespBuf>> {
+    ) -> Result<Vec<RespResponse>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =
             oneshot::channel();
         let message = Message::batch(
@@ -400,13 +408,7 @@ impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a,
     type IntoFuture = Future<'a, R>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let result = self
-                .executor
-                .send(self.command, self.retry_on_error)
-                .await?;
-            result.to()
-        })
+        Box::pin(async move { self.executor.send(self.command, self.retry_on_error).await })
     }
 }
 

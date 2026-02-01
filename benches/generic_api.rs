@@ -113,10 +113,10 @@ fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
                 let key = "test_key";
 
                 client
-                    .send(cmd("SET").arg(key).arg(42.423456), None)
+                    .send::<()>(cmd("SET").arg(key).arg(42.423456), None)
                     .await?;
-                let _: f64 = client.send(cmd("GET").arg(key), None).await?.to()?;
-                client.send(cmd("DEL").arg(key), None).await?;
+                let _: f64 = client.send(cmd("GET").arg(key), None).await?;
+                client.send::<u32>(cmd("DEL").arg(key), None).await?;
 
                 Ok::<_, Error>(())
             })

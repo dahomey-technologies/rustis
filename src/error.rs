@@ -1,4 +1,5 @@
 use crate::Result;
+use atoi::atoi;
 use futures_channel::{
     mpsc::{self},
     oneshot,
@@ -7,7 +8,7 @@ use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
     num::{ParseFloatError, ParseIntError},
-    str::{FromStr, Utf8Error},
+    str::Utf8Error,
     string::FromUtf8Error,
     sync::Arc,
 };
@@ -40,12 +41,21 @@ pub enum ClientError {
     /// Raised when an expected array result is not received for MGET command
     #[error("protocol: expected array result for MGET")]
     ExpectedArrayForMGet,
-    /// Raised when cannot parse number from the RESP buffer
-    #[error("protocol: cannot parse number")]
-    CannotParseNumber,
+    /// Raised when cannot parse integer from the RESP buffer
+    #[error("protocol: cannot parse integer")]
+    CannotParseInteger,
+    /// Raised when cannot parse double from the RESP buffer
+    #[error("protocol: cannot parse double")]
+    CannotParseDouble,
     /// Raised when cannot parse bulk string from the RESP buffer
     #[error("protocol: cannot parse bulk string")]
     CannotParseBulkString,
+    /// Raised when cannot parse bulk error from the RESP buffer
+    #[error("protocol: cannot parse bulk error")]
+    CannotParseBulkError,
+    /// Raised when cannot parse verbartim string from the RESP buffer
+    #[error("protocol: cannot parse verbartim string")]
+    CannotParseVerbatimString,
     /// Raised when cannot parse nil from the RESP buffer
     #[error("protocol: cannot parse nil")]
     CannotParseNil,
@@ -295,56 +305,57 @@ pub enum RedisErrorKind {
 }
 
 impl RedisErrorKind {
-    fn parse_hash_slot_and_address(hash_slot: &str, address: &str) -> Result<(u16, (String, u16))> {
-        let hash_slot = hash_slot
-            .parse::<u16>()
-            .map_err(|_| Error::Client(ClientError::CannotParseHashSlot))?;
-        let (host, port) = address
-            .split_once(':')
-            .ok_or_else(|| Error::Client(ClientError::CannotParseAddress))?;
-        let port = port
-            .parse::<u16>()
-            .map_err(|_| Error::Client(ClientError::CannotParsePort))?;
-        Ok((hash_slot, (host.to_owned(), port)))
+    fn parse_hash_slot_and_address(
+        hash_slot: &[u8],
+        address: &[u8],
+    ) -> Result<(u16, (String, u16))> {
+        let hash_slot = atoi(hash_slot).ok_or(Error::Client(ClientError::CannotParseHashSlot))?;
+        let index = address
+            .iter()
+            .position(|b| *b == b':')
+            .ok_or(Error::Client(ClientError::CannotParseAddress))?;
+        let (host, port) = (&address[..index], &address[index + 1..]);
+        let port = atoi(port).ok_or(Error::Client(ClientError::CannotParsePort))?;
+        Ok((hash_slot, (String::from_utf8_lossy(host).to_string(), port)))
     }
 }
 
-impl FromStr for RedisErrorKind {
-    type Err = Error;
+impl<'a> TryFrom<&'a [u8]> for RedisErrorKind {
+    type Error = Error;
 
-    fn from_str(str: &str) -> Result<Self> {
-        match str {
-            "BUSYGROUP" => Ok(Self::BusyGroup),
-            "CLUSTERDOWN" => Ok(Self::ClusterDown),
-            "CROSSSLOT" => Ok(Self::CrossSlot),
-            "ERR" => Ok(Self::Err),
-            "INPROG" => Ok(Self::InProg),
-            "IOERR" => Ok(Self::IoErr),
-            "MASTERDOWN" => Ok(Self::MasterDown),
-            "MISCONF" => Ok(Self::MisConf),
-            "NOAUTH" => Ok(Self::NoAuth),
-            "NOGOODSLAVE" => Ok(Self::NoGoodSlave),
-            "NOMASTERLINK" => Ok(Self::NoMasterLink),
-            "NOPERM" => Ok(Self::NoPerm),
-            "NOPROTO" => Ok(Self::NoProto),
-            "NOQUORUM" => Ok(Self::NoQuorum),
-            "NOTBUSY" => Ok(Self::NotBusy),
-            "NOSCRIPT" => Ok(Self::NoScript),
-            "OOM" => Ok(Self::OutOfMemory),
-            "READONLY" => Ok(Self::Readonly),
-            "TRYAGAIN" => Ok(Self::TryAgain),
-            "UNKILLABLE" => Ok(Self::UnKillable),
-            "UNBLOCKED" => Ok(Self::Unblocked),
-            "WRONGPASS" => Ok(Self::WrongPass),
-            "WRONGTYPE" => Ok(Self::WrongType),
+    fn try_from(value: &'a [u8]) -> std::result::Result<Self, Self::Error> {
+        match value {
+            b"BUSYGROUP" => Ok(Self::BusyGroup),
+            b"CLUSTERDOWN" => Ok(Self::ClusterDown),
+            b"CROSSSLOT" => Ok(Self::CrossSlot),
+            b"ERR" => Ok(Self::Err),
+            b"INPROG" => Ok(Self::InProg),
+            b"IOERR" => Ok(Self::IoErr),
+            b"MASTERDOWN" => Ok(Self::MasterDown),
+            b"MISCONF" => Ok(Self::MisConf),
+            b"NOAUTH" => Ok(Self::NoAuth),
+            b"NOGOODSLAVE" => Ok(Self::NoGoodSlave),
+            b"NOMASTERLINK" => Ok(Self::NoMasterLink),
+            b"NOPERM" => Ok(Self::NoPerm),
+            b"NOPROTO" => Ok(Self::NoProto),
+            b"NOQUORUM" => Ok(Self::NoQuorum),
+            b"NOTBUSY" => Ok(Self::NotBusy),
+            b"NOSCRIPT" => Ok(Self::NoScript),
+            b"OOM" => Ok(Self::OutOfMemory),
+            b"READONLY" => Ok(Self::Readonly),
+            b"TRYAGAIN" => Ok(Self::TryAgain),
+            b"UNKILLABLE" => Ok(Self::UnKillable),
+            b"UNBLOCKED" => Ok(Self::Unblocked),
+            b"WRONGPASS" => Ok(Self::WrongPass),
+            b"WRONGTYPE" => Ok(Self::WrongType),
             _ => {
-                let mut iter = str.split_whitespace();
+                let mut iter = value.split(u8::is_ascii_whitespace);
                 match (iter.next(), iter.next(), iter.next(), iter.next()) {
-                    (Some("ASK"), Some(hash_slot), Some(address), None) => {
+                    (Some(b"ASK"), Some(hash_slot), Some(address), None) => {
                         Self::parse_hash_slot_and_address(hash_slot, address)
                             .map(|(hash_slot, address)| Self::Ask { hash_slot, address })
                     }
-                    (Some("MOVED"), Some(hash_slot), Some(address), None) => {
+                    (Some(b"MOVED"), Some(hash_slot), Some(address), None) => {
                         Self::parse_hash_slot_and_address(hash_slot, address)
                             .map(|(hash_slot, address)| Self::Moved { hash_slot, address })
                     }
@@ -401,33 +412,40 @@ pub struct RedisError {
     pub description: String,
 }
 
-impl FromStr for RedisError {
-    type Err = Error;
+impl<'a> TryFrom<&'a [u8]> for RedisError {
+    type Error = Error;
 
-    fn from_str(error: &str) -> Result<Self> {
-        match error.split_once(' ') {
-            Some(("ASK", _)) => Ok(Self {
-                kind: RedisErrorKind::from_str(error)?,
+    fn try_from(error: &'a [u8]) -> std::result::Result<Self, Self::Error> {
+        match error
+            .iter()
+            .position(|b| *b == b' ')
+            .map(|i| (&error[..i], &error[i + 1..]))
+        {
+            Some((b"ASK", _)) => Ok(Self {
+                kind: RedisErrorKind::try_from(error)?,
                 description: "".to_owned(),
             }),
-            Some(("MOVED", _)) => Ok(Self {
-                kind: RedisErrorKind::from_str(error)?,
+            Some((b"MOVED", _)) => Ok(Self {
+                kind: RedisErrorKind::try_from(error)?,
                 description: "".to_owned(),
             }),
             Some((kind, description)) => {
-                let kind = RedisErrorKind::from_str(kind)?;
+                let kind = RedisErrorKind::try_from(kind)?;
 
                 let description = if let RedisErrorKind::Other = kind {
-                    error.to_owned()
+                    error
                 } else {
-                    description.to_owned()
+                    description
                 };
 
-                Ok(Self { kind, description })
+                Ok(Self {
+                    kind,
+                    description: String::from_utf8_lossy(description).to_string(),
+                })
             }
             None => Ok(Self {
                 kind: RedisErrorKind::Other,
-                description: error.to_owned(),
+                description: String::from_utf8_lossy(error).to_string(),
             }),
         }
     }

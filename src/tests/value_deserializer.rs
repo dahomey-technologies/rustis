@@ -41,7 +41,7 @@ fn bool() -> Result<()> {
     let result = bool::deserialize(&Value::BulkString(b"false".to_vec()))?;
     assert!(!result);
 
-    let result = bool::deserialize(&Value::Nil)?;
+    let result = bool::deserialize(&Value::Null)?;
     assert!(!result);
 
     Ok(())
@@ -63,7 +63,7 @@ fn i64() -> Result<()> {
     let result = i64::deserialize(&Value::BulkString(b"12".to_vec()))?;
     assert_eq!(12, result);
 
-    let result = i64::deserialize(&Value::Nil)?;
+    let result = i64::deserialize(&Value::Null)?;
     assert_eq!(0, result);
 
     let result = i64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
@@ -88,7 +88,7 @@ fn u64() -> Result<()> {
     let result = u64::deserialize(&Value::BulkString(b"12".to_vec()))?;
     assert_eq!(12, result);
 
-    let result = u64::deserialize(&Value::Nil)?;
+    let result = u64::deserialize(&Value::Null)?;
     assert_eq!(0, result);
 
     let result = u64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
@@ -113,7 +113,7 @@ fn f32() -> Result<()> {
     let result = f32::deserialize(&Value::BulkString(b"12.12".to_vec()))?;
     assert_eq!(12.12, result);
 
-    let result = f32::deserialize(&Value::Nil)?;
+    let result = f32::deserialize(&Value::Null)?;
     assert_eq!(0., result);
 
     Ok(())
@@ -135,7 +135,7 @@ fn f64() -> Result<()> {
     let result = f64::deserialize(&Value::BulkString(b"12.12".to_vec()))?;
     assert_eq!(12.12, result);
 
-    let result = f64::deserialize(&Value::Nil)?;
+    let result = f64::deserialize(&Value::Null)?;
     assert_eq!(0., result);
 
     Ok(())
@@ -151,7 +151,7 @@ fn char() -> Result<()> {
     let result = char::deserialize(&Value::BulkString(b"a".to_vec()))?;
     assert_eq!('a', result);
 
-    let result = char::deserialize(&Value::Nil)?;
+    let result = char::deserialize(&Value::Null)?;
     assert_eq!('\0', result);
 
     Ok(())
@@ -169,7 +169,7 @@ fn str() -> Result<()> {
     let result = <&str>::deserialize(&value)?;
     assert_eq!("foo", result);
 
-    let result = <&str>::deserialize(&Value::Nil)?;
+    let result = <&str>::deserialize(&Value::Null)?;
     assert_eq!("", result);
 
     Ok(())
@@ -188,7 +188,7 @@ fn string() -> Result<()> {
     let result = String::deserialize(&Value::Double(12.))?;
     assert_eq!("12", result);
 
-    let result = String::deserialize(&Value::Nil)?;
+    let result = String::deserialize(&Value::Null)?;
     assert_eq!("", result);
 
     Ok(())
@@ -213,13 +213,13 @@ fn option() -> Result<()> {
     let result = Option::<String>::deserialize(&Value::BulkString(b"hello".to_vec()))?;
     assert_eq!(Some("hello".to_owned()), result);
 
-    let result = Option::<String>::deserialize(&Value::Nil)?;
+    let result = Option::<String>::deserialize(&Value::Null)?;
     assert_eq!(None, result);
 
     let result = Option::<i64>::deserialize(&Value::Integer(12))?;
     assert_eq!(Some(12), result);
 
-    let result = Option::<i64>::deserialize(&Value::Nil)?;
+    let result = Option::<i64>::deserialize(&Value::Null)?;
     assert_eq!(None, result);
 
     let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
@@ -247,7 +247,7 @@ fn unit() -> Result<()> {
         })) if description == "error"
     ));
 
-    let result = <()>::deserialize(&Value::Nil);
+    let result = <()>::deserialize(&Value::Null);
     assert!(result.is_ok());
 
     let result = <()>::deserialize(&Value::BulkString(b"hello".to_vec()));
@@ -278,7 +278,7 @@ fn unit_struct() -> Result<()> {
         })) if description == "error"
     ));
 
-    let result = Unit::deserialize(&Value::Nil);
+    let result = Unit::deserialize(&Value::Null);
     assert!(result.is_ok());
 
     let result = Unit::deserialize(&Value::BulkString(b"hello".to_vec()));

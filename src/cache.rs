@@ -8,20 +8,20 @@ use crate::{
         StringCommands, ZRangeOptions,
     },
     resp::{
-        BulkString, Command, CommandArgsMut, RespBuf, RespDeserializer, RespSerializer, Response,
-        Value, cmd,
+        BulkString, Command, CommandArgsMut, FastPathCommandBuilder, RespDeserializer,
+        RespResponse, Response,
     },
 };
-use bytes::BytesMut;
+use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::StreamExt;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{fmt::Write, sync::Arc, time::Duration};
+use serde::{Serialize, de::DeserializeOwned};
+use std::{sync::Arc, time::Duration};
 
 /// Re-export the moka cache builder.
 pub use moka::future::CacheBuilder;
 
-type SubCache = DashMap<Command, RespBuf>;
+type SubCache = DashMap<Bytes, RespResponse>;
 type MokaCache = moka::future::Cache<BulkString, Arc<SubCache>>;
 type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, MokaCache>;
 
@@ -134,65 +134,78 @@ impl Cache {
     /// Executes the `MGET` command with client-side caching.
     pub async fn mget<R: Response + DeserializeOwned>(&self, keys: impl Serialize) -> Result<R> {
         let prepared_command = self.client.mget::<R>(keys);
-        let mut collection_buf = BytesMut::new();
-        let _ =
-            collection_buf.write_fmt(format_args!("*{}\r\n", prepared_command.command.num_args()));
+        let mut responses = Vec::with_capacity(prepared_command.command.num_args());
+        let mut missing_indices = Vec::new();
+        let mut missing_keys = Vec::new();
 
-        for arg in (0..prepared_command.command.num_args())
-            .filter_map(|i| prepared_command.command.get_arg(i))
-        {
-            let key = BulkString::from(arg.to_vec());
+        // 1. check cache
+        for (i, arg) in prepared_command.command.args().enumerate() {
+            let key = BulkString::from(arg.clone());
 
-            let Some(values) = self.cache.get(&key).await else {
-                collection_buf.clear();
-                break;
-            };
-
-            let prepared_command = self.client.get::<R>(arg);
-            let Some(buf) = values.get(&prepared_command.command) else {
-                collection_buf.clear();
-                break;
-            };
-
-            collection_buf.extend(buf.iter());
-        }
-
-        if !collection_buf.is_empty() {
-            log::debug!("[{}] Cache hit on mget", self.client.connection_tag(),);
-
-            let mut deserializer = RespDeserializer::new(&collection_buf);
-            return R::deserialize(&mut deserializer);
-        }
-
-        let buf = self
-            .client
-            .send(prepared_command.command.clone(), None)
-            .await?;
-        let mut deserializer = RespDeserializer::new(&buf);
-        let Value::Array(values) = Value::deserialize(&mut deserializer)? else {
-            return Err(Error::Client(ClientError::ExpectedArrayForMGet));
-        };
-
-        for (value, key) in values.iter().zip(
-            (0..prepared_command.command.num_args())
-                .filter_map(|i| prepared_command.command.get_arg(i)),
-        ) {
-            let mut serializer = RespSerializer::new();
-            value.serialize(&mut serializer)?;
-
-            // Insert into cache
-            self.cache
-                .entry(key.to_vec().into())
-                .or_insert_with(async { Arc::new(DashMap::new()) })
-                .await
-                .value()
-                .insert(
-                    cmd("GET").arg(key).into(),
-                    RespBuf::new(serializer.get_output().into()),
+            if let Some(values) = self.cache.get(&key).await
+                && let Some(response) = values.get(FastPathCommandBuilder::get(key.clone()).bytes())
+            {
+                log::debug!(
+                    "[{}] Cache hit on key `{}`",
+                    self.client.connection_tag(),
+                    key
                 );
+                responses.push(response.clone());
+            } else {
+                log::debug!(
+                    "[{}] Cache miss on key `{}`",
+                    self.client.connection_tag(),
+                    key
+                );
+                responses.push(RespResponse::null());
+                missing_indices.push(i);
+                missing_keys.push(key);
+            }
         }
 
-        R::deserialize(&Value::Array(values))
+        // 2. Fetch missing keys from Redis server if any
+        if !missing_keys.is_empty() {
+            let missing_prepared_command = self.client.mget::<R>(missing_keys);
+            let response = self
+                .client
+                .internal_send(missing_prepared_command.command, None)
+                .await?;
+            let Ok(array_iter) = response.clone().into_array_iter() else {
+                return Err(Error::Client(ClientError::ExpectedArrayForMGet));
+            };
+
+            for (idx_in_missing, response) in array_iter.enumerate() {
+                let original_idx = missing_indices[idx_in_missing];
+
+                let Some(key) = prepared_command
+                    .command
+                    .get_arg(original_idx)
+                    .map(BulkString::from)
+                else {
+                    break;
+                };
+
+                // Insert into cache
+                self.cache
+                    .entry(key.clone())
+                    .or_insert_with(async { Arc::new(DashMap::new()) })
+                    .await
+                    .value()
+                    .insert(
+                        FastPathCommandBuilder::get(key).bytes().clone(),
+                        response.clone(),
+                    );
+
+                responses[original_idx] = response;
+            }
+        } else {
+            log::debug!("[{}] Cache hit on mget", self.client.connection_tag());
+        }
+
+        // 3. deserialize
+        let response = RespResponse::owned_array(responses);
+        let deserializer = RespDeserializer::new(response.view());
+        R::deserialize(deserializer)
     }
 
     /// Executes the `GETRANGE` command with client-side caching.
@@ -458,15 +471,15 @@ impl Cache {
         R: Response + DeserializeOwned,
     {
         if let Some(values) = self.cache.get(&key).await
-            && let Some(buf) = values.get(&command)
+            && let Some(response) = values.get(command.bytes())
         {
             log::debug!(
                 "[{}] Cache hit on key `{}`",
                 self.client.connection_tag(),
                 key
             );
-            let mut deserializer = RespDeserializer::new(&buf);
-            return R::deserialize(&mut deserializer);
+            let deserializer = RespDeserializer::new(response.view());
+            return R::deserialize(deserializer);
         }
 
         // Cache miss: fetch from Redis
@@ -476,9 +489,10 @@ impl Cache {
             key
         );
 
-        let buf = self.client.send(command.clone(), None).await?;
-        let mut deserializer = RespDeserializer::new(&buf);
-        let deserialized = R::deserialize(&mut deserializer)?;
+        let command_bytes = command.bytes().clone();
+        let response = self.client.internal_send(command, None).await?;
+        let deserializer = RespDeserializer::new(response.view());
+        let deserialized = R::deserialize(deserializer)?;
 
         // Insert into cache
         self.cache
@@ -486,7 +500,7 @@ impl Cache {
             .or_insert_with(async { Arc::new(DashMap::new()) })
             .await
             .value()
-            .insert(command, buf);
+            .insert(command_bytes, response);
 
         Ok(deserialized)
     }

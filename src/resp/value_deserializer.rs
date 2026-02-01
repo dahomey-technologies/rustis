@@ -27,7 +27,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Set(values) => visitor.visit_seq(SeqAccess::new(values)),
             Value::Push(values) => visitor.visit_seq(SeqAccess::new(values)),
             Value::Error(e) => Err(Error::Redis(e.clone())),
-            Value::Nil => visitor.visit_none(),
+            Value::Null => visitor.visit_none(),
         }
     }
 
@@ -40,7 +40,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i != 0,
             Value::Double(d) => *d != 0.,
             Value::SimpleString(s) if s == "OK" => true,
-            Value::Nil => false,
+            Value::Null => false,
             Value::BulkString(s) if s == b"0" || s == b"false" => false,
             Value::BulkString(s) if s == b"1" || s == b"true" => true,
             Value::Boolean(b) => *b,
@@ -60,12 +60,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as i8,
             Value::Double(d) => *d as i8,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -79,12 +79,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as i16,
             Value::Double(d) => *d as i16,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -98,12 +98,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as i32,
             Value::Double(d) => *d as i32,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -118,13 +118,13 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i,
             Value::Double(d) => *d as i64,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
             Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -138,12 +138,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as u8,
             Value::Double(d) => *d as u8,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -157,12 +157,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as u16,
             Value::Double(d) => *d as u16,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -176,12 +176,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as u32,
             Value::Double(d) => *d as u32,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -195,13 +195,13 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i as u64,
             Value::Double(d) => *d as u64,
-            Value::Nil => 0,
+            Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
             Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseInteger));
             }
         };
 
@@ -216,11 +216,11 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as f32,
             Value::Double(d) => *d as f32,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f32>()?,
-            Value::Nil => 0.,
+            Value::Null => 0.,
             Value::SimpleString(s) => s.parse::<f32>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseDouble));
             }
         };
 
@@ -235,11 +235,11 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as f64,
             Value::Double(d) => *d,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f64>()?,
-            Value::Nil => 0.,
+            Value::Null => 0.,
             Value::SimpleString(s) => s.parse::<f64>()?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseNumber));
+                return Err(Error::Client(ClientError::CannotParseDouble));
             }
         };
 
@@ -266,7 +266,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                     return Err(Error::Client(ClientError::CannotParseChar));
                 }
             }
-            Value::Nil => '\0',
+            Value::Null => '\0',
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => return Err(Error::Client(ClientError::CannotParseChar)),
         };
@@ -280,7 +280,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::BulkString(s) => str::from_utf8(s)?,
-            Value::Nil => "",
+            Value::Null => "",
             Value::SimpleString(s) => s.as_str(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -299,7 +299,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Double(d) => d.to_string(),
             Value::BulkString(s) => str::from_utf8(s)?.to_owned(),
-            Value::Nil => String::from(""),
+            Value::Null => String::from(""),
             Value::SimpleString(s) => s.clone(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -316,7 +316,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::BulkString(s) => s.as_slice(),
-            Value::Nil => &[],
+            Value::Null => &[],
             Value::SimpleString(s) => s.as_bytes(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -333,7 +333,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::BulkString(s) => s.clone(),
-            Value::Nil => vec![],
+            Value::Null => vec![],
             Value::SimpleString(s) => s.as_bytes().to_vec(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
@@ -350,7 +350,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         match self {
-            Value::Nil => visitor.visit_none(),
+            Value::Null => visitor.visit_none(),
             Value::Array(values) if values.is_empty() => visitor.visit_none(),
             Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => visitor.visit_some(self),
@@ -363,7 +363,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         match self {
-            Value::Nil => visitor.visit_unit(),
+            Value::Null => visitor.visit_unit(),
             Value::Integer(_) => visitor.visit_unit(),
             Value::SimpleString(_) => visitor.visit_unit(),
             Value::BulkString(bs) if bs.is_empty() => visitor.visit_unit(),
@@ -400,7 +400,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         match self {
-            Value::Nil => visitor.visit_seq(NilSeqAccess),
+            Value::Null => visitor.visit_seq(NilSeqAccess),
             Value::Array(values) | Value::Set(values) | Value::Push(values) => {
                 visitor.visit_seq(SeqAccess::new(values))
             }

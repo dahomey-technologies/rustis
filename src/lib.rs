@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
     client
-        .send(
+        .send::<()>(
             cmd("MSET")
                 .arg("key1")
                 .arg("value1")
@@ -149,16 +149,14 @@ async fn main() -> Result<()> {
                 .arg("value4"),
             None,
         )
-        .await?
-        .to::<()>()?;
+        .await?;
 
     let values: Vec<String> = client
         .send(
             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
             None,
         )
-        .await?
-        .to()?;
+        .await?;
 
     assert_eq!(vec!["value1", "value2", "value3", "value4"], values);
 

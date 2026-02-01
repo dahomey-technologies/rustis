@@ -4,11 +4,11 @@ use crate::{
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
-        CommandListOptions, ConnectionCommands, FailOverOptions, FlushingMode, InfoSection,
-        LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ReplicaOfOptions, RoleResult,
-        ServerCommands, SlowLogGetOptions, StringCommands,
+        CommandListOptions, ConnectionCommands, DebugCommands, FailOverOptions, FlushingMode,
+        InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ReplicaOfOptions,
+        RoleResult, ServerCommands, SlowLogGetOptions, StringCommands,
     },
-    resp::{Value, cmd},
+    resp::Value,
     spawn,
     tests::{
         get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config,
@@ -16,7 +16,10 @@ use crate::{
 };
 use futures_util::StreamExt;
 use serial_test::serial;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -601,10 +604,10 @@ async fn flushdb() -> Result<()> {
     client0.flushdb(None).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: String = client1.get("key1").await?;
     assert_eq!("value1", value);
@@ -632,16 +635,16 @@ async fn flushall() -> Result<()> {
     client0.flushall(None).await?;
 
     let value: Value = client0.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client0.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client1.get("key1").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     let value: Value = client1.get("key2").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     Ok(())
 }
@@ -704,15 +707,9 @@ async fn latency_graph() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
+    client.debug_sleep(Duration::from_millis(100)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
 
     let report: String = client.latency_graph(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -771,15 +768,9 @@ async fn latency_history() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
+    client.debug_sleep(Duration::from_millis(100)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
 
     let report: Vec<(u32, u32)> = client.latency_history(LatencyHistoryEvent::Command).await?;
     assert!(!report.is_empty());
@@ -800,15 +791,9 @@ async fn latency_latest() -> Result<()> {
 
     client.latency_reset([LatencyHistoryEvent::Command]).await?;
 
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.1), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
-    client
-        .send(cmd("DEBUG").arg("SLEEP").arg(0.2), None)
-        .await?;
+    client.debug_sleep(Duration::from_millis(100)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
+    client.debug_sleep(Duration::from_millis(200)).await?;
 
     let report: Vec<(String, u32, u32, u32)> = client.latency_latest().await?;
     assert!(!report.is_empty());

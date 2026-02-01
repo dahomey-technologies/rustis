@@ -106,10 +106,14 @@ harness = false
 required-features = ["bench"]
 
 [[bench]]
-name = "large_array_parsing"
+name = "parse_integer"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "large_array_parsing"
+harness = false
+required-features = ["bench"]
 
 [[example]]
 name = "actix_crud"

@@ -8,32 +8,32 @@ use std::{
 
 /// Generic Redis Object Model
 ///
-/// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/reference/protocol-spec/) (RESP)
+/// This enum is a direct mapping to [`Redis serialization protocol`](https://redis.io/docs/latest/develop/reference/protocol-spec) (RESP)
 #[derive(Default)]
 pub enum Value {
-    /// [RESP Simple String](https://redis.io/docs/reference/protocol-spec/#resp-simple-strings)
+    /// [RESP Simple String](https://redis.io/docs/latest/develop/reference/protocol-spec/#simple-strings)
     SimpleString(String),
-    /// [RESP Integer](https://redis.io/docs/reference/protocol-spec/#resp-integers)
+    /// [RESP Integer](https://redis.io/docs/latest/develop/reference/protocol-spec/#integers)
     Integer(i64),
-    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Double
+    /// [RESP Double](https://redis.io/docs/latest/develop/reference/protocol-spec/#doubles)
     Double(f64),
-    /// [RESP Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
+    /// [RESP Bulk String](https://redis.io/docs/latest/develop/reference/protocol-spec/#bulk-strings)
     BulkString(Vec<u8>),
-    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Boolean
+    /// [RESP Boolean](https://redis.io/docs/latest/develop/reference/protocol-spec/#booleans)
     Boolean(bool),
-    /// [RESP Array](https://redis.io/docs/reference/protocol-spec/#resp-arrays)
+    /// [RESP Array](https://redis.io/docs/latest/develop/reference/protocol-spec/#arrays)
     Array(Vec<Value>),
-    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Map type
+    /// [RESP Map](https://redis.io/docs/latest/develop/reference/protocol-spec/#maps)
     Map(HashMap<Value, Value>),
-    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Push
+    /// [RESP Set](https://redis.io/docs/latest/develop/reference/protocol-spec/#sets)
     Set(Vec<Value>),
-    /// [RESP3](https://github.com/antirez/RESP3/blob/master/spec.md) Set reply
+    /// [RESP Push](https://redis.io/docs/latest/develop/reference/protocol-spec/#pushes)
     Push(Vec<Value>),
-    /// [RESP Error](https://redis.io/docs/reference/protocol-spec/#resp-errors)
+    /// [RESP Error](https://redis.io/docs/latest/develop/reference/protocol-spec/#simple-errors)
     Error(RedisError),
-    /// [RESP Null](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings)
+    /// [RESP Null](https://redis.io/docs/latest/develop/reference/protocol-spec/#nulls)
     #[default]
-    Nil,
+    Null,
 }
 
 impl Value {
@@ -58,7 +58,7 @@ impl Hash for Value {
             Value::Double(d) => d.to_string().hash(state),
             Value::BulkString(bs) => bs.hash(state),
             Value::Error(e) => e.hash(state),
-            Value::Nil => "_\r\n".hash(state),
+            Value::Null => "_\r\n".hash(state),
             _ => unimplemented!("Hash not implemented for {self}"),
         }
     }
@@ -142,7 +142,7 @@ impl Display for Value {
                 f.write_char(']')
             }
             Value::Error(e) => e.fmt(f),
-            Value::Nil => f.write_str("Nil"),
+            Value::Null => f.write_str("Nil"),
         }
     }
 }
@@ -163,7 +163,7 @@ impl fmt::Debug for Value {
             Self::Set(arg0) => f.debug_tuple("Set").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f.debug_tuple("Error").field(arg0).finish(),
-            Self::Nil => write!(f, "Nil"),
+            Self::Null => write!(f, "Nil"),
         }
     }
 }

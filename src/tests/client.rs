@@ -18,7 +18,7 @@ use serial_test::serial;
 async fn send() -> Result<()> {
     let client = get_test_client().await?;
 
-    client.send(cmd("PING"), None).await?;
+    client.send::<()>(cmd("PING"), None).await?;
 
     client.close().await?;
 
@@ -32,7 +32,7 @@ async fn forget() -> Result<()> {
     let client = get_test_client().await?;
 
     client.send_and_forget(cmd("PING"), None)?;
-    client.send(cmd("PING"), None).await?;
+    client.send::<()>(cmd("PING"), None).await?;
 
     client.close().await?;
 
@@ -128,7 +128,7 @@ async fn mget_mset() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
     client
-        .send(
+        .send::<()>(
             cmd("MSET")
                 .arg("key1")
                 .arg("value1")
@@ -140,16 +140,14 @@ async fn mget_mset() -> Result<()> {
                 .arg("value4"),
             None,
         )
-        .await?
-        .to::<()>()?;
+        .await?;
 
     let values: Vec<String> = client
         .send(
             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
             None,
         )
-        .await?
-        .to()?;
+        .await?;
 
     assert_eq!(
         vec![

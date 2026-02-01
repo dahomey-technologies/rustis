@@ -3,7 +3,7 @@ use crate::{
     StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
-    resp::{Command, RespBuf},
+    resp::{Command, RespResponse},
 };
 use serde::de::DeserializeOwned;
 use std::{future::IntoFuture, sync::Arc, task::Poll};
@@ -50,7 +50,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
+    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,
             Connection::Sentinel(connection) => connection.read().await,
@@ -59,7 +59,7 @@ impl Connection {
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         match self {
             Connection::Standalone(connection) => connection.try_read(),
             Connection::Sentinel(connection) => connection.try_read(),
@@ -77,7 +77,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn send(&mut self, command: &Command) -> Result<RespBuf> {
+    pub async fn send(&mut self, command: &Command) -> Result<RespResponse> {
         self.feed(command, &[]).await?;
         self.flush().await?;
         self.read().await.ok_or_else(|| Error::DisconnectedByPeer)?

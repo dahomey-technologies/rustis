@@ -1,17 +1,17 @@
 use crate::{
     Error, Result,
-    resp::{RespBuf, RespDeserializer},
+    resp::{RespDeserializer, RespResponse},
 };
 use serde::{Deserializer, de::DeserializeSeed, forward_to_deserialize_any};
 use std::slice;
 
 pub(crate) struct RespBatchDeserializer<'de> {
-    bufs: &'de Vec<RespBuf>,
+    responses: &'de [RespResponse],
 }
 
 impl<'de> RespBatchDeserializer<'de> {
-    pub fn new(bufs: &'de Vec<RespBuf>) -> RespBatchDeserializer<'de> {
-        RespBatchDeserializer { bufs }
+    pub fn new(responses: &'de [RespResponse]) -> RespBatchDeserializer<'de> {
+        RespBatchDeserializer { responses }
     }
 }
 
@@ -35,14 +35,14 @@ impl<'de> Deserializer<'de> for &'de RespBatchDeserializer<'de> {
     where
         V: serde::de::Visitor<'de>,
     {
-        visitor.visit_seq(SeqAccess::new(self.bufs))
+        visitor.visit_seq(SeqAccess::new(self.responses))
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
     where
         V: serde::de::Visitor<'de>,
     {
-        if self.bufs.is_empty() {
+        if self.responses.is_empty() {
             visitor.visit_unit()
         } else {
             self.deserialize_seq(visitor)
@@ -51,12 +51,12 @@ impl<'de> Deserializer<'de> for &'de RespBatchDeserializer<'de> {
 }
 
 struct SeqAccess<'de> {
-    iter: slice::Iter<'de, RespBuf>,
+    iter: slice::Iter<'de, RespResponse>,
     len: usize,
 }
 
 impl<'de> SeqAccess<'de> {
-    pub fn new(bufs: &'de [RespBuf]) -> Self {
+    pub fn new(bufs: &'de [RespResponse]) -> Self {
         Self {
             len: bufs.len(),
             iter: bufs.iter(),
@@ -72,7 +72,9 @@ impl<'de> serde::de::SeqAccess<'de> for SeqAccess<'de> {
         T: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(buf) => seed.deserialize(&mut RespDeserializer::new(buf)).map(Some),
+            Some(response) => seed
+                .deserialize(RespDeserializer::new(response.view()))
+                .map(Some),
             None => Ok(None),
         }
     }

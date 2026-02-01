@@ -27,9 +27,7 @@ fn get_redis_client() -> redis::Client {
 
 async fn get_rustis_client() -> rustis::client::Client {
     let redis_host = get_redis_host();
-    rustis::client::Client::connect(redis_host)
-        .await
-        .unwrap()
+    rustis::client::Client::connect(redis_host).await.unwrap()
 }
 
 async fn get_fred_client() -> fred::clients::Client {

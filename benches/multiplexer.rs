@@ -81,19 +81,19 @@ async fn bench_redis_rs(
 fn compare_drivers(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let keys: Arc<Vec<String>> = Arc::new((0..100).map(|i| format!("key{i}")).collect());
-    let host = "127.0.0.1";
+    let redis_host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     // Initialisation des clients (Setup)
     let (rustis, fred, redis_rs) = rt.block_on(async {
         // rustis
-        let rustis = RustisClient::connect(host).await.unwrap();
+        let rustis = RustisClient::connect(redis_host.clone()).await.unwrap();
         setup_data(&rustis).await;
         // fred
-        let config = Config::from_url(&format!("redis://{host}:6379/0")).unwrap();
+        let config = Config::from_url(&format!("redis://{redis_host}:6379/0")).unwrap();
         let fred = Builder::from_config(config).build().unwrap();
         fred.init().await.unwrap();
         // redis-rs
-        let redis_rs = redis::Client::open(format!("redis://{host}/")).unwrap();
+        let redis_rs = redis::Client::open(format!("redis://{redis_host}:6379")).unwrap();
         let redis_rs = redis_rs.get_multiplexed_async_connection().await.unwrap();
 
         (rustis, fred, redis_rs)

@@ -16,12 +16,18 @@ where
     current_thread_runtime().block_on(f)
 }
 
+fn get_redis_host() -> String {
+    std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
 fn get_redis_client() -> redis::Client {
-    redis::Client::open("redis://127.0.0.1:6379").unwrap()
+    let redis_host = get_redis_host();
+    redis::Client::open(format!("redis://{redis_host}:6379")).unwrap()
 }
 
 async fn get_rustis_client() -> rustis::client::Client {
-    rustis::client::Client::connect("127.0.0.1:6379")
+    let redis_host = get_redis_host();
+    rustis::client::Client::connect(redis_host)
         .await
         .unwrap()
 }
@@ -29,7 +35,8 @@ async fn get_rustis_client() -> rustis::client::Client {
 async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = Config::default();
+    let redis_host = get_redis_host();
+    let config = Config::from_url(&format!("redis://{redis_host}:6379/0")).unwrap();
     let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();

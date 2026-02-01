@@ -16,25 +16,32 @@ where
     current_thread_runtime().block_on(f)
 }
 
+fn get_redis_host() -> String {
+    std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
 fn get_redis_client() -> redis::Client {
-    redis::Client::open("redis://127.0.0.1:6379").unwrap()
+    let redis_host = get_redis_host();
+    redis::Client::open(format!("redis://{redis_host}:6379")).unwrap()
+}
+
+async fn get_rustis_client() -> rustis::client::Client {
+    let redis_host = get_redis_host();
+    rustis::client::Client::connect(redis_host)
+        .await
+        .unwrap()
 }
 
 async fn get_fred_client() -> fred::clients::Client {
     use fred::prelude::*;
 
-    let config = Config::default();
+    let redis_host = get_redis_host();
+    let config = Config::from_url(&format!("redis://{redis_host}:6379/0")).unwrap();
     let client = Client::new(config, None, None, None);
     client.connect();
     client.wait_for_connect().await.unwrap();
 
     client
-}
-
-async fn get_rustis_client() -> rustis::client::Client {
-    rustis::client::Client::connect("127.0.0.1:6379")
-        .await
-        .unwrap()
 }
 
 fn bench_redis_simple_getsetdel_async(b: &mut Bencher) {
@@ -108,10 +115,10 @@ fn bench_rustis_simple_getsetdel_async(b: &mut Bencher) {
                 let key = "test_key";
 
                 client
-                    .send(cmd("SET").arg(key).arg(42.423456), None)
+                    .send::<()>(cmd("SET").arg(key).arg(42.423456), None)
                     .await?;
-                let _: f64 = client.send(cmd("GET").arg(key), None).await?.to()?;
-                client.send(cmd("DEL").arg(key), None).await?;
+                let _: f64 = client.send(cmd("GET").arg(key), None).await?;
+                client.send::<u32>(cmd("DEL").arg(key), None).await?;
 
                 Ok::<_, Error>(())
             })

@@ -150,7 +150,7 @@ impl Client {
     ///     client.flushall(FlushingMode::Sync).await?;
     ///
     ///     client
-    ///         .send(
+    ///         .send::<()>(
     ///             cmd("MSET")
     ///                 .arg("key1")
     ///                 .arg("value1")

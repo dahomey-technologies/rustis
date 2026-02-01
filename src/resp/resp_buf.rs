@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use std::{fmt, ops::Deref};
 
 /// Represents a [RESP](https://redis.io/docs/reference/protocol-spec/) Buffer incoming from the network
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq, Eq, Hash)]
 pub struct RespBuf(Bytes);
 
 impl RespBuf {

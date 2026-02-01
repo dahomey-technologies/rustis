@@ -10,7 +10,6 @@ async fn setup_data(client: &RustisClient) {
     let data: Vec<_> = (0..100)
         .map(|i| (format!("key{i}"), format!("value{i}")))
         .collect();
-    // On s'assure que les données sont bien là avant de commencer
     let _: () = client.mset(data).await.unwrap();
 }
 

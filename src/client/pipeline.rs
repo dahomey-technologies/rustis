@@ -12,7 +12,6 @@ use crate::{
 };
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
-use std::iter::zip;
 
 /// Represents a Redis command pipeline.
 pub struct Pipeline<'a> {
@@ -94,21 +93,26 @@ impl Pipeline<'_> {
     /// ```    
     pub async fn execute<T: DeserializeOwned>(self) -> Result<T> {
         let num_commands = self.commands.len();
-        let results = self
+        let mut results = self
             .client
-            .send_batch(self.commands, self.retry_on_error)
+            .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
         if num_commands > 1 {
-            let mut filtered_results = zip(results, self.forget_flags.iter())
-                .filter_map(|(value, forget_flag)| if *forget_flag { None } else { Some(value) })
-                .collect::<Vec<_>>();
+            if !self.forget_flags.is_empty() {
+                let mut idx = 0;
+                results.retain(|_| {
+                    let keep = !self.forget_flags[idx];
+                    idx += 1;
+                    keep
+                });
+            }
 
-            if filtered_results.len() == 1 {
-                let result = filtered_results.pop().unwrap();
+            if results.len() == 1 {
+                let result = results.pop().unwrap();
                 result.to()
             } else {
-                let deserializer = RespBatchDeserializer::new(&filtered_results);
+                let deserializer = RespBatchDeserializer::new(&results);
                 T::deserialize(&deserializer)
             }
         } else {

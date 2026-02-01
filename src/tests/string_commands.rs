@@ -280,7 +280,7 @@ async fn getset() -> Result<()> {
     client.del("key").await?;
 
     let value: Value = client.getset("key", "newvalue").await?;
-    assert!(matches!(value, Value::Nil));
+    assert!(matches!(value, Value::Null));
 
     client.close().await?;
 

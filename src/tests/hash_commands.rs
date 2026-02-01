@@ -197,22 +197,23 @@ async fn hget() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn hgetdel() -> Result<()> {
-    let client = get_test_client().await?;
+async fn hgetdel() {
+    let client = get_test_client().await.unwrap();
 
     // cleanup
-    client.flushall(FlushingMode::Sync).await?;
+    client.flushall(FlushingMode::Sync).await.unwrap();
 
     client
         .hset(
             "key",
             [("field1", "Hello"), ("field2", "World"), ("field3", "!")],
         )
-        .await?;
-    let values: Vec<Option<String>> = client.hgetdel("key", ["field3", "field4"]).await?;
+        .await
+        .unwrap();
+    let values: Vec<Option<String>> = client.hgetdel("key", ["field3", "field4"]).await.unwrap();
     assert_eq!(values, vec![Some("!".to_string()), None]);
 
-    let result: Vec<(String, String)> = client.hgetall("key").await?;
+    let result: Vec<(String, String)> = client.hgetall("key").await.unwrap();
     assert_eq!(
         result,
         vec![
@@ -221,13 +222,11 @@ async fn hgetdel() -> Result<()> {
         ]
     );
 
-    let values: Vec<String> = client.hgetdel("key", ["field1", "field2"]).await?;
+    let values: Vec<String> = client.hgetdel("key", ["field1", "field2"]).await.unwrap();
     assert_eq!(values, vec!["Hello".to_string(), "World".to_string()]);
 
-    let result = client.exists("key").await?;
+    let result = client.exists("key").await.unwrap();
     assert_eq!(result, 0);
-
-    Ok(())
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

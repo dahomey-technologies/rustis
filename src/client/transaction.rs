@@ -97,22 +97,23 @@ impl Transaction {
 
         let results = self
             .client
-            .send_batch(self.commands, self.retry_on_error)
+            .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
         let mut iter = results.into_iter();
 
         // MULTI + QUEUED commands
         for _ in 0..num_commands - 1 {
-            if let Some(resp_buf) = iter.next() {
-                resp_buf.to::<()>()?;
+            if let Some(response) = iter.next() {
+                response.to::<()>()?;
             }
         }
 
         // EXEC
         if let Some(result) = iter.next() {
-            let mut deserializer = RespDeserializer::new(&result);
-            match TransactionResultSeed::new(self.forget_flags).deserialize(&mut deserializer) {
+            match TransactionResultSeed::new(self.forget_flags)
+                .deserialize(RespDeserializer::new(result.view()))
+            {
                 Ok(Some(t)) => Ok(t),
                 Ok(None) => Err(Error::Aborted),
                 Err(e) => Err(e),

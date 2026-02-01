@@ -29,7 +29,8 @@ mod pooled_client_manager;
 mod pub_sub_commands;
 mod resp3;
 mod resp_deserializer;
-mod resp_serializer;
+mod resp_frame_parser;
+mod resp_response;
 mod scripting_commands;
 mod search_commands;
 mod sentinel;
@@ -47,7 +48,6 @@ mod util;
 mod value;
 mod value_deserialize;
 mod value_deserializer;
-mod value_serialize;
 mod vector_sets;
 
 pub(crate) use util::*;

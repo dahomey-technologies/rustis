@@ -12,7 +12,7 @@ license-file = "LICENSE"
 edition = "2024"
 
 [features]
-default = ["tokio-runtime", "pool", "tokio-rustls", "json", "client-cache"]
+default = ["tokio-runtime"]
 tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]
 tokio-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "rustls"]
 tokio-native-tls = ["dep:tokio-native-tls", "native-tls"]
@@ -105,6 +105,16 @@ name = "fast_path"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "parse_integer"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "large_array_parsing"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["web-examples"]
@@ -136,4 +146,10 @@ name = "simple"
 [profile.dev]
 opt-level = 0
 debug = true
-split-debuginfo = "packed"
+debug-assertions = true
+overflow-checks = true
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

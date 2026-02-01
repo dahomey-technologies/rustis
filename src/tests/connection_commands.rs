@@ -226,7 +226,7 @@ async fn client_setinfo() -> Result<()> {
         .client_setinfo(ClientInfoAttribute::LibVer, "0.13.3")
         .await?;
 
-    let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?.to()?;
+    let attrs: String = client.send(cmd("CLIENT").arg("INFO"), None).await?;
 
     assert!(attrs.contains("lib-name=rustis lib-ver=0.13.3"));
     Ok(())

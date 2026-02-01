@@ -2,7 +2,7 @@ use crate::{
     Error, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
-    resp::{Command, RespBuf},
+    resp::{Command, RespResponse},
     sleep,
 };
 use log::debug;
@@ -26,12 +26,12 @@ impl SentinelConnection {
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
+    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         self.inner_connection.read().await
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         self.inner_connection.try_read()
     }
 

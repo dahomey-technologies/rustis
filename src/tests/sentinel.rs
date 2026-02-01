@@ -119,16 +119,14 @@ async fn sentinel_info_cache() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-async fn sentinel_master() -> Result<()> {
+async fn sentinel_master() {
     // connect to the sentinel instance directly for this command
-    let client = get_sentinel_test_client().await?;
+    let client = get_sentinel_test_client().await.unwrap();
 
-    let result = client.sentinel_master("myservice").await?;
+    let result = client.sentinel_master("myservice").await.unwrap();
     assert_eq!("master", result.flags);
     //assert_eq!(2, result.num_other_sentinels);
     assert_eq!(2, result.quorum);
-
-    Ok(())
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

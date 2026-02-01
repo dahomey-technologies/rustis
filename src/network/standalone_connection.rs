@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
-    resp::{BufferDecoder, Command, CommandEncoder, RespBuf},
+    resp::{BufferDecoder, Command, CommandEncoder, RespResponse},
     tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -128,7 +128,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
+    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         if let Some(result) = match &mut self.streams {
             Streams::Tcp(framed_read, _) => framed_read.next().await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -136,8 +136,8 @@ impl StandaloneConnection {
         } {
             if log_enabled!(Level::Debug) {
                 match &result {
-                    Ok(bytes) => debug!("[{}] Received result {bytes}", self.tag),
-                    Err(err) => debug!("[{}] Received result {err:?}", self.tag),
+                    Ok(response) => debug!("[{}] Received response {response:?}", self.tag),
+                    Err(err) => debug!("[{}] Received response {err:?}", self.tag),
                 }
             }
             Some(result)
@@ -147,7 +147,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         let waker = noop_waker_ref();
         let mut cx = Context::from_waker(waker);
 
@@ -161,7 +161,9 @@ impl StandaloneConnection {
             Poll::Ready(Some(result)) => {
                 if log_enabled!(Level::Debug) {
                     match &result {
-                        Ok(bytes) => debug!("[{}] (try_read) Received result {bytes}", self.tag),
+                        Ok(response) => {
+                            debug!("[{}] (try_read) Received result {response:?}", self.tag)
+                        }
                         Err(err) => debug!("[{}] (try_read) Received result {err:?}", self.tag),
                     }
                 }
@@ -237,13 +239,13 @@ where
         Box::pin(async move {
             self.executor.write(&self.command.into()).await?;
 
-            let resp_buf = self
+            let response = self
                 .executor
                 .read()
                 .await
                 .ok_or_else(|| Error::DisconnectedByPeer)??;
 
-            resp_buf.to()
+            response.to()
         })
     }
 }

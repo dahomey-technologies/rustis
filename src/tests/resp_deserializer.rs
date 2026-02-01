@@ -1,17 +1,29 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result, resp::RespDeserializer, tests::log_try_init,
+    Error, RedisError, RedisErrorKind, Result,
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse},
+    tests::log_try_init,
 };
+use bytes::Bytes;
 use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
-fn deserialize<'a, T>(str: &'a str) -> Result<T>
+fn deserialize<T>(str: &str) -> Result<T>
 where
-    T: serde::Deserialize<'a>,
+    T: serde::de::DeserializeOwned,
 {
     let buf = str.as_bytes();
-    let mut deserializer = RespDeserializer::new(buf);
-    T::deserialize(&mut deserializer)
+    let (frame, _) = RespFrameParser::new(buf).parse()?;
+    let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
+    deserialize_from_resp_response(response)
+}
+
+fn deserialize_from_resp_response<T>(response: RespResponse) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let deserializer = RespDeserializer::new(response.view());
+    T::deserialize(deserializer)
 }
 
 #[test]
@@ -64,7 +76,7 @@ fn bool() -> Result<()> {
 }
 
 #[test]
-fn integer() -> Result<()> {
+fn integer() {
     log_try_init();
 
     let result: Result<i64> = deserialize("-ERR error\r\n"); // error
@@ -76,25 +88,23 @@ fn integer() -> Result<()> {
         }))
     ));
 
-    let result: i64 = deserialize(":12\r\n")?; // 12
+    let result: i64 = deserialize(":12\r\n").unwrap(); // 12
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("_\r\n")?; // null
+    let result: i64 = deserialize("_\r\n").unwrap(); // null
     assert_eq!(0, result);
 
-    let result: i64 = deserialize("$2\r\n12\r\n")?; // b"12"
+    let result: i64 = deserialize("$2\r\n12\r\n").unwrap(); // b"12"
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("+12\r\n")?; // "12"
+    let result: i64 = deserialize("+12\r\n").unwrap(); // "12"
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    let result: i64 = deserialize("*1\r\n:12\r\n").unwrap(); // [12]
     assert_eq!(12, result);
 
-    let result: u64 = deserialize("*1\r\n:12\r\n")?; // [12]
+    let result: u64 = deserialize("*1\r\n:12\r\n").unwrap(); // [12]
     assert_eq!(12, result);
-
-    Ok(())
 }
 
 #[test]
@@ -146,31 +156,6 @@ fn char() -> Result<()> {
 
     let result: char = deserialize("+m\r\n")?; // "m"
     assert_eq!('m', result);
-
-    Ok(())
-}
-
-#[test]
-fn str() -> Result<()> {
-    log_try_init();
-
-    let result: Result<&str> = deserialize("-ERR error\r\n"); // error
-    assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description: _
-        }))
-    ));
-
-    let result: &str = deserialize("$5\r\nhello\r\n")?; // b"hello"
-    assert_eq!("hello", result);
-
-    let result: &str = deserialize("+hello\r\n")?; // "hello"
-    assert_eq!("hello", result);
-
-    let result: &str = deserialize("$0\r\n\r\n")?; // b""
-    assert_eq!("", result);
 
     Ok(())
 }
@@ -330,12 +315,44 @@ fn seq() -> Result<()> {
     assert_eq!(12, result[0]);
     assert_eq!(13, result[1]);
 
+    let result: Vec<i32> = deserialize("*2\r\n$2\r\n12\r\n$2\r\n13\r\n")?; // [b "12", b"13"]
+    assert_eq!(2, result.len());
+    assert_eq!(12, result[0]);
+    assert_eq!(13, result[1]);
+
+    let result: Vec<bool> = deserialize("*2\r\n#t\r\n#f\r\n")?; // [true, false]
+    assert_eq!(2, result.len());
+    assert!(result[0]);
+    assert!(!result[1]);
+
+    let result: Vec<bool> = deserialize("*2\r\n:1\r\n:0\r\n")?; // [1, 0]
+    assert_eq!(2, result.len());
+    assert!(result[0]);
+    assert!(!result[1]);
+
     let result: SmallVec<[String; 2]> = deserialize("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello", b"world"]
     assert_eq!(2, result.len());
     assert_eq!("hello", result[0]);
     assert_eq!("world", result[1]);
 
     Ok(())
+}
+
+#[test]
+fn integer_array() {
+    log_try_init();
+
+    let result: Vec<i32> =
+        deserialize_from_resp_response(RespResponse::IntegerArray(vec![12, 13])).unwrap();
+    assert_eq!(2, result.len());
+    assert_eq!(12, result[0]);
+    assert_eq!(13, result[1]);
+
+    let result: Vec<bool> =
+        deserialize_from_resp_response(RespResponse::IntegerArray(vec![1, 0])).unwrap();
+    assert_eq!(2, result.len());
+    assert!(result[0]);
+    assert!(!result[1]);
 }
 
 #[test]
@@ -363,8 +380,8 @@ fn tuple() -> Result<()> {
     let result: (i32, i32) = deserialize("*2\r\n:12\r\n:13\r\n")?; // [12, 13]
     assert_eq!((12, 13), result);
 
-    let result: (&str, &str) = deserialize("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello", b"world"]
-    assert_eq!(("hello", "world"), result);
+    let result: (String, String) = deserialize("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?; // [b"hello", b"world"]
+    assert_eq!(("hello".to_string(), "world".to_string()), result);
 
     Ok(())
 }
@@ -392,7 +409,7 @@ fn tuple_struct() -> Result<()> {
 }
 
 #[test]
-fn map() -> Result<()> {
+fn map() {
     log_try_init();
 
     let result: Result<HashMap<i32, i32>> = deserialize("-ERR error\r\n"); // error
@@ -404,23 +421,22 @@ fn map() -> Result<()> {
         }))
     ));
 
-    let result: HashMap<i32, i32> = deserialize("*4\r\n:12\r\n:13\r\n:14\r\n:15\r\n")?; // [12, 13, 14, 15]
+    let result: HashMap<i32, i32> = deserialize("*4\r\n:12\r\n:13\r\n:14\r\n:15\r\n").unwrap(); // [12, 13, 14, 15]
     assert_eq!(Some(&13), result.get(&12));
     assert_eq!(Some(&15), result.get(&14));
 
-    let result: HashMap<i32, i32> = deserialize("%2\r\n:12\r\n:13\r\n:14\r\n:15\r\n")?; // { 12: 13, 14: 15 }
+    let result: HashMap<i32, i32> = deserialize("%2\r\n:12\r\n:13\r\n:14\r\n:15\r\n").unwrap(); // { 12: 13, 14: 15 }
     assert_eq!(Some(&13), result.get(&12));
     assert_eq!(Some(&15), result.get(&14));
 
-    let result: HashMap<i32, i32> = deserialize("*2\r\n*2\r\n:12\r\n:13\r\n*2\r\n:14\r\n:15\r\n")?; // [[12, 13], [14, 15]]
+    let result: HashMap<i32, i32> =
+        deserialize("*2\r\n*2\r\n:12\r\n:13\r\n*2\r\n:14\r\n:15\r\n").unwrap(); // [[12, 13], [14, 15]]
     assert_eq!(Some(&13), result.get(&12));
     assert_eq!(Some(&15), result.get(&14));
-
-    Ok(())
 }
 
 #[test]
-fn _struct() -> Result<()> {
+fn r#struct() {
     log_try_init();
 
     #[derive(Debug, Deserialize, PartialEq)]
@@ -438,7 +454,8 @@ fn _struct() -> Result<()> {
         }))
     ));
 
-    let result: Person = deserialize("*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // [b"id", 12, b"name", b"Mike"]
+    let result: Person =
+        deserialize("*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n").unwrap(); // [b"id", 12, b"name", b"Mike"]
     assert_eq!(
         Person {
             id: 12,
@@ -447,7 +464,8 @@ fn _struct() -> Result<()> {
         result
     );
 
-    let result: Person = deserialize("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
+    let result: Person =
+        deserialize("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n").unwrap(); // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
         Person {
             id: 12,
@@ -456,7 +474,7 @@ fn _struct() -> Result<()> {
         result
     );
 
-    let result: Person = deserialize("*2\r\n:12\r\n$4\r\nMike\r\n")?; // [12, b"Mike"]
+    let result: Person = deserialize("*2\r\n:12\r\n$4\r\nMike\r\n").unwrap(); // [12, b"Mike"]
     assert_eq!(
         Person {
             id: 12,
@@ -464,12 +482,10 @@ fn _struct() -> Result<()> {
         },
         result
     );
-
-    Ok(())
 }
 
 #[test]
-fn _enum() -> Result<()> {
+fn r#enum() {
     log_try_init();
 
     #[derive(Debug, Deserialize, PartialEq)]
@@ -490,30 +506,31 @@ fn _enum() -> Result<()> {
     ));
 
     // unit_variant
-    let result: E = deserialize("$1\r\nA\r\n")?; // b"A"
+    let result: E = deserialize("$1\r\nA\r\n").unwrap(); // b"A"
     assert_eq!(E::A, result);
 
-    let result: E = deserialize("+A\r\n")?; // "A"
+    let result: E = deserialize("+A\r\n").unwrap(); // "A"
     assert_eq!(E::A, result);
 
     // newtype_variant
-    let result: E = deserialize("*2\r\n$1\r\nB\r\n:12\r\n")?; // [ b"B", 12 ]
+    let result: E = deserialize("*2\r\n$1\r\nB\r\n:12\r\n").unwrap(); // [ b"B", 12 ]
     assert_eq!(E::B(12), result);
 
-    let result: E = deserialize("%1\r\n$1\r\nB\r\n:12\r\n")?; // { b"B": 12 }
+    let result: E = deserialize("%1\r\n$1\r\nB\r\n:12\r\n").unwrap(); // { b"B": 12 }
     assert_eq!(E::B(12), result);
 
     // tuple_variant
-    let result: E = deserialize("*2\r\n$1\r\nC\r\n*2\r\n:12\r\n:13\r\n")?; // [ b"C", [12, 13] ]
+    let result: E = deserialize("*2\r\n$1\r\nC\r\n*2\r\n:12\r\n:13\r\n").unwrap(); // [ b"C", [12, 13] ]
     assert_eq!(E::C(12, 13), result);
 
-    let result: E = deserialize("%1\r\n$1\r\nC\r\n*2\r\n:12\r\n:13\r\n")?; // { b"C": [12, 13] }
+    let result: E = deserialize("%1\r\n$1\r\nC\r\n*2\r\n:12\r\n:13\r\n").unwrap(); // { b"C": [12, 13] }
     assert_eq!(E::C(12, 13), result);
 
     // struct_variant
     let result: E = deserialize(
         "*2\r\n$1\r\nD\r\n*6\r\n$1\r\nr\r\n:12\r\n$1\r\ng\r\n:13\r\n$1\r\nb\r\n:14\r\n",
-    )?; // [ b"D", [b"r", 12, b"g", 13, b"b", 14] ]
+    )
+    .unwrap(); // [ b"D", [b"r", 12, b"g", 13, b"b", 14] ]
     assert_eq!(
         E::D {
             r: 12,
@@ -525,7 +542,8 @@ fn _enum() -> Result<()> {
 
     let result: E = deserialize(
         "%1\r\n$1\r\nD\r\n*6\r\n$1\r\nr\r\n:12\r\n$1\r\ng\r\n:13\r\n$1\r\nb\r\n:14\r\n",
-    )?; // { b"D", [b"r", 12, b"g", 13, b"b", 14] }
+    )
+    .unwrap(); // { b"D", [b"r", 12, b"g", 13, b"b", 14] }
     assert_eq!(
         E::D {
             r: 12,
@@ -537,7 +555,8 @@ fn _enum() -> Result<()> {
 
     let result: E = deserialize(
         "%1\r\n$1\r\nD\r\n%3\r\n$1\r\nr\r\n:12\r\n$1\r\ng\r\n:13\r\n$1\r\nb\r\n:14\r\n",
-    )?; // { b"D", { b"r": 12, b"g": 13, b"b": 14 } }
+    )
+    .unwrap(); // { b"D", { b"r": 12, b"g": 13, b"b": 14 } }
     assert_eq!(
         E::D {
             r: 12,
@@ -546,24 +565,4 @@ fn _enum() -> Result<()> {
         },
         result
     );
-
-    Ok(())
-}
-
-#[test]
-fn array_chunks() -> Result<()> {
-    let resp = "*3\r\n:1\r\n:12\r\n:123\r\n";
-    let mut deserializer = RespDeserializer::new(resp.as_bytes());
-    let chunks = deserializer.array_chunks()?.collect::<Vec<_>>();
-
-    assert_eq!(
-        vec![
-            ":1\r\n".as_bytes(),
-            ":12\r\n".as_bytes(),
-            ":123\r\n".as_bytes()
-        ],
-        chunks
-    );
-
-    Ok(())
 }

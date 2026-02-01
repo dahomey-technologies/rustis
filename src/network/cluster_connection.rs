@@ -6,14 +6,14 @@ use crate::{
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::Version,
-    resp::{Command, CommandBuilder, RespBuf, RespDeserializer, RespSerializer},
+    resp::{Command, CommandBuilder, RespResponse, RespView},
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
 use rand::Rng;
 use serde::{
-    Deserialize, Deserializer, Serialize,
+    Deserialize,
     de::{self, value::SeqAccessDeserializer},
 };
 use smallvec::{SmallVec, smallvec};
@@ -80,7 +80,7 @@ struct SlotRange {
 struct SubRequest {
     pub node_id: NodeId,
     pub keys: SmallVec<[Bytes; 10]>,
-    pub result: Option<Option<Result<RespBuf>>>,
+    pub result: Option<Option<Result<RespResponse>>>,
 }
 
 #[derive(Debug)]
@@ -465,7 +465,7 @@ impl ClusterConnection {
         Err(Error::Client(ClientError::CommandNotSupportedInCluster))
     }
 
-    pub async fn read(&mut self) -> Option<Result<RespBuf>> {
+    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         let request_info: RequestInfo;
 
         loop {
@@ -485,7 +485,7 @@ impl ClusterConnection {
             result.as_ref()?;
 
             if let Some(Ok(bytes)) = &result
-                && bytes.is_push_message()
+                && bytes.is_push()
             {
                 return result;
             }
@@ -522,7 +522,7 @@ impl ClusterConnection {
         self.internal_read(request_info)
     }
 
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespBuf>>> {
+    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         let request_info: RequestInfo;
 
         loop {
@@ -547,8 +547,8 @@ impl ClusterConnection {
                 return Poll::Pending;
             };
 
-            if let Some(Ok(bytes)) = &result
-                && bytes.is_push_message()
+            if let Some(Ok(response)) = &result
+                && response.is_push()
             {
                 return Poll::Ready(result);
             }
@@ -590,34 +590,38 @@ impl ClusterConnection {
     fn internal_read(
         &mut self,
         mut request_info: RequestInfo,
-    ) -> Option<std::result::Result<RespBuf, Error>> {
+    ) -> Option<std::result::Result<RespResponse, Error>> {
         let mut sub_results =
-            Vec::<Result<RespBuf>>::with_capacity(request_info.sub_requests.len());
+            Vec::<Result<RespResponse>>::with_capacity(request_info.sub_requests.len());
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
         for sub_request in request_info.sub_requests.iter_mut() {
             let result = sub_request.result.take()?;
 
             if let Some(result) = result {
-                match &result {
-                    Ok(resp_buf) if resp_buf.is_error() => match resp_buf.to::<()>() {
-                        Err(Error::Redis(RedisError {
-                            kind: RedisErrorKind::Ask { hash_slot, address },
-                            description: _,
-                        })) => retry_reasons.push(RetryReason::Ask {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        Err(Error::Redis(RedisError {
-                            kind: RedisErrorKind::Moved { hash_slot, address },
-                            description: _,
-                        })) => retry_reasons.push(RetryReason::Moved {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        _ => sub_results.push(result),
-                    },
-                    _ => sub_results.push(result),
+                if let Ok(result) = result {
+                    match result.view() {
+                        RespView::Error(error) => match RedisError::try_from(error) {
+                            Ok(RedisError {
+                                kind: RedisErrorKind::Ask { hash_slot, address },
+                                description: _,
+                            }) => retry_reasons.push(RetryReason::Ask {
+                                hash_slot,
+                                address: address.clone(),
+                            }),
+                            Ok(RedisError {
+                                kind: RedisErrorKind::Moved { hash_slot, address },
+                                description: _,
+                            }) => retry_reasons.push(RetryReason::Moved {
+                                hash_slot,
+                                address: address.clone(),
+                            }),
+                            _ => sub_results.push(Ok(result)),
+                        },
+                        _ => sub_results.push(Ok(result)),
+                    }
+                } else {
+                    sub_results.push(result);
                 }
             } else {
                 return None;
@@ -655,9 +659,9 @@ impl ClusterConnection {
 
     fn response_policy_one_succeeded(
         &mut self,
-        sub_results: Vec<Result<RespBuf>>,
-    ) -> Option<Result<RespBuf>> {
-        let mut result: Result<RespBuf> = Ok(RespBuf::nil());
+        sub_results: Vec<Result<RespResponse>>,
+    ) -> Option<Result<RespResponse>> {
+        let mut result: Result<RespResponse> = Ok(RespResponse::null());
 
         for sub_result in sub_results {
             match &sub_result {
@@ -672,9 +676,9 @@ impl ClusterConnection {
 
     fn response_policy_all_succeeded(
         &mut self,
-        sub_results: Vec<Result<RespBuf>>,
-    ) -> Option<Result<RespBuf>> {
-        let mut result: Result<RespBuf> = Ok(RespBuf::nil());
+        sub_results: Vec<Result<RespResponse>>,
+    ) -> Option<Result<RespResponse>> {
+        let mut result: Result<RespResponse> = Ok(RespResponse::null());
 
         for sub_result in sub_results {
             match &sub_result {
@@ -689,51 +693,69 @@ impl ClusterConnection {
 
     fn response_policy_agg<F>(
         &mut self,
-        sub_results: Vec<Result<RespBuf>>,
+        sub_results: Vec<Result<RespResponse>>,
         f: F,
-    ) -> Option<Result<RespBuf>>
+    ) -> Option<Result<RespResponse>>
     where
         F: Fn(i64, i64) -> i64,
     {
-        let mut visitor = AggVisitor {
-            integer: Integer::Nil,
-            f,
-        };
+        let mut integer = Integer::Null;
 
         for sub_result in sub_results {
             let Ok(sub_result) = sub_result else {
                 return Some(sub_result);
             };
 
-            let mut deserializer = RespDeserializer::new(&sub_result);
-            if let Err(e) = deserializer.deserialize_any(&mut visitor) {
-                return Some(Err(e));
+            match sub_result.view() {
+                RespView::Integer(i) => match &mut integer {
+                    Integer::Single(current) => *current = f(*current, i),
+                    Integer::Null => integer = Integer::Single(i),
+                    Integer::Array(_) => return Some(Err(Error::Client(ClientError::Unexpected))),
+                },
+                RespView::Array(resp_array)
+                | RespView::Set(resp_array)
+                | RespView::Push(resp_array) => match &mut integer {
+                    Integer::Single(_) => {
+                        return Some(Err(Error::Client(ClientError::Unexpected)));
+                    }
+                    Integer::Array(items) => {
+                        for (item, view) in items.iter_mut().zip(resp_array) {
+                            if let RespView::Integer(i) = view {
+                                *item = f(*item, i);
+                            } else {
+                                return Some(Err(Error::Client(ClientError::Unexpected)));
+                            }
+                        }
+                    }
+                    Integer::Null => {
+                        let mut int_array = Vec::with_capacity(resp_array.len());
+
+                        for view in resp_array {
+                            if let RespView::Integer(i) = view {
+                                int_array.push(i);
+                            } else {
+                                return Some(Err(Error::Client(ClientError::Unexpected)));
+                            }
+                        }
+
+                        integer = Integer::Array(int_array)
+                    }
+                },
+                _ => return Some(Err(Error::Client(ClientError::Unexpected))),
             }
         }
 
-        match visitor.integer {
-            Integer::Single(i) => {
-                let mut serializer = RespSerializer::new();
-                if let Err(e) = i.serialize(&mut serializer) {
-                    return Some(Err(e));
-                }
-                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
-            }
-            Integer::Array(vec) => {
-                let mut serializer = RespSerializer::new();
-                if let Err(e) = vec.serialize(&mut serializer) {
-                    return Some(Err(e));
-                }
-                Some(Ok(RespBuf::new(serializer.get_output().freeze())))
-            }
-            Integer::Nil => Some(Ok(RespBuf::nil())),
+        match integer {
+            Integer::Single(i) => Some(Ok(RespResponse::integer(i))),
+            Integer::Array(v) => Some(Ok(RespResponse::integer_array(v))),
+            Integer::Null => Some(Ok(RespResponse::null())),
         }
     }
 
     fn response_policy_special(
         &mut self,
-        _sub_results: Vec<Result<RespBuf>>,
-    ) -> Option<Result<RespBuf>> {
+        _sub_results: Vec<Result<RespResponse>>,
+    ) -> Option<Result<RespResponse>> {
         Some(Err(Error::Client(
             ClientError::CommandNotSupportedInCluster,
         )))
@@ -741,69 +763,36 @@ impl ClusterConnection {
 
     fn no_response_policy(
         &mut self,
-        sub_results: Vec<Result<RespBuf>>,
+        sub_results: Vec<Result<RespResponse>>,
         request_info: &RequestInfo,
-    ) -> Option<Result<RespBuf>> {
+    ) -> Option<Result<RespResponse>> {
         log::trace!("[{}] no_response_policy", self.tag);
+
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
             // on the right connection. For example, GET's reply
-            Some(sub_results.into_iter().next()?)
+            sub_results.into_iter().next()
         } else if request_info.keys.is_empty() {
             // The command doesn't accept key name arguments:
             // the client can aggregate all replies within a single nested data structure.
             // For example, the array replies we get from calling KEYS against all shards.
             // These should be packed in a single array in no particular order.
-            let mut results = Vec::<&[u8]>::new();
-            for sub_result in &sub_results {
-                match sub_result {
-                    Ok(resp_buf) if !resp_buf.is_error() => {
-                        let mut deserializer = RespDeserializer::new(resp_buf);
-                        let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(
-                                ClientError::UnexpectedMessageReceived,
-                            )));
-                        };
-
-                        for chunk in chunks {
-                            results.push(chunk);
-                        }
-                    }
-                    _ => {
-                        return Some(sub_result.clone());
-                    }
-                }
+            let mut results = Vec::<RespResponse>::new();
+            for sub_result in sub_results {
+                let iter = sub_result.ok()?.into_array_iter().ok()?;
+                results.extend(iter);
             }
 
-            Some(Ok(RespBuf::from_chunks(&results)))
+            Some(Ok(RespResponse::owned_array(results)))
         } else {
             // For commands that accept one or more key name arguments:
             // the client needs to retain the same order of replies as the input key names.
             // For example, MGET's aggregated reply.
-            let mut results = SmallVec::<[(&Bytes, &[u8]); 10]>::new();
+            let mut results = SmallVec::<[(&Bytes, RespResponse); 10]>::new();
 
-            for (sub_result, sub_request) in zip(&sub_results, &request_info.sub_requests) {
-                match sub_result {
-                    Ok(resp_buf) if !resp_buf.is_error() => {
-                        let mut deserializer = RespDeserializer::new(resp_buf);
-                        let Ok(chunks) = deserializer.array_chunks() else {
-                            return Some(Err(Error::Client(
-                                ClientError::UnexpectedMessageReceived,
-                            )));
-                        };
-
-                        if sub_request.keys.len() == chunks.len() {
-                            results.extend(zip(&sub_request.keys, chunks));
-                        } else {
-                            return Some(Err(Error::Client(
-                                ClientError::UnexpectedMessageReceived,
-                            )));
-                        }
-                    }
-                    _ => {
-                        return Some(sub_result.clone());
-                    }
-                }
+            for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
+                let iter = sub_result.ok()?.into_array_iter().ok()?;
+                results.extend(sub_request.keys.iter().zip(iter));
             }
 
             results.sort_by(|(k1, _), (k2, _)| {
@@ -815,7 +804,7 @@ impl ClusterConnection {
             });
 
             let results = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(RespBuf::from_chunks(&results)))
+            Some(Ok(RespResponse::owned_array(results)))
         }
     }
 
@@ -1213,7 +1202,7 @@ pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Com
 enum Integer {
     Single(i64),
     Array(Vec<i64>),
-    Nil,
+    Null,
 }
 
 struct AggVisitor<F: Fn(i64, i64) -> i64> {
@@ -1233,7 +1222,7 @@ impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut AggVisitor<F> {
         E: de::Error,
     {
         match &self.integer {
-            Integer::Nil => self.integer = Integer::Single(v),
+            Integer::Null => self.integer = Integer::Single(v),
             Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
             _ => {
                 return Err(de::Error::custom("Unexpected value".to_owned()));
@@ -1248,7 +1237,7 @@ impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut AggVisitor<F> {
         A: de::SeqAccess<'de>,
     {
         match &mut self.integer {
-            Integer::Nil => {
+            Integer::Null => {
                 self.integer =
                     Integer::Array(Vec::<i64>::deserialize(SeqAccessDeserializer::new(seq))?)
             }

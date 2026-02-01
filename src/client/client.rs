@@ -19,10 +19,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout,
     },
-    resp::{
-        Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType,
-        cmd,
-    },
+    resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};

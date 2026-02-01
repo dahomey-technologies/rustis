@@ -4,7 +4,7 @@ use crate::{
 };
 use serde::{
     Deserializer,
-    de::{self, IntoDeserializer, Visitor, value::I64Deserializer},
+    de::{self, IntoDeserializer, Visitor},
     forward_to_deserialize_any,
 };
 use std::str::{self};
@@ -31,10 +31,10 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         match self.view {
-            RespView::SimpleString(ss) => visitor.visit_bytes(ss),
+            RespView::SimpleString(_) => self.deserialize_str(visitor),
             RespView::Integer(i) => visitor.visit_i64(i),
             RespView::Double(d) => visitor.visit_f64(d),
-            RespView::BulkString(bs) => visitor.visit_bytes(bs),
+            RespView::BulkString(bs) => visitor.visit_borrowed_bytes(bs),
             RespView::Boolean(b) => visitor.visit_bool(b),
             RespView::IntegerArray(a) => visitor.visit_seq(IntegerArraySeqAccess::new(a.iter())),
             RespView::OwnedArray(a) => visitor.visit_seq(OwnedArraySeqAccess::new(a.iter())),
@@ -66,8 +66,294 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         visitor.visit_bool(result)
     }
 
-    forward_to_deserialize_any! {
-        i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64
+    #[inline]
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as i128,
+            RespView::Double(d) => d as i128,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as i128,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_i128(result)
+    }
+
+    #[inline]
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as u128,
+            RespView::Double(d) => d as u128,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as u128,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_u128(result)
+    }
+
+    #[inline]
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i,
+            RespView::Double(d) => d as i64,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_i64(result)
+    }
+
+    #[inline]
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as u64,
+            RespView::Double(d) => d as u64,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as u64,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_u64(result)
+    }
+
+    #[inline]
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as i32,
+            RespView::Double(d) => d as i32,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as i32,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_i32(result)
+    }
+
+    #[inline]
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as u32,
+            RespView::Double(d) => d as u32,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as u32,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_u32(result)
+    }
+
+    #[inline]
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as i16,
+            RespView::Double(d) => d as i16,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as i16,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_i16(result)
+    }
+
+    #[inline]
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as u16,
+            RespView::Double(d) => d as u16,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as u16,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_u16(result)
+    }
+
+    #[inline]
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as i8,
+            RespView::Double(d) => d as i8,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as i8,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_i8(result)
+    }
+
+    #[inline]
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self.view {
+            RespView::SimpleString(ss) => {
+                atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Integer(i) => i as u8,
+            RespView::Double(d) => d as u8,
+            RespView::BulkString(bs) => {
+                atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Array(a) => match a.into_iter().next() {
+                Some(RespView::Integer(i)) => i as u8,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
+            RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+            RespView::Null => 0,
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        };
+        visitor.visit_u8(result)
+    }
+
+    #[inline]
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result =
+            match self.view {
+                RespView::SimpleString(ss) => fast_float2::parse(ss)
+                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                RespView::Integer(i) => i as f64,
+                RespView::Double(d) => d,
+                RespView::BulkString(bs) => fast_float2::parse(bs)
+                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+                RespView::Null => 0.0,
+                _ => return Err(Error::Client(ClientError::CannotParseDouble)),
+            };
+        visitor.visit_f64(result)
+    }
+
+    #[inline]
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result =
+            match self.view {
+                RespView::SimpleString(ss) => fast_float2::parse(ss)
+                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                RespView::Integer(i) => i as f32,
+                RespView::Double(d) => d as f32,
+                RespView::BulkString(bs) => fast_float2::parse(bs)
+                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
+                RespView::Null => 0.0,
+                _ => return Err(Error::Client(ClientError::CannotParseDouble)),
+            };
+        visitor.visit_f32(result)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
@@ -206,6 +492,8 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     {
         match self.view {
             RespView::Array(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
+            RespView::IntegerArray(a) => visitor.visit_seq(IntegerArraySeqAccess::new(a.iter())),
+            RespView::OwnedArray(a) => visitor.visit_seq(OwnedArraySeqAccess::new(a.iter())),
             RespView::Map(view) => visitor.visit_seq(MapAccess::new(view.into_iter())),
             RespView::Set(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
             RespView::Push(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
@@ -242,6 +530,8 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     {
         match self.view {
             RespView::Array(view) => visitor.visit_map(SeqAccess::new(view.into_iter())),
+            RespView::IntegerArray(a) => visitor.visit_map(IntegerArraySeqAccess::new(a.iter())),
+            RespView::OwnedArray(a) => visitor.visit_map(OwnedArraySeqAccess::new(a.iter())),
             RespView::Map(view) => visitor.visit_map(MapAccess::new(view.into_iter())),
             RespView::Set(view) => visitor.visit_map(SeqAccess::new(view.into_iter())),
             RespView::Push(view) => visitor.visit_map(SeqAccess::new(view.into_iter())),
@@ -254,14 +544,40 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     fn deserialize_struct<V>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
+        #[inline]
+        fn check_resp2_array(
+            view: RespArrayView<'_>,
+            fields: &'static [&'static str],
+        ) -> Result<bool> {
+            if view.len() >= 2 * fields.len() {
+                if let Some(RespView::BulkString(bs)) = view.into_iter().next()
+                    && fields.iter().any(|f| f.as_bytes() == bs)
+                {
+                    Ok(true)
+                } else {
+                    Err(Error::Client(ClientError::CannotParseStruct))
+                }
+            } else if view.len() == fields.len() {
+                Ok(false)
+            } else {
+                Err(Error::Client(ClientError::CannotParseStruct))
+            }
+        }
+
         match self.view {
-            RespView::Array(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
+            RespView::Array(view) => {
+                if check_resp2_array(view.clone(), fields)? {
+                    visitor.visit_map(SeqAccess::new(view.into_iter()))
+                } else {
+                    visitor.visit_seq(SeqAccess::new(view.into_iter()))
+                }
+            }
             RespView::Set(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
             RespView::Push(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
             RespView::Map(view) => visitor.visit_map(MapAccess::new(view.into_iter())),
@@ -340,7 +656,7 @@ impl<'de> de::SeqAccess<'de> for NilSeqAccess {
         Ok(None)
     }
 
-    #[inline]
+    #[inline(always)]
     fn size_hint(&self) -> Option<usize> {
         Some(0)
     }
@@ -393,13 +709,47 @@ impl<'de> de::SeqAccess<'de> for IntegerArraySeqAccess<'de> {
         T: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(i) => seed.deserialize(I64Deserializer::new(*i)).map(Some),
+            Some(i) => seed
+                .deserialize(RespDeserializer::new(RespView::Integer(*i)))
+                .map(Some),
             None => Ok(None),
         }
     }
 
+    #[inline(always)]
     fn size_hint(&self) -> Option<usize> {
         Some(self.iter.len())
+    }
+}
+
+impl<'de> de::MapAccess<'de> for IntegerArraySeqAccess<'de> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some(i) => seed
+                .deserialize(RespDeserializer::new(RespView::Integer(*i)))
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some(i) => seed.deserialize(RespDeserializer::new(RespView::Integer(*i))),
+            None => Err(Error::Client(ClientError::CannotParseMap)),
+        }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.iter.len() / 2)
     }
 }
 
@@ -434,8 +784,83 @@ impl<'de> de::SeqAccess<'de> for OwnedArraySeqAccess<'de> {
         }
     }
 
+    #[inline(always)]
     fn size_hint(&self) -> Option<usize> {
         Some(self.iter.len())
+    }
+}
+
+impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next().map(|r| r.view()) {
+            Some(view) => {
+                if let RespView::Array(array_view) = &view
+                    && array_view.len() == 2
+                {
+                    let mut inner_iter = array_view.clone().into_iter();
+                    let key_view = inner_iter
+                        .next()
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                    return seed.deserialize(RespDeserializer::new(key_view)).map(Some);
+                }
+
+                seed.deserialize(RespDeserializer::new(view)).map(Some)
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some(r) => seed.deserialize(RespDeserializer::new(r.view())),
+            None => Err(Error::Client(ClientError::CannotParseMap)),
+        }
+    }
+
+    fn next_entry_seed<K, V>(&mut self, kseed: K, vseed: V) -> Result<Option<(K::Value, V::Value)>>
+    where
+        K: de::DeserializeSeed<'de>,
+        V: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next().map(|r| r.view()) {
+            Some(view) => {
+                if let RespView::Array(ref array_view) = view
+                    && array_view.len() == 2
+                {
+                    let mut pair_iter = array_view.clone().into_iter();
+                    let kview = pair_iter.next().unwrap();
+                    let vview = pair_iter.next().unwrap();
+
+                    let key = kseed.deserialize(RespDeserializer::new(kview))?;
+                    let value = vseed.deserialize(RespDeserializer::new(vview))?;
+                    return Ok(Some((key, value)));
+                }
+
+                let key = kseed.deserialize(RespDeserializer::new(view))?;
+                let vview = self
+                    .iter
+                    .next()
+                    .map(|r| r.view())
+                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                let value = vseed.deserialize(RespDeserializer::new(vview))?;
+
+                Ok(Some((key, value)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.iter.len() / 2)
     }
 }
 
@@ -503,6 +928,43 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
             None => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }
+
+    fn next_entry_seed<K, V>(&mut self, kseed: K, vseed: V) -> Result<Option<(K::Value, V::Value)>>
+    where
+        K: de::DeserializeSeed<'de>,
+        V: de::DeserializeSeed<'de>,
+    {
+        match self.iter.next() {
+            Some(view) => {
+                if let RespView::Array(ref array_view) = view
+                    && array_view.len() == 2
+                {
+                    let mut pair_iter = array_view.clone().into_iter();
+                    let kview = pair_iter.next().unwrap();
+                    let vview = pair_iter.next().unwrap();
+
+                    let key = kseed.deserialize(RespDeserializer::new(kview))?;
+                    let value = vseed.deserialize(RespDeserializer::new(vview))?;
+                    return Ok(Some((key, value)));
+                }
+
+                let key = kseed.deserialize(RespDeserializer::new(view))?;
+                let vview = self
+                    .iter
+                    .next()
+                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                let value = vseed.deserialize(RespDeserializer::new(vview))?;
+
+                Ok(Some((key, value)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.iter.len() / 2)
+    }
 }
 
 struct MapAccess<'a> {
@@ -564,6 +1026,11 @@ impl<'de> de::SeqAccess<'de> for MapAccess<'de> {
             Ok(None)
         }
     }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.iter.len() / 2)
+    }
 }
 
 struct RespTuple2Deserializer<'a, 'de> {
@@ -599,6 +1066,11 @@ impl<'de, 'a> de::SeqAccess<'de> for RespTuple2Deserializer<'a, 'de> {
             Some(view) => seed.deserialize(RespDeserializer::new(view)).map(Some),
             None => Ok(None),
         }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(2)
     }
 }
 
@@ -696,6 +1168,7 @@ impl<'de> PushMapAccess<'de> {
 impl<'de> de::MapAccess<'de> for PushMapAccess<'de> {
     type Error = Error;
 
+    #[inline]
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
         K: de::DeserializeSeed<'de>,
@@ -714,6 +1187,11 @@ impl<'de> de::MapAccess<'de> for PushMapAccess<'de> {
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(PushDeserializer::new(self.view.clone()))
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.view.len())
     }
 }
 

@@ -105,6 +105,11 @@ name = "fast_path"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "parse_integer"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["web-examples"]

@@ -98,10 +98,13 @@ impl RespResponse {
 
     pub fn into_array_iter(self) -> Result<RespResponseIter> {
         match self {
-            RespResponse::Frame(buf, RespFrame::Array { len, ranges } | RespFrame::Set { len, ranges }) => {
-                Ok(RespResponseIter::new(buf, len, ranges))
+            RespResponse::Frame(
+                buf,
+                RespFrame::Array { len, ranges } | RespFrame::Set { len, ranges },
+            ) => Ok(RespResponseIter::new(buf, len, ranges)),
+            RespResponse::Frame(buf, RespFrame::Error(r)) => {
+                Err(Error::Redis(RedisError::try_from(buf.slice(r).as_ref())?))
             }
-            RespResponse::Frame(buf, RespFrame::Error(r)) => Err(Error::Redis(RedisError::try_from(buf.slice(r).as_ref())?)),
             _ => Err(Error::Client(ClientError::Unexpected)),
         }
     }
@@ -135,14 +138,10 @@ impl<'a> From<(&'a [u8], RespFrame)> for RespView<'a> {
             RespFrame::Array { len, ranges } => {
                 RespView::Array(RespArrayView::new(bytes, len, ranges))
             }
-            RespFrame::Map { len, ranges } => {
-                RespView::Array(RespArrayView::new(bytes, len, ranges))
-            }
-            RespFrame::Set { len, ranges } => {
-                RespView::Array(RespArrayView::new(bytes, len, ranges))
-            }
+            RespFrame::Map { len, ranges } => RespView::Map(RespArrayView::new(bytes, len, ranges)),
+            RespFrame::Set { len, ranges } => RespView::Set(RespArrayView::new(bytes, len, ranges)),
             RespFrame::Push { len, ranges } => {
-                RespView::Array(RespArrayView::new(bytes, len, ranges))
+                RespView::Push(RespArrayView::new(bytes, len, ranges))
             }
             RespFrame::Error(r) => RespView::Error(&bytes[r]),
             RespFrame::Null => RespView::Null,
@@ -153,10 +152,16 @@ impl<'a> From<(&'a [u8], RespFrame)> for RespView<'a> {
 impl<'a> fmt::Debug for RespView<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SimpleString(arg0) => f.debug_tuple("SimpleString").field(&String::from_utf8_lossy(arg0)).finish(),
+            Self::SimpleString(arg0) => f
+                .debug_tuple("SimpleString")
+                .field(&String::from_utf8_lossy(arg0))
+                .finish(),
             Self::Integer(arg0) => f.debug_tuple("Integer").field(arg0).finish(),
             Self::Double(arg0) => f.debug_tuple("Double").field(arg0).finish(),
-            Self::BulkString(arg0) => f.debug_tuple("BulkString").field(&String::from_utf8_lossy(arg0)).finish(),
+            Self::BulkString(arg0) => f
+                .debug_tuple("BulkString")
+                .field(&String::from_utf8_lossy(arg0))
+                .finish(),
             Self::Boolean(arg0) => f.debug_tuple("Boolean").field(arg0).finish(),
             Self::IntegerArray(arg0) => f.debug_tuple("IntegerArray").field(arg0).finish(),
             Self::OwnedArray(arg0) => f.debug_tuple("OwnedArray").field(arg0).finish(),
@@ -164,7 +169,10 @@ impl<'a> fmt::Debug for RespView<'a> {
             Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
             Self::Set(arg0) => f.debug_tuple("Set").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
-            Self::Error(arg0) => f.debug_tuple("Error").field(&String::from_utf8_lossy(arg0)).finish(),
+            Self::Error(arg0) => f
+                .debug_tuple("Error")
+                .field(&String::from_utf8_lossy(arg0))
+                .finish(),
             Self::Null => write!(f, "Null"),
         }
     }
@@ -286,16 +294,13 @@ impl Iterator for RespResponseIter {
             let frame = parser.parse_range(range.clone()).ok()?;
             self.pos = range.end;
             self.current += 1;
-            let sub_buf = RespBuf::from(self.buf.clone().slice(range));
-            Some(RespResponse::new(sub_buf, frame))
+            Some(RespResponse::new(self.buf.clone(), frame))
         } else {
             let mut parser = RespFrameParser::new(&self.buf.as_ref()[self.pos..]);
             let (frame, len) = parser.parse().ok()?;
-            let range = self.pos..self.pos + len;
             self.pos += len;
             self.current += 1;
-            let sub_buf = RespBuf::from(self.buf.clone().slice(range));
-            Some(RespResponse::new(sub_buf, frame))
+            Some(RespResponse::new(self.buf.clone(), frame))
         }
     }
 }

@@ -50,6 +50,12 @@ pub enum ClientError {
     /// Raised when cannot parse bulk string from the RESP buffer
     #[error("protocol: cannot parse bulk string")]
     CannotParseBulkString,
+    /// Raised when cannot parse bulk error from the RESP buffer
+    #[error("protocol: cannot parse bulk error")]
+    CannotParseBulkError,
+    /// Raised when cannot parse verbartim string from the RESP buffer
+    #[error("protocol: cannot parse verbartim string")]
+    CannotParseVerbatimString,
     /// Raised when cannot parse nil from the RESP buffer
     #[error("protocol: cannot parse nil")]
     CannotParseNil,

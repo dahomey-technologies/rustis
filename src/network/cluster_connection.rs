@@ -721,7 +721,7 @@ impl ClusterConnection {
                     Integer::Array(items) => {
                         for (item, view) in items.iter_mut().zip(resp_array) {
                             if let RespView::Integer(i) = view {
-                                *item += f(*item, i);
+                                *item = f(*item, i);
                             } else {
                                 return Some(Err(Error::Client(ClientError::Unexpected)));
                             }

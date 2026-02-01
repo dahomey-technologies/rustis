@@ -28,3 +28,16 @@ fn array() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn into_array_iter() {
+    let resp = Bytes::from_static(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
+    let mut parser = RespFrameParser::new(&resp);
+    let (frame, _) = parser.parse().unwrap();
+    let response = RespResponse::new(resp.into(), frame);
+    let mut iter = response.into_array_iter().unwrap();
+
+    assert_eq!(RespView::BulkString(b"foo"), iter.next().unwrap().view());
+    assert_eq!(RespView::BulkString(b"bar"), iter.next().unwrap().view());
+    assert_eq!(None, iter.next());
+}

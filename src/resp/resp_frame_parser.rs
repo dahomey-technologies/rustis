@@ -58,15 +58,22 @@ impl<'a> RespFrameParser<'a> {
                 RespFrame::Null
             }
             BOOL_TAG => {
+                // 't' or 'f' + \r\n
+                if self.pos + 3 > self.buf.len() {
+                    return Err(Error::EOF);
+                }
                 let b = match self.buf[self.pos] {
                     b't' => true,
                     b'f' => false,
                     _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
                 };
-                self.pos += 3; // t/f + \r\n
+                if &self.buf[self.pos + 1..self.pos + 3] != b"\r\n" {
+                    return Err(Error::Client(ClientError::CannotParseBoolean));
+                }
+                self.pos += 3;
                 RespFrame::Boolean(b)
             }
-            BULK_STRING_TAG | VERBATIM_STRING_TAG => {
+            BULK_STRING_TAG => {
                 let len = self.parse_integer()?;
                 if len == -1 {
                     RespFrame::Null
@@ -76,8 +83,34 @@ impl<'a> RespFrameParser<'a> {
                     if self.buf.len() < need {
                         return Err(Error::EOF);
                     }
+                    if &self.buf[need - 2..need] != b"\r\n" {
+                        return Err(Error::Client(ClientError::CannotParseBulkString));
+                    }
                     self.pos = need;
                     RespFrame::BulkString(start..need - 2)
+                }
+            }
+            // The first three bytes provide information about the format of the following string,
+            // which can be txt for plain text, or mkd for markdown.
+            // The fourth byte is always :. Then the real string follows.
+            VERBATIM_STRING_TAG => {
+                let len = self.parse_integer()?;
+                if len == -1 {
+                    RespFrame::Null
+                } else {
+                    if len < 4 {
+                        return Err(Error::Client(ClientError::VerbatimStringTooShort));
+                    }
+                    let start = self.pos;
+                    let need = self.pos + len as usize + 2;
+                    if self.buf.len() < need {
+                        return Err(Error::EOF);
+                    }
+                    if &self.buf[need - 2..need] != b"\r\n" {
+                        return Err(Error::Client(ClientError::CannotParseVerbatimString));
+                    }
+                    self.pos = need;
+                    RespFrame::BulkString(start + 4..need - 2)
                 }
             }
             BULK_ERROR_TAG => {
@@ -86,6 +119,9 @@ impl<'a> RespFrameParser<'a> {
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
                     return Err(Error::EOF);
+                }
+                if &self.buf[need - 2..need] != b"\r\n" {
+                    return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
                 self.pos = need;
                 RespFrame::Error(start..need - 2)
@@ -139,12 +175,26 @@ impl<'a> RespFrameParser<'a> {
                 };
                 RespFrame::Boolean(b)
             }
-            BULK_STRING_TAG | VERBATIM_STRING_TAG => {
+            BULK_STRING_TAG => {
                 let len = self.parse_integer()?;
                 if len == -1 {
                     RespFrame::Null
                 } else {
                     RespFrame::BulkString(self.pos..self.pos + len as usize)
+                }
+            }
+            // The first three bytes provide information about the format of the following string,
+            // which can be txt for plain text, or mkd for markdown.
+            // The fourth byte is always :. Then the real string follows.
+            VERBATIM_STRING_TAG => {
+                let len = self.parse_integer()?;
+                if len == -1 {
+                    RespFrame::Null
+                } else {
+                    if len < 4 {
+                        return Err(Error::Client(ClientError::VerbatimStringTooShort));
+                    }
+                    RespFrame::BulkString(self.pos + 4..self.pos + 4 + len as usize)
                 }
             }
             BULK_ERROR_TAG => {
@@ -188,10 +238,37 @@ impl<'a> RespFrameParser<'a> {
 
     #[inline]
     fn parse_integer(&mut self) -> Result<i64> {
-        let start = self.pos;
-        self.parse_crlf()?;
-        atoi::atoi(&self.buf[start..(self.pos - 2)])
-            .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))
+        let mut n = 0i64;
+        let slice = &self.buf[self.pos..];
+        let mut i = 0;
+
+        let sign = if let Some(&b'-') = slice.first() {
+            i += 1;
+            -1
+        } else {
+            1
+        };
+
+        while i < slice.len() {
+            let b = slice[i];
+            match b {
+                b'0'..=b'9' => {
+                    // n = n * 10 + (b - b'0')
+                    n = n.wrapping_mul(10).wrapping_add((b - b'0') as i64);
+                    i += 1;
+                }
+                b'\r' => match slice.get(i + 1) {
+                    Some(&b'\n') => {
+                        self.pos += i + 2;
+                        return Ok(n * sign);
+                    }
+                    Some(_) => return Err(Error::Client(ClientError::CannotParseInteger)),
+                    None => return Err(Error::EOF),
+                },
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            }
+        }
+        Err(Error::EOF)
     }
 
     #[inline]

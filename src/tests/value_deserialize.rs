@@ -1,16 +1,18 @@
-use std::collections::HashMap;
-
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
-    resp::{RespDeserializer, Value},
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, Value},
     tests::log_try_init,
 };
+use bytes::Bytes;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 fn deserialize_value(str: &str) -> Result<Value> {
     let buf = str.as_bytes();
-    let mut deserializer = RespDeserializer::new(buf);
-    Value::deserialize(&mut deserializer)
+    let (frame, _) = RespFrameParser::new(buf).parse()?;
+    let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
+    let deserializer = RespDeserializer::new(response.view());
+    Value::deserialize(deserializer)
 }
 
 #[test]
@@ -112,7 +114,7 @@ fn array() -> Result<()> {
 }
 
 #[test]
-fn nil() -> Result<()> {
+fn null() -> Result<()> {
     log_try_init();
 
     let result = deserialize_value("_\r\n")?;
@@ -122,10 +124,11 @@ fn nil() -> Result<()> {
 }
 
 #[test]
-fn map() -> Result<()> {
+fn map() {
     log_try_init();
 
-    let result = deserialize_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n")?; // {b"id": 12, b"name": b"Mike"}
+    let result =
+        deserialize_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n").unwrap(); // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
         Value::Map(HashMap::from([
             (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
@@ -137,10 +140,8 @@ fn map() -> Result<()> {
         result
     );
 
-    let result = deserialize_value("%0\r\n")?; // {}
+    let result = deserialize_value("%0\r\n").unwrap(); // {}
     assert_eq!(Value::Null, result);
-
-    Ok(())
 }
 
 #[test]

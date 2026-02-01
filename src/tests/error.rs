@@ -5,7 +5,6 @@ use crate::{
     tests::{get_default_config, get_test_client, get_test_client_with_config},
 };
 use serial_test::serial;
-use std::str::FromStr;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -13,7 +12,7 @@ use std::str::FromStr;
 async fn unknown_command() -> Result<()> {
     let client = get_test_client().await?;
 
-    let result: Result<()> = client.send(cmd("UNKNOWN").arg("arg"), None).await?.to();
+    let result = client.send::<()>(cmd("UNKNOWN").arg("arg"), None).await;
 
     assert!(matches!(
         result,
@@ -28,8 +27,8 @@ async fn unknown_command() -> Result<()> {
 
 #[test]
 fn moved_error() {
-    let raw_error = "MOVED 3999 127.0.0.1:6381";
-    let error = RedisError::from_str(raw_error);
+    let raw_error = b"MOVED 3999 127.0.0.1:6381";
+    let error = RedisError::try_from(&raw_error[..]);
     println!("error: {error:?}");
     assert!(matches!(
         error,
@@ -42,8 +41,8 @@ fn moved_error() {
 
 #[test]
 fn ask_error() {
-    let raw_error = "ASK 3999 127.0.0.1:6381";
-    let error = RedisError::from_str(raw_error);
+    let raw_error = b"ASK 3999 127.0.0.1:6381";
+    let error = RedisError::try_from(&raw_error[..]);
     assert!(matches!(
         error,
         Ok(RedisError {
@@ -194,7 +193,7 @@ async fn kill_on_write() -> Result<()> {
 
     // 3 reconnections
     let result = client
-        .send(
+        .send::<()>(
             cmd("SET")
                 .arg("key1")
                 .arg("value1")
@@ -206,7 +205,7 @@ async fn kill_on_write() -> Result<()> {
 
     // 2 reconnections
     let result = client
-        .send(
+        .send::<()>(
             cmd("SET")
                 .arg("key2")
                 .arg("value2")
@@ -218,7 +217,7 @@ async fn kill_on_write() -> Result<()> {
 
     // 2 reconnections / no retry
     let result = client
-        .send(
+        .send::<()>(
             cmd("SET")
                 .arg("key3")
                 .arg("value3")

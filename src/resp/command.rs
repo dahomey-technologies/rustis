@@ -5,7 +5,7 @@ use crate::{
 use bytes::{BufMut, Bytes, BytesMut};
 use memchr::memchr;
 use serde::Serialize;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 #[cfg(debug_assertions)]
 use std::sync::{
     Arc,
@@ -281,12 +281,8 @@ impl fmt::Display for Command {
     }
 }
 
-/// Builder for a [`Command`]
 #[derive(Debug)]
-pub struct CommandBuilder {
-    /// The raw buffer containing the serialized arguments (in RESP format).
-    /// It starts with `HEADROOM` bytes of zero-padding.
-    pub(crate) buffer: BytesMut,
+pub struct CommandMetadata {
     /// Offset & Length of the command name
     pub(crate) name_layout: (usize, usize),
     /// An ephemeral index of argument positions (Start Offset, Length).
@@ -305,6 +301,15 @@ pub struct CommandBuilder {
     pub(crate) response_policy: Option<ResponsePolicy>,
     pub(crate) key_step: u8,
     pub(crate) with_head_room: bool,
+}
+
+/// Builder for a [`Command`]
+#[derive(Debug)]
+pub struct CommandBuilder {
+    /// The raw buffer containing the serialized arguments (in RESP format).
+    /// It starts with `HEADROOM` bytes of zero-padding.
+    pub(crate) buffer: BytesMut,
+    pub(crate) metadata: SmallVec<[CommandMetadata; 1]>,
 }
 
 impl CommandBuilder {
@@ -330,6 +335,36 @@ impl CommandBuilder {
 
         Self {
             buffer,
+            metadata: smallvec![CommandMetadata {
+                name_layout: (name_start, name.len()),
+                args_layout: Default::default(),
+                #[cfg(debug_assertions)]
+                kill_connection_on_write: 0,
+                #[cfg(debug_assertions)]
+                command_seq: next_sequence_counter(),
+                request_policy: None,
+                response_policy: None,
+                key_step: 0,
+                with_head_room: true,
+            }],
+        }
+    }
+
+    pub fn command(mut self, name: &[u8]) -> Self {
+        // Reserve space for the header. These bytes will be overwritten later.
+        self.buffer.put_bytes(0, HEADROOM_SIZE);
+
+        // Write $NameLen\r\nName\r\n
+        self.buffer.put_u8(b'$');
+        let mut itoa_buf = itoa::Buffer::new();
+        self.buffer
+            .put_slice(itoa_buf.format(name.len()).as_bytes());
+        self.buffer.put_slice(b"\r\n");
+        let name_start = self.buffer.len();
+        self.buffer.put_slice(name);
+        self.buffer.put_slice(b"\r\n");
+
+        self.metadata.push(CommandMetadata {
             name_layout: (name_start, name.len()),
             args_layout: Default::default(),
             #[cfg(debug_assertions)]
@@ -340,16 +375,20 @@ impl CommandBuilder {
             response_policy: None,
             key_step: 0,
             with_head_room: true,
-        }
+        });
+
+        self
     }
 
     /// Builder function to add an argument to an existing command (uses Serde).
     #[must_use]
     #[inline(always)]
     pub fn arg(mut self, arg: impl Serialize) -> Self {
-        let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
-        arg.serialize(&mut serializer)
-            .expect("Arg serialization failed");
+        if let Some(metadata) = self.metadata.last_mut() {
+            let mut serializer = ArgSerializer::new(&mut self.buffer, &mut metadata.args_layout);
+            arg.serialize(&mut serializer)
+                .expect("Arg serialization failed");
+        }
         self
     }
 
@@ -400,14 +439,22 @@ impl CommandBuilder {
     #[must_use]
     #[inline(always)]
     pub fn key(mut self, key: impl Serialize) -> Self {
-        let old_len = self.args_layout.len();
-        self = self.arg(key);
-        let new_len = self.args_layout.len();
+        let old_len = self
+            .metadata
+            .last()
+            .map(|m| m.args_layout.len())
+            .unwrap_or(0);
 
-        for layout in &mut self.args_layout[old_len..new_len] {
-            layout.set_key();
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
+        self = self.arg(key);
+
+        if let Some(metadata) = self.metadata.last_mut() {
+            let new_len = metadata.args_layout.len();
+
+            for layout in &mut metadata.args_layout[old_len..new_len] {
+                layout.set_key();
+                let key_bytes = &self.buffer[layout.range()];
+                layout.slot = hash_slot(key_bytes);
+            }
         }
 
         self
@@ -423,14 +470,22 @@ impl CommandBuilder {
     #[must_use]
     #[inline(always)]
     pub fn key_with_count(mut self, keys: impl Serialize) -> Self {
-        let old_len = self.args_layout.len();
-        self = self.arg_with_count(keys);
-        let new_len = self.args_layout.len();
+        let old_len = self
+            .metadata
+            .last()
+            .map(|m| m.args_layout.len())
+            .unwrap_or(0);
 
-        for layout in &mut self.args_layout[old_len + 1..new_len] {
-            layout.flags |= ArgLayout::IS_KEY;
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
+        self = self.arg_with_count(keys);
+
+        if let Some(metadata) = self.metadata.last_mut() {
+            let new_len = metadata.args_layout.len();
+
+            for layout in &mut metadata.args_layout[old_len + 1..new_len] {
+                layout.flags |= ArgLayout::IS_KEY;
+                let key_bytes = &self.buffer[layout.range()];
+                layout.slot = hash_slot(key_bytes);
+            }
         }
 
         self
@@ -441,14 +496,25 @@ impl CommandBuilder {
     #[must_use]
     #[inline(always)]
     pub fn key_with_step(mut self, args: impl Serialize, step: usize) -> Self {
-        let old_len = self.args_layout.len();
-        self = self.arg(args);
-        let new_len = self.args_layout.len();
+        let old_len = self
+            .metadata
+            .last()
+            .map(|m| m.args_layout.len())
+            .unwrap_or(0);
 
-        for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
-            layout.flags |= ArgLayout::IS_KEY;
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
+        self = self.arg(args);
+
+        if let Some(metadata) = self.metadata.last_mut() {
+            let new_len = metadata.args_layout.len();
+
+            for layout in &mut metadata.args_layout[old_len..new_len]
+                .iter_mut()
+                .step_by(step)
+            {
+                layout.flags |= ArgLayout::IS_KEY;
+                let key_bytes = &self.buffer[layout.range()];
+                layout.slot = hash_slot(key_bytes);
+            }
         }
 
         self
@@ -457,7 +523,9 @@ impl CommandBuilder {
     #[cfg(debug_assertions)]
     #[inline(always)]
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {
-        self.kill_connection_on_write = num_kills;
+        if let Some(metadata) = self.metadata.last_mut() {
+            metadata.kill_connection_on_write = num_kills;
+        }
         self
     }
 
@@ -468,9 +536,11 @@ impl CommandBuilder {
         response_policy: impl Into<Option<ResponsePolicy>>,
         key_step: u8,
     ) -> Self {
-        self.request_policy = request_policy.into();
-        self.response_policy = response_policy.into();
-        self.key_step = key_step;
+        if let Some(metadata) = self.metadata.last_mut() {
+            metadata.request_policy = request_policy.into();
+            metadata.response_policy = response_policy.into();
+            metadata.key_step = key_step;
+        }
         self
     }
 }
@@ -479,7 +549,12 @@ impl From<CommandBuilder> for Command {
     /// Finalizes the command into a raw RESP frame.
     /// Fills the HEADROOM with the header and freezes the buffer.
     fn from(mut command_builder: CommandBuilder) -> Self {
-        if command_builder.with_head_room {
+        let mut metadata = command_builder
+            .metadata
+            .pop()
+            .expect("CommandBuilder must contain exactly one command for From conversion");
+
+        if metadata.with_head_room {
             // Stack buffer helpers
             fn write_u8(buf: &mut &mut [u8], val: u8) {
                 buf[0] = val;
@@ -492,7 +567,7 @@ impl From<CommandBuilder> for Command {
                 *buf = &mut std::mem::take(buf)[len..];
             }
 
-            let total_args = 1 + command_builder.args_layout.len();
+            let total_args = 1 + metadata.args_layout.len();
 
             // Temporary stack buffer for header formatting
             let mut header_buf = [0u8; HEADROOM_SIZE];
@@ -513,38 +588,35 @@ impl From<CommandBuilder> for Command {
 
             let bytes = command_builder.buffer.freeze().slice(start_pos..);
 
-            command_builder
+            metadata
                 .args_layout
                 .iter_mut()
                 .for_each(|arg_layout| arg_layout.start -= start_pos as u64);
 
             Command::new(
                 bytes,
-                (
-                    command_builder.name_layout.0 - start_pos,
-                    command_builder.name_layout.1,
-                ),
-                command_builder.args_layout,
+                (metadata.name_layout.0 - start_pos, metadata.name_layout.1),
+                metadata.args_layout,
                 #[cfg(debug_assertions)]
-                command_builder.kill_connection_on_write,
+                metadata.kill_connection_on_write,
                 #[cfg(debug_assertions)]
-                command_builder.command_seq,
-                command_builder.request_policy,
-                command_builder.response_policy,
-                command_builder.key_step,
+                metadata.command_seq,
+                metadata.request_policy,
+                metadata.response_policy,
+                metadata.key_step,
             )
         } else {
             Command::new(
                 command_builder.buffer.freeze(),
-                command_builder.name_layout,
-                command_builder.args_layout,
+                metadata.name_layout,
+                metadata.args_layout,
                 #[cfg(debug_assertions)]
-                command_builder.kill_connection_on_write,
+                metadata.kill_connection_on_write,
                 #[cfg(debug_assertions)]
-                command_builder.command_seq,
-                command_builder.request_policy,
-                command_builder.response_policy,
-                command_builder.key_step,
+                metadata.command_seq,
+                metadata.request_policy,
+                metadata.response_policy,
+                metadata.key_step,
             )
         }
     }

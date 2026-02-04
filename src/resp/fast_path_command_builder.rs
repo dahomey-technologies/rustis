@@ -1,11 +1,11 @@
 #[cfg(debug_assertions)]
-use crate::resp::next_sequence_counter;
 use crate::resp::{ArgLayout, CommandBuilder, hash_slot};
+use crate::resp::{CommandMetadata, next_sequence_counter};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
 use serde::{Serialize, Serializer, ser};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::{fmt::Error, ops::Range};
 
 pub struct FastPathCommandBuilder {
@@ -56,14 +56,16 @@ impl FastPathCommandBuilder {
     pub fn build(self) -> CommandBuilder {
         CommandBuilder {
             buffer: self.buffer,
-            name_layout:  self.name_layout,
-            args_layout: self.args_layout,
-            kill_connection_on_write: 0,
-            command_seq: next_sequence_counter(),
-            request_policy: None,
-            response_policy: None,
-            key_step: 0,
-            with_head_room: false,
+            metadata: smallvec![CommandMetadata {
+                name_layout: self.name_layout,
+                args_layout: self.args_layout,
+                kill_connection_on_write: 0,
+                command_seq: next_sequence_counter(),
+                request_policy: None,
+                response_policy: None,
+                key_step: 0,
+                with_head_room: false,
+            }],
         }
     }
 

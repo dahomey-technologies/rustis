@@ -1,3 +1,4 @@
+use super::{ConnectionSetup, ServerKind};
 use crate::{ClientError, Error, Result};
 #[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
@@ -148,6 +149,26 @@ impl Config {
     /// Build a config from an URI in the format `redis[s]://[[username]:password@]host[:port]/[database]`
     pub fn from_uri(uri: Url) -> Result<Config> {
         Self::from_str(uri.as_str())
+    }
+
+    pub(crate) fn server_kind(&self) -> ServerKind {
+        match &self.server {
+            ServerConfig::Standalone { .. } => ServerKind::Standalone,
+            ServerConfig::Sentinel(_) => ServerKind::Sentinel,
+            ServerConfig::Cluster(_) => ServerKind::Cluster,
+        }
+    }
+
+    pub(crate) fn tls_enabled(&self) -> bool {
+        #[cfg(any(feature = "native-tls", feature = "rustls"))]
+        {
+            self.tls_config.is_some()
+        }
+
+        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+        {
+            false
+        }
     }
 
     /// Parse address in the standard formart `host`:`port`
@@ -848,6 +869,14 @@ impl TlsConfig {
 pub trait IntoConfig {
     /// Converts this type into a [`Config`](crate::client::Config).
     fn into_config(self) -> Result<Config>;
+
+    #[doc(hidden)]
+    fn into_connection_setup(self) -> Result<ConnectionSetup>
+    where
+        Self: Sized,
+    {
+        Ok(ConnectionSetup::new(self.into_config()?))
+    }
 }
 
 impl IntoConfig for Config {

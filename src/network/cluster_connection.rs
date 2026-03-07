@@ -1,6 +1,8 @@
 use crate::{
     ClientError, Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
-    client::{ClusterConfig, Config},
+    client::{
+        ClusterConfig, Config, CredentialsReason, CredentialsTarget, SharedCredentialsProvider,
+    },
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
@@ -118,6 +120,7 @@ impl ClusterNodeResult {
 pub struct ClusterConnection {
     cluster_config: ClusterConfig,
     config: Config,
+    credentials_provider: Option<SharedCredentialsProvider>,
     nodes: Vec<Node>,
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
@@ -130,8 +133,15 @@ impl ClusterConnection {
     pub async fn connect(
         cluster_config: &ClusterConfig,
         config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
     ) -> Result<ClusterConnection> {
-        let (mut nodes, slot_ranges) = Self::connect_to_cluster(cluster_config, config).await?;
+        let (mut nodes, slot_ranges) = Self::connect_to_cluster(
+            cluster_config,
+            config,
+            credentials_provider.clone(),
+            CredentialsReason::InitialConnect,
+        )
+        .await?;
         let first_node = nodes
             .get_mut(0)
             .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
@@ -141,6 +151,7 @@ impl ClusterConnection {
         Ok(ClusterConnection {
             cluster_config: cluster_config.clone(),
             config: config.clone(),
+            credentials_provider,
             nodes,
             slot_ranges,
             pending_requests: VecDeque::new(),
@@ -810,8 +821,13 @@ impl ClusterConnection {
 
     pub async fn reconnect(&mut self) -> Result<()> {
         info!("[{}] Reconnecting to cluster...", self.tag);
-        let (nodes, slot_ranges) =
-            Self::connect_to_cluster(&self.cluster_config, &self.config).await?;
+        let (nodes, slot_ranges) = Self::connect_to_cluster(
+            &self.cluster_config,
+            &self.config,
+            self.credentials_provider.clone(),
+            CredentialsReason::Reconnect,
+        )
+        .await?;
         info!("[{}] Reconnected to cluster!", self.tag);
 
         self.nodes = nodes;
@@ -825,13 +841,24 @@ impl ClusterConnection {
     async fn connect_to_cluster(
         cluster_config: &ClusterConfig,
         config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
+        credentials_reason: CredentialsReason,
     ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
         debug!("Discovering cluster shard and slots...");
 
         let mut shard_info_list: Option<Vec<ClusterShardResult>> = None;
 
         for node_config in &cluster_config.nodes {
-            match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
+            match StandaloneConnection::connect_with_context(
+                &node_config.0,
+                node_config.1,
+                config,
+                credentials_provider.clone(),
+                credentials_reason,
+                CredentialsTarget::DataNode,
+            )
+            .await
+            {
                 Ok(mut connection) => {
                     let version: Result<Version> = connection.get_version().try_into();
                     let Ok(version) = version else {
@@ -895,7 +922,15 @@ impl ClusterConnection {
 
             let port = master_info.get_port()?;
 
-            let connection = StandaloneConnection::connect(&master_info.ip, port, config).await?;
+            let connection = StandaloneConnection::connect_with_context(
+                &master_info.ip,
+                port,
+                config,
+                credentials_provider.clone(),
+                credentials_reason,
+                CredentialsTarget::DataNode,
+            )
+            .await?;
 
             slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
                 slot_range: *s,
@@ -937,8 +972,15 @@ impl ClusterConnection {
                 let port = node_info.get_port()?;
                 let node_id: NodeId = node_info.id.as_str().into();
 
-                let connection =
-                    StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
+                let connection = StandaloneConnection::connect_with_context(
+                    &node_info.ip,
+                    port,
+                    &self.config,
+                    self.credentials_provider.clone(),
+                    CredentialsReason::TopologyRefresh,
+                    CredentialsTarget::DataNode,
+                )
+                .await?;
 
                 for slot_range_info in &shard_info.slots {
                     if let Some(slot_range) = self.get_slot_range_by_slot_mut(slot_range_info.0)
@@ -1032,8 +1074,15 @@ impl ClusterConnection {
                     // add missing node
                     let port = node_info.get_port()?;
 
-                    let connection =
-                        StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
+                    let connection = StandaloneConnection::connect_with_context(
+                        &node_info.ip,
+                        port,
+                        &self.config,
+                        self.credentials_provider.clone(),
+                        CredentialsReason::TopologyRefresh,
+                        CredentialsTarget::DataNode,
+                    )
+                    .await?;
 
                     self.nodes.push(Node {
                         id: node_id,

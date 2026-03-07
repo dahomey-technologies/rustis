@@ -1,6 +1,8 @@
 use crate::{
     Error, Result, RetryReason, StandaloneConnection,
-    client::{Config, SentinelConfig},
+    client::{
+        Config, CredentialsReason, CredentialsTarget, SentinelConfig, SharedCredentialsProvider,
+    },
     commands::{RoleResult, SentinelCommands, ServerCommands},
     resp::{Command, RespResponse},
     sleep,
@@ -11,6 +13,8 @@ use std::{sync::Arc, task::Poll};
 pub struct SentinelConnection {
     sentinel_config: SentinelConfig,
     config: Config,
+    credentials_provider: Option<SharedCredentialsProvider>,
+    sentinel_credentials_provider: Option<SharedCredentialsProvider>,
     pub inner_connection: StandaloneConnection,
 }
 
@@ -37,8 +41,14 @@ impl SentinelConnection {
 
     #[inline]
     pub async fn reconnect(&mut self) -> Result<()> {
-        self.inner_connection =
-            Self::connect_to_sentinel(&self.sentinel_config, &self.config).await?;
+        self.inner_connection = Self::connect_to_sentinel(
+            &self.sentinel_config,
+            &self.config,
+            self.credentials_provider.clone(),
+            self.sentinel_credentials_provider.clone(),
+            CredentialsReason::Reconnect,
+        )
+        .await?;
 
         Ok(())
     }
@@ -52,12 +62,23 @@ impl SentinelConnection {
     pub async fn connect(
         sentinel_config: &SentinelConfig,
         config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
+        sentinel_credentials_provider: Option<SharedCredentialsProvider>,
     ) -> Result<SentinelConnection> {
-        let inner_connection = Self::connect_to_sentinel(sentinel_config, config).await?;
+        let inner_connection = Self::connect_to_sentinel(
+            sentinel_config,
+            config,
+            credentials_provider.clone(),
+            sentinel_credentials_provider.clone(),
+            CredentialsReason::InitialConnect,
+        )
+        .await?;
 
         Ok(SentinelConnection {
             sentinel_config: sentinel_config.clone(),
             config: config.clone(),
+            credentials_provider,
+            sentinel_credentials_provider,
             inner_connection,
         })
     }
@@ -65,6 +86,9 @@ impl SentinelConnection {
     async fn connect_to_sentinel(
         sentinel_config: &SentinelConfig,
         config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
+        sentinel_credentials_provider: Option<SharedCredentialsProvider>,
+        credentials_reason: CredentialsReason,
     ) -> Result<StandaloneConnection> {
         let mut restart = false;
         let mut unreachable_sentinel = true;
@@ -82,14 +106,22 @@ impl SentinelConnection {
                 // Step 1: connecting to Sentinel
                 let (host, port) = sentinel_instance;
 
-                let mut sentinel_connection =
-                    match StandaloneConnection::connect(host, *port, &sentinel_node_config).await {
-                        Ok(sentinel_connection) => sentinel_connection,
-                        Err(e) => {
-                            debug!("Cannot connect to Sentinel {}:{} : {}", *host, *port, e);
-                            continue;
-                        }
-                    };
+                let mut sentinel_connection = match StandaloneConnection::connect_with_context(
+                    host,
+                    *port,
+                    &sentinel_node_config,
+                    sentinel_credentials_provider.clone(),
+                    credentials_reason,
+                    CredentialsTarget::SentinelNode,
+                )
+                .await
+                {
+                    Ok(sentinel_connection) => sentinel_connection,
+                    Err(e) => {
+                        debug!("Cannot connect to Sentinel {}:{} : {}", *host, *port, e);
+                        continue;
+                    }
+                };
 
                 // Step 2: ask for master address
                 let (master_host, master_port) = match sentinel_connection
@@ -115,8 +147,15 @@ impl SentinelConnection {
                 };
 
                 // Step 3: call the ROLE command in the target instance
-                let mut master_connection =
-                    StandaloneConnection::connect(&master_host, master_port, config).await?;
+                let mut master_connection = StandaloneConnection::connect_with_context(
+                    &master_host,
+                    master_port,
+                    config,
+                    credentials_provider.clone(),
+                    credentials_reason,
+                    CredentialsTarget::DataNode,
+                )
+                .await?;
 
                 let role: RoleResult = master_connection.role().await?;
 

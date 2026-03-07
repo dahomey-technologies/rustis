@@ -1,7 +1,7 @@
 use crate::{
     ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
     StandaloneConnection,
-    client::{Config, PreparedCommand, ServerConfig},
+    client::{ConnectionSetup, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
     resp::{Command, RespResponse},
 };
@@ -17,16 +17,33 @@ pub enum Connection {
 
 impl Connection {
     #[inline]
-    pub async fn connect(config: Config) -> Result<Self> {
-        match &config.server {
+    pub async fn connect(setup: ConnectionSetup) -> Result<Self> {
+        match setup.config.server.clone() {
             ServerConfig::Standalone { host, port } => Ok(Connection::Standalone(
-                StandaloneConnection::connect(host, *port, &config).await?,
+                StandaloneConnection::connect(
+                    &host,
+                    port,
+                    &setup.config,
+                    setup.credentials_provider.clone(),
+                )
+                .await?,
             )),
             ServerConfig::Sentinel(sentinel_config) => Ok(Connection::Sentinel(
-                SentinelConnection::connect(sentinel_config, &config).await?,
+                SentinelConnection::connect(
+                    &sentinel_config,
+                    &setup.config,
+                    setup.credentials_provider.clone(),
+                    setup.sentinel_credentials_provider.clone(),
+                )
+                .await?,
             )),
             ServerConfig::Cluster(cluster_config) => Ok(Connection::Cluster(
-                ClusterConnection::connect(cluster_config, &config).await?,
+                ClusterConnection::connect(
+                    &cluster_config,
+                    &setup.config,
+                    setup.credentials_provider.clone(),
+                )
+                .await?,
             )),
         }
     }

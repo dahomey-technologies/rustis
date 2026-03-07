@@ -1,8 +1,15 @@
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::time::Duration;
 
 use crate::{
     Error, Result,
-    client::{Client, IntoConfig},
+    client::{
+        Client, Credentials, CredentialsReason, CredentialsTarget, IntoConfig, ServerKind,
+        WithCredentialsProvider,
+    },
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
         ListCommands, ServerCommands, StringCommands,
@@ -64,6 +71,59 @@ async fn on_reconnect() -> Result<()> {
 
     client1.close().await?;
     client2.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn dynamic_credentials_provider_is_used_for_connect_and_reconnect() -> Result<()> {
+    let admin = get_test_client().await?;
+    admin.config_set(("requirepass", "pwd")).await?;
+
+    let addr = get_default_addr();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let contexts = Arc::new(Mutex::new(Vec::new()));
+    let calls_clone = calls.clone();
+    let contexts_clone = contexts.clone();
+
+    let config = addr.clone().with_credentials_provider(move |ctx| {
+        let calls_clone = calls_clone.clone();
+        let contexts_clone = contexts_clone.clone();
+
+        async move {
+            calls_clone.fetch_add(1, Ordering::SeqCst);
+            contexts_clone.lock().unwrap().push(ctx);
+            Ok(Credentials::for_default_user("pwd"))
+        }
+    });
+
+    let client = Client::connect(config).await?;
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+
+    let killer = Client::connect(format!("redis://:pwd@{}", addr)).await?;
+    let client_id = client.client_id().await?;
+    killer
+        .client_kill(ClientKillOptions::default().id(client_id))
+        .await?;
+
+    client
+        .set("provider:key", "value")
+        .retry_on_error(true)
+        .await?;
+
+    let recorded = contexts.lock().unwrap().clone();
+    assert_eq!(2, recorded.len());
+    assert_eq!(CredentialsReason::InitialConnect, recorded[0].reason);
+    assert_eq!(CredentialsReason::Reconnect, recorded[1].reason);
+    assert_eq!(CredentialsTarget::DataNode, recorded[0].target);
+    assert_eq!(ServerKind::Standalone, recorded[0].server_kind);
+
+    client.config_set(("requirepass", "")).await?;
+    killer.close().await?;
+    client.close().await?;
+    admin.close().await?;
 
     Ok(())
 }

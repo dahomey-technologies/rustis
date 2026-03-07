@@ -1,6 +1,9 @@
 use crate::{
     Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
-    client::{Config, PreparedCommand},
+    client::{
+        Config, Credentials, CredentialsContext, CredentialsReason, CredentialsTarget,
+        PreparedCommand, SharedCredentialsProvider,
+    },
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
@@ -61,19 +64,47 @@ pub struct StandaloneConnection {
     host: String,
     port: u16,
     config: Config,
+    credentials_provider: Option<SharedCredentialsProvider>,
+    credentials_target: CredentialsTarget,
     streams: Streams,
     version: String,
     tag: Arc<str>,
 }
 
 impl StandaloneConnection {
-    pub async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
+    pub async fn connect(
+        host: &str,
+        port: u16,
+        config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
+    ) -> Result<Self> {
+        Self::connect_with_context(
+            host,
+            port,
+            config,
+            credentials_provider,
+            CredentialsReason::InitialConnect,
+            CredentialsTarget::DataNode,
+        )
+        .await
+    }
+
+    pub async fn connect_with_context(
+        host: &str,
+        port: u16,
+        config: &Config,
+        credentials_provider: Option<SharedCredentialsProvider>,
+        credentials_reason: CredentialsReason,
+        credentials_target: CredentialsTarget,
+    ) -> Result<Self> {
         let streams = Streams::connect(host, port, config).await?;
 
         let mut connection = Self {
             host: host.to_owned(),
             port,
             config: config.clone(),
+            credentials_provider,
+            credentials_target,
             streams,
             version: String::new(),
             tag: if config.connection_name.is_empty() {
@@ -83,7 +114,7 @@ impl StandaloneConnection {
             },
         };
 
-        connection.post_connect().await?;
+        connection.post_connect(credentials_reason).await?;
 
         Ok(connection)
     }
@@ -105,8 +136,15 @@ impl StandaloneConnection {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
             "killer".clone_into(&mut config.connection_name);
-            let mut connection =
-                StandaloneConnection::connect(&self.host, self.port, &config).await?;
+            let mut connection = StandaloneConnection::connect_with_context(
+                &self.host,
+                self.port,
+                &config,
+                self.credentials_provider.clone(),
+                CredentialsReason::InitialConnect,
+                self.credentials_target,
+            )
+            .await?;
             connection
                 .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
                 .await?;
@@ -179,27 +217,23 @@ impl StandaloneConnection {
 
     pub async fn reconnect(&mut self) -> Result<()> {
         self.streams = Streams::connect(&self.host, self.port, &self.config).await?;
-        self.post_connect().await?;
+        self.post_connect(CredentialsReason::Reconnect).await?;
 
         Ok(())
     }
 
-    async fn post_connect(&mut self) -> Result<()> {
+    async fn post_connect(&mut self, credentials_reason: CredentialsReason) -> Result<()> {
         // RESP3
         let mut hello_options = HelloOptions::new(3);
 
-        let config_username = self.config.username.clone();
-        let config_password = self.config.password.clone();
         let config_connection_name = self.config.connection_name.clone();
+        let resolved_credentials = self.resolve_credentials(credentials_reason).await?;
 
         // authentication
-        if let Some(password) = &config_password {
+        if let Some(credentials) = &resolved_credentials {
             hello_options = hello_options.auth(
-                match &config_username {
-                    Some(username) => username,
-                    None => "default",
-                },
-                password,
+                credentials.username.as_deref().unwrap_or("default"),
+                &credentials.password,
             );
         }
 
@@ -217,6 +251,26 @@ impl StandaloneConnection {
         }
 
         Ok(())
+    }
+
+    async fn resolve_credentials(&self, reason: CredentialsReason) -> Result<Option<Credentials>> {
+        if let Some(provider) = &self.credentials_provider {
+            let context = CredentialsContext {
+                host: self.host.clone(),
+                port: self.port,
+                reason,
+                target: self.credentials_target,
+                server_kind: self.config.server_kind(),
+                tls_enabled: self.config.tls_enabled(),
+            };
+
+            return Ok(Some(provider.resolve(context).await?));
+        }
+
+        Ok(self.config.password.as_ref().map(|password| Credentials {
+            username: self.config.username.clone(),
+            password: password.clone(),
+        }))
     }
 
     pub fn get_version(&self) -> &str {

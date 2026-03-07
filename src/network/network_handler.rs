@@ -1,7 +1,7 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
     ClientError, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
-    client::{Config, Message, MessageKind},
+    client::{ConnectionSetup, Message, MessageKind},
     commands::InternalPubSubCommands,
     resp::{ClientReplyMode, CommandKind, RespResponse, SubscriptionType, cmd},
     spawn, timeout,
@@ -107,14 +107,14 @@ pub(crate) struct NetworkHandler {
 
 impl NetworkHandler {
     pub async fn connect(
-        config: Config,
+        setup: ConnectionSetup,
     ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, Arc<str>)> {
         // options
-        let auto_resubscribe = config.auto_resubscribe;
-        let auto_remonitor = config.auto_remonitor;
-        let reconnection_config = config.reconnection.clone();
+        let auto_resubscribe = setup.config.auto_resubscribe;
+        let auto_remonitor = setup.config.auto_remonitor;
+        let reconnection_config = setup.config.reconnection.clone();
 
-        let connection = Connection::connect(config).await?;
+        let connection = Connection::connect(setup).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
         let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
         let tag = connection.tag().to_owned();

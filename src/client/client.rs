@@ -68,11 +68,11 @@ impl Client {
     /// Any Redis driver [`Error`](crate::Error) that occurs during the connection operation
     #[inline]
     pub async fn connect(config: impl IntoConfig) -> Result<Self> {
-        let config = config.into_config()?;
-        let command_timeout = config.command_timeout;
-        let retry_on_error = config.retry_on_error;
+        let setup = config.into_connection_setup()?;
+        let command_timeout = setup.config.command_timeout;
+        let retry_on_error = setup.config.retry_on_error;
         let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag) =
-            NetworkHandler::connect(config.into_config()?).await?;
+            NetworkHandler::connect(setup).await?;
 
         Ok(Self {
             msg_sender: Arc::new(Some(msg_sender)),

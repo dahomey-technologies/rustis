@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    client::{Client, IntoConfig},
+    client::{Client, Credentials, IntoConfig, WithCredentialsProvider},
     commands::{ClientKillOptions, ConnectionCommands, FlushingMode, ServerCommands},
     tests::{get_default_host, get_default_port, get_test_client, log_try_init},
 };
@@ -236,6 +236,25 @@ fn into_config() -> Result<()> {
     );
     assert!("redis://127.0.0.1?param".into_config().is_err());
     assert!("redis://127.0.0.1?param=value".into_config().is_ok());
+
+    Ok(())
+}
+
+#[test]
+fn credentials_provider_wrappers_layer_without_changing_config() -> Result<()> {
+    let setup = "redis+sentinel://127.0.0.1:6379/myservice"
+        .with_credentials_provider(|_| async { Ok(Credentials::for_default_user("data-pwd")) })
+        .with_sentinel_credentials_provider(|_| async {
+            Ok(Credentials::new("sentinel-user", "sentinel-pwd"))
+        })
+        .into_connection_setup()?;
+
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379/myservice",
+        setup.config.to_string()
+    );
+    assert!(setup.credentials_provider.is_some());
+    assert!(setup.sentinel_credentials_provider.is_some());
 
     Ok(())
 }

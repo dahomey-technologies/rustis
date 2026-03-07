@@ -120,6 +120,52 @@ A [`Client`] instance can be configured with the [`Config`] struct:
 * [`String`](https://doc.rust-lang.org/alloc/string/struct.String.html): host and port separated by a colon
 * [`Url`](https://docs.rs/url/latest/url/struct.Url.html): see Url syntax below.
 
+## Dynamic Authentication
+
+For deployments that use short-lived credentials, such as cloud IAM auth, attach an async
+credentials provider with [`WithCredentialsProvider::with_credentials_provider`].
+
+The provider is called each time `rustis` establishes a new authenticated TCP session:
+* initial connect
+* reconnect
+* pub/sub reconnect
+* cluster node connect
+* sentinel node connect
+
+The provider returns fresh [`Credentials`](crate::client::Credentials) immediately before
+authentication. Any token caching policy stays inside the provider implementation.
+
+### IAM Example
+
+```no_run
+use rustis::{
+    client::{Client, Credentials, CredentialsContext, WithCredentialsProvider},
+    commands::ConnectionCommands,
+    Result,
+};
+
+async fn fetch_iam_token(_ctx: &CredentialsContext) -> Result<String> {
+    todo!("Call your cloud SDK or metadata service here")
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = Client::connect(
+        "rediss://cache.example.com:6379".with_credentials_provider(|ctx| async move {
+            let token = fetch_iam_token(&ctx).await?;
+            Ok(Credentials::for_default_user(token))
+        }),
+    )
+    .await?;
+
+    let _: String = client.ping("hello").await?;
+    Ok(())
+}
+```
+
+If Sentinel uses different credentials from the Redis data node, chain
+[`WithCredentialsProvider::with_sentinel_credentials_provider`] as well.
+
 ## Url Syntax
 
 The **rustis** [`Config`] can also be built from an URL

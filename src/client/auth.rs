@@ -66,6 +66,14 @@ pub struct CredentialsContext {
 }
 
 /// Async credentials source used to authenticate every new TCP session.
+///
+/// Providers are invoked immediately before authentication on each newly established TCP session,
+/// including the initial connect, reconnects, pub/sub reconnects, and cluster or sentinel node
+/// connections. This makes them suitable for short-lived cloud credentials such as IAM-issued
+/// Redis tokens.
+///
+/// Providers own their own caching policy. If token minting is expensive, cache internally and
+/// return a fresh-enough [`Credentials`] value when `rustis` asks for one.
 pub trait CredentialsProvider: Send + Sync + 'static {
     fn resolve(&self, context: CredentialsContext) -> Future<'_, Credentials>;
 }
@@ -234,8 +242,43 @@ impl<C: IntoConfig> IntoConfig for ConfigWithCredentialsProvider<C> {
 
 /// Extension methods for attaching dynamic credentials providers to any
 /// [`IntoConfig`] input accepted by `rustis`.
+///
+/// This is the public entry point for dynamic authentication. The configured provider is called
+/// every time `rustis` opens a new authenticated TCP session, so it integrates with the library's
+/// built-in reconnect and resubscribe behavior.
+///
+/// # IAM example
+///
+/// ```no_run
+/// use rustis::{
+///     client::{Client, Credentials, CredentialsContext, WithCredentialsProvider},
+///     commands::ConnectionCommands,
+///     Result,
+/// };
+///
+/// async fn fetch_iam_token(_ctx: &CredentialsContext) -> Result<String> {
+///     todo!("Call your cloud SDK or metadata service here")
+/// }
+///
+/// #[tokio::main]
+/// async fn main() -> Result<()> {
+///     let client = Client::connect(
+///         "rediss://cache.example.com:6379".with_credentials_provider(|ctx| async move {
+///             let token = fetch_iam_token(&ctx).await?;
+///             Ok(Credentials::for_default_user(token))
+///         }),
+///     )
+///     .await?;
+///
+///     let _: String = client.ping("hello").await?;
+///     Ok(())
+/// }
+/// ```
 pub trait WithCredentialsProvider: IntoConfig + Sized {
     /// Use this provider for every new Redis data-node TCP session.
+    ///
+    /// Static [`Config`](crate::client::Config) username and password fields are still supported,
+    /// but when a dynamic provider is attached, its return value is used for each new session.
     #[must_use]
     fn with_credentials_provider(
         self,
@@ -245,6 +288,8 @@ pub trait WithCredentialsProvider: IntoConfig + Sized {
     }
 
     /// Use this provider for every new Sentinel control-plane TCP session.
+    ///
+    /// This is useful when sentinel discovery and Redis data nodes use different credentials.
     #[must_use]
     fn with_sentinel_credentials_provider(
         self,

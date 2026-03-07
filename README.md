@@ -38,6 +38,7 @@ An asynchronous Redis client for Rust.
 * [LUA Scripts/Functions](hhttps://redis.io/docs/latest/develop/programmability/) support
 * [Cluster](https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/) support (minimus supported Redis version is 6)
 * [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
+* Support for AWS/GCP/other IAM auth using `with_credentials_provider`
 
 # Protocol Compatibility
 

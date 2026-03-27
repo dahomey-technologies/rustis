@@ -177,8 +177,8 @@ impl NetworkHandler {
                 break;
             }
 
-            match self.msg_receiver.try_next() {
-                Ok(m) => msg = m,
+            match self.msg_receiver.try_recv() {
+                Ok(m) => msg = Some(m),
                 Err(_) => {
                     // there are no messages available, but channel is not yet closed
                     is_channel_closed = false;

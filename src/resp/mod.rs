@@ -55,7 +55,45 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+## Byte arguments and serde limitations
 
+Due to how serde handles byte types, passing raw byte values like `&[u8]`,
+`Vec<u8>`, or byte literals like `b"val"` directly as command arguments
+will **not** produce a single RESP bulk string. Instead, serde serializes
+them as sequences of individual integer values, resulting in a runtime error.
+
+This is a fundamental serde limitation: without specialization, there is no
+way to distinguish a `&[u8]` from any other `&[T]` at the trait level.
+Note that `&str` works correctly because it is a distinct type, not a slice.
+
+To pass raw bytes as a single bulk string argument, use the provided adapter types:
+
+- [`BulkString`] for owned byte data (`Vec<u8>`) — moves ownership, zero allocation
+- [`RefBulkString`] for borrowed byte data (`&[u8]`) — zero allocation
+
+#### Example
+```
+use rustis::{
+    client::Client,
+    commands::StringCommands,
+    resp::{BulkString, RefBulkString},
+    Result,
+};
+
+#[cfg_attr(feature = "tokio-runtime", tokio::main)]
+#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+async fn main() -> Result<()> {
+    let client = Client::connect("127.0.0.1:6379").await?;
+
+    // &[u8]: use RefBulkString (zero allocation, borrowed)
+    client.set("key", RefBulkString::new(b"val")).await?;
+
+    // Vec<u8>: use BulkString (zero allocation, owned)
+    client.set("key", BulkString::new(b"val".to_vec())).await?;
+
+    Ok(())
+}
+```
 # Command results
 
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)

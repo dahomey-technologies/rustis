@@ -76,3 +76,62 @@ impl fmt::Display for BulkString {
         f.write_str(String::from_utf8_lossy(&self.0).as_ref())
     }
 }
+
+/// Represents a reference to the [Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings) RESP type
+#[derive(Serialize, Hash, PartialEq, Eq, Clone)]
+pub struct RefBulkString<'a>(
+    #[serde(
+        serialize_with = "serialize_byte_buf"
+    )]
+    &'a [u8],
+);
+
+impl<'a> RefBulkString<'a> {
+    /// Constructs a new `RefBulkString` from a byte slice
+    #[inline]
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+
+    /// Returns the internal buffer as a byte slice
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0
+    }
+}
+
+impl<'a> Deref for RefBulkString<'a> {
+    type Target = [u8];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl<'a> From<&'a [u8]> for RefBulkString<'a> {
+    #[inline]
+    fn from(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl<'a, const N: usize> From<&'a [u8; N]> for RefBulkString<'a> {
+    #[inline]
+    fn from(bytes: &'a [u8; N]) -> Self {
+        Self(bytes.as_slice())
+    }
+}
+
+impl<'a> fmt::Debug for RefBulkString<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RefBulkString").field(&self.0).finish()
+    }
+}
+
+impl<'a> fmt::Display for RefBulkString<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(String::from_utf8_lossy(self.0).as_ref())
+    }
+}

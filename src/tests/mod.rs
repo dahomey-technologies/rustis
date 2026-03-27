@@ -1,3 +1,4 @@
+mod arg_serializer;
 mod bitmap_commands;
 mod bloom_commands;
 mod buffer_decoder;

@@ -79,12 +79,7 @@ impl fmt::Display for BulkString {
 
 /// Represents a reference to the [Bulk String](https://redis.io/docs/reference/protocol-spec/#resp-bulk-strings) RESP type
 #[derive(Serialize, Hash, PartialEq, Eq, Clone)]
-pub struct RefBulkString<'a>(
-    #[serde(
-        serialize_with = "serialize_byte_buf"
-    )]
-    &'a [u8],
-);
+pub struct RefBulkString<'a>(#[serde(serialize_with = "serialize_byte_buf")] &'a [u8]);
 
 impl<'a> RefBulkString<'a> {
     /// Constructs a new `RefBulkString` from a byte slice

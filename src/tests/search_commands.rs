@@ -856,7 +856,6 @@ async fn ft_info() -> Result<()> {
                 .max_text_fields()
                 .temporary(500)
                 .nohl()
-                .nofields()
                 .nofreqs()
                 .prefix("log")
                 .prefix("doc")

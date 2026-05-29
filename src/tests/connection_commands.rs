@@ -204,6 +204,22 @@ async fn client_reply() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn client_reply_skip() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    client.set("skip_key", "skip_value").forget()?;
+    client.client_reply(ClientReplyMode::On).await?;
+    let value: String = client.get("skip_key").await?;
+    assert_eq!("skip_value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn client_setname_getname() -> Result<()> {
     let client = get_test_client().await?;
 

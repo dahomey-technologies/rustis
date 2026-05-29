@@ -128,7 +128,7 @@ impl<'a> From<&'a Command> for CommandKind {
             b"CLIENT" => match (command.get_arg(0).as_deref(), command.get_arg(1).as_deref()) {
                 (Some(b"REPLY"), Some(b"ON")) => CommandKind::ClientReply(ClientReplyMode::On),
                 (Some(b"REPLY"), Some(b"OFF")) => CommandKind::ClientReply(ClientReplyMode::Off),
-                (Some(b"REPLY"), Some(b"SKIPP")) => CommandKind::ClientReply(ClientReplyMode::Skip),
+                (Some(b"REPLY"), Some(b"SKIP")) => CommandKind::ClientReply(ClientReplyMode::Skip),
                 _ => CommandKind::Other,
             },
             b"RESET" => CommandKind::Reset,

@@ -253,8 +253,10 @@ impl<'a> RespFrameParser<'a> {
             let b = slice[i];
             match b {
                 b'0'..=b'9' => {
-                    // n = n * 10 + (b - b'0')
-                    n = n.wrapping_mul(10).wrapping_add((b - b'0') as i64);
+                    n = n
+                        .checked_mul(10)
+                        .and_then(|n| n.checked_add((b - b'0') as i64))
+                        .ok_or(Error::Client(ClientError::CannotParseInteger))?;
                     i += 1;
                 }
                 b'\r' => match slice.get(i + 1) {

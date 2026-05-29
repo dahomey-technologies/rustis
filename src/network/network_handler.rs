@@ -516,8 +516,10 @@ impl NetworkHandler {
                                 MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
                                         message_to_receive.pending_responses.push(resp_buf);
-                                        self.pending_result_batches
-                                            .push((results_sender, Ok(message_to_receive.pending_responses.into_vec())));
+                                        self.pending_result_batches.push((
+                                            results_sender,
+                                            Ok(message_to_receive.pending_responses.into_vec()),
+                                        ));
                                     }
                                     Err(e) => {
                                         self.pending_result_batches.push((results_sender, Err(e)));

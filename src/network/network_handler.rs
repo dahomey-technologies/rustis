@@ -62,6 +62,7 @@ struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
     pub attempts: usize,
+    pub pending_responses: SmallVec<[RespResponse; 10]>,
 }
 
 impl MessageToReceive {
@@ -70,6 +71,7 @@ impl MessageToReceive {
             message,
             num_commands,
             attempts,
+            pending_responses: SmallVec::new(),
         }
     }
 }
@@ -95,7 +97,6 @@ pub(crate) struct NetworkHandler {
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
     is_reply_on: bool,
     push_sender: Option<PushSender>,
-    pending_responses: Option<Vec<RespResponse>>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
@@ -131,7 +132,6 @@ impl NetworkHandler {
             subscriptions: HashMap::new(),
             is_reply_on: true,
             push_sender: None,
-            pending_responses: None,
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
             auto_remonitor,
@@ -515,16 +515,9 @@ impl NetworkHandler {
                                 }
                                 MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
-                                        let pending_replies = self.pending_responses.take();
-
-                                        if let Some(mut pending_replies) = pending_replies {
-                                            pending_replies.push(resp_buf);
-                                            self.pending_result_batches
-                                                .push((results_sender, Ok(pending_replies)));
-                                        } else {
-                                            self.pending_result_batches
-                                                .push((results_sender, Ok(vec![resp_buf])));
-                                        }
+                                        message_to_receive.pending_responses.push(resp_buf);
+                                        self.pending_result_batches
+                                            .push((results_sender, Ok(message_to_receive.pending_responses.into_vec())));
                                     }
                                     Err(e) => {
                                         self.pending_result_batches.push((results_sender, Err(e)));
@@ -542,28 +535,22 @@ impl NetworkHandler {
                         }
                     }
                 } else {
-                    if self.pending_responses.is_none() {
-                        self.pending_responses = Some(Vec::new());
-                    }
-
-                    if let Some(pending_replies) = &mut self.pending_responses {
-                        match result {
-                            Ok(value) => {
-                                pending_replies.push(value);
-                                message_to_receive.num_commands -= 1;
-                            }
-                            Err(Error::Retry(reasons)) => {
-                                if let Some(retry_reasons) =
-                                    &mut message_to_receive.message.retry_reasons
-                                {
-                                    retry_reasons.extend(reasons);
-                                } else {
-                                    message_to_receive.message.retry_reasons =
-                                        Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
-                                }
-                            }
-                            _ => (),
+                    match result {
+                        Ok(value) => {
+                            message_to_receive.pending_responses.push(value);
+                            message_to_receive.num_commands -= 1;
                         }
+                        Err(Error::Retry(reasons)) => {
+                            if let Some(retry_reasons) =
+                                &mut message_to_receive.message.retry_reasons
+                            {
+                                retry_reasons.extend(reasons);
+                            } else {
+                                message_to_receive.message.retry_reasons =
+                                    Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                            }
+                        }
+                        _ => (),
                     }
                 }
             }

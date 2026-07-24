@@ -296,9 +296,9 @@ impl Iterator for RespResponseIter {
             self.current += 1;
             Some(RespResponse::new(self.buf.clone(), frame))
         } else {
-            let mut parser = RespFrameParser::new(&self.buf.as_ref()[self.pos..]);
-            let (frame, len) = parser.parse().ok()?;
-            self.pos += len;
+            let mut parser = RespFrameParser::new_at(self.buf.as_ref(), self.pos);
+            let (frame, end) = parser.parse().ok()?;
+            self.pos = end;
             self.current += 1;
             Some(RespResponse::new(self.buf.clone(), frame))
         }

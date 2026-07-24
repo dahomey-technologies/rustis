@@ -783,7 +783,7 @@ pub enum ClientTrackingStatus {
 }
 
 /// Options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
-#[derive(Default, Serialize)]
+#[derive(Clone, Default, Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct ClientTrackingOptions {
     #[serde(skip_serializing_if = "Option::is_none")]

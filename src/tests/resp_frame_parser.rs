@@ -67,9 +67,39 @@ fn parse_range_negative_bulk_lengths_error() {
     // RESP-03: `parse_range` re-validates nothing on its own, so cover both
     // negative-length arms there too.
     let resp = b"$-2\r\n";
-    assert!(RespFrameParser::new(resp).parse_range(0..resp.len()).is_err());
+    assert!(
+        RespFrameParser::new(resp)
+            .parse_range(0..resp.len())
+            .is_err()
+    );
     let resp = b"!-2\r\n";
-    assert!(RespFrameParser::new(resp).parse_range(0..resp.len()).is_err());
+    assert!(
+        RespFrameParser::new(resp)
+            .parse_range(0..resp.len())
+            .is_err()
+    );
+}
+
+#[test]
+fn parse_deeply_nested_frame_is_rejected_not_overflowing() {
+    // HARD-01: a crafted `*1\r\n*1\r\n…` reply must be rejected by the depth
+    // guard instead of recursing `parse_value` into an uncatchable stack
+    // overflow. 100_000 levels would blow any stack without the bound.
+    let mut resp = b"*1\r\n".repeat(100_000);
+    resp.extend_from_slice(b":1\r\n");
+    let mut parser = RespFrameParser::new(&resp);
+    assert!(parser.parse().is_err());
+}
+
+#[test]
+fn parse_nesting_within_limit_succeeds() {
+    // A frame nested just under the bound must still parse: the guard rejects
+    // pathology, not legitimately nested replies.
+    let depth = 100;
+    let mut resp = b"*1\r\n".repeat(depth);
+    resp.extend_from_slice(b":7\r\n");
+    let mut parser = RespFrameParser::new(&resp);
+    assert!(parser.parse().is_ok());
 }
 
 #[test]

@@ -18,8 +18,6 @@ on:
       - "Cargo.toml"
     branches:
       - "**"
-    tags-ignore:
-      - "*.*.*"
 
 jobs:
   check:
@@ -29,7 +27,7 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Run cargo check
         run: cargo check
       - name: Run cargo check --release
@@ -44,7 +42,7 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Create Redis containers
         run: |
           cd /home/runner/work/rustis/rustis/redis/

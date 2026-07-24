@@ -136,9 +136,32 @@ struct RequestInfo {
     pub response_policy: Option<ResponsePolicy>,
     pub keys: SmallVec<[Bytes; 10]>,
     pub sub_requests: SmallVec<[SubRequest; 10]>,
+    /// The command the sub-requests were derived from, kept only when a single
+    /// sub-request can be re-sent on its own — i.e. when the command was split
+    /// across several shards. Everything else is retried as a whole and does not
+    /// pay for the clone.
+    pub command: Option<Command>,
     #[allow(unused)]
     #[cfg(test)]
     pub command_seq: usize,
+}
+
+/// A sub-request that must be re-sent to another node before its request can be
+/// completed. Held aside because deciding this happens in `read`/`try_read`,
+/// and `try_read` cannot await the send.
+struct PendingRedirection {
+    node_id: NodeId,
+    command: Command,
+    should_ask: bool,
+}
+
+/// What `internal_read` concluded about a fulfilled request.
+enum ReadOutcome {
+    /// The request is over: this is its answer, or `None` for a disconnection.
+    Ready(Option<Result<RespResponse>>),
+    /// Part of the request was redirected and has been re-armed against the
+    /// right node. There is nothing to report yet.
+    Deferred,
 }
 
 /// Stores the state related to the current transaction (MULTI/EXEC block).
@@ -169,6 +192,9 @@ pub struct ClusterConnection {
     nodes: Vec<Node>,
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
+    /// Sub-requests re-armed by a partial redirection, awaiting the next `read`
+    /// to be sent.
+    pending_redirections: Vec<PendingRedirection>,
     tag: Arc<str>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
@@ -197,6 +223,7 @@ impl ClusterConnection {
             nodes,
             slot_ranges,
             pending_requests: VecDeque::new(),
+            pending_redirections: Vec::new(),
             tag,
             transaction_state: TransactionState::default(),
             refreshed_in_current_batch: false,
@@ -337,6 +364,7 @@ impl ClusterConnection {
             response_policy: command.response_policy(),
             sub_requests,
             keys: command.keys().collect(),
+            command: None,
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -369,6 +397,7 @@ impl ClusterConnection {
             response_policy: command.response_policy(),
             sub_requests,
             keys: command.keys().collect(),
+            command: None,
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -454,10 +483,12 @@ impl ClusterConnection {
             result: None,
         });
 
+        let sub_requests_len = sub_requests.len();
         let request_info = RequestInfo {
             response_policy: command.response_policy(),
             keys: command.keys().collect(),
             sub_requests,
+            command: (sub_requests_len > 1).then(|| command.clone()),
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -521,6 +552,7 @@ impl ClusterConnection {
                 result: None,
             }],
             keys,
+            command: None,
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -578,11 +610,17 @@ impl ClusterConnection {
     }
 
     pub async fn read(&mut self) -> Option<Result<RespResponse>> {
-        let request_info: RequestInfo;
-
         loop {
             #[cfg(test)]
             self.apply_test_node_drop();
+
+            // Sub-requests re-armed by a partial redirection, possibly by a
+            // `try_read` that could not await their send.
+            if !self.pending_redirections.is_empty()
+                && let Err(e) = self.flush_pending_redirections().await
+            {
+                return Some(Err(e));
+            }
 
             // Fail an orphaned front request instead of waiting forever for a
             // reply that will never come. It is reported as a lost connection,
@@ -599,8 +637,10 @@ impl ClusterConnection {
             {
                 trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
                 if let Some(ri) = self.pending_requests.pop_front() {
-                    request_info = ri;
-                    break;
+                    match self.internal_read(ri) {
+                        ReadOutcome::Ready(result) => return result,
+                        ReadOutcome::Deferred => continue,
+                    }
                 }
             }
 
@@ -652,16 +692,18 @@ impl ClusterConnection {
                 self.tag, self.pending_requests[req_idx]
             );
         }
-
-        self.internal_read(request_info)
     }
 
     pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
-        let request_info: RequestInfo;
-
         loop {
             #[cfg(test)]
             self.apply_test_node_drop();
+
+            // Re-armed sub-requests can only be sent from `read`, which can
+            // await. Yield so the network loop goes back to it.
+            if !self.pending_redirections.is_empty() {
+                return Poll::Pending;
+            }
 
             // See `read()`: an orphaned front request must not block the queue.
             if self.front_request_references_missing_node() {
@@ -674,8 +716,10 @@ impl ClusterConnection {
             {
                 trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
                 if let Some(ri) = self.pending_requests.pop_front() {
-                    request_info = ri;
-                    break;
+                    match self.internal_read(ri) {
+                        ReadOutcome::Ready(result) => return Poll::Ready(result),
+                        ReadOutcome::Deferred => return Poll::Pending,
+                    }
                 }
             }
 
@@ -732,11 +776,154 @@ impl ClusterConnection {
                 self.tag, self.pending_requests[req_idx]
             );
         }
-
-        Poll::Ready(self.internal_read(request_info))
     }
 
-    fn internal_read(
+    /// Collects the ASK/MOVED redirections carried by a fulfilled request,
+    /// paired with the sub-request that received them.
+    fn collect_redirections(request_info: &RequestInfo) -> SmallVec<[(usize, RetryReason); 1]> {
+        let mut redirections = SmallVec::<[(usize, RetryReason); 1]>::new();
+
+        for (idx, sub_request) in request_info.sub_requests.iter().enumerate() {
+            let Some(Some(Ok(result))) = &sub_request.result else {
+                continue;
+            };
+
+            let RespView::Error(error) = result.view() else {
+                continue;
+            };
+
+            match RedisError::try_from(error) {
+                Ok(RedisError {
+                    kind: RedisErrorKind::Ask { hash_slot, address },
+                    ..
+                }) => redirections.push((idx, RetryReason::Ask { hash_slot, address })),
+                Ok(RedisError {
+                    kind: RedisErrorKind::Moved { hash_slot, address },
+                    ..
+                }) => redirections.push((idx, RetryReason::Moved { hash_slot, address })),
+                _ => (),
+            }
+        }
+
+        redirections
+    }
+
+    /// Re-arms the redirected sub-requests of a partially redirected command
+    /// against the nodes the server pointed at, leaving the sub-results already
+    /// obtained untouched.
+    ///
+    /// Returns `false` — changing nothing — when a target is not a node we hold a
+    /// connection to. The caller then falls back to retrying the whole command,
+    /// which goes through a topology refresh.
+    fn rearm_redirected_sub_requests(
+        &mut self,
+        request_info: &mut RequestInfo,
+        redirections: &[(usize, RetryReason)],
+    ) -> bool {
+        let Some(command) = request_info.command.clone() else {
+            return false;
+        };
+
+        // Resolve every target first: re-arming half of the sub-requests and
+        // then giving up would leave the request unable to ever complete.
+        let mut targets = SmallVec::<[(usize, NodeId, bool); 1]>::new();
+
+        for (idx, reason) in redirections {
+            let (address, should_ask) = match reason {
+                RetryReason::Ask { address, .. } => (address, true),
+                RetryReason::Moved { address, .. } => (address, false),
+            };
+
+            let Some(node) = self.nodes.iter().find(|n| n.address == *address) else {
+                return false;
+            };
+
+            targets.push((*idx, node.id.clone(), should_ask));
+        }
+
+        for (idx, node_id, should_ask) in targets {
+            let sub_request = &mut request_info.sub_requests[idx];
+            let shard_command = prepare_command_for_shard(&command, &sub_request.keys);
+
+            sub_request.node_id = node_id.clone();
+            sub_request.result = None;
+
+            self.pending_redirections.push(PendingRedirection {
+                node_id,
+                command: shard_command,
+                should_ask,
+            });
+        }
+
+        true
+    }
+
+    /// Sends the sub-requests re-armed by a partial redirection.
+    async fn flush_pending_redirections(&mut self) -> Result<()> {
+        let redirections = std::mem::take(&mut self.pending_redirections);
+
+        // A MOVED means the slot map is stale, exactly as on the whole-command
+        // retry path. Without this every later command on that slot would be
+        // redirected again. The re-send itself does not depend on it — the
+        // target is already known by node id — so a failed refresh only costs
+        // freshness and must not fail the request.
+        if redirections.iter().any(|r| !r.should_ask)
+            && let Err(e) = self.refresh_nodes_and_slot_ranges().await
+        {
+            warn!(
+                "[{}] Cannot refresh the topology after a redirection: {e}",
+                self.tag
+            );
+        }
+
+        for redirection in redirections {
+            // A node that vanished in the meantime leaves the sub-request
+            // unfulfilled; the orphan check at the top of `read` turns that into
+            // a reported failure rather than an endless wait.
+            let Some(node_index) = self.get_node_index_by_id(&redirection.node_id) else {
+                warn!(
+                    "[{}] Redirection target {:?} is gone",
+                    self.tag, redirection.node_id
+                );
+                continue;
+            };
+
+            let node = &mut self.nodes[node_index];
+            if redirection.should_ask {
+                node.connection.asking().await?;
+            }
+            node.feed(&redirection.command).await?;
+        }
+
+        self.flush().await
+    }
+
+    fn internal_read(&mut self, mut request_info: RequestInfo) -> ReadOutcome {
+        // A command split across shards whose sub-requests did not all fail must
+        // not be replayed as a whole: the shards that answered already applied
+        // it, and a second run reports different numbers — a replayed `DEL`
+        // answers 0 for the keys it deleted the first time. Re-send only what
+        // was redirected and keep the rest.
+        let redirections = Self::collect_redirections(&request_info);
+        if !redirections.is_empty()
+            && redirections.len() < request_info.sub_requests.len()
+            && self.rearm_redirected_sub_requests(&mut request_info, &redirections)
+        {
+            debug!(
+                "[{}] partially redirected request, re-sending {} of {} sub-requests. reasons: {:?}",
+                self.tag,
+                redirections.len(),
+                request_info.sub_requests.len(),
+                redirections.iter().map(|(_, r)| r).collect::<Vec<_>>()
+            );
+            self.pending_requests.push_front(request_info);
+            return ReadOutcome::Deferred;
+        }
+
+        ReadOutcome::Ready(self.aggregate_sub_results(request_info))
+    }
+
+    fn aggregate_sub_results(
         &mut self,
         mut request_info: RequestInfo,
     ) -> Option<std::result::Result<RespResponse, Error>> {

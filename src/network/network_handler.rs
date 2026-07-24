@@ -34,6 +34,73 @@ pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 type PendingResult = (ResultSender, Result<RespResponse>);
 type PendingResultBatch = (ResultsSender, Result<Vec<RespResponse>>);
 
+/// Test-only observability and fault-injection hook for the send batch.
+///
+/// This is the queue-position primitive of the failure-path test
+/// infrastructure: it lets a test deterministically force retry reasons onto a
+/// message drained by [`NetworkHandler::send_messages`] and observe the retry
+/// reasons every command is actually fed with. It carries no cost in release
+/// builds because it is gated behind `debug_assertions`, like the existing
+/// `kill_connection_on_write` primitive.
+#[cfg(debug_assertions)]
+#[derive(Clone, Default)]
+pub(crate) struct SendBatchTestHook {
+    /// Retry reasons to force onto the **first** message of each
+    /// `send_messages` drain that contains at least one message. One entry is
+    /// consumed per such drain; `None` leaves that drain untouched.
+    inject_first_message_reasons: Arc<std::sync::Mutex<VecDeque<Option<Vec<RetryReason>>>>>,
+    /// Records, in feed order, `(command name, number of retry reasons fed)`
+    /// for every command actually fed to the connection.
+    fed_retry_reasons: Arc<std::sync::Mutex<Vec<(String, usize)>>>,
+}
+
+#[cfg(debug_assertions)]
+// This infrastructure is consumed by failure-path tests that assert retry
+// reasons do not leak across messages; the public API is unused until those
+// tests land.
+#[allow(dead_code)]
+impl SendBatchTestHook {
+    #[cfg(test)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Queues retry reasons to be forced onto the first message of the next
+    /// send drain (or `None` to skip that drain).
+    #[cfg(test)]
+    pub fn push_injection(&self, reasons: Option<Vec<RetryReason>>) {
+        self.inject_first_message_reasons
+            .lock()
+            .expect("send batch test hook mutex poisoned")
+            .push_back(reasons);
+    }
+
+    /// Returns the recorded `(command name, number of retry reasons fed)`
+    /// entries, in feed order.
+    #[cfg(test)]
+    pub fn fed_retry_reasons(&self) -> Vec<(String, usize)> {
+        self.fed_retry_reasons
+            .lock()
+            .expect("send batch test hook mutex poisoned")
+            .clone()
+    }
+
+    fn take_injection(&self) -> Option<Vec<RetryReason>> {
+        self.inject_first_message_reasons
+            .lock()
+            .expect("send batch test hook mutex poisoned")
+            .pop_front()
+            .flatten()
+    }
+
+    fn record_fed(&self, command_name: String, num_reasons: usize) {
+        self.fed_retry_reasons
+            .lock()
+            .expect("send batch test hook mutex poisoned")
+            .push((command_name, num_reasons));
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
     Disconnected,
@@ -104,6 +171,8 @@ pub(crate) struct NetworkHandler {
     reconnection_state: ReconnectionState,
     pending_results: SmallVec<[PendingResult; 64]>,
     pending_result_batches: SmallVec<[PendingResultBatch; 64]>,
+    #[cfg(debug_assertions)]
+    send_batch_test_hook: Option<SendBatchTestHook>,
 }
 
 impl NetworkHandler {
@@ -114,6 +183,8 @@ impl NetworkHandler {
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;
         let reconnection_config = config.reconnection.clone();
+        #[cfg(debug_assertions)]
+        let send_batch_test_hook = config.send_batch_test_hook.clone();
 
         let connection = Connection::connect(config).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
@@ -139,6 +210,8 @@ impl NetworkHandler {
             reconnection_state: ReconnectionState::new(reconnection_config),
             pending_results: SmallVec::new(),
             pending_result_batches: SmallVec::new(),
+            #[cfg(debug_assertions)]
+            send_batch_test_hook,
         };
 
         let join_handle = spawn(async move {
@@ -315,6 +388,17 @@ impl NetworkHandler {
             }
         }
 
+        // Test-only: force retry reasons onto the first message of this drain so
+        // a test can reproduce a redirected message ahead of unrelated ones.
+        #[cfg(debug_assertions)]
+        if let Some(hook) = &self.send_batch_test_hook
+            && !self.messages_to_send.is_empty()
+            && let Some(reasons) = hook.take_injection()
+            && let Some(front) = self.messages_to_send.front_mut()
+        {
+            front.message.retry_reasons = Some(SmallVec::from_iter(reasons));
+        }
+
         let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
 
         let start_idx = self.messages_to_receive.len();
@@ -340,6 +424,16 @@ impl NetworkHandler {
 
                 if self.is_reply_on {
                     num_commands_to_receive += 1;
+                }
+
+                // Test-only: record the retry reasons this command is fed with,
+                // so a test can assert reasons do not leak across messages.
+                #[cfg(debug_assertions)]
+                if let Some(hook) = &self.send_batch_test_hook {
+                    hook.record_fed(
+                        String::from_utf8_lossy(&command.name()).into_owned(),
+                        retry_reasons.len(),
+                    );
                 }
 
                 if let Err(e) = self.connection.feed(command, &retry_reasons).await {

@@ -91,6 +91,10 @@ impl Transaction {
     /// }
     /// ```
     pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
+        if self.client.is_cluster() {
+            Self::check_single_slot(&self.commands)?;
+        }
+
         self.commands.push(cmd("EXEC").into());
 
         let num_commands = self.commands.len();
@@ -121,6 +125,34 @@ impl Transaction {
         } else {
             Err(Error::Client(ClientError::Unexpected))
         }
+    }
+
+    /// Enforce Redis Cluster's own transaction constraint: every key must hash to
+    /// the same slot.
+    ///
+    /// In cluster mode each queued command is routed independently by its own key,
+    /// while MULTI is pinned to the node of the first key-bearing command and EXEC
+    /// follows that pin. A command whose slot belongs to another node is therefore
+    /// sent there *outside* any MULTI and executes immediately, and the queued-phase
+    /// check cannot notice: it accepts any non-error reply, so a direct command
+    /// result passes for `+QUEUED`. The outcome is a partially applied transaction
+    /// reported as a success. Refuse it before anything is sent.
+    fn check_single_slot(commands: &[Command]) -> Result<()> {
+        let mut slot: Option<u16> = None;
+
+        for command in commands {
+            for command_slot in command.slots() {
+                match slot {
+                    None => slot = Some(command_slot),
+                    Some(slot) if slot != command_slot => {
+                        return Err(Error::Client(ClientError::CrossSlot));
+                    }
+                    Some(_) => (),
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

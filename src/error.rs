@@ -134,6 +134,10 @@ pub enum ClientError {
     /// Raised when EXEC is called without MULTI
     #[error("EXEC called without MULTI")]
     ExecCalledWithoutMulti,
+    /// Raised when a transaction mixes keys belonging to different hash slots,
+    /// which Redis Cluster cannot execute atomically
+    #[error("CROSSSLOT Keys in request don't hash to the same slot")]
+    CrossSlot,
     /// Raised when a command is not supported in cluster mode
     #[error("Command not supported in cluster mode")]
     CommandNotSupportedInCluster,

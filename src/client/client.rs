@@ -4,7 +4,7 @@ use crate::{
     ClientError, Error, Future, Result,
     client::{
         ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
-        PreparedCommand, PubSubStream, Transaction,
+        PreparedCommand, PubSubStream, ServerConfig, Transaction,
     },
     commands::{
         BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
@@ -36,6 +36,9 @@ pub struct Client {
     command_timeout: Duration,
     retry_on_error: bool,
     connection_tag: Arc<str>,
+    /// Whether this client talks to a Redis Cluster, which constrains what a
+    /// transaction may contain.
+    is_cluster: bool,
 }
 
 impl Drop for Client {
@@ -71,6 +74,7 @@ impl Client {
         let config = config.into_config()?;
         let command_timeout = config.command_timeout;
         let retry_on_error = config.retry_on_error;
+        let is_cluster = matches!(config.server, ServerConfig::Cluster(_));
         let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag) =
             NetworkHandler::connect(config.into_config()?).await?;
 
@@ -81,7 +85,13 @@ impl Client {
             command_timeout,
             retry_on_error,
             connection_tag,
+            is_cluster,
         })
+    }
+
+    /// Whether this client is connected to a Redis Cluster.
+    pub(crate) fn is_cluster(&self) -> bool {
+        self.is_cluster
     }
 
     #[allow(dead_code)]

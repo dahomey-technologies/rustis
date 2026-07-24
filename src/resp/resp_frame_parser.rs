@@ -132,22 +132,22 @@ impl<'a> RespFrameParser<'a> {
                 self.pos = need;
                 RespFrame::Error(start..need - 2)
             }
-            ARRAY_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Array { len, ranges }
-            }
-            MAP_TAG => {
-                let (len, ranges) = self.parse_collection(2)?;
-                RespFrame::Map { len, ranges }
-            }
-            SET_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Set { len, ranges }
-            }
-            PUSH_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Push { len, ranges }
-            }
+            ARRAY_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Array { len, ranges },
+                None => RespFrame::Null,
+            },
+            MAP_TAG => match self.parse_collection(2)? {
+                Some((len, ranges)) => RespFrame::Map { len, ranges },
+                None => RespFrame::Null,
+            },
+            SET_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Set { len, ranges },
+                None => RespFrame::Null,
+            },
+            PUSH_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Push { len, ranges },
+                None => RespFrame::Null,
+            },
             _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         };
 
@@ -207,22 +207,22 @@ impl<'a> RespFrameParser<'a> {
                 let len = self.parse_integer()?;
                 RespFrame::Error(self.pos..self.pos + len as usize)
             }
-            ARRAY_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Array { len, ranges }
-            }
-            MAP_TAG => {
-                let (len, ranges) = self.parse_collection(2)?;
-                RespFrame::Map { len, ranges }
-            }
-            SET_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Set { len, ranges }
-            }
-            PUSH_TAG => {
-                let (len, ranges) = self.parse_collection(1)?;
-                RespFrame::Push { len, ranges }
-            }
+            ARRAY_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Array { len, ranges },
+                None => RespFrame::Null,
+            },
+            MAP_TAG => match self.parse_collection(2)? {
+                Some((len, ranges)) => RespFrame::Map { len, ranges },
+                None => RespFrame::Null,
+            },
+            SET_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Set { len, ranges },
+                None => RespFrame::Null,
+            },
+            PUSH_TAG => match self.parse_collection(1)? {
+                Some((len, ranges)) => RespFrame::Push { len, ranges },
+                None => RespFrame::Null,
+            },
             _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         };
 
@@ -280,8 +280,16 @@ impl<'a> RespFrameParser<'a> {
     }
 
     #[inline]
-    fn parse_collection(&mut self, multiplier: usize) -> Result<(usize, [Range<u32>; 5])> {
-        let len = self.parse_integer()? as usize * multiplier;
+    fn parse_collection(&mut self, multiplier: usize) -> Result<Option<(usize, [Range<u32>; 5])>> {
+        let len = self.parse_integer()?;
+        if len == -1 {
+            // RESP2 null array/map
+            return Ok(None);
+        }
+        if len < 0 {
+            return Err(Error::Client(ClientError::CannotParseSequence));
+        }
+        let len = len as usize * multiplier;
         let mut ranges = [0..0, 0..0, 0..0, 0..0, 0..0];
         let range_len = std::cmp::min(len, ranges.len());
 
@@ -295,7 +303,7 @@ impl<'a> RespFrameParser<'a> {
             self.parse_value()?;
         }
 
-        Ok((len, ranges))
+        Ok(Some((len, ranges)))
     }
 
     fn parse_value(&mut self) -> Result<()> {
@@ -330,15 +338,29 @@ impl<'a> RespFrameParser<'a> {
                 Ok(())
             }
             ARRAY_TAG | SET_TAG | PUSH_TAG => {
-                let len = self.parse_integer()? as usize;
-                for _ in 0..len {
+                let len = self.parse_integer()?;
+                if len == -1 {
+                    // RESP2 null array
+                    return Ok(());
+                }
+                if len < 0 {
+                    return Err(Error::Client(ClientError::CannotParseSequence));
+                }
+                for _ in 0..len as usize {
                     self.parse_value()?;
                 }
                 Ok(())
             }
             MAP_TAG => {
-                let len = self.parse_integer()? as usize * 2;
-                for _ in 0..len {
+                let len = self.parse_integer()?;
+                if len == -1 {
+                    // RESP2 null map
+                    return Ok(());
+                }
+                if len < 0 {
+                    return Err(Error::Client(ClientError::CannotParseMap));
+                }
+                for _ in 0..len as usize * 2 {
                     self.parse_value()?;
                 }
                 Ok(())

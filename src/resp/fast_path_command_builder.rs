@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::resp::next_sequence_counter;
-use crate::resp::{ArgLayout, Command, hash_slot};
+use crate::resp::{ArgLayout, Command, cmd, hash_slot};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
@@ -27,29 +27,29 @@ impl FastPathCommandBuilder {
         }
     }
 
+    /// Serializes `arg` onto the fast path, returning the builder on success or
+    /// `Err` on any non-primitive (WR-01). The caller falls back to the generic
+    /// builder rather than panicking.
     #[inline(always)]
-    pub fn arg(mut self, arg: impl Serialize) -> Self {
+    fn try_arg(mut self, arg: impl Serialize) -> Result<Self, Error> {
         let mut serializer = FastPathRespSerializer::new(&mut self.buffer);
-        let range = arg
-            .serialize(&mut serializer)
-            .expect("Argument serialization failed");
+        let range = arg.serialize(&mut serializer)?;
 
         self.args_layout.push(ArgLayout::arg(range));
-        self
+        Ok(self)
     }
 
+    /// Same as [`Self::try_arg`] for a key, also recording its hash slot.
     #[inline(always)]
-    pub fn key(mut self, key: impl Serialize) -> Self {
+    fn try_key(mut self, key: impl Serialize) -> Result<Self, Error> {
         let mut serializer = FastPathRespSerializer::new(&mut self.buffer);
-        let range = key
-            .serialize(&mut serializer)
-            .expect("Argument serialization failed");
+        let range = key.serialize(&mut serializer)?;
 
         self.args_layout.push(ArgLayout::key(
             range.clone(),
             hash_slot(&self.buffer[range]),
         ));
-        self
+        Ok(self)
     }
 
     #[inline(always)]
@@ -72,99 +72,133 @@ impl FastPathCommandBuilder {
 
     #[inline(always)]
     pub fn get(key: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*2\r\n$3\r\nGET\r\n", (8, 3))
-            .key(key)
-            .build()
+        match FastPathCommandBuilder::new(b"*2\r\n$3\r\nGET\r\n", (8, 3)).try_key(&key) {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("GET").key(key).into(),
+        }
     }
 
     #[inline(always)]
     pub fn set(key: impl Serialize, value: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$3\r\nSET\r\n", (8, 3))
-            .key(key)
-            .arg(value)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$3\r\nSET\r\n", (8, 3))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&value))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("SET").key(key).arg(value).into(),
+        }
     }
 
     #[inline(always)]
     pub fn expire(key: impl Serialize, seconds: u64) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$6\r\nEXPIRE\r\n", (8, 6))
-            .key(key)
-            .arg(seconds)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$6\r\nEXPIRE\r\n", (8, 6))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(seconds))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("EXPIRE").key(key).arg(seconds).into(),
+        }
     }
 
     #[inline(always)]
     pub fn hget(key: impl Serialize, field: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$4\r\nHGET\r\n", (8, 4))
-            .key(key)
-            .arg(field)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$4\r\nHGET\r\n", (8, 4))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&field))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("HGET").key(key).arg(field).into(),
+        }
     }
 
     #[inline(always)]
     pub fn hincrby(key: impl Serialize, field: impl Serialize, increment: i64) -> Command {
-        FastPathCommandBuilder::new(b"*4\r\n$7\r\nHINCRBY\r\n", (8, 7))
-            .key(key)
-            .arg(field)
-            .arg(increment)
-            .build()
+        match FastPathCommandBuilder::new(b"*4\r\n$7\r\nHINCRBY\r\n", (8, 7))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&field))
+            .and_then(|b| b.try_arg(increment))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("HINCRBY").key(key).arg(field).arg(increment).into(),
+        }
     }
 
     #[inline(always)]
     pub fn sismember(key: impl Serialize, member: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$9\r\nSISMEMBER\r\n", (8, 9))
-            .key(key)
-            .arg(member)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$9\r\nSISMEMBER\r\n", (8, 9))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&member))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("SISMEMBER").key(key).arg(member).into(),
+        }
     }
 
     #[inline(always)]
     pub fn zincrby(key: impl Serialize, increment: f64, member: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*4\r\n$7\r\nZINCRBY\r\n", (8, 7))
-            .key(key)
-            .arg(increment)
-            .arg(member)
-            .build()
+        match FastPathCommandBuilder::new(b"*4\r\n$7\r\nZINCRBY\r\n", (8, 7))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(increment))
+            .and_then(|b| b.try_arg(&member))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("ZINCRBY").key(key).arg(increment).arg(member).into(),
+        }
     }
 
     #[inline(always)]
     pub fn publish(channel: impl Serialize, message: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$7\r\nPUBLISH\r\n", (8, 7))
-            .arg(channel)
-            .arg(message)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$7\r\nPUBLISH\r\n", (8, 7))
+            .try_arg(&channel)
+            .and_then(|b| b.try_arg(&message))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("PUBLISH").arg(channel).arg(message).into(),
+        }
     }
 
     #[inline(always)]
     pub fn lpush(key: impl Serialize, element: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$5\r\nLPUSH\r\n", (8, 5))
-            .key(key)
-            .arg(element)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$5\r\nLPUSH\r\n", (8, 5))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&element))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("LPUSH").key(key).arg(element).into(),
+        }
     }
 
     #[inline(always)]
     pub fn rpush(key: impl Serialize, element: impl Serialize) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$5\r\nRPUSH\r\n", (8, 5))
-            .key(key)
-            .arg(element)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$5\r\nRPUSH\r\n", (8, 5))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(&element))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("RPUSH").key(key).arg(element).into(),
+        }
     }
 
     #[inline(always)]
     pub fn lpop(key: impl Serialize, count: u32) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$4\r\nLPOP\r\n", (8, 4))
-            .key(key)
-            .arg(count)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$4\r\nLPOP\r\n", (8, 4))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(count))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("LPOP").key(key).arg(count).into(),
+        }
     }
 
     #[inline(always)]
     pub fn rpop(key: impl Serialize, count: u32) -> Command {
-        FastPathCommandBuilder::new(b"*3\r\n$4\r\nRPOP\r\n", (8, 4))
-            .key(key)
-            .arg(count)
-            .build()
+        match FastPathCommandBuilder::new(b"*3\r\n$4\r\nRPOP\r\n", (8, 4))
+            .try_key(&key)
+            .and_then(|b| b.try_arg(count))
+        {
+            Ok(builder) => builder.build(),
+            Err(_) => cmd("RPOP").key(key).arg(count).into(),
+        }
     }
 }
 
@@ -397,5 +431,54 @@ impl<'a> Serializer for &'a mut FastPathRespSerializer<'a> {
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(ser::Error::custom("FastPath only supports primitives"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FastPathCommandBuilder;
+
+    #[test]
+    fn primitive_args_stay_on_the_fast_path() {
+        // Regression guard: the common primitive case must keep working exactly
+        // as before the WR-01 fallback was added.
+        let command = FastPathCommandBuilder::set("key", "value");
+        assert_eq!(b"SET", command.name().as_ref());
+        assert_eq!(2, command.num_args());
+        assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
+        assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
+    }
+
+    #[test]
+    fn none_argument_falls_back_instead_of_panicking() {
+        // WR-01: `set(key, None::<String>)` used to panic the caller thread.
+        // It must now fall back to the generic builder, which drops the None as
+        // a no-op (a caller-visible arity error from Redis, not a panic).
+        let command = FastPathCommandBuilder::set("key", None::<String>);
+        assert_eq!(b"SET", command.name().as_ref());
+        assert_eq!(1, command.num_args());
+        assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
+        assert_eq!(None, command.get_arg(1));
+    }
+
+    #[test]
+    fn collection_argument_falls_back_to_a_flattened_command() {
+        // WR-01: `lpush(key, vec!["a","b"])` used to panic. The generic builder
+        // flattens the sequence into a correct multi-element LPUSH.
+        let command = FastPathCommandBuilder::lpush("key", vec!["a", "b"]);
+        assert_eq!(b"LPUSH", command.name().as_ref());
+        assert_eq!(3, command.num_args());
+        assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
+        assert_eq!(Some(&b"a"[..]), command.get_arg(1).as_deref());
+        assert_eq!(Some(&b"b"[..]), command.get_arg(2).as_deref());
+    }
+
+    #[test]
+    fn some_primitive_still_serializes_on_the_fast_path() {
+        // `serialize_some` delegates, so `Some(primitive)` stays on the fast
+        // path — only `None` degrades.
+        let command = FastPathCommandBuilder::set("key", Some("value"));
+        assert_eq!(2, command.num_args());
+        assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
     }
 }

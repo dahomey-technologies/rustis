@@ -26,6 +26,12 @@ impl<'a> RespFrameParser<'a> {
         Self { buf, pos: 0 }
     }
 
+    /// Creates a parser over `buf` positioned at `pos`, so parsed frames carry
+    /// ranges absolute to `buf` rather than to a sub-slice.
+    pub fn new_at(buf: &'a [u8], pos: usize) -> Self {
+        Self { buf, pos }
+    }
+
     #[inline(always)]
     pub fn parse(&mut self) -> Result<(RespFrame, usize)> {
         let tag = self.buf[self.pos];

@@ -68,9 +68,10 @@ pub(crate) struct ArgLayout {
     /// Redis limits bulk strings to 512MB, so `u32` is more than sufficient.
     pub len: u32,
 
-    /// The CRC16 hash slot (0-16383) calculated for this argument.
-    /// This is pre-calculated by the client thread to allow O(1) routing
-    /// in Cluster mode without further CPU overhead in the network thread.
+    /// The CRC16 hash slot (0-16383) of this argument, when it is a key.
+    /// Populated on the *caller* thread by [`Command::compute_slots`], and only
+    /// when the client runs in Cluster mode, so the shared network thread keeps
+    /// O(1) routing and standalone clients pay no CRC16. Left at 0 otherwise.
     pub slot: u16,
 
     /// Bitwise flags for argument properties.
@@ -94,11 +95,11 @@ impl ArgLayout {
     }
 
     #[inline(always)]
-    pub fn key(range: std::ops::Range<usize>, slot: u16) -> Self {
+    pub fn key(range: std::ops::Range<usize>) -> Self {
         Self {
             start: range.start as u64,
             len: range.end as u32 - range.start as u32,
-            slot,
+            slot: 0,
             flags: Self::IS_KEY,
         }
     }
@@ -237,6 +238,20 @@ impl Command {
             .iter()
             .filter(|&al| al.is_key())
             .map(|al| al.slot)
+    }
+
+    /// Computes the CRC16 hash slot of every key argument from its bytes.
+    ///
+    /// Runs on the *caller* thread and must be invoked only in Cluster mode,
+    /// before the command is handed to the shared network thread (which then
+    /// routes in O(1)) or its slots are inspected. Standalone clients skip this
+    /// entirely and pay no CRC16 on their hot path.
+    pub(crate) fn compute_slots(&mut self) {
+        for layout in &mut self.args_layout {
+            if layout.is_key() {
+                layout.slot = hash_slot(&self.buffer[layout.range()]);
+            }
+        }
     }
 
     pub fn request_policy(&self) -> Option<RequestPolicy> {
@@ -405,7 +420,9 @@ impl CommandBuilder {
         }
     }
 
-    /// Adds a Key argument and calculates its CRC16 slot immediately.
+    /// Adds a Key argument, marking it for Cluster routing. The CRC16 slot is
+    /// computed later by [`Command::compute_slots`], on the caller thread and
+    /// only in Cluster mode.
     #[must_use]
     #[inline(always)]
     pub fn key(mut self, key: impl Serialize) -> Self {
@@ -415,8 +432,6 @@ impl CommandBuilder {
 
         for layout in &mut self.args_layout[old_len..new_len] {
             layout.set_key();
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
         }
 
         self
@@ -438,8 +453,6 @@ impl CommandBuilder {
 
         for layout in &mut self.args_layout[old_len + 1..new_len] {
             layout.flags |= ArgLayout::IS_KEY;
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
         }
 
         self
@@ -456,8 +469,6 @@ impl CommandBuilder {
 
         for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
             layout.flags |= ArgLayout::IS_KEY;
-            let key_bytes = &self.buffer[layout.range()];
-            layout.slot = hash_slot(key_bytes);
         }
 
         self

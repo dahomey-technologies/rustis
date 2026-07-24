@@ -284,7 +284,16 @@ impl Client {
     }
 
     #[inline]
-    fn send_message(&self, message: Message) -> Result<()> {
+    fn send_message(&self, mut message: Message) -> Result<()> {
+        // Compute cluster hash slots here, on the caller thread, and only in
+        // cluster mode. This keeps CRC16 off the shared network thread (the
+        // multiplexer domain) while sparing standalone clients the cost.
+        if self.is_cluster {
+            for command in message.commands_mut() {
+                command.compute_slots();
+            }
+        }
+
         if let Some(shared) = self.shared.as_ref() {
             trace!(
                 "[{}], Will enqueue message: {message:?}",

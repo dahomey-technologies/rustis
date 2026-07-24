@@ -92,6 +92,12 @@ impl Transaction {
     /// ```
     pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
         if self.client.is_cluster() {
+            // Slots are no longer computed at command-build time; populate them
+            // here (caller thread, cluster only) before the cross-slot check
+            // reads them.
+            for command in &mut self.commands {
+                command.compute_slots();
+            }
             Self::check_single_slot(&self.commands)?;
         }
 

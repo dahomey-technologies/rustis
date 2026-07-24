@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::resp::next_sequence_counter;
-use crate::resp::{ArgLayout, Command, cmd, hash_slot};
+use crate::resp::{ArgLayout, Command, cmd};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
@@ -39,16 +39,15 @@ impl FastPathCommandBuilder {
         Ok(self)
     }
 
-    /// Same as [`Self::try_arg`] for a key, also recording its hash slot.
+    /// Same as [`Self::try_arg`] for a key, marking it for Cluster routing. The
+    /// CRC16 slot is computed later by [`Command::compute_slots`], on the caller
+    /// thread and only in Cluster mode.
     #[inline(always)]
     fn try_key(mut self, key: impl Serialize) -> Result<Self, Error> {
         let mut serializer = FastPathRespSerializer::new(&mut self.buffer);
         let range = key.serialize(&mut serializer)?;
 
-        self.args_layout.push(ArgLayout::key(
-            range.clone(),
-            hash_slot(&self.buffer[range]),
-        ));
+        self.args_layout.push(ArgLayout::key(range));
         Ok(self)
     }
 

@@ -53,6 +53,13 @@ pub(crate) struct SendBatchTestHook {
     /// Records, in feed order, `(command name, number of retry reasons fed)`
     /// for every command actually fed to the connection.
     fed_retry_reasons: Arc<std::sync::Mutex<Vec<(String, usize)>>>,
+    /// When set, the next fed command whose name matches is armed to kill the
+    /// connection on its `usize`-th following read (see
+    /// [`CommandBuilder::kill_connection_on_read`]). Consumed on first match,
+    /// so it fires exactly once. Lets a test inject a send failure onto a
+    /// command it does not build itself, such as the sink's internal
+    /// `UNSUBSCRIBE`.
+    kill_on_read_by_name: Arc<std::sync::Mutex<Option<(String, usize)>>>,
 }
 
 #[cfg(test)]
@@ -92,6 +99,29 @@ impl SendBatchTestHook {
             .lock()
             .expect("send batch test hook mutex poisoned")
             .push((command_name, num_reasons));
+    }
+
+    /// Arms the connection to be killed on the `num_reads`-th read following the
+    /// next fed command named `command_name`.
+    pub fn arm_kill_on_read_for(&self, command_name: &str, num_reads: usize) {
+        *self
+            .kill_on_read_by_name
+            .lock()
+            .expect("send batch test hook mutex poisoned") =
+            Some((command_name.to_owned(), num_reads));
+    }
+
+    /// If the next queued kill matches `command_name`, consumes it and returns
+    /// the read count to arm.
+    fn take_kill_on_read_for(&self, command_name: &str) -> Option<usize> {
+        let mut guard = self
+            .kill_on_read_by_name
+            .lock()
+            .expect("send batch test hook mutex poisoned");
+        if guard.as_ref().is_some_and(|(name, _)| name == command_name) {
+            return guard.take().map(|(_, num_reads)| num_reads);
+        }
+        None
     }
 }
 
@@ -423,10 +453,17 @@ impl NetworkHandler {
                 // so a test can assert reasons do not leak across messages.
                 #[cfg(test)]
                 if let Some(hook) = &self.send_batch_test_hook {
-                    hook.record_fed(
-                        String::from_utf8_lossy(&command.name()).into_owned(),
-                        retry_reasons.len(),
-                    );
+                    let command_name = String::from_utf8_lossy(&command.name()).into_owned();
+                    hook.record_fed(command_name.clone(), retry_reasons.len());
+
+                    // Arm a read-side kill onto this command if a test queued one
+                    // for its name, reusing the per-command countdown so the
+                    // existing `feed` path picks it up.
+                    if let Some(num_reads) = hook.take_kill_on_read_for(&command_name) {
+                        command
+                            .kill_connection_on_read
+                            .store(num_reads, std::sync::atomic::Ordering::SeqCst);
+                    }
                 }
 
                 if let Err(e) = self.connection.feed(command, &retry_reasons).await {

@@ -7,6 +7,7 @@ use crate::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
         ListCommands, ServerCommands, StringCommands,
     },
+    network::timeout,
     resp::cmd,
     tests::{get_default_addr, get_test_client, log_try_init},
 };
@@ -64,6 +65,56 @@ async fn on_reconnect() -> Result<()> {
 
     client1.close().await?;
     client2.close().await?;
+
+    Ok(())
+}
+
+/// Dropping the last two clones of a client concurrently must still shut the
+/// shared connection down. Deciding "am I the last clone?" with two independent
+/// `Arc`s and `try_unwrap` let both droppers observe a strong count of 2 and
+/// each back off, so the message channel was never closed and the network task,
+/// socket and buffers leaked forever. A single shared refcount resolved with
+/// `Arc::into_inner` hands exactly one dropper the shutdown, race or not.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn concurrent_drop_of_the_last_clones_still_closes_the_connection() -> Result<()> {
+    use std::sync::{Arc as StdArc, Barrier};
+
+    log_try_init();
+
+    // The losing interleaving is a narrow window between the swap-out and the
+    // ownership check, so a single pair rarely hits it. Repeat enough that the
+    // leak surfaces on the buggy path.
+    for _ in 0..300 {
+        let client = get_test_client().await?;
+        let mut on_reconnect = client.on_reconnect();
+        let clone = client.clone();
+
+        // Release both threads together so their drops overlap.
+        let barrier = StdArc::new(Barrier::new(2));
+        let barrier2 = barrier.clone();
+
+        let h1 = std::thread::spawn(move || {
+            barrier.wait();
+            drop(client);
+        });
+        let h2 = std::thread::spawn(move || {
+            barrier2.wait();
+            drop(clone);
+        });
+        h1.join().unwrap();
+        h2.join().unwrap();
+
+        // Once the last clone is gone the network task ends and drops the only
+        // remaining reconnect sender, so the receiver reports the channel
+        // closed. A leaked task keeps its sender alive and this times out.
+        let closed = timeout(Duration::from_secs(5), on_reconnect.recv()).await;
+        assert!(
+            matches!(closed, Ok(Err(_))),
+            "the network task must end when the last client clone is dropped, got {closed:?}"
+        );
+    }
 
     Ok(())
 }

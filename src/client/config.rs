@@ -110,6 +110,12 @@ pub struct Config {
     /// Only present in debug builds; it carries no cost in release builds.
     #[cfg(test)]
     pub(crate) send_batch_test_hook: Option<crate::network::SendBatchTestHook>,
+    /// Test-only hook to make the cluster topology-refresh failure path
+    /// observable (simulate a node vanishing while requests are in flight).
+    ///
+    /// Only present in test builds; it carries no cost in release builds.
+    #[cfg(test)]
+    pub(crate) cluster_test_hook: Option<crate::network::ClusterTestHook>,
 }
 
 impl fmt::Debug for Config {
@@ -155,6 +161,8 @@ impl Default for Config {
             reconnection: Default::default(),
             #[cfg(test)]
             send_batch_test_hook: None,
+            #[cfg(test)]
+            cluster_test_hook: None,
         }
     }
 }

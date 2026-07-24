@@ -26,7 +26,40 @@ use std::{
     task::Poll,
 };
 
-#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
+/// Test-only handle used to make the cluster topology-change failure path
+/// observable. Shared (via `Arc`) between a test and the `ClusterConnection`
+/// living inside the network task; like `SendBatchTestHook`, it exists only
+/// when the crate itself is built as a test target.
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub(crate) struct ClusterTestHook {
+    /// When armed, the node serving the oldest in-flight request is removed
+    /// from the topology and its slot ranges are handed over to a surviving
+    /// node, reproducing the state a topology refresh leaves behind when a node
+    /// disappears while requests are in flight against it.
+    drop_front_pending_node: Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[cfg(test)]
+impl ClusterTestHook {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Arms a one-shot removal of the node serving the oldest in-flight request.
+    /// It is consumed only once such a request actually exists.
+    pub fn arm_drop_front_pending_node(&self) {
+        self.drop_front_pending_node
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn take_drop_front_pending_node(&self) -> bool {
+        self.drop_front_pending_node
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[repr(transparent)]
 struct NodeId(Arc<str>);
 
@@ -124,6 +157,8 @@ pub struct ClusterConnection {
     tag: Arc<str>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
+    #[cfg(test)]
+    test_hook: Option<ClusterTestHook>,
 }
 
 impl ClusterConnection {
@@ -146,6 +181,8 @@ impl ClusterConnection {
             pending_requests: VecDeque::new(),
             tag,
             transaction_state: TransactionState::default(),
+            #[cfg(test)]
+            test_hook: config.cluster_test_hook.clone(),
         })
     }
 
@@ -465,10 +502,68 @@ impl ClusterConnection {
         Err(Error::Client(ClientError::CommandNotSupportedInCluster))
     }
 
+    /// A pending request is orphaned once one of its still-unresolved
+    /// sub-requests targets a node that is no longer part of the cluster: a
+    /// topology refresh removed that node, and its connection died with it, so
+    /// the response can never arrive. Since `read()` pops the front request only
+    /// once **all** its sub-requests resolve, an orphaned request left at the
+    /// front would block every subsequent reply and hang all callers.
+    /// Test-only: reproduce the state a topology refresh leaves behind when the
+    /// node serving the oldest in-flight request disappears from the cluster.
+    /// Consumed only once such a request exists, so a test needs no timing
+    /// assumption about when its command reaches the wire.
+    #[cfg(test)]
+    fn apply_test_node_drop(&mut self) {
+        let Some(hook) = self.test_hook.clone() else {
+            return;
+        };
+
+        let Some(victim) = self
+            .pending_requests
+            .front()
+            .and_then(|ri| ri.sub_requests.iter().find(|sr| sr.result.is_none()))
+            .map(|sr| sr.node_id.clone())
+        else {
+            return;
+        };
+
+        // Keep at least one node so the cluster stays usable.
+        if self.nodes.len() < 2 || !hook.take_drop_front_pending_node() {
+            return;
+        }
+
+        self.nodes.retain(|node| node.id != victim);
+        debug!("[{}] test hook removed node {victim:?}", self.tag);
+    }
+
+    fn front_request_references_missing_node(&self) -> bool {
+        let Some(request_info) = self.pending_requests.front() else {
+            return false;
+        };
+
+        request_info
+            .sub_requests
+            .iter()
+            .any(|sr| sr.result.is_none() && self.get_node_index_by_id(&sr.node_id).is_none())
+    }
+
     pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         let request_info: RequestInfo;
 
         loop {
+            #[cfg(test)]
+            self.apply_test_node_drop();
+
+            // Fail an orphaned front request instead of waiting forever for a
+            // reply that will never come. It is reported as a lost connection,
+            // not as a redirection: replaying it unconditionally would
+            // re-execute a command whose caller may have opted out of retries,
+            // and which the vanished node may well have already run.
+            if self.front_request_references_missing_node() {
+                self.pending_requests.pop_front();
+                return Some(Err(Error::DisconnectedByPeer));
+            }
+
             if let Some(ri) = self.pending_requests.front()
                 && ri.sub_requests.iter().all(|sr| sr.result.is_some())
             {
@@ -526,6 +621,15 @@ impl ClusterConnection {
         let request_info: RequestInfo;
 
         loop {
+            #[cfg(test)]
+            self.apply_test_node_drop();
+
+            // See `read()`: an orphaned front request must not block the queue.
+            if self.front_request_references_missing_node() {
+                self.pending_requests.pop_front();
+                return Poll::Ready(Some(Err(Error::DisconnectedByPeer)));
+            }
+
             if let Some(ri) = self.pending_requests.front()
                 && ri.sub_requests.iter().all(|sr| sr.result.is_some())
             {
@@ -816,6 +920,16 @@ impl ClusterConnection {
 
         self.nodes = nodes;
         self.slot_ranges = slot_ranges;
+
+        // Every in-flight request was fed to the previous per-node connections,
+        // which are now gone; their responses can never arrive. Left in place,
+        // the request stuck at the front of the queue would block every
+        // subsequent reply from surfacing (`read()` pops the front only once
+        // all its sub-requests resolve) and hang all callers. Drop them here:
+        // the network handler owns caller delivery and has already failed the
+        // non-retryable messages and re-queued the retryable ones for replay,
+        // which will repopulate `pending_requests` consistently.
+        self.pending_requests.clear();
 
         Ok(())
 

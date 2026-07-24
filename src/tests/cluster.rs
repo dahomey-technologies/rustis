@@ -1,15 +1,19 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
-    client::{BatchPreparedCommand, Client},
+    client::{BatchPreparedCommand, Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClusterCommands, ClusterNodeResult,
         ClusterSetSlotSubCommand::{self, Importing, Migrating, Node},
         ClusterShardResult, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
         MigrateOptions, ScriptingCommands, ServerCommands, StringCommands,
     },
-    network::{ClusterConnection, Version},
+    network::{ClusterConnection, ClusterTestHook, Version, timeout},
+    resp::cmd,
     sleep, spawn,
-    tests::{TestClient, get_cluster_test_client, get_cluster_test_client_with_command_timeout},
+    tests::{
+        TestClient, get_cluster_test_client, get_cluster_test_client_with_command_timeout,
+        get_default_host,
+    },
 };
 use futures_util::try_join;
 use serial_test::serial;
@@ -363,6 +367,90 @@ async fn get_loop() -> Result<()> {
         let _value: Result<String> = client.get("key").await;
         sleep(Duration::from_secs(1)).await;
     }
+
+    Ok(())
+}
+
+/// On a cluster reconnect, the in-flight `pending_requests` reference the old
+/// per-node connections and can never be fulfilled. If they are not purged, the
+/// stale request stuck at the front of the queue blocks every subsequent reply
+/// from surfacing (`read()` pops the front only once all its sub-requests are
+/// resolved) and every caller hangs. A follow-up command must still complete.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn reconnect_purges_pending_requests_so_callers_do_not_hang() -> Result<()> {
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    // Make the in-flight command retryable so it survives the reconnect purge
+    // and is replayed, exercising the queue reconciliation.
+    config.retry_on_error = true;
+    let client = Client::connect(config).await?;
+
+    // Send a command and close its node connection on the next read, before its
+    // response is matched, so it is in flight when the cluster reconnect fires.
+    client.send_and_forget(
+        cmd("GET").arg("clu02_key").kill_connection_on_read(1),
+        Some(true),
+    )?;
+
+    // Let the reconnection settle.
+    sleep(Duration::from_millis(500)).await;
+
+    // A follow-up command must receive its own reply rather than hang behind a
+    // stale, never-fulfilled in-flight request.
+    let echoed: String = timeout(
+        Duration::from_secs(2),
+        client.send(cmd("ECHO").arg("clu02_marker"), None),
+    )
+    .await??;
+
+    assert_eq!(
+        "clu02_marker", echoed,
+        "the follow-up response must be routed to its own caller"
+    );
+
+    Ok(())
+}
+
+/// When a topology refresh removes a node while requests are in flight against
+/// it, those requests are orphaned: their response can never arrive. Left in
+/// the queue, an orphaned request stuck at the front blocks every subsequent
+/// reply (`read()` pops the front only once all its sub-requests resolve) and
+/// hangs all callers. Orphaned requests must instead surface as a retryable
+/// error so the handler replays them against the refreshed topology.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn refresh_removing_a_node_does_not_hang_in_flight_callers() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    config.retry_on_error = true;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    // Arm the node removal before issuing anything: it is consumed on the first
+    // read that finds an in-flight request, so the command below is guaranteed
+    // to be the one orphaned, with no timing assumption.
+    cluster_hook.arm_drop_front_pending_node();
+
+    // This command is in flight against the node that owns its key when that
+    // node disappears from the topology, so its reply can never arrive.
+    client.send_and_forget(cmd("GET").key("clu02_key"), None)?;
+
+    // A follow-up caller must reach a verdict — a reply, or an error if it was
+    // itself routed to the removed node — instead of hanging behind an orphaned
+    // request that can never be fulfilled. Completing within the timeout is the
+    // assertion: without the purge, this call never returns.
+    let _: Result<String> = timeout(Duration::from_secs(3), client.send(cmd("PING"), None)).await?;
 
     Ok(())
 }

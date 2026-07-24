@@ -24,6 +24,19 @@ pub(crate) const PUSH_TAG: u8 = b'>';
 /// unlike a panic — is not catchable and aborts the whole process.
 pub(crate) const MAX_NESTING_DEPTH: usize = 128;
 
+/// Maximum byte length the parser accepts for a single bulk string, bulk error
+/// or verbatim string, checked against the declared header before the payload
+/// is trusted. Matches Redis's default `proto-max-bulk-len` (512 MiB): generous
+/// for any legitimate reply, while stopping a crafted `$999999999999\r\n` header
+/// from making the streaming decoder accumulate an unbounded buffer (HARD-02).
+pub(crate) const MAX_BULK_LENGTH: usize = 512 * 1024 * 1024;
+
+/// Maximum number of elements the parser accepts in a single collection (array,
+/// set, push, or map — counted after the map key/value doubling). Bounds an
+/// attacker-controlled loop count and any future pre-reservation (HARD-02);
+/// generous for real replies.
+pub(crate) const MAX_COLLECTION_LENGTH: usize = 128 * 1024 * 1024;
+
 pub struct RespFrameParser<'a> {
     buf: &'a [u8],
     pos: usize,
@@ -61,6 +74,25 @@ impl<'a> RespFrameParser<'a> {
     #[inline]
     fn leave(&mut self) {
         self.depth -= 1;
+    }
+
+    /// Rejects a bulk-family length that exceeds [`MAX_BULK_LENGTH`]. `len` must
+    /// already be known non-negative.
+    #[inline]
+    fn check_bulk_len(len: i64) -> Result<()> {
+        if len as usize > MAX_BULK_LENGTH {
+            return Err(Error::Client(ClientError::BulkLengthTooLarge));
+        }
+        Ok(())
+    }
+
+    /// Rejects a collection cardinality that exceeds [`MAX_COLLECTION_LENGTH`].
+    #[inline]
+    fn check_collection_len(len: usize) -> Result<()> {
+        if len > MAX_COLLECTION_LENGTH {
+            return Err(Error::Client(ClientError::CollectionLengthTooLarge));
+        }
+        Ok(())
     }
 
     #[inline(always)]
@@ -118,6 +150,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 0 {
                         return Err(Error::Client(ClientError::CannotParseBulkString));
                     }
+                    Self::check_bulk_len(len)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -141,6 +174,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 4 {
                         return Err(Error::Client(ClientError::VerbatimStringTooShort));
                     }
+                    Self::check_bulk_len(len)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -158,6 +192,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
+                Self::check_bulk_len(len)?;
                 let start = self.pos;
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
@@ -226,6 +261,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 0 {
                         return Err(Error::Client(ClientError::CannotParseBulkString));
                     }
+                    Self::check_bulk_len(len)?;
                     RespFrame::BulkString(self.pos..self.pos + len as usize)
                 }
             }
@@ -240,6 +276,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 4 {
                         return Err(Error::Client(ClientError::VerbatimStringTooShort));
                     }
+                    Self::check_bulk_len(len)?;
                     RespFrame::BulkString(self.pos + 4..self.pos + 4 + len as usize)
                 }
             }
@@ -248,6 +285,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
+                Self::check_bulk_len(len)?;
                 RespFrame::Error(self.pos..self.pos + len as usize)
             }
             ARRAY_TAG => match self.parse_collection(1)? {
@@ -333,6 +371,7 @@ impl<'a> RespFrameParser<'a> {
             return Err(Error::Client(ClientError::CannotParseSequence));
         }
         let len = len as usize * multiplier;
+        Self::check_collection_len(len)?;
         let mut ranges = [0..0, 0..0, 0..0, 0..0, 0..0];
         let range_len = std::cmp::min(len, ranges.len());
 
@@ -374,6 +413,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseBulkString));
                 }
+                Self::check_bulk_len(len)?;
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
                     return Err(Error::EOF);
@@ -393,6 +433,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseSequence));
                 }
+                Self::check_collection_len(len as usize)?;
                 self.enter()?;
                 for _ in 0..len as usize {
                     self.parse_value()?;
@@ -409,6 +450,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseMap));
                 }
+                Self::check_collection_len(len as usize * 2)?;
                 self.enter()?;
                 for _ in 0..len as usize * 2 {
                     self.parse_value()?;

@@ -214,6 +214,7 @@ pub enum Error {
     #[error("End of stream reached")]
     EOF,
     /// Raised when a tokio join error occurs
+    #[cfg(feature = "tokio-runtime")]
     #[error("tokio join error: {0}")]
     TokioJoin(Arc<tokio::task::JoinError>),
     /// Raised when oneshot channel is canceled
@@ -270,6 +271,7 @@ impl From<rustls::pki_types::InvalidDnsNameError> for Error {
     }
 }
 
+#[cfg(feature = "tokio-runtime")]
 impl From<tokio::task::JoinError> for Error {
     fn from(value: tokio::task::JoinError) -> Self {
         Error::TokioJoin(Arc::new(value))

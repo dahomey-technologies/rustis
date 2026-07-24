@@ -36,6 +36,36 @@ jobs:
       - name: Checking style
         run: cargo fmt --all -- --check
 
+  # Compile a curated set of feature combinations (compile-only, no server
+  # needed). Cargo features are additive, so `--no-default-features` is used to
+  # pin exactly one runtime per entry — otherwise the default `tokio-runtime`
+  # would mask a broken `async-std-runtime` build. This is what would have
+  # caught CACHE-04 (`client-cache` + `async-std-runtime` does not compile).
+  check-features:
+    name: Check features (${{ matrix.features }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          # tokio runtime
+          - tokio-runtime
+          - tokio-runtime,pool,json,client-cache
+          - tokio-runtime,tokio-rustls,pool,json,client-cache
+          - tokio-runtime,tokio-native-tls,pool,json,client-cache
+          # async-std runtime (pool is tokio-only by design — bb8 constraint)
+          - async-std-runtime
+          - async-std-runtime,json,client-cache
+          - async-std-runtime,async-std-native-tls,json,client-cache
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: cargo check --no-default-features --features ${{ matrix.features }}
+        run: cargo check --no-default-features --features ${{ matrix.features }}
+
   test:
     name: Test
     runs-on: ubuntu-latest

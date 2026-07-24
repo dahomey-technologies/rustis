@@ -1,10 +1,11 @@
 use crate::{
-    Result,
+    ClientError, Error, Result,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         ListCommands, PubSubCommands, ServerCommands, StringCommands,
     },
+    network::SendBatchTestHook,
     spawn,
     tests::{
         get_cluster_test_client, get_default_addr, get_default_config, get_test_client,
@@ -695,6 +696,50 @@ async fn unsubscribe() -> Result<()> {
 
     pub_sub_stream.close().await?;
     regular_client.close().await?;
+
+    Ok(())
+}
+
+/// A failed `unsubscribe` must not drop the channel from local tracking: the
+/// subscription still stands server-side, so forgetting it locally would leave a
+/// ghost the stream keeps receiving and `close`/`Drop` no longer cancel. The
+/// asymmetry with `subscribe`, which inserts only after success, is the defect.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn a_failed_unsubscribe_keeps_the_channel_tracked() -> Result<()> {
+    log_try_init();
+
+    let hook = SendBatchTestHook::new();
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    config.send_batch_test_hook = Some(hook.clone());
+    let pub_sub_client = Client::connect(config).await?;
+
+    let mut pub_sub_stream = pub_sub_client.subscribe(["ps03_a", "ps03_b"]).await?;
+
+    // Kill the connection on the confirmation read of the next UNSUBSCRIBE: the
+    // command reaches the server but its caller sees a send failure, since the
+    // non-retryable command is purged on reconnect and the await returns Err.
+    hook.arm_kill_on_read_for("UNSUBSCRIBE", 1);
+
+    let unsubscribe_result = pub_sub_stream.unsubscribe("ps03_b").await;
+    assert!(
+        unsubscribe_result.is_err(),
+        "the unsubscribe send must fail for this test to be meaningful, got {unsubscribe_result:?}"
+    );
+
+    // The channel is still subscribed, so re-subscribing to it must be rejected
+    // as a duplicate. On the buggy path it was forgotten before the failed send,
+    // so the re-subscribe is wrongly accepted.
+    let resubscribe_result = pub_sub_stream.subscribe("ps03_b").await;
+    assert!(
+        matches!(
+            resubscribe_result,
+            Err(Error::Client(ClientError::AlreadySubscribed))
+        ),
+        "a channel whose unsubscribe failed must remain tracked, got {resubscribe_result:?}"
+    );
 
     Ok(())
 }

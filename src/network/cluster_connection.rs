@@ -298,7 +298,7 @@ impl ClusterConnection {
             self.transaction_state.node_index = Some(node_idx);
         }
 
-        match command.name().as_ref() {
+        match command.name() {
             b"MULTI" => {
                 // We do not send it to the network yet. We wait for the first key-based command
                 // to decide which shard owns this transaction.
@@ -1587,7 +1587,7 @@ impl ClusterConnection {
 
 pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Command {
     // Initialize a new command with the same base name
-    let mut shard_command = CommandBuilder::new(&command.name());
+    let mut shard_command = CommandBuilder::new(command.name());
 
     // Tracks how many subsequent arguments to keep after a valid key
     let mut keep_next = 0;

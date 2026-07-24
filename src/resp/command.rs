@@ -122,7 +122,7 @@ impl ArgLayout {
 
 impl<'a> From<&'a Command> for CommandKind {
     fn from(command: &'a Command) -> Self {
-        match command.name().as_ref() {
+        match command.name() {
             b"UNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Channel),
             b"PUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::Pattern),
             b"SUNSUBSCRIBE" => CommandKind::Unsbuscribe(SubscriptionType::ShardChannel),
@@ -200,9 +200,13 @@ impl Command {
         &self.kind
     }
 
-    pub fn name(&self) -> Bytes {
+    /// Borrows the command name from the buffer.
+    ///
+    /// Returns a plain slice rather than an owned [`Bytes`] so that merely
+    /// inspecting the name (e.g. classification) touches no atomic refcount.
+    pub fn name(&self) -> &[u8] {
         let (start, len) = self.name_layout;
-        self.buffer.slice(start..start + len)
+        &self.buffer[start..start + len]
     }
 
     pub fn get_arg(&self, index: usize) -> Option<Bytes> {
@@ -292,7 +296,7 @@ impl Hash for Command {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        String::from_utf8_lossy(&self.name()).fmt(f)?;
+        String::from_utf8_lossy(self.name()).fmt(f)?;
         for arg in self.args() {
             f.write_char(' ')?;
             String::from_utf8_lossy(&arg).fmt(f)?;

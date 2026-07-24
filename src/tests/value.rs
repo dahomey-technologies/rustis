@@ -102,3 +102,12 @@ fn display() {
         ])
     );
 }
+
+#[test]
+fn boolean_equality() {
+    // Two booleans must compare on their inner value, not merely on the variant.
+    assert_eq!(Value::Boolean(true), Value::Boolean(true));
+    assert_eq!(Value::Boolean(false), Value::Boolean(false));
+    assert_ne!(Value::Boolean(true), Value::Boolean(false));
+    assert_ne!(Value::Boolean(false), Value::Boolean(true));
+}

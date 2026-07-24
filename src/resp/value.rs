@@ -70,6 +70,7 @@ impl PartialEq for Value {
             (Self::SimpleString(l0), Self::SimpleString(r0)) => l0 == r0,
             (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
             (Self::Double(l0), Self::Double(r0)) => l0 == r0,
+            (Self::Boolean(l0), Self::Boolean(r0)) => l0 == r0,
             (Self::BulkString(l0), Self::BulkString(r0)) => l0 == r0,
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,
             (Self::Map(l0), Self::Map(r0)) => l0 == r0,

@@ -24,6 +24,7 @@ mod json;
 mod json_commands;
 mod list_commands;
 mod multiplexed_client;
+mod network_handler;
 mod pipeline;
 #[cfg(feature = "pool")]
 mod pooled_client_manager;

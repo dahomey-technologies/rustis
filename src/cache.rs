@@ -391,20 +391,6 @@ impl Cache {
             .await
     }
 
-    /// Executes the `ZREMRANGEBYSCORE` command with client-side caching.
-    pub async fn zremrangebyscore(
-        &self,
-        key: impl Serialize,
-        start: impl Serialize,
-        stop: impl Serialize,
-    ) -> Result<usize> {
-        self.process_prepared_command(
-            key_to_bulk_string(&key),
-            self.client.zremrangebyscore(key, start, stop),
-        )
-        .await
-    }
-
     /// Executes the `ZREVRANK` command with client-side caching.
     pub async fn zrevrank(
         &self,

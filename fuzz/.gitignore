@@ -1,0 +1,7 @@
+/target
+/Cargo.lock
+/artifacts
+/coverage
+# Machine-generated, coverage-guided corpus — ephemeral, can reach tens of MiB.
+# Curated starter inputs are tracked under seeds/ instead.
+/corpus

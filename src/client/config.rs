@@ -108,7 +108,7 @@ pub struct Config {
     /// Test-only hook to observe and inject retry reasons in the send batch.
     ///
     /// Only present in debug builds; it carries no cost in release builds.
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub(crate) send_batch_test_hook: Option<crate::network::SendBatchTestHook>,
 }
 
@@ -153,7 +153,7 @@ impl Default for Config {
             no_delay: DEFAULT_NO_DELAY,
             retry_on_error: DEFAULT_RETRY_ON_ERROR,
             reconnection: Default::default(),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             send_batch_test_hook: None,
         }
     }

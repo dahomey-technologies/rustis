@@ -1,4 +1,4 @@
-#[cfg(debug_assertions)]
+#[cfg(test)]
 use crate::resp::next_sequence_counter;
 use crate::resp::{ArgLayout, Command, hash_slot};
 use bytes::{BufMut, BytesMut};
@@ -58,11 +58,11 @@ impl FastPathCommandBuilder {
             self.buffer.freeze(),
             self.name_layout,
             self.args_layout,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             0,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             0,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             next_sequence_counter(),
             None,
             None,

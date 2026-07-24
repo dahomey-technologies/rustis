@@ -1,8 +1,3 @@
-// Every test in this module drives test-only, `debug_assertions`-gated
-// infrastructure (the send-batch hook, `kill_connection_on_read`). In release
-// builds that infrastructure is compiled out, so the whole module must be too.
-#![cfg(debug_assertions)]
-
 use crate::{
     Result, RetryReason,
     client::{Client, ReconnectionConfig},

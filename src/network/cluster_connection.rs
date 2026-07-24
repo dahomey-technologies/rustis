@@ -89,7 +89,7 @@ struct RequestInfo {
     pub keys: SmallVec<[Bytes; 10]>,
     pub sub_requests: SmallVec<[SubRequest; 10]>,
     #[allow(unused)]
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub command_seq: usize,
 }
 
@@ -272,7 +272,7 @@ impl ClusterConnection {
             response_policy: command.response_policy(),
             sub_requests,
             keys: command.keys().collect(),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq: command.command_seq,
         };
 
@@ -304,7 +304,7 @@ impl ClusterConnection {
             response_policy: command.response_policy(),
             sub_requests,
             keys: command.keys().collect(),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq: command.command_seq,
         };
 
@@ -393,7 +393,7 @@ impl ClusterConnection {
             response_policy: command.response_policy(),
             keys: command.keys().collect(),
             sub_requests,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq: command.command_seq,
         };
 
@@ -454,7 +454,7 @@ impl ClusterConnection {
                 result: None,
             }],
             keys,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq: command.command_seq,
         };
         self.pending_requests.push_back(request_info);

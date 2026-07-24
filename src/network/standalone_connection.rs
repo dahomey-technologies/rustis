@@ -66,7 +66,7 @@ pub struct StandaloneConnection {
     tag: Arc<str>,
     /// Test-only: number of read attempts remaining before the connection
     /// simulates being closed (see [`Command::kill_connection_on_read`]).
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     kill_connection_on_read_countdown: usize,
 }
 
@@ -85,7 +85,7 @@ impl StandaloneConnection {
             } else {
                 format!("{}:{}:{}", config.connection_name, host, port).into()
             },
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             kill_connection_on_read_countdown: 0,
         };
 
@@ -106,7 +106,7 @@ impl StandaloneConnection {
     pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
         debug!("[{}] Sending command: {command}", self.tag);
 
-        #[cfg(debug_assertions)]
+        #[cfg(test)]
         if command.try_decrement_kill_connection_on_write() {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
@@ -120,7 +120,7 @@ impl StandaloneConnection {
 
         // Test-only: arm the read-kill countdown once, when the marked command
         // is fed. `swap` makes it one-shot so a replayed command cannot re-arm.
-        #[cfg(debug_assertions)]
+        #[cfg(test)]
         {
             let num_reads = command
                 .kill_connection_on_read
@@ -149,7 +149,7 @@ impl StandaloneConnection {
     pub async fn read(&mut self) -> Option<Result<RespResponse>> {
         // Test-only: simulate the connection being closed before any response
         // is delivered, once the armed countdown expires.
-        #[cfg(debug_assertions)]
+        #[cfg(test)]
         if self.kill_connection_on_read_countdown > 0 {
             self.kill_connection_on_read_countdown -= 1;
             if self.kill_connection_on_read_countdown == 0 {
@@ -178,7 +178,7 @@ impl StandaloneConnection {
 
     pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         // Test-only: mirror `read`'s simulated close on the drain path.
-        #[cfg(debug_assertions)]
+        #[cfg(test)]
         if self.kill_connection_on_read_countdown > 0 {
             self.kill_connection_on_read_countdown -= 1;
             if self.kill_connection_on_read_countdown == 0 {

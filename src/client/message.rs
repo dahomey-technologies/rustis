@@ -6,10 +6,10 @@ use crate::{
 use bytes::Bytes;
 use log::warn;
 use smallvec::SmallVec;
-#[cfg(debug_assertions)]
+#[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
@@ -78,7 +78,7 @@ pub(crate) struct Message {
     pub kind: MessageKind,
     pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
     pub retry_on_error: bool,
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     #[allow(unused)]
     pub(crate) message_seq: usize,
 }
@@ -93,7 +93,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -107,7 +107,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -125,7 +125,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -146,7 +146,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: true,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -161,7 +161,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: true,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }
@@ -174,7 +174,7 @@ impl Message {
             },
             retry_reasons: None,
             retry_on_error: false,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
         }
     }

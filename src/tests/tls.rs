@@ -30,3 +30,18 @@ async fn tls() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "native-tls")]
+#[test]
+fn native_tls_default_min_protocol_version() {
+    use crate::client::TlsConfig;
+
+    // The default native-tls minimum protocol version must be TLS 1.2:
+    // TLS 1.0/1.1 are deprecated by RFC 8996.
+    let config = TlsConfig::default();
+    let debug = format!("{config:?}");
+    assert!(
+        debug.contains("min_protocol_version: Some(Tlsv12)"),
+        "unexpected default min protocol version: {debug}"
+    );
+}

@@ -164,11 +164,16 @@ impl PubSubSplitSink {
     pub async fn unsubscribe(&mut self, channels: impl Serialize) -> Result<()> {
         let channels = CommandArgsMut::default().arg(channels).freeze();
 
+        self.client.unsubscribe(&channels).await?;
+
+        // Forget the channels only once the server has confirmed: on a send
+        // failure the subscription still stands server-side, so dropping it from
+        // local tracking here would leave a ghost the stream keeps receiving and
+        // `close`/`Drop` no longer clean up. `subscribe` is the reference — it
+        // inserts only after success.
         for channel in &channels {
             self.channels.remove(&channel);
         }
-
-        self.client.unsubscribe(channels).await?;
 
         Ok(())
     }
@@ -177,11 +182,12 @@ impl PubSubSplitSink {
     pub async fn punsubscribe(&mut self, patterns: impl Serialize) -> Result<()> {
         let patterns = CommandArgsMut::default().arg(patterns).freeze();
 
+        self.client.punsubscribe(&patterns).await?;
+
+        // Forget only after the server confirms — see `unsubscribe`.
         for pattern in &patterns {
             self.patterns.remove(&pattern);
         }
-
-        self.client.punsubscribe(patterns).await?;
 
         Ok(())
     }
@@ -190,11 +196,12 @@ impl PubSubSplitSink {
     pub async fn sunsubscribe(&mut self, shardchannels: impl Serialize) -> Result<()> {
         let shardchannels = CommandArgsMut::default().arg(shardchannels).freeze();
 
+        self.client.sunsubscribe(&shardchannels).await?;
+
+        // Forget only after the server confirms — see `unsubscribe`.
         for shardchannel in &shardchannels {
             self.shardchannels.remove(&shardchannel);
         }
-
-        self.client.sunsubscribe(shardchannels).await?;
 
         Ok(())
     }

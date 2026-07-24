@@ -7,6 +7,7 @@ use crate::{
         ConnectionCommands, HashCommands, ListCommands, SetCommands, SortedSetCommands,
         StringCommands, ZRangeOptions,
     },
+    network::{JoinHandle, spawn},
     resp::{
         BulkString, Command, CommandArgsMut, FastPathCommandBuilder, RespDeserializer,
         RespResponse, Response,
@@ -72,9 +73,9 @@ pub struct Cache {
     cache: Arc<MokaCache>,
     client: Client,
     #[allow(dead_code)]
-    invalidation_task: tokio::task::JoinHandle<()>,
+    invalidation_task: JoinHandle<()>,
     #[allow(dead_code)]
-    reconnection_task: tokio::task::JoinHandle<()>,
+    reconnection_task: JoinHandle<()>,
 }
 
 impl Cache {
@@ -95,7 +96,7 @@ impl Cache {
         let cache_clone = cache.clone();
 
         let connection_tag = client.connection_tag().to_owned();
-        let invalidation_task = tokio::spawn(async move {
+        let invalidation_task = spawn(async move {
             let mut stream = stream;
             while let Some(keys) = stream.next().await {
                 for key in keys {
@@ -116,7 +117,7 @@ impl Cache {
         let client_clone = client.clone();
         let connection_tag = client.connection_tag().to_owned();
         let mut on_reconnect = client.on_reconnect();
-        let reconnection_task = tokio::spawn(async move {
+        let reconnection_task = spawn(async move {
             while on_reconnect.recv().await.is_ok() {
                 log::debug!("[{connection_tag}] Re-enabling client tracking after reconnection");
 

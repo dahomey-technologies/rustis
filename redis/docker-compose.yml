@@ -67,9 +67,9 @@ services:
     command: >
       sh -c "
       echo 'port 26379' > /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
       echo 'sentinel announce-port 26379' >> /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
       redis-sentinel /tmp/sentinel.conf"
@@ -87,9 +87,9 @@ services:
     command: >
       sh -c "
       echo 'port 26380' > /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
       echo 'sentinel announce-port 26380' >> /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
       redis-server /tmp/sentinel.conf --sentinel"
@@ -107,9 +107,9 @@ services:
     command: >
       sh -c "
       echo 'port 26381' > /tmp/sentinel.conf;
+      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
       echo 'sentinel announce-port 26381' >> /tmp/sentinel.conf;
-      echo 'sentinel monitor myservice ${HOST_IP} 6381 2' >> /tmp/sentinel.conf;
       echo 'sentinel down-after-milliseconds myservice 1000' >> /tmp/sentinel.conf;
       echo 'sentinel failover-timeout myservice 1000' >> /tmp/sentinel.conf;
       redis-server /tmp/sentinel.conf --sentinel"

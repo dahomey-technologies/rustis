@@ -33,7 +33,7 @@ type Uri<'a> = (
 
 /// Configuration options for a [`client`](crate::client::Client)
 /// or a [`pooled client`](crate::client::PooledClientManager)
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     /// Connection server configuration (standalone, sentinel, or cluster)
     pub server: ServerConfig,
@@ -105,6 +105,29 @@ pub struct Config {
     pub retry_on_error: bool,
     /// Reconnection policy configuration (Constant, Linear or Exponential)
     pub reconnection: ReconnectionConfig,
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = f.debug_struct("Config");
+        s.field("server", &self.server)
+            .field("username", &self.username)
+            // never leak the password in clear text
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .field("database", &self.database);
+        #[cfg(any(feature = "native-tls", feature = "rustls"))]
+        s.field("tls_config", &self.tls_config);
+        s.field("connect_timeout", &self.connect_timeout)
+            .field("command_timeout", &self.command_timeout)
+            .field("auto_resubscribe", &self.auto_resubscribe)
+            .field("auto_remonitor", &self.auto_remonitor)
+            .field("connection_name", &self.connection_name)
+            .field("keep_alive", &self.keep_alive)
+            .field("no_delay", &self.no_delay)
+            .field("retry_on_error", &self.retry_on_error)
+            .field("reconnection", &self.reconnection)
+            .finish()
+    }
 }
 
 impl Default for Config {
@@ -458,10 +481,9 @@ impl Display for Config {
             f.write_str(username)?;
         }
 
-        if let Some(password) = &self.password {
-            f.write_char(':')?;
-            f.write_str(password)?;
-            f.write_char('@')?;
+        if self.password.is_some() {
+            // never leak the password in clear text (e.g. when logging a config)
+            f.write_str(":***@")?;
         }
 
         match &self.server {
@@ -621,14 +643,14 @@ impl Display for Config {
                 f.write_str("sentinel_username=")?;
                 f.write_str(username)?;
             }
-            if let Some(password) = password {
+            if password.is_some() {
                 if !query_separator {
                     f.write_char('?')?;
                 } else {
                     f.write_char('&')?;
                 }
-                f.write_str("sentinel_password=")?;
-                f.write_str(password)?;
+                // never leak the password in clear text
+                f.write_str("sentinel_password=***")?;
             }
         }
 
@@ -662,7 +684,7 @@ impl Default for ServerConfig {
 }
 
 /// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SentinelConfig {
     /// An array of `(host, port)` tuples for each known sentinel instance.
     pub instances: Vec<(String, u16)>,
@@ -678,6 +700,19 @@ pub struct SentinelConfig {
 
     /// Sentinel password
     pub password: Option<String>,
+}
+
+impl fmt::Debug for SentinelConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SentinelConfig")
+            .field("instances", &self.instances)
+            .field("service_name", &self.service_name)
+            .field("wait_between_failures", &self.wait_between_failures)
+            .field("username", &self.username)
+            // never leak the password in clear text
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 impl Default for SentinelConfig {
@@ -745,7 +780,8 @@ impl Default for TlsConfig {
         Self {
             identity: None,
             root_certificates: None,
-            min_protocol_version: Some(Protocol::Tlsv10),
+            // TLS 1.0/1.1 are deprecated by RFC 8996; default to TLS 1.2
+            min_protocol_version: Some(Protocol::Tlsv12),
             max_protocol_version: None,
             disable_built_in_roots: false,
             danger_accept_invalid_certs: false,

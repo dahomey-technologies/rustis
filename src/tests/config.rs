@@ -66,6 +66,31 @@ async fn reconnection() -> Result<()> {
 }
 
 #[test]
+fn display_masks_password() -> Result<()> {
+    // Display is the natural way to log a config; it must never leak the
+    // password in clear text.
+    assert_eq!(
+        "redis://:***@127.0.0.1",
+        "redis://:pwd@127.0.0.1".into_config()?.to_string()
+    );
+    assert_eq!(
+        "redis://username:***@127.0.0.1",
+        "redis://username:pwd@127.0.0.1".into_config()?.to_string()
+    );
+    assert_eq!(
+        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_username=foo&sentinel_password=***",
+        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_username=foo&sentinel_password=bar"
+            .into_config()?
+            .to_string()
+    );
+
+    // Debug must not leak the password either.
+    let debug = format!("{:?}", "redis://username:pwd@127.0.0.1".into_config()?);
+    assert!(!debug.contains("pwd"), "Debug leaked the password: {debug}");
+    Ok(())
+}
+
+#[test]
 fn into_config() -> Result<()> {
     assert_eq!("redis://127.0.0.1", "127.0.0.1".into_config()?.to_string());
     assert_eq!(
@@ -89,22 +114,22 @@ fn into_config() -> Result<()> {
         "redis://example.com".into_config()?.to_string()
     );
     assert_eq!(
-        "redis://:pwd@127.0.0.1",
+        "redis://:***@127.0.0.1",
         "redis://:pwd@127.0.0.1".into_config()?.to_string()
     );
     assert_eq!(
-        "redis://username:pwd@127.0.0.1",
+        "redis://username:***@127.0.0.1",
         "redis://username:pwd@127.0.0.1".into_config()?.to_string()
     );
     assert_eq!(
-        "redis://username:pwd@127.0.0.1/1",
+        "redis://username:***@127.0.0.1/1",
         "redis://username:pwd@127.0.0.1/1"
             .into_config()?
             .to_string()
     );
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
     assert_eq!(
-        "rediss://username:pwd@127.0.0.1/1",
+        "rediss://username:***@127.0.0.1/1",
         "rediss://username:pwd@127.0.0.1/1"
             .into_config()?
             .to_string()
@@ -184,14 +209,14 @@ fn into_config() -> Result<()> {
     );
 
     assert_eq!(
-        "redis+sentinel://username:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
+        "redis+sentinel://username:***@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
         "redis+sentinel://username:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice"
             .into_config()?
             .to_string()
     );
 
     assert_eq!(
-        "redis+sentinel://:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
+        "redis+sentinel://:***@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice",
         "redis+sentinel://:pwd@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice"
             .into_config()?
             .to_string()
@@ -205,22 +230,22 @@ fn into_config() -> Result<()> {
     );
 
     assert_eq!(
-        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=bar",
-        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=bar"
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=***",
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=100&sentinel_username=foo&sentinel_password=***"
             .into_config()?
             .to_string()
     );
 
     assert_eq!(
-        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_username=foo&sentinel_password=bar",
-        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250&sentinel_username=foo&sentinel_password=bar"
+        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_username=foo&sentinel_password=***",
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250&sentinel_username=foo&sentinel_password=***"
             .into_config()?
             .to_string()
     );
 
     assert_eq!(
-        "redis+sentinel://127.0.0.1:6379/myservice?connect_timeout=100&wait_between_failures=100&sentinel_username=foo&sentinel_password=bar",
-        "redis+sentinel://127.0.0.1:6379/myservice?connect_timeout=100&wait_between_failures=100&sentinel_username=foo&sentinel_password=bar"
+        "redis+sentinel://127.0.0.1:6379/myservice?connect_timeout=100&wait_between_failures=100&sentinel_username=foo&sentinel_password=***",
+        "redis+sentinel://127.0.0.1:6379/myservice?connect_timeout=100&wait_between_failures=100&sentinel_username=foo&sentinel_password=***"
             .into_config()?
             .to_string()
     );

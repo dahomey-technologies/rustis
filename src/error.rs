@@ -173,7 +173,7 @@ pub enum Error {
     #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     #[cfg(feature = "native-tls")]
     #[error("tls error: {0}")]
-    Tls(#[from] native_tls::Error),
+    Tls(Arc<native_tls::Error>),
     /// Raised by the TLS library
     #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     #[cfg(feature = "rustls")]
@@ -232,6 +232,14 @@ impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Error::IO(Arc::new(value))
+    }
+}
+
+#[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
+#[cfg(feature = "native-tls")]
+impl From<native_tls::Error> for Error {
+    fn from(value: native_tls::Error) -> Self {
+        Error::Tls(Arc::new(value))
     }
 }
 

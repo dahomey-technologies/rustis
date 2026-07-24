@@ -607,6 +607,92 @@ async fn partial_redirection_keeps_the_sub_results_already_obtained() -> Result<
     Ok(())
 }
 
+/// An ASK points at the node currently importing the slot, which the client may
+/// never have heard of: unlike a MOVED, an ASK invalidates nothing, so nothing
+/// else brings that node into the local topology. Resolving the target among the
+/// known nodes only therefore fails the command outright, where the cluster spec
+/// requires the redirection to be followed.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ask_to_an_unknown_node_is_followed_instead_of_failing() -> Result<()> {
+    let probe = get_cluster_test_client().await?;
+    probe.flushall(FlushingMode::Sync).await?;
+
+    let hello_result = probe.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(probe.cluster_slots().await?)
+    } else {
+        probe.cluster_shards().await?
+    };
+
+    let slot = probe.cluster_keyslot("clu05_key").await?;
+    let src_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
+    let dst_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for destination shard");
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+
+    // The client under test starts with a topology that ignores the node the
+    // slot is about to be imported by — the state a client is in when a node
+    // joined, or was learned about, after its own discovery.
+    let cluster_hook = ClusterTestHook::new();
+    cluster_hook.hide_node_on_initial_discovery(dst_id);
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    client.set("clu05_key", "value").await?;
+
+    // Leave the slot in migrating/importing state and move the key across, so
+    // the source answers ASK for it. Half a hand-over on purpose, hence not
+    // `migrate_slot`.
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
+    src_client
+        .migrate(
+            dst_node.ip.clone(),
+            dst_node.port.unwrap(),
+            "clu05_key",
+            0,
+            1000,
+            MigrateOptions::default(),
+        )
+        .await?;
+
+    let while_migrating: Result<String> = client.get("clu05_key").await;
+
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test. The half hand-over is completed first — the key now lives on
+    // the destination, which only serves it once it owns the slot — then the key
+    // is dropped, since a node still holding keys for a slot refuses to hand
+    // that slot back.
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+    dst_client.del("clu05_key").await?;
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
+
+    assert_eq!(
+        "value", while_migrating?,
+        "an ASK must be followed even to a node absent from the local topology"
+    );
+
+    Ok(())
+}
+
 /// A topology discovery that describes no usable node must be rejected, not
 /// applied. Applying it empties the node list, and the next node lookup then
 /// indexes an empty collection — panicking the network task, which owns all

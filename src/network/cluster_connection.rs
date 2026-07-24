@@ -42,6 +42,9 @@ pub(crate) struct ClusterTestHook {
     /// reproducing what a buggy server, a proxy, or a corrupted discovery reply
     /// can return.
     empty_topology_on_refresh: Arc<std::sync::atomic::AtomicBool>,
+    /// When set, the initial discovery ignores the shard holding this node,
+    /// reproducing a local topology that does not know a node the cluster does.
+    hidden_node_id: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[cfg(test)]
@@ -71,6 +74,16 @@ impl ClusterTestHook {
     fn take_empty_topology_on_refresh(&self) -> bool {
         self.empty_topology_on_refresh
             .swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Hides the shard holding `node_id` from the initial discovery only, so
+    /// that a later refresh sees the real topology again.
+    pub fn hide_node_on_initial_discovery(&self, node_id: &str) {
+        *self.hidden_node_id.lock().unwrap() = Some(node_id.to_owned());
+    }
+
+    fn take_hidden_node_id(&self) -> Option<String> {
+        self.hidden_node_id.lock().unwrap().take()
     }
 }
 
@@ -262,6 +275,21 @@ impl ClusterConnection {
                 }
             })
             .collect::<Vec<_>>();
+
+        // An ASK points at the node importing the slot, which the local topology
+        // may not know: it may have joined, or only been learned about, after
+        // the last discovery. Unlike a MOVED, an ASK invalidates nothing, so
+        // nothing else would ever bring that node in and the command would fail
+        // outright, where the cluster spec requires the redirection to be
+        // followed. Reload the topology so the target becomes reachable.
+        if !self.refreshed_in_current_batch
+            && ask_reasons.iter().any(|(_hash_slot, address)| {
+                !self.nodes.iter().any(|node| node.address == *address)
+            })
+        {
+            self.refreshed_in_current_batch = true;
+            self.refresh_nodes_and_slot_ranges().await?;
+        }
 
         if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
             let (node_idx, _) = self.get_no_request_policy_node(command, &ask_reasons)?;
@@ -1246,10 +1274,19 @@ impl ClusterConnection {
         cluster_config: &ClusterConfig,
         config: &Config,
     ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
-        let Some(shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
+        #[cfg_attr(not(test), allow(unused_mut))]
+        let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
         else {
             return Err(Error::Client(ClientError::ClusterConfig));
         };
+
+        // Test-only: build a topology that ignores a node the cluster does know.
+        #[cfg(test)]
+        if let Some(hook) = &config.cluster_test_hook
+            && let Some(hidden_node_id) = hook.take_hidden_node_id()
+        {
+            shard_info_list.retain(|s| !s.nodes.iter().any(|n| n.id == hidden_node_id));
+        }
 
         let mut nodes = Vec::<Node>::new();
         let mut slot_ranges = Vec::<SlotRange>::new();

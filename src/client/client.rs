@@ -28,10 +28,26 @@ use smallvec::SmallVec;
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 
 /// Client with a unique connection to a Redis server.
+/// State shared by every clone of a [`Client`] over a single connection.
+///
+/// The message sender and the network task join handle live behind **one**
+/// `Arc`, so a single reference count governs both. Shutting the connection
+/// down is then gated on [`Arc::into_inner`], which hands the last owner
+/// exclusive access and — crucially — returns `Some` to exactly one caller even
+/// when several clones drop (or `close`) concurrently. Two independent `Arc`s
+/// decided with `try_unwrap` allowed two threads to each observe strong-count 2
+/// and both back off, leaking the task, socket and buffers forever.
+struct ClientShared {
+    msg_sender: MsgSender,
+    network_task_join_handle: JoinHandle<()>,
+}
+
 #[derive(Clone)]
 pub struct Client {
-    msg_sender: Arc<Option<MsgSender>>,
-    network_task_join_handle: Arc<Option<JoinHandle<()>>>,
+    /// `Option` only so a dropping/closing clone can swap its reference out of
+    /// `&mut self` before calling [`Arc::into_inner`]; a live client always
+    /// holds `Some`.
+    shared: Arc<Option<ClientShared>>,
     reconnect_sender: ReconnectSender,
     command_timeout: Duration,
     retry_on_error: bool,
@@ -42,25 +58,21 @@ pub struct Client {
 }
 
 impl Drop for Client {
-    /// if this client is the last client on the shared connection, the channel to send messages
-    /// to the underlying network handler will be closed explicitely
+    /// When the last clone sharing a connection goes away, the message channel
+    /// must be closed explicitly: the network handler keeps its own sender for
+    /// retries, so the channel never closes on its own. `Arc::into_inner` yields
+    /// `Some` to exactly one caller even under a concurrent drop/close, so the
+    /// shutdown runs once and is never lost to a race.
     fn drop(&mut self) {
-        let mut network_task_join_handle: Arc<Option<JoinHandle<()>>> = Arc::new(None);
-        std::mem::swap(
-            &mut network_task_join_handle,
-            &mut self.network_task_join_handle,
-        );
+        let mut shared: Arc<Option<ClientShared>> = Arc::new(None);
+        std::mem::swap(&mut shared, &mut self.shared);
 
-        // stop the network loop if we are the last reference to its handle
-        if Arc::try_unwrap(network_task_join_handle).is_ok() {
-            let mut msg_sender: Arc<Option<MsgSender>> = Arc::new(None);
-            std::mem::swap(&mut msg_sender, &mut self.msg_sender);
-
-            if let Ok(Some(msg_sender)) = Arc::try_unwrap(msg_sender) {
-                // the network loop will automatically ends when it detects the sender bound has been closed
-                msg_sender.close_channel();
-            }
-        };
+        if let Some(Some(shared)) = Arc::into_inner(shared) {
+            // the network loop ends once it detects the sender bound is closed;
+            // a synchronous `Drop` cannot await the task, so the handle is just
+            // dropped here (see `close` for the awaiting path).
+            shared.msg_sender.close_channel();
+        }
     }
 }
 
@@ -79,8 +91,10 @@ impl Client {
             NetworkHandler::connect(config.into_config()?).await?;
 
         Ok(Self {
-            msg_sender: Arc::new(Some(msg_sender)),
-            network_task_join_handle: Arc::new(Some(network_task_join_handle)),
+            shared: Arc::new(Some(ClientShared {
+                msg_sender,
+                network_task_join_handle,
+            })),
             reconnect_sender,
             command_timeout,
             retry_on_error,
@@ -104,23 +118,17 @@ impl Client {
     ///
     /// Then, this function will await for the network handler to be ended
     pub async fn close(mut self) -> Result<()> {
-        let mut network_task_join_handle: Arc<Option<JoinHandle<()>>> = Arc::new(None);
-        std::mem::swap(
-            &mut network_task_join_handle,
-            &mut self.network_task_join_handle,
-        );
+        let mut shared: Arc<Option<ClientShared>> = Arc::new(None);
+        std::mem::swap(&mut shared, &mut self.shared);
 
-        // stop the network loop if we are the last reference to its handle
-        if let Ok(Some(network_task_join_handle)) = Arc::try_unwrap(network_task_join_handle) {
-            let mut msg_sender: Arc<Option<MsgSender>> = Arc::new(None);
-            std::mem::swap(&mut msg_sender, &mut self.msg_sender);
-
-            if let Ok(Some(msg_sender)) = Arc::try_unwrap(msg_sender) {
-                // the network loop will automatically ends when it detects the sender bound has been closed
-                msg_sender.close_channel();
-                network_task_join_handle.await?;
-            }
-        };
+        // stop the network loop if we are the last owner of the shared state;
+        // `into_inner` makes that determination race-free against a concurrent
+        // `close`/`Drop` (see `ClientShared`).
+        if let Some(Some(shared)) = Arc::into_inner(shared) {
+            // the network loop ends once it detects the sender bound is closed
+            shared.msg_sender.close_channel();
+            shared.network_task_join_handle.await?;
+        }
 
         Ok(())
     }
@@ -277,12 +285,12 @@ impl Client {
 
     #[inline]
     fn send_message(&self, message: Message) -> Result<()> {
-        if let Some(msg_sender) = &self.msg_sender as &Option<MsgSender> {
+        if let Some(shared) = self.shared.as_ref() {
             trace!(
                 "[{}], Will enqueue message: {message:?}",
                 self.connection_tag
             );
-            Ok(msg_sender.unbounded_send(message).map_err(|e| {
+            Ok(shared.msg_sender.unbounded_send(message).map_err(|e| {
                 info!("{e}");
                 Error::Client(ClientError::DisconnectedFromServer)
             })?)

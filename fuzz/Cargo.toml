@@ -1,0 +1,53 @@
+[package]
+name = "rustis-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+# The crate's network module requires a runtime feature to compile, so keep the
+# default `tokio-runtime` on and add `fuzzing` on top.
+[dependencies.rustis]
+path = ".."
+features = ["fuzzing"]
+
+# Prevent this from interfering with workspace-level builds.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "frame_parser"
+path = "fuzz_targets/frame_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_chunked"
+path = "fuzz_targets/decode_chunked.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resp_deserializer"
+path = "fuzz_targets/resp_deserializer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "value_deserializer"
+path = "fuzz_targets/value_deserializer.rs"
+test = false
+doc = false
+bench = false

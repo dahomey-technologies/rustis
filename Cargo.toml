@@ -28,6 +28,9 @@ rustls = ["dep:rustls"]
 json = ["dep:serde_json"]
 client-cache = ["dep:moka", "dep:dashmap"]
 bench = ["dep:criterion", "dep:fred", "dep:redis"]
+# Exposes internal RESP parsing/deserialization entry points to the `cargo-fuzz`
+# targets in `fuzz/`. Not part of the public API; no stability guarantee.
+fuzzing = []
 web-examples = ["dep:axum", "dep:actix-web"]
 
 [dependencies]

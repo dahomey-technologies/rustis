@@ -170,6 +170,8 @@ pub mod cache;
 pub mod client;
 pub mod commands;
 mod error;
+#[cfg(feature = "fuzzing")]
+pub mod fuzz_api;
 mod network;
 pub mod resp;
 

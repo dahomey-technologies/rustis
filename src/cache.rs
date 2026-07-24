@@ -73,6 +73,8 @@ pub struct Cache {
     client: Client,
     #[allow(dead_code)]
     invalidation_task: tokio::task::JoinHandle<()>,
+    #[allow(dead_code)]
+    reconnection_task: tokio::task::JoinHandle<()>,
 }
 
 impl Cache {
@@ -84,7 +86,7 @@ impl Cache {
         tracking_opts: ClientTrackingOptions,
     ) -> Result<Arc<Self>> {
         client
-            .client_tracking(ClientTrackingStatus::On, tracking_opts)
+            .client_tracking(ClientTrackingStatus::On, tracking_opts.clone())
             .await?;
 
         let stream = client.create_client_tracking_invalidation_stream()?;
@@ -107,10 +109,39 @@ impl Cache {
             }
         });
 
+        // Server-side tracking is per-connection state: it dies with the socket and
+        // nothing on the server restores it. The invalidation stream itself survives
+        // a reconnection, so without this the cache would keep answering hits while
+        // silently never being invalidated again.
+        let cache_clone = cache.clone();
+        let client_clone = client.clone();
+        let connection_tag = client.connection_tag().to_owned();
+        let mut on_reconnect = client.on_reconnect();
+        let reconnection_task = tokio::spawn(async move {
+            while on_reconnect.recv().await.is_ok() {
+                log::debug!("[{connection_tag}] Re-enabling client tracking after reconnection");
+
+                // Invalidations emitted while the connection was down are lost for
+                // good, so every entry must be considered stale. A partial refresh
+                // cannot be correct here.
+                cache_clone.invalidate_all();
+
+                if let Err(e) = client_clone
+                    .client_tracking(ClientTrackingStatus::On, tracking_opts.clone())
+                    .await
+                {
+                    log::error!(
+                        "[{connection_tag}] Cannot re-enable client tracking after reconnection: {e}"
+                    );
+                }
+            }
+        });
+
         Ok(Arc::new(Self {
             cache,
             client,
             invalidation_task,
+            reconnection_task,
         }))
     }
 

@@ -6,7 +6,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use memchr::memchr;
 use serde::Serialize;
 use smallvec::SmallVec;
-#[cfg(debug_assertions)]
+#[cfg(test)]
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -16,7 +16,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 static COMMAND_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The size in bytes reserved at the beginning of the buffer.
@@ -145,12 +145,12 @@ pub struct Command {
     name_layout: (usize, usize),
     args_layout: SmallVec<[ArgLayout; 10]>,
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub kill_connection_on_write: Arc<AtomicUsize>,
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub kill_connection_on_read: Arc<AtomicUsize>,
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
     request_policy: Option<RequestPolicy>,
@@ -164,9 +164,9 @@ impl Command {
         buffer: Bytes,
         name_layout: (usize, usize),
         args_layout: SmallVec<[ArgLayout; 10]>,
-        #[cfg(debug_assertions)] kill_connection_on_write: usize,
-        #[cfg(debug_assertions)] kill_connection_on_read: usize,
-        #[cfg(debug_assertions)] command_seq: usize,
+        #[cfg(test)] kill_connection_on_write: usize,
+        #[cfg(test)] kill_connection_on_read: usize,
+        #[cfg(test)] command_seq: usize,
         request_policy: Option<RequestPolicy>,
         response_policy: Option<ResponsePolicy>,
         key_step: u8,
@@ -176,11 +176,11 @@ impl Command {
             kind: CommandKind::Other,
             name_layout,
             args_layout,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             kill_connection_on_write: Arc::new(kill_connection_on_write.into()),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             kill_connection_on_read: Arc::new(kill_connection_on_read.into()),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq,
             request_policy,
             response_policy,
@@ -251,7 +251,7 @@ impl Command {
         self.key_step as usize
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub(crate) fn try_decrement_kill_connection_on_write(&self) -> bool {
         self.kill_connection_on_write
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
@@ -302,12 +302,12 @@ pub struct CommandBuilder {
     /// This index is dropped when the command is sent to the network layer.
     pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub kill_connection_on_write: usize,
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     pub kill_connection_on_read: usize,
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
     pub(crate) request_policy: Option<RequestPolicy>,
@@ -340,11 +340,11 @@ impl CommandBuilder {
             buffer,
             name_layout: (name_start, name.len()),
             args_layout: Default::default(),
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             kill_connection_on_write: 0,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             kill_connection_on_read: 0,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_seq: next_sequence_counter(),
             request_policy: None,
             response_policy: None,
@@ -463,7 +463,7 @@ impl CommandBuilder {
         self
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     #[inline(always)]
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {
         self.kill_connection_on_write = num_kills;
@@ -476,7 +476,7 @@ impl CommandBuilder {
     /// The commands have already reached and been executed by the server (they
     /// were flushed), so this reproduces a disconnection occurring after
     /// server-side execution but before the client matches the responses.
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     #[inline(always)]
     pub fn kill_connection_on_read(mut self, num_reads: usize) -> Self {
         self.kill_connection_on_read = num_reads;
@@ -546,11 +546,11 @@ impl From<CommandBuilder> for Command {
                 command_builder.name_layout.1,
             ),
             command_builder.args_layout,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_builder.kill_connection_on_write,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_builder.kill_connection_on_read,
-            #[cfg(debug_assertions)]
+            #[cfg(test)]
             command_builder.command_seq,
             command_builder.request_policy,
             command_builder.response_policy,
@@ -576,7 +576,7 @@ pub(crate) fn hash_slot(mut key: &[u8]) -> u16 {
     crc16::State::<crc16::XMODEM>::calculate(key) % 16384
 }
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 #[inline(always)]
 pub(crate) fn next_sequence_counter() -> usize {
     COMMAND_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst)

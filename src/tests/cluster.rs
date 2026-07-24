@@ -183,6 +183,23 @@ async fn all_nodes_all_succeeded() -> Result<()> {
     Ok(())
 }
 
+/// Hands `slot` over from the shard served by `src_client` to the one served by
+/// `dst_client`. The operation is symmetric: calling it with the two sides
+/// swapped moves the slot back.
+async fn migrate_slot(
+    slot: u16,
+    src_client: &Client,
+    src_id: &str,
+    dst_client: &Client,
+    dst_id: &str,
+) -> Result<()> {
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -216,29 +233,21 @@ async fn moved() -> Result<()> {
     let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
     let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
 
-    // migrate
-    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
-
-    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
-
-    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
-
-    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+    migrate_slot(slot, &src_client, src_id, &dst_client, dst_id).await?;
 
     // issue command on migrated slot
-    client.set("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-    client.del("key").await?;
+    let set_result = client.set("key", "value").await;
+    let value: Result<String> = client.get("key").await;
+    let del_result = client.del("key").await;
 
-    // migrate back
-    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test, and an early return here would strand the slot outside its
+    // range, breaking unrelated tests in a way that is hard to trace back.
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
 
-    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
-
-    src_client.cluster_setslot(slot, Node(src_id)).await?;
-
-    dst_client.cluster_setslot(slot, Node(src_id)).await?;
+    set_result?;
+    del_result?;
+    assert_eq!("value", value?);
 
     Ok(())
 }
@@ -281,12 +290,11 @@ async fn ask() -> Result<()> {
     // set key
     client.set("key", "value").await?;
 
-    // migrate
+    // Leave the slot in migrating/importing state and move the key across, so
+    // the source answers ASK for it. This is deliberately only half of a slot
+    // hand-over, hence not `migrate_slot`.
     dst_client.cluster_setslot(slot, Importing(src_id)).await?;
-
     src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
-
-    // migrate key
     src_client
         .migrate(
             dst_node.ip.clone(),
@@ -299,33 +307,34 @@ async fn ask() -> Result<()> {
         .await?;
 
     // issue command on migrating slot
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-    client.del("key").await?;
+    let while_migrating: Result<String> = client.get("key").await;
+    let cleanup_migrating = client.del("key").await;
 
     // finish migration
     dst_client.cluster_setslot(slot, Node(dst_id)).await?;
-
     src_client.cluster_setslot(slot, Node(dst_id)).await?;
 
-    client.set("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-    client.del("key").await?;
+    let set_migrated = client.set("key", "value").await;
+    let once_migrated: Result<String> = client.get("key").await;
+    let cleanup_migrated = client.del("key").await;
 
-    // migrate back
-    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test, and an early return here would strand the slot outside its
+    // range, breaking unrelated tests in a way that is hard to trace back.
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
 
-    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
+    let set_restored = client.set("key", "value").await;
+    let once_restored: Result<String> = client.get("key").await;
+    let cleanup_restored = client.del("key").await;
 
-    src_client.cluster_setslot(slot, Node(src_id)).await?;
-
-    dst_client.cluster_setslot(slot, Node(src_id)).await?;
-
-    client.set("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-    client.del("key").await?;
+    cleanup_migrating?;
+    set_migrated?;
+    cleanup_migrated?;
+    set_restored?;
+    cleanup_restored?;
+    assert_eq!("value", while_migrating?);
+    assert_eq!("value", once_migrated?);
+    assert_eq!("value", once_restored?);
 
     Ok(())
 }
@@ -498,10 +507,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 
     // Hand the slot over to another shard. The batch client keeps its stale slot
     // map, so a command on that key is answered with a MOVED redirection.
-    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
-    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
-    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
-    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+    migrate_slot(slot, &src_client, src_id, &dst_client, dst_id).await?;
 
     // The redirected key's value must live on its new owner.
     dst_client.set("clu01_moved", "M").await?;
@@ -521,10 +527,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 
     // Restore the topology before asserting: the cluster is shared with every
     // other test, and an early return here would leave a slot stranded.
-    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
-    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
-    src_client.cluster_setslot(slot, Node(src_id)).await?;
-    dst_client.cluster_setslot(slot, Node(src_id)).await?;
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
 
     let values = results?
         .iter()
@@ -581,10 +584,7 @@ async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() ->
 
     // Hand the slot over so the client, whose slot map is now stale, is answered
     // with a MOVED redirection — the trigger of a topology refresh.
-    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
-    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
-    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
-    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+    migrate_slot(slot, &src_client, src_id, &dst_client, dst_id).await?;
 
     // That refresh discovers an empty cluster.
     cluster_hook.arm_empty_topology_on_refresh();
@@ -600,10 +600,7 @@ async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() ->
 
     // Restore the topology before asserting: the cluster is shared with every
     // other test, and an early return here would leave a slot stranded.
-    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
-    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
-    src_client.cluster_setslot(slot, Node(src_id)).await?;
-    dst_client.cluster_setslot(slot, Node(src_id)).await?;
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
 
     assert_eq!(
         "PONG", pong??,

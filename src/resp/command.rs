@@ -147,6 +147,9 @@ pub struct Command {
     #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: Arc<AtomicUsize>,
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    pub kill_connection_on_read: Arc<AtomicUsize>,
     #[cfg(debug_assertions)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
@@ -162,6 +165,7 @@ impl Command {
         name_layout: (usize, usize),
         args_layout: SmallVec<[ArgLayout; 10]>,
         #[cfg(debug_assertions)] kill_connection_on_write: usize,
+        #[cfg(debug_assertions)] kill_connection_on_read: usize,
         #[cfg(debug_assertions)] command_seq: usize,
         request_policy: Option<RequestPolicy>,
         response_policy: Option<ResponsePolicy>,
@@ -174,6 +178,8 @@ impl Command {
             args_layout,
             #[cfg(debug_assertions)]
             kill_connection_on_write: Arc::new(kill_connection_on_write.into()),
+            #[cfg(debug_assertions)]
+            kill_connection_on_read: Arc::new(kill_connection_on_read.into()),
             #[cfg(debug_assertions)]
             command_seq,
             request_policy,
@@ -298,6 +304,9 @@ pub struct CommandBuilder {
     #[doc(hidden)]
     #[cfg(debug_assertions)]
     pub kill_connection_on_write: usize,
+    #[doc(hidden)]
+    #[cfg(debug_assertions)]
+    pub kill_connection_on_read: usize,
     #[cfg(debug_assertions)]
     #[allow(unused)]
     pub(crate) command_seq: usize,
@@ -333,6 +342,8 @@ impl CommandBuilder {
             args_layout: Default::default(),
             #[cfg(debug_assertions)]
             kill_connection_on_write: 0,
+            #[cfg(debug_assertions)]
+            kill_connection_on_read: 0,
             #[cfg(debug_assertions)]
             command_seq: next_sequence_counter(),
             request_policy: None,
@@ -459,6 +470,19 @@ impl CommandBuilder {
         self
     }
 
+    /// Arms the connection to be killed on the `num_reads`-th read attempt that
+    /// follows this command being fed, before any response is delivered.
+    ///
+    /// The commands have already reached and been executed by the server (they
+    /// were flushed), so this reproduces a disconnection occurring after
+    /// server-side execution but before the client matches the responses.
+    #[cfg(debug_assertions)]
+    #[inline(always)]
+    pub fn kill_connection_on_read(mut self, num_reads: usize) -> Self {
+        self.kill_connection_on_read = num_reads;
+        self
+    }
+
     #[inline(always)]
     pub fn cluster_info(
         mut self,
@@ -524,6 +548,8 @@ impl From<CommandBuilder> for Command {
             command_builder.args_layout,
             #[cfg(debug_assertions)]
             command_builder.kill_connection_on_write,
+            #[cfg(debug_assertions)]
+            command_builder.kill_connection_on_read,
             #[cfg(debug_assertions)]
             command_builder.command_seq,
             command_builder.request_policy,

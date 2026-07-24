@@ -64,6 +64,10 @@ pub struct StandaloneConnection {
     streams: Streams,
     version: String,
     tag: Arc<str>,
+    /// Test-only: number of read attempts remaining before the connection
+    /// simulates being closed (see [`Command::kill_connection_on_read`]).
+    #[cfg(debug_assertions)]
+    kill_connection_on_read_countdown: usize,
 }
 
 impl StandaloneConnection {
@@ -81,6 +85,8 @@ impl StandaloneConnection {
             } else {
                 format!("{}:{}:{}", config.connection_name, host, port).into()
             },
+            #[cfg(debug_assertions)]
+            kill_connection_on_read_countdown: 0,
         };
 
         connection.post_connect().await?;
@@ -112,6 +118,18 @@ impl StandaloneConnection {
                 .await?;
         }
 
+        // Test-only: arm the read-kill countdown once, when the marked command
+        // is fed. `swap` makes it one-shot so a replayed command cannot re-arm.
+        #[cfg(debug_assertions)]
+        {
+            let num_reads = command
+                .kill_connection_on_read
+                .swap(0, std::sync::atomic::Ordering::SeqCst);
+            if num_reads > 0 {
+                self.kill_connection_on_read_countdown = num_reads;
+            }
+        }
+
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -129,6 +147,17 @@ impl StandaloneConnection {
     }
 
     pub async fn read(&mut self) -> Option<Result<RespResponse>> {
+        // Test-only: simulate the connection being closed before any response
+        // is delivered, once the armed countdown expires.
+        #[cfg(debug_assertions)]
+        if self.kill_connection_on_read_countdown > 0 {
+            self.kill_connection_on_read_countdown -= 1;
+            if self.kill_connection_on_read_countdown == 0 {
+                debug!("[{}] Simulating a closed socket on read", self.tag);
+                return None;
+            }
+        }
+
         if let Some(result) = match &mut self.streams {
             Streams::Tcp(framed_read, _) => framed_read.next().await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -148,6 +177,16 @@ impl StandaloneConnection {
     }
 
     pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
+        // Test-only: mirror `read`'s simulated close on the drain path.
+        #[cfg(debug_assertions)]
+        if self.kill_connection_on_read_countdown > 0 {
+            self.kill_connection_on_read_countdown -= 1;
+            if self.kill_connection_on_read_countdown == 0 {
+                debug!("[{}] (try_read) Simulating a closed socket on read", self.tag);
+                return Poll::Ready(None);
+            }
+        }
+
         let waker = noop_waker_ref();
         let mut cx = Context::from_waker(waker);
 

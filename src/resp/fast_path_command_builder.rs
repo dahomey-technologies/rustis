@@ -61,6 +61,8 @@ impl FastPathCommandBuilder {
             #[cfg(debug_assertions)]
             0,
             #[cfg(debug_assertions)]
+            0,
+            #[cfg(debug_assertions)]
             next_sequence_counter(),
             None,
             None,

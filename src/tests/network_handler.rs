@@ -1,11 +1,18 @@
+// Every test in this module drives test-only, `debug_assertions`-gated
+// infrastructure (the send-batch hook, `kill_connection_on_read`). In release
+// builds that infrastructure is compiled out, so the whole module must be too.
+#![cfg(debug_assertions)]
+
 use crate::{
-    Result,
+    Result, RetryReason,
     client::{Client, ReconnectionConfig},
     commands::{GenericCommands, StringCommands},
-    network::{sleep, SendBatchTestHook},
+    network::{SendBatchTestHook, sleep, timeout},
     resp::cmd,
-    tests::{get_default_config, get_default_port, get_test_client, get_test_client_with_config, log_try_init},
-    RetryReason,
+    tests::{
+        get_default_config, get_default_port, get_test_client, get_test_client_with_config,
+        log_try_init,
+    },
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -66,7 +73,6 @@ async fn retry_reasons_do_not_leak_across_messages_in_a_batch() -> Result<()> {
 /// On reconnect, a non-retryable message sitting behind a retryable one must
 /// be failed, not replayed: replaying it double-executes a command whose
 /// caller explicitly opted out of retries.
-#[cfg(debug_assertions)]
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -102,5 +108,51 @@ async fn non_retryable_message_behind_retryable_is_not_replayed_on_reconnect() -
     );
 
     control.del("net01_counter").await?;
+    Ok(())
+}
+
+/// On reconnect, an in-flight UNSUBSCRIBE that is replayed must have its
+/// pub/sub bookkeeping (`pending_unsubscriptions`) rebuilt. Otherwise its
+/// confirmation push arrives with nothing to match, the stale message keeps
+/// its slot in the receive queue, and it consumes the reply of the next
+/// command — shifting every subsequent response by one, permanently.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn inflight_unsubscribe_does_not_desync_responses_after_reconnect() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    // Make the in-flight UNSUBSCRIBE retryable so it survives the reconnect
+    // purge and is replayed: that replay is what arms the desync.
+    config.retry_on_error = true;
+    let client = get_test_client_with_config(config).await?;
+
+    // Send an UNSUBSCRIBE and close the connection on the next read, before its
+    // confirmation is matched, so it is in flight when the reconnect happens.
+    client.send_and_forget(
+        cmd("UNSUBSCRIBE")
+            .arg("net03_chan")
+            .kill_connection_on_read(1),
+        None,
+    )?;
+
+    // Let the reconnection complete and the UNSUBSCRIBE be replayed.
+    sleep(Duration::from_millis(500)).await;
+
+    // A follow-up command must receive its own reply. With the desync its
+    // reply is consumed by the stale UNSUBSCRIBE slot and the call hangs.
+    let echoed: String = timeout(
+        Duration::from_secs(2),
+        client.send(cmd("ECHO").arg("net03_marker"), None),
+    )
+    .await??;
+
+    assert_eq!(
+        "net03_marker", echoed,
+        "the follow-up response must be routed to its own caller"
+    );
+
     Ok(())
 }

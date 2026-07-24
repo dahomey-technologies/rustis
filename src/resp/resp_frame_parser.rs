@@ -16,20 +16,51 @@ pub(crate) const MAP_TAG: u8 = b'%';
 pub(crate) const SET_TAG: u8 = b'~';
 pub(crate) const PUSH_TAG: u8 = b'>';
 
+/// Maximum collection-nesting depth the parser will descend into before
+/// rejecting a frame. RESP replies are shallow in practice (a handful of levels
+/// for the deepest cluster/stream introspection commands), so this bound is
+/// generous for legitimate traffic while stopping a crafted `*1\r\n*1\r\n…`
+/// reply from recursing `parse_value` into a stack overflow (HARD-01), which —
+/// unlike a panic — is not catchable and aborts the whole process.
+pub(crate) const MAX_NESTING_DEPTH: usize = 128;
+
 pub struct RespFrameParser<'a> {
     buf: &'a [u8],
     pos: usize,
+    /// Current collection-nesting depth, bounded by [`MAX_NESTING_DEPTH`].
+    depth: usize,
 }
 
 impl<'a> RespFrameParser<'a> {
     pub fn new(buf: &'a [u8]) -> Self {
-        Self { buf, pos: 0 }
+        Self {
+            buf,
+            pos: 0,
+            depth: 0,
+        }
     }
 
     /// Creates a parser over `buf` positioned at `pos`, so parsed frames carry
     /// ranges absolute to `buf` rather than to a sub-slice.
     pub fn new_at(buf: &'a [u8], pos: usize) -> Self {
-        Self { buf, pos }
+        Self { buf, pos, depth: 0 }
+    }
+
+    /// Enters one collection-nesting level, rejecting the frame once the bound
+    /// is crossed. Paired with [`Self::leave`] on the success path; error paths
+    /// abort parsing outright, so the counter need not be unwound there.
+    #[inline]
+    fn enter(&mut self) -> Result<()> {
+        self.depth += 1;
+        if self.depth > MAX_NESTING_DEPTH {
+            return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn leave(&mut self) {
+        self.depth -= 1;
     }
 
     #[inline(always)]
@@ -305,6 +336,8 @@ impl<'a> RespFrameParser<'a> {
         let mut ranges = [0..0, 0..0, 0..0, 0..0, 0..0];
         let range_len = std::cmp::min(len, ranges.len());
 
+        self.enter()?;
+
         for range in ranges.iter_mut().take(range_len) {
             let start = self.pos;
             self.parse_value()?;
@@ -314,6 +347,8 @@ impl<'a> RespFrameParser<'a> {
         for _ in range_len..len {
             self.parse_value()?;
         }
+
+        self.leave();
 
         Ok(Some((len, ranges)))
     }
@@ -358,9 +393,11 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseSequence));
                 }
+                self.enter()?;
                 for _ in 0..len as usize {
                     self.parse_value()?;
                 }
+                self.leave();
                 Ok(())
             }
             MAP_TAG => {
@@ -372,9 +409,11 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseMap));
                 }
+                self.enter()?;
                 for _ in 0..len as usize * 2 {
                     self.parse_value()?;
                 }
+                self.leave();
                 Ok(())
             }
 

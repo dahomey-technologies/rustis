@@ -150,6 +150,11 @@ pub enum ClientError {
     /// Raised when cannot parse Redis server version
     #[error("Cannot parse Redis server version")]
     CannotParseRedisServerVersion,
+    /// Raised when a RESP frame nests collections deeper than the parser allows,
+    /// guarding against a crafted reply driving `parse_value` into a stack
+    /// overflow (HARD-01).
+    #[error("protocol: maximum nesting depth exceeded")]
+    MaxNestingDepthExceeded,
 }
 
 /// All error kinds

@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ClientError, Error, RedisError, RedisErrorKind, Result,
     client::{BatchPreparedCommand, Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClusterCommands, ClusterNodeResult,
@@ -648,6 +648,37 @@ async fn cluster_transaction() -> Result<()> {
     let value: String = transaction.execute().await?;
 
     assert_eq!("value", value);
+
+    Ok(())
+}
+
+/// Redis Cluster only supports transactions whose keys all live in the same slot.
+/// Commands are routed per key, so a cross-slot transaction would be split across
+/// nodes: the ones outside the pinned node execute immediately, outside any MULTI.
+/// That must be refused up front rather than reported as a successful transaction.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cross_slot_transaction_is_rejected_instead_of_losing_atomicity() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+
+    client.del(["api01_a{1}", "api01_b{3}"]).await?;
+
+    let mut transaction = client.create_transaction();
+    transaction.set("api01_a{1}", "value1").forget();
+    transaction.set("api01_b{3}", "value2").forget();
+    let result: Result<()> = transaction.execute().await;
+
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CrossSlot))),
+        "a cross-slot transaction must be refused, got {result:?}"
+    );
+
+    // Refused before sending: neither half may have been executed.
+    let values: Vec<Option<String>> = client.mget(["api01_a{1}"]).await?;
+    assert_eq!(vec![None], values);
+    let values: Vec<Option<String>> = client.mget(["api01_b{3}"]).await?;
+    assert_eq!(vec![None], values);
 
     Ok(())
 }

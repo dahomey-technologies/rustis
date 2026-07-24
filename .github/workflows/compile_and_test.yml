@@ -23,6 +23,7 @@ jobs:
   check:
     name: Check
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     env:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
@@ -38,6 +39,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
     steps:
@@ -47,5 +49,21 @@ jobs:
         run: |
           cd /home/runner/work/rustis/rustis/redis/
           sh ./docker_up.sh
+      - name: Wait for Redis to be ready
+        timeout-minutes: 3
+        run: |
+          # `docker compose up -d` returns as soon as the containers start,
+          # not when Redis is serving or the cluster has finished forming.
+          # Launching the tests too early makes cluster clients loop on
+          # reconnection forever, so gate the test step on readiness.
+          echo "Waiting for standalone node..."
+          until docker exec redis-standalone redis-cli ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for cluster to reach cluster_state:ok..."
+          until docker exec redis-node1 redis-cli -p 7000 cluster info 2>/dev/null | grep -q "cluster_state:ok"; do
+            sleep 1
+          done
+          echo "Redis is ready."
       - name: Run cargo test
         run: cargo test --release --features pool,tokio-rustls,json,client-cache -- --test-threads=1

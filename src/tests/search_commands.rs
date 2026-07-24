@@ -1289,10 +1289,24 @@ async fn ft_syn() -> Result<()> {
     assert_eq!(1, world_result.len());
     assert_eq!("group1", world_result[0]);
 
+    // FT.SYNUPDATE triggers an asynchronous re-scan of already-indexed
+    // documents to apply the new synonym group, so wait for it to complete
+    // before searching (otherwise the search may still return the old result).
+    wait_for_index_scanned(&client, "index").await?;
+
     // search => foo and bar are matched!
-    let result = client
+    let mut result = client
         .ft_search("index", "hello", FtSearchOptions::default())
         .await?;
+    for _ in 0..50 {
+        if result.total_results == 2 {
+            break;
+        }
+        sleep(Duration::from_millis(100)).await;
+        result = client
+            .ft_search("index", "hello", FtSearchOptions::default())
+            .await?;
+    }
     assert_eq!(2, result.total_results);
     assert_eq!("foo", result.results[0].id);
     assert_eq!(1, result.results[0].extra_attributes.len());

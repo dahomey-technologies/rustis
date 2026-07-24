@@ -5,7 +5,7 @@ use crate::{
     network::PushReceiver,
 };
 use futures_util::{Stream, StreamExt};
-use log::error;
+use log::warn;
 use serde::{Deserialize, Deserializer, de};
 use std::{
     net::SocketAddr,
@@ -42,23 +42,29 @@ impl Stream for MonitorStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         if self.closed {
-            Poll::Ready(None)
-        } else {
-            match self.get_mut().receiver.poll_next_unpin(cx) {
-                Poll::Ready(bytes) => match bytes {
-                    Some(bytes) => match bytes {
-                        Ok(resp_buf) => match resp_buf.to() {
-                            Ok(info) => Poll::Ready(Some(info)),
-                            Err(e) => {
-                                error!("Error will receiving data in monitor stream: {e}");
-                                Poll::Ready(None)
-                            }
-                        },
-                        Err(_) => Poll::Ready(None),
-                    },
-                    None => Poll::Ready(None),
+            return Poll::Ready(None);
+        }
+
+        let this = self.get_mut();
+
+        // An undecodable event must not end the stream: the consumer would stop
+        // polling and never see another monitored command, on a feed that is
+        // fully server-driven. Skip it and keep reading instead.
+        loop {
+            let Poll::Ready(event) = this.receiver.poll_next_unpin(cx) else {
+                return Poll::Pending;
+            };
+
+            let Some(event) = event else {
+                return Poll::Ready(None);
+            };
+
+            match event {
+                Ok(resp_buf) => match resp_buf.to() {
+                    Ok(info) => return Poll::Ready(Some(info)),
+                    Err(e) => warn!("Cannot decode a monitor event: {e}"),
                 },
-                Poll::Pending => Poll::Pending,
+                Err(e) => warn!("Error while receiving a monitor event: {e}"),
             }
         }
     }

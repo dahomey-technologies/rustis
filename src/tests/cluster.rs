@@ -652,6 +652,52 @@ async fn cluster_transaction() -> Result<()> {
     Ok(())
 }
 
+/// A multi-shard command whose shards do not all succeed must surface that shard's
+/// error to the caller. Reporting it as a disconnection instead makes the handler
+/// reconnect the whole cluster and replay in-flight work, turning a routine
+/// per-shard error into topology churn.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn per_shard_error_surfaces_to_the_caller_without_reconnecting() -> Result<()> {
+    let admin = get_cluster_test_client().await?;
+
+    // A user allowed to read one slot only. `clu03_a{1}` and `clu03_b{3}` are served
+    // by two different masters, so MGET is split in two sub-requests of which exactly
+    // one comes back as a NOPERM error frame.
+    admin
+        .acl_setuser(
+            "clu03_user",
+            ["reset", "on", ">clu03_pwd", "+@all", "%R~clu03_a{1}"],
+        )
+        .await?;
+    admin.set("clu03_a{1}", "value").await?;
+
+    let host = get_default_host();
+    let client = Client::connect(format!(
+        "redis+cluster://clu03_user:clu03_pwd@{host}:7000,{host}:7001,{host}:7002"
+    ))
+    .await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    let result: Result<Vec<Option<String>>> = client.mget(["clu03_a{1}", "clu03_b{3}"]).await;
+
+    // Restore the shared server state before asserting.
+    admin.acl_deluser("clu03_user").await?;
+    admin.del("clu03_a{1}").await?;
+
+    assert!(
+        matches!(&result, Err(Error::Redis(e)) if e.kind == RedisErrorKind::NoPerm),
+        "the failing shard's error must reach the caller, got {result:?}"
+    );
+    assert!(
+        on_reconnect.try_recv().is_err(),
+        "a per-shard error must not trigger a cluster reconnection"
+    );
+
+    Ok(())
+}
+
 /// Redis Cluster only supports transactions whose keys all live in the same slot.
 /// Commands are routed per key, so a cross-slot transaction would be split across
 /// nodes: the ones outside the pinned node execute immediately, outside any MULTI.

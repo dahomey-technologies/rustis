@@ -928,7 +928,14 @@ impl ClusterConnection {
             // These should be packed in a single array in no particular order.
             let mut results = Vec::<RespResponse>::new();
             for sub_result in sub_results {
-                let iter = sub_result.ok()?.into_array_iter().ok()?;
+                // Propagate the shard's failure as a failure. Returning `None` here
+                // would mean "disconnected" to the network handler, which would
+                // reconnect the whole cluster over what is merely one shard
+                // answering an error.
+                let iter = match sub_result.and_then(RespResponse::into_array_iter) {
+                    Ok(iter) => iter,
+                    Err(e) => return Some(Err(e)),
+                };
                 results.extend(iter);
             }
 
@@ -940,7 +947,12 @@ impl ClusterConnection {
             let mut results = SmallVec::<[(&Bytes, RespResponse); 10]>::new();
 
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
-                let iter = sub_result.ok()?.into_array_iter().ok()?;
+                // Same reasoning as above: one shard's error is an error for the
+                // caller, not a lost connection.
+                let iter = match sub_result.and_then(RespResponse::into_array_iter) {
+                    Ok(iter) => iter,
+                    Err(e) => return Some(Err(e)),
+                };
                 results.extend(sub_request.keys.iter().zip(iter));
             }
 

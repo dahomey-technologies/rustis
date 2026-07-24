@@ -1,7 +1,7 @@
 use crate::{
     Result, RetryReason,
     client::{Client, ReconnectionConfig},
-    commands::{GenericCommands, StringCommands},
+    commands::{GenericCommands, PubSubCommands, StringCommands},
     network::{SendBatchTestHook, sleep, timeout},
     resp::cmd,
     tests::{
@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use serial_test::serial;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 /// Retry reasons accumulated for one message must not be applied to the other
 /// messages sharing the same send batch: each message must be fed only with
@@ -147,6 +147,49 @@ async fn inflight_unsubscribe_does_not_desync_responses_after_reconnect() -> Res
     assert_eq!(
         "net03_marker", echoed,
         "the follow-up response must be routed to its own caller"
+    );
+
+    Ok(())
+}
+
+/// On reconnect, an in-flight UNSUBSCRIBE must not be turned into a SUBSCRIBE by
+/// `auto_resubscribe`. The correct action for a pending unsubscription on a
+/// fresh connection is to emit nothing and drop it: resubscribing would leave
+/// the server subscribed to a channel the client no longer tracks.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn inflight_unsubscribe_is_not_turned_into_subscribe_on_reconnect() -> Result<()> {
+    log_try_init();
+
+    let control = get_test_client().await?;
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    // Keep the default `auto_resubscribe = true` so the reconnection runs the
+    // resubscribe pass that this test exercises.
+    let client = get_test_client_with_config(config).await?;
+
+    // Send a non-retryable UNSUBSCRIBE (so it is purged rather than replayed)
+    // and close the connection on the next read. Its entry then sits in the
+    // handler's pending-unsubscriptions bookkeeping when the reconnection fires
+    // `auto_resubscribe`.
+    client.send_and_forget(
+        cmd("UNSUBSCRIBE")
+            .arg("net02_chan")
+            .kill_connection_on_read(1),
+        None,
+    )?;
+
+    // Let the reconnection and its resubscribe pass run.
+    sleep(Duration::from_millis(500)).await;
+
+    // The client must not have subscribed the server to the channel.
+    let num_sub: HashMap<String, usize> = control.pub_sub_numsub(["net02_chan"]).await?;
+    assert_eq!(
+        Some(&0usize),
+        num_sub.get("net02_chan"),
+        "an in-flight unsubscription must not be resubscribed on reconnect"
     );
 
     Ok(())

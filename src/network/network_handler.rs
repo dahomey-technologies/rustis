@@ -932,6 +932,18 @@ impl NetworkHandler {
     }
 
     async fn auto_resubscribe(&mut self) -> Result<()> {
+        // Drop every pending unsubscription first, emitting nothing. On a fresh
+        // connection the server is subscribed to nothing, so a pending
+        // unsubscription has already achieved its goal. Removing the channels
+        // from `subscriptions` up front also prevents the resubscribe loop
+        // below from restoring subscriptions the caller was in the middle of
+        // cancelling.
+        for map in self.pending_unsubscriptions.drain(..) {
+            for channel_or_pattern in map.into_keys() {
+                self.subscriptions.remove(&channel_or_pattern);
+            }
+        }
+
         if !self.subscriptions.is_empty() {
             for (channel_or_pattern, (subscription_type, _)) in &self.subscriptions {
                 match subscription_type {
@@ -972,32 +984,6 @@ impl NetworkHandler {
                     pending_sub.channel_or_pattern,
                     (pending_sub.subscription_type, pending_sub.sender),
                 );
-            }
-        }
-
-        if !self.pending_unsubscriptions.is_empty() {
-            for mut map in self.pending_unsubscriptions.drain(..) {
-                for (channel_or_pattern, subscription_type) in map.drain() {
-                    match subscription_type {
-                        SubscriptionType::Channel => {
-                            self.connection
-                                .subscribe(channel_or_pattern.clone())
-                                .await?;
-                        }
-                        SubscriptionType::Pattern => {
-                            self.connection
-                                .psubscribe(channel_or_pattern.clone())
-                                .await?;
-                        }
-                        SubscriptionType::ShardChannel => {
-                            self.connection
-                                .ssubscribe(channel_or_pattern.clone())
-                                .await?;
-                        }
-                    }
-
-                    self.subscriptions.remove(&channel_or_pattern);
-                }
             }
         }
 

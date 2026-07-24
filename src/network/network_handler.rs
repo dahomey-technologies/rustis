@@ -108,15 +108,11 @@ enum Status {
 
 struct MessageToSend {
     pub message: Message,
-    pub attempts: usize,
 }
 
 impl MessageToSend {
     pub fn new(message: Message) -> Self {
-        Self {
-            message,
-            attempts: 0,
-        }
+        Self { message }
     }
 }
 
@@ -124,16 +120,14 @@ impl MessageToSend {
 struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
-    pub attempts: usize,
     pub pending_responses: SmallVec<[RespResponse; 10]>,
 }
 
 impl MessageToReceive {
-    pub fn new(message: Message, num_commands: usize, attempts: usize) -> Self {
+    pub fn new(message: Message, num_commands: usize) -> Self {
         Self {
             message,
             num_commands,
-            attempts,
             pending_responses: SmallVec::new(),
         }
     }
@@ -441,11 +435,8 @@ impl NetworkHandler {
             }
 
             if num_commands_to_receive > 0 {
-                self.messages_to_receive.push_back(MessageToReceive::new(
-                    msg,
-                    num_commands_to_receive,
-                    message_to_send.attempts,
-                ));
+                self.messages_to_receive
+                    .push_back(MessageToReceive::new(msg, num_commands_to_receive));
             }
         }
 
@@ -897,22 +888,44 @@ impl NetworkHandler {
                 );
             }
 
-            while let Some(message_to_receive) = self.messages_to_receive.pop_back() {
-                self.messages_to_send.push_front(MessageToSend {
-                    message: message_to_receive.message,
-                    attempts: message_to_receive.attempts,
-                });
-            }
-
-            self.send_messages().await;
-
+            // Restore the connection status before replaying in-flight
+            // messages so that they are routed through `handle_message`,
+            // exactly as fresh messages and the retry path are.
             if let Status::Monitor | Status::EnteringMonitor = old_status {
                 if self.push_sender.is_some() {
                     self.status = Status::Monitor;
+                } else {
+                    self.status = Status::Connected;
                 }
             } else {
                 self.status = Status::Connected;
             }
+
+            // Replay every in-flight message through `handle_message` rather
+            // than pushing it straight into `messages_to_send`. This rebuilds
+            // the pub/sub bookkeeping (`pending_subscriptions` /
+            // `pending_unsubscriptions`) for the replayed messages exactly as
+            // the retry path does. Bypassing it would replay, for instance, an
+            // UNSUBSCRIBE without a matching `pending_unsubscriptions` entry:
+            // its confirmation push would then go unmatched, the stale message
+            // would keep its slot in the receive queue, and every subsequent
+            // response would be shifted by one, permanently. Messages already
+            // sent but awaiting a reply are replayed before the ones still
+            // queued, preserving the original global send order.
+            let to_replay: Vec<Message> = std::mem::take(&mut self.messages_to_receive)
+                .into_iter()
+                .map(|message_to_receive| message_to_receive.message)
+                .chain(
+                    std::mem::take(&mut self.messages_to_send)
+                        .into_iter()
+                        .map(|message_to_send| message_to_send.message),
+                )
+                .collect();
+            for message in to_replay {
+                self.handle_message(message);
+            }
+
+            self.send_messages().await;
 
             info!("[{}] reconnected!", self.tag);
             self.reconnection_state.reset_attempts();

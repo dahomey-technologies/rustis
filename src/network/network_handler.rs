@@ -55,10 +55,6 @@ pub(crate) struct SendBatchTestHook {
 }
 
 #[cfg(debug_assertions)]
-// This infrastructure is consumed by failure-path tests that assert retry
-// reasons do not leak across messages; the public API is unused until those
-// tests land.
-#[allow(dead_code)]
 impl SendBatchTestHook {
     #[cfg(test)]
     pub fn new() -> Self {
@@ -399,13 +395,14 @@ impl NetworkHandler {
             front.message.retry_reasons = Some(SmallVec::from_iter(reasons));
         }
 
-        let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
-
         let start_idx = self.messages_to_receive.len();
 
         while let Some(message_to_send) = self.messages_to_send.pop_front() {
             let mut msg = message_to_send.message;
 
+            // Scope the retry reasons to the current message: they must not
+            // leak onto the other messages sharing this send batch.
+            let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
             let reasons = msg.retry_reasons.take();
             if let Some(reasons) = reasons {
                 retry_reasons.extend(reasons);

@@ -8,7 +8,7 @@ use crate::{
         ServerCommands, StringCommands,
     },
     network::spawn,
-    resp::cmd,
+    resp::{BulkString, cmd},
     sleep,
     tests::{get_test_client, log_try_init},
 };
@@ -270,9 +270,9 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value").await?;
 
-    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
+    let keys_to_invalidate: Vec<BulkString> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
-    assert_eq!("key", keys_to_invalidate[0]);
+    assert_eq!(b"key", keys_to_invalidate[0].as_bytes());
 
     client1
         .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
@@ -297,9 +297,9 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value3").await?;
 
-    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
+    let keys_to_invalidate: Vec<BulkString> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
-    assert_eq!("key", keys_to_invalidate[0]);
+    assert_eq!(b"key", keys_to_invalidate[0].as_bytes());
 
     // broadcasting mode
     client1
@@ -318,9 +318,62 @@ async fn client_tracking() -> Result<()> {
 
     client2.set("key", "new_value4").await?;
 
-    let keys_to_invalidate: Vec<String> = invalidation_stream.next().await.unwrap();
+    let keys_to_invalidate: Vec<BulkString> = invalidation_stream.next().await.unwrap();
     assert_eq!(1, keys_to_invalidate.len());
-    assert_eq!("key", keys_to_invalidate[0]);
+    assert_eq!(b"key", keys_to_invalidate[0].as_bytes());
+
+    Ok(())
+}
+
+/// Redis keys are binary-safe, so an invalidation can name a key that is not
+/// valid UTF-8. Such an event must still reach the consumer, and above all must
+/// not end the stream: once ended, no invalidation ever arrives again and every
+/// cache built on top of it silently serves stale data for good.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_tracking_invalidation_survives_a_binary_key() -> Result<()> {
+    log_try_init();
+    let client1 = Client::connect("redis://127.0.0.1?connection_name=binary1").await?;
+    let client2 = Client::connect("redis://127.0.0.1?connection_name=binary2").await?;
+
+    let mut invalidation_stream = client1.create_client_tracking_invalidation_stream()?;
+
+    let binary_key = BulkString::new(vec![0xffu8, 0xfe]);
+    client1.set(binary_key.clone(), "value").await?;
+    client1.set("text_key", "value").await?;
+
+    client1
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
+        .await?;
+
+    // Have both keys tracked for this connection.
+    let _value: String = client1.get(binary_key.clone()).await?;
+    let _value: String = client1.get("text_key").await?;
+
+    client2.set(binary_key.clone(), "new_value").await?;
+
+    let keys_to_invalidate: Vec<BulkString> = invalidation_stream
+        .next()
+        .await
+        .expect("a binary key must not be reported as the end of the stream");
+    assert_eq!(1, keys_to_invalidate.len());
+    assert_eq!(binary_key.as_bytes(), keys_to_invalidate[0].as_bytes());
+
+    // The stream must still be alive: this second invalidation is the assertion
+    // that the binary one did not terminate it.
+    client2.set("text_key", "new_value").await?;
+
+    let keys_to_invalidate: Vec<BulkString> = invalidation_stream
+        .next()
+        .await
+        .expect("later invalidations must still be delivered");
+    assert_eq!(1, keys_to_invalidate.len());
+    assert_eq!(b"text_key", keys_to_invalidate[0].as_bytes());
+
+    client1
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
 
     Ok(())
 }

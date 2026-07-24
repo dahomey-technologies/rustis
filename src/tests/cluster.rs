@@ -527,6 +527,10 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 
     // Restore the topology before asserting: the cluster is shared with every
     // other test, and an early return here would leave a slot stranded.
+    // The key goes first: a node still holding keys for a slot refuses to hand
+    // that slot over to another node, and whether it still sees itself as the
+    // owner at that instant depends on gossip timing.
+    dst_client.del("clu01_moved").await?;
     migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
 
     let values = results?

@@ -144,6 +144,48 @@ fn parse_oversized_map_length_is_rejected() {
 }
 
 #[test]
+fn parse_leading_attribute_is_skipped_and_reply_decodes() {
+    // RESP-02: an attribute frame may precede any reply. The parser must skip
+    // it and decode the underlying reply normally, without a self-inflicted
+    // reconnect (RESP-01).
+    // |1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n  then  :42\r\n
+    let resp = b"|1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n:42\r\n";
+    let mut parser = RespFrameParser::new(resp);
+    let (frame, len) = parser.parse().unwrap();
+
+    assert_eq!(resp.len(), len);
+    assert!(matches!(frame, RespFrame::Integer(42)));
+}
+
+#[test]
+fn parse_attribute_preceding_an_array_element_is_skipped() {
+    // Attributes can precede an element inside a collection, so the skip must
+    // happen at frame-dispatch level, not only at the top level.
+    // *2\r\n :1\r\n  |1\r\n$1\r\na\r\n$1\r\nb\r\n :2\r\n
+    let resp = b"*2\r\n:1\r\n|1\r\n$1\r\na\r\n$1\r\nb\r\n:2\r\n";
+    let mut parser = RespFrameParser::new(resp);
+    let (frame, len) = parser.parse().unwrap();
+
+    assert_eq!(resp.len(), len);
+    assert!(matches!(frame, RespFrame::Array { len: 2, .. }));
+}
+
+#[test]
+fn parse_big_number_is_exposed_as_its_string_payload() {
+    // RESP-02: a big number does not fit in an i64 and is surfaced as its
+    // decimal-string payload.
+    let resp = b"(3492890328409238509324850943850943825024385\r\n";
+    let mut parser = RespFrameParser::new(resp);
+    let (frame, len) = parser.parse().unwrap();
+
+    assert_eq!(resp.len(), len);
+    let RespFrame::BulkString(r) = frame else {
+        panic!("expected a big number surfaced as a bulk string, got {frame:?}");
+    };
+    assert_eq!(&resp[r], b"3492890328409238509324850943850943825024385");
+}
+
+#[test]
 fn parse_map() {
     let resp = b"%1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"; // {"foo": "bar"}
     let mut parser = RespFrameParser::new(resp);

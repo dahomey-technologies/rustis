@@ -15,6 +15,8 @@ pub(crate) const VERBATIM_STRING_TAG: u8 = b'=';
 pub(crate) const MAP_TAG: u8 = b'%';
 pub(crate) const SET_TAG: u8 = b'~';
 pub(crate) const PUSH_TAG: u8 = b'>';
+pub(crate) const ATTRIBUTE_TAG: u8 = b'|';
+pub(crate) const BIG_NUMBER_TAG: u8 = b'(';
 
 /// Maximum collection-nesting depth the parser will descend into before
 /// rejecting a frame. RESP replies are shallow in practice (a handful of levels
@@ -95,8 +97,36 @@ impl<'a> RespFrameParser<'a> {
         Ok(())
     }
 
+    /// Consumes any leading RESP3 attribute frames (`|<n>\r\n` followed by `2n`
+    /// values). Attributes are out-of-band metadata that may legally precede
+    /// *any* reply, so they are skipped at frame-dispatch level and never
+    /// surfaced as a frame (RESP-02). Element values are consumed with
+    /// [`Self::parse_value`], which itself skips nested attributes.
+    #[inline]
+    fn skip_attributes(&mut self) -> Result<()> {
+        while self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
+            self.pos += 1;
+            let len = self.parse_integer()?;
+            if len < 0 {
+                return Err(Error::Client(ClientError::CannotParseMap));
+            }
+            let len = len as usize * 2;
+            Self::check_collection_len(len)?;
+            self.enter()?;
+            for _ in 0..len {
+                self.parse_value()?;
+            }
+            self.leave();
+        }
+        Ok(())
+    }
+
     #[inline(always)]
     pub fn parse(&mut self) -> Result<(RespFrame, usize)> {
+        self.skip_attributes()?;
+        if self.pos >= self.buf.len() {
+            return Err(Error::EOF);
+        }
         let tag = self.buf[self.pos];
         self.pos += 1;
 
@@ -220,6 +250,14 @@ impl<'a> RespFrameParser<'a> {
                 Some((len, ranges)) => RespFrame::Push { len, ranges },
                 None => RespFrame::Null,
             },
+            // A big number is an arbitrary-precision integer that does not fit
+            // in an `i64`; it is surfaced as its decimal-string payload so the
+            // caller can read it as a string (RESP-02).
+            BIG_NUMBER_TAG => {
+                let start = self.pos;
+                self.parse_crlf()?;
+                RespFrame::BulkString(start..self.pos - 2)
+            }
             _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         };
 
@@ -228,6 +266,10 @@ impl<'a> RespFrameParser<'a> {
 
     pub fn parse_range(&mut self, range: Range<usize>) -> Result<RespFrame> {
         self.pos = range.start;
+        self.skip_attributes()?;
+        if self.pos >= self.buf.len() {
+            return Err(Error::EOF);
+        }
         let tag = self.buf[self.pos];
         self.pos += 1;
 
@@ -304,6 +346,7 @@ impl<'a> RespFrameParser<'a> {
                 Some((len, ranges)) => RespFrame::Push { len, ranges },
                 None => RespFrame::Null,
             },
+            BIG_NUMBER_TAG => RespFrame::BulkString(self.pos..range.end - 2),
             _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
         };
 
@@ -393,6 +436,7 @@ impl<'a> RespFrameParser<'a> {
     }
 
     fn parse_value(&mut self) -> Result<()> {
+        self.skip_attributes()?;
         if self.pos >= self.buf.len() {
             return Err(Error::EOF);
         }
@@ -402,7 +446,7 @@ impl<'a> RespFrameParser<'a> {
 
         match tag {
             SIMPLE_STRING_TAG | SIMPLE_ERROR_TAG | INTEGER_TAG | DOUBLE_TAG | NULL_TAG
-            | BOOL_TAG => self.parse_crlf(),
+            | BOOL_TAG | BIG_NUMBER_TAG => self.parse_crlf(),
 
             BULK_STRING_TAG | BULK_ERROR_TAG | VERBATIM_STRING_TAG => {
                 let len = self.parse_integer()?;

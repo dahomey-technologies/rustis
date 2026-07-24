@@ -159,6 +159,9 @@ pub(crate) struct NetworkHandler {
     reconnection_state: ReconnectionState,
     pending_results: SmallVec<[PendingResult; 64]>,
     pending_result_batches: SmallVec<[PendingResultBatch; 64]>,
+    /// Number of incoming results belonging to a message that has already been
+    /// resolved, and which must therefore be dropped instead of matched.
+    results_to_discard: usize,
     #[cfg(test)]
     send_batch_test_hook: Option<SendBatchTestHook>,
 }
@@ -198,6 +201,7 @@ impl NetworkHandler {
             reconnection_state: ReconnectionState::new(reconnection_config),
             pending_results: SmallVec::new(),
             pending_result_batches: SmallVec::new(),
+            results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
         };
@@ -547,12 +551,34 @@ impl NetworkHandler {
     }
 
     fn receive_result(&mut self, result: Result<RespResponse>) {
+        // Responses owed to a message that was already resolved as a whole: the
+        // commands were executed, so their replies still arrive, but there is no
+        // caller left for them. Matching them would shift every subsequent
+        // response by one.
+        if self.results_to_discard > 0 {
+            self.results_to_discard -= 1;
+            debug!(
+                "[{}] discarding response of an already resolved message: {result:?}",
+                self.tag
+            );
+            return;
+        }
+
         match self.messages_to_receive.front_mut() {
             Some(message_to_receive) => {
                 log::trace!("message_to_receive: {:?}", message_to_receive);
 
                 if message_to_receive.num_commands == 1 || result.is_err() {
                     if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
+                        // A batch message is sent as several independent
+                        // commands, each awaiting its own response. Resolving
+                        // the whole message on the error of one of them leaves
+                        // the commands queued behind it without a caller, while
+                        // their replies are already on their way.
+                        if message_to_receive.num_commands > 1 {
+                            self.results_to_discard += message_to_receive.num_commands - 1;
+                        }
+
                         let mut should_retry = false;
 
                         if let Err(Error::Retry(_)) = &result {
@@ -796,6 +822,10 @@ impl NetworkHandler {
         debug!("[{}] reconnecting...", self.tag);
         let old_status = self.status;
         self.status = Status::Disconnected;
+
+        // The responses we were waiting to discard died with the connection;
+        // keeping the count would discard legitimate responses afterwards.
+        self.results_to_discard = 0;
 
         // Purge every non-retryable message, wherever it sits in the queue,
         // and keep the retryable ones in order. A prefix-only purge would leave

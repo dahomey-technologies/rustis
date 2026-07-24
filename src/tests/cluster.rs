@@ -17,6 +17,7 @@ use crate::{
 };
 use futures_util::try_join;
 use serial_test::serial;
+use smallvec::smallvec;
 use std::{collections::HashSet, future::IntoFuture, time::Duration};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -451,6 +452,163 @@ async fn refresh_removing_a_node_does_not_hang_in_flight_callers() -> Result<()>
     // request that can never be fulfilled. Completing within the timeout is the
     // assertion: without the purge, this call never returns.
     let _: Result<String> = timeout(Duration::from_secs(3), client.send(cmd("PING"), None)).await?;
+
+    Ok(())
+}
+
+/// A batch message is fed to the cluster as N independent requests. When one of
+/// them is redirected (ASK/MOVED) the whole message is retried — but the
+/// requests queued behind it must be discarded too. Otherwise their replies
+/// still arrive, get matched FIFO against the retried message, and shift every
+/// subsequent response by one.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let hello_result = client.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+    } else {
+        client.cluster_shards().await?
+    };
+
+    let slot = client.cluster_keyslot("clu01_moved").await?;
+    let src_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
+    let dst_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for destination shard");
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+
+    // Keys whose slots are left untouched by the migration below.
+    client.set("clu01_a", "A").await?;
+    client.set("clu01_b", "B").await?;
+
+    // Hand the slot over to another shard. The batch client keeps its stale slot
+    // map, so a command on that key is answered with a MOVED redirection.
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+
+    // The redirected key's value must live on its new owner.
+    dst_client.set("clu01_moved", "M").await?;
+
+    // A batch whose *middle* command is redirected: the third request is the one
+    // whose reply must not leak onto the retried message.
+    let results = client
+        .internal_send_batch(
+            smallvec![
+                cmd("GET").key("clu01_a").into(),
+                cmd("GET").key("clu01_moved").into(),
+                cmd("GET").key("clu01_b").into(),
+            ],
+            Some(true),
+        )
+        .await;
+
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test, and an early return here would leave a slot stranded.
+    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
+    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
+    src_client.cluster_setslot(slot, Node(src_id)).await?;
+    dst_client.cluster_setslot(slot, Node(src_id)).await?;
+
+    let values = results?
+        .iter()
+        .map(|response| response.to::<String>())
+        .collect::<Result<Vec<_>>>()?;
+    assert_eq!(
+        vec!["A", "M", "B"],
+        values,
+        "each command of the batch must receive its own response, in order"
+    );
+
+    Ok(())
+}
+
+/// A topology discovery that describes no usable node must be rejected, not
+/// applied. Applying it empties the node list, and the next node lookup then
+/// indexes an empty collection — panicking the network task, which owns all
+/// routing state, and leaving the client permanently dead.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() -> Result<()> {
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    let hello_result = client.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+    } else {
+        client.cluster_shards().await?
+    };
+
+    let slot = client.cluster_keyslot("clu09_key").await?;
+    let src_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
+    let dst_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for destination shard");
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+
+    // Hand the slot over so the client, whose slot map is now stale, is answered
+    // with a MOVED redirection — the trigger of a topology refresh.
+    dst_client.cluster_setslot(slot, Importing(src_id)).await?;
+    src_client.cluster_setslot(slot, Migrating(dst_id)).await?;
+    dst_client.cluster_setslot(slot, Node(dst_id)).await?;
+    src_client.cluster_setslot(slot, Node(dst_id)).await?;
+
+    // That refresh discovers an empty cluster.
+    cluster_hook.arm_empty_topology_on_refresh();
+    let _: Result<String> = client.send(cmd("GET").key("clu09_key"), None).await;
+
+    // The client must still be alive. A keyless command picks a node at random,
+    // which is precisely what indexes the node list.
+    let pong = timeout(
+        Duration::from_secs(3),
+        client.send::<String>(cmd("PING"), None),
+    )
+    .await;
+
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test, and an early return here would leave a slot stranded.
+    src_client.cluster_setslot(slot, Importing(dst_id)).await?;
+    dst_client.cluster_setslot(slot, Migrating(src_id)).await?;
+    src_client.cluster_setslot(slot, Node(src_id)).await?;
+    dst_client.cluster_setslot(slot, Node(src_id)).await?;
+
+    assert_eq!(
+        "PONG", pong??,
+        "an unusable topology must surface as an error, not kill the network task"
+    );
 
     Ok(())
 }

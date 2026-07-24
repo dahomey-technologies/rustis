@@ -38,6 +38,10 @@ pub(crate) struct ClusterTestHook {
     /// node, reproducing the state a topology refresh leaves behind when a node
     /// disappears while requests are in flight against it.
     drop_front_pending_node: Arc<std::sync::atomic::AtomicBool>,
+    /// When armed, the next topology refresh discovers an empty cluster,
+    /// reproducing what a buggy server, a proxy, or a corrupted discovery reply
+    /// can return.
+    empty_topology_on_refresh: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[cfg(test)]
@@ -55,6 +59,17 @@ impl ClusterTestHook {
 
     fn take_drop_front_pending_node(&self) -> bool {
         self.drop_front_pending_node
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Arms a one-shot empty topology discovery on the next refresh.
+    pub fn arm_empty_topology_on_refresh(&self) {
+        self.empty_topology_on_refresh
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn take_empty_topology_on_refresh(&self) -> bool {
+        self.empty_topology_on_refresh
             .swap(false, std::sync::atomic::Ordering::SeqCst)
     }
 }
@@ -157,6 +172,9 @@ pub struct ClusterConnection {
     tag: Arc<str>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
+    /// Whether the topology has already been refreshed during the send batch
+    /// currently being fed. Reset by `flush`, which ends that batch.
+    refreshed_in_current_batch: bool,
     #[cfg(test)]
     test_hook: Option<ClusterTestHook>,
 }
@@ -181,6 +199,7 @@ impl ClusterConnection {
             pending_requests: VecDeque::new(),
             tag,
             transaction_state: TransactionState::default(),
+            refreshed_in_current_batch: false,
             #[cfg(test)]
             test_hook: config.cluster_test_hook.clone(),
         })
@@ -197,7 +216,13 @@ impl ClusterConnection {
                 }
             )
         }) {
-            self.refresh_nodes_and_slot_ranges().await?;
+            // The retry reasons are carried by the message, so every command of
+            // a retried batch is fed with them. One refresh per send batch is
+            // enough: it reloads the whole topology, which covers them all.
+            if !self.refreshed_in_current_batch {
+                self.refreshed_in_current_batch = true;
+                self.refresh_nodes_and_slot_ranges().await?;
+            }
         }
 
         let ask_reasons = retry_reasons
@@ -272,6 +297,9 @@ impl ClusterConnection {
 
     #[inline]
     pub async fn flush(&mut self) -> Result<()> {
+        // End of the send batch: allow the next one to refresh again if needed.
+        self.refreshed_in_current_batch = false;
+
         let mut flush_futures = SmallVec::<[_; 16]>::new();
 
         for node in self.nodes.iter_mut() {
@@ -467,7 +495,9 @@ impl ClusterConnection {
             self.get_master_node_index_by_slot(first_slot, ask_reasons)
                 .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
         } else {
-            Ok((self.get_random_node_index(), false))
+            self.get_random_node_index()
+                .map(|node_idx| (node_idx, false))
+                .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
         }
     }
 
@@ -574,6 +604,15 @@ impl ClusterConnection {
                 }
             }
 
+            // `select_all` panics on an empty set of futures. A node-less
+            // cluster connection cannot serve anything: report it as a
+            // disconnection so the handler reconnects and rediscovers the
+            // topology, rather than taking the whole network task down.
+            if self.nodes.is_empty() {
+                warn!("[{}] No cluster node available to read from", self.tag);
+                return None;
+            }
+
             let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
             let (result, node_idx, _) = future::select_all(read_futures).await;
 
@@ -638,6 +677,12 @@ impl ClusterConnection {
                     request_info = ri;
                     break;
                 }
+            }
+
+            // See `read()`: a node-less connection cannot serve anything.
+            if self.nodes.is_empty() {
+                warn!("[{}] No cluster node available to read from", self.tag);
+                return Poll::Ready(None);
             }
 
             let Some((node_idx, result)) =
@@ -936,61 +981,74 @@ impl ClusterConnection {
         // TODO improve reconnection strategy with multiple retries
     }
 
-    async fn connect_to_cluster(
-        cluster_config: &ClusterConfig,
+    /// Discover the cluster topology over a **dedicated, short-lived**
+    /// connection, trying each address in turn.
+    ///
+    /// Discovery must never run on one of the multiplexed node connections.
+    /// Those are driven by the network handler in feed/flush/read batches, so
+    /// they can hold commands that have been fed but not yet flushed — and
+    /// callers of this function run *inside* such a batch (`feed` triggers a
+    /// refresh on a MOVED). An inline request/response on such a connection
+    /// flushes the pending command too, then reads a single frame and
+    /// attributes it to the discovery command, corrupting both.
+    async fn discover_shards(
+        addresses: &[(String, u16)],
         config: &Config,
-    ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
-        debug!("Discovering cluster shard and slots...");
+    ) -> Option<Vec<ClusterShardResult>> {
+        debug!("Discovering cluster shards and slots...");
 
-        let mut shard_info_list: Option<Vec<ClusterShardResult>> = None;
-
-        for node_config in &cluster_config.nodes {
-            match StandaloneConnection::connect(&node_config.0, node_config.1, config).await {
-                Ok(mut connection) => {
-                    let version: Result<Version> = connection.get_version().try_into();
-                    let Ok(version) = version else {
-                        warn!("[{}] Cannot execute get Redis version", connection.tag());
-                        break;
-                    };
-
-                    // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
-                    if version.major < 7 {
-                        match connection.cluster_slots().await {
-                            Ok(si) => {
-                                shard_info_list =
-                                    Some(Self::convert_from_legacy_shard_description(si));
-                                break;
-                            }
-                            Err(e) => warn!(
-                                "[{}] Cannot execute `cluster_slots` on node ({}:{}): {e}",
-                                connection.tag(),
-                                node_config.0,
-                                node_config.1
-                            ),
-                        }
-                    } else {
-                        match connection.cluster_shards().await {
-                            Ok(si) => {
-                                shard_info_list = Some(si);
-                                break;
-                            }
-                            Err(e) => warn!(
-                                "[{}] Cannot execute `cluster_shards` on node ({}:{}): {e}",
-                                connection.tag(),
-                                node_config.0,
-                                node_config.1
-                            ),
-                        }
-                    }
+        for (host, port) in addresses {
+            let mut connection = match StandaloneConnection::connect(host, *port, config).await {
+                Ok(connection) => connection,
+                Err(e) => {
+                    warn!("Cannot connect to node ({host}:{port}): {e}");
+                    continue;
                 }
+            };
+
+            let version: Result<Version> = connection.get_version().try_into();
+            let Ok(version) = version else {
+                warn!("[{}] Cannot get Redis version", connection.tag());
+                continue;
+            };
+
+            // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
+            let shard_info_list = if version.major < 7 {
+                connection
+                    .cluster_slots()
+                    .await
+                    .map(Self::convert_from_legacy_shard_description)
+            } else {
+                connection.cluster_shards().await
+            };
+
+            match shard_info_list {
+                Ok(shard_info_list) => return Some(shard_info_list),
                 Err(e) => warn!(
-                    "Cannot connect to node ({}:{}): {}",
-                    node_config.0, node_config.1, e
+                    "[{}] Cannot discover cluster shards on node ({host}:{port}): {e}",
+                    connection.tag()
                 ),
             }
         }
 
-        let Some(shard_info_list) = shard_info_list else {
+        None
+    }
+
+    /// Addresses to try for topology discovery: the nodes currently known,
+    /// then the configured seeds as a fallback.
+    fn discovery_addresses(&self) -> Vec<(String, u16)> {
+        let mut addresses: Vec<(String, u16)> =
+            self.nodes.iter().map(|node| node.address.clone()).collect();
+        addresses.extend(self.cluster_config.nodes.iter().cloned());
+        addresses
+    }
+
+    async fn connect_to_cluster(
+        cluster_config: &ClusterConfig,
+        config: &Config,
+    ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
+        let Some(shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
+        else {
             return Err(Error::Client(ClientError::ClusterConfig));
         };
 
@@ -1036,14 +1094,9 @@ impl ClusterConnection {
     async fn connect_replicas(&mut self) -> Result<()> {
         debug!("[{}] Connecting replicas...", self.tag);
 
-        let connection = &mut self.get_random_node_mut().connection;
-        let version: Version = connection.get_version().try_into()?;
-
-        // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
-        let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-            Self::convert_from_legacy_shard_description(connection.cluster_slots().await?)
-        } else {
-            connection.cluster_shards().await?
+        let addresses = self.discovery_addresses();
+        let Some(shard_info_list) = Self::discover_shards(&addresses, &self.config).await else {
+            return Err(Error::Client(ClientError::ClusterConfig));
         };
 
         for shard_info in shard_info_list {
@@ -1087,15 +1140,33 @@ impl ClusterConnection {
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
         debug!("[{}] Reloading slot ranges", self.tag);
 
-        let connection = &mut self.get_random_node_mut().connection;
-        let version: Version = connection.get_version().try_into()?;
-
-        // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
-        let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-            Self::convert_from_legacy_shard_description(connection.cluster_slots().await?)
-        } else {
-            connection.cluster_shards().await?
+        let addresses = self.discovery_addresses();
+        #[cfg_attr(not(test), allow(unused_mut))]
+        let Some(mut shard_info_list) = Self::discover_shards(&addresses, &self.config).await
+        else {
+            return Err(Error::Client(ClientError::ClusterConfig));
         };
+
+        // Test-only: simulate a discovery reply that describes no node at all.
+        #[cfg(test)]
+        if let Some(hook) = &self.test_hook
+            && hook.take_empty_topology_on_refresh()
+        {
+            shard_info_list.clear();
+        }
+
+        // Refuse an unusable topology rather than applying it. Applying it would
+        // empty `nodes`, and every later node lookup — the `select_all` in
+        // `read()`, the random-node pick — indexes that collection and would
+        // panic the network task, which owns all routing state. Nothing has been
+        // mutated at this point, so the previous topology stays in place.
+        if shard_info_list.is_empty() {
+            warn!(
+                "[{}] Ignoring a cluster topology describing no node",
+                self.tag
+            );
+            return Err(Error::Client(ClientError::ClusterConfig));
+        }
 
         // filter out nodes that do not exist anymore
         let mut node_ids = shard_info_list
@@ -1177,14 +1248,11 @@ impl ClusterConnection {
     }
 
     #[inline]
-    fn get_random_node_index(&self) -> usize {
-        rand::rng().random_range(0..self.nodes.len())
-    }
-
-    #[inline]
-    fn get_random_node_mut(&mut self) -> &mut Node {
-        let node_idx = self.get_random_node_index();
-        &mut self.nodes[node_idx]
+    fn get_random_node_index(&self) -> Option<usize> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+        Some(rand::rng().random_range(0..self.nodes.len()))
     }
 
     #[inline]

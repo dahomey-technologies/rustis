@@ -318,9 +318,12 @@ impl RedisErrorKind {
         address: &[u8],
     ) -> Result<(u16, (String, u16))> {
         let hash_slot = atoi(hash_slot).ok_or(Error::Client(ClientError::CannotParseHashSlot))?;
+        // Split at the last colon: IPv6 hosts contain colons, and Redis emits
+        // bare `host:port` with no brackets, so only the rightmost colon
+        // reliably separates the port.
         let index = address
             .iter()
-            .position(|b| *b == b':')
+            .rposition(|b| *b == b':')
             .ok_or(Error::Client(ClientError::CannotParseAddress))?;
         let (host, port) = (&address[..index], &address[index + 1..]);
         let port = atoi(port).ok_or(Error::Client(ClientError::CannotParsePort))?;

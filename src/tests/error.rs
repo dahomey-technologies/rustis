@@ -52,6 +52,22 @@ fn ask_error() {
     ));
 }
 
+#[test]
+fn moved_error_ipv6() {
+    // The address must be split at the last colon (the port separator), so
+    // that IPv6 hosts, which contain colons, are parsed correctly.
+    let raw_error = b"MOVED 3999 2001:db8::1:6380";
+    let error = RedisError::try_from(&raw_error[..]);
+    println!("error: {error:?}");
+    assert!(matches!(
+        error,
+        Ok(RedisError {
+            kind: RedisErrorKind::Moved { hash_slot: 3999, address: (host, 6380) },
+            description
+        }) if description.is_empty() && host == "2001:db8::1"
+    ));
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]

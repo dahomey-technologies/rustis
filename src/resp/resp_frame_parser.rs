@@ -84,6 +84,9 @@ impl<'a> RespFrameParser<'a> {
                 if len == -1 {
                     RespFrame::Null
                 } else {
+                    if len < 0 {
+                        return Err(Error::Client(ClientError::CannotParseBulkString));
+                    }
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -121,6 +124,9 @@ impl<'a> RespFrameParser<'a> {
             }
             BULK_ERROR_TAG => {
                 let len = self.parse_integer()?;
+                if len < 0 {
+                    return Err(Error::Client(ClientError::CannotParseBulkError));
+                }
                 let start = self.pos;
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
@@ -186,6 +192,9 @@ impl<'a> RespFrameParser<'a> {
                 if len == -1 {
                     RespFrame::Null
                 } else {
+                    if len < 0 {
+                        return Err(Error::Client(ClientError::CannotParseBulkString));
+                    }
                     RespFrame::BulkString(self.pos..self.pos + len as usize)
                 }
             }
@@ -205,6 +214,9 @@ impl<'a> RespFrameParser<'a> {
             }
             BULK_ERROR_TAG => {
                 let len = self.parse_integer()?;
+                if len < 0 {
+                    return Err(Error::Client(ClientError::CannotParseBulkError));
+                }
                 RespFrame::Error(self.pos..self.pos + len as usize)
             }
             ARRAY_TAG => match self.parse_collection(1)? {

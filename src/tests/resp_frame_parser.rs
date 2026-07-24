@@ -46,6 +46,33 @@ fn parse_negative_array_length_errors() {
 }
 
 #[test]
+fn parse_negative_bulk_string_length_errors() {
+    // RESP-03: a bulk-string length other than -1 (nil) must be rejected, not
+    // fed to `pos + len as usize + 2` where it overflows.
+    let resp = b"$-2\r\n";
+    let mut parser = RespFrameParser::new(resp);
+    assert!(parser.parse().is_err());
+}
+
+#[test]
+fn parse_negative_bulk_error_length_errors() {
+    // RESP-03: the bulk-error arm had no negative-length guard at all.
+    let resp = b"!-2\r\n";
+    let mut parser = RespFrameParser::new(resp);
+    assert!(parser.parse().is_err());
+}
+
+#[test]
+fn parse_range_negative_bulk_lengths_error() {
+    // RESP-03: `parse_range` re-validates nothing on its own, so cover both
+    // negative-length arms there too.
+    let resp = b"$-2\r\n";
+    assert!(RespFrameParser::new(resp).parse_range(0..resp.len()).is_err());
+    let resp = b"!-2\r\n";
+    assert!(RespFrameParser::new(resp).parse_range(0..resp.len()).is_err());
+}
+
+#[test]
 fn parse_map() {
     let resp = b"%1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"; // {"foo": "bar"}
     let mut parser = RespFrameParser::new(resp);

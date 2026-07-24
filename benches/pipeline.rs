@@ -42,7 +42,13 @@ async fn get_fred_client() -> fred::clients::Client {
     client
 }
 
-fn bench_redis_simple_getsetdel_pipeline(b: &mut Bencher) {
+// This baseline uses redis-rs's *synchronous* connection (`get_connection()`) —
+// no channel hop, no task wakeup, no multiplexer — while the rustis benchmark
+// below pays a full multiplexed round-trip. The two are therefore *different
+// execution models*: part of any measured gap is the model, not batch
+// efficiency. It is kept only as a raw lower-bound reference. For a like-for-like
+// comparison against rustis, use the multiplexed baseline below.
+fn bench_redis_sync_simple_getsetdel_pipeline(b: &mut Bencher) {
     let client = get_redis_client();
     let mut con = client.get_connection().unwrap();
 
@@ -57,7 +63,35 @@ fn bench_redis_simple_getsetdel_pipeline(b: &mut Bencher) {
     });
 }
 
-#[allow(dead_code)]
+// Same execution model as `bench_rustis_simple_getsetdel_pipeline`: redis-rs's
+// multiplexed async connection. This is the fair head-to-head baseline for the
+// 3-command pipeline.
+fn bench_redis_multiplexed_simple_getsetdel_pipeline(b: &mut Bencher) {
+    use redis::RedisError;
+
+    let client = get_redis_client();
+    let runtime = current_thread_runtime();
+    let mut con = runtime
+        .block_on(client.get_multiplexed_async_connection())
+        .unwrap();
+
+    b.iter(|| {
+        runtime
+            .block_on(async {
+                let key = "test_key";
+                let _result: ((), i64, usize) = redis::pipe()
+                    .set(key, 42)
+                    .get(key)
+                    .del(key)
+                    .query_async(&mut con)
+                    .await?;
+
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    });
+}
+
 fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
     use fred::prelude::*;
 
@@ -71,8 +105,8 @@ fn bench_fred_simple_getsetdel_pipeline(b: &mut Bencher) {
 
                 let pipeline = client.pipeline();
                 pipeline.set::<(), _, _>(key, 42, None, None, false).await?;
-                pipeline.get::<i64, _>(key).await?;
-                pipeline.del::<u32, _>(key).await?;
+                pipeline.get::<(), _>(key).await?;
+                pipeline.del::<(), _>(key).await?;
                 let _result: ((), i64, usize) = pipeline.all().await?;
 
                 Ok::<_, Error>(())
@@ -110,32 +144,10 @@ fn bench_rustis_simple_getsetdel_pipeline(b: &mut Bencher) {
 
 const PIPELINE_QUERIES: usize = 1_000;
 
-fn bench_redis_async_long_pipeline(b: &mut Bencher) {
-    use redis::RedisError;
-
-    let client = get_redis_client();
-    let runtime = current_thread_runtime();
-    let mut con = runtime
-        .block_on(client.get_multiplexed_async_connection())
-        .unwrap();
-
-    b.iter(|| {
-        runtime
-            .block_on(async {
-                let mut pipe = redis::Pipeline::with_capacity(PIPELINE_QUERIES);
-
-                for i in 0..PIPELINE_QUERIES {
-                    pipe.set(format!("foo{i}"), "bar");
-                }
-
-                let _result: Vec<String> = pipe.query_async(&mut con).await?;
-
-                Ok::<_, RedisError>(())
-            })
-            .unwrap();
-    });
-}
-
+// redis-rs's multiplexed async connection — the fair head-to-head baseline for
+// the 1000-command pipeline, sharing rustis's execution model. redis 1.0 exposes
+// no separate single-async connection (`get_async_connection` was removed), so
+// this multiplexed connection is the only async model available to compare.
 fn bench_redis_multiplexed_async_long_pipeline(b: &mut Bencher) {
     use redis::RedisError;
 
@@ -174,7 +186,7 @@ fn bench_fred_long_pipeline(b: &mut Bencher) {
                 let pipeline = client.pipeline();
                 for i in 0..PIPELINE_QUERIES {
                     pipeline
-                        .set::<String, _, _>(format!("foo{i}"), "bar", None, None, false)
+                        .set::<(), _, _>(format!("foo{i}"), "bar", None, None, false)
                         .await?;
                 }
 
@@ -215,13 +227,17 @@ fn bench_simple(c: &mut Criterion) {
     group
         .measurement_time(Duration::from_secs(10))
         .bench_function(
-            "redis_simple_getsetdel_pipeline",
-            bench_redis_simple_getsetdel_pipeline,
+            "redis_sync_simple_getsetdel_pipeline",
+            bench_redis_sync_simple_getsetdel_pipeline,
         )
-        // .bench_function(
-        //     "fred_simple_getsetdel_pipeline",
-        //     bench_fred_simple_getsetdel_pipeline,
-        // )
+        .bench_function(
+            "redis_multiplexed_simple_getsetdel_pipeline",
+            bench_redis_multiplexed_simple_getsetdel_pipeline,
+        )
+        .bench_function(
+            "fred_simple_getsetdel_pipeline",
+            bench_fred_simple_getsetdel_pipeline,
+        )
         .bench_function(
             "rustis_simple_getsetdel_pipeline",
             bench_rustis_simple_getsetdel_pipeline,
@@ -233,7 +249,6 @@ fn bench_long(c: &mut Criterion) {
     let mut group = c.benchmark_group("long_pipeline");
     group
         .measurement_time(Duration::from_secs(10))
-        .bench_function("redis_async_long_pipeline", bench_redis_async_long_pipeline)
         .bench_function(
             "redis_multiplexed_async_long_pipeline",
             bench_redis_multiplexed_async_long_pipeline,

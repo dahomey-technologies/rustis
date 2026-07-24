@@ -182,7 +182,10 @@ impl StandaloneConnection {
         if self.kill_connection_on_read_countdown > 0 {
             self.kill_connection_on_read_countdown -= 1;
             if self.kill_connection_on_read_countdown == 0 {
-                debug!("[{}] (try_read) Simulating a closed socket on read", self.tag);
+                debug!(
+                    "[{}] (try_read) Simulating a closed socket on read",
+                    self.tag
+                );
                 return Poll::Ready(None);
             }
         }

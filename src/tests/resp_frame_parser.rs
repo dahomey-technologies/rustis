@@ -103,6 +103,47 @@ fn parse_nesting_within_limit_succeeds() {
 }
 
 #[test]
+fn parse_oversized_bulk_string_length_is_rejected_before_payload() {
+    // HARD-02: a header declaring more than MAX_BULK_LENGTH (512 MiB) must be
+    // rejected outright, not returned as `EOF` — otherwise the streaming
+    // decoder would keep buffering, waiting for bytes that never come.
+    let resp = b"$536870913\r\n"; // 512 MiB + 1, no payload
+    let mut parser = RespFrameParser::new(resp);
+    assert!(matches!(
+        parser.parse(),
+        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+    ));
+}
+
+#[test]
+fn parse_oversized_collection_length_is_rejected() {
+    // HARD-02: a collection cardinality beyond MAX_COLLECTION_LENGTH must be
+    // rejected before the element loop runs.
+    let resp = b"*134217729\r\n"; // 128 Mi + 1 elements
+    let mut parser = RespFrameParser::new(resp);
+    assert!(matches!(
+        parser.parse(),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+}
+
+#[test]
+fn parse_oversized_map_length_is_rejected() {
+    // The map arm doubles the declared length; a value that overflows the cap
+    // only after doubling must still be caught.
+    let resp = b"%67108865\r\n"; // 64 Mi + 1 pairs => 128 Mi + 2 elements
+    let mut parser = RespFrameParser::new(resp);
+    assert!(matches!(
+        parser.parse(),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+}
+
+#[test]
 fn parse_map() {
     let resp = b"%1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"; // {"foo": "bar"}
     let mut parser = RespFrameParser::new(resp);

@@ -453,7 +453,7 @@ impl NetworkHandler {
                 // so a test can assert reasons do not leak across messages.
                 #[cfg(test)]
                 if let Some(hook) = &self.send_batch_test_hook {
-                    let command_name = String::from_utf8_lossy(&command.name()).into_owned();
+                    let command_name = String::from_utf8_lossy(command.name()).into_owned();
                     hook.record_fed(command_name.clone(), retry_reasons.len());
 
                     // Arm a read-side kill onto this command if a test queued one

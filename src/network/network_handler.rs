@@ -808,29 +808,34 @@ impl NetworkHandler {
         let old_status = self.status;
         self.status = Status::Disconnected;
 
-        while let Some(message_to_receive) = self.messages_to_receive.front() {
-            if !message_to_receive.message.retry_on_error {
-                if let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive
-                        .message
-                        .send_error(&self.tag, Error::DisconnectedByPeer);
-                }
+        // Purge every non-retryable message, wherever it sits in the queue,
+        // and keep the retryable ones in order. A prefix-only purge would leave
+        // a non-retryable message behind a retryable one, and it would then be
+        // replayed on reconnect — double-executing a command whose caller
+        // opted out of retries.
+        let mut retained_to_receive = VecDeque::with_capacity(self.messages_to_receive.len());
+        while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
+            if message_to_receive.message.retry_on_error {
+                retained_to_receive.push_back(message_to_receive);
             } else {
-                break;
+                message_to_receive
+                    .message
+                    .send_error(&self.tag, Error::DisconnectedByPeer);
             }
         }
+        self.messages_to_receive = retained_to_receive;
 
-        while let Some(message_to_send) = self.messages_to_send.front() {
-            if !message_to_send.message.retry_on_error {
-                if let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send
-                        .message
-                        .send_error(&self.tag, Error::DisconnectedByPeer);
-                }
+        let mut retained_to_send = VecDeque::with_capacity(self.messages_to_send.len());
+        while let Some(message_to_send) = self.messages_to_send.pop_front() {
+            if message_to_send.message.retry_on_error {
+                retained_to_send.push_back(message_to_send);
             } else {
-                break;
+                message_to_send
+                    .message
+                    .send_error(&self.tag, Error::DisconnectedByPeer);
             }
         }
+        self.messages_to_send = retained_to_send;
 
         loop {
             if let Some(delay) = self.reconnection_state.next_delay() {

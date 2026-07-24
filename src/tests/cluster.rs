@@ -546,6 +546,67 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
     Ok(())
 }
 
+/// A multi-shard command is split into one sub-request per slot, and their replies
+/// are aggregated. When a single sub-request is redirected, re-running the whole
+/// command double-counts nothing but *under*-counts everything already applied: a
+/// replayed `DEL` answers 0 for the keys its first attempt deleted. The caller then
+/// receives a total that is silently wrong, reported as a success.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn partial_redirection_keeps_the_sub_results_already_obtained() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let hello_result = client.hello(HelloOptions::new(3)).await?;
+    let version: Version = hello_result.version.as_str().try_into()?;
+    let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
+        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+    } else {
+        client.cluster_shards().await?
+    };
+
+    let slot = client.cluster_keyslot("clu04_moved").await?;
+    let src_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for source shard");
+    let dst_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().all(|s| s.0 > slot || slot > s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("No master found for destination shard");
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+
+    // A key whose slot is left untouched by the migration below, so its own
+    // sub-request succeeds on the first attempt.
+    client.set("clu04_stable", "S").await?;
+
+    // Hand the slot over to another shard. The client keeps its stale slot map,
+    // so the sub-request carrying this key is answered with a MOVED redirection.
+    migrate_slot(slot, &src_client, src_id, &dst_client, dst_id).await?;
+    dst_client.set("clu04_moved", "M").await?;
+
+    // Both keys exist, so both are deleted: the only correct answer is 2.
+    let deleted: Result<usize> = client.del(["clu04_stable", "clu04_moved"]).await;
+
+    // Restore the topology before asserting: the cluster is shared with every
+    // other test. The key goes first — see the migration test above.
+    dst_client.del("clu04_moved").await?;
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
+
+    assert_eq!(
+        2, deleted?,
+        "a redirected sub-request must not discard the sub-results already obtained"
+    );
+
+    Ok(())
+}
+
 /// A topology discovery that describes no usable node must be rejected, not
 /// applied. Applying it empties the node list, and the next node lookup then
 /// indexes an empty collection — panicking the network task, which owns all

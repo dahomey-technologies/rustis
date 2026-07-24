@@ -14,6 +14,8 @@ mod count_min_sktech_commands;
 mod cuckoo_commands;
 mod debug_commands;
 mod error;
+#[cfg(feature = "tokio-runtime")]
+mod fault_injection_proxy;
 mod from_value;
 mod generic_commands;
 mod geo_commands;

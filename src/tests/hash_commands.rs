@@ -159,6 +159,33 @@ async fn hexpiretime() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn hpersist() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.hset("key", ("field", "value")).await?;
+
+    // field exists but has no expiration set
+    let result: Vec<i64> = client.hpersist("key", "field").await?;
+    assert_eq!(result, vec![-1]);
+
+    // field with an expiration set: it is removed
+    client.hexpire::<Vec<i64>>("key", 10, None, "field").await?;
+    let result: Vec<i64> = client.hpersist("key", "field").await?;
+    assert_eq!(result, vec![1]);
+    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![-1]);
+
+    // missing field
+    let result: Vec<i64> = client.hpersist("key", "missing").await?;
+    assert_eq!(result, vec![-2]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn hexists() -> Result<()> {
     let client = get_test_client().await?;
 

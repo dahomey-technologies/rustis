@@ -324,7 +324,13 @@ pub trait HashCommands<'a>: Sized {
         key: impl Serialize,
         fields: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("HPERSIST").key(key).arg(fields))
+        prepare_command(
+            self,
+            cmd("HPERSIST")
+                .key(key)
+                .arg("FIELDS")
+                .arg_with_count(fields),
+        )
     }
 
     /// This command works like [`hexpire`](HashCommands::hexpire), but the expiration of a field is specified in milliseconds instead of seconds.

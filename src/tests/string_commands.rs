@@ -498,6 +498,47 @@ async fn msetnx() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn msetex() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    // plain multi-set, no condition, no expiration
+    let success = client
+        .msetex([("key1", "value1"), ("key2", "value2")], None, None)
+        .await?;
+    assert!(success);
+
+    let values: Vec<Option<String>> = client.mget(["key1", "key2"]).await?;
+    assert!(matches!(&values[0], Some(value) if value == "value1"));
+    assert!(matches!(&values[1], Some(value) if value == "value2"));
+
+    // with a shared expiration
+    let success = client
+        .msetex(
+            [("key1", "value1"), ("key2", "value2")],
+            None,
+            Some(SetExpiration::Ex(100)),
+        )
+        .await?;
+    assert!(success);
+    let ttl = client.ttl("key1").await?;
+    assert!(ttl > 0);
+
+    // NX must fail when at least one key already exists
+    let success = client
+        .msetex([("key1", "other")], Some(SetCondition::NX), None)
+        .await?;
+    assert!(!success);
+
+    client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn psetex() -> Result<()> {
     let client = get_test_client().await?;
 

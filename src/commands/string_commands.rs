@@ -419,8 +419,12 @@ pub trait StringCommands<'a>: Sized {
     /// * `false` - if none of the keys were set
     /// * `true` - if all of the keys were set.
     ///
+    /// # Cluster
+    /// In cluster mode all keys must hash to the same slot, otherwise the
+    /// command fails client-side with a mismatched-slot error.
+    ///
     /// # See Also
-    /// [<https://redis.io/commands/mset/>](https://redis.io/commands/mset/)
+    /// [<https://redis.io/commands/msetex/>](https://redis.io/commands/msetex/)
     #[must_use]
     fn msetex<'b>(
         self,
@@ -431,7 +435,7 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("MSETEX")
-                .key_with_step(items, 2)
+                .key_with_count_and_step(items, 2)
                 .arg(condition.into())
                 .arg(expiration.into())
                 .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AllSucceeded, 2),

@@ -52,14 +52,39 @@ impl Value {
 
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        // A RESP3 map is `HashMap<Value, Value>`, so any variant can appear as a
+        // key and gets hashed — including Boolean/Array/Map/Set/Push reached from
+        // server data. Missing arms used to `unimplemented!()` and panic the
+        // decoding task, so every variant must hash. Mixing the discriminant in
+        // keeps values of different variants from colliding.
+        core::mem::discriminant(self).hash(state);
         match self {
             Value::SimpleString(s) => s.hash(state),
             Value::Integer(i) => i.hash(state),
-            Value::Double(d) => d.to_string().hash(state),
+            // `PartialEq` compares doubles with `==`, under which `0.0 == -0.0`;
+            // the hash must agree, so normalize the sign of zero before hashing
+            // the bit pattern (which otherwise differs for the two zeros).
+            Value::Double(d) => {
+                let normalized = if *d == 0.0 { 0.0 } else { *d };
+                normalized.to_bits().hash(state);
+            }
             Value::BulkString(bs) => bs.hash(state),
+            Value::Boolean(b) => b.hash(state),
+            Value::Array(v) | Value::Set(v) | Value::Push(v) => v.hash(state),
+            Value::Map(m) => {
+                // `HashMap` has no `Hash`; fold order-independently so equal maps
+                // hash equally regardless of iteration order.
+                let mut acc: u64 = 0;
+                for (k, val) in m {
+                    let mut h = std::collections::hash_map::DefaultHasher::new();
+                    k.hash(&mut h);
+                    val.hash(&mut h);
+                    acc = acc.wrapping_add(h.finish());
+                }
+                acc.hash(state);
+            }
             Value::Error(e) => e.hash(state),
             Value::Null => "_\r\n".hash(state),
-            _ => unimplemented!("Hash not implemented for {self}"),
         }
     }
 }

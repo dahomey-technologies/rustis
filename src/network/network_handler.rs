@@ -179,7 +179,9 @@ impl MessageToReceive {
         Self {
             message,
             num_commands,
-            pending_responses: Vec::new(),
+            // A batch collects exactly `num_commands` responses; size the buffer
+            // once instead of letting it grow.
+            pending_responses: Vec::with_capacity(num_commands),
         }
     }
 }
@@ -749,12 +751,19 @@ impl NetworkHandler {
                 }
             }
             None => {
-                // disconnection errors could end here but ok values should match a value_sender instance
-                assert!(
-                    result.is_err(),
-                    "[{}] Received unexpected message: {result:?}",
-                    self.tag
-                );
+                // Disconnection errors legitimately end here (no message is left
+                // to carry them). An `Ok` frame with an empty in-flight queue is
+                // unexpected — a mis-routed push, a buggy server/proxy, or a
+                // desynchronized stream — but a network loop must never panic on
+                // wire input: that would kill the sole owner of the routing state
+                // and permanently wedge the client with no reconnection. Drop the
+                // stray frame and log it instead.
+                if result.is_ok() {
+                    warn!(
+                        "[{}] Dropping an unexpected response with no message awaiting it: {result:?}",
+                        self.tag
+                    );
+                }
             }
         }
     }

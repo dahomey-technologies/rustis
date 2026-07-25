@@ -836,8 +836,16 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
                     && array_view.len() == 2
                 {
                     let mut pair_iter = array_view.clone().into_iter();
-                    let kview = pair_iter.next().unwrap();
-                    let vview = pair_iter.next().unwrap();
+                    // `len() == 2` counts the framed elements; re-parsing a scalar
+                    // whose content the framing pass did not validate (e.g. a
+                    // nested `:abc`) can still fail here, so surface an error
+                    // rather than unwrapping in the caller's task.
+                    let kview = pair_iter
+                        .next()
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                    let vview = pair_iter
+                        .next()
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
 
                     let key = kseed.deserialize(RespDeserializer::new(kview))?;
                     let value = vseed.deserialize(RespDeserializer::new(vview))?;
@@ -940,8 +948,14 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
                     && array_view.len() == 2
                 {
                     let mut pair_iter = array_view.clone().into_iter();
-                    let kview = pair_iter.next().unwrap();
-                    let vview = pair_iter.next().unwrap();
+                    // See the sibling `next_entry_seed`: `len() == 2` does not
+                    // guarantee the elements re-parse, so error instead of unwrap.
+                    let kview = pair_iter
+                        .next()
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                    let vview = pair_iter
+                        .next()
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
 
                     let key = kseed.deserialize(RespDeserializer::new(kview))?;
                     let value = vseed.deserialize(RespDeserializer::new(vview))?;

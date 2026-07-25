@@ -154,6 +154,21 @@ name = "resp_profiling"
 required-features = ["bench"]
 
 [[example]]
+name = "command_construction_profiling"
+required-features = ["bench"]
+
+[[example]]
+name = "pprof_multiplexer_get"
+required-features = ["bench"]
+
+[[example]]
+name = "wakeup_cost_probe"
+
+[[example]]
+name = "strace_workload"
+required-features = ["bench"]
+
+[[example]]
 name = "simple"
 
 [profile.dev]

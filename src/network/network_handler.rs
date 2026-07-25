@@ -436,6 +436,12 @@ impl NetworkHandler {
 
             let mut num_commands_to_receive: usize = 0;
 
+            // Commands are fed one by one on purpose. Batching them into a single
+            // call (to hoist the stream-variant `match` out of the loop and issue
+            // one pre-computed reserve) was implemented and measured against a live
+            // Redis: no change (long pipeline +1.3%, p=0.53). The 8 KiB write-buffer
+            // flush (see `CommandEncoder::encode`) already caps the buffer, so there
+            // is nothing to amortize. Keep the per-command loop.
             for command in msg.commands_mut() {
                 match command.kind() {
                     CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,

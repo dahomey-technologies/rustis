@@ -501,6 +501,11 @@ impl NetworkHandler {
             return self.reconnect().await;
         };
         self.handle_result(result);
+        // Wake the caller of this reply immediately, before parsing the next
+        // ready reply. On a multi-thread runtime another worker resumes it in
+        // parallel while this task keeps draining, shortening first-reply
+        // latency on the critical path.
+        self.dispatch_pending();
 
         // OPTIMIZATION : Drain the next available results in the buffer
         while let Poll::Ready(result) = self.connection.try_read() {
@@ -508,8 +513,15 @@ impl NetworkHandler {
                 return self.reconnect().await;
             };
             self.handle_result(result);
+            self.dispatch_pending();
         }
 
+        true
+    }
+
+    /// Sends every matched reply owed to a caller, waking them. Called eagerly
+    /// per reply so callers resume as soon as their answer is parsed.
+    fn dispatch_pending(&mut self) {
         for (sender, response) in self.pending_results.drain(..) {
             if let Err(e) = sender.send(response) {
                 warn!(
@@ -527,8 +539,6 @@ impl NetworkHandler {
                 );
             }
         }
-
-        true
     }
 
     fn handle_result(&mut self, result: Result<RespResponse>) {

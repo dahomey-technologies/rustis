@@ -605,14 +605,14 @@ mod tests {
     fn command() {
         let command: Command = cmd("SET").arg("key").arg("value").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"SET", command.name().as_ref());
+        assert_eq!(b"SET", command.name());
         assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
         assert_eq!(None, command.get_arg(2));
 
         let command: Command = cmd("EVAL").arg("return ARGV[1]").arg(0).arg("HELLO").into();
         println!("cmd: {command:?}");
-        assert_eq!(b"EVAL", command.name().as_ref());
+        assert_eq!(b"EVAL", command.name());
         assert_eq!(Some(&b"return ARGV[1]"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"0"[..]), command.get_arg(1).as_deref());
         assert_eq!(Some(&b"HELLO"[..]), command.get_arg(2).as_deref());

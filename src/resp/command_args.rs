@@ -1,6 +1,6 @@
 use crate::resp::{ArgLayout, ArgSerializer, ArgsLayout};
 use bytes::{Bytes, BytesMut};
-use serde::{Serialize, ser::SerializeSeq};
+use serde::{Serialize, ser::Error as _, ser::SerializeSeq};
 
 /// A specialized buffer for Redis command arguments.
 ///
@@ -16,6 +16,11 @@ pub struct CommandArgsMut {
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
     pub(crate) args_layout: ArgsLayout,
+    /// First serialization error deferred from [`arg`](Self::arg), re-emitted by
+    /// this type's `Serialize` impl so that — when a `CommandArgsMut` is embedded
+    /// as an option field of a command — the failure propagates up through the
+    /// outer command builder rather than panicking.
+    pub(crate) pending_error: Option<crate::Error>,
 }
 
 impl Default for CommandArgsMut {
@@ -23,6 +28,7 @@ impl Default for CommandArgsMut {
         Self {
             buffer: BytesMut::with_capacity(1024),
             args_layout: Default::default(),
+            pending_error: None,
         }
     }
 }
@@ -30,9 +36,15 @@ impl Default for CommandArgsMut {
 impl CommandArgsMut {
     #[inline(always)]
     pub fn arg(mut self, arg: impl Serialize) -> Self {
-        let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
-        arg.serialize(&mut serializer)
-            .expect("Arg serialization failed");
+        let result = {
+            let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
+            arg.serialize(&mut serializer)
+        };
+        if let Err(e) = result
+            && self.pending_error.is_none()
+        {
+            self.pending_error = Some(e);
+        }
         self
     }
 
@@ -68,6 +80,12 @@ impl Serialize for CommandArgsMut {
             fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                 serializer.serialize_bytes(self.0)
             }
+        }
+
+        // Propagate a deferred build error so an embedded `CommandArgsMut`
+        // surfaces it through the outer command builder.
+        if let Some(error) = &self.pending_error {
+            return Err(S::Error::custom(error.to_string()));
         }
 
         let mut seq = serializer.serialize_seq(Some(self.len()))?;

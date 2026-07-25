@@ -273,6 +273,15 @@ impl Client {
 
     #[inline]
     fn send_message(&self, mut message: Message) -> Result<()> {
+        // Surface any serialization error deferred by the fluent builder (a
+        // failing user `Serialize` impl) before the command reaches the network
+        // layer, so the caller gets a clean error instead of a panic.
+        for command in message.commands_mut() {
+            if let Some(error) = command.take_serialization_error() {
+                return Err(error);
+            }
+        }
+
         // Compute cluster hash slots here, on the caller thread, and only in
         // cluster mode. This keeps CRC16 off the shared network thread (the
         // multiplexer domain) while sparing standalone clients the cost.

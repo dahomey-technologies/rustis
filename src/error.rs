@@ -108,6 +108,8 @@ pub enum ClientError {
     /// without succeeding, so it is failed instead of retried indefinitely.
     #[error("command failed after reaching the maximum number of attempts")]
     MaxCommandAttemptsReached,
+    #[error("a client-side cache key must serialize to exactly one argument")]
+    InvalidCacheKey,
     /// Raised when an unexpected error occurs
     #[error("Unexpected error")]
     Unexpected,

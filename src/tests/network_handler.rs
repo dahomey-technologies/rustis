@@ -1,5 +1,5 @@
 use crate::{
-    Result, RetryReason,
+    ClientError, Error, Result, RetryReason,
     client::{Client, ReconnectionConfig},
     commands::{GenericCommands, PubSubCommands, StringCommands},
     network::{SendBatchTestHook, sleep, timeout},
@@ -190,6 +190,42 @@ async fn inflight_unsubscribe_is_not_turned_into_subscribe_on_reconnect() -> Res
         Some(&0usize),
         num_sub.get("net02_chan"),
         "an in-flight unsubscription must not be resubscribed on reconnect"
+    );
+
+    Ok(())
+}
+
+/// A retryable command must be given up after `Config::max_command_attempts`
+/// replays and failed with a distinct error rather than replayed further. With a
+/// cap of 1, the single reconnection replay this test forces already reaches the
+/// budget, so the command is failed instead of retried.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 10);
+    config.retry_on_error = true;
+    // One attempt allowed: the first replay exhausts the budget.
+    config.max_command_attempts = 1;
+    let client = get_test_client_with_config(config).await?;
+
+    // The command tears the socket down before its response is matched, forcing a
+    // reconnect that would replay it — which the cap turns into a failure.
+    let result: Result<String> = timeout(
+        Duration::from_secs(5),
+        client.send(cmd("PING").kill_connection_on_read(1), Some(true)),
+    )
+    .await?;
+
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(ClientError::MaxCommandAttemptsReached))
+        ),
+        "expected MaxCommandAttemptsReached, got {result:?}"
     );
 
     Ok(())

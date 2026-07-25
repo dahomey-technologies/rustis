@@ -220,6 +220,8 @@ pub(crate) struct NetworkHandler {
     auto_remonitor: bool,
     tag: Arc<str>,
     reconnection_state: ReconnectionState,
+    /// Per-message retry cap from `Config::max_command_attempts` (`0` = unlimited).
+    max_command_attempts: usize,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
@@ -234,6 +236,7 @@ impl NetworkHandler {
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;
+        let max_command_attempts = config.max_command_attempts;
         let reconnection_config = config.reconnection.clone();
         #[cfg(test)]
         let send_batch_test_hook = config.send_batch_test_hook.clone();
@@ -262,6 +265,7 @@ impl NetworkHandler {
             auto_remonitor,
             tag: tag.clone(),
             reconnection_state: ReconnectionState::new(reconnection_config),
+            max_command_attempts,
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
@@ -702,11 +706,29 @@ impl NetworkHandler {
                                 }
                             }
 
+                            // Bound message-level retries: a command caught in a
+                            // pathological redirect loop would otherwise be replayed
+                            // forever. Count this attempt and fail the message with a
+                            // distinct error once the cap is reached.
+                            message_to_receive.message.attempts += 1;
+                            if max_attempts_reached(
+                                message_to_receive.message.attempts,
+                                self.max_command_attempts,
+                            ) {
+                                debug!(
+                                    "[{}] Message reached the maximum number of attempts, failing it",
+                                    self.tag
+                                );
+                                message_to_receive.message.send_error(
+                                    &self.tag,
+                                    Error::Client(ClientError::MaxCommandAttemptsReached),
+                                );
+                            }
                             // retry: upgrade the weak handle just long enough to
                             // requeue the message. A failed upgrade means every
                             // client is gone and the channel is closing, so the
                             // retry is moot.
-                            if let Some(msg_sender) = self.msg_sender.upgrade() {
+                            else if let Some(msg_sender) = self.msg_sender.upgrade() {
                                 if let Err(e) = msg_sender.send(message_to_receive.message) {
                                     error!("[{}] Cannot retry message: {e}", self.tag);
                                 }
@@ -948,26 +970,46 @@ impl NetworkHandler {
         // a non-retryable message behind a retryable one, and it would then be
         // replayed on reconnect — double-executing a command whose caller
         // opted out of retries.
+        // A reconnection replay is also a retry attempt: count it and fail a message
+        // that has exhausted its budget instead of replaying it once more.
+        let max_command_attempts = self.max_command_attempts;
+
         let mut retained_to_receive = VecDeque::with_capacity(self.messages_to_receive.len());
-        while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-            if message_to_receive.message.retry_on_error {
-                retained_to_receive.push_back(message_to_receive);
-            } else {
+        while let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
+            if !message_to_receive.message.retry_on_error {
                 message_to_receive
                     .message
                     .send_error(&self.tag, Error::DisconnectedByPeer);
+            } else {
+                message_to_receive.message.attempts += 1;
+                if max_attempts_reached(message_to_receive.message.attempts, max_command_attempts) {
+                    message_to_receive.message.send_error(
+                        &self.tag,
+                        Error::Client(ClientError::MaxCommandAttemptsReached),
+                    );
+                } else {
+                    retained_to_receive.push_back(message_to_receive);
+                }
             }
         }
         self.messages_to_receive = retained_to_receive;
 
         let mut retained_to_send = VecDeque::with_capacity(self.messages_to_send.len());
-        while let Some(message_to_send) = self.messages_to_send.pop_front() {
-            if message_to_send.message.retry_on_error {
-                retained_to_send.push_back(message_to_send);
-            } else {
+        while let Some(mut message_to_send) = self.messages_to_send.pop_front() {
+            if !message_to_send.message.retry_on_error {
                 message_to_send
                     .message
                     .send_error(&self.tag, Error::DisconnectedByPeer);
+            } else {
+                message_to_send.message.attempts += 1;
+                if max_attempts_reached(message_to_send.message.attempts, max_command_attempts) {
+                    message_to_send.message.send_error(
+                        &self.tag,
+                        Error::Client(ClientError::MaxCommandAttemptsReached),
+                    );
+                } else {
+                    retained_to_send.push_back(message_to_send);
+                }
             }
         }
         self.messages_to_send = retained_to_send;
@@ -1183,9 +1225,30 @@ fn is_connection_level_error(error: &Error) -> bool {
     }
 }
 
+/// Whether a message that has been attempted `attempts` times has reached the
+/// configured per-message cap. `cap == 0` means unlimited (the default), matching
+/// the historical behavior of never bounding retries at the message level.
+#[inline]
+fn max_attempts_reached(attempts: usize, cap: usize) -> bool {
+    cap != 0 && attempts >= cap
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_connection_level_error;
+    use super::{is_connection_level_error, max_attempts_reached};
+
+    #[test]
+    fn zero_cap_is_unlimited() {
+        assert!(!max_attempts_reached(1, 0));
+        assert!(!max_attempts_reached(1_000_000, 0));
+    }
+
+    #[test]
+    fn cap_reached_at_or_above_limit() {
+        assert!(!max_attempts_reached(2, 3));
+        assert!(max_attempts_reached(3, 3));
+        assert!(max_attempts_reached(4, 3));
+    }
     use crate::{ClientError, Error, RedisError, RedisErrorKind};
 
     #[test]

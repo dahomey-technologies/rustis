@@ -77,6 +77,10 @@ pub(crate) struct Message {
     pub kind: MessageKind,
     pub retry_reasons: Option<Vec<RetryReason>>,
     pub retry_on_error: bool,
+    /// Number of times this message has been (re)attempted. Incremented at each
+    /// retry choke point and compared against `Config::max_command_attempts` to
+    /// bound retries at the message level (see `NetworkHandler`).
+    pub attempts: usize,
     #[cfg(test)]
     #[allow(unused)]
     pub(crate) message_seq: usize,
@@ -91,6 +95,7 @@ impl Message {
                 result_sender: Some(result_sender),
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -105,6 +110,7 @@ impl Message {
                 result_sender: None,
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -123,6 +129,7 @@ impl Message {
                 results_sender,
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -144,6 +151,7 @@ impl Message {
                 subscriptions,
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error: true,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -159,6 +167,7 @@ impl Message {
                 push_sender: Some(push_sender),
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error: true,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),
@@ -172,6 +181,7 @@ impl Message {
                 push_sender: Some(push_sender),
             },
             retry_reasons: None,
+            attempts: 0,
             retry_on_error: false,
             #[cfg(test)]
             message_seq: MESSAGE_SEQUENCE_COUNTER.fetch_add(1, Ordering::SeqCst),

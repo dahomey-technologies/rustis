@@ -167,6 +167,14 @@ name = "pprof_multiplexer_get"
 required-features = ["bench"]
 
 [[example]]
+name = "pprof_send_vs_receive"
+required-features = ["bench"]
+
+[[example]]
+name = "conn_scaling_probe"
+required-features = ["bench"]
+
+[[example]]
 name = "wakeup_cost_probe"
 
 [[example]]

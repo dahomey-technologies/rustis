@@ -92,31 +92,36 @@ impl Pipeline<'_> {
     /// }
     /// ```    
     pub async fn execute<T: DeserializeOwned>(self) -> Result<T> {
-        let num_commands = self.commands.len();
+        // An empty pipeline never reaches the network layer (no `MessageToReceive`
+        // is created), so awaiting a result would surface an opaque channel-canceled
+        // error. Resolve it as an empty batch instead.
+        if self.commands.is_empty() {
+            let deserializer = RespBatchDeserializer::new(&[]);
+            return T::deserialize(&deserializer);
+        }
+
         let mut results = self
             .client
             .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
-        if num_commands > 1 {
-            if !self.forget_flags.is_empty() {
-                let mut idx = 0;
-                results.retain(|_| {
-                    let keep = !self.forget_flags[idx];
-                    idx += 1;
-                    keep
-                });
-            }
+        // Forget-flag filtering runs unconditionally: a single forgotten command
+        // must have its response dropped just like it would in a multi-command batch.
+        if !self.forget_flags.is_empty() {
+            let mut idx = 0;
+            results.retain(|_| {
+                let keep = !self.forget_flags[idx];
+                idx += 1;
+                keep
+            });
+        }
 
-            if results.len() == 1 {
-                let result = results.pop().unwrap();
-                result.to()
-            } else {
-                let deserializer = RespBatchDeserializer::new(&results);
-                T::deserialize(&deserializer)
-            }
+        if results.len() == 1 {
+            let result = results.pop().unwrap();
+            result.to()
         } else {
-            results[0].to()
+            let deserializer = RespBatchDeserializer::new(&results);
+            T::deserialize(&deserializer)
         }
     }
 }

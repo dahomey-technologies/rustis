@@ -30,6 +30,39 @@ async fn pipeline() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn single_command_forget() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // A single forgotten command must have its response dropped, so the pipeline
+    // resolves to the empty tuple rather than surfacing that command's response.
+    let mut pipeline = client.create_pipeline();
+    pipeline.set("key1", "value1").forget();
+    pipeline.execute::<()>().await?;
+
+    let value: String = client.get("key1").await?;
+    assert_eq!("value1", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn empty_pipeline() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // An empty pipeline must resolve cleanly instead of failing with an opaque
+    // channel-canceled error.
+    let pipeline = client.create_pipeline();
+    pipeline.execute::<()>().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn error() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;

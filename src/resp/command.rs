@@ -57,12 +57,14 @@ pub(crate) enum CommandKind {
 
 /// Represents the memory layout and metadata of a single Redis command argument.
 ///
-/// This structure is packed into 128 bits (16 bytes) to minimize its footprint.
+/// This structure is packed into 96 bits (12 bytes) to minimize its footprint.
 #[derive(Debug, Clone, Copy, Default)]
 #[repr(C)]
 pub(crate) struct ArgLayout {
-    /// The starting position of the argument data within the command's internal buffer.
-    pub start: u64,
+    /// The starting position of the argument data within the command's internal
+    /// buffer. A single command's buffer never nears 4 GiB (Redis caps a bulk
+    /// string at 512 MiB), so `u32` is sufficient and keeps the struct at 12 B.
+    pub start: u32,
 
     /// The length of the argument data in bytes.
     /// Redis limits bulk strings to 512MB, so `u32` is more than sufficient.
@@ -87,7 +89,7 @@ impl ArgLayout {
     #[inline(always)]
     pub fn arg(range: std::ops::Range<usize>) -> Self {
         Self {
-            start: range.start as u64,
+            start: range.start as u32,
             len: range.end as u32 - range.start as u32,
             slot: 0,
             flags: 0,
@@ -97,7 +99,7 @@ impl ArgLayout {
     #[inline(always)]
     pub fn key(range: std::ops::Range<usize>) -> Self {
         Self {
-            start: range.start as u64,
+            start: range.start as u32,
             len: range.end as u32 - range.start as u32,
             slot: 0,
             flags: Self::IS_KEY,
@@ -552,7 +554,7 @@ impl From<CommandBuilder> for Command {
         command_builder
             .args_layout
             .iter_mut()
-            .for_each(|arg_layout| arg_layout.start -= start_pos as u64);
+            .for_each(|arg_layout| arg_layout.start -= start_pos as u32);
 
         Command::new(
             bytes,

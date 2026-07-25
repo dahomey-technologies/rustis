@@ -69,7 +69,7 @@ impl<'a> ArgSerializer<'a> {
         // 4. Update the layout index
         if let Some(ref mut layout) = self.args_layout {
             layout.push(ArgLayout {
-                start: start_pos as u64,
+                start: start_pos as u32,
                 len: data_len as u32,
                 slot: 0,
                 flags: 0,

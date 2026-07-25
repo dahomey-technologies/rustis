@@ -16,7 +16,7 @@ use smallvec::SmallVec;
 /// Represents a Redis command pipeline.
 pub struct Pipeline<'a> {
     client: &'a Client,
-    commands: SmallVec<[Command; 10]>,
+    commands: Vec<Command>,
     forget_flags: SmallVec<[bool; 10]>,
     retry_on_error: Option<bool>,
 }
@@ -25,7 +25,7 @@ impl Pipeline<'_> {
     pub(crate) fn new<'a>(client: &'a Client) -> Pipeline<'a> {
         Pipeline {
             client,
-            commands: SmallVec::new(),
+            commands: Vec::new(),
             forget_flags: SmallVec::new(),
             retry_on_error: None,
         }

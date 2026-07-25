@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::resp::next_sequence_counter;
-use crate::resp::{ArgLayout, Command, cmd};
+use crate::resp::{ArgLayout, ArgsLayout, Command, cmd};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
@@ -11,7 +11,7 @@ use std::{fmt::Error, ops::Range};
 pub struct FastPathCommandBuilder {
     buffer: BytesMut,
     name_layout: (usize, usize),
-    args_layout: SmallVec<[ArgLayout; 10]>,
+    args_layout: ArgsLayout,
 }
 
 impl FastPathCommandBuilder {

@@ -1,7 +1,6 @@
-use crate::resp::{ArgLayout, ArgSerializer};
+use crate::resp::{ArgLayout, ArgSerializer, ArgsLayout};
 use bytes::{Bytes, BytesMut};
 use serde::{Serialize, ser::SerializeSeq};
-use smallvec::SmallVec;
 
 /// A specialized buffer for Redis command arguments.
 ///
@@ -16,7 +15,7 @@ pub struct CommandArgsMut {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
+    pub(crate) args_layout: ArgsLayout,
 }
 
 impl Default for CommandArgsMut {
@@ -96,7 +95,7 @@ pub struct CommandArgs {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
+    pub(crate) args_layout: ArgsLayout,
 }
 
 impl CommandArgs {

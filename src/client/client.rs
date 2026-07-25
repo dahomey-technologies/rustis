@@ -24,7 +24,6 @@ use crate::{
 use futures_channel::{mpsc, oneshot};
 use log::{info, trace};
 use serde::{Serialize, de::DeserializeOwned};
-use smallvec::SmallVec;
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 
 /// Client with a unique connection to a Redis server.
@@ -252,7 +251,7 @@ impl Client {
     #[inline]
     pub(crate) async fn internal_send_batch(
         &self,
-        commands: SmallVec<[Command; 10]>,
+        commands: Vec<Command>,
         retry_on_error: Option<bool>,
     ) -> Result<Vec<RespResponse>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =

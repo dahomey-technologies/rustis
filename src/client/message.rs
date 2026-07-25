@@ -5,7 +5,6 @@ use crate::{
 };
 use bytes::Bytes;
 use log::warn;
-use smallvec::SmallVec;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -54,14 +53,14 @@ pub(crate) enum MessageKind {
         result_sender: Option<ResultSender>,
     },
     Batch {
-        commands: SmallVec<[Command; 10]>,
+        commands: Vec<Command>,
         results_sender: ResultsSender,
     },
     PubSub {
         command: Command,
         result_sender: ResultSender,
         subscription_type: SubscriptionType,
-        subscriptions: SmallVec<[(Bytes, PubSubSender); 10]>,
+        subscriptions: Vec<(Bytes, PubSubSender)>,
     },
     Monitor {
         command: Command,
@@ -76,7 +75,7 @@ pub(crate) enum MessageKind {
 #[derive(Debug)]
 pub(crate) struct Message {
     pub kind: MessageKind,
-    pub retry_reasons: Option<SmallVec<[RetryReason; 10]>>,
+    pub retry_reasons: Option<Vec<RetryReason>>,
     pub retry_on_error: bool,
     #[cfg(test)]
     #[allow(unused)]
@@ -114,7 +113,7 @@ impl Message {
 
     #[inline(always)]
     pub fn batch(
-        commands: SmallVec<[Command; 10]>,
+        commands: Vec<Command>,
         results_sender: ResultsSender,
         retry_on_error: bool,
     ) -> Self {
@@ -135,7 +134,7 @@ impl Message {
         command: Command,
         result_sender: ResultSender,
         subscription_type: SubscriptionType,
-        subscriptions: SmallVec<[(Bytes, PubSubSender); 10]>,
+        subscriptions: Vec<(Bytes, PubSubSender)>,
     ) -> Self {
         Message {
             kind: MessageKind::PubSub {
@@ -229,7 +228,7 @@ impl Message {
     pub fn commands(&self) -> CommandsIteratorRef<'_> {
         match &self.kind {
             MessageKind::Single { command, .. } => CommandsIteratorRef::Single(Some(command)),
-            MessageKind::Batch { commands, .. } => CommandsIteratorRef::Batch(commands.into_iter()),
+            MessageKind::Batch { commands, .. } => CommandsIteratorRef::Batch(commands.iter()),
             MessageKind::PubSub { command, .. } => CommandsIteratorRef::Single(Some(command)),
             MessageKind::Monitor { command, .. } => CommandsIteratorRef::Single(Some(command)),
             MessageKind::Invalidation { push_sender: _ } => CommandsIteratorRef::Single(None),
@@ -239,7 +238,7 @@ impl Message {
     pub fn commands_mut(&mut self) -> CommandsIteratorMut<'_> {
         match &mut self.kind {
             MessageKind::Single { command, .. } => CommandsIteratorMut::Single(Some(command)),
-            MessageKind::Batch { commands, .. } => CommandsIteratorMut::Batch(commands.into_iter()),
+            MessageKind::Batch { commands, .. } => CommandsIteratorMut::Batch(commands.iter_mut()),
             MessageKind::PubSub { command, .. } => CommandsIteratorMut::Single(Some(command)),
             MessageKind::Monitor { command, .. } => CommandsIteratorMut::Single(Some(command)),
             MessageKind::Invalidation { push_sender: _ } => CommandsIteratorMut::Single(None),

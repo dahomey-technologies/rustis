@@ -1,21 +1,17 @@
-use crate::resp::ArgLayout;
+use crate::resp::{ArgLayout, ArgsLayout};
 use bytes::{BufMut, BytesMut};
 use dtoa::Float;
 use itoa::Integer;
 use serde::{Serializer, ser};
-use smallvec::SmallVec;
 
 pub struct ArgSerializer<'a> {
     buffer: &'a mut BytesMut,
-    args_layout: Option<&'a mut SmallVec<[ArgLayout; 10]>>,
+    args_layout: Option<&'a mut ArgsLayout>,
 }
 
 impl<'a> ArgSerializer<'a> {
     #[inline]
-    pub(crate) fn new(
-        buffer: &'a mut BytesMut,
-        args_layout: &'a mut SmallVec<[ArgLayout; 10]>,
-    ) -> Self {
+    pub(crate) fn new(buffer: &'a mut BytesMut, args_layout: &'a mut ArgsLayout) -> Self {
         Self {
             buffer,
             args_layout: Some(args_layout),

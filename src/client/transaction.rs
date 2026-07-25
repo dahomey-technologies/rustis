@@ -15,13 +15,13 @@ use serde::{
     de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
     forward_to_deserialize_any,
 };
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 use std::{fmt, marker::PhantomData};
 
 /// Represents an on-going [`transaction`](https://redis.io/docs/manual/transactions/) on a specific client instance.
 pub struct Transaction {
     client: Client,
-    commands: SmallVec<[Command; 10]>,
+    commands: Vec<Command>,
     forget_flags: SmallVec<[bool; 10]>,
     retry_on_error: Option<bool>,
 }
@@ -30,7 +30,7 @@ impl Transaction {
     pub(crate) fn new(client: Client) -> Self {
         Self {
             client,
-            commands: smallvec![cmd("MULTI").into()],
+            commands: vec![cmd("MULTI").into()],
             forget_flags: SmallVec::new(),
             retry_on_error: None,
         }

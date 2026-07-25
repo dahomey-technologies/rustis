@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ClientError, Error, RedisError, RedisErrorKind, Result,
     resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse},
     tests::log_try_init,
 };
@@ -643,4 +643,50 @@ fn value_map_with_boolean_key_hashes() -> Result<()> {
     assert_eq!(Some(&Value::Integer(1)), map.get(&Value::Boolean(true)));
 
     Ok(())
+}
+
+#[test]
+fn out_of_range_integer_errors_instead_of_truncating() {
+    log_try_init();
+
+    // `:300` no longer silently truncates to 44 when deserialized as u8.
+    let result: Result<u8> = deserialize(":300\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "u8 from 300 should error, got {result:?}"
+    );
+
+    // A negative wire integer into an unsigned target no longer wraps.
+    let result: Result<u32> = deserialize(":-1\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "u32 from -1 should error, got {result:?}"
+    );
+
+    // In-range values still deserialize.
+    let value: u8 = deserialize(":42\r\n").unwrap();
+    assert_eq!(42, value);
+}
+
+#[test]
+fn i64_min_is_parsed_not_rejected() {
+    log_try_init();
+
+    // DECRBY can return i64::MIN; the frame parser accumulates negatively so the
+    // value is representable rather than rejected as an overflow.
+    let value: i64 = deserialize(":-9223372036854775808\r\n").unwrap();
+    assert_eq!(i64::MIN, value);
+
+    let value: i64 = deserialize(":9223372036854775807\r\n").unwrap();
+    assert_eq!(i64::MAX, value);
+}
+
+#[test]
+fn null_still_deserializes_to_integer_default() {
+    log_try_init();
+
+    // Documented ergonomic coercion: a nil reply deserializes to 0. This is
+    // deliberate and preserved by the lossy-cast fix.
+    let value: i32 = deserialize("_\r\n").unwrap();
+    assert_eq!(0, value);
 }

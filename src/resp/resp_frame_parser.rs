@@ -133,25 +133,36 @@ fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
     let slice = &data[from..];
     let mut i = 0;
 
-    let sign = if let Some(&b'-') = slice.first() {
+    let negative = if let Some(&b'-') = slice.first() {
         i += 1;
-        -1
+        true
     } else {
-        1
+        false
     };
 
+    // Accumulate the magnitude as a *negative* number so that `i64::MIN` — whose
+    // positive magnitude is not representable — parses instead of overflowing.
+    // A positive result is negated back at the end.
     let mut n = 0i64;
     while i < slice.len() {
         match slice[i] {
             b'0'..=b'9' => {
                 n = n
                     .checked_mul(10)
-                    .and_then(|n| n.checked_add((slice[i] - b'0') as i64))
+                    .and_then(|n| n.checked_sub((slice[i] - b'0') as i64))
                     .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?;
                 i += 1;
             }
             b'\r' => match slice.get(i + 1) {
-                Some(&b'\n') => return Ok((n * sign, from + i + 2)),
+                Some(&b'\n') => {
+                    let value = if negative {
+                        n
+                    } else {
+                        n.checked_neg()
+                            .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+                    };
+                    return Ok((value, from + i + 2));
+                }
                 Some(_) => return Err(Error::Client(ClientError::CannotParseInteger)),
                 None => return Err(Error::EOF),
             },

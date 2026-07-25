@@ -460,6 +460,13 @@ impl PubSubStream {
     /// Close the stream by cancelling all subscriptions
     /// Calling `close` allows to wait for all the unsubscriptions.
     /// `drop` will achieve the same process but silently in background
+    ///
+    /// # Semantics
+    /// Once closed, the stream terminates immediately: any message that was
+    /// delivered to the internal receiver but not yet polled is **discarded**.
+    /// If draining those pending messages matters, use [`split`](Self::split)
+    /// and keep polling the [`PubSubSplitStream`], which drains its receiver
+    /// naturally before ending.
     pub async fn close(self) -> Result<()> {
         self.split_sink.close().await
     }
@@ -469,6 +476,10 @@ impl Stream for PubSubStream {
     type Item = Result<PubSubMessage>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        // Terminating on `closed` intentionally drops any buffered-but-unread
+        // messages: draining the receiver here could block indefinitely when the
+        // sender has not been released. See `close` for the documented semantics
+        // and the split-stream drain path.
         if self.split_sink.closed {
             Poll::Ready(None)
         } else {

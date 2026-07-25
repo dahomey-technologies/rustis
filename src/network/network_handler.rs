@@ -8,19 +8,27 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{FutureExt, StreamExt, select};
+use futures_util::{FutureExt, select};
 use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
 use std::{
     collections::{HashMap, VecDeque},
+    future::poll_fn,
     sync::Arc,
     task::Poll,
     time::Duration,
 };
 use tokio::{sync::broadcast, time::Instant};
 
-pub(crate) type MsgSender = mpsc::UnboundedSender<Message>;
-pub(crate) type MsgReceiver = mpsc::UnboundedReceiver<Message>;
+pub(crate) type MsgSender = tokio::sync::mpsc::UnboundedSender<Message>;
+pub(crate) type MsgReceiver = tokio::sync::mpsc::UnboundedReceiver<Message>;
+/// Retry-only handle the network task keeps on the message channel. It is
+/// [`Weak`](tokio::sync::mpsc::WeakUnboundedSender) on purpose: holding a strong
+/// sender would keep the channel open forever, so dropping the last client
+/// would never end the network loop. With a weak handle the channel closes
+/// naturally when the last client is dropped, and the task upgrades it only to
+/// requeue a message for retry.
+type WeakMsgSender = tokio::sync::mpsc::WeakUnboundedSender<Message>;
 pub(crate) type ResultSender = oneshot::Sender<Result<RespResponse>>;
 pub(crate) type ResultReceiver = oneshot::Receiver<Result<RespResponse>>;
 pub(crate) type ResultsSender = oneshot::Sender<Result<Vec<RespResponse>>>;
@@ -173,7 +181,7 @@ pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
     /// for retries
-    msg_sender: MsgSender,
+    msg_sender: WeakMsgSender,
     msg_receiver: MsgReceiver,
     messages_to_send: VecDeque<MessageToSend>,
     messages_to_receive: VecDeque<MessageToReceive>,
@@ -208,14 +216,15 @@ impl NetworkHandler {
         let send_batch_test_hook = config.send_batch_test_hook.clone();
 
         let connection = Connection::connect(config).await?;
-        let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) = mpsc::unbounded();
+        let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) =
+            tokio::sync::mpsc::unbounded_channel();
         let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
         let tag = connection.tag().to_owned();
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
             connection,
-            msg_sender: msg_sender.clone(),
+            msg_sender: msg_sender.downgrade(),
             msg_receiver,
             messages_to_send: VecDeque::new(),
             messages_to_receive: VecDeque::new(),
@@ -248,7 +257,7 @@ impl NetworkHandler {
     async fn network_loop(&mut self) -> Result<()> {
         loop {
             select! {
-                msg = self.msg_receiver.next().fuse() => {
+                msg = poll_fn(|cx| self.msg_receiver.poll_recv(cx)).fuse() => {
                     if !self.try_handle_message(msg).await { break; }
                 },
                 result = self.connection.read().fuse() => {
@@ -652,10 +661,16 @@ impl NetworkHandler {
                                 }
                             }
 
-                            // retry
-                            let result = self.msg_sender.unbounded_send(message_to_receive.message);
-                            if let Err(e) = result {
-                                error!("[{}] Cannot retry message: {e}", self.tag);
+                            // retry: upgrade the weak handle just long enough to
+                            // requeue the message. A failed upgrade means every
+                            // client is gone and the channel is closing, so the
+                            // retry is moot.
+                            if let Some(msg_sender) = self.msg_sender.upgrade() {
+                                if let Err(e) = msg_sender.send(message_to_receive.message) {
+                                    error!("[{}] Cannot retry message: {e}", self.tag);
+                                }
+                            } else {
+                                debug!("[{}] Cannot retry message: channel closed", self.tag);
                             }
                         } else {
                             trace!(
@@ -918,7 +933,8 @@ impl NetworkHandler {
                 let end = start.checked_add(Duration::from_millis(delay)).unwrap();
                 loop {
                     let delay = end.duration_since(Instant::now());
-                    let result = timeout(delay, self.msg_receiver.next().fuse()).await;
+                    let result =
+                        timeout(delay, poll_fn(|cx| self.msg_receiver.poll_recv(cx))).await;
                     if let Ok(msg) = result {
                         if !self.try_handle_message(msg).await {
                             return false;

@@ -57,25 +57,6 @@ pub struct Client {
     is_cluster: bool,
 }
 
-impl Drop for Client {
-    /// When the last clone sharing a connection goes away, the message channel
-    /// must be closed explicitly: the network handler keeps its own sender for
-    /// retries, so the channel never closes on its own. `Arc::into_inner` yields
-    /// `Some` to exactly one caller even under a concurrent drop/close, so the
-    /// shutdown runs once and is never lost to a race.
-    fn drop(&mut self) {
-        let mut shared: Arc<Option<ClientShared>> = Arc::new(None);
-        std::mem::swap(&mut shared, &mut self.shared);
-
-        if let Some(Some(shared)) = Arc::into_inner(shared) {
-            // the network loop ends once it detects the sender bound is closed;
-            // a synchronous `Drop` cannot await the task, so the handle is just
-            // dropped here (see `close` for the awaiting path).
-            shared.msg_sender.close_channel();
-        }
-    }
-}
-
 impl Client {
     /// Connects asynchronously to the Redis server.
     ///
@@ -125,9 +106,16 @@ impl Client {
         // `into_inner` makes that determination race-free against a concurrent
         // `close`/`Drop` (see `ClientShared`).
         if let Some(Some(shared)) = Arc::into_inner(shared) {
-            // the network loop ends once it detects the sender bound is closed
-            shared.msg_sender.close_channel();
-            shared.network_task_join_handle.await?;
+            let ClientShared {
+                msg_sender,
+                network_task_join_handle,
+            } = shared;
+            // Dropping the last strong sender closes the channel, which is what
+            // ends the network loop; the task keeps a weak handle only, so this
+            // must happen before awaiting it, otherwise the loop never sees the
+            // channel close and the await deadlocks.
+            drop(msg_sender);
+            network_task_join_handle.await?;
         }
 
         Ok(())
@@ -299,7 +287,7 @@ impl Client {
                 "[{}], Will enqueue message: {message:?}",
                 self.connection_tag
             );
-            Ok(shared.msg_sender.unbounded_send(message).map_err(|e| {
+            Ok(shared.msg_sender.send(message).map_err(|e| {
                 info!("{e}");
                 Error::Client(ClientError::DisconnectedFromServer)
             })?)

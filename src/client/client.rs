@@ -206,6 +206,13 @@ impl Client {
         );
         self.send_message(message)?;
 
+        self.await_result(result_receiver).await
+    }
+
+    /// Await a single-response oneshot, applying the configured `command_timeout`
+    /// so subscribe/monitor callers honour the same contract as regular sends.
+    #[inline]
+    async fn await_result(&self, result_receiver: ResultReceiver) -> Result<RespResponse> {
         if self.command_timeout != Duration::ZERO {
             timeout(self.command_timeout, result_receiver).await??
         } else {
@@ -355,7 +362,7 @@ impl Client {
 
         self.send_message(message)?;
 
-        result_receiver.await??.to::<()>()
+        self.await_result(result_receiver).await?.to::<()>()
     }
 
     pub(crate) async fn psubscribe_from_pub_sub_sender(
@@ -380,7 +387,7 @@ impl Client {
 
         self.send_message(message)?;
 
-        result_receiver.await??.to::<()>()
+        self.await_result(result_receiver).await?.to::<()>()
     }
 
     pub(crate) async fn ssubscribe_from_pub_sub_sender(
@@ -405,7 +412,7 @@ impl Client {
 
         self.send_message(message)?;
 
-        result_receiver.await??.to::<()>()
+        self.await_result(result_receiver).await?.to::<()>()
     }
 }
 
@@ -531,7 +538,7 @@ impl<'a> BlockingCommands<'a> for &'a Client {
 
         self.send_message(message)?;
 
-        let _bytes = result_receiver.await??;
+        let _bytes = self.await_result(result_receiver).await?;
         Ok(MonitorStream::new(push_receiver, self.clone()))
     }
 }

@@ -17,7 +17,6 @@ use crate::{
 };
 use futures_util::try_join;
 use serial_test::serial;
-use smallvec::smallvec;
 use std::{collections::HashSet, future::IntoFuture, time::Duration};
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -516,7 +515,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
     // whose reply must not leak onto the retried message.
     let results = client
         .internal_send_batch(
-            smallvec![
+            vec![
                 cmd("GET").key("clu01_a").into(),
                 cmd("GET").key("clu01_moved").into(),
                 cmd("GET").key("clu01_b").into(),

@@ -82,6 +82,20 @@ pub(crate) struct ArgLayout {
     pub flags: u16,
 }
 
+/// Inline capacity of a command's argument-layout list.
+///
+/// Every [`Command`] carries this array inline, and a `Command` is moved
+/// (memcpy'd) several times per request along the serialized network path, so
+/// this capacity is a direct throughput knob: it costs
+/// `ARGS_LAYOUT_INLINE * 12` bytes on every command, whatever its arity.
+/// Commands with more arguments spill to the heap on the *caller* thread, which
+/// parallelizes; the inline bytes would instead be copied on the shared network
+/// task.
+pub(crate) const ARGS_LAYOUT_INLINE: usize = 4;
+
+/// Argument-layout list of a command, sized by [`ARGS_LAYOUT_INLINE`].
+pub(crate) type ArgsLayout = SmallVec<[ArgLayout; ARGS_LAYOUT_INLINE]>;
+
 impl ArgLayout {
     /// Flag indicating that this argument is a Redis key.
     const IS_KEY: u16 = 1 << 0;
@@ -146,7 +160,7 @@ pub struct Command {
     buffer: Bytes,
     kind: CommandKind,
     name_layout: (usize, usize),
-    args_layout: SmallVec<[ArgLayout; 10]>,
+    args_layout: ArgsLayout,
     #[doc(hidden)]
     #[cfg(test)]
     pub kill_connection_on_write: Arc<AtomicUsize>,
@@ -166,7 +180,7 @@ impl Command {
     pub(crate) fn new(
         buffer: Bytes,
         name_layout: (usize, usize),
-        args_layout: SmallVec<[ArgLayout; 10]>,
+        args_layout: ArgsLayout,
         #[cfg(test)] kill_connection_on_write: usize,
         #[cfg(test)] kill_connection_on_read: usize,
         #[cfg(test)] command_seq: usize,
@@ -321,7 +335,7 @@ pub struct CommandBuilder {
     /// This allows the `Client` to extract keys (for Cluster sharding) or
     /// channel names (for Pub/Sub) in O(1) time without re-parsing the buffer.
     /// This index is dropped when the command is sent to the network layer.
-    pub(crate) args_layout: SmallVec<[ArgLayout; 10]>,
+    pub(crate) args_layout: ArgsLayout,
     #[doc(hidden)]
     #[cfg(test)]
     pub kill_connection_on_write: usize,

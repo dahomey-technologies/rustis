@@ -156,7 +156,7 @@ impl MessageToSend {
 struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
-    pub pending_responses: SmallVec<[RespResponse; 10]>,
+    pub pending_responses: Vec<RespResponse>,
 }
 
 impl MessageToReceive {
@@ -164,7 +164,7 @@ impl MessageToReceive {
         Self {
             message,
             num_commands,
-            pending_responses: SmallVec::new(),
+            pending_responses: Vec::new(),
         }
     }
 }
@@ -427,7 +427,7 @@ impl NetworkHandler {
             && let Some(reasons) = hook.take_injection()
             && let Some(front) = self.messages_to_send.front_mut()
         {
-            front.message.retry_reasons = Some(SmallVec::from_iter(reasons));
+            front.message.retry_reasons = Some(reasons);
         }
 
         let start_idx = self.messages_to_receive.len();
@@ -657,7 +657,7 @@ impl NetworkHandler {
                                     retry_reasons.extend(reasons);
                                 } else {
                                     message_to_receive.message.retry_reasons =
-                                        Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                        Some(Vec::from_iter(reasons));
                                 }
                             }
 
@@ -692,7 +692,7 @@ impl NetworkHandler {
                                         message_to_receive.pending_responses.push(resp_buf);
                                         self.pending_result_batches.push((
                                             results_sender,
-                                            Ok(message_to_receive.pending_responses.into_vec()),
+                                            Ok(message_to_receive.pending_responses),
                                         ));
                                     }
                                     Err(e) => {
@@ -723,7 +723,7 @@ impl NetworkHandler {
                                 retry_reasons.extend(reasons);
                             } else {
                                 message_to_receive.message.retry_reasons =
-                                    Some(SmallVec::<[RetryReason; 10]>::from_iter(reasons));
+                                    Some(Vec::from_iter(reasons));
                             }
                         }
                         _ => (),

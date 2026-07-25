@@ -85,7 +85,7 @@ impl Streams {
             let (reader, writer) =
                 tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
             let framed_read =
-                FramedRead::with_capacity(reader, BufferDecoder, TARGET_BUFFER_CAPACITY);
+                FramedRead::with_capacity(reader, BufferDecoder::new(), TARGET_BUFFER_CAPACITY);
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))
         } else {
@@ -98,7 +98,7 @@ impl Streams {
 
     pub async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
-        let framed_read = FramedRead::new(reader, BufferDecoder);
+        let framed_read = FramedRead::new(reader, BufferDecoder::new());
         let framed_write = FramedWrite::new(writer, CommandEncoder);
         Ok(Streams::Tcp(framed_read, framed_write))
     }

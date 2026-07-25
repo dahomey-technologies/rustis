@@ -3,7 +3,7 @@ use crate::{
     resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse},
     tests::log_try_init,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -13,7 +13,8 @@ where
     T: serde::de::DeserializeOwned,
 {
     let buf = str.as_bytes();
-    let (frame, _) = RespFrameParser::new(buf).parse()?;
+    let mut tape = BytesMut::new();
+    let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
     let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
     deserialize_from_resp_response(response)
 }

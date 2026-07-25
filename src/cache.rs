@@ -216,7 +216,9 @@ impl Cache {
                     break;
                 };
 
-                // Insert into cache
+                // Insert into cache. Compact first so a retained entry holds
+                // only its own bytes instead of pinning the whole MGET reply
+                // block every element still shares.
                 self.cache
                     .entry(key.clone())
                     .or_insert_with(async { Arc::new(DashMap::new()) })
@@ -224,7 +226,7 @@ impl Cache {
                     .value()
                     .insert(
                         FastPathCommandBuilder::get(key).bytes().clone(),
-                        response.clone(),
+                        response.compact(),
                     );
 
                 responses[original_idx] = response;
@@ -511,13 +513,15 @@ impl Cache {
         let deserializer = RespDeserializer::new(response.view());
         let deserialized = R::deserialize(deserializer)?;
 
-        // Insert into cache
+        // Insert into cache. Compact first so a retained entry holds only its
+        // own bytes instead of pinning the whole recycled network block it was
+        // decoded from.
         self.cache
             .entry(key)
             .or_insert_with(async { Arc::new(DashMap::new()) })
             .await
             .value()
-            .insert(command_bytes, response);
+            .insert(command_bytes, response.compact());
 
         Ok(deserialized)
     }

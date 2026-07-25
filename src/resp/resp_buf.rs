@@ -65,7 +65,8 @@ impl RespBuf {
     /// Convert the RESP Buffer to a Rust type `T` by using serde deserialization
     #[inline]
     pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
-        let (frame, _) = RespFrameParser::new(&self.0).parse()?;
+        let mut tape = BytesMut::new();
+        let (frame, _) = RespFrameParser::new(&self.0, &mut tape).parse()?;
         let response = RespResponse::new(self.clone(), frame);
         T::deserialize(RespDeserializer::new(response.view()))
     }

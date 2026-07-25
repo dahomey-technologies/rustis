@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    ClientError, Error, Result,
     cache::Cache,
     client::Client,
     commands::{
@@ -45,6 +45,25 @@ async fn cache_get() -> Result<()> {
 
     let value: String = cache.get("key").await?;
     assert_eq!("new_value", value);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cache_key_serializing_to_zero_args_errors_instead_of_panicking() -> Result<()> {
+    log_try_init();
+    let client = Client::connect("redis://127.0.0.1?connection_name=cache_bad_key").await?;
+    let cache = Cache::new(client, 60, ClientTrackingOptions::default()).await?;
+
+    // A key that serializes to zero arguments (e.g. `None`) must surface a clean
+    // error rather than panicking the caller thread.
+    let result: Result<String> = cache.get(None::<String>).await;
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::InvalidCacheKey))),
+        "expected InvalidCacheKey, got {result:?}"
+    );
 
     Ok(())
 }

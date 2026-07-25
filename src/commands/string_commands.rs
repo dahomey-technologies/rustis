@@ -457,6 +457,12 @@ pub trait StringCommands<'a>: Sized {
     /// - 1 if the all the keys were set.
     /// - 0 if no key was set (at least one key already existed).
     ///
+    /// # Cluster
+    /// Unlike [`mset`](StringCommands::mset), MSETNX is routed to a single node:
+    /// its all-or-nothing atomicity cannot be preserved if the keys were split
+    /// across shards. All keys must therefore hash to the same slot in cluster
+    /// mode, otherwise the command fails client-side with a mismatched-slot error.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/msetnx/>](https://redis.io/commands/msetnx/)
     #[must_use]
@@ -748,10 +754,16 @@ pub enum SetCondition<'a> {
     NX,
     /// Only set the key if it already exist.
     XX,
-    /// Set the key’s value and expiration only if the hash digest of its current value is equal to the provided value.
+    /// Set the key’s value and expiration only if its current value is equal to the provided value.
     /// If the key doesn’t exist, it won’t be created.
     IFEQ(&'a str),
-    /// Set the key’s value and expiration only if the hash digest of its current value is not equal to the provided value.
+    /// Set the key’s value and expiration only if its current value is not equal to the provided value.
+    /// If the key doesn’t exist, it will be created.
+    IFNE(&'a str),
+    /// Set the key’s value and expiration only if the hash digest of its current value is equal to the provided digest.
+    /// If the key doesn’t exist, it won’t be created.
+    IFDEQ(&'a str),
+    /// Set the key’s value and expiration only if the hash digest of its current value is not equal to the provided digest.
     /// If the key doesn’t exist, it will be created.
     IFDNE(&'a str),
 }

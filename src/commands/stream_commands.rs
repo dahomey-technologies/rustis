@@ -576,6 +576,8 @@ pub struct XTrimOptions<'a> {
     minid: Option<(Option<XTrimOperator>, &'a str)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<u32>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    entries_deletion: Option<StreamEntryDeletionPolicy>,
 }
 
 impl<'a> XTrimOptions<'a> {
@@ -600,6 +602,31 @@ impl<'a> XTrimOptions<'a> {
         self.limit = Some(count);
         self
     }
+
+    /// How consumer-group references are handled for the removed entries
+    /// (Redis 8.2). Applies to both [`xtrim`](StreamCommands::xtrim) and the
+    /// trimming clause of [`xadd`](StreamCommands::xadd).
+    #[must_use]
+    pub fn entries_deletion(mut self, policy: StreamEntryDeletionPolicy) -> Self {
+        self.entries_deletion = Some(policy);
+        self
+    }
+}
+
+/// Controls how consumer-group references are handled when stream entries are
+/// removed. Shared by every entry-removing command since Redis 8.2 — here the
+/// trimming clause of [`xadd`](StreamCommands::xadd) and
+/// [`xtrim`](StreamCommands::xtrim).
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum StreamEntryDeletionPolicy {
+    /// Remove the entry but keep consumer-group references (default, preserves
+    /// pre-8.2 behaviour).
+    KeepRef,
+    /// Remove the entry and all references to it from every consumer group's PEL.
+    DelRef,
+    /// Only remove entries already acknowledged by all consumer groups.
+    Acked,
 }
 
 /// Options for the [`xautoclaim`](StreamCommands::xautoclaim) command

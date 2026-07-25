@@ -1,9 +1,10 @@
 use crate::{
     Result,
     commands::{
-        FlushingMode, ServerCommands, StreamCommands, StreamEntry, XAddOptions, XAutoClaimOptions,
-        XAutoClaimResult, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions,
-        XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XTrimOptions,
+        FlushingMode, ServerCommands, StreamCommands, StreamEntry, StreamEntryDeletionPolicy,
+        XAddOptions, XAutoClaimOptions, XAutoClaimResult, XClaimOptions, XGroupCreateOptions,
+        XInfoStreamOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions,
+        XReadOptions, XTrimOptions,
     },
     tests::{TestClient, get_test_client},
 };
@@ -850,6 +851,51 @@ async fn xtrim() -> Result<()> {
     let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;
     assert_eq!(1, results.len());
     assert_eq!(id2, results[0].stream_id);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xtrim_entries_deletion_policy() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    for _ in 0..3 {
+        let _: String = client
+            .xadd(
+                "mystream",
+                "*",
+                [("field", "value")],
+                XAddOptions::default(),
+            )
+            .await?;
+    }
+
+    // XTRIM with an explicit entry-deletion policy (Redis 8.2).
+    let deleted = client
+        .xtrim(
+            "mystream",
+            XTrimOptions::max_len(None, 2).entries_deletion(StreamEntryDeletionPolicy::DelRef),
+        )
+        .await?;
+    assert_eq!(1, deleted);
+
+    // XADD may carry the same policy inside its trim clause.
+    let _: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default().trim_options(
+                XTrimOptions::max_len(None, 1).entries_deletion(StreamEntryDeletionPolicy::KeepRef),
+            ),
+        )
+        .await?;
+
+    let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;
+    assert_eq!(1, results.len());
 
     Ok(())
 }

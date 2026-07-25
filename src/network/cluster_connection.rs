@@ -12,15 +12,11 @@ use bytes::Bytes;
 use futures_util::{FutureExt, future};
 use log::{debug, info, trace, warn};
 use rand::Rng;
-use serde::{
-    Deserialize,
-    de::{self, value::SeqAccessDeserializer},
-};
 use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
-    fmt::{self, Debug, Formatter},
+    fmt::{Debug, Formatter},
     iter::zip,
     sync::Arc,
     task::Poll,
@@ -1083,6 +1079,12 @@ impl ClusterConnection {
                         return Some(Err(Error::Client(ClientError::Unexpected)));
                     }
                     Integer::Array(items) => {
+                        // Unequal per-shard array lengths must not be silently
+                        // truncated by `zip`: an uncombined tail would be a wrong
+                        // aggregate reported as success.
+                        if items.len() != resp_array.len() {
+                            return Some(Err(Error::Client(ClientError::Unexpected)));
+                        }
                         for (item, view) in items.iter_mut().zip(resp_array) {
                             if let RespView::Integer(i) = view {
                                 *item = f(*item, i);
@@ -1629,58 +1631,4 @@ enum Integer {
     Single(i64),
     Array(Vec<i64>),
     Null,
-}
-
-struct AggVisitor<F: Fn(i64, i64) -> i64> {
-    integer: Integer,
-    f: F,
-}
-
-impl<'de, F: Fn(i64, i64) -> i64> de::Visitor<'de> for &mut AggVisitor<F> {
-    type Value = ();
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("()")
-    }
-
-    fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        match &self.integer {
-            Integer::Null => self.integer = Integer::Single(v),
-            Integer::Single(i) => self.integer = Integer::Single((self.f)(v, *i)),
-            _ => {
-                return Err(de::Error::custom("Unexpected value".to_owned()));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-    where
-        A: de::SeqAccess<'de>,
-    {
-        match &mut self.integer {
-            Integer::Null => {
-                self.integer =
-                    Integer::Array(Vec::<i64>::deserialize(SeqAccessDeserializer::new(seq))?)
-            }
-            Integer::Array(a) => {
-                for i in a {
-                    let Some(next_i) = seq.next_element()? else {
-                        return Err(de::Error::custom("Unexpected value".to_owned()));
-                    };
-
-                    *i = (self.f)(*i, next_i);
-                }
-            }
-            _ => {
-                return Err(de::Error::custom("Unexpected value".to_owned()));
-            }
-        }
-
-        Ok(())
-    }
 }

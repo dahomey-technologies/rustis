@@ -284,8 +284,116 @@ fn map() -> Result<()> {
 }
 
 #[test]
+fn a_nested_collection_resumes_byte_by_byte_across_chunks() {
+    // Fed one byte at a time, a reply must stay incomplete until its last byte
+    // and then decode correctly — proof the parser suspends and resumes instead
+    // of failing or restarting. The tape is built once, across chunks; the *win*
+    // (no re-scan) is what the chunked bench measures.
+    let full = b"*2\r\n*2\r\n:1\r\n:2\r\n*2\r\n:3\r\n:4\r\n";
+    let mut decoder = BufferDecoder::new();
+    let mut buf = BytesMut::new();
+    let mut completed = None;
+
+    for (i, &byte) in full.iter().enumerate() {
+        buf.extend_from_slice(&[byte]);
+        let result = decoder.decode(&mut buf).unwrap();
+        if i + 1 < full.len() {
+            assert!(result.is_none(), "frame completed early at byte {i}");
+        } else {
+            completed = result;
+        }
+    }
+
+    let response = completed.expect("the last byte completes the frame");
+    assert_eq!(
+        vec![vec![1i64, 2], vec![3, 4]],
+        response.to::<Vec<Vec<i64>>>().unwrap()
+    );
+    assert!(buf.is_empty(), "the completed frame must be consumed");
+}
+
+#[test]
+fn a_collection_split_at_every_boundary_resumes_without_corruption() {
+    // Cutting between chunk 1 and chunk 2 at every byte offset must always yield
+    // the same result — the resume path is exercised at each offset (including
+    // mid-header and mid-bulk-string), the exact class of boundary the old
+    // re-parsing decoder mishandled.
+    let full = b"*3\r\n$5\r\nhello\r\n$5\r\nworld\r\n$3\r\nfoo\r\n";
+    let expected = vec!["hello".to_owned(), "world".to_owned(), "foo".to_owned()];
+
+    for split in 1..full.len() {
+        let mut decoder = BufferDecoder::new();
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&full[..split]);
+        assert!(
+            decoder.decode(&mut buf).unwrap().is_none(),
+            "a proper prefix must be incomplete (split {split})"
+        );
+        buf.extend_from_slice(&full[split..]);
+        let response = decoder
+            .decode(&mut buf)
+            .unwrap()
+            .expect("the remaining bytes complete the frame");
+        assert_eq!(
+            expected,
+            response.to::<Vec<String>>().unwrap(),
+            "wrong result when split at {split}"
+        );
+        assert!(buf.is_empty());
+    }
+}
+
+#[test]
+fn a_top_level_scalar_split_across_chunks_resumes() {
+    // Top-level scalars carry no tape and no stack, so their resume path is the
+    // empty-stack re-dispatch. Every split must still decode.
+    let full = b"$11\r\nhello world\r\n";
+    for split in 1..full.len() {
+        let mut decoder = BufferDecoder::new();
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&full[..split]);
+        assert!(
+            decoder.decode(&mut buf).unwrap().is_none(),
+            "incomplete at split {split}"
+        );
+        buf.extend_from_slice(&full[split..]);
+        let response = decoder.decode(&mut buf).unwrap().expect("complete");
+        assert_eq!("hello world", response.to::<String>().unwrap());
+    }
+}
+
+#[test]
+fn pipelined_frames_decode_one_then_resume_the_next() {
+    // A read can deliver one whole frame plus the start of the next. The decoder
+    // must return the first, consume exactly its bytes, then resume the second —
+    // proof that completing a frame resets the resume state cleanly.
+    let mut decoder = BufferDecoder::new();
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(b"*1\r\n:1\r\n*2\r\n:2\r\n");
+
+    let first = decoder
+        .decode(&mut buf)
+        .unwrap()
+        .expect("first frame complete");
+    assert_eq!(vec![1i64], first.to::<Vec<i64>>().unwrap());
+
+    assert!(
+        decoder.decode(&mut buf).unwrap().is_none(),
+        "the second frame is buffered but incomplete"
+    );
+
+    buf.extend_from_slice(b":3\r\n");
+    let second = decoder
+        .decode(&mut buf)
+        .unwrap()
+        .expect("second frame complete");
+    assert_eq!(vec![2i64, 3], second.to::<Vec<i64>>().unwrap());
+    assert!(buf.is_empty());
+}
+
+#[test]
 fn tape_buffer_shrinks_back_after_a_large_collection_spike() {
-    // HARD-03 policy applied to the decoder's recycled tape buffer: a single
+    // The shrink policy applied to the decoder's recycled tape buffer: a single
     // huge collection must not inflate it permanently. Because a post-`split()`
     // tail can pin the whole block while reporting near-zero `capacity()`, the
     // decoder tracks the oversized state directly and releases the block after a

@@ -1,9 +1,6 @@
 use crate::Result;
 use atoi::atoi;
-use futures_channel::{
-    mpsc::{self},
-    oneshot,
-};
+use futures_channel::mpsc;
 use smallvec::SmallVec;
 use std::{
     fmt::{Display, Formatter},
@@ -217,7 +214,7 @@ pub enum Error {
     TokioJoin(Arc<tokio::task::JoinError>),
     /// Raised when oneshot channel is canceled
     #[error("oneshot channel canceled")]
-    OneshotCanceled(#[from] oneshot::Canceled),
+    OneshotCanceled(#[from] tokio::sync::oneshot::error::RecvError),
     /// Raised when mpsc send error occurs
     #[error("mpsc send error: {0}")]
     MpscSend(#[from] mpsc::SendError),

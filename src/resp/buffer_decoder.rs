@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    resp::{PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse},
+    resp::{PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse, bulk_value_end},
 };
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
@@ -152,6 +152,17 @@ impl Decoder for BufferDecoder {
                 // Keep the partial tape in `tape_buf` and the stack; the next chunk
                 // continues this frame from `end_pos` rather than re-parsing it.
                 self.resume_pos = Some(end_pos);
+                // If the suspension is on a large bulk-family value whose length is
+                // already known, reserve the read buffer to the value's exact end in
+                // one shot. Otherwise `FramedRead` grows it by doubling, memcpy-ing
+                // the whole accumulated reply ~log2(size) times — measurably costly
+                // on multi-MB replies (see `benches/large_reply_reserve.rs`). The
+                // reservation is bounded by the parser's own bulk-length cap.
+                if let Some(end) = bulk_value_end(src, end_pos)
+                    && end > src.len()
+                {
+                    src.reserve(end - src.len());
+                }
                 Ok(None)
             }
             Err(e) => {

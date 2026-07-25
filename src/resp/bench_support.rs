@@ -52,6 +52,64 @@ pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> 
     }
 }
 
+/// Drives [`BufferDecoder`] over `data` delivered in `chunk`-byte slices while
+/// growing the read buffer the way `FramedRead` does today: `reserve(1)` before
+/// each read, so the `BytesMut` doubles every time it fills. This is the
+/// realloc-by-doubling cost STRUCT-05 targets — a multi-MB reply is memcpy'd
+/// ~log2(size) times as the buffer grows. Returns the decoded frame's byte
+/// length; the frame itself is dropped (no deserialize), so the measurement
+/// isolates buffer growth from serde.
+#[inline(never)]
+pub fn bench_decode_stream_grow(data: &[u8], chunk: usize) -> Result<usize> {
+    drive_stream(data, chunk, false)
+}
+
+/// Same as [`bench_decode_stream_grow`], but reserves the announced frame size
+/// once (the STRUCT-05 fix): the read buffer reaches its final capacity in a
+/// single allocation and never doubles. Compare the two to decide whether the
+/// reallocation cost is worth re-plumbing the decoder's EOF contract.
+#[inline(never)]
+pub fn bench_decode_stream_prereserve(data: &[u8], chunk: usize) -> Result<usize> {
+    drive_stream(data, chunk, true)
+}
+
+/// Shared driver for the two streaming-reserve shims above. Models the
+/// `FramedRead` read loop: decode what is buffered, and if the frame is
+/// incomplete, reserve then copy the next `chunk`-sized slice from `data`.
+#[inline(always)]
+fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
+    use crate::network::TARGET_BUFFER_CAPACITY;
+
+    let mut decoder = BufferDecoder::new();
+    let mut src = BytesMut::with_capacity(TARGET_BUFFER_CAPACITY);
+    let mut pos = 0usize;
+    let mut reserved = false;
+    loop {
+        if let Some(resp) = decoder.decode(&mut src)? {
+            let len = match std::hint::black_box(&resp) {
+                RespResponse::Frame(buf, _) => buf.as_ref().len(),
+                _ => 0,
+            };
+            return Ok(len);
+        }
+        if pos >= data.len() {
+            return Err(Error::EOF);
+        }
+        // The fix reserves the whole announced reply once the header is buffered.
+        if prereserve && !reserved && !src.is_empty() {
+            src.reserve(data.len().saturating_sub(src.len()));
+            reserved = true;
+        }
+        // FramedRead reserves at least one byte before every read; on a full
+        // BytesMut that doubles the block.
+        src.reserve(1);
+        let spare = src.capacity() - src.len();
+        let take = spare.min(chunk).min(data.len() - pos);
+        src.extend_from_slice(&data[pos..pos + take]);
+        pos += take;
+    }
+}
+
 /// Parses one complete RESP frame from `bytes` into the reused `tape`, without
 /// deserializing it — isolating the parser and tape build from serde and
 /// allocation cost. Reusing `tape` across calls mirrors the decoder's recycled

@@ -85,6 +85,33 @@ fn check_bulk_len(len: i64) -> Result<()> {
     Ok(())
 }
 
+/// Total buffer offset an incomplete bulk-family value at `pos` ends at, when its
+/// length header is already fully buffered — the read buffer can then be reserved
+/// to exactly that size in one shot instead of doubling toward it. Returns `None`
+/// when `pos` is not a length-prefixed scalar, when its header line has not
+/// arrived yet (only a few bytes are pending — the doubling fallback is cheap
+/// there), or when the announced length is negative/nil or exceeds
+/// [`MAX_BULK_LENGTH`] (the same cap the parser enforces, so a hostile length
+/// cannot drive an unbounded reservation).
+///
+/// Only `$` bulk strings and `=` verbatim strings are considered: they are the
+/// scalars whose payload is large enough for the reallocation cost to bite. All
+/// other frames stay on the existing incremental-growth path.
+#[inline]
+pub(crate) fn bulk_value_end(data: &[u8], pos: usize) -> Option<usize> {
+    let tag = *data.get(pos)?;
+    if tag != b'$' && tag != b'=' {
+        return None;
+    }
+    let (len, after) = parse_int_at(data, pos + 1).ok()?;
+    if len < 0 {
+        return None;
+    }
+    check_bulk_len(len).ok()?;
+    // payload + trailing CRLF
+    Some(after + len as usize + 2)
+}
+
 /// Finds the `\r` of the next `\r\n` at or after `from`, returning its index.
 /// Errors with [`Error::EOF`] when no complete terminator is present yet.
 #[inline]

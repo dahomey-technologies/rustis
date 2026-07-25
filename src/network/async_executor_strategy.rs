@@ -12,10 +12,15 @@ use std::{
     time::Duration,
 };
 
+// `into_split` gives owned halves that share the `TcpStream` through an `Arc`
+// with no per-operation lock, unlike `tokio::io::split`'s `BiLock` which is
+// acquired on every read and every write. Plain TCP can use it because the two
+// halves are the whole stream; TLS streams have no native split and keep
+// `io::split` below.
 #[cfg(feature = "tokio-runtime")]
-pub(crate) type TcpStreamReader = tokio::io::ReadHalf<tokio::net::TcpStream>;
+pub(crate) type TcpStreamReader = tokio::net::tcp::OwnedReadHalf;
 #[cfg(feature = "tokio-runtime")]
-pub(crate) type TcpStreamWriter = tokio::io::WriteHalf<tokio::net::TcpStream>;
+pub(crate) type TcpStreamWriter = tokio::net::tcp::OwnedWriteHalf;
 #[cfg(feature = "tokio-rustls")]
 pub(crate) type TcpTlsStreamReader =
     tokio::io::ReadHalf<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>;
@@ -74,7 +79,7 @@ pub(crate) async fn tcp_connect(
             stream.set_nodelay(true)?;
         }
 
-        (reader, writer) = tokio::io::split(stream);
+        (reader, writer) = stream.into_split();
     }
     #[cfg(feature = "async-std-runtime")]
     {

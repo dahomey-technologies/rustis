@@ -94,6 +94,11 @@ harness = false
 required-features = ["bench"]
 
 [[bench]]
+name = "throughput"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
 name = "native_api"
 harness = false
 required-features = ["bench"]

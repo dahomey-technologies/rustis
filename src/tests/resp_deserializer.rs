@@ -567,3 +567,58 @@ fn r#enum() {
         result
     );
 }
+
+/// A map whose value re-parses as a malformed scalar (framing does not validate
+/// integer/double content) must surface a decode error, not panic the caller's
+/// task on the pair-iteration `unwrap`s.
+#[test]
+fn map_malformed_nested_scalar_errors() -> Result<()> {
+    log_try_init();
+
+    // `*1\r\n*2\r\n:abc\r\n:1\r\n`: a map read from a sequence of 2-element pairs
+    // where the key element's bytes `abc` pass framing but fail `atoi` when the
+    // pair iterator re-reads the element (`read_scalar_view` → None).
+    let result: Result<HashMap<i64, i64>> = deserialize("*1\r\n*2\r\n:abc\r\n:1\r\n");
+    assert!(result.is_err(), "expected a decode error, got {result:?}");
+
+    Ok(())
+}
+
+/// `Display`/`Debug` of a `RespBuf` is used by trace/debug logging and must never
+/// panic — not on an empty buffer (produced by `null()`/`integer()` values), and
+/// not allocate the whole reply for a large buffer (it summarizes past a limit).
+#[test]
+fn resp_buf_display_never_panics() {
+    log_try_init();
+
+    // Empty buffer: the parser returns EOF instead of indexing out of bounds.
+    let empty = RespBuf::from(Bytes::new());
+    let _ = format!("{empty}");
+    let _ = format!("{empty:?}");
+
+    // Large buffer: summarized rather than fully materialized.
+    let big = RespBuf::from(Bytes::from(vec![b'x'; 64 * 1024]));
+    let rendered = format!("{big}");
+    assert!(
+        rendered.contains("RESP buffer of"),
+        "large buffer should be summarized, got {rendered}"
+    );
+}
+
+/// A RESP3 map with a non-string key (boolean, array, …) is protocol-valid and
+/// deserializing it into `Value` hashes the key. Every `Value` variant must hash
+/// rather than `unimplemented!()`-panic the decoding task.
+#[test]
+fn value_map_with_boolean_key_hashes() -> Result<()> {
+    use crate::resp::Value;
+    log_try_init();
+
+    // `%1\r\n#t\r\n:1\r\n`: { true: 1 }.
+    let value: Value = deserialize("%1\r\n#t\r\n:1\r\n")?;
+    let Value::Map(map) = value else {
+        panic!("expected a Value::Map");
+    };
+    assert_eq!(Some(&Value::Integer(1)), map.get(&Value::Boolean(true)));
+
+    Ok(())
+}

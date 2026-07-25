@@ -104,10 +104,21 @@ impl Deref for RespBuf {
     }
 }
 
+/// Above this raw buffer size, `Display`/`Debug` no longer deserializes the whole
+/// reply into a `Value` just to truncate the rendering to 1000 chars — a large
+/// reply under debug/trace logging would otherwise trigger an allocation storm.
+/// Beyond the threshold we print a cheap summary instead.
+const DISPLAY_MATERIALIZE_LIMIT: usize = 4 * 1024;
+
 impl fmt::Display for RespBuf {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //f.write_str(&String::from_utf8_lossy(&self.0))
+        // Deserializing to `Value` and formatting it allocates proportionally to
+        // the reply; cap that work by summarizing anything past the limit rather
+        // than materializing it and truncating after the fact.
+        if self.0.len() > DISPLAY_MATERIALIZE_LIMIT {
+            return f.write_fmt(format_args!("<RESP buffer of {} bytes>", self.0.len()));
+        }
         match self.to::<Value>() {
             Ok(value) => {
                 let str = format!("{value:?}");

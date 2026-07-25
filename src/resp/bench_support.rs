@@ -12,11 +12,11 @@
 
 use crate::{
     Error, Result,
-    resp::{BufferDecoder, RespBuf, RespFrameParser, RespResponse},
+    resp::{BufferDecoder, Command, CommandEncoder, RespBuf, RespFrameParser, RespResponse},
 };
 use bytes::{Bytes, BytesMut};
 use serde::de::DeserializeOwned;
-use tokio_util::codec::Decoder;
+use tokio_util::codec::{Decoder, Encoder as _};
 
 /// Parses one complete RESP frame from `bytes` and deserializes it into `T`.
 ///
@@ -122,4 +122,21 @@ pub fn bench_parse_only(bytes: &[u8], tape: &mut BytesMut) {
         .parse()
         .expect("bench_parse_only fed a valid frame");
     std::hint::black_box((&frame, frame_len));
+}
+
+/// Encodes `command` into `buf` through [`CommandEncoder`] — the exact write-path
+/// step that copies the already-serialized command into `FramedWrite`'s buffer.
+///
+/// This is the isolation instrument for the vectored-write question: on a large
+/// `SET` payload, the encoder copies the whole value a second time (once into the
+/// command buffer at build time, once here into the write buffer). Reusing `buf`
+/// across calls mirrors the recycled write buffer, so the measurement is the pure
+/// `reserve` + `memcpy` cost a vectored write would remove — decide on the numbers.
+#[inline(never)]
+pub fn bench_encode_command(command: &Command, buf: &mut BytesMut) {
+    buf.clear();
+    CommandEncoder
+        .encode(command, buf)
+        .expect("bench_encode_command fed a valid command");
+    std::hint::black_box(&buf);
 }

@@ -5,6 +5,13 @@ use serde::{
 };
 use std::{collections::HashMap, fmt};
 
+/// Sentinel field name used to smuggle RESP push frames through serde's map
+/// channel: the deserializer emits this as the first (and only) map key to signal
+/// "the value is a push, not a map". This is an in-band convention — a genuine map
+/// whose first key equals this string would be misread as a push. The collision is
+/// vanishingly unlikely for real Redis replies (no command returns a map keyed by
+/// this token), so the convention is kept; an out-of-band channel would be the
+/// proper fix if that ever changes.
 pub(crate) const PUSH_FAKE_FIELD: &str = ">>>PUSH>>>";
 
 /// Implementation meant to be used with [`RespDeserializer`](crate::resp::RespDeserializer)

@@ -578,6 +578,17 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        // Heuristic for decoding a struct out of a flat RESP2 array (RESP3 maps go
+        // through the robust `RespView::Map` path below). Two shapes are accepted:
+        //   * `len >= 2 * fields` with the first element matching a field name —
+        //     treated as a field/value map. This can false-positive on a plain
+        //     array whose first element happens to equal a field name.
+        //   * `len == fields` exactly — treated as a positional tuple. A server that
+        //     adds a field breaks this exact-length match.
+        // The tension is inherent to driving serde's typed shapes over an untyped
+        // protocol and is bounded to variable-shape commands still returning flat
+        // arrays under RESP3. Tightening it risks breaking currently-working
+        // decodes; document the boundary before changing it.
         #[inline]
         fn check_resp2_array(
             view: RespArrayView<'_>,

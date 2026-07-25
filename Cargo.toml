@@ -129,6 +129,11 @@ harness = false
 required-features = ["bench"]
 
 [[bench]]
+name = "command_encode"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
 name = "large_reply_reserve"
 harness = false
 required-features = ["bench"]

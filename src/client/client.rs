@@ -21,7 +21,7 @@ use crate::{
     },
     resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use log::{info, trace};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{future::IntoFuture, sync::Arc, time::Duration};
@@ -197,7 +197,8 @@ impl Client {
         command: impl Into<Command>,
         retry_on_error: Option<bool>,
     ) -> Result<RespResponse> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
         let message = Message::single(
             command.into(),
             result_sender,
@@ -255,7 +256,7 @@ impl Client {
         retry_on_error: Option<bool>,
     ) -> Result<Vec<RespResponse>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =
-            oneshot::channel();
+            tokio::sync::oneshot::channel();
         let message = Message::batch(
             commands,
             results_sender,
@@ -328,7 +329,8 @@ impl Client {
         channels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
 
         let pub_sub_senders = channels
             .into_iter()
@@ -352,7 +354,8 @@ impl Client {
         patterns: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
 
         let pub_sub_senders = patterns
             .into_iter()
@@ -376,7 +379,8 @@ impl Client {
         shardchannels: &CommandArgs,
         pub_sub_sender: &PubSubSender,
     ) -> Result<()> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
 
         let pub_sub_senders = shardchannels
             .into_iter()
@@ -510,7 +514,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
 
 impl<'a> BlockingCommands<'a> for &'a Client {
     async fn monitor(self) -> Result<MonitorStream> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) = oneshot::channel();
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
         let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
 
         let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);

@@ -7,7 +7,7 @@ use crate::{
     spawn, timeout,
 };
 use bytes::Bytes;
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use futures_util::{FutureExt, select};
 use log::{Level, debug, error, info, log_enabled, trace, warn};
 use smallvec::SmallVec;
@@ -29,10 +29,10 @@ pub(crate) type MsgReceiver = tokio::sync::mpsc::UnboundedReceiver<Message>;
 /// naturally when the last client is dropped, and the task upgrades it only to
 /// requeue a message for retry.
 type WeakMsgSender = tokio::sync::mpsc::WeakUnboundedSender<Message>;
-pub(crate) type ResultSender = oneshot::Sender<Result<RespResponse>>;
-pub(crate) type ResultReceiver = oneshot::Receiver<Result<RespResponse>>;
-pub(crate) type ResultsSender = oneshot::Sender<Result<Vec<RespResponse>>>;
-pub(crate) type ResultsReceiver = oneshot::Receiver<Result<Vec<RespResponse>>>;
+pub(crate) type ResultSender = tokio::sync::oneshot::Sender<Result<RespResponse>>;
+pub(crate) type ResultReceiver = tokio::sync::oneshot::Receiver<Result<RespResponse>>;
+pub(crate) type ResultsSender = tokio::sync::oneshot::Sender<Result<Vec<RespResponse>>>;
+pub(crate) type ResultsReceiver = tokio::sync::oneshot::Receiver<Result<Vec<RespResponse>>>;
 pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<RespResponse>>;
 pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<RespResponse>>;
 pub(crate) type PushSender = mpsc::UnboundedSender<Result<RespResponse>>;

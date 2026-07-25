@@ -1,14 +1,15 @@
-use std::ops::Range;
-
 use crate::{
     ClientError, Error, Result,
-    resp::{BufferDecoder, RespBuf, RespFrame, RespResponse},
+    resp::{
+        BufferDecoder, RespBuf, RespFrame, RespResponse, TAPE_SHRINK_HYSTERESIS,
+        TARGET_TAPE_CAPACITY,
+    },
 };
 use bytes::{Bytes, BytesMut};
 use tokio_util::codec::Decoder;
 
 fn decode(str: &str) -> Result<Option<RespResponse>> {
-    let mut buffer_decoder = BufferDecoder;
+    let mut buffer_decoder = BufferDecoder::new();
     let mut buf: BytesMut = str.into();
     buffer_decoder.decode(&mut buf)
 }
@@ -202,22 +203,14 @@ fn bulk_string() {
 
 #[test]
 fn array() -> Result<()> {
-    let result = decode("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?;
+    let response = decode("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?.expect("a complete array frame");
+    assert!(matches!(
+        response,
+        RespResponse::Frame(_, RespFrame::Array { root: 0, .. })
+    ));
     assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")),
-            RespFrame::Array {
-                len: 2,
-                ranges: [
-                    Range { start: 4, end: 15 },
-                    Range { start: 15, end: 26 },
-                    Range { start: 0, end: 0 },
-                    Range { start: 0, end: 0 },
-                    Range { start: 0, end: 0 }
-                ]
-            }
-        )),
-        result
+        vec!["hello".to_owned(), "world".to_owned()],
+        response.to::<Vec<String>>()?
     );
 
     let result = decode("*2")?;
@@ -252,23 +245,13 @@ fn array() -> Result<()> {
 
 #[test]
 fn map() -> Result<()> {
-    let result = decode("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n")),
-            RespFrame::Map {
-                len: 2,
-                ranges: [
-                    Range { start: 4, end: 15 },
-                    Range { start: 15, end: 26 },
-                    Range { start: 0, end: 0 },
-                    Range { start: 0, end: 0 },
-                    Range { start: 0, end: 0 }
-                ]
-            }
-        )),
-        result
-    );
+    let response = decode("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?.expect("a complete map frame");
+    assert!(matches!(
+        response,
+        RespResponse::Frame(_, RespFrame::Map { root: 0, .. })
+    ));
+    let map = response.to::<std::collections::HashMap<String, String>>()?;
+    assert_eq!(Some(&"world".to_owned()), map.get("hello"));
 
     let result = decode("%1")?;
     assert_eq!(None, result);
@@ -298,4 +281,39 @@ fn map() -> Result<()> {
     assert_eq!(None, result);
 
     Ok(())
+}
+
+#[test]
+fn tape_buffer_shrinks_back_after_a_large_collection_spike() {
+    // HARD-03 policy applied to the decoder's recycled tape buffer: a single
+    // huge collection must not inflate it permanently. Because a post-`split()`
+    // tail can pin the whole block while reporting near-zero `capacity()`, the
+    // decoder tracks the oversized state directly and releases the block after a
+    // quiet streak.
+    let mut decoder = BufferDecoder::new();
+
+    // 70_000 elements => 70_002 nodes => ~547 KiB of tape, past 8 x 64 KiB.
+    let mut big = format!("*{}\r\n", 70_000).into_bytes();
+    for _ in 0..70_000 {
+        big.extend_from_slice(b":1\r\n");
+    }
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(&big);
+    let response = decoder.decode(&mut buf).unwrap();
+    assert!(response.is_some());
+    drop(response); // release the frozen tape so its block becomes reclaimable
+
+    // Small collections (which do touch the tape) reclaim the oversized block,
+    // then trip the reset once the hysteresis window elapses.
+    for _ in 0..TAPE_SHRINK_HYSTERESIS + 2 {
+        let mut small = BytesMut::new();
+        small.extend_from_slice(b"*1\r\n:1\r\n");
+        drop(decoder.decode(&mut small).unwrap());
+    }
+
+    assert!(
+        decoder.tape_capacity() <= TARGET_TAPE_CAPACITY,
+        "tape buffer should shrink back to the target after a spike, got {} bytes",
+        decoder.tape_capacity()
+    );
 }

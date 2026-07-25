@@ -1,4 +1,8 @@
-use crate::{ClientError, Error, Result, resp::RespFrame};
+use crate::{
+    ClientError, Error, Result,
+    resp::{RespFrame, TAPE_LEN_TAG, is_container_tag, node_count, patch_node, push_node},
+};
+use bytes::BytesMut;
 use memchr::memchr;
 use std::ops::Range;
 
@@ -22,7 +26,7 @@ pub(crate) const BIG_NUMBER_TAG: u8 = b'(';
 /// rejecting a frame. RESP replies are shallow in practice (a handful of levels
 /// for the deepest cluster/stream introspection commands), so this bound is
 /// generous for legitimate traffic while stopping a crafted `*1\r\n*1\r\n…`
-/// reply from recursing `parse_value` into a stack overflow (HARD-01), which —
+/// reply from recursing `emit_value` into a stack overflow (HARD-01), which —
 /// unlike a panic — is not catchable and aborts the whole process.
 pub(crate) const MAX_NESTING_DEPTH: usize = 128;
 
@@ -39,26 +43,273 @@ pub(crate) const MAX_BULK_LENGTH: usize = 512 * 1024 * 1024;
 /// generous for real replies.
 pub(crate) const MAX_COLLECTION_LENGTH: usize = 128 * 1024 * 1024;
 
-pub struct RespFrameParser<'a> {
+/// The normalized kind of a scalar element, as recovered from its bytes by
+/// [`element_bounds`]. This is what the tape reader dispatches on, independent
+/// of the exact RESP tag (a big number and a bulk string both read back as
+/// [`ElementKind::BulkString`], for instance).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ElementKind {
+    SimpleString,
+    Error,
+    Integer,
+    Double,
+    BulkString,
+    Boolean,
+    Null,
+}
+
+/// The layout of one scalar element within the data buffer: its kind, the byte
+/// range of its value payload, and the offset one past the whole element.
+///
+/// This is the **single source of truth** for per-element byte layout, shared
+/// by the write side (the parser's forward pass, which needs only `end` to
+/// advance) and the read side (the tape reader, which needs `kind` + `value` to
+/// build a view). Keeping one function means the two passes can never disagree
+/// on where an element ends — the divergence class of bug that corrupted
+/// elements read against a mismatched layout.
+pub(crate) struct ElementBounds {
+    pub kind: ElementKind,
+    pub value: Range<usize>,
+    pub end: usize,
+}
+
+/// Rejects a bulk-family length that exceeds [`MAX_BULK_LENGTH`]. `len` must
+/// already be known non-negative.
+#[inline]
+fn check_bulk_len(len: i64) -> Result<()> {
+    if len as usize > MAX_BULK_LENGTH {
+        return Err(Error::Client(ClientError::BulkLengthTooLarge));
+    }
+    Ok(())
+}
+
+/// Finds the `\r` of the next `\r\n` at or after `from`, returning its index.
+/// Errors with [`Error::EOF`] when no complete terminator is present yet.
+#[inline]
+fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
+    let rem = &data[from..];
+    let i = memchr(b'\r', rem).ok_or(Error::EOF)?;
+    if i + 1 >= rem.len() || rem[i + 1] != b'\n' {
+        return Err(Error::EOF);
+    }
+    Ok(from + i)
+}
+
+/// Parses a RESP integer header starting at `from`, returning `(value, end)`
+/// where `end` is the offset just past the terminating `\r\n`. Mirrors
+/// [`RespFrameParser::parse_integer`] but over a free slice, for reading a node
+/// back without a parser instance.
+#[inline]
+fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
+    let slice = &data[from..];
+    let mut i = 0;
+
+    let sign = if let Some(&b'-') = slice.first() {
+        i += 1;
+        -1
+    } else {
+        1
+    };
+
+    let mut n = 0i64;
+    while i < slice.len() {
+        match slice[i] {
+            b'0'..=b'9' => {
+                n = n
+                    .checked_mul(10)
+                    .and_then(|n| n.checked_add((slice[i] - b'0') as i64))
+                    .ok_or(Error::Client(ClientError::CannotParseInteger))?;
+                i += 1;
+            }
+            b'\r' => match slice.get(i + 1) {
+                Some(&b'\n') => return Ok((n * sign, from + i + 2)),
+                Some(_) => return Err(Error::Client(ClientError::CannotParseInteger)),
+                None => return Err(Error::EOF),
+            },
+            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+        }
+    }
+    Err(Error::EOF)
+}
+
+/// Computes the [`ElementBounds`] of the scalar element whose tag byte is at
+/// `off` in `data`. `off` must point at a non-container, non-attribute tag (the
+/// parser dispatches containers and skips attributes before recording a node's
+/// offset), so those tags are rejected as unknown.
+///
+/// The validation here is exactly the parser's original per-tag validation, so
+/// a frame the decoder accepted reads back byte-identically.
+pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
+    let tag = *data.get(off).ok_or(Error::EOF)?;
+    let start = off + 1;
+
+    match tag {
+        SIMPLE_STRING_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::SimpleString,
+                value: start..cr,
+                end: cr + 2,
+            })
+        }
+        SIMPLE_ERROR_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::Error,
+                value: start..cr,
+                end: cr + 2,
+            })
+        }
+        INTEGER_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::Integer,
+                value: start..cr,
+                end: cr + 2,
+            })
+        }
+        DOUBLE_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::Double,
+                value: start..cr,
+                end: cr + 2,
+            })
+        }
+        // A big number is an arbitrary-precision integer surfaced as its
+        // decimal-string payload so the caller can read it as a string.
+        BIG_NUMBER_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::BulkString,
+                value: start..cr,
+                end: cr + 2,
+            })
+        }
+        NULL_TAG => {
+            let cr = find_crlf(data, start)?;
+            Ok(ElementBounds {
+                kind: ElementKind::Null,
+                value: start..start,
+                end: cr + 2,
+            })
+        }
+        BOOL_TAG => {
+            if start + 3 > data.len() {
+                return Err(Error::EOF);
+            }
+            match data[start] {
+                b't' | b'f' => {}
+                _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
+            }
+            if &data[start + 1..start + 3] != b"\r\n" {
+                return Err(Error::Client(ClientError::CannotParseBoolean));
+            }
+            Ok(ElementBounds {
+                kind: ElementKind::Boolean,
+                value: start..start + 1,
+                end: start + 3,
+            })
+        }
+        BULK_STRING_TAG => {
+            let (len, after) = parse_int_at(data, start)?;
+            if len == -1 {
+                return Ok(ElementBounds {
+                    kind: ElementKind::Null,
+                    value: after..after,
+                    end: after,
+                });
+            }
+            if len < 0 {
+                return Err(Error::Client(ClientError::CannotParseBulkString));
+            }
+            check_bulk_len(len)?;
+            let end = after + len as usize + 2;
+            if data.len() < end {
+                return Err(Error::EOF);
+            }
+            if &data[end - 2..end] != b"\r\n" {
+                return Err(Error::Client(ClientError::CannotParseBulkString));
+            }
+            Ok(ElementBounds {
+                kind: ElementKind::BulkString,
+                value: after..after + len as usize,
+                end,
+            })
+        }
+        // The first three bytes give the format (txt / mkd), the fourth is `:`,
+        // then the real string follows — so the value skips the 4-byte prefix.
+        VERBATIM_STRING_TAG => {
+            let (len, after) = parse_int_at(data, start)?;
+            if len == -1 {
+                return Ok(ElementBounds {
+                    kind: ElementKind::Null,
+                    value: after..after,
+                    end: after,
+                });
+            }
+            if len < 4 {
+                return Err(Error::Client(ClientError::VerbatimStringTooShort));
+            }
+            check_bulk_len(len)?;
+            let end = after + len as usize + 2;
+            if data.len() < end {
+                return Err(Error::EOF);
+            }
+            if &data[end - 2..end] != b"\r\n" {
+                return Err(Error::Client(ClientError::CannotParseVerbatimString));
+            }
+            Ok(ElementBounds {
+                kind: ElementKind::BulkString,
+                value: after + 4..after + len as usize,
+                end,
+            })
+        }
+        BULK_ERROR_TAG => {
+            let (len, after) = parse_int_at(data, start)?;
+            if len < 0 {
+                return Err(Error::Client(ClientError::CannotParseBulkError));
+            }
+            check_bulk_len(len)?;
+            let end = after + len as usize + 2;
+            if data.len() < end {
+                return Err(Error::EOF);
+            }
+            if &data[end - 2..end] != b"\r\n" {
+                return Err(Error::Client(ClientError::CannotParseBulkError));
+            }
+            Ok(ElementBounds {
+                kind: ElementKind::Error,
+                value: after..after + len as usize,
+                end,
+            })
+        }
+        _ => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
+    }
+}
+
+/// Streaming RESP parser. One forward pass produces either an inline scalar
+/// [`RespFrame`] (top-level scalars carry no tape) or, for a collection, a flat
+/// tape of fixed-width nodes written into the borrowed `tape` buffer (see
+/// [`crate::resp::resp_tape`]).
+pub struct RespFrameParser<'a, 'b> {
     buf: &'a [u8],
+    /// Tape builder, borrowed so the decoder can recycle one `BytesMut` across
+    /// frames (`split().freeze()` per frame keeps its capacity).
+    tape: &'b mut BytesMut,
     pos: usize,
     /// Current collection-nesting depth, bounded by [`MAX_NESTING_DEPTH`].
     depth: usize,
 }
 
-impl<'a> RespFrameParser<'a> {
-    pub fn new(buf: &'a [u8]) -> Self {
+impl<'a, 'b> RespFrameParser<'a, 'b> {
+    pub fn new(buf: &'a [u8], tape: &'b mut BytesMut) -> Self {
         Self {
             buf,
+            tape,
             pos: 0,
             depth: 0,
         }
-    }
-
-    /// Creates a parser over `buf` positioned at `pos`, so parsed frames carry
-    /// ranges absolute to `buf` rather than to a sub-slice.
-    pub fn new_at(buf: &'a [u8], pos: usize) -> Self {
-        Self { buf, pos, depth: 0 }
     }
 
     /// Enters one collection-nesting level, rejecting the frame once the bound
@@ -78,16 +329,6 @@ impl<'a> RespFrameParser<'a> {
         self.depth -= 1;
     }
 
-    /// Rejects a bulk-family length that exceeds [`MAX_BULK_LENGTH`]. `len` must
-    /// already be known non-negative.
-    #[inline]
-    fn check_bulk_len(len: i64) -> Result<()> {
-        if len as usize > MAX_BULK_LENGTH {
-            return Err(Error::Client(ClientError::BulkLengthTooLarge));
-        }
-        Ok(())
-    }
-
     /// Rejects a collection cardinality that exceeds [`MAX_COLLECTION_LENGTH`].
     #[inline]
     fn check_collection_len(len: usize) -> Result<()> {
@@ -100,8 +341,8 @@ impl<'a> RespFrameParser<'a> {
     /// Consumes any leading RESP3 attribute frames (`|<n>\r\n` followed by `2n`
     /// values). Attributes are out-of-band metadata that may legally precede
     /// *any* reply, so they are skipped at frame-dispatch level and never
-    /// surfaced as a frame (RESP-02). Element values are consumed with
-    /// [`Self::parse_value`], which itself skips nested attributes.
+    /// surfaced — neither as a frame nor as a tape node. Element values are
+    /// consumed with [`Self::skip_value`], which itself skips nested attributes.
     #[inline]
     fn skip_attributes(&mut self) -> Result<()> {
         while self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
@@ -114,7 +355,7 @@ impl<'a> RespFrameParser<'a> {
             Self::check_collection_len(len)?;
             self.enter()?;
             for _ in 0..len {
-                self.parse_value()?;
+                self.skip_value()?;
             }
             self.leave();
         }
@@ -128,8 +369,15 @@ impl<'a> RespFrameParser<'a> {
             return Err(Error::EOF);
         }
         let tag = self.buf[self.pos];
-        self.pos += 1;
 
+        // Collections build a tape; top-level scalars stay inline (no tape),
+        // keeping the scalar path allocation- and node-free.
+        if is_container_tag(tag) {
+            let frame = self.parse_top_container(tag)?;
+            return Ok((frame, self.pos));
+        }
+
+        self.pos += 1;
         let frame = match tag {
             SIMPLE_STRING_TAG => {
                 let start = self.pos;
@@ -142,7 +390,7 @@ impl<'a> RespFrameParser<'a> {
                 RespFrame::Error(start..self.pos - 2)
             }
             INTEGER_TAG => {
-                let val = self.parse_integer()?; // Parsing direct
+                let val = self.parse_integer()?;
                 RespFrame::Integer(val)
             }
             DOUBLE_TAG => {
@@ -157,7 +405,6 @@ impl<'a> RespFrameParser<'a> {
                 RespFrame::Null
             }
             BOOL_TAG => {
-                // 't' or 'f' + \r\n
                 if self.pos + 3 > self.buf.len() {
                     return Err(Error::EOF);
                 }
@@ -180,7 +427,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 0 {
                         return Err(Error::Client(ClientError::CannotParseBulkString));
                     }
-                    Self::check_bulk_len(len)?;
+                    check_bulk_len(len)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -204,7 +451,7 @@ impl<'a> RespFrameParser<'a> {
                     if len < 4 {
                         return Err(Error::Client(ClientError::VerbatimStringTooShort));
                     }
-                    Self::check_bulk_len(len)?;
+                    check_bulk_len(len)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -222,7 +469,7 @@ impl<'a> RespFrameParser<'a> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
-                Self::check_bulk_len(len)?;
+                check_bulk_len(len)?;
                 let start = self.pos;
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {
@@ -234,25 +481,8 @@ impl<'a> RespFrameParser<'a> {
                 self.pos = need;
                 RespFrame::Error(start..need - 2)
             }
-            ARRAY_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Array { len, ranges },
-                None => RespFrame::Null,
-            },
-            MAP_TAG => match self.parse_collection(2)? {
-                Some((len, ranges)) => RespFrame::Map { len, ranges },
-                None => RespFrame::Null,
-            },
-            SET_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Set { len, ranges },
-                None => RespFrame::Null,
-            },
-            PUSH_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Push { len, ranges },
-                None => RespFrame::Null,
-            },
-            // A big number is an arbitrary-precision integer that does not fit
-            // in an `i64`; it is surfaced as its decimal-string payload so the
-            // caller can read it as a string (RESP-02).
+            // A big number does not fit in an i64; surface it as its
+            // decimal-string payload so the caller can read it as a string.
             BIG_NUMBER_TAG => {
                 let start = self.pos;
                 self.parse_crlf()?;
@@ -264,95 +494,126 @@ impl<'a> RespFrameParser<'a> {
         Ok((frame, self.pos))
     }
 
-    pub fn parse_range(&mut self, range: Range<usize>) -> Result<RespFrame> {
-        self.pos = range.start;
+    /// Parses a top-level collection header (positioned at its tag) and, unless
+    /// it is a null collection, builds its tape rooted at node 0.
+    fn parse_top_container(&mut self, tag: u8) -> Result<RespFrame> {
+        self.pos += 1;
+        let multiplier = if tag == MAP_TAG { 2 } else { 1 };
+        let n = self.parse_integer()?;
+        if n == -1 {
+            return Ok(RespFrame::Null);
+        }
+        if n < 0 {
+            return Err(Error::Client(ClientError::CannotParseSequence));
+        }
+        let count = n as usize * multiplier;
+        Self::check_collection_len(count)?;
+
+        debug_assert!(self.tape.is_empty(), "tape must start empty per frame");
+        self.emit_container_body(tag, count)?;
+        let tape = self.tape.split().freeze();
+
+        Ok(match tag {
+            ARRAY_TAG => RespFrame::Array { tape, root: 0 },
+            MAP_TAG => RespFrame::Map { tape, root: 0 },
+            SET_TAG => RespFrame::Set { tape, root: 0 },
+            PUSH_TAG => RespFrame::Push { tape, root: 0 },
+            _ => unreachable!("parse_top_container called with a non-container tag"),
+        })
+    }
+
+    /// Emits the `[head, len, children…]` nodes of a collection whose element
+    /// count is already known and whose first child is at `self.pos`. The head's
+    /// `next` is back-patched once the whole subtree has been written, giving an
+    /// O(1) sibling skip.
+    fn emit_container_body(&mut self, tag: u8, count: usize) -> Result<()> {
+        self.enter()?;
+        let head = push_node(self.tape, tag, 0);
+        push_node(self.tape, TAPE_LEN_TAG, count as u64);
+        for _ in 0..count {
+            self.emit_value()?;
+        }
+        let next = node_count(self.tape) as u64;
+        patch_node(self.tape, head, tag, next);
+        self.leave();
+        Ok(())
+    }
+
+    /// Parses one value at `self.pos`, emitting its node(s) into the tape and
+    /// advancing past it. Scalars emit one node holding their start offset;
+    /// collections recurse through [`Self::emit_container_body`]; a null
+    /// collection emits a single [`NULL_TAG`] node so it is still counted.
+    fn emit_value(&mut self) -> Result<()> {
         self.skip_attributes()?;
         if self.pos >= self.buf.len() {
             return Err(Error::EOF);
         }
         let tag = self.buf[self.pos];
-        self.pos += 1;
 
-        let frame = match tag {
-            SIMPLE_STRING_TAG => RespFrame::SimpleString(self.pos..range.end - 2),
-            SIMPLE_ERROR_TAG => RespFrame::Error(self.pos..range.end - 2),
-            INTEGER_TAG => {
-                let val = atoi::atoi(&self.buf[self.pos..range.end - 2])
-                    .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?;
-                RespFrame::Integer(val)
+        if is_container_tag(tag) {
+            let off = self.pos;
+            self.pos += 1;
+            let multiplier = if tag == MAP_TAG { 2 } else { 1 };
+            let n = self.parse_integer()?;
+            if n == -1 {
+                push_node(self.tape, NULL_TAG, off as u64);
+                return Ok(());
             }
-            DOUBLE_TAG => {
-                let val = fast_float2::parse(&self.buf[self.pos..range.end - 2])
-                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?;
-                RespFrame::Double(val)
-            }
-            NULL_TAG => RespFrame::Null,
-            BOOL_TAG => {
-                let b = match self.buf[self.pos] {
-                    b't' => true,
-                    b'f' => false,
-                    _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
-                };
-                RespFrame::Boolean(b)
-            }
-            BULK_STRING_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    RespFrame::Null
+            if n < 0 {
+                return Err(Error::Client(if tag == MAP_TAG {
+                    ClientError::CannotParseMap
                 } else {
-                    if len < 0 {
-                        return Err(Error::Client(ClientError::CannotParseBulkString));
-                    }
-                    Self::check_bulk_len(len)?;
-                    RespFrame::BulkString(self.pos..self.pos + len as usize)
-                }
+                    ClientError::CannotParseSequence
+                }));
             }
-            // The first three bytes provide information about the format of the following string,
-            // which can be txt for plain text, or mkd for markdown.
-            // The fourth byte is always :. Then the real string follows.
-            VERBATIM_STRING_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    RespFrame::Null
+            let count = n as usize * multiplier;
+            Self::check_collection_len(count)?;
+            self.emit_container_body(tag, count)
+        } else {
+            let off = self.pos;
+            let bounds = element_bounds(self.buf, off)?;
+            push_node(self.tape, tag, off as u64);
+            self.pos = bounds.end;
+            Ok(())
+        }
+    }
+
+    /// Advances past one value at `self.pos` without emitting any tape, used to
+    /// consume attribute payloads. Structurally identical to [`Self::emit_value`]
+    /// minus the node writes.
+    fn skip_value(&mut self) -> Result<()> {
+        self.skip_attributes()?;
+        if self.pos >= self.buf.len() {
+            return Err(Error::EOF);
+        }
+        let tag = self.buf[self.pos];
+
+        if is_container_tag(tag) {
+            self.pos += 1;
+            let multiplier = if tag == MAP_TAG { 2 } else { 1 };
+            let n = self.parse_integer()?;
+            if n == -1 {
+                return Ok(());
+            }
+            if n < 0 {
+                return Err(Error::Client(if tag == MAP_TAG {
+                    ClientError::CannotParseMap
                 } else {
-                    if len < 4 {
-                        return Err(Error::Client(ClientError::VerbatimStringTooShort));
-                    }
-                    Self::check_bulk_len(len)?;
-                    RespFrame::BulkString(self.pos + 4..self.pos + 4 + len as usize)
-                }
+                    ClientError::CannotParseSequence
+                }));
             }
-            BULK_ERROR_TAG => {
-                let len = self.parse_integer()?;
-                if len < 0 {
-                    return Err(Error::Client(ClientError::CannotParseBulkError));
-                }
-                Self::check_bulk_len(len)?;
-                RespFrame::Error(self.pos..self.pos + len as usize)
+            let count = n as usize * multiplier;
+            Self::check_collection_len(count)?;
+            self.enter()?;
+            for _ in 0..count {
+                self.skip_value()?;
             }
-            ARRAY_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Array { len, ranges },
-                None => RespFrame::Null,
-            },
-            MAP_TAG => match self.parse_collection(2)? {
-                Some((len, ranges)) => RespFrame::Map { len, ranges },
-                None => RespFrame::Null,
-            },
-            SET_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Set { len, ranges },
-                None => RespFrame::Null,
-            },
-            PUSH_TAG => match self.parse_collection(1)? {
-                Some((len, ranges)) => RespFrame::Push { len, ranges },
-                None => RespFrame::Null,
-            },
-            BIG_NUMBER_TAG => RespFrame::BulkString(self.pos..range.end - 2),
-            _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
-        };
-
-        self.pos = range.end;
-
-        Ok(frame)
+            self.leave();
+            Ok(())
+        } else {
+            self.pos = element_bounds(self.buf, self.pos)?.end;
+            Ok(())
+        }
     }
 
     #[inline]
@@ -368,142 +629,8 @@ impl<'a> RespFrameParser<'a> {
 
     #[inline]
     fn parse_integer(&mut self) -> Result<i64> {
-        let mut n = 0i64;
-        let slice = &self.buf[self.pos..];
-        let mut i = 0;
-
-        let sign = if let Some(&b'-') = slice.first() {
-            i += 1;
-            -1
-        } else {
-            1
-        };
-
-        while i < slice.len() {
-            let b = slice[i];
-            match b {
-                b'0'..=b'9' => {
-                    n = n
-                        .checked_mul(10)
-                        .and_then(|n| n.checked_add((b - b'0') as i64))
-                        .ok_or(Error::Client(ClientError::CannotParseInteger))?;
-                    i += 1;
-                }
-                b'\r' => match slice.get(i + 1) {
-                    Some(&b'\n') => {
-                        self.pos += i + 2;
-                        return Ok(n * sign);
-                    }
-                    Some(_) => return Err(Error::Client(ClientError::CannotParseInteger)),
-                    None => return Err(Error::EOF),
-                },
-                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
-            }
-        }
-        Err(Error::EOF)
-    }
-
-    #[inline]
-    fn parse_collection(&mut self, multiplier: usize) -> Result<Option<(usize, [Range<u32>; 5])>> {
-        let len = self.parse_integer()?;
-        if len == -1 {
-            // RESP2 null array/map
-            return Ok(None);
-        }
-        if len < 0 {
-            return Err(Error::Client(ClientError::CannotParseSequence));
-        }
-        let len = len as usize * multiplier;
-        Self::check_collection_len(len)?;
-        let mut ranges = [0..0, 0..0, 0..0, 0..0, 0..0];
-        let range_len = std::cmp::min(len, ranges.len());
-
-        self.enter()?;
-
-        for range in ranges.iter_mut().take(range_len) {
-            let start = self.pos;
-            self.parse_value()?;
-            *range = (start as u32)..(self.pos as u32);
-        }
-
-        for _ in range_len..len {
-            self.parse_value()?;
-        }
-
-        self.leave();
-
-        Ok(Some((len, ranges)))
-    }
-
-    fn parse_value(&mut self) -> Result<()> {
-        self.skip_attributes()?;
-        if self.pos >= self.buf.len() {
-            return Err(Error::EOF);
-        }
-
-        let tag = self.buf[self.pos];
-        self.pos += 1;
-
-        match tag {
-            SIMPLE_STRING_TAG | SIMPLE_ERROR_TAG | INTEGER_TAG | DOUBLE_TAG | NULL_TAG
-            | BOOL_TAG | BIG_NUMBER_TAG => self.parse_crlf(),
-
-            BULK_STRING_TAG | BULK_ERROR_TAG | VERBATIM_STRING_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    // Null bulk string
-                    return Ok(());
-                }
-                if len < 0 {
-                    return Err(Error::Client(ClientError::CannotParseBulkString));
-                }
-                Self::check_bulk_len(len)?;
-                let need = self.pos + len as usize + 2;
-                if self.buf.len() < need {
-                    return Err(Error::EOF);
-                }
-                if &self.buf[self.pos + len as usize..need] != b"\r\n" {
-                    return Err(Error::Client(ClientError::CannotParseBulkString));
-                }
-                self.pos = need;
-                Ok(())
-            }
-            ARRAY_TAG | SET_TAG | PUSH_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    // RESP2 null array
-                    return Ok(());
-                }
-                if len < 0 {
-                    return Err(Error::Client(ClientError::CannotParseSequence));
-                }
-                Self::check_collection_len(len as usize)?;
-                self.enter()?;
-                for _ in 0..len as usize {
-                    self.parse_value()?;
-                }
-                self.leave();
-                Ok(())
-            }
-            MAP_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    // RESP2 null map
-                    return Ok(());
-                }
-                if len < 0 {
-                    return Err(Error::Client(ClientError::CannotParseMap));
-                }
-                Self::check_collection_len(len as usize * 2)?;
-                self.enter()?;
-                for _ in 0..len as usize * 2 {
-                    self.parse_value()?;
-                }
-                self.leave();
-                Ok(())
-            }
-
-            tag => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
-        }
+        let (val, end) = parse_int_at(self.buf, self.pos)?;
+        self.pos = end;
+        Ok(val)
     }
 }

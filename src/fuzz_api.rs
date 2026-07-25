@@ -26,7 +26,8 @@ pub fn parse_frame(data: &[u8]) {
     if data.is_empty() {
         return;
     }
-    let _ = RespFrameParser::new(data).parse();
+    let mut tape = BytesMut::new();
+    let _ = RespFrameParser::new(data, &mut tape).parse();
 }
 
 /// Feed `data` through the streaming [`BufferDecoder`], cutting the input at the
@@ -37,7 +38,7 @@ pub fn parse_frame(data: &[u8]) {
 /// the `Error::EOF` resume behaviour and makes RESP-06's re-parse cost
 /// observable, in addition to the plain parse path.
 pub fn decode_chunked(data: &[u8], splits: &[u8]) {
-    let mut decoder = BufferDecoder;
+    let mut decoder = BufferDecoder::new();
     let mut buf = BytesMut::new();
 
     // Turn the raw split bytes into sorted, in-range offsets, then always end on

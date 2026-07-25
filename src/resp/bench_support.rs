@@ -24,7 +24,8 @@ use tokio_util::codec::Decoder;
 /// the parser's forward pass plus the deserializer, with no resume/EOF handling.
 #[inline]
 pub fn bench_decode_to<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
-    let (frame, frame_len) = RespFrameParser::new(bytes).parse()?;
+    let mut tape = BytesMut::new();
+    let (frame, frame_len) = RespFrameParser::new(bytes, &mut tape).parse()?;
     let buf = RespBuf::from(Bytes::copy_from_slice(&bytes[..frame_len]));
     RespResponse::new(buf, frame).to()
 }
@@ -37,7 +38,7 @@ pub fn bench_decode_to<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 /// same large reply as one slice vs. as many, and compare.
 #[inline]
 pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> {
-    let mut decoder = BufferDecoder;
+    let mut decoder = BufferDecoder::new();
     let mut buf = BytesMut::new();
     for chunk in chunks {
         buf.extend_from_slice(chunk);

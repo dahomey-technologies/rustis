@@ -3,13 +3,14 @@ use crate::{
     resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, Value},
     tests::log_try_init,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use serde::Deserialize;
 use std::collections::HashMap;
 
 fn deserialize_value(str: &str) -> Result<Value> {
     let buf = str.as_bytes();
-    let (frame, _) = RespFrameParser::new(buf).parse()?;
+    let mut tape = BytesMut::new();
+    let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
     let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
     let deserializer = RespDeserializer::new(response.view());
     Value::deserialize(deserializer)

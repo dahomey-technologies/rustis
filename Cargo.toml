@@ -175,6 +175,10 @@ name = "conn_scaling_probe"
 required-features = ["bench"]
 
 [[example]]
+name = "head_to_head"
+required-features = ["bench"]
+
+[[example]]
 name = "wakeup_cost_probe"
 
 [[example]]

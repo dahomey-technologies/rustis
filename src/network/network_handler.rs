@@ -133,6 +133,23 @@ impl SendBatchTestHook {
     }
 }
 
+/// Maximum number of messages collected into a single write (see
+/// [`NetworkHandler::try_handle_message`]).
+///
+/// Draining the message channel until it is empty convoys the entire in-flight
+/// concurrency into one `writev`, so every caller waits for the whole batch to be
+/// written *and* answered. Capping the wave keeps a batch in flight at the server
+/// while the next one is being collected.
+///
+/// Calibrated against a live Redis over concurrency levels 64 → 1024 (see
+/// `RUSTIS_VS_REDIS_RS.md`, H13). The optimum is flat between 32 and 128 and only
+/// mildly concurrency-dependent; what matters is that the cap stays *below* the
+/// in-flight concurrency, otherwise it never fires and the convoy returns. 48 is
+/// within ~12% of the per-level optimum everywhere and beats the uncapped drain
+/// at every level from 64 tasks up. Below 48 concurrent in-flight messages the cap
+/// never fires, so low-concurrency behaviour is unchanged.
+const MAX_MESSAGES_PER_WAVE: usize = 48;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
     Disconnected,
@@ -271,21 +288,32 @@ impl NetworkHandler {
     }
 
     async fn try_handle_message(&mut self, mut msg: Option<Message>) -> bool {
-        let is_channel_closed: bool;
+        let mut is_channel_closed = false;
+        // Messages queued since the last flush, for the wave cap below.
+        let mut queued: usize = 0;
 
         loop {
             if let Some(msg) = msg {
                 self.handle_message(msg);
+                queued += 1;
             } else {
                 is_channel_closed = true;
                 break;
+            }
+
+            // Send in waves rather than accumulating the whole channel into
+            // one write (see `MAX_MESSAGES_PER_WAVE`).
+            if queued >= MAX_MESSAGES_PER_WAVE {
+                if self.status != Status::Disconnected {
+                    self.send_messages().await;
+                }
+                queued = 0;
             }
 
             match self.msg_receiver.try_recv() {
                 Ok(m) => msg = Some(m),
                 Err(_) => {
                     // there are no messages available, but channel is not yet closed
-                    is_channel_closed = false;
                     break;
                 }
             }

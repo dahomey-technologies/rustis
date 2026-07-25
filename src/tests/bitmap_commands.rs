@@ -142,6 +142,33 @@ async fn bitop() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn bitop_new_operators() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.set("bnk1", BulkString::new(b"\xff\x00")).await?;
+    client.set("bnk2", BulkString::new(b"\x0f\x0f")).await?;
+
+    let cases = [
+        (BitOperation::Diff, "bndiff", b"\xf0\x00".as_slice()),
+        (BitOperation::Diff1, "bndiff1", b"\x00\x0f".as_slice()),
+        (BitOperation::AndOr, "bnandor", b"\x0f\x00".as_slice()),
+        (BitOperation::One, "bnone", b"\xf0\x0f".as_slice()),
+    ];
+
+    for (op, dest, expected) in cases {
+        client.bitop(op, dest, ["bnk1", "bnk2"]).await?;
+        let value: BulkString = client.get(dest).await?;
+        assert_eq!(expected, value.as_bytes(), "operator {dest}");
+    }
+
+    client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn bitpos() -> Result<()> {
     let client = get_test_client().await?;
 

@@ -249,5 +249,20 @@ pub enum BitOperation {
     And,
     Or,
     Xor,
+    /// Bitwise NOT of a single source key (takes exactly one source key).
     Not,
+    /// `X ∧ ¬(Y1 ∨ Y2 ∨ …)` — bits set in the first key and in none of the others.
+    ///
+    /// Requires at least two source keys. Added in Redis 8.2.
+    Diff,
+    /// `¬X ∧ (Y1 ∨ Y2 ∨ …)` — bits set in at least one of the other keys but not in the first.
+    ///
+    /// Requires at least two source keys. Added in Redis 8.2.
+    Diff1,
+    /// `X ∧ (Y1 ∨ Y2 ∨ …)` — bits set in the first key and in at least one of the others.
+    ///
+    /// Requires at least two source keys. Added in Redis 8.2.
+    AndOr,
+    /// Bits set in exactly one of the given bitmaps. Added in Redis 8.2.
+    One,
 }

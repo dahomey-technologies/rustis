@@ -663,6 +663,56 @@ async fn set_with_options() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn set_with_options_conditionals() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // IFEQ: set only if the current value equals the provided one.
+    client.set("key", "value").await?;
+    let result = client
+        .set_with_options("key", "new", Some(SetCondition::IFEQ("value")), None)
+        .await?;
+    assert!(result);
+    let value: String = client.get("key").await?;
+    assert_eq!("new", value);
+    let result = client
+        .set_with_options("key", "other", Some(SetCondition::IFEQ("wrong")), None)
+        .await?;
+    assert!(!result);
+
+    // IFNE: set only if the current value differs from the provided one.
+    client.set("key", "value").await?;
+    let result = client
+        .set_with_options("key", "new", Some(SetCondition::IFNE("value")), None)
+        .await?;
+    assert!(!result);
+    let result = client
+        .set_with_options("key", "new", Some(SetCondition::IFNE("different")), None)
+        .await?;
+    assert!(result);
+
+    // IFDEQ / IFDNE compare against the XXH3 digest of the current value. Without
+    // a matching digest at hand, assert the tokens are accepted by the server and
+    // behave as expected: a wrong digest never matches (IFDEQ fails, IFDNE
+    // succeeds), with no protocol error.
+    client.set("key", "value").await?;
+    let wrong_digest = "0".repeat(16);
+    let result = client
+        .set_with_options("key", "new", Some(SetCondition::IFDEQ(&wrong_digest)), None)
+        .await?;
+    assert!(!result);
+    let result = client
+        .set_with_options("key", "new", Some(SetCondition::IFDNE(&wrong_digest)), None)
+        .await?;
+    assert!(result);
+
+    client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn setex() -> Result<()> {
     let client = get_test_client().await?;
 

@@ -17,7 +17,13 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::StreamExt;
 use serde::{Serialize, de::DeserializeOwned};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 /// Re-export the moka cache builder.
 pub use moka::future::CacheBuilder;
@@ -72,6 +78,14 @@ type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, Mo
 pub struct Cache {
     cache: Arc<MokaCache>,
     client: Client,
+    /// Monotonic counter bumped once per received invalidation. A fetch samples
+    /// it before sending; the sampled value is compared at insert time to detect
+    /// an invalidation that raced the in-flight response (see `process_command`).
+    generation_counter: Arc<AtomicU64>,
+    /// Last `generation_counter` value at which each key was invalidated. Only
+    /// keys with an in-flight or recent invalidation appear here; entries are
+    /// pruned when the key is next inserted cleanly.
+    key_generations: Arc<DashMap<BulkString, u64>>,
     #[allow(dead_code)]
     invalidation_task: JoinHandle<()>,
     #[allow(dead_code)]
@@ -95,7 +109,12 @@ impl Cache {
         let cache = Arc::new(builder.build());
         let cache_clone = cache.clone();
 
+        let generation_counter = Arc::new(AtomicU64::new(0));
+        let key_generations: Arc<DashMap<BulkString, u64>> = Arc::new(DashMap::new());
+
         let connection_tag = client.connection_tag().to_owned();
+        let counter_clone = generation_counter.clone();
+        let key_generations_clone = key_generations.clone();
         let invalidation_task = spawn(async move {
             let mut stream = stream;
             while let Some(keys) = stream.next().await {
@@ -104,6 +123,13 @@ impl Cache {
                         "[{}] Invalidating key `{key}` from client cache",
                         connection_tag
                     );
+                    // Record the invalidation before removing the entry, so a
+                    // fetch that samples the counter after this point and inserts
+                    // afterwards observes the newer generation and drops its stale
+                    // value (see `process_command`). Ordering is `SeqCst` so the
+                    // bump and the record cannot be reordered past the sample.
+                    let generation = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
+                    key_generations_clone.insert(key.clone(), generation);
                     cache_clone.invalidate(&key).await;
                 }
             }
@@ -140,6 +166,8 @@ impl Cache {
         Ok(Arc::new(Self {
             cache,
             client,
+            generation_counter,
+            key_generations,
             invalidation_task,
             reconnection_task,
         }))
@@ -508,6 +536,11 @@ impl Cache {
             key
         );
 
+        // Sample the invalidation counter *before* sending: any invalidation for
+        // this key recorded at a higher generation raced our in-flight response,
+        // so the value we are about to cache may already be stale.
+        let generation_before = self.generation_counter.load(Ordering::SeqCst);
+
         let command_bytes = command.bytes().clone();
         let response = self.client.internal_send(command, None).await?;
         let deserializer = RespDeserializer::new(response.view());
@@ -516,12 +549,29 @@ impl Cache {
         // Insert into cache. Compact first so a retained entry holds only its
         // own bytes instead of pinning the whole recycled network block it was
         // decoded from.
+        let key_for_check = key.clone();
         self.cache
             .entry(key)
             .or_insert_with(async { Arc::new(DashMap::new()) })
             .await
             .value()
             .insert(command_bytes, response.compact());
+
+        // If an invalidation for this key landed while the response was in flight,
+        // drop what we just inserted rather than pinning a stale entry until TTL.
+        // Biased toward safety: this only ever over-invalidates (a spurious later
+        // miss), never serves stale data. If no invalidation raced, prune this
+        // key's now-obsolete generation record so the map does not grow unbounded.
+        let recorded = self.key_generations.get(&key_for_check).map(|g| *g);
+        match post_insert_action(recorded, generation_before) {
+            PostInsertAction::DropStale => {
+                self.cache.invalidate(&key_for_check).await;
+            }
+            PostInsertAction::PruneGeneration => {
+                self.key_generations.remove(&key_for_check);
+            }
+            PostInsertAction::Keep => {}
+        }
 
         Ok(deserialized)
     }
@@ -533,4 +583,56 @@ fn key_to_bulk_string(key: &impl Serialize) -> BulkString {
         .next()
         .expect("expected a single argument")
         .into()
+}
+
+/// What to do with a freshly inserted cache entry once the response is in, given
+/// the key's last recorded invalidation generation and the counter value sampled
+/// before the request was sent.
+#[derive(Debug, PartialEq, Eq)]
+enum PostInsertAction {
+    /// An invalidation for this key raced the in-flight response — drop the entry.
+    DropStale,
+    /// A stale, older generation record is present — remove it to bound the map.
+    PruneGeneration,
+    /// No invalidation touched this key during the fetch — keep the entry.
+    Keep,
+}
+
+/// Pure decision behind the insert-after-response race guard, split out so the
+/// ordering logic is unit-testable without a live cache or a real race.
+fn post_insert_action(recorded_generation: Option<u64>, sampled_before: u64) -> PostInsertAction {
+    match recorded_generation {
+        Some(generation) if generation > sampled_before => PostInsertAction::DropStale,
+        Some(_) => PostInsertAction::PruneGeneration,
+        None => PostInsertAction::Keep,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PostInsertAction, post_insert_action};
+
+    #[test]
+    fn no_invalidation_recorded_keeps_entry() {
+        assert_eq!(PostInsertAction::Keep, post_insert_action(None, 5));
+    }
+
+    #[test]
+    fn invalidation_after_sample_drops_stale_entry() {
+        // Sampled 5 before sending; key invalidated at generation 6 in flight.
+        assert_eq!(PostInsertAction::DropStale, post_insert_action(Some(6), 5));
+    }
+
+    #[test]
+    fn invalidation_at_or_before_sample_is_stale_record_pruned() {
+        // A record no newer than our sample cannot have raced this fetch.
+        assert_eq!(
+            PostInsertAction::PruneGeneration,
+            post_insert_action(Some(5), 5)
+        );
+        assert_eq!(
+            PostInsertAction::PruneGeneration,
+            post_insert_action(Some(4), 5)
+        );
+    }
 }

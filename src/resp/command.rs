@@ -173,6 +173,14 @@ pub struct Command {
     request_policy: Option<RequestPolicy>,
     response_policy: Option<ResponsePolicy>,
     key_step: u8,
+    /// A serialization error deferred from the builder, surfaced at send time.
+    ///
+    /// The fluent builder cannot return a `Result`, so a failing user
+    /// `Serialize` impl is recorded here instead of panicking, and returned to
+    /// the caller when the command reaches the network layer (see
+    /// `Client::send_message`). Boxed to keep `Command` — memcpy'd several times
+    /// per request — a single pointer wider in the common (no-error) case.
+    serialization_error: Option<Box<crate::Error>>,
 }
 
 impl Command {
@@ -202,10 +210,19 @@ impl Command {
             request_policy,
             response_policy,
             key_step,
+            serialization_error: None,
         };
 
         this.kind = CommandKind::from(&this);
         this
+    }
+
+    /// Takes the serialization error deferred from the builder, if any.
+    ///
+    /// Returns `Some` at most once: the error is moved out so the send path can
+    /// surface it to the caller and the command is left in its normal state.
+    pub(crate) fn take_serialization_error(&mut self) -> Option<crate::Error> {
+        self.serialization_error.take().map(|boxed| *boxed)
     }
 
     pub fn bytes(&self) -> &Bytes {
@@ -348,9 +365,21 @@ pub struct CommandBuilder {
     pub(crate) request_policy: Option<RequestPolicy>,
     pub(crate) response_policy: Option<ResponsePolicy>,
     pub(crate) key_step: u8,
+    /// First serialization error encountered while building, deferred to send
+    /// time so the fluent API stays panic-free (see [`Command`]).
+    pub(crate) pending_error: Option<crate::Error>,
 }
 
 impl CommandBuilder {
+    /// Records the first deferred serialization error; later ones are ignored
+    /// since the command is already doomed and the first is the most relevant.
+    #[inline(always)]
+    fn record_serialization_error(&mut self, error: crate::Error) {
+        if self.pending_error.is_none() {
+            self.pending_error = Some(error);
+        }
+    }
+
     /// Creates an new command.
     ///
     /// [`cmd`](crate::resp::cmd) function can be used as a shortcut.
@@ -384,6 +413,7 @@ impl CommandBuilder {
             request_policy: None,
             response_policy: None,
             key_step: 0,
+            pending_error: None,
         }
     }
 
@@ -391,9 +421,13 @@ impl CommandBuilder {
     #[must_use]
     #[inline(always)]
     pub fn arg(mut self, arg: impl Serialize) -> Self {
-        let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
-        arg.serialize(&mut serializer)
-            .expect("Arg serialization failed");
+        let result = {
+            let mut serializer = ArgSerializer::new(&mut self.buffer, &mut self.args_layout);
+            arg.serialize(&mut serializer)
+        };
+        if let Err(e) = result {
+            self.record_serialization_error(e);
+        }
         self
     }
 
@@ -416,7 +450,10 @@ impl CommandBuilder {
     pub fn arg_with_count(mut self, arg: impl Serialize) -> Self {
         // 1. Dry Run (CPU only, No Alloc)
         let mut counter = ArgCounter::default();
-        arg.serialize(&mut counter).expect("Arg counting failed");
+        if let Err(e) = arg.serialize(&mut counter) {
+            self.record_serialization_error(e);
+            return self;
+        }
 
         // 2. Write the count
         self = self.arg(counter.count);
@@ -427,10 +464,13 @@ impl CommandBuilder {
 
     #[must_use]
     #[inline(always)]
-    pub fn arg_labeled(self, label: &'static str, arg: impl Serialize) -> Self {
+    pub fn arg_labeled(mut self, label: &'static str, arg: impl Serialize) -> Self {
         // 1. Dry Run (CPU only, No Alloc)
         let mut counter = ArgCounter::default();
-        arg.serialize(&mut counter).expect("Arg counting failed");
+        if let Err(e) = arg.serialize(&mut counter) {
+            self.record_serialization_error(e);
+            return self;
+        }
 
         // 2. Conditionnally write the label + arg
         if counter.count != 0 {
@@ -507,7 +547,10 @@ impl CommandBuilder {
     pub fn key_with_count_and_step(mut self, args: impl Serialize, step: usize) -> Self {
         // 1. Dry Run (CPU only, No Alloc) to get the total argument count.
         let mut counter = ArgCounter::default();
-        args.serialize(&mut counter).expect("Arg counting failed");
+        if let Err(e) = args.serialize(&mut counter) {
+            self.record_serialization_error(e);
+            return self;
+        }
         debug_assert!(
             counter.count % step == 0,
             "key_with_count_and_step: argument count {} is not a multiple of step {step}",
@@ -605,7 +648,7 @@ impl From<CommandBuilder> for Command {
             .iter_mut()
             .for_each(|arg_layout| arg_layout.start -= start_pos as u32);
 
-        Command::new(
+        let mut command = Command::new(
             bytes,
             (
                 command_builder.name_layout.0 - start_pos,
@@ -621,7 +664,10 @@ impl From<CommandBuilder> for Command {
             command_builder.request_policy,
             command_builder.response_policy,
             command_builder.key_step,
-        )
+        );
+
+        command.serialization_error = command_builder.pending_error.take().map(Box::new);
+        command
     }
 }
 
@@ -667,5 +713,36 @@ mod tests {
         assert_eq!(Some(&b"return ARGV[1]"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"0"[..]), command.get_arg(1).as_deref());
         assert_eq!(Some(&b"HELLO"[..]), command.get_arg(2).as_deref());
+    }
+
+    struct FailingSerialize;
+    impl serde::Serialize for FailingSerialize {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("boom"))
+        }
+    }
+
+    #[test]
+    fn arg_serialization_error_is_deferred_not_panicked() {
+        let mut command: Command = cmd("PING").arg(FailingSerialize).into();
+        assert!(matches!(
+            command.take_serialization_error(),
+            Some(crate::Error::Client(crate::ClientError::SerdeSerialize(_)))
+        ));
+        // The error is taken once, not re-yielded.
+        assert!(command.take_serialization_error().is_none());
+    }
+
+    #[test]
+    fn embedded_command_args_error_propagates_through_the_outer_builder() {
+        let args = crate::resp::CommandArgsMut::default().arg(FailingSerialize);
+        let mut command: Command = cmd("SORT").arg(args).into();
+        assert!(command.take_serialization_error().is_some());
+    }
+
+    #[test]
+    fn a_well_formed_command_carries_no_serialization_error() {
+        let mut command: Command = cmd("SET").arg("key").arg("value").into();
+        assert!(command.take_serialization_error().is_none());
     }
 }

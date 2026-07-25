@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    Error, Result,
+    ClientError, Error, Result,
     client::{Client, IntoConfig},
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
@@ -19,6 +19,35 @@ use serial_test::serial;
 async fn send() -> Result<()> {
     let client = get_test_client().await?;
 
+    client.send::<()>(cmd("PING"), None).await?;
+
+    client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn failing_user_serialize_surfaces_as_error_not_panic() -> Result<()> {
+    let client = get_test_client().await?;
+
+    struct FailingSerialize;
+    impl serde::Serialize for FailingSerialize {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> std::result::Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("boom"))
+        }
+    }
+
+    let result = client
+        .send::<()>(cmd("SET").arg("key").arg(FailingSerialize), None)
+        .await;
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::SerdeSerialize(_)))),
+        "expected a deferred serialization error, got {result:?}"
+    );
+
+    // The connection is still usable: the doomed command never reached the wire.
     client.send::<()>(cmd("PING"), None).await?;
 
     client.close().await?;

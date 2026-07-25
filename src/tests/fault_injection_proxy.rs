@@ -1,4 +1,4 @@
-//! Fault-injecting TCP proxy for failure-path tests (PROC-02 capability 3).
+//! Fault-injecting TCP proxy for failure-path tests.
 //!
 //! A [`FaultProxy`] binds an ephemeral local port in front of an upstream
 //! address (a real Redis, or a fake server in a hermetic test), accepts a
@@ -8,10 +8,10 @@
 //! forwards both directions transparently.
 //!
 //! This is the one primitive that unlocks the faults the client cannot inflict
-//! on itself — truncated frames mid-response (RESP-01), unknown RESP3 tags
-//! (RESP-02), unsolicited frames (NET-05), byte-boundary chunking (RESP-06) and
-//! per-shard errors (CLU-03). The individual scenario tests attach to those
-//! findings; this module provides and self-tests the harness itself.
+//! on itself — truncated frames mid-response, unknown RESP3 tags, unsolicited
+//! frames, byte-boundary chunking and per-shard errors. The individual scenario
+//! tests attach to those cases; this module provides and self-tests the harness
+//! itself.
 
 use std::net::SocketAddr;
 use std::time::Duration;

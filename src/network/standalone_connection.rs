@@ -22,10 +22,10 @@ use std::{
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 /// Initial capacity of the read framing buffer, and the target both the read
-/// and write buffers are shrunk back to once they have grown oversized
-/// (HARD-03). `FramedRead` otherwise starts at tokio-util's 8 KiB default; a
-/// 64 KiB start matches the shrink target so the two are one parameter (this
-/// knob moves to `Config` per PROC-07).
+/// and write buffers are shrunk back to once they have grown oversized.
+/// `FramedRead` otherwise starts at tokio-util's 8 KiB default; a 64 KiB start
+/// matches the shrink target so the two are one parameter (a knob that could
+/// later move to `Config`).
 pub(crate) const TARGET_BUFFER_CAPACITY: usize = 64 * 1024;
 
 /// A buffer is only considered for shrinking once its capacity exceeds this
@@ -40,7 +40,7 @@ const BUFFER_SHRINK_HYSTERESIS: usize = 16;
 /// Replaces `buf` with a fresh `TARGET_BUFFER_CAPACITY` buffer once it has been
 /// oversized and near-empty for long enough, returning its high-water-mark
 /// memory to the allocator. `BytesMut` has no `shrink_to_fit`, so replacement
-/// is the only lever (HARD-03).
+/// is the only lever.
 ///
 /// `small_streak` is the caller-owned hysteresis counter for this buffer.
 fn maybe_shrink_buffer(buf: &mut BytesMut, small_streak: &mut usize) {
@@ -111,9 +111,9 @@ pub struct StandaloneConnection {
     streams: Streams,
     version: String,
     tag: Arc<str>,
-    /// Hysteresis counter for the read buffer's shrink policy (HARD-03).
+    /// Hysteresis counter for the read buffer's shrink policy.
     read_buffer_small_streak: usize,
-    /// Hysteresis counter for the write buffer's shrink policy (HARD-03).
+    /// Hysteresis counter for the write buffer's shrink policy.
     write_buffer_small_streak: usize,
     /// Test-only: number of read attempts remaining before the connection
     /// simulates being closed (see [`Command::kill_connection_on_read`]).
@@ -148,8 +148,8 @@ impl StandaloneConnection {
     }
 
     /// Returns the oversized read/write buffers to the allocator once they have
-    /// been quiet long enough (HARD-03). Disjoint field borrows let the streak
-    /// counters and `streams` be mutated together.
+    /// been quiet long enough. Disjoint field borrows let the streak counters and
+    /// `streams` be mutated together.
     fn shrink_read_buffer(&mut self) {
         let streak = &mut self.read_buffer_small_streak;
         match &mut self.streams {
@@ -410,8 +410,8 @@ mod tests {
 
     #[test]
     fn does_not_shrink_a_buffer_within_the_factor() {
-        // HARD-03: a buffer that never grew past factor × target is left alone
-        // and never accrues a streak.
+        // A buffer that never grew past factor × target is left alone and never
+        // accrues a streak.
         let mut buf = BytesMut::with_capacity(TARGET_BUFFER_CAPACITY);
         let mut streak = 0;
         for _ in 0..BUFFER_SHRINK_HYSTERESIS * 2 {
@@ -423,8 +423,8 @@ mod tests {
 
     #[test]
     fn shrinks_an_oversized_idle_buffer_only_after_the_hysteresis() {
-        // HARD-03: an oversized, near-empty buffer shrinks back to the target,
-        // but only once the quiet streak reaches the hysteresis threshold.
+        // An oversized, near-empty buffer shrinks back to the target, but only
+        // once the quiet streak reaches the hysteresis threshold.
         let mut buf = BytesMut::with_capacity(OVERSIZED);
         let grown = buf.capacity();
         assert!(grown > TARGET_BUFFER_CAPACITY * BUFFER_SHRINK_FACTOR);
@@ -441,8 +441,8 @@ mod tests {
 
     #[test]
     fn a_busy_oversized_buffer_is_not_shrunk_and_resets_the_streak() {
-        // HARD-03: while the residue still exceeds the target the buffer is
-        // legitimately busy; shrinking is skipped and any accrued streak resets.
+        // While the residue still exceeds the target the buffer is legitimately
+        // busy; shrinking is skipped and any accrued streak resets.
         let mut buf = BytesMut::with_capacity(OVERSIZED);
         let grown = buf.capacity();
         let mut streak = 0;

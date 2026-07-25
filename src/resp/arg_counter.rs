@@ -283,7 +283,12 @@ impl ser::SerializeStruct for &mut ArgCounter {
     where
         T: ?Sized + ser::Serialize,
     {
-        self.serialize_str(key)?;
+        // Mirror `ArgSerializer`: a field renamed to "" serializes only its value,
+        // so it must not be counted as an argument either — otherwise the dry-run
+        // count diverges from the real one and inflates a `numkeys`-style header.
+        if !key.is_empty() {
+            self.serialize_str(key)?;
+        }
         value.serialize(&mut **self)
     }
 
@@ -300,7 +305,10 @@ impl ser::SerializeStructVariant for &mut ArgCounter {
     where
         T: ?Sized + ser::Serialize,
     {
-        self.serialize_str(key)?;
+        // Same empty-name handling as the struct path and `ArgSerializer`.
+        if !key.is_empty() {
+            self.serialize_str(key)?;
+        }
         value.serialize(&mut **self)
     }
 

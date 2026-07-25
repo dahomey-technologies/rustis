@@ -39,8 +39,6 @@ pub(crate) type PushSender = mpsc::UnboundedSender<Result<RespResponse>>;
 pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<RespResponse>>;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
-type PendingResult = (ResultSender, Result<RespResponse>);
-type PendingResultBatch = (ResultsSender, Result<Vec<RespResponse>>);
 
 /// Test-only observability and fault-injection hook for the send batch.
 ///
@@ -212,8 +210,6 @@ pub(crate) struct NetworkHandler {
     auto_remonitor: bool,
     tag: Arc<str>,
     reconnection_state: ReconnectionState,
-    pending_results: SmallVec<[PendingResult; 64]>,
-    pending_result_batches: SmallVec<[PendingResultBatch; 64]>,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
@@ -255,8 +251,6 @@ impl NetworkHandler {
             auto_remonitor,
             tag: tag.clone(),
             reconnection_state: ReconnectionState::new(reconnection_config),
-            pending_results: SmallVec::new(),
-            pending_result_batches: SmallVec::new(),
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
@@ -538,11 +532,6 @@ impl NetworkHandler {
             return self.reconnect().await;
         };
         self.handle_result(result);
-        // Wake the caller of this reply immediately, before parsing the next
-        // ready reply. On a multi-thread runtime another worker resumes it in
-        // parallel while this task keeps draining, shortening first-reply
-        // latency on the critical path.
-        self.dispatch_pending();
 
         // OPTIMIZATION : Drain the next available results in the buffer
         while let Poll::Ready(result) = self.connection.try_read() {
@@ -550,31 +539,23 @@ impl NetworkHandler {
                 return self.reconnect().await;
             };
             self.handle_result(result);
-            self.dispatch_pending();
         }
 
         true
     }
 
-    /// Sends every matched reply owed to a caller, waking them. Called eagerly
-    /// per reply so callers resume as soon as their answer is parsed.
-    fn dispatch_pending(&mut self) {
-        for (sender, response) in self.pending_results.drain(..) {
-            if let Err(e) = sender.send(response) {
-                warn!(
-                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    self.tag
-                );
-            }
-        }
-
-        for (sender, results) in self.pending_result_batches.drain(..) {
-            if let Err(e) = sender.send(results) {
-                warn!(
-                    "[{}] Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    self.tag
-                );
-            }
+    /// Hands a matched reply to its caller, waking it.
+    ///
+    /// Called from [`Self::receive_result`] the moment the reply is matched,
+    /// before the next ready reply is parsed: on a multi-thread runtime another
+    /// worker resumes the caller in parallel while this task keeps draining,
+    /// which shortens first-reply latency on the critical path.
+    fn dispatch_result<T>(&self, sender: tokio::sync::oneshot::Sender<T>, value: T) {
+        if sender.send(value).is_err() {
+            warn!(
+                "[{}] Cannot send value to caller because receiver is not there anymore",
+                self.tag
+            );
         }
     }
 
@@ -713,18 +694,18 @@ impl NetworkHandler {
                                 }
                                 | MessageKind::PubSub { result_sender, .. }
                                 | MessageKind::Monitor { result_sender, .. } => {
-                                    self.pending_results.push((result_sender, result));
+                                    self.dispatch_result(result_sender, result);
                                 }
                                 MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
                                         message_to_receive.pending_responses.push(resp_buf);
-                                        self.pending_result_batches.push((
+                                        self.dispatch_result(
                                             results_sender,
                                             Ok(message_to_receive.pending_responses),
-                                        ));
+                                        );
                                     }
                                     Err(e) => {
-                                        self.pending_result_batches.push((results_sender, Err(e)));
+                                        self.dispatch_result(results_sender, Err(e));
                                     }
                                 },
                                 MessageKind::Invalidation { .. }

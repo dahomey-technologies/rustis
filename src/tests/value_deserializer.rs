@@ -633,3 +633,32 @@ fn _enum() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn out_of_range_integer_errors_instead_of_truncating() {
+    log_try_init();
+
+    // Mirror of the RESP deserializer: an out-of-range `Value::Integer` no longer
+    // silently truncates/wraps when deserialized into a narrower target.
+    let result = u8::deserialize(&Value::Integer(300));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "u8 from 300 should error, got {result:?}"
+    );
+
+    let result = u32::deserialize(&Value::Integer(-1));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "u32 from -1 should error, got {result:?}"
+    );
+
+    // In-range values and the nil-to-default coercion are preserved.
+    assert_eq!(42u8, u8::deserialize(&Value::Integer(42)).unwrap());
+    assert_eq!(0i32, i32::deserialize(&Value::Null).unwrap());
+}

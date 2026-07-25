@@ -58,7 +58,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as i8,
+            Value::Integer(i) => {
+                i8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as i8,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
@@ -77,7 +79,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as i16,
+            Value::Integer(i) => {
+                i16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as i16,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
@@ -96,7 +100,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as i32,
+            Value::Integer(i) => {
+                i32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as i32,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
@@ -136,7 +142,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as u8,
+            Value::Integer(i) => {
+                u8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as u8,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
@@ -155,7 +163,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as u16,
+            Value::Integer(i) => {
+                u16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as u16,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
@@ -174,7 +184,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as u32,
+            Value::Integer(i) => {
+                u32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as u32,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
@@ -193,7 +205,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
-            Value::Integer(i) => *i as u64,
+            Value::Integer(i) => {
+                u64::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
             Value::Double(d) => *d as u64,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,

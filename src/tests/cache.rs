@@ -98,6 +98,12 @@ async fn cache_hash() -> Result<()> {
         .hset("key", [("field1", "value11"), ("field2", "value22")])
         .await?;
 
+    // The invalidation reaches `client1` on its own connection and is applied by
+    // a separate task, so `client2`'s write completing says nothing about when
+    // the entry is evicted. Wait for it, as `cache_get` and
+    // `cache_survives_reconnection` already do.
+    sleep(Duration::from_millis(100)).await;
+
     let mut values: Vec<(String, String)> = cache.hgetall("key").await?;
     values.sort_by(|(f1, _), (f2, _)| f1.cmp(f2));
     assert_eq!(

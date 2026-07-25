@@ -98,6 +98,10 @@ pub enum ClientError {
     /// Raised when client is already subscribed to the given channel/pattern
     #[error("client is already subscribed to the given channel/pattern")]
     AlreadySubscribed,
+    /// Raised when the server sends a subscription confirmation that does not
+    /// match the pending subscription request (out-of-order or spurious ack)
+    #[error("unexpected subscription confirmation from server")]
+    UnexpectedSubscriptionConfirmation,
     /// Raised when serde serialization error occurs
     #[error("Serde deserialization error: {0}")]
     SerdeDeserialize(String),

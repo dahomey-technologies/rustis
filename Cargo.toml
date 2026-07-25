@@ -151,6 +151,7 @@ required-features = ["bench"]
 
 [[example]]
 name = "resp_profiling"
+required-features = ["bench"]
 
 [[example]]
 name = "simple"

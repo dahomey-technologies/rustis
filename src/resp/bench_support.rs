@@ -7,8 +7,8 @@
 //! gated behind the `bench` feature and compiled out of shipped builds, like
 //! the `pprof` profiling example.
 //!
-//! This is the arbitration instrument for the tape rework (STRUCT-01/02): the
-//! baseline numbers it produces are what the tape must be measured against.
+//! This is the arbitration instrument for the tape rework: the baseline numbers
+//! it produces are what the tape is measured against.
 
 use crate::{
     Error, Result,
@@ -33,9 +33,9 @@ pub fn bench_decode_to<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 /// Feeds `chunks` through `BufferDecoder` one at a time, as a socket would
 /// deliver a large reply in TCP-sized slices, then deserializes the frame.
 ///
-/// Every partial `decode` call re-parses the buffer from the start (RESP-06),
-/// so this is the shape that makes the resume-state win observable — feed the
-/// same large reply as one slice vs. as many, and compare.
+/// This drives the decoder's chunk-boundary resume path; feeding the same large
+/// reply as one slice vs. as many is what makes the streaming (resume-state) win
+/// observable — compare the two.
 #[inline]
 pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> {
     let mut decoder = BufferDecoder::new();
@@ -50,4 +50,18 @@ pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> 
         Some(resp) => resp.to(),
         None => Err(Error::EOF),
     }
+}
+
+/// Parses one complete RESP frame from `bytes` into the reused `tape`, without
+/// deserializing it — isolating the parser and tape build from serde and
+/// allocation cost. Reusing `tape` across calls mirrors the decoder's recycled
+/// buffer (the zero-allocation steady state); the built frame is dropped each
+/// call, as prompt consumption would. For the CPU profiler (`resp_profiling`);
+/// `#[inline(never)]` so it shows as a frame boundary in the sampler.
+#[inline(never)]
+pub fn bench_parse_only(bytes: &[u8], tape: &mut BytesMut) {
+    let (frame, frame_len) = RespFrameParser::new(bytes, tape)
+        .parse()
+        .expect("bench_parse_only fed a valid frame");
+    std::hint::black_box((&frame, frame_len));
 }

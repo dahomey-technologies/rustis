@@ -104,6 +104,10 @@ pub enum ClientError {
     /// Raised when serde serialization error occurs
     #[error("Serde serialization error: {0}")]
     SerdeSerialize(String),
+    /// Raised when a command has been retried up to `Config::max_command_attempts`
+    /// without succeeding, so it is failed instead of retried indefinitely.
+    #[error("command failed after reaching the maximum number of attempts")]
+    MaxCommandAttemptsReached,
     /// Raised when an unexpected error occurs
     #[error("Unexpected error")]
     Unexpected,

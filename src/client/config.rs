@@ -21,6 +21,7 @@ const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
 const DEFAULT_RETRY_ON_ERROR: bool = false;
+const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 0;
 
 type Uri<'a> = (
     &'a str,
@@ -105,6 +106,18 @@ pub struct Config {
     pub retry_on_error: bool,
     /// Reconnection policy configuration (Constant, Linear or Exponential)
     pub reconnection: ReconnectionConfig,
+    /// Maximum number of times a single command/batch may be attempted before it
+    /// is failed with [`ClientError::MaxCommandAttemptsReached`](crate::ClientError::MaxCommandAttemptsReached)
+    /// instead of being retried again.
+    ///
+    /// Retries happen on cluster `ASK`/`MOVED` redirections and on reconnection
+    /// replay of `retry_on_error` commands. The connection-level
+    /// [`reconnection`](Self::reconnection) cap does not bound them, so a command
+    /// caught in a pathological redirect or reconnect loop would otherwise be
+    /// replayed forever.
+    ///
+    /// The default is `0`, meaning unlimited (the historical behavior).
+    pub max_command_attempts: usize,
     /// Test-only hook to observe and inject retry reasons in the send batch.
     ///
     /// Only present in debug builds; it carries no cost in release builds.
@@ -159,6 +172,7 @@ impl Default for Config {
             no_delay: DEFAULT_NO_DELAY,
             retry_on_error: DEFAULT_RETRY_ON_ERROR,
             reconnection: Default::default(),
+            max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
             #[cfg(test)]
             send_batch_test_hook: None,
             #[cfg(test)]
@@ -380,6 +394,12 @@ impl Config {
                 && let Ok(retry_on_error) = retry_on_error.parse::<bool>()
             {
                 config.retry_on_error = retry_on_error;
+            }
+
+            if let Some(max_command_attempts) = query.remove("max_command_attempts")
+                && let Ok(max_command_attempts) = max_command_attempts.parse::<usize>()
+            {
+                config.max_command_attempts = max_command_attempts;
             }
         }
 

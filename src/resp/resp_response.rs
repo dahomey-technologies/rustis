@@ -421,6 +421,11 @@ impl<'a> Iterator for RespArrayIter<'a> {
             Some(container_view(tag, self.buf, self.tape, root))
         } else {
             let off = node_payload(node) as usize;
+            // A `None` here means the already-validated tape is inconsistent
+            // (effectively unreachable); iteration stops silently rather than
+            // surfacing the error. Yielding `Result` items would fix that but is a
+            // breaking change to this public iterator's item type — deferred to a
+            // release train.
             let view = read_scalar_view(tag, self.buf, off)?;
             self.cursor += 1;
             self.remaining -= 1;
@@ -477,6 +482,9 @@ impl Iterator for RespResponseIter {
             Some(RespResponse::Frame(self.buf.clone(), frame))
         } else {
             let off = node_payload(node) as usize;
+            // Same silent-stop-on-inconsistent-tape tradeoff as `RespArrayIter`;
+            // upgrading the item type to `Result` is a breaking change deferred to
+            // a release train.
             let frame = read_scalar_frame(tag, self.buf.as_ref(), off)?;
             self.cursor += 1;
             self.remaining -= 1;

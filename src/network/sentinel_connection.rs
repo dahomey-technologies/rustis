@@ -68,6 +68,10 @@ impl SentinelConnection {
     ) -> Result<StandaloneConnection> {
         let mut restart = false;
         let mut unreachable_sentinel = true;
+        // A step-3 failure (master connect / ROLE) is a distinct outcome from a
+        // sentinel being unreachable: it means we did learn a master address but
+        // could not use it, typically mid-failover.
+        let mut master_unreachable = false;
 
         let mut sentinel_node_config = config.clone();
         sentinel_node_config
@@ -77,7 +81,17 @@ impl SentinelConnection {
             .password
             .clone_from(&sentinel_config.password);
 
+        let mut rounds = 0;
         loop {
+            // Bound the restart loop: a stale Sentinel stuck announcing a
+            // non-master would otherwise spin forever.
+            if rounds >= MAX_DISCOVERY_ROUNDS {
+                return Err(
+                    DiscoveryOutcome::RoundsExhausted.into_error(&sentinel_config.service_name)
+                );
+            }
+            rounds += 1;
+
             for sentinel_instance in &sentinel_config.instances {
                 // Step 1: connecting to Sentinel
                 let (host, port) = sentinel_instance;
@@ -114,11 +128,32 @@ impl SentinelConnection {
                     }
                 };
 
-                // Step 3: call the ROLE command in the target instance
-                let mut master_connection =
-                    StandaloneConnection::connect(&master_host, master_port, config).await?;
+                // This Sentinel answered, so it is not the source of any later
+                // failure; a master address is now known.
+                unreachable_sentinel = false;
 
-                let role: RoleResult = master_connection.role().await?;
+                // Step 3: call the ROLE command in the target instance. An
+                // unreachable announced master is exactly the failover scenario
+                // Sentinel exists for, so fall through to the next Sentinel — which
+                // may know the newly promoted master — instead of aborting.
+                let mut master_connection =
+                    match StandaloneConnection::connect(&master_host, master_port, config).await {
+                        Ok(connection) => connection,
+                        Err(e) => {
+                            debug!("Cannot connect to master {master_host}:{master_port}: {e}");
+                            master_unreachable = true;
+                            continue;
+                        }
+                    };
+
+                let role: RoleResult = match master_connection.role().await {
+                    Ok(role) => role,
+                    Err(e) => {
+                        debug!("Cannot execute command `ROLE` on {master_host}:{master_port}: {e}");
+                        master_unreachable = true;
+                        continue;
+                    }
+                };
 
                 if let RoleResult::Master {
                     master_replication_offset: _,
@@ -141,19 +176,80 @@ impl SentinelConnection {
             }
         }
 
-        if unreachable_sentinel {
-            Err(Error::Sentinel(
-                "All Sentinel instances are unreachable".to_owned(),
-            ))
+        let outcome = if unreachable_sentinel {
+            DiscoveryOutcome::AllUnreachable
+        } else if master_unreachable {
+            DiscoveryOutcome::MasterUnreachable
         } else {
-            Err(Error::Sentinel(format!(
-                "master {} is unknown by all Sentinel instances",
-                sentinel_config.service_name
-            )))
-        }
+            DiscoveryOutcome::MasterUnknown
+        };
+        Err(outcome.into_error(&sentinel_config.service_name))
     }
 
     pub(crate) fn tag(&self) -> Arc<str> {
         self.inner_connection.tag()
+    }
+}
+
+/// Maximum number of full discovery rounds before giving up, bounding the
+/// otherwise unbounded restart loop: a stale Sentinel persistently announcing a
+/// non-master instance would spin forever, one `wait_between_failures` apart.
+const MAX_DISCOVERY_ROUNDS: usize = 10;
+
+/// Why sentinel discovery exhausted every instance, used to pick an accurate
+/// error. Split out from the I/O loop so the message selection is unit-testable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiscoveryOutcome {
+    /// No Sentinel could be reached at all.
+    AllUnreachable,
+    /// Sentinels were reached but none knew the requested master.
+    MasterUnknown,
+    /// A master address was obtained but connecting to it or confirming its role
+    /// failed on every round (failover in progress, or the cap was hit).
+    MasterUnreachable,
+    /// The bounded restart loop hit its cap while still seeing non-master roles.
+    RoundsExhausted,
+}
+
+impl DiscoveryOutcome {
+    fn into_error(self, service_name: &str) -> Error {
+        match self {
+            DiscoveryOutcome::AllUnreachable => {
+                Error::Sentinel("All Sentinel instances are unreachable".to_owned())
+            }
+            DiscoveryOutcome::MasterUnknown => Error::Sentinel(format!(
+                "master {service_name} is unknown by all Sentinel instances"
+            )),
+            DiscoveryOutcome::MasterUnreachable => Error::Sentinel(format!(
+                "master {service_name} could not be reached through any Sentinel"
+            )),
+            DiscoveryOutcome::RoundsExhausted => Error::Sentinel(format!(
+                "master {service_name} did not stabilize after {MAX_DISCOVERY_ROUNDS} discovery rounds"
+            )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DiscoveryOutcome, MAX_DISCOVERY_ROUNDS};
+
+    #[test]
+    fn outcome_messages_are_distinct_and_named() {
+        let all = DiscoveryOutcome::AllUnreachable.into_error("mymaster");
+        let unknown = DiscoveryOutcome::MasterUnknown.into_error("mymaster");
+        let unreachable = DiscoveryOutcome::MasterUnreachable.into_error("mymaster");
+        let exhausted = DiscoveryOutcome::RoundsExhausted.into_error("mymaster");
+
+        assert!(all.to_string().contains("unreachable"));
+        // A step-3 failure must not be reported as "all Sentinels unreachable".
+        assert_ne!(all.to_string(), unreachable.to_string());
+        assert!(unknown.to_string().contains("unknown"));
+        assert!(unreachable.to_string().contains("mymaster"));
+        assert!(
+            exhausted
+                .to_string()
+                .contains(&MAX_DISCOVERY_ROUNDS.to_string())
+        );
     }
 }

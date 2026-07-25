@@ -188,8 +188,21 @@ impl Config {
         Self::from_str(uri.as_str())
     }
 
-    /// Parse address in the standard formart `host`:`port`
+    /// Parse address in the standard format `host`:`port`, including bracketed
+    /// IPv6 (`[::1]` / `[::1]:6379`) whose host part itself contains colons.
     fn parse_addr(str: &str) -> Option<(&str, u16)> {
+        // Bracketed IPv6: the host is inside `[...]`, an optional `:port` follows.
+        if let Some(rest) = str.strip_prefix('[') {
+            let (host, after) = rest.split_once(']')?;
+            return match after {
+                "" => Some((host, DEFAULT_PORT)),
+                _ => {
+                    let port = after.strip_prefix(':')?;
+                    Some((host, port.parse::<u16>().ok()?))
+                }
+            };
+        }
+
         let mut iter = str.split(':');
 
         match (iter.next(), iter.next(), iter.next()) {
@@ -310,8 +323,12 @@ impl Config {
 
         let mut config = Config {
             server,
-            username: username.map(|u| u.to_owned()),
-            password: password.map(|p| p.to_owned()),
+            // Credentials are percent-encoded in a URI (a password may legally
+            // contain `@`, `:`, `/`, `%`). Decode them so the server receives the
+            // literal secret, as standard clients do — otherwise `p%40ss` would be
+            // sent verbatim and authentication would fail.
+            username: username.map(percent_decode),
+            password: password.map(percent_decode),
             database,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             tls_config,
@@ -1043,5 +1060,77 @@ impl ReconnectionConfig {
                 *jitter = jitter_ms;
             }
         }
+    }
+}
+
+/// Percent-decodes a URI component (`%XX` → byte), rendering the result lossily as
+/// UTF-8. Malformed escapes are left as-is rather than dropped, so a stray `%`
+/// never silently corrupts the surrounding text.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(hi) = bytes.get(i + 1).and_then(|b| (*b as char).to_digit(16))
+            && let Some(lo) = bytes.get(i + 2).and_then(|b| (*b as char).to_digit(16))
+        {
+            out.push((hi * 16 + lo) as u8);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+
+    fn standalone(uri: &str) -> (String, u16) {
+        match Config::from_str(uri).unwrap().server {
+            ServerConfig::Standalone { host, port } => (host, port),
+            other => panic!("expected Standalone, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ipv6_bracketed_address_with_port() {
+        assert_eq!(Some(("::1", 6379)), Config::parse_addr("[::1]:6379"));
+        assert_eq!(
+            Some(("2001:db8::1", 6380)),
+            Config::parse_addr("[2001:db8::1]:6380")
+        );
+    }
+
+    #[test]
+    fn ipv6_bracketed_address_without_port() {
+        assert_eq!(Some(("::1", DEFAULT_PORT)), Config::parse_addr("[::1]"));
+    }
+
+    #[test]
+    fn ipv4_address_still_parses() {
+        assert_eq!(
+            Some(("127.0.0.1", 6379)),
+            Config::parse_addr("127.0.0.1:6379")
+        );
+        assert_eq!(
+            Some(("localhost", DEFAULT_PORT)),
+            Config::parse_addr("localhost")
+        );
+    }
+
+    #[test]
+    fn ipv6_uri() {
+        assert_eq!(("::1".to_owned(), 6379), standalone("redis://[::1]:6379"));
+    }
+
+    #[test]
+    fn percent_decoded_password() {
+        let config = Config::from_str("redis://user:p%40ss@127.0.0.1:6379").unwrap();
+        assert_eq!(Some("user".to_owned()), config.username);
+        assert_eq!(Some("p@ss".to_owned()), config.password);
     }
 }

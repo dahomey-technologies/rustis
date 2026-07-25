@@ -19,7 +19,7 @@ use serde::{
 use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,
-    collections::VecDeque,
+    collections::{HashMap, HashSet, VecDeque},
     fmt::{self, Debug, Formatter},
     iter::zip,
     sync::Arc,
@@ -1171,13 +1171,16 @@ impl ClusterConnection {
                 results.extend(sub_request.keys.iter().zip(iter));
             }
 
-            results.sort_by(|(k1, _), (k2, _)| {
-                request_info
-                    .keys
-                    .iter()
-                    .position(|k| k == *k1)
-                    .cmp(&request_info.keys.iter().position(|k| k == *k2))
-            });
+            // Precompute each key's position in the request's key list once, so
+            // the reorder is O(n log n) instead of O(n² log n): the previous
+            // comparator ran two linear `position` scans per comparison, making a
+            // 10k-key MGET ~10⁹ `Bytes` comparisons. Duplicate keys keep their
+            // first position, matching the old `position` semantics.
+            let mut key_order = HashMap::<&Bytes, usize>::with_capacity(request_info.keys.len());
+            for (i, k) in request_info.keys.iter().enumerate() {
+                key_order.entry(k).or_insert(i);
+            }
+            results.sort_by_key(|(k, _)| *key_order.get(k).unwrap_or(&usize::MAX));
 
             let results = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
             Some(Ok(RespResponse::owned_array(results)))
@@ -1595,11 +1598,16 @@ pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Com
     // The step defines how many arguments form a logical group (e.g., 2 for MSET)
     let step = command.key_step();
 
+    // Index the shard's keys once so the per-key membership test below is O(1)
+    // instead of a linear `contains` scan — the latter is O(K²) per shard on a
+    // large multi-key command (e.g. a 10k-key MGET).
+    let shard_key_set: HashSet<&[u8]> = shard_keys.iter().map(|k| k.as_ref()).collect();
+
     // Iterate through all arguments using the cluster helper
     for (arg, is_key, _) in command.args_for_cluster() {
         if is_key {
             // If the current argument is a key, check if it exists in our shard group
-            if shard_keys.contains(&arg) {
+            if shard_key_set.contains(arg.as_ref()) {
                 shard_command = shard_command.arg(arg);
                 // Keep the next (step - 1) arguments associated with this key
                 keep_next = step - 1;

@@ -21,8 +21,8 @@ use tokio_util::codec::Decoder;
 /// hits [`RespFrameParser`] directly so the fuzzer drives the parser without
 /// the streaming layer in between.
 pub fn parse_frame(data: &[u8]) {
-    // `RespFrameParser::parse` indexes `buf[0]` unconditionally; the streaming
-    // decoder guards emptiness, so we replicate that guard here.
+    // The streaming decoder guards emptiness before calling the parser; mirror
+    // that here so the fuzz target exercises the same entry conditions.
     if data.is_empty() {
         return;
     }
@@ -34,9 +34,9 @@ pub fn parse_frame(data: &[u8]) {
 /// byte offsets in `splits` so partial frames are handed to the decoder exactly
 /// as they would arrive across TCP segments.
 ///
-/// This is the chunked-path harness the audit's PROC-01 calls for: it exercises
-/// the `Error::EOF` resume behaviour and makes RESP-06's re-parse cost
-/// observable, in addition to the plain parse path.
+/// This drives the decoder's chunk-boundary resume path: feeding the input in
+/// pieces makes partial frames exercise the `Error::EOF` suspend-and-resume
+/// behaviour, in addition to the plain parse path.
 pub fn decode_chunked(data: &[u8], splits: &[u8]) {
     let mut decoder = BufferDecoder::new();
     let mut buf = BytesMut::new();
@@ -72,8 +72,8 @@ pub fn deserialize_to_value(data: &[u8]) -> Option<Value> {
 
 /// Value-deserializer path: parse `data` to a [`Value`], then deserialize that
 /// `Value` into several concrete Rust types, exercising the coercions in
-/// `value_deserializer.rs` (the VAL-02 panic family, RESP-09/VAL-06 lossy
-/// casts, empty-collection handling, …).
+/// `value_deserializer.rs` (the numeric-coercion panic family, lossy casts,
+/// empty-collection handling, …).
 pub fn value_deserializer_roundtrip(data: &[u8]) {
     // `Value` is not `Clone`, so re-parse for each target type. Parsing is
     // cheap and the fuzzer cares about the deserialize step, not the parse.

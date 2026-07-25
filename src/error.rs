@@ -151,18 +151,16 @@ pub enum ClientError {
     #[error("Cannot parse Redis server version")]
     CannotParseRedisServerVersion,
     /// Raised when a RESP frame nests collections deeper than the parser allows,
-    /// guarding against a crafted reply driving `parse_value` into a stack
-    /// overflow (HARD-01).
+    /// guarding against a crafted reply driving the parser into a stack overflow.
     #[error("protocol: maximum nesting depth exceeded")]
     MaxNestingDepthExceeded,
     /// Raised when a bulk string / bulk error / verbatim string declares a
     /// length beyond the parser's configured ceiling, before the payload is
-    /// trusted — stops a crafted header from driving unbounded buffering
-    /// (HARD-02).
+    /// trusted — stops a crafted header from driving unbounded buffering.
     #[error("protocol: bulk length exceeds the maximum allowed")]
     BulkLengthTooLarge,
     /// Raised when a collection (array / set / push / map) declares a cardinality
-    /// beyond the parser's configured ceiling (HARD-02).
+    /// beyond the parser's configured ceiling.
     #[error("protocol: collection length exceeds the maximum allowed")]
     CollectionLengthTooLarge,
 }

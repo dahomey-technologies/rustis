@@ -28,8 +28,8 @@ impl FastPathCommandBuilder {
     }
 
     /// Serializes `arg` onto the fast path, returning the builder on success or
-    /// `Err` on any non-primitive (WR-01). The caller falls back to the generic
-    /// builder rather than panicking.
+    /// `Err` on any non-primitive. The caller falls back to the generic builder
+    /// rather than panicking.
     #[inline(always)]
     fn try_arg(mut self, arg: impl Serialize) -> Result<Self, Error> {
         let mut serializer = FastPathRespSerializer::new(&mut self.buffer);
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn primitive_args_stay_on_the_fast_path() {
         // Regression guard: the common primitive case must keep working exactly
-        // as before the WR-01 fallback was added.
+        // as before the fallback was added.
         let command = FastPathCommandBuilder::set("key", "value");
         assert_eq!(b"SET", command.name());
         assert_eq!(2, command.num_args());
@@ -450,9 +450,9 @@ mod tests {
 
     #[test]
     fn none_argument_falls_back_instead_of_panicking() {
-        // WR-01: `set(key, None::<String>)` used to panic the caller thread.
-        // It must now fall back to the generic builder, which drops the None as
-        // a no-op (a caller-visible arity error from Redis, not a panic).
+        // `set(key, None::<String>)` used to panic the caller thread. It must now
+        // fall back to the generic builder, which drops the None as a no-op (a
+        // caller-visible arity error from Redis, not a panic).
         let command = FastPathCommandBuilder::set("key", None::<String>);
         assert_eq!(b"SET", command.name());
         assert_eq!(1, command.num_args());
@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn collection_argument_falls_back_to_a_flattened_command() {
-        // WR-01: `lpush(key, vec!["a","b"])` used to panic. The generic builder
+        // `lpush(key, vec!["a","b"])` used to panic. The generic builder
         // flattens the sequence into a correct multi-element LPUSH.
         let command = FastPathCommandBuilder::lpush("key", vec!["a", "b"]);
         assert_eq!(b"LPUSH", command.name());

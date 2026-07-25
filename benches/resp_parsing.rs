@@ -1,16 +1,16 @@
-//! Parser-isolation benchmarks (STRUCT-02).
+//! Parser-isolation benchmarks.
 //!
 //! These measure the RESP decode + deserialize path directly on hand-built
-//! buffers, with no network, so the cost the tape rework (STRUCT-01) targets is
-//! actually observable — a full client round-trip buries it under socket time.
-//! They are the baseline the tape must be measured against:
+//! buffers, with no network, so the cost the tape rework targets is actually
+//! observable — a full client round-trip buries it under socket time. They are
+//! the baseline the tape must be measured against:
 //!
 //! - **scalars** — the tape must stay invisible here (cost provably zero).
 //! - **large collection of small elements** — where the tape pays +bytes per
 //!   element but saves the header re-parse.
 //! - **nested reply** — where the tape wins outright.
 //! - **chunked feed** — the same large collection delivered in TCP-sized
-//!   slices, the only shape that exposes the partial-parse re-scan (RESP-06).
+//!   slices, the only shape that exposes the partial-parse re-scan.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use rustis::resp::{bench_decode_chunked, bench_decode_to};

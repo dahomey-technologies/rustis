@@ -605,6 +605,28 @@ fn resp_buf_display_never_panics() {
     );
 }
 
+/// An empty RESP array/map must decode to an empty `Value` collection, distinct
+/// from a nil (`*-1` / `_`) which stays `Value::Null`. Collapsing both to `Null`
+/// destroys the empty-vs-nil distinction that `Value` exists to preserve.
+#[test]
+fn empty_collections_are_not_null() {
+    use crate::resp::Value;
+    log_try_init();
+
+    assert_eq!(
+        Value::Array(vec![]),
+        deserialize::<Value>("*0\r\n").unwrap()
+    );
+    assert!(matches!(
+        deserialize::<Value>("%0\r\n").unwrap(),
+        Value::Map(m) if m.is_empty()
+    ));
+
+    // Nil must still be Null, not an empty collection.
+    assert_eq!(Value::Null, deserialize::<Value>("_\r\n").unwrap());
+    assert_eq!(Value::Null, deserialize::<Value>("*-1\r\n").unwrap());
+}
+
 /// A RESP3 map with a non-string key (boolean, array, …) is protocol-valid and
 /// deserializing it into `Value` hashes the key. Every `Value` variant must hash
 /// rather than `unimplemented!()`-panic the decoding task.

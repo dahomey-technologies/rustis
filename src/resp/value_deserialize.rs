@@ -81,18 +81,17 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let len = seq.size_hint();
 
-        if let Some(0) = len {
-            Ok(Value::Null)
-        } else {
-            let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
-            loop {
-                match seq.next_element()? {
-                    None => break,
-                    Some(value) => values.push(value),
-                };
-            }
-            Ok(Value::Array(values))
+        // An empty array is `Value::Array([])`, not `Value::Null`: a nil array
+        // arrives through `visit_none` instead, and conflating the two destroys the
+        // empty-vs-nil distinction (e.g. `LRANGE` on an empty list vs a missing key).
+        let mut values: Vec<Value> = Vec::with_capacity(len.unwrap_or_default());
+        loop {
+            match seq.next_element()? {
+                None => break,
+                Some(value) => values.push(value),
+            };
         }
+        Ok(Value::Array(values))
     }
 
     fn visit_map<A>(self, mut map: A) -> Result<Value, A::Error>
@@ -101,32 +100,23 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let len = map.size_hint();
 
-        if let Some(0) = len {
-            Ok(Value::Null)
-        } else {
-            let mut values: HashMap<Value, Value> = HashMap::with_capacity(len.unwrap_or_default());
-            loop {
-                let key = match map.next_key::<PushOrKey>()? {
-                    None => break,
-                    Some(PushOrKey::Push) => {
-                        let values: Vec<Value> = map.next_value()?;
-                        if values.is_empty() {
-                            return Ok(Value::Null);
-                        } else {
-                            return Ok(Value::Push(values));
-                        }
-                    }
-                    Some(PushOrKey::Key(key)) => key,
-                };
+        // As with `visit_seq`, an empty map is `Value::Map({})`, not `Value::Null`;
+        // a nil arrives through `visit_none`. Likewise an empty push stays a
+        // `Value::Push([])`.
+        let mut values: HashMap<Value, Value> = HashMap::with_capacity(len.unwrap_or_default());
+        loop {
+            let key = match map.next_key::<PushOrKey>()? {
+                None => break,
+                Some(PushOrKey::Push) => {
+                    let values: Vec<Value> = map.next_value()?;
+                    return Ok(Value::Push(values));
+                }
+                Some(PushOrKey::Key(key)) => key,
+            };
 
-                values.insert(key, map.next_value()?);
-            }
-            if values.is_empty() {
-                Ok(Value::Null)
-            } else {
-                Ok(Value::Map(values))
-            }
+            values.insert(key, map.next_value()?);
         }
+        Ok(Value::Map(values))
     }
 }
 

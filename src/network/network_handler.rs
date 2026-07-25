@@ -204,7 +204,15 @@ pub(crate) struct NetworkHandler {
     pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
     is_reply_on: bool,
-    push_sender: Option<PushSender>,
+    /// Sink for client-side-caching invalidation pushes, active while the
+    /// connection is in `Status::Connected`. Kept separate from `monitor_sender`
+    /// so registering one push consumer cannot silently overwrite the other's
+    /// slot — the two flows are routed by distinct `Status` states, so a single
+    /// shared field was only ever a latent trap, not a working multiplexer.
+    invalidation_sender: Option<PushSender>,
+    /// Sink for MONITOR output, active while the connection is in
+    /// `Status::Monitor` / `LeavingMonitor`. See `invalidation_sender`.
+    monitor_sender: Option<PushSender>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
@@ -245,7 +253,8 @@ impl NetworkHandler {
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
             is_reply_on: true,
-            push_sender: None,
+            invalidation_sender: None,
+            monitor_sender: None,
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
             auto_remonitor,
@@ -370,14 +379,14 @@ impl NetworkHandler {
                         let push_sender = push_sender.take();
                         if let Some(push_sender) = push_sender {
                             debug!("[{}] Registering MONITOR push_sender", self.tag);
-                            self.push_sender = Some(push_sender);
+                            self.monitor_sender = Some(push_sender);
                         }
                     }
                     MessageKind::Invalidation { push_sender } => {
                         let push_sender = push_sender.take();
                         if let Some(push_sender) = push_sender {
                             debug!("[{}] Registering Invalidation push_sender", self.tag);
-                            self.push_sender = Some(push_sender);
+                            self.invalidation_sender = Some(push_sender);
                         }
                         return; // no message to send
                     }
@@ -568,7 +577,7 @@ impl NetworkHandler {
                         if response.is_err() {
                             self.receive_result(response);
                         } else {
-                            match &mut self.push_sender {
+                            match &mut self.invalidation_sender {
                                 Some(push_sender) => {
                                     if let Err(e) = push_sender.unbounded_send(response) {
                                         warn!(
@@ -597,7 +606,7 @@ impl NetworkHandler {
             }
             Status::Monitor => match &result {
                 Ok(response) if response.is_monitor() => {
-                    if let Some(push_sender) = &mut self.push_sender
+                    if let Some(push_sender) = &mut self.monitor_sender
                         && let Err(e) = push_sender.unbounded_send(result)
                     {
                         warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
@@ -607,7 +616,7 @@ impl NetworkHandler {
             },
             Status::LeavingMonitor => match &result {
                 Ok(response) if response.is_monitor() => {
-                    if let Some(push_sender) = &mut self.push_sender
+                    if let Some(push_sender) = &mut self.monitor_sender
                         && let Err(e) = push_sender.unbounded_send(result)
                     {
                         warn!("[{}] Cannot send monitor result to caller: {e}", self.tag);
@@ -998,7 +1007,7 @@ impl NetworkHandler {
             // messages so that they are routed through `handle_message`,
             // exactly as fresh messages and the retry path are.
             if let Status::Monitor | Status::EnteringMonitor = old_status {
-                if self.push_sender.is_some() {
+                if self.monitor_sender.is_some() {
                     self.status = Status::Monitor;
                 } else {
                     self.status = Status::Connected;

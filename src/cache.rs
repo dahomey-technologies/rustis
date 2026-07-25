@@ -196,13 +196,17 @@ impl Cache {
         let mut responses = Vec::with_capacity(prepared_command.command.num_args());
         let mut missing_indices = Vec::new();
         let mut missing_keys = Vec::new();
+        // Subcache key (`GET <key>` bytes) for each missing key, computed once
+        // during the probe below and reused at insert time.
+        let mut missing_subcache_keys = Vec::new();
 
         // 1. check cache
         for (i, arg) in prepared_command.command.args().enumerate() {
             let key = BulkString::from(arg.clone());
+            let subcache_key = get_subcache_key(&key);
 
             if let Some(values) = self.cache.get(&key).await
-                && let Some(response) = values.get(FastPathCommandBuilder::get(key.clone()).bytes())
+                && let Some(response) = values.get(&subcache_key)
             {
                 log::debug!(
                     "[{}] Cache hit on key `{}`",
@@ -219,6 +223,7 @@ impl Cache {
                 responses.push(RespResponse::null());
                 missing_indices.push(i);
                 missing_keys.push(key);
+                missing_subcache_keys.push(subcache_key);
             }
         }
 
@@ -248,12 +253,12 @@ impl Cache {
                 // only its own bytes instead of pinning the whole MGET reply
                 // block every element still shares.
                 self.cache
-                    .entry(key.clone())
+                    .entry(key)
                     .or_insert_with(async { Arc::new(DashMap::new()) })
                     .await
                     .value()
                     .insert(
-                        FastPathCommandBuilder::get(key).bytes().clone(),
+                        missing_subcache_keys[idx_in_missing].clone(),
                         response.compact(),
                     );
 
@@ -578,6 +583,13 @@ impl Cache {
 
         Ok(deserialized)
     }
+}
+
+/// Derives the subcache key (`GET <key>` RESP bytes) under which a value for
+/// `key` is stored. Kept identical to the single-command `get` path so that
+/// `get` and `mget` cross-hit on the same entry.
+fn get_subcache_key(key: &BulkString) -> Bytes {
+    FastPathCommandBuilder::get(key.clone()).bytes().clone()
 }
 
 fn key_to_bulk_string(key: &impl Serialize) -> Result<BulkString> {

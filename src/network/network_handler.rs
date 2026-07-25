@@ -851,39 +851,43 @@ impl NetworkHandler {
                     PubSubMessage::Subscribe(channel_or_pattern)
                     | PubSubMessage::PSubscribe(channel_or_pattern)
                     | PubSubMessage::SSubscribe(channel_or_pattern) => {
-                        if let Some(pending_sub) = self.pending_subscriptions.pop_front() {
-                            if pending_sub.channel_or_pattern == channel_or_pattern {
-                                if self
-                                    .subscriptions
-                                    .insert(
-                                        pending_sub.channel_or_pattern,
-                                        (pending_sub.subscription_type, pending_sub.sender),
-                                    )
-                                    .is_some()
-                                {
-                                    return Some(Err(Error::Client(
-                                        ClientError::AlreadySubscribed,
-                                    )));
-                                }
-
-                                if pending_sub.more_to_come {
-                                    return None;
-                                }
-                            } else {
-                                error!(
-                                    "[{}] Unexpected subscription confirmation on channel `{}`",
-                                    self.tag,
-                                    String::from_utf8_lossy(channel_or_pattern)
-                                );
+                        // Peek before popping: a mismatched confirmation must not
+                        // consume (and silently drop) the pending subscriber. Only
+                        // pop once we know the front entry is the one being confirmed.
+                        let matches = self
+                            .pending_subscriptions
+                            .front()
+                            .is_some_and(|p| p.channel_or_pattern == channel_or_pattern);
+                        if matches {
+                            let pending_sub = self.pending_subscriptions.pop_front().unwrap();
+                            if self
+                                .subscriptions
+                                .insert(
+                                    pending_sub.channel_or_pattern,
+                                    (pending_sub.subscription_type, pending_sub.sender),
+                                )
+                                .is_some()
+                            {
+                                return Some(Err(Error::Client(ClientError::AlreadySubscribed)));
                             }
+
+                            if pending_sub.more_to_come {
+                                return None;
+                            }
+
+                            self.receive_result(Ok(RespResponse::ok()));
                         } else {
                             error!(
-                                "[{}] Cannot find pending subscription for channel `{}`",
+                                "[{}] Unexpected subscription confirmation on channel `{}`",
                                 self.tag,
                                 String::from_utf8_lossy(channel_or_pattern)
                             );
+                            // Surface the anomaly to the caller instead of reporting
+                            // a spurious success; the pending entry is left intact.
+                            self.receive_result(Err(Error::Client(
+                                ClientError::UnexpectedSubscriptionConfirmation,
+                            )));
                         }
-                        self.receive_result(Ok(RespResponse::ok()));
                         None
                     }
                     PubSubMessage::Unsubscribe(channel_or_pattern)
@@ -1020,7 +1024,11 @@ impl NetworkHandler {
 
                 // keep on receiving new message during the delay
                 let start = Instant::now();
-                let end = start.checked_add(Duration::from_millis(delay)).unwrap();
+                // A pathologically large reconnection delay would overflow the
+                // monotonic clock; cap it rather than panicking the network task.
+                let end = start
+                    .checked_add(Duration::from_millis(delay))
+                    .unwrap_or_else(|| start + Duration::from_secs(3600));
                 loop {
                     let delay = end.duration_since(Instant::now());
                     let result =

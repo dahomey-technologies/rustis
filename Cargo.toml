@@ -118,6 +118,11 @@ name = "large_array_parsing"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "resp_parsing"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["web-examples"]

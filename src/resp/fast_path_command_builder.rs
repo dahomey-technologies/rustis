@@ -442,7 +442,7 @@ mod tests {
         // Regression guard: the common primitive case must keep working exactly
         // as before the WR-01 fallback was added.
         let command = FastPathCommandBuilder::set("key", "value");
-        assert_eq!(b"SET", command.name().as_ref());
+        assert_eq!(b"SET", command.name());
         assert_eq!(2, command.num_args());
         assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"value"[..]), command.get_arg(1).as_deref());
@@ -454,7 +454,7 @@ mod tests {
         // It must now fall back to the generic builder, which drops the None as
         // a no-op (a caller-visible arity error from Redis, not a panic).
         let command = FastPathCommandBuilder::set("key", None::<String>);
-        assert_eq!(b"SET", command.name().as_ref());
+        assert_eq!(b"SET", command.name());
         assert_eq!(1, command.num_args());
         assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
         assert_eq!(None, command.get_arg(1));
@@ -465,7 +465,7 @@ mod tests {
         // WR-01: `lpush(key, vec!["a","b"])` used to panic. The generic builder
         // flattens the sequence into a correct multi-element LPUSH.
         let command = FastPathCommandBuilder::lpush("key", vec!["a", "b"]);
-        assert_eq!(b"LPUSH", command.name().as_ref());
+        assert_eq!(b"LPUSH", command.name());
         assert_eq!(3, command.num_args());
         assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
         assert_eq!(Some(&b"a"[..]), command.get_arg(1).as_deref());

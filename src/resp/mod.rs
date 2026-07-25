@@ -113,6 +113,8 @@ The different command traits implementations ([`Client`](crate::client::Client),
 
 pub(crate) use arg_counter::*;
 pub(crate) use arg_serializer::*;
+#[cfg(feature = "bench")]
+pub use bench_support::*;
 pub(crate) use buffer_decoder::*;
 pub use bulk_string::*;
 pub use command::*;
@@ -133,6 +135,8 @@ pub(crate) use value_deserialize::*;
 
 mod arg_counter;
 mod arg_serializer;
+#[cfg(feature = "bench")]
+mod bench_support;
 mod buffer_decoder;
 mod bulk_string;
 mod command;

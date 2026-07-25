@@ -494,6 +494,41 @@ impl CommandBuilder {
         self
     }
 
+    /// Serializes a collection prefixed by the number of `step`-sized groups it
+    /// contains, then marks every `step`-th element as a key for cluster routing.
+    ///
+    /// Combines [`key_with_count`](Self::key_with_count) (leading count) and
+    /// [`key_with_step`](Self::key_with_step) (stepped key flags) for commands
+    /// such as MSETEX, whose grammar is `numkeys key value [key value ...]`.
+    /// The emitted count is the number of groups (`total / step`), not the raw
+    /// argument count.
+    #[must_use]
+    #[inline(always)]
+    pub fn key_with_count_and_step(mut self, args: impl Serialize, step: usize) -> Self {
+        // 1. Dry Run (CPU only, No Alloc) to get the total argument count.
+        let mut counter = ArgCounter::default();
+        args.serialize(&mut counter).expect("Arg counting failed");
+        debug_assert!(
+            counter.count % step == 0,
+            "key_with_count_and_step: argument count {} is not a multiple of step {step}",
+            counter.count
+        );
+
+        // 2. Write the group count (number of key/value groups).
+        self = self.arg(counter.count / step);
+
+        // 3. Write the elements, marking every step-th one (after the count) as a key.
+        let old_len = self.args_layout.len();
+        self = self.arg(args);
+        let new_len = self.args_layout.len();
+
+        for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
+            layout.flags |= ArgLayout::IS_KEY;
+        }
+
+        self
+    }
+
     #[cfg(test)]
     #[inline(always)]
     pub fn kill_connection_on_write(mut self, num_kills: usize) -> Self {

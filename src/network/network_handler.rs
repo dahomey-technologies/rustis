@@ -542,6 +542,18 @@ impl NetworkHandler {
         let Some(result) = result else {
             return self.reconnect().await;
         };
+        // A protocol decode error desynchronizes the stream; attributing it to the
+        // head-of-queue message blames an innocent caller. Reconnect instead, which
+        // resynchronizes the stream and purges/replays in-flight messages cleanly.
+        if let Err(e) = &result
+            && is_connection_level_error(e)
+        {
+            debug!(
+                "[{}] Connection-level read error, reconnecting: {e}",
+                self.tag
+            );
+            return self.reconnect().await;
+        }
         self.handle_result(result);
 
         // OPTIMIZATION : Drain the next available results in the buffer
@@ -549,6 +561,15 @@ impl NetworkHandler {
             let Some(result) = result else {
                 return self.reconnect().await;
             };
+            if let Err(e) = &result
+                && is_connection_level_error(e)
+            {
+                debug!(
+                    "[{}] Connection-level read error, reconnecting: {e}",
+                    self.tag
+                );
+                return self.reconnect().await;
+            }
             self.handle_result(result);
         }
 
@@ -1122,5 +1143,79 @@ impl NetworkHandler {
         }
 
         Ok(())
+    }
+}
+
+/// Whether an error surfaced by `connection.read()` is a connection-level failure
+/// (a protocol decode error, a transport/IO error, or end of stream) rather than a
+/// per-message one.
+///
+/// A decode error desynchronizes the byte stream, so it belongs to the connection,
+/// not to whichever caller happens to sit at the head of the receive queue; it must
+/// trigger a reconnect (clean purge + replay) instead of being dispatched as that
+/// caller's result. Per-message errors that legitimately arrive here — a cluster
+/// `Error::Retry` (ASK/MOVED) and a `Error::Redis` command error from a failing
+/// shard — must be delivered to the caller, so this is a positive allow-list of the
+/// framing/transport errors: anything unlisted is treated as per-message, which is
+/// the safe default (a stray error reaches one caller instead of churning the whole
+/// connection).
+#[inline]
+fn is_connection_level_error(error: &Error) -> bool {
+    match error {
+        Error::IO(_) | Error::EOF => true,
+        Error::Client(client_error) => matches!(
+            client_error,
+            ClientError::CannotParseInteger
+                | ClientError::CannotParseDouble
+                | ClientError::CannotParseBulkString
+                | ClientError::CannotParseBulkError
+                | ClientError::CannotParseVerbatimString
+                | ClientError::CannotParseBoolean
+                | ClientError::CannotParseMap
+                | ClientError::CannotParseSequence
+                | ClientError::UnknownRespTag(_)
+                | ClientError::BulkLengthTooLarge
+                | ClientError::CollectionLengthTooLarge
+                | ClientError::MaxNestingDepthExceeded
+                | ClientError::VerbatimStringTooShort
+        ),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_connection_level_error;
+    use crate::{ClientError, Error, RedisError, RedisErrorKind};
+
+    #[test]
+    fn per_message_errors_are_not_connection_level() {
+        // Cluster redirection and a failing-shard Redis error must reach the
+        // caller, not tear down the connection.
+        assert!(!is_connection_level_error(
+            &Error::Retry(Default::default())
+        ));
+        assert!(!is_connection_level_error(&Error::Redis(RedisError {
+            kind: RedisErrorKind::NoPerm,
+            description: "no permission".to_owned(),
+        })));
+        // A caller-side client error is not a stream desync either.
+        assert!(!is_connection_level_error(&Error::Client(
+            ClientError::CrossSlot
+        )));
+    }
+
+    #[test]
+    fn decode_and_transport_errors_are_connection_level() {
+        assert!(is_connection_level_error(&Error::Client(
+            ClientError::CannotParseInteger
+        )));
+        assert!(is_connection_level_error(&Error::Client(
+            ClientError::UnknownRespTag('?')
+        )));
+        assert!(is_connection_level_error(&Error::Client(
+            ClientError::MaxNestingDepthExceeded
+        )));
+        assert!(is_connection_level_error(&Error::EOF));
     }
 }

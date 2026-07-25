@@ -86,27 +86,40 @@ pub(crate) async fn tcp_connect(
         use async_std::net::TcpStream;
         use futures_util::AsyncReadExt;
         use socket2::{Domain, Protocol, Socket, Type};
-        use std::net::{SocketAddr, ToSocketAddrs};
+        use std::net::ToSocketAddrs;
         use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-        fn resolve_address(host: &str, port: u16) -> std::io::Result<SocketAddr> {
-            let mut addrs_iter = (host, port).to_socket_addrs()?;
-            addrs_iter
-                .next()
-                .ok_or_else(|| std::io::Error::other("No address found"))
-        }
+        // Bring this path to parity with the tokio one. The previous version issued
+        // a synchronous socket2 `connect` from async context (stalling the executor
+        // thread up to the OS TCP timeout), ignored `connect_timeout`, hardcoded a
+        // 60 s keepalive, and tried only the first resolved address. The crate
+        // forbids `unsafe`, so keepalive cannot be set on an `async_std::TcpStream`
+        // (it exposes no `AsFd`); instead the blocking connect — which *can* set
+        // keepalive and iterate every address safely — runs on a blocking thread so
+        // it no longer stalls the executor, bounded by `connect_timeout`.
+        let host = host.to_owned();
+        let keep_alive = config.keep_alive;
+        let std_stream: std::net::TcpStream = timeout(
+            config.connect_timeout,
+            async_std::task::spawn_blocking(move || {
+                let addrs = (host.as_str(), port).to_socket_addrs()?;
+                let mut last_err = None;
+                for addr in addrs {
+                    let socket =
+                        Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+                    if let Some(keep_alive) = keep_alive {
+                        socket.set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+                    }
+                    match socket.connect(&addr.into()) {
+                        Ok(()) => return Ok(socket.into()),
+                        Err(e) => last_err = Some(e),
+                    }
+                }
+                Err(last_err.unwrap_or_else(|| std::io::Error::other("No address found")))
+            }),
+        )
+        .await??;
 
-        let addr = resolve_address(host, port)?;
-
-        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
-
-        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(60));
-
-        socket.set_tcp_keepalive(&keepalive)?;
-
-        socket.connect(&addr.into())?;
-
-        let std_stream: std::net::TcpStream = socket.into();
         let stream = TcpStream::from(std_stream);
 
         if config.no_delay {

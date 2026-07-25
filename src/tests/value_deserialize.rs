@@ -109,7 +109,7 @@ fn array() -> Result<()> {
     );
 
     let result = deserialize_value("*0\r\n")?; // []
-    assert_eq!(Value::Null, result);
+    assert_eq!(Value::Array(vec![]), result);
 
     Ok(())
 }
@@ -142,7 +142,7 @@ fn map() {
     );
 
     let result = deserialize_value("%0\r\n").unwrap(); // {}
-    assert_eq!(Value::Null, result);
+    assert_eq!(Value::Map(HashMap::new()), result);
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn set() -> Result<()> {
     );
 
     let result = deserialize_value("~0\r\n")?; // []
-    assert_eq!(Value::Null, result);
+    assert_eq!(Value::Array(vec![]), result);
 
     Ok(())
 }
@@ -185,7 +185,7 @@ fn push() -> Result<()> {
     );
 
     let result = deserialize_value(">0\r\n")?; // []
-    assert_eq!(Value::Null, result);
+    assert_eq!(Value::Push(vec![]), result);
 
     Ok(())
 }

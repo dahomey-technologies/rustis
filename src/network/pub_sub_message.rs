@@ -71,11 +71,11 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
 
             let mut iterator = resp_array.into_iter();
 
-            let Some(RespView::BulkString(kind)) = iterator.next() else {
+            let Some(Ok(RespView::BulkString(kind))) = iterator.next() else {
                 return Err(());
             };
 
-            let Some(RespView::BulkString(channel_or_pattern)) = iterator.next() else {
+            let Some(Ok(RespView::BulkString(channel_or_pattern))) = iterator.next() else {
                 return Err(());
             };
 
@@ -87,18 +87,18 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
                 b"punsubscribe" => Ok(PubSubMessage::PUnsubscribe(channel_or_pattern)),
                 b"sunsubscribe" => Ok(PubSubMessage::SUnsubscribe(channel_or_pattern)),
                 b"message" => {
-                    let Some(RespView::BulkString(payload)) = iterator.next() else {
+                    let Some(Ok(RespView::BulkString(payload))) = iterator.next() else {
                         return Err(());
                     };
 
                     Ok(PubSubMessage::Message(channel_or_pattern, payload))
                 }
                 b"pmessage" => {
-                    let Some(RespView::BulkString(channel)) = iterator.next() else {
+                    let Some(Ok(RespView::BulkString(channel))) = iterator.next() else {
                         return Err(());
                     };
 
-                    let Some(RespView::BulkString(payload)) = iterator.next() else {
+                    let Some(Ok(RespView::BulkString(payload))) = iterator.next() else {
                         return Err(());
                     };
 
@@ -109,7 +109,7 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
                     ))
                 }
                 b"smessage" => {
-                    let Some(RespView::BulkString(payload)) = iterator.next() else {
+                    let Some(Ok(RespView::BulkString(payload))) = iterator.next() else {
                         return Err(());
                     };
                     Ok(PubSubMessage::SMessage(channel_or_pattern, payload))

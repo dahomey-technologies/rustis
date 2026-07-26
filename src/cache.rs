@@ -239,6 +239,7 @@ impl Cache {
             };
 
             for (idx_in_missing, response) in array_iter.enumerate() {
+                let response = response?;
                 let original_idx = missing_indices[idx_in_missing];
 
                 let Some(key) = prepared_command

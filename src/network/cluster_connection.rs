@@ -1086,10 +1086,12 @@ impl ClusterConnection {
                             return Some(Err(Error::Client(ClientError::Unexpected)));
                         }
                         for (item, view) in items.iter_mut().zip(resp_array) {
-                            if let RespView::Integer(i) = view {
-                                *item = f(*item, i);
-                            } else {
-                                return Some(Err(Error::Client(ClientError::Unexpected)));
+                            match view {
+                                Ok(RespView::Integer(i)) => *item = f(*item, i),
+                                Ok(_) => {
+                                    return Some(Err(Error::Client(ClientError::Unexpected)));
+                                }
+                                Err(e) => return Some(Err(e)),
                             }
                         }
                     }
@@ -1097,10 +1099,12 @@ impl ClusterConnection {
                         let mut int_array = Vec::with_capacity(resp_array.len());
 
                         for view in resp_array {
-                            if let RespView::Integer(i) = view {
-                                int_array.push(i);
-                            } else {
-                                return Some(Err(Error::Client(ClientError::Unexpected)));
+                            match view {
+                                Ok(RespView::Integer(i)) => int_array.push(i),
+                                Ok(_) => {
+                                    return Some(Err(Error::Client(ClientError::Unexpected)));
+                                }
+                                Err(e) => return Some(Err(e)),
                             }
                         }
 
@@ -1153,7 +1157,12 @@ impl ClusterConnection {
                     Ok(iter) => iter,
                     Err(e) => return Some(Err(e)),
                 };
-                results.extend(iter);
+                for item in iter {
+                    match item {
+                        Ok(item) => results.push(item),
+                        Err(e) => return Some(Err(e)),
+                    }
+                }
             }
 
             Some(Ok(RespResponse::owned_array(results)))
@@ -1170,7 +1179,12 @@ impl ClusterConnection {
                     Ok(iter) => iter,
                     Err(e) => return Some(Err(e)),
                 };
-                results.extend(sub_request.keys.iter().zip(iter));
+                for (key, item) in sub_request.keys.iter().zip(iter) {
+                    match item {
+                        Ok(item) => results.push((key, item)),
+                        Err(e) => return Some(Err(e)),
+                    }
+                }
             }
 
             // Precompute each key's position in the request's key list once, so

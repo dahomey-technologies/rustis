@@ -12,9 +12,21 @@ jobs:
     steps:
     - name: Checkout sources
       uses: actions/checkout@v5
-    - name: Update version
+    # `Cargo.toml` is the version's source of truth: the bump is a reviewable
+    # commit, and the tag only confirms it. This step used to `sed` the version
+    # in from the tag name and publish with `--allow-dirty`, which meant the
+    # version never existed in the repository at all — `Cargo.toml` stayed at
+    # its placeholder while released crates went out under tag-derived numbers.
+    # Nothing could then compare "what I am about to publish" with "what is
+    # published", which is what `cargo-semver-checks` needs to work.
+    - name: Verify the tag matches Cargo.toml
       run: |
-        VERSION=${{github.ref_name}}
-        sed -i -e 's/^version = .*/version = "'$VERSION'"/' Cargo.toml
+        TAG=${{github.ref_name}}
+        MANIFEST=$(cargo metadata --no-deps --format-version 1 \
+          | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+        if [ "$TAG" != "$MANIFEST" ]; then
+          echo "::error::tag $TAG does not match Cargo.toml version $MANIFEST — bump the manifest and re-tag"
+          exit 1
+        fi
     - name: Publish crate
-      run: cargo publish --allow-dirty --token ${{secrets.CRATES_IO_API_TOKEN}}
+      run: cargo publish --token ${{secrets.CRATES_IO_API_TOKEN}}

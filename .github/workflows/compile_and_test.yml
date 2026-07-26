@@ -59,6 +59,50 @@ jobs:
       - name: cargo clippy --lib (async-std)
         run: cargo clippy --lib --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache -- -D warnings
 
+  # Check that the version bump in `Cargo.toml` matches what actually changed in
+  # the public API. In 0.x, cargo treats the minor field as the major one, so a
+  # breaking change requires 0.(x+1).0 and a compatible one 0.x.(y+1) — this job
+  # fails when the bump is smaller than the changes justify.
+  #
+  # It compares against the previous tag rather than crates.io: no dependency on
+  # the registry, and it works on a branch. Pull requests only, because it builds
+  # the crate twice (baseline and current).
+  #
+  # Its blind spot is worth stating: it reads the *shape* of the public API from
+  # rustdoc, so it cannot see a behavior change. A function that keeps its
+  # signature but returns a different value passes this job silently. Those
+  # belong in `CHANGELOG.md`, written by hand. It also misses some shape changes
+  # — the 0.20.0 run did not flag `Command::name()` switching its return type
+  # from `Bytes` to `&[u8]`.
+  #
+  # One-time caveat: tags up to 0.19.3 carry the placeholder `version = "0.1.0"`
+  # in their manifest, so against those the tool reads a 0.1.0 -> 0.20.0 jump,
+  # calls it a major release and skips every lint. Until 0.20.0 is tagged this
+  # job passes vacuously; a real check needs `--release-type minor` locally. From
+  # 0.20.0 onwards the baseline manifest is correct and inference works.
+  semver:
+    name: Semver compatibility
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request'
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+        with:
+          # Tags are needed to resolve the baseline revision.
+          fetch-depth: 0
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - name: cargo semver-checks
+        run: |
+          BASELINE=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*')
+          echo "baseline: $BASELINE"
+          cargo semver-checks --baseline-rev "$BASELINE" --default-features
+
   # Compile a curated set of feature combinations (compile-only, no server
   # needed). Cargo features are additive, so `--no-default-features` is used to
   # pin exactly one runtime per entry — otherwise the default `tokio-runtime`

@@ -1,3 +1,12 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "test code: a panic is how a test reports failure"
+)]
+
 mod arg_serializer;
 mod bitmap_commands;
 mod bloom_commands;

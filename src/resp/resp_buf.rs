@@ -47,19 +47,19 @@ impl RespBuf {
     /// Returns `true` if the RESP Buffer is a push message
     #[inline]
     pub fn is_push_message(&self) -> bool {
-        (!self.0.is_empty() && self.0[0] == PUSH_TAG) || self.is_monitor_message()
+        matches!(self.0.first(), Some(&PUSH_TAG)) || self.is_monitor_message()
     }
 
     /// Returns `true` if the RESP Buffer is a monitor message
     #[inline]
     pub fn is_monitor_message(&self) -> bool {
-        self.0.len() > 1 && self.0[0] == SIMPLE_STRING_TAG && (self.0[1] as char).is_numeric()
+        matches!(self.0.as_ref(), [SIMPLE_STRING_TAG, second, ..] if (*second as char).is_numeric())
     }
 
     /// Returns `true` if the RESP Buffer is a Redis error
     #[inline]
     pub fn is_error(&self) -> bool {
-        self.0.len() > 1 && (self.0[0] == SIMPLE_ERROR_TAG || self.0[0] == BULK_ERROR_TAG)
+        matches!(self.0.as_ref(), [SIMPLE_ERROR_TAG | BULK_ERROR_TAG, _, ..])
     }
 
     /// Convert the RESP Buffer to a Rust type `T` by using serde deserialization

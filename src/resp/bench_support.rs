@@ -9,6 +9,13 @@
 //!
 //! This is the arbitration instrument for the tape rework: the baseline numbers
 //! it produces are what the tape is measured against.
+#![allow(
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    reason = "bench harness over hand-built buffers: a panic on a malformed \
+              fixture is the report, and adding error handling would put \
+              branches in the code being measured"
+)]
 
 use crate::{
     Error, Result,

@@ -9,6 +9,17 @@ use std::{
     slice, str, vec,
 };
 
+/// Reads a string that must hold exactly one character. The slice pattern keeps
+/// the length test and the read as one expression, so neither can drift from the
+/// other; UTF-8 validity then makes a single byte a single ASCII character.
+#[inline]
+fn single_char(str: &str) -> Result<char> {
+    match str.as_bytes() {
+        &[b] => Ok(b as char),
+        _ => Err(Error::Client(ClientError::CannotParseChar)),
+    }
+}
+
 impl<'de> Deserializer<'de> for &'de Value {
     type Error = Error;
 
@@ -127,7 +138,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
-            Value::Array(a) if a.len() == 1 => i64::deserialize(&a[0])?,
+            Value::Array(a) if let [single] = a.as_slice() => i64::deserialize(single)?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -212,7 +223,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
-            Value::Array(a) if a.len() == 1 => u64::deserialize(&a[0])?,
+            Value::Array(a) if let [single] = a.as_slice() => u64::deserialize(single)?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -265,21 +276,8 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result: char = match self {
-            Value::BulkString(bs) => {
-                let str = str::from_utf8(bs)?;
-                if str.len() == 1 {
-                    str.chars().next().unwrap()
-                } else {
-                    return Err(Error::Client(ClientError::CannotParseChar));
-                }
-            }
-            Value::SimpleString(str) => {
-                if str.len() == 1 {
-                    str.chars().next().unwrap()
-                } else {
-                    return Err(Error::Client(ClientError::CannotParseChar));
-                }
-            }
+            Value::BulkString(bs) => single_char(str::from_utf8(bs)?)?,
+            Value::SimpleString(str) => single_char(str)?,
             Value::Null => '\0',
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => return Err(Error::Client(ClientError::CannotParseChar)),
@@ -509,24 +507,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 // Visit a unit variant.
                 visitor.visit_enum(str.as_str().into_deserializer())
             }
-            Value::Array(a) => {
-                // Visit a newtype variant, tuple variant, or struct variant
-                // as an array of 2 elements
-                if a.len() == 2 {
-                    visitor.visit_enum(Enum::from_array(a))
-                } else {
-                    Err(Error::Client(ClientError::CannotParseEnum))
-                }
-            }
-            Value::Map(m) => {
-                // Visit a newtype variant, tuple variant, or struct variant
-                // as a map of 1 element
-                if m.len() == 1 {
-                    visitor.visit_enum(Enum::from_map(m))
-                } else {
-                    Err(Error::Client(ClientError::CannotParseEnum))
-                }
-            }
+            // Visit a newtype variant, tuple variant, or struct variant
+            // as an array of 2 elements
+            Value::Array(a) => visitor.visit_enum(Enum::from_array(a)?),
+            // Same, encoded as a map of 1 element
+            Value::Map(m) => visitor.visit_enum(Enum::from_map(m)?),
             Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => Err(Error::Client(ClientError::CannotParseEnum)),
         }
@@ -610,9 +595,8 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess<'de> {
     {
         match self.iter.next() {
             Some(key) => match key {
-                Value::Array(values) if values.len() == 2 => {
-                    let key = &values[0];
-                    self.value = Some(&values[1]);
+                Value::Array(values) if let [key, value] = values.as_slice() => {
+                    self.value = Some(value);
                     seed.deserialize(key).map(Some)
                 }
                 _ => seed.deserialize(key).map(Some),
@@ -769,26 +753,29 @@ struct Enum<'de> {
 }
 
 impl<'de> Enum<'de> {
-    fn from_array(values: &'de [Value]) -> Self {
-        let mut iter = values.iter();
-        Self {
-            variant_identifier: iter
-                .next()
-                .expect("array should have been tested as a 2-elements vector"),
-            variant_value: iter
-                .next()
-                .expect("array should have been tested as a 2-elements vector"),
+    /// Reads the 2-element array form. The slice pattern *is* the length test,
+    /// so the check and the two reads are one expression and cannot drift apart
+    /// — the caller no longer holds an invariant this function depends on.
+    fn from_array(values: &'de [Value]) -> Result<Self> {
+        match values {
+            [variant_identifier, variant_value] => Ok(Self {
+                variant_identifier,
+                variant_value,
+            }),
+            _ => Err(Error::Client(ClientError::CannotParseEnum)),
         }
     }
 
-    fn from_map(values: &'de HashMap<Value, Value>) -> Self {
+    /// Reads the 1-element map form. A `HashMap` has no slice pattern, so the
+    /// cardinality is tested by asking for a second entry and requiring none.
+    fn from_map(values: &'de HashMap<Value, Value>) -> Result<Self> {
         let mut iter = values.iter();
-        let (variant_identifier, variant_value) = iter
-            .next()
-            .expect("map should have been tested as a 1-element map");
-        Self {
-            variant_identifier,
-            variant_value,
+        match (iter.next(), iter.next()) {
+            (Some((variant_identifier, variant_value)), None) => Ok(Self {
+                variant_identifier,
+                variant_value,
+            }),
+            _ => Err(Error::Client(ClientError::CannotParseEnum)),
         }
     }
 }

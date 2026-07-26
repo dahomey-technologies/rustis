@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    reason = "test-support module (`#[cfg(test)]` in `commands/mod.rs`): a panic \
+              is how a test reports failure"
+)]
+
 use crate::{
     client::{PreparedCommand, prepare_command},
     resp::cmd,

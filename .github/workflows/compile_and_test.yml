@@ -36,6 +36,29 @@ jobs:
       - name: Checking style
         run: cargo fmt --all -- --check
 
+  # Enforce the panic policy declared in `src/lib.rs`: the explicit-panic family
+  # crate-wide, plus `clippy::indexing_slicing` in `network/` and `resp/`. Those
+  # are `deny`, so they already fail without `-D warnings`; the flag is what
+  # makes an *unfulfilled* `#[expect(...)]` fail too, so a justification that no
+  # longer applies gets removed instead of quietly outliving its reason.
+  #
+  # `--all-targets` only on the tokio matrix: the examples are `#[tokio::main]`,
+  # so they do not build under `async-std-runtime` at all. That is why the
+  # feature-compile job below uses `cargo check` rather than `--all-targets`.
+  clippy:
+    name: Clippy (panic policy)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: cargo clippy --all-targets (tokio)
+        run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache -- -D warnings
+      - name: cargo clippy --lib (async-std)
+        run: cargo clippy --lib --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache -- -D warnings
+
   # Compile a curated set of feature combinations (compile-only, no server
   # needed). Cargo features are additive, so `--no-default-features` is used to
   # pin exactly one runtime per entry — otherwise the default `tokio-runtime`

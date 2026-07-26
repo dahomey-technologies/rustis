@@ -118,13 +118,18 @@ impl Pipeline<'_> {
             });
         }
 
-        if results.len() == 1 {
-            let result = results.pop().unwrap();
-            result.to()
-        } else {
-            let deserializer = RespBatchDeserializer::new(&results);
-            T::deserialize(&deserializer)
+        // A single response deserializes directly as `T` rather than as a
+        // one-element batch. Peeling it off with `pop` inside the condition
+        // rather than after it keeps the emptiness of `results` the only thing
+        // this branch depends on, with no length invariant left to assert.
+        if results.len() == 1
+            && let Some(result) = results.pop()
+        {
+            return result.to();
         }
+
+        let deserializer = RespBatchDeserializer::new(&results);
+        T::deserialize(&deserializer)
     }
 }
 

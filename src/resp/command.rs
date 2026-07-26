@@ -237,6 +237,12 @@ impl Command {
     ///
     /// Returns a plain slice rather than an owned [`Bytes`] so that merely
     /// inspecting the name (e.g. classification) touches no atomic refcount.
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "invariant: `name_layout` was recorded by the builder while it \
+                  wrote those very bytes into `buffer`; the two are produced \
+                  together and never read off the wire."
+    )]
     pub fn name(&self) -> &[u8] {
         let (start, len) = self.name_layout;
         &self.buffer[start..start + len]
@@ -283,6 +289,12 @@ impl Command {
     /// before the command is handed to the shared network thread (which then
     /// routes in O(1)) or its slots are inspected. Standalone clients skip this
     /// entirely and pay no CRC16 on their hot path.
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "invariant: an `ArgLayout` range is recorded by the builder as \
+                  it appends the argument's bytes, so it always addresses this \
+                  same buffer."
+    )]
     pub(crate) fn compute_slots(&mut self) {
         for layout in &mut self.args_layout {
             if layout.is_key() {
@@ -462,6 +474,36 @@ impl CommandBuilder {
         self.arg(arg)
     }
 
+    /// Adds a collection prefixed by the number of `step`-sized groups it
+    /// contains, without marking anything as a routing key.
+    ///
+    /// The non-key counterpart of
+    /// [`key_with_count_and_step`](Self::key_with_count_and_step), for commands
+    /// whose grouped arguments live *inside* a key rather than being keys —
+    /// `HSETEX key FIELDS numfields field value [field value ...]`, where the
+    /// hash key is the only thing cluster routing cares about.
+    ///
+    /// Zero Allocation strategy.
+    #[must_use]
+    #[inline(always)]
+    pub fn arg_with_count_and_step(mut self, arg: impl Serialize, step: usize) -> Self {
+        // 1. Dry Run (CPU only, No Alloc) to get the total argument count.
+        let mut counter = ArgCounter::default();
+        if let Err(e) = arg.serialize(&mut counter) {
+            self.record_serialization_error(e);
+            return self;
+        }
+        debug_assert!(
+            counter.count % step == 0,
+            "arg_with_count_and_step: argument count {} is not a multiple of step {step}",
+            counter.count
+        );
+
+        // 2. Write the group count, then the elements.
+        self = self.arg(counter.count / step);
+        self.arg(arg)
+    }
+
     #[must_use]
     #[inline(always)]
     pub fn arg_labeled(mut self, label: &'static str, arg: impl Serialize) -> Self {
@@ -488,9 +530,8 @@ impl CommandBuilder {
     pub fn key(mut self, key: impl Serialize) -> Self {
         let old_len = self.args_layout.len();
         self = self.arg(key);
-        let new_len = self.args_layout.len();
 
-        for layout in &mut self.args_layout[old_len..new_len] {
+        for layout in self.args_layout.iter_mut().skip(old_len) {
             layout.set_key();
         }
 
@@ -509,9 +550,8 @@ impl CommandBuilder {
     pub fn key_with_count(mut self, keys: impl Serialize) -> Self {
         let old_len = self.args_layout.len();
         self = self.arg_with_count(keys);
-        let new_len = self.args_layout.len();
 
-        for layout in &mut self.args_layout[old_len + 1..new_len] {
+        for layout in self.args_layout.iter_mut().skip(old_len + 1) {
             layout.flags |= ArgLayout::IS_KEY;
         }
 
@@ -525,9 +565,8 @@ impl CommandBuilder {
     pub fn key_with_step(mut self, args: impl Serialize, step: usize) -> Self {
         let old_len = self.args_layout.len();
         self = self.arg(args);
-        let new_len = self.args_layout.len();
 
-        for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
+        for layout in self.args_layout.iter_mut().skip(old_len).step_by(step) {
             layout.flags |= ArgLayout::IS_KEY;
         }
 
@@ -563,9 +602,8 @@ impl CommandBuilder {
         // 3. Write the elements, marking every step-th one (after the count) as a key.
         let old_len = self.args_layout.len();
         self = self.arg(args);
-        let new_len = self.args_layout.len();
 
-        for layout in &mut self.args_layout[old_len..new_len].iter_mut().step_by(step) {
+        for layout in self.args_layout.iter_mut().skip(old_len).step_by(step) {
             layout.flags |= ArgLayout::IS_KEY;
         }
 
@@ -609,6 +647,15 @@ impl CommandBuilder {
 impl From<CommandBuilder> for Command {
     /// Finalizes the command into a raw RESP frame.
     /// Fills the HEADROOM with the header and freezes the buffer.
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "invariant: every write below is bounded by `HEADROOM_SIZE`, \
+                  which is sized to hold the longest `*<n>` header line and is \
+                  reserved up front by `CommandBuilder::new`. Nothing here is \
+                  driven by input, and a fallback would have to emit a command \
+                  with a truncated header — silent corruption in place of a \
+                  crash. This exemption covers the finalizer only."
+    )]
     fn from(mut command_builder: CommandBuilder) -> Self {
         // Stack buffer helpers
         fn write_u8(buf: &mut &mut [u8], val: u8) {
@@ -674,15 +721,14 @@ impl From<CommandBuilder> for Command {
 /// Implement hash_slot algorithm
 /// see. https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags
 pub(crate) fn hash_slot(mut key: &[u8]) -> u16 {
-    // { found
-    if let Some(s) = memchr(b'{', key) {
-        // } found
-        if let Some(e) = memchr(b'}', &key[s + 1..]) {
-            // hash tag non empty
-            if e != 0 {
-                key = &key[s + 1..s + 1 + e];
-            }
-        }
+    // `{` found, then `}` after it, with a non-empty tag in between
+    if let Some(s) = memchr(b'{', key)
+        && let Some(after_brace) = key.get(s + 1..)
+        && let Some(e) = memchr(b'}', after_brace)
+        && e != 0
+        && let Some(tag) = after_brace.get(..e)
+    {
+        key = tag;
     }
 
     crc16::State::<crc16::XMODEM>::calculate(key) % 16384
@@ -696,6 +742,14 @@ pub(crate) fn next_sequence_counter() -> usize {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing,
+        reason = "test code: a panic is how a test reports failure"
+    )]
     use crate::resp::{Command, cmd};
 
     #[test]
@@ -744,5 +798,44 @@ mod tests {
     fn a_well_formed_command_carries_no_serialization_error() {
         let mut command: Command = cmd("SET").arg("key").arg("value").into();
         assert!(command.take_serialization_error().is_none());
+    }
+
+    #[test]
+    fn arg_with_count_and_step_emits_the_group_count_not_the_argument_count() {
+        let command: Command = cmd("HSETEX")
+            .key("key")
+            .arg("FIELDS")
+            .arg_with_count_and_step(["f1", "v1", "f2", "v2"], 2)
+            .into();
+        assert_eq!(Some(&b"key"[..]), command.get_arg(0).as_deref());
+        assert_eq!(Some(&b"FIELDS"[..]), command.get_arg(1).as_deref());
+        // Two field/value groups, not four arguments.
+        assert_eq!(Some(&b"2"[..]), command.get_arg(2).as_deref());
+        assert_eq!(Some(&b"f1"[..]), command.get_arg(3).as_deref());
+        assert_eq!(Some(&b"v1"[..]), command.get_arg(4).as_deref());
+        assert_eq!(Some(&b"f2"[..]), command.get_arg(5).as_deref());
+        assert_eq!(Some(&b"v2"[..]), command.get_arg(6).as_deref());
+        assert_eq!(None, command.get_arg(7));
+    }
+
+    #[test]
+    fn arg_with_count_and_step_marks_no_element_as_a_key() {
+        let command: Command = cmd("HSETEX")
+            .key("key")
+            .arg("FIELDS")
+            .arg_with_count_and_step(["f1", "v1"], 2)
+            .into();
+        // The hash key is the only routing key; the fields inside it are not.
+        assert_eq!(vec![&b"key"[..]], command.keys().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_failing_arg_with_count_and_step_defers_instead_of_panicking() {
+        let mut command: Command = cmd("HSETEX")
+            .key("key")
+            .arg("FIELDS")
+            .arg_with_count_and_step(FailingSerialize, 2)
+            .into();
+        assert!(command.take_serialization_error().is_some());
     }
 }

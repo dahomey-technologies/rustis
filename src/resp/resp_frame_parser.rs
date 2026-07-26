@@ -97,13 +97,25 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) ->
     Some(after + len as usize + 2)
 }
 
+/// Slices `data[range]`, answering [`Error::EOF`] instead of panicking when the
+/// buffer stops short.
+///
+/// Every bound in this parser is derived from a length the *server* sent, so
+/// "past the end" is a routine streaming state — the decoder retries once more
+/// bytes arrive — and never a reason to abort the connection. Reading through
+/// this helper is what lets the module deny `clippy::indexing_slicing` outright.
+#[inline(always)]
+fn slice(data: &[u8], range: Range<usize>) -> Result<&[u8]> {
+    data.get(range).ok_or_else(|| Error::EOF)
+}
+
 /// Finds the `\r` of the next `\r\n` at or after `from`, returning its index.
 /// Errors with [`Error::EOF`] when no complete terminator is present yet.
 #[inline]
 fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
-    let rem = &data[from..];
+    let rem = data.get(from..).ok_or_else(|| Error::EOF)?;
     let i = memchr(b'\r', rem).ok_or_else(|| Error::EOF)?;
-    if i + 1 >= rem.len() || rem[i + 1] != b'\n' {
+    if rem.get(i + 1) != Some(&b'\n') {
         return Err(Error::EOF);
     }
     Ok(from + i)
@@ -115,10 +127,10 @@ fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
 /// back without a parser instance.
 #[inline]
 fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
-    let slice = &data[from..];
+    let digits = data.get(from..).ok_or_else(|| Error::EOF)?;
     let mut i = 0;
 
-    let negative = if let Some(&b'-') = slice.first() {
+    let negative = if let Some(&b'-') = digits.first() {
         i += 1;
         true
     } else {
@@ -129,16 +141,16 @@ fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
     // positive magnitude is not representable — parses instead of overflowing.
     // A positive result is negated back at the end.
     let mut n = 0i64;
-    while i < slice.len() {
-        match slice[i] {
+    while let Some(&digit) = digits.get(i) {
+        match digit {
             b'0'..=b'9' => {
                 n = n
                     .checked_mul(10)
-                    .and_then(|n| n.checked_sub((slice[i] - b'0') as i64))
+                    .and_then(|n| n.checked_sub((digit - b'0') as i64))
                     .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?;
                 i += 1;
             }
-            b'\r' => match slice.get(i + 1) {
+            b'\r' => match digits.get(i + 1) {
                 Some(&b'\n') => {
                     let value = if negative {
                         n
@@ -224,15 +236,9 @@ pub(crate) fn element_bounds(
             })
         }
         BOOL_TAG => {
-            if start + 3 > data.len() {
-                return Err(Error::EOF);
-            }
-            match data[start] {
-                b't' | b'f' => {}
+            match slice(data, start..start + 3)? {
+                [b't' | b'f', b'\r', b'\n'] => {}
                 _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
-            }
-            if &data[start + 1..start + 3] != b"\r\n" {
-                return Err(Error::Client(ClientError::CannotParseBoolean));
             }
             Ok(ElementBounds {
                 kind: ElementKind::Boolean,
@@ -254,10 +260,7 @@ pub(crate) fn element_bounds(
             }
             check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
-            if data.len() < end {
-                return Err(Error::EOF);
-            }
-            if &data[end - 2..end] != b"\r\n" {
+            if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseBulkString));
             }
             Ok(ElementBounds {
@@ -282,10 +285,7 @@ pub(crate) fn element_bounds(
             }
             check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
-            if data.len() < end {
-                return Err(Error::EOF);
-            }
-            if &data[end - 2..end] != b"\r\n" {
+            if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseVerbatimString));
             }
             Ok(ElementBounds {
@@ -301,10 +301,7 @@ pub(crate) fn element_bounds(
             }
             check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
-            if data.len() < end {
-                return Err(Error::EOF);
-            }
-            if &data[end - 2..end] != b"\r\n" {
+            if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseBulkError));
             }
             Ok(ElementBounds {
@@ -342,7 +339,7 @@ enum ContainerHeader {
 /// point at a container tag. [`Error::EOF`] when the header has not fully
 /// arrived, so the streaming decoder can retry once more bytes are read.
 fn parse_container_header(data: &[u8], at: usize) -> Result<ContainerHeader> {
-    let tag = data[at];
+    let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
     let (n, end) = parse_int_at(data, at + 1)?;
     if n == -1 {
         return Ok(ContainerHeader::Null { end });
@@ -373,7 +370,7 @@ fn skip_leading_attributes(
     depth: usize,
     limits: &RespLimits,
 ) -> Result<usize> {
-    while pos < data.len() && data[pos] == ATTRIBUTE_TAG {
+    while data.get(pos) == Some(&ATTRIBUTE_TAG) {
         if depth + 1 > limits.max_nesting_depth {
             return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
         }
@@ -517,7 +514,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// `begin_collection`, so the two cannot diverge on how a value is decoded.
     #[inline(always)]
     pub fn parse(&mut self) -> Result<(RespFrame, usize)> {
-        if self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
+        if self.buf.get(self.pos) == Some(&ATTRIBUTE_TAG) {
             self.pos = skip_leading_attributes(self.buf, self.pos, 0, &self.limits)?;
         }
         let tag = *self.buf.get(self.pos).ok_or_else(|| Error::EOF)?;
@@ -551,7 +548,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         // Leading attributes are rare out-of-band metadata; peek before calling so
         // the common scalar path pays nothing. A partial attribute rewinds to the
         // frame start; a complete run is consumed and stays in the buffer.
-        if self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
+        if self.buf.get(self.pos) == Some(&ATTRIBUTE_TAG) {
             match skip_leading_attributes(self.buf, self.pos, 0, &self.limits) {
                 Ok(at) => self.pos = at,
                 Err(Error::EOF) => {
@@ -623,17 +620,18 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         &mut self,
         stack: &mut Vec<PendingContainer>,
     ) -> Result<Option<RespFrame>> {
-        loop {
-            let remaining = stack
-                .last()
-                .expect("collection loop entered with an empty stack")
-                .remaining;
-
+        // The loop is entered with at least one open collection and returns the
+        // moment the root closes, so neither the empty stack nor the non-container
+        // tag below is reachable. Both are written as a malformed-frame error
+        // rather than an assertion: this runs on the network task, where a panic
+        // takes the client down with every in-flight command and no reconnect,
+        // while an error fails just this frame.
+        while let Some(remaining) = stack.last().map(|open| open.remaining) {
             if remaining == 0 {
                 // Every child of this collection is written. Back-patch its head's
                 // `next` to the tape end (the reader's O(1) sibling skip) and close
                 // the level, crediting the parent — or finish the frame at the root.
-                let done = stack.pop().expect("non-empty stack");
+                let Some(done) = stack.pop() else { break };
                 let next = node_count(self.tape) as u64;
                 patch_node(self.tape, done.head_index, done.tag, next);
                 if let Some(parent) = stack.last_mut() {
@@ -646,7 +644,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     MAP_TAG => RespFrame::Map { tape, root: 0 },
                     SET_TAG => RespFrame::Set { tape, root: 0 },
                     PUSH_TAG => RespFrame::Push { tape, root: 0 },
-                    _ => unreachable!("a non-container tag on the parse stack"),
+                    _ => return Err(Error::Client(ClientError::Unexpected)),
                 }));
             }
 
@@ -662,6 +660,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 Err(e) => return Err(e),
             }
         }
+
+        Err(Error::Client(ClientError::Unexpected))
     }
 
     /// Emits the tape node(s) for the value at `self.pos` and advances past it.
@@ -674,7 +674,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         // Elements rarely carry a leading attribute; peek before paying for the
         // (non-inlinable, recursive) skip call, so the common case is one compare.
         let mut at = self.pos;
-        if at < self.buf.len() && self.buf[at] == ATTRIBUTE_TAG {
+        if self.buf.get(at) == Some(&ATTRIBUTE_TAG) {
             at = skip_leading_attributes(self.buf, at, stack.len(), &self.limits)?;
         }
         let tag = *self.buf.get(at).ok_or_else(|| Error::EOF)?;
@@ -740,7 +740,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             DOUBLE_TAG => {
                 let start = self.pos;
                 self.parse_crlf()?;
-                let val = fast_float2::parse(&self.buf[start..self.pos - 2])
+                let val = fast_float2::parse(slice(self.buf, start..self.pos - 2)?)
                     .map_err(|_| Error::Client(ClientError::CannotParseDouble))?;
                 RespFrame::Double(val)
             }
@@ -749,17 +749,11 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 RespFrame::Null
             }
             BOOL_TAG => {
-                if self.pos + 3 > self.buf.len() {
-                    return Err(Error::EOF);
-                }
-                let b = match self.buf[self.pos] {
-                    b't' => true,
-                    b'f' => false,
+                let b = match slice(self.buf, self.pos..self.pos + 3)? {
+                    [b't', b'\r', b'\n'] => true,
+                    [b'f', b'\r', b'\n'] => false,
                     _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
                 };
-                if &self.buf[self.pos + 1..self.pos + 3] != b"\r\n" {
-                    return Err(Error::Client(ClientError::CannotParseBoolean));
-                }
                 self.pos += 3;
                 RespFrame::Boolean(b)
             }
@@ -774,10 +768,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     check_bulk_len(len, self.limits.max_bulk_length)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
-                    if self.buf.len() < need {
-                        return Err(Error::EOF);
-                    }
-                    if &self.buf[need - 2..need] != b"\r\n" {
+                    if slice(self.buf, need - 2..need)? != b"\r\n" {
                         return Err(Error::Client(ClientError::CannotParseBulkString));
                     }
                     self.pos = need;
@@ -798,10 +789,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     check_bulk_len(len, self.limits.max_bulk_length)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
-                    if self.buf.len() < need {
-                        return Err(Error::EOF);
-                    }
-                    if &self.buf[need - 2..need] != b"\r\n" {
+                    if slice(self.buf, need - 2..need)? != b"\r\n" {
                         return Err(Error::Client(ClientError::CannotParseVerbatimString));
                     }
                     self.pos = need;
@@ -816,10 +804,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 check_bulk_len(len, self.limits.max_bulk_length)?;
                 let start = self.pos;
                 let need = self.pos + len as usize + 2;
-                if self.buf.len() < need {
-                    return Err(Error::EOF);
-                }
-                if &self.buf[need - 2..need] != b"\r\n" {
+                if slice(self.buf, need - 2..need)? != b"\r\n" {
                     return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
                 self.pos = need;
@@ -838,14 +823,11 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         Ok(frame)
     }
 
+    /// Advances past the next `\r\n`. The same scan as [`find_crlf`], which it
+    /// delegates to so the two cannot disagree on what terminates a scalar.
     #[inline]
     fn parse_crlf(&mut self) -> Result<()> {
-        let rem = &self.buf[self.pos..];
-        let i = memchr(b'\r', rem).ok_or_else(|| Error::EOF)?;
-        if i + 1 >= rem.len() || rem[i + 1] != b'\n' {
-            return Err(Error::EOF);
-        }
-        self.pos += i + 2;
+        self.pos = find_crlf(self.buf, self.pos)? + 2;
         Ok(())
     }
 
@@ -858,10 +840,12 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
 }
 
 /// Records that one child of the innermost open collection is fully parsed.
+///
+/// A no-op on an empty stack, which the collection loop never produces: it is
+/// the only caller of `emit_one_child` and always holds at least one open level.
 #[inline]
 fn credit_open_collection(stack: &mut [PendingContainer]) {
-    stack
-        .last_mut()
-        .expect("a child was parsed without an open collection")
-        .remaining -= 1;
+    if let Some(open) = stack.last_mut() {
+        open.remaining -= 1;
+    }
 }

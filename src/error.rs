@@ -140,6 +140,14 @@ pub enum ClientError {
     /// buffer capacity, a zero loop bound. The message names the offending knob.
     #[error("Invalid config: {0}")]
     InvalidConfig(&'static str),
+    /// Raised when the client's own routing state stops agreeing with itself — a
+    /// node index or a pending-request index that no longer addresses anything.
+    /// Unreachable by construction: every such index is produced by scanning the
+    /// very collection it is then used on. It is reported rather than asserted
+    /// because these lookups happen on the network task, where a panic would take
+    /// down every in-flight command and the reconnection loop with them.
+    #[error("inconsistent internal routing state")]
+    InconsistentRoutingState,
     /// Raised if an error occurs in the [`ClusterConfig`](crate::client::ClusterConfig)
     #[error("Cluster misconfiguration")]
     ClusterConfig,

@@ -90,8 +90,15 @@ impl Serialize for CommandArgsMut {
 
         let mut seq = serializer.serialize_seq(Some(self.len()))?;
 
+        // An `ArgLayout` range is recorded as the argument's bytes are appended
+        // to this same buffer, so `get` always yields. Asking for it rather than
+        // indexing turns a builder bug into the error this `Serialize` can
+        // already return, instead of a panic in the caller's thread.
         for arg_layout in &self.args_layout {
-            let arg_bytes = &self.buffer[arg_layout.range()];
+            let arg_bytes = self
+                .buffer
+                .get(arg_layout.range())
+                .ok_or_else(|| S::Error::custom("argument layout is out of its buffer"))?;
             seq.serialize_element(&RawBytes(arg_bytes))?;
         }
 

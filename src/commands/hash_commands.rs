@@ -1,9 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{
-        ArgCounter, FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag,
-    },
+    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -564,9 +562,6 @@ pub trait HashCommands<'a>: Sized {
         expiration: impl Into<Option<SetExpiration>>,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        let mut counter = ArgCounter::default();
-        items.serialize(&mut counter).expect("Arg counting failed");
-
         prepare_command(
             self,
             cmd("HSETEX")
@@ -574,8 +569,8 @@ pub trait HashCommands<'a>: Sized {
                 .arg(condition.into())
                 .arg(expiration.into())
                 .arg("FIELDS")
-                .arg(counter.count / 2)
-                .arg(items),
+                // Field/value pairs: the emitted count is the number of pairs.
+                .arg_with_count_and_step(items, 2),
         )
     }
 

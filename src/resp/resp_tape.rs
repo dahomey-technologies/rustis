@@ -87,8 +87,22 @@ pub(crate) fn is_container_tag(tag: u8) -> bool {
 /// (`< tape.len() / 8`); the tape is produced by the parser, so this holds by
 /// construction for every index reachable from a valid root.
 #[inline(always)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    reason = "invariant: `index` addresses a node this crate wrote. Tape indices \
+              are never read off the wire — they are literal roots (0) or `next` \
+              payloads the parser back-patched from `node_count`. A fallback \
+              would have to invent a node word and corrupt the read silently, \
+              so the invariant is checked by the debug assertion instead."
+)]
 pub(crate) fn read_node(tape: &[u8], index: usize) -> u64 {
     let start = index * TAPE_NODE_SIZE;
+    debug_assert!(
+        start + TAPE_NODE_SIZE <= tape.len(),
+        "tape node {index} is past the end of a {}-byte tape",
+        tape.len()
+    );
     let bytes: [u8; TAPE_NODE_SIZE] = tape[start..start + TAPE_NODE_SIZE]
         .try_into()
         .expect("tape slice shorter than a node");
@@ -112,7 +126,17 @@ pub(crate) fn push_node(tape: &mut BytesMut, tag: u8, payload: u64) -> usize {
 /// Overwrites the payload of an already-emitted node, used to back-patch a
 /// container head's `next` once its whole subtree has been written.
 #[inline(always)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "invariant: `index` was returned by `push_node` for this same tape, \
+              so the node it addresses has already been appended."
+)]
 pub(crate) fn patch_node(tape: &mut BytesMut, index: usize, tag: u8, payload: u64) {
     let start = index * TAPE_NODE_SIZE;
+    debug_assert!(
+        start + TAPE_NODE_SIZE <= tape.len(),
+        "tape node {index} is past the end of a {}-byte tape",
+        tape.len()
+    );
     tape[start..start + TAPE_NODE_SIZE].copy_from_slice(&encode(tag, payload).to_le_bytes());
 }

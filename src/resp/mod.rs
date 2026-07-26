@@ -110,6 +110,11 @@ The different command traits implementations ([`Client`](crate::client::Client),
  serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
 */
+// This module is fed directly by server bytes: every length, cardinality and
+// offset here is attacker-controlled, so an out-of-bounds index is reachable
+// from the wire rather than from a local mistake. Indexing is denied, not
+// warned; see the panic policy in `lib.rs`.
+#![deny(clippy::indexing_slicing)]
 
 pub(crate) use arg_counter::*;
 pub(crate) use arg_serializer::*;

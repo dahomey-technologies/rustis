@@ -4,10 +4,10 @@ use crate::{
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
         FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtGroupBy,
-        FtHybridCombine, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery, FtHybridVsim,
-        FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult,
-        FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions,
-        FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
+        FtHybridCombine, FtHybridFormat, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery,
+        FtHybridVsim, FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer, FtSearchOptions,
+        FtSearchResult, FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions,
+        FtSugGetOptions, FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
         FtWithCursorOptions, HashCommands, JsonCommands, SearchCommands, ServerCommands, SortOrder,
     },
     network::sleep,
@@ -612,6 +612,59 @@ async fn ft_hybrid() -> Result<()> {
 
     // A successful hybrid query returns a non-null reply describing the matches.
     assert!(!matches!(result, Value::Null));
+
+    // Advanced post-processing: fuse the two result sets, group the fused rows by
+    // their `content`, count each group, sort by that count and cap the output —
+    // exercising GROUPBY/REDUCE, the (count-aware) SORTBY, LIMIT and FORMAT.
+    let grouped: Value = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: None,
+            }),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: None,
+                    window: Some(40),
+                })
+                .load(["@content"])
+                .groupby(
+                    FtGroupBy::default()
+                        .property("@content")
+                        .reduce(FtReducer::count().as_name("cnt")),
+                )
+                .sortby("@cnt", SortOrder::Desc)
+                .limit(0, 10)
+                .format(FtHybridFormat::String)
+                .param("vec", &query_vector),
+        )
+        .await?;
+    assert!(!matches!(grouped, Value::Null));
+
+    // Post-combine FILTER on an APPLY-computed field.
+    let filtered: Value = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: None,
+            }),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: None,
+                    window: Some(40),
+                })
+                .load(["@content"])
+                .apply("upper(@content)", "upper_content")
+                .filter("@upper_content != ''")
+                .limit(0, 10)
+                .param("vec", &query_vector),
+        )
+        .await?;
+    assert!(!matches!(filtered, Value::Null));
 
     Ok(())
 }

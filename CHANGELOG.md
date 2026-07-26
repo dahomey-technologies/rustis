@@ -160,12 +160,15 @@ contains breaking changes; read that section before upgrading.
   success. Switching to `ok_or_else` builds an `Error` only when one is actually
   returned, cutting parse-and-deserialize time by roughly 15–30 % across reply
   shapes.
-- The network task got a series of throughput reductions in per-command
+- **The network task was optimized for throughput**, cutting per-command
   overhead: the message and result channels moved to tokio's `mpsc`/`oneshot`,
   `Message` shrank from 2536 to 288 bytes, replies are dispatched straight to the
   waiting caller as they decode rather than after the batch completes, the send
   wave is capped so reading is never starved by writing, and the TCP stream is
-  split without a `BiLock`.
+  split without a `BiLock`. Measured against `0.19.3` on a single connection to a
+  local server: **+65 % ops/s at 64 concurrent tasks, +111 % at 256 and +100 % at
+  1024**, and −15 % wall-time on the latency-bound multiplexer benchmark. Below 32
+  tasks the workload is round-trip-bound and unchanged.
 - Routing work stays on the caller thread and off the network task: key hash
   slots are computed lazily by the caller, `ArgLayout` shrank to 12 bytes, and
   the cluster client indexes `MGET` reordering and shard-key lookups by hash set

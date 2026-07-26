@@ -81,7 +81,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => i as i128,
+                Some(Ok(RespView::Integer(i))) => i as i128,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
@@ -106,7 +106,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => i as u128,
+                Some(Ok(RespView::Integer(i))) => i as u128,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
@@ -131,7 +131,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => i,
+                Some(Ok(RespView::Integer(i))) => i,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
@@ -158,7 +158,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     u64::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -187,7 +187,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     i32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -216,7 +216,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     u32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -245,7 +245,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     i16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -274,7 +274,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     u16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -303,7 +303,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     i8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -332,7 +332,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Array(a) => match a.into_iter().next() {
-                Some(RespView::Integer(i)) => {
+                Some(Ok(RespView::Integer(i))) => {
                     u8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
@@ -595,7 +595,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             fields: &'static [&'static str],
         ) -> Result<bool> {
             if view.len() >= 2 * fields.len() {
-                if let Some(RespView::BulkString(bs)) = view.into_iter().next()
+                if let Some(Ok(RespView::BulkString(bs))) = view.into_iter().next()
                     && fields.iter().any(|f| f.as_bytes() == bs)
                 {
                     Ok(true)
@@ -644,7 +644,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 // Visit a newtype variant, tuple variant, or struct variant
                 // as a map of 1 element
                 let mut iter = view.into_iter();
-                if let (Some(key), Some(val), None) = (iter.next(), iter.next(), iter.next()) {
+                if let (Some(Ok(key)), Some(Ok(val)), None) =
+                    (iter.next(), iter.next(), iter.next())
+                {
                     visitor.visit_enum(EnumAccess::new(key, val))
                 } else {
                     Err(Error::Client(ClientError::CannotParseEnum))
@@ -654,7 +656,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 // Visit a newtype variant, tuple variant, or struct variant
                 // as an array of 2 elements
                 let mut iter = view.into_iter();
-                if let (Some(key), Some(val), None) = (iter.next(), iter.next(), iter.next()) {
+                if let (Some(Ok(key)), Some(Ok(val)), None) =
+                    (iter.next(), iter.next(), iter.next())
+                {
                     visitor.visit_enum(EnumAccess::new(key, val))
                 } else {
                     Err(Error::Client(ClientError::CannotParseEnum))
@@ -844,7 +848,7 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
                     let mut inner_iter = array_view.clone().into_iter();
                     let key_view = inner_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                     return seed.deserialize(RespDeserializer::new(key_view)).map(Some);
                 }
 
@@ -881,10 +885,10 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
                     // rather than unwrapping in the caller's task.
                     let kview = pair_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                     let vview = pair_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
 
                     let key = kseed.deserialize(RespDeserializer::new(kview))?;
                     let value = vseed.deserialize(RespDeserializer::new(vview))?;
@@ -930,7 +934,7 @@ impl<'de> de::SeqAccess<'de> for SeqAccess<'de> {
         T: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(view) => seed.deserialize(RespDeserializer::new(view)).map(Some),
+            Some(view) => seed.deserialize(RespDeserializer::new(view?)).map(Some),
             None => Ok(None),
         }
     }
@@ -950,13 +954,14 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
     {
         match self.iter.next() {
             Some(view) => {
+                let view = view?;
                 if let RespView::Array(array_view) = &view
                     && array_view.len() == 2
                 {
                     let mut inner_iter = array_view.clone().into_iter();
                     let key_view = inner_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                     return seed.deserialize(RespDeserializer::new(key_view)).map(Some);
                 }
 
@@ -971,7 +976,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
         V: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(view) => seed.deserialize(RespDeserializer::new(view)),
+            Some(view) => seed.deserialize(RespDeserializer::new(view?)),
             None => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }
@@ -983,6 +988,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
     {
         match self.iter.next() {
             Some(view) => {
+                let view = view?;
                 if let RespView::Array(ref array_view) = view
                     && array_view.len() == 2
                 {
@@ -991,10 +997,10 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
                     // guarantee the elements re-parse, so error instead of unwrap.
                     let kview = pair_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                     let vview = pair_iter
                         .next()
-                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                        .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
 
                     let key = kseed.deserialize(RespDeserializer::new(kview))?;
                     let value = vseed.deserialize(RespDeserializer::new(vview))?;
@@ -1005,7 +1011,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
                 let vview = self
                     .iter
                     .next()
-                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                 let value = vseed.deserialize(RespDeserializer::new(vview))?;
 
                 Ok(Some((key, value)))
@@ -1039,7 +1045,7 @@ impl<'de> de::MapAccess<'de> for MapAccess<'de> {
         K: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(view) => seed.deserialize(RespDeserializer::new(view)).map(Some),
+            Some(view) => seed.deserialize(RespDeserializer::new(view?)).map(Some),
             None => Ok(None),
         }
     }
@@ -1049,7 +1055,7 @@ impl<'de> de::MapAccess<'de> for MapAccess<'de> {
         V: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(view) => seed.deserialize(RespDeserializer::new(view)),
+            Some(view) => seed.deserialize(RespDeserializer::new(view?)),
             None => Err(Error::Client(ClientError::Unexpected)),
         }
     }
@@ -1116,7 +1122,7 @@ impl<'de, 'a> de::SeqAccess<'de> for RespTuple2Deserializer<'a, 'de> {
         T: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(view) => seed.deserialize(RespDeserializer::new(view)).map(Some),
+            Some(view) => seed.deserialize(RespDeserializer::new(view?)).map(Some),
             None => Ok(None),
         }
     }

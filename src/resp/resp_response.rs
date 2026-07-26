@@ -363,7 +363,7 @@ impl<'a> RespArrayView<'a> {
 }
 
 impl<'a> IntoIterator for RespArrayView<'a> {
-    type Item = RespView<'a>;
+    type Item = Result<RespView<'a>>;
     type IntoIter = RespArrayIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -404,7 +404,7 @@ impl<'a> RespArrayIter<'a> {
 }
 
 impl<'a> Iterator for RespArrayIter<'a> {
-    type Item = RespView<'a>;
+    type Item = Result<RespView<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
@@ -418,18 +418,25 @@ impl<'a> Iterator for RespArrayIter<'a> {
             let root = self.cursor;
             self.cursor = node_payload(node) as usize;
             self.remaining -= 1;
-            Some(container_view(tag, self.buf, self.tape, root))
+            Some(Ok(container_view(tag, self.buf, self.tape, root)))
         } else {
             let off = node_payload(node) as usize;
             // A `None` here means the already-validated tape is inconsistent
-            // (effectively unreachable); iteration stops silently rather than
-            // surfacing the error. Yielding `Result` items would fix that but is a
-            // breaking change to this public iterator's item type — deferred to a
-            // release train.
-            let view = read_scalar_view(tag, self.buf, off)?;
-            self.cursor += 1;
-            self.remaining -= 1;
-            Some(view)
+            // (effectively unreachable). Surface it as an error and end the
+            // iterator instead of silently truncating the array: the consumer
+            // must be able to tell "the array ended" from "an element could not
+            // be read".
+            match read_scalar_view(tag, self.buf, off) {
+                Some(view) => {
+                    self.cursor += 1;
+                    self.remaining -= 1;
+                    Some(Ok(view))
+                }
+                None => {
+                    self.remaining = 0;
+                    Some(Err(Error::Client(ClientError::Unexpected)))
+                }
+            }
         }
     }
 }
@@ -456,7 +463,7 @@ impl RespResponseIter {
 }
 
 impl Iterator for RespResponseIter {
-    type Item = RespResponse;
+    type Item = Result<RespResponse>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
@@ -479,16 +486,22 @@ impl Iterator for RespResponseIter {
                 PUSH_TAG => RespFrame::Push { tape, root },
                 _ => unreachable!("is_container_tag matched a non-container tag"),
             };
-            Some(RespResponse::Frame(self.buf.clone(), frame))
+            Some(Ok(RespResponse::Frame(self.buf.clone(), frame)))
         } else {
             let off = node_payload(node) as usize;
-            // Same silent-stop-on-inconsistent-tape tradeoff as `RespArrayIter`;
-            // upgrading the item type to `Result` is a breaking change deferred to
-            // a release train.
-            let frame = read_scalar_frame(tag, self.buf.as_ref(), off)?;
-            self.cursor += 1;
-            self.remaining -= 1;
-            Some(RespResponse::Frame(self.buf.clone(), frame))
+            // Same surface-and-stop handling as `RespArrayIter`: an inconsistent
+            // tape yields an error, not a silent truncation.
+            match read_scalar_frame(tag, self.buf.as_ref(), off) {
+                Some(frame) => {
+                    self.cursor += 1;
+                    self.remaining -= 1;
+                    Some(Ok(RespResponse::Frame(self.buf.clone(), frame)))
+                }
+                None => {
+                    self.remaining = 0;
+                    Some(Err(Error::Client(ClientError::Unexpected)))
+                }
+            }
         }
     }
 }

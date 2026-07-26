@@ -614,6 +614,7 @@ async fn no_auto_resubscribe() -> Result<()> {
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
 async fn concurrent_subscribe() -> Result<()> {
     let pub_sub_client1 = get_test_client().await?;
@@ -625,7 +626,7 @@ async fn concurrent_subscribe() -> Result<()> {
 
     regular_client.lpush("key", ["value1", "value2"]).await?;
 
-    let results = tokio::join!(
+    let results = futures_util::join!(
         pub_sub_client1.subscribe("mychannel1"),
         pub_sub_client2.subscribe("mychannel2"),
         regular_client.lpop("key", 2).into_future(),

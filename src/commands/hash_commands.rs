@@ -686,6 +686,7 @@ impl<'a> HScanOptions<'a> {
 
 /// Result for the [`hscan`](HashCommands::hscan) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct HScanResult<F: Response + DeserializeOwned, V: Response + DeserializeOwned> {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]
@@ -695,6 +696,7 @@ pub struct HScanResult<F: Response + DeserializeOwned, V: Response + Deserialize
 /// Condition option for the [`hsetex`](HashCommands::hsetex) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum HSetExCondition {
     /// Only set the fields if none of them already exist.
     FNX,

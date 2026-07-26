@@ -496,6 +496,7 @@ pub enum ClusterBumpEpochResult {
 /// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClusterFailoverOption {
     /// FORCE option: manual failover when the master is down
     Force,
@@ -517,6 +518,7 @@ pub enum ClusterState {
 
 /// Result for the [`cluster_info`](ClusterCommands::cluster_info) command
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct ClusterInfo {
     /// State is ok if the node is able to receive queries.
     /// fail if there is at least one hash slot which is unbound (no node associated),
@@ -646,6 +648,7 @@ pub enum ClusterLinkDirection {
 /// Result for the [`cluster_links`](ClusterCommands::cluster_links) command
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct ClusterLinkInfo {
     /// This link is established by the local node to the peer,
     /// or accepted by the local node from the peer.
@@ -668,6 +671,7 @@ pub struct ClusterLinkInfo {
 /// Type of [`cluster reset`](ClusterCommands::cluster_reset)
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClusterResetType {
     Hard,
     Soft,
@@ -676,6 +680,7 @@ pub enum ClusterResetType {
 /// Subcommand for the [`cluster_setslot`](ClusterCommands::cluster_setslot) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClusterSetSlotSubCommand<'a> {
     /// Set a hash slot in importing state.
     Importing(&'a str),
@@ -688,6 +693,7 @@ pub enum ClusterSetSlotSubCommand<'a> {
 }
 
 /// Slot selection for the [`cluster_slot_stats`](ClusterCommands::cluster_slot_stats) command.
+#[non_exhaustive]
 pub enum ClusterSlotStatsFilter {
     /// Limit the results to an inclusive range of slots, sorted by slot number.
     SlotsRange { start: u16, end: u16 },
@@ -703,6 +709,7 @@ pub enum ClusterSlotStatsFilter {
 /// Metric to sort by in [`ClusterSlotStatsFilter::OrderBy`].
 #[derive(Serialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+#[non_exhaustive]
 pub enum ClusterSlotStatMetric {
     /// Number of keys stored in the slot.
     KeyCount,
@@ -720,6 +727,7 @@ pub enum ClusterSlotStatMetric {
 /// and [`cluster_migration_status`](ClusterCommands::cluster_migration_status) commands.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClusterMigrationTarget<'a> {
     /// A single migration task, by id.
     Id(&'a str),
@@ -729,6 +737,7 @@ pub enum ClusterMigrationTarget<'a> {
 
 /// Result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct ClusterShardResult {
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]
     pub slots: Vec<(u16, u16)>,
@@ -738,6 +747,7 @@ pub struct ClusterShardResult {
 /// Cluster node result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct ClusterNodeResult {
     /// The unique node id for this particular node.
     pub id: String,
@@ -783,6 +793,7 @@ pub enum ClusterHealthStatus {
 
 /// Result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct LegacyClusterShardResult {
     pub slot: (u16, u16),
     pub nodes: Vec<LegacyClusterNodeResult>,
@@ -832,6 +843,7 @@ impl<'de> Deserialize<'de> for LegacyClusterShardResult {
 
 /// Cluster node result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct LegacyClusterNodeResult {
     /// The node ID
     pub id: String,

@@ -154,6 +154,7 @@ pub trait GeoCommands<'a>: Sized {
 /// Condition for the [`geoadd`](GeoCommands::geoadd) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum GeoAddCondition {
     /// Don't update already existing elements. Always add new elements.
     NX,
@@ -163,6 +164,7 @@ pub enum GeoAddCondition {
 
 /// Distance Unit
 #[derive(Serialize)]
+#[non_exhaustive]
 pub enum GeoUnit {
     #[serde(rename = "M")]
     Meters,
@@ -177,6 +179,7 @@ pub enum GeoUnit {
 /// The query's center point is provided by one of these mandatory options:
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
+#[non_exhaustive]
 pub enum GeoSearchFrom<'a> {
     /// Use the position of the given existing `member` in the sorted set.
     FromMember(&'a str),
@@ -197,6 +200,7 @@ impl<'a> GeoSearchFrom<'a> {
 /// The query's shape is provided by one of these mandatory options:
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
+#[non_exhaustive]
 pub enum GeoSearchBy {
     /// Search inside circular area according to given `radius` in the specified `unit`.
     ByRadius(f64, GeoUnit),
@@ -218,6 +222,7 @@ impl GeoSearchBy {
 /// To sort them, use one of the following two options:
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum GeoSearchOrder {
     /// Sort returned items from the nearest to the farthest, relative to the center point.
     Asc,
@@ -290,6 +295,7 @@ impl GeoSearchOptions {
 
 /// Result of the [`geosearch`](GeoCommands::geosearch) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct GeoSearchResult<R: Response> {
     /// The matched member.
     pub member: R,

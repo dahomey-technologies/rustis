@@ -36,6 +36,7 @@ const DEFAULT_MAX_DISCOVERY_ROUNDS: usize = 10;
 /// Both buffers deliberately share one shrink policy — they grow for the same
 /// reason (one oversized reply) and should reclaim on the same terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BufferConfig {
     /// Initial capacity of the read framing buffer, and the target both the read
     /// and write buffers are shrunk back to once they have grown oversized.
@@ -117,6 +118,7 @@ impl Default for BufferConfig {
 /// [`ClientError`](crate::ClientError) rather than being reported as a truncated
 /// read, so the streaming decoder never waits for bytes that will never come.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RespLimits {
     /// Maximum collection-nesting depth accepted before a frame is rejected with
     /// [`MaxNestingDepthExceeded`](crate::ClientError::MaxNestingDepthExceeded).
@@ -205,6 +207,7 @@ type Uri<'a> = (
 /// Configuration options for a [`client`](crate::client::Client)
 /// or a [`pooled client`](crate::client::PooledClientManager)
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct Config {
     /// Connection server configuration (standalone, sentinel, or cluster)
     pub server: ServerConfig,
@@ -942,6 +945,7 @@ impl Display for Config {
 
 /// Configuration for connecting to a Redis server
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum ServerConfig {
     /// Configuration for connecting to a standalone server (no master-replica, no cluster)
     Standalone {
@@ -967,6 +971,7 @@ impl Default for ServerConfig {
 
 /// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct SentinelConfig {
     /// An array of `(host, port)` tuples for each known sentinel instance.
     pub instances: Vec<(String, u16)>,
@@ -1024,6 +1029,7 @@ impl Default for SentinelConfig {
 
 /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
     pub nodes: Vec<(String, u16)>,
@@ -1034,6 +1040,7 @@ pub struct ClusterConfig {
 /// See [rustls::client::ClientConfig](https://docs.rs/rustls/latest/rustls/client/struct.ClientConfig.html) documentation
 #[cfg(feature = "rustls")]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TlsConfig {
     pub rustls_config: Arc<rustls::ClientConfig>,
 }
@@ -1058,6 +1065,7 @@ impl Default for TlsConfig {
 /// See [TlsConnectorBuilder](https://docs.rs/tokio-native-tls/latest/tokio_native_tls/native_tls/struct.TlsConnectorBuilder.html) documentation
 #[cfg(feature = "native-tls")]
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct TlsConfig {
     identity: Option<Identity>,
     root_certificates: Option<Vec<Certificate>>,
@@ -1220,6 +1228,7 @@ impl IntoConfig for Url {
 /// The type of reconnection policy to use. This will apply to every connection used by the client.
 /// This code has been mostly inpisred by [fred ReconnectPolicy](https://docs.rs/fred/latest/fred/types/enum.ReconnectPolicy.html)
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum ReconnectionConfig {
     /// Wait a constant amount of time between reconnection attempts, in ms.
     Constant {

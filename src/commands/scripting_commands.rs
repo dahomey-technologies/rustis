@@ -376,6 +376,7 @@ pub trait ScriptingCommands<'a>: Sized {
 /// Policy option for the [`function_restore`](ScriptingCommands::function_restore) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FunctionRestorePolicy {
     /// Appends the restored libraries to the existing libraries and aborts on collision.
     /// This is the default policy.
@@ -390,6 +391,7 @@ pub enum FunctionRestorePolicy {
 
 /// Result for the [`function_list`](ScriptingCommands::function_list) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct LibraryInfo {
     /// the name of the library.
     pub library_name: String,
@@ -404,6 +406,7 @@ pub struct LibraryInfo {
 
 /// Sub-result for the [`function_list`](ScriptingCommands::function_list) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FunctionInfo {
     /// the name of the function.
     pub name: String,
@@ -415,6 +418,7 @@ pub struct FunctionInfo {
 
 /// Result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FunctionStats {
     /// information about the running script. If there's no in-flight function, the server replies with `None`.
     pub running_script: Option<RunningScript>,
@@ -425,6 +429,7 @@ pub struct FunctionStats {
 
 /// Sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct RunningScript {
     /// the name of the function.
     pub name: String,
@@ -436,6 +441,7 @@ pub struct RunningScript {
 
 /// sub-result for the [`function_stats`](ScriptingCommands::function_stats) command.
 #[derive(Debug, Default, Deserialize)]
+#[non_exhaustive]
 pub struct EngineStats {
     /// Number of libraries of functions
     pub libraries_count: usize,
@@ -446,6 +452,7 @@ pub struct EngineStats {
 /// Options for the [`script_debug`](ScriptingCommands::script_debug) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ScriptDebugMode {
     /// Enable non-blocking asynchronous debugging of Lua scripts (changes are discarded).
     Yes,

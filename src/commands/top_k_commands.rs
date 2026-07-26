@@ -165,6 +165,7 @@ pub trait TopKCommands<'a>: Sized {
 
 /// Result for the [`topk_info`](TopKCommands::topk_info) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct TopKInfoResult {
     /// The number of required items
     pub k: usize,
@@ -180,6 +181,7 @@ pub struct TopKInfoResult {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct TopKListWithCountResult<R: Response> {
     pub items: Vec<(R, usize)>,
 }

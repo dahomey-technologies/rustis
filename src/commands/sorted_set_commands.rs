@@ -730,6 +730,7 @@ pub trait SortedSetCommands<'a>: Sized {
 /// Condition option for the [`zadd`](SortedSetCommands::zadd) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ZAddCondition {
     /// Only update elements that already exist. Don't add new elements.
     NX,
@@ -740,6 +741,7 @@ pub enum ZAddCondition {
 /// Comparison option for the [`zadd`](SortedSetCommands::zadd) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ZAddComparison {
     /// Only update existing elements if the new score is greater than the current score.
     ///
@@ -754,6 +756,7 @@ pub enum ZAddComparison {
 /// sort by option of the [`zrange`](SortedSetCommands::zrange) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ZRangeSortBy {
     /// When the `ByScore` option is provided, the command behaves like `ZRANGEBYSCORE` and returns
     /// the range of elements from the sorted set having scores equal or between `start` and `stop`.
@@ -772,6 +775,7 @@ pub enum ZRangeSortBy {
 /// [zunionstore](SortedSetCommands::zunionstore)
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ZAggregate {
     /// The score of an element is summed across the inputs where it exists.
     Sum,
@@ -784,6 +788,7 @@ pub enum ZAggregate {
 /// Where option of the [`zmpop`](SortedSetCommands::zmpop) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ZWhere {
     /// When the MIN modifier is used, the elements popped are those
     /// with the lowest scores from the first non-empty sorted set.
@@ -892,6 +897,7 @@ impl<'a> ZScanOptions<'a> {
 
 /// Result for the [`zscan`](SortedSetCommands::zscan) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct ZScanResult<R: Response + DeserializeOwned> {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]

@@ -707,6 +707,7 @@ pub trait StringCommands<'a>: Sized {
 /// Options for the [`getex`](StringCommands::getex) and the [`hgetex`](crate::commands::HashCommands::hgetex) commands
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum GetExOptions {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -722,6 +723,7 @@ pub enum GetExOptions {
 
 /// Part of the result for the [`lcs`](StringCommands::lcs) command
 #[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LcsMatch(pub (usize, usize), pub (usize, usize), pub Option<usize>);
 
 impl<'de> Deserialize<'de> for LcsMatch {
@@ -762,6 +764,7 @@ impl<'de> Deserialize<'de> for LcsMatch {
 
 /// Result for the [`lcs`](StringCommands::lcs) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,
     pub len: usize,
@@ -770,6 +773,7 @@ pub struct LcsResult {
 /// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](crate::commands::HashCommands::hsetex) commands
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum SetExpiration {
     /// Set the specified expire time, in seconds.
     Ex(u64),
@@ -790,6 +794,7 @@ pub enum SetExpiration {
 /// does not accept.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum DelexCondition<'a> {
     /// Delete only if the current value is equal to the provided value.
     IFEQ(&'a str),
@@ -804,6 +809,7 @@ pub enum DelexCondition<'a> {
 /// Condition option for the [`set_with_options`](StringCommands::set_with_options) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum SetCondition<'a> {
     /// Only set the key if it does not already exist.
     NX,

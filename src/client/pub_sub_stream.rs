@@ -20,6 +20,7 @@ use std::{
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct PubSubMessage {
     pub pattern: Vec<u8>,
     pub channel: Vec<u8>,

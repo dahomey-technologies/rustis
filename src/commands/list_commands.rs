@@ -320,6 +320,7 @@ pub trait ListCommands<'a>: Sized {
 /// Where option for the [`linsert`](ListCommands::linsert) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum LInsertWhere {
     Before,
     After,
@@ -328,6 +329,7 @@ pub enum LInsertWhere {
 /// Where option for the [`lmove`](ListCommands::lmove) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum LMoveWhere {
     Left,
     Right,

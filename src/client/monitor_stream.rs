@@ -82,6 +82,7 @@ impl Drop for MonitorStream {
 
 /// Result for the [`monitor`](crate::commands::BlockingCommands::monitor) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct MonitoredCommandInfo {
     pub unix_timestamp_millis: f64,
     pub database: usize,

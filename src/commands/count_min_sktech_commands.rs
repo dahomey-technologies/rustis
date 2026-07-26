@@ -150,6 +150,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
 
 /// Result for the [`cms_info`](CountMinSketchCommands::cms_info) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct CmsInfoResult {
     /// Width of the sketch
     pub width: usize,

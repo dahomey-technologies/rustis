@@ -649,6 +649,7 @@ impl<'a> TsAddOptions<'a> {
 /// When not specified, the option is set to `Compressed`.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum TsEncoding {
     /// applies compression to the series samples.
     Compressed,
@@ -953,6 +954,7 @@ impl TsGetOptions {
 /// Result for the [`ts_info`](TimeSeriesCommands::ts_info) command.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct TsInfoResult {
     /// key name
     pub key_self_name: String,
@@ -1004,6 +1006,7 @@ pub struct TsInfoResult {
 /// Additional debug result for the [`ts_info`](TimeSeriesCommands::ts_info) command.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct TsInfoChunkResult {
     /// First timestamp present in the chunk
     pub start_timestamp: i64,
@@ -1022,6 +1025,7 @@ pub struct TsInfoChunkResult {
 /// information about the [`compaction rules`](https://redis.io/commands/ts.createrule/)
 /// of a time series collection, in the context of the [`ts_info`](TimeSeriesCommands::ts_info) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct TsCompactionRule {
     /// The compaction key
     pub compaction_key: String,
@@ -1153,6 +1157,7 @@ impl<'a> TsMGetOptions<'a> {
 
 /// Result for the [`ts_mget`](TimeSeriesCommands::ts_mget) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct TsSample {
     /// Label-value pairs
     ///
@@ -1329,6 +1334,7 @@ impl<'a> TsMRangeOptions<'a> {
 /// Result for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) and
 /// [`ts_mrevrange`](TimeSeriesCommands::ts_mrevrange) commands.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct TsRangeSample {
     /// Label-value pairs
     ///
@@ -1619,6 +1625,7 @@ impl<'a> TsRangeOptions<'a> {
 }
 
 /// Timeseries Timestamp
+#[non_exhaustive]
 pub enum TsTimestamp {
     /// User specified timestamp
     Value(u64),

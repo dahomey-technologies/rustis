@@ -16,6 +16,7 @@ use thiserror::Error;
 /// Gives a reason to retry sending a command to the Redis Server
 #[doc(hidden)]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RetryReason {
     /// Received an ASK error from the Redis Server
     Ask {
@@ -31,6 +32,7 @@ pub enum RetryReason {
 
 /// Errors issued by the client
 #[derive(Debug, Error, Clone)]
+#[non_exhaustive]
 pub enum ClientError {
     /// Raised when an invalid RESP tag is encountered
     #[error("protocol: invalid tag")]
@@ -187,6 +189,7 @@ pub enum ClientError {
 
 /// All error kinds
 #[derive(Debug, Error, Clone)]
+#[non_exhaustive]
 pub enum Error {
     /// Raised if an error occurs within the driver
     #[error("client error: {0}")]
@@ -316,6 +319,7 @@ impl serde::ser::Error for Error {
 
 /// Redis server error kind
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RedisErrorKind {
     Ask {
         hash_slot: u16,
@@ -457,6 +461,7 @@ impl Display for RedisErrorKind {
 
 /// Error issued by the Redis server
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
+#[non_exhaustive]
 pub struct RedisError {
     pub kind: RedisErrorKind,
     pub description: String,

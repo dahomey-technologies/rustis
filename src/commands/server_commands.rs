@@ -1222,6 +1222,7 @@ pub trait ServerCommands<'a>: Sized {
 /// Database flushing mode
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
+#[non_exhaustive]
 pub enum FlushingMode {
     /// Flushes the database(s) asynchronously
     Async,
@@ -1272,6 +1273,7 @@ impl AclGenPassOptions {
 /// Options for the [`acl_log`](ServerCommands::acl_log) command
 #[derive(Default, Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
+#[non_exhaustive]
 pub struct AclLogOptions {
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     pub count: Option<u32>,
@@ -1327,6 +1329,7 @@ impl BgsaveOptions {
 
 /// Command info result for the [`command`](ServerCommands::command) command.
 #[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
 pub struct CommandInfo {
     /// This is the command's name in lowercase.
     pub name: String,
@@ -1527,6 +1530,7 @@ impl FromStr for ResponsePolicy {
 
 /// Key specifications of a command for the [`command`](ServerCommands::command) command.
 #[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
 pub struct KeySpecification {
     pub begin_search: BeginSearch,
     pub find_keys: FindKeys,
@@ -1598,6 +1602,7 @@ pub enum FindKeys {
 
 /// Command doc result for the [`command_docs`](ServerCommands::command_docs) command
 #[derive(Debug, Default, Deserialize)]
+#[non_exhaustive]
 pub struct CommandDoc {
     /// short command description.
     pub summary: String,
@@ -1636,6 +1641,7 @@ pub enum CommandDocFlag {
 
 /// Sub-result for the [`command_docs`](ServerCommands::command_docs) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct HistoricalNote {
     pub version: String,
     pub description: String,
@@ -1643,6 +1649,7 @@ pub struct HistoricalNote {
 
 /// [`command argument`](https://redis.io/docs/reference/command-arguments/)
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct CommandArgument {
     ///  the argument's name, always present.
     pub name: String,
@@ -1811,6 +1818,7 @@ impl<'a> FailOverOptions<'a> {
 /// Section for the [`info`](ServerCommands::info) command.
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum InfoSection {
     Server,
     Clients,
@@ -1834,6 +1842,7 @@ pub enum InfoSection {
 /// & [`latency_history`](ServerCommands::latency_history) commands.
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum LatencyHistoryEvent {
     ActiveDefragCycle,
     AofFsyncAlways,
@@ -1855,6 +1864,7 @@ pub enum LatencyHistoryEvent {
 
 /// Command Histogram for the [`latency_histogram`](ServerCommands::latency_histogram) commands.
 #[derive(Default, Deserialize)]
+#[non_exhaustive]
 pub struct CommandHistogram {
     /// The total calls for that command.
     pub calls: usize,
@@ -1895,6 +1905,7 @@ impl LolWutOptions {
 
 /// Result for the [`memory_stats`](ServerCommands::memory_stats) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct MemoryStats {
     /// Peak memory consumed by Redis in bytes
     /// (see [`INFO`](https://redis.io/commands/info)'s used_memory_peak)
@@ -2032,6 +2043,7 @@ pub struct MemoryStats {
 
 /// Sub-result for the [`memory_stats`](ServerCommands::memory_stats) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct DatabaseOverhead {
     pub overhead_hashtable_main: usize,
     pub overhead_hashtable_expires: usize,
@@ -2060,6 +2072,7 @@ impl MemoryUsageOptions {
 
 /// Module information result for the [`module_list`](ServerCommands::module_list) command.
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct ModuleInfo {
     /// Name of the module
     pub name: String,
@@ -2071,6 +2084,7 @@ pub struct ModuleInfo {
 /// options for the [`replicaof`](ServerCommands::replicaof) command.
 #[derive(Serialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum ReplicaOfOptions<'a> {
     Master((&'a str, u16)),
     NoOne(&'static str, &'static str),
@@ -2201,6 +2215,7 @@ impl<'de> Deserialize<'de> for RoleResult {
 ///
 /// returned by the [`role`](ServerCommands::role) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct ReplicaInfo {
     /// the replica IP
     pub ip: String,
@@ -2309,6 +2324,7 @@ impl SlowLogGetOptions {
 
 /// Result [`slowlog_get`](ServerCommands::slowlog_get) for the command.
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct SlowLogEntry {
     /// A unique progressive identifier for every slow log entry.
     pub id: i64,

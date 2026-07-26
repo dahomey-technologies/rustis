@@ -192,6 +192,7 @@ impl BitRange {
 /// Unit of a [`range`](BitRange), bit or byte
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum BitUnit {
     Byte,
     Bit,
@@ -200,6 +201,7 @@ pub enum BitUnit {
 /// Sub-command for the [`bitfield`](BitmapCommands::bitfield) command
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
+#[non_exhaustive]
 pub enum BitFieldSubCommand<'a> {
     Get((&'a str, &'a str)),
     Set((&'a str, &'a str, u64)),
@@ -236,6 +238,7 @@ impl<'a> BitFieldSubCommand<'a> {
 /// Option for the [`BitFieldSubCommand`](BitFieldSubCommand) sub-command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum BitFieldOverflow {
     Wrap,
     Sat,
@@ -245,6 +248,7 @@ pub enum BitFieldOverflow {
 /// Bit operation for the [`bitop`](BitmapCommands::bitop) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum BitOperation {
     And,
     Or,

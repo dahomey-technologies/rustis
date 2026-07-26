@@ -265,8 +265,7 @@ impl<'a> Serializer for &'a mut FastPathRespSerializer<'a> {
 
     #[inline(always)]
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        const BOOL_VALS: [&[u8]; 2] = [b"0", b"1"];
-        Ok(self.write_arg(BOOL_VALS[v as usize]))
+        Ok(self.write_arg(if v { b"1" } else { b"0" }))
     }
 
     #[inline(always)]
@@ -435,6 +434,14 @@ impl<'a> Serializer for &'a mut FastPathRespSerializer<'a> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing,
+        reason = "test code: a panic is how a test reports failure"
+    )]
     use super::FastPathCommandBuilder;
 
     #[test]

@@ -1350,6 +1350,11 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod parse_tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::panic,
+        reason = "test code: a panic is how a test reports failure"
+    )]
     use super::*;
 
     fn standalone(uri: &str) -> (String, u16) {

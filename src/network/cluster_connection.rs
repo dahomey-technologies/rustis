@@ -44,6 +44,10 @@ pub(crate) struct ClusterTestHook {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "test-support code: a panic is how a test reports failure"
+)]
 impl ClusterTestHook {
     pub fn new() -> Self {
         Self::default()
@@ -465,7 +469,13 @@ impl ClusterConnection {
         let mut last_node_index: usize = usize::MAX;
         let mut last_should_ask = false;
 
-        let mut node = &mut self.nodes[0];
+        // Placeholder, overwritten on the first iteration: `last_node_index`
+        // starts at a value no real index can equal. A node-less connection
+        // cannot serve the non-empty work list above.
+        let mut node = self
+            .nodes
+            .first_mut()
+            .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
 
         for (node_index, slot, key, should_ask) in node_slot_keys_ask {
             if slot != last_slot {
@@ -490,7 +500,10 @@ impl ClusterConnection {
             current_slot_keys.push(key);
 
             if node_index != last_node_index {
-                node = &mut self.nodes[node_index];
+                node = self
+                    .nodes
+                    .get_mut(node_index)
+                    .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
                 last_node_index = node_index;
             }
         }
@@ -562,7 +575,10 @@ impl ClusterConnection {
         node_idx: usize,
         should_ask: bool,
     ) -> Result<()> {
-        let node = &mut self.nodes[node_idx];
+        let node = self
+            .nodes
+            .get_mut(node_idx)
+            .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
         if should_ask {
             node.connection.asking().await?;
         }
@@ -688,7 +704,12 @@ impl ClusterConnection {
                 return result;
             }
 
-            let node_id = &self.nodes[node_idx].id;
+            // `select_all` reports the index of the future it resolved, so this
+            // always addresses a node we are holding.
+            let Some(node) = self.nodes.get(node_idx) else {
+                return Some(Err(Error::Client(ClientError::InconsistentRoutingState)));
+            };
+            let node_id = &node.id;
 
             let Some((req_idx, sub_req_idx)) =
                 self.pending_requests
@@ -705,16 +726,14 @@ impl ClusterConnection {
                 log::error!(
                     "[{}] Received unexpected message: {result:?} from {}",
                     self.tag,
-                    self.nodes[node_idx].connection.tag()
+                    node.connection.tag()
                 );
                 return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
             };
 
-            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
-            trace!(
-                "[{}] Did store sub-request result into {:?}",
-                self.tag, self.pending_requests[req_idx]
-            );
+            if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
+                return Some(Err(Error::Client(ClientError::InconsistentRoutingState)));
+            }
         }
     }
 
@@ -770,7 +789,12 @@ impl ClusterConnection {
                 return Poll::Ready(result);
             }
 
-            let node = &self.nodes[node_idx];
+            // The index comes from the `enumerate` over `self.nodes` just above.
+            let Some(node) = self.nodes.get(node_idx) else {
+                return Poll::Ready(Some(Err(Error::Client(
+                    ClientError::InconsistentRoutingState,
+                ))));
+            };
             let node_id = &node.id;
 
             let Some((req_idx, sub_req_idx)) =
@@ -794,12 +818,40 @@ impl ClusterConnection {
                 ))));
             };
 
-            self.pending_requests[req_idx].sub_requests[sub_req_idx].result = Some(result);
-            trace!(
-                "[{}] Did store sub-request result into {:?}",
-                self.tag, self.pending_requests[req_idx]
-            );
+            if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
+                return Poll::Ready(Some(Err(Error::Client(
+                    ClientError::InconsistentRoutingState,
+                ))));
+            }
         }
+    }
+
+    /// Files a sub-request result at the indices the caller just located by
+    /// scanning `pending_requests`, returning `false` if either index no longer
+    /// addresses anything.
+    ///
+    /// The scan and the store see the same queue with no mutation in between, so
+    /// `false` is unreachable; the caller turns it into an error for that one
+    /// command rather than letting it panic the network task.
+    fn store_sub_request_result(
+        &mut self,
+        req_idx: usize,
+        sub_req_idx: usize,
+        result: Option<Result<RespResponse>>,
+    ) -> bool {
+        let Some(request) = self.pending_requests.get_mut(req_idx) else {
+            return false;
+        };
+        let Some(sub_request) = request.sub_requests.get_mut(sub_req_idx) else {
+            return false;
+        };
+        sub_request.result = Some(result);
+        trace!(
+            "[{}] Did store sub-request result into {:?}",
+            self.tag,
+            self.pending_requests.get(req_idx)
+        );
+        true
     }
 
     /// Collects the ASK/MOVED redirections carried by a fulfilled request,
@@ -862,11 +914,20 @@ impl ClusterConnection {
                 return false;
             };
 
+            // Resolve the sub-request index here too, for the same reason: the
+            // loop below must not be able to skip one half-way through.
+            if request_info.sub_requests.get(*idx).is_none() {
+                return false;
+            }
+
             targets.push((*idx, node.id.clone(), should_ask));
         }
 
         for (idx, node_id, should_ask) in targets {
-            let sub_request = &mut request_info.sub_requests[idx];
+            // Bounds-checked in the resolve loop above.
+            let Some(sub_request) = request_info.sub_requests.get_mut(idx) else {
+                continue;
+            };
             let shard_command = prepare_command_for_shard(&command, &sub_request.keys);
 
             sub_request.node_id = node_id.clone();
@@ -912,7 +973,10 @@ impl ClusterConnection {
                 continue;
             };
 
-            let node = &mut self.nodes[node_index];
+            let node = self
+                .nodes
+                .get_mut(node_index)
+                .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
             if redirection.should_ask {
                 node.connection.asking().await?;
             }
@@ -1440,8 +1504,13 @@ impl ClusterConnection {
 
         // add missing nodes and connect them
         for mut shard_info in shard_info_list {
-            // ensure that the first node is master
-            if shard_info.nodes[0].role != "master" {
+            // ensure that the first node is master. A shard the server describes
+            // with no node at all is a malformed topology, not something to index.
+            let first_is_master = match shard_info.nodes.first() {
+                Some(first) => first.role == "master",
+                None => return Err(Error::Client(ClientError::ClusterConfig)),
+            };
+            if !first_is_master {
                 let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master")
                 else {
                     return Err(Error::Client(ClientError::ClusterConfig));
@@ -1528,13 +1597,13 @@ impl ClusterConnection {
     #[inline]
     fn get_slot_range_by_slot(&self, slot: u16) -> Option<&SlotRange> {
         self.get_slot_range_index(slot)
-            .map(|idx| &self.slot_ranges[idx])
+            .and_then(|idx| self.slot_ranges.get(idx))
     }
 
     #[inline]
     fn get_slot_range_by_slot_mut(&mut self, slot: u16) -> Option<&mut SlotRange> {
         self.get_slot_range_index(slot)
-            .map(|idx| &mut self.slot_ranges[idx])
+            .and_then(|idx| self.slot_ranges.get_mut(idx))
     }
 
     fn get_master_node_index_by_slot(
@@ -1551,7 +1620,8 @@ impl ClusterConnection {
             Some((node_index, true))
         } else {
             let slot_range = self.get_slot_range_by_slot(slot)?;
-            let master_node_id = &slot_range.node_ids[0];
+            // A slot range names its master first; one with no node routes nowhere.
+            let master_node_id = slot_range.node_ids.first()?;
             let node_index = self.get_node_index_by_id(master_node_id)?;
             Some((node_index, false))
         }
@@ -1560,14 +1630,24 @@ impl ClusterConnection {
     pub(crate) fn convert_from_legacy_shard_description(
         mut legacy_shards: Vec<LegacyClusterShardResult>,
     ) -> Vec<ClusterShardResult> {
-        legacy_shards.sort_by(|s1, s2| s1.nodes[0].id.cmp(&s2.nodes[0].id));
+        // Group by master id, which the legacy reply lists first for each shard.
+        // A shard the server sent with no node at all sorts to the front and is
+        // skipped below rather than indexed into.
+        legacy_shards.sort_by(|s1, s2| {
+            s1.nodes
+                .first()
+                .map(|n| &n.id)
+                .cmp(&s2.nodes.first().map(|n| &n.id))
+        });
 
         let mut last_master_id = String::new();
         let mut shards = Vec::new();
         for legacy_shard in legacy_shards {
-            let master_id = &legacy_shard.nodes[0].id;
-            if master_id != &last_master_id {
-                last_master_id.clone_from(master_id);
+            let Some(master_id) = legacy_shard.nodes.first().map(|node| node.id.clone()) else {
+                continue;
+            };
+            if master_id != last_master_id {
+                last_master_id = master_id;
                 shards.push(ClusterShardResult {
                     slots: vec![legacy_shard.slot],
                     nodes: legacy_shard

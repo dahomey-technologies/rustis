@@ -79,6 +79,10 @@ pub(crate) struct SendBatchTestHook {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "test-support code: a panic is how a test reports failure"
+)]
 impl SendBatchTestHook {
     pub fn new() -> Self {
         Self::default()
@@ -873,8 +877,8 @@ impl NetworkHandler {
                             .pending_subscriptions
                             .front()
                             .is_some_and(|p| p.channel_or_pattern == channel_or_pattern);
-                        if matches {
-                            let pending_sub = self.pending_subscriptions.pop_front().unwrap();
+                        if matches && let Some(pending_sub) = self.pending_subscriptions.pop_front()
+                        {
                             if self
                                 .subscriptions
                                 .insert(
@@ -1258,6 +1262,14 @@ fn max_attempts_reached(attempts: usize, cap: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing,
+        reason = "test code: a panic is how a test reports failure"
+    )]
     use super::{is_connection_level_error, max_attempts_reached};
 
     #[test]

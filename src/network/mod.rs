@@ -1,3 +1,8 @@
+// A panic here kills the network task, and with it every in-flight command and
+// the reconnection loop itself — there is nothing left to retry on. Indexing is
+// therefore denied, not warned; see the panic policy in `lib.rs`.
+#![deny(clippy::indexing_slicing)]
+
 mod async_executor_strategy;
 mod cluster_connection;
 mod connection;

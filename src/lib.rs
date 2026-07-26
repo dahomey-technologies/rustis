@@ -1,4 +1,36 @@
 #![forbid(unsafe_code)]
+// Panic policy — the achievable analogue of the line above.
+//
+// No `forbid(panics)` can exist: a panic has no single syntactic form. It
+// escapes from `unwrap`/`expect`/`panic!`/`unreachable!` *and* from indexing,
+// integer division, debug arithmetic and dozens of std methods. What is
+// enforceable is the explicit-panic family, denied crate-wide here, plus
+// `indexing_slicing` — the only lint covering `a[i]` / `a[i..j]`, the crate's
+// largest real panic surface — denied in the two zones where a panic is fatal
+// rather than merely wrong: `network/` (a panic in the network task kills the
+// client with no reconnect) and `resp/` (fed directly by server bytes). See
+// their `mod.rs`.
+//
+// This is deny-plus-justified-allow, not a blanket ban: not every panic is a
+// bug. An `unreachable!` on an exhaustive internal match and an index guarded
+// by the compare on the line above are correct code, and rewriting them into
+// `.get().unwrap()` would trade clarity for nothing. Every surviving site
+// therefore carries `#[allow(…, reason = "…")]` naming the invariant that makes
+// it unreachable — the same contract a `// SAFETY:` comment carries over an
+// `unsafe` block, and reviewable the same way.
+//
+// `warn` would have been indistinguishable from `deny` here: CI runs clippy
+// with `-D warnings`, so the real tiers are enforced and exempt. Test code is
+// exempt (`#![allow]` at the top of each test module): a test that panics is a
+// test that failed, which is the mechanism, not a defect.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 /*!
 rustis is a Redis client for Rust.

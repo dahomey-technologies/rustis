@@ -88,8 +88,7 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
 
     #[inline]
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        const BOOL_VALS: [&[u8]; 2] = [b"0", b"1"];
-        self.write_arg(BOOL_VALS[v as usize]);
+        self.write_arg(if v { b"1" } else { b"0" });
         Ok(())
     }
 

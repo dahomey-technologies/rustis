@@ -265,6 +265,12 @@ impl RespResponse {
 /// strings shrink to exactly their value; a collection copies its data and tape
 /// buffers wholesale (frame-sized at the top level), which is enough to release
 /// the shared block.
+#[expect(
+    clippy::indexing_slicing,
+    reason = "invariant: `frame`'s ranges were produced by the parser over this \
+              very `data`; `RespResponse` owns the two together and never pairs \
+              a frame with another buffer."
+)]
 fn compact_frame(data: &[u8], frame: &RespFrame) -> (RespBuf, RespFrame) {
     match frame {
         RespFrame::SimpleString(r) => (
@@ -329,12 +335,12 @@ fn read_scalar_view<'a>(tag: u8, data: &'a [u8], off: usize) -> Option<RespView<
     // cap here would reject values a raised limit legitimately let through.
     let bounds = element_bounds(data, off, NO_BULK_LIMIT).ok()?;
     Some(match bounds.kind {
-        ElementKind::SimpleString => RespView::SimpleString(&data[bounds.value]),
-        ElementKind::Error => RespView::Error(&data[bounds.value]),
-        ElementKind::Integer => RespView::Integer(atoi::atoi(&data[bounds.value])?),
-        ElementKind::Double => RespView::Double(fast_float2::parse(&data[bounds.value]).ok()?),
-        ElementKind::BulkString => RespView::BulkString(&data[bounds.value]),
-        ElementKind::Boolean => RespView::Boolean(data[bounds.value.start] == b't'),
+        ElementKind::SimpleString => RespView::SimpleString(data.get(bounds.value)?),
+        ElementKind::Error => RespView::Error(data.get(bounds.value)?),
+        ElementKind::Integer => RespView::Integer(atoi::atoi(data.get(bounds.value)?)?),
+        ElementKind::Double => RespView::Double(fast_float2::parse(data.get(bounds.value)?).ok()?),
+        ElementKind::BulkString => RespView::BulkString(data.get(bounds.value)?),
+        ElementKind::Boolean => RespView::Boolean(*data.get(bounds.value.start)? == b't'),
         ElementKind::Null => RespView::Null,
     })
 }
@@ -352,16 +358,23 @@ fn read_scalar_frame(tag: u8, data: &[u8], off: usize) -> Option<RespFrame> {
     Some(match bounds.kind {
         ElementKind::SimpleString => RespFrame::SimpleString(bounds.value),
         ElementKind::Error => RespFrame::Error(bounds.value),
-        ElementKind::Integer => RespFrame::Integer(atoi::atoi(&data[bounds.value])?),
-        ElementKind::Double => RespFrame::Double(fast_float2::parse(&data[bounds.value]).ok()?),
+        ElementKind::Integer => RespFrame::Integer(atoi::atoi(data.get(bounds.value)?)?),
+        ElementKind::Double => RespFrame::Double(fast_float2::parse(data.get(bounds.value)?).ok()?),
         ElementKind::BulkString => RespFrame::BulkString(bounds.value),
-        ElementKind::Boolean => RespFrame::Boolean(data[bounds.value.start] == b't'),
+        ElementKind::Boolean => RespFrame::Boolean(*data.get(bounds.value.start)? == b't'),
         ElementKind::Null => RespFrame::Null,
     })
 }
 
 /// Builds the borrowed collection view for a container node at tape index `root`.
 #[inline]
+#[expect(
+    clippy::unreachable,
+    reason = "invariant: callers gate on `is_container_tag`, whose `matches!` \
+              lists exactly these four tags. The arm asserts that pairing; a \
+              fallback would have to invent a view for a tag that is not a \
+              container."
+)]
 fn container_view<'a>(tag: u8, buf: &'a [u8], tape: &'a [u8], root: usize) -> RespView<'a> {
     let view = RespArrayView::new(buf, tape, root);
     match tag {
@@ -394,6 +407,12 @@ impl<'a> RespView<'a> {
     /// Borrows a decoded frame as a view. Collections read their structure from
     /// the frame's tape; scalars read their bytes from `data`.
     #[inline]
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "invariant: `frame`'s ranges were produced by the parser over \
+                  this very `data`; the two travel together inside a \
+                  `RespResponse`."
+    )]
     fn from_frame(data: &'a [u8], frame: &'a RespFrame) -> RespView<'a> {
         match frame {
             RespFrame::SimpleString(r) => RespView::SimpleString(&data[r.clone()]),
@@ -644,6 +663,11 @@ impl Iterator for RespResponseIter {
             self.remaining -= 1;
             let tape = self.tape.clone();
             let root = root as u32;
+            #[expect(
+                clippy::unreachable,
+                reason = "invariant: guarded by `is_container_tag` just above, \
+                          whose `matches!` lists exactly these four tags."
+            )]
             let frame = match tag {
                 ARRAY_TAG => RespFrame::Array { tape, root },
                 MAP_TAG => RespFrame::Map { tape, root },

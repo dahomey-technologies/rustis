@@ -2,7 +2,8 @@ use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        Response, Value, cmd, serialize_byte_buf_option, serialize_flag, serialize_slice_with_len,
+        RefBulkString, Response, Value, cmd, serialize_byte_buf_option, serialize_flag,
+        serialize_slice_with_len,
     },
 };
 use serde::{
@@ -378,6 +379,136 @@ pub trait SearchCommands<'a>: Sized {
     #[must_use]
     fn ft_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FT._LIST"))
+    }
+
+    /// Performs a hybrid search combining a text search ([`FtHybridSearch`]) and a
+    /// vector similarity search ([`FtHybridVsim`]), fusing their results.
+    ///
+    /// The aggregation-style post-processing ([`FtHybridOptions`]) covers the core
+    /// clauses: `COMBINE` (RRF/LINEAR), `LIMIT`, `SORTBY`/`NOSORT`, `LOAD`, `APPLY`,
+    /// `PARAMS` and `TIMEOUT`. The vector query blob is passed by reference (e.g.
+    /// `$vec`) and its bytes supplied through `PARAMS`. Advanced options not yet
+    /// modelled (`POLICY`, `SHARD_K_RATIO`, `FORMAT`, `GROUPBY`/`REDUCE`) can be
+    /// added later; see the command reference.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/ft.hybrid/>](https://redis.io/commands/ft.hybrid/)
+    #[must_use]
+    fn ft_hybrid<R: Response>(
+        self,
+        index: impl Serialize,
+        search: FtHybridSearch,
+        vsim: FtHybridVsim,
+        options: FtHybridOptions,
+    ) -> PreparedCommand<'a, Self, R> {
+        let mut command = cmd("FT.HYBRID").arg(index);
+
+        // SEARCH query [SCORER count ...] [YIELD_SCORE_AS name]
+        command = command.arg("SEARCH").arg(search.query);
+        if !search.scorer.is_empty() {
+            command = command
+                .arg("SCORER")
+                .arg(search.scorer.len())
+                .arg(search.scorer);
+        }
+        if let Some(name) = search.yield_score_as {
+            command = command.arg("YIELD_SCORE_AS").arg(name);
+        }
+
+        // VSIM field vector [KNN count ... | RANGE count ...] [FILTER expr] [YIELD_SCORE_AS name]
+        command = command.arg("VSIM").arg(vsim.field).arg(vsim.vector);
+        match vsim.query {
+            Some(FtHybridVectorQuery::Knn { k, ef_runtime }) => {
+                let count = if ef_runtime.is_some() { 4 } else { 2 };
+                command = command.arg("KNN").arg(count).arg("K").arg(k);
+                if let Some(ef_runtime) = ef_runtime {
+                    command = command.arg("EF_RUNTIME").arg(ef_runtime);
+                }
+            }
+            Some(FtHybridVectorQuery::Range { radius, epsilon }) => {
+                let count = if epsilon.is_some() { 4 } else { 2 };
+                command = command.arg("RANGE").arg(count).arg("RADIUS").arg(radius);
+                if let Some(epsilon) = epsilon {
+                    command = command.arg("EPSILON").arg(epsilon);
+                }
+            }
+            None => {}
+        }
+        if let Some(filter) = vsim.filter {
+            command = command.arg("FILTER").arg(filter);
+        }
+        if let Some(name) = vsim.yield_score_as {
+            command = command.arg("YIELD_SCORE_AS").arg(name);
+        }
+
+        // COMBINE <RRF count ... | LINEAR count ...>
+        match options.combine {
+            Some(FtHybridCombine::Rrf { constant, window }) => {
+                let count = 2 * (constant.is_some() as usize + window.is_some() as usize);
+                // `COMBINE RRF` requires at least one argument; with none, RRF is
+                // already the default, so the clause is omitted entirely.
+                if count > 0 {
+                    command = command.arg("COMBINE").arg("RRF").arg(count);
+                    if let Some(constant) = constant {
+                        command = command.arg("CONSTANT").arg(constant);
+                    }
+                    if let Some(window) = window {
+                        command = command.arg("WINDOW").arg(window);
+                    }
+                }
+            }
+            Some(FtHybridCombine::Linear {
+                alpha,
+                beta,
+                window,
+            }) => {
+                let count = 4 + 2 * window.is_some() as usize;
+                command = command
+                    .arg("COMBINE")
+                    .arg("LINEAR")
+                    .arg(count)
+                    .arg("ALPHA")
+                    .arg(alpha)
+                    .arg("BETA")
+                    .arg(beta);
+                if let Some(window) = window {
+                    command = command.arg("WINDOW").arg(window);
+                }
+            }
+            None => {}
+        }
+
+        if let Some((offset, num)) = options.limit {
+            command = command.arg("LIMIT").arg(offset).arg(num);
+        }
+        if options.nosort {
+            command = command.arg("NOSORT");
+        } else if let Some((field, order)) = options.sortby {
+            command = command.arg("SORTBY").arg(1).arg(field).arg(order);
+        }
+        match options.load {
+            FtHybridLoad::All => command = command.arg("LOAD").arg("*"),
+            FtHybridLoad::Fields(fields) if !fields.is_empty() => {
+                command = command.arg("LOAD").arg(fields.len()).arg(fields);
+            }
+            _ => {}
+        }
+        for (expr, name) in options.apply {
+            command = command.arg("APPLY").arg(expr).arg("AS").arg(name);
+        }
+        if !options.params.is_empty() {
+            // PARAMS nargs name value [name value ...] — nargs counts every token,
+            // i.e. two per pair.
+            command = command.arg("PARAMS").arg(options.params.len() * 2);
+            for (name, value) in options.params {
+                command = command.arg(name).arg(RefBulkString::new(value));
+            }
+        }
+        if let Some(timeout) = options.timeout {
+            command = command.arg("TIMEOUT").arg(timeout);
+        }
+
+        prepare_command(self, command)
     }
 
     /// Perform a [`ft_search`](SearchCommands::ft_search) command and collects performance information
@@ -1308,6 +1439,199 @@ impl<'a> FtCreateOptions<'a> {
     }
 }
 
+/// Text-search component of the [`ft_hybrid`](SearchCommands::ft_hybrid) command.
+#[derive(Default)]
+pub struct FtHybridSearch<'a> {
+    query: &'a str,
+    scorer: SmallVec<[&'a str; 4]>,
+    yield_score_as: Option<&'a str>,
+}
+
+impl<'a> FtHybridSearch<'a> {
+    /// Creates a search clause from a text query (same syntax as `FT.SEARCH`).
+    #[must_use]
+    pub fn new(query: &'a str) -> Self {
+        Self {
+            query,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the scoring algorithm and its parameters (e.g. `["BM25", "1.2", "0.75"]`).
+    #[must_use]
+    pub fn scorer(mut self, tokens: impl IntoIterator<Item = &'a str>) -> Self {
+        self.scorer = tokens.into_iter().collect();
+        self
+    }
+
+    /// Aliases the search score for use in post-processing.
+    #[must_use]
+    pub fn yield_score_as(mut self, name: &'a str) -> Self {
+        self.yield_score_as = Some(name);
+        self
+    }
+}
+
+/// Vector query type for the [`FtHybridVsim`] clause.
+pub enum FtHybridVectorQuery {
+    /// K-nearest-neighbors search.
+    Knn { k: u32, ef_runtime: Option<u32> },
+    /// Range search within a radius.
+    Range { radius: f64, epsilon: Option<f64> },
+}
+
+/// Vector-similarity component of the [`ft_hybrid`](SearchCommands::ft_hybrid) command.
+pub struct FtHybridVsim<'a> {
+    field: &'a str,
+    vector: &'a str,
+    query: Option<FtHybridVectorQuery>,
+    filter: Option<&'a str>,
+    yield_score_as: Option<&'a str>,
+}
+
+impl<'a> FtHybridVsim<'a> {
+    /// Creates a vector-similarity clause on `field`, comparing against the vector
+    /// referenced by `vector` (e.g. `$vec`, whose bytes are supplied via `PARAMS`).
+    #[must_use]
+    pub fn new(field: &'a str, vector: &'a str) -> Self {
+        Self {
+            field,
+            vector,
+            query: None,
+            filter: None,
+            yield_score_as: None,
+        }
+    }
+
+    /// Sets the vector query type (`KNN` or `RANGE`).
+    #[must_use]
+    pub fn query(mut self, query: FtHybridVectorQuery) -> Self {
+        self.query = Some(query);
+        self
+    }
+
+    /// Pre-filters the vector results with a search expression.
+    #[must_use]
+    pub fn filter(mut self, filter: &'a str) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+
+    /// Aliases the vector score for use in post-processing.
+    #[must_use]
+    pub fn yield_score_as(mut self, name: &'a str) -> Self {
+        self.yield_score_as = Some(name);
+        self
+    }
+}
+
+/// Fusion method for the `COMBINE` clause of [`ft_hybrid`](SearchCommands::ft_hybrid).
+pub enum FtHybridCombine {
+    /// Reciprocal Rank Fusion.
+    Rrf {
+        constant: Option<f64>,
+        window: Option<u32>,
+    },
+    /// Linear combination with `ALPHA`/`BETA` weights.
+    Linear {
+        alpha: f64,
+        beta: f64,
+        window: Option<u32>,
+    },
+}
+
+/// `LOAD` selection for [`FtHybridOptions`].
+#[derive(Default)]
+pub enum FtHybridLoad<'a> {
+    /// Do not load any document fields (default).
+    #[default]
+    None,
+    /// Load all fields (`LOAD *`).
+    All,
+    /// Load the named fields.
+    Fields(SmallVec<[&'a str; 4]>),
+}
+
+/// Post-processing options for the [`ft_hybrid`](SearchCommands::ft_hybrid) command.
+#[derive(Default)]
+pub struct FtHybridOptions<'a> {
+    combine: Option<FtHybridCombine>,
+    limit: Option<(u32, u32)>,
+    sortby: Option<(&'a str, SortOrder)>,
+    nosort: bool,
+    load: FtHybridLoad<'a>,
+    apply: SmallVec<[(&'a str, &'a str); 2]>,
+    params: SmallVec<[(&'a str, &'a [u8]); 2]>,
+    timeout: Option<u64>,
+}
+
+impl<'a> FtHybridOptions<'a> {
+    /// Sets the fusion method used to combine the search and vector results.
+    #[must_use]
+    pub fn combine(mut self, combine: FtHybridCombine) -> Self {
+        self.combine = Some(combine);
+        self
+    }
+
+    /// Limits the final results to `num` starting at `offset` (zero-based).
+    #[must_use]
+    pub fn limit(mut self, offset: u32, num: u32) -> Self {
+        self.limit = Some((offset, num));
+        self
+    }
+
+    /// Sorts the final results by `field`.
+    #[must_use]
+    pub fn sortby(mut self, field: &'a str, order: SortOrder) -> Self {
+        self.sortby = Some((field, order));
+        self
+    }
+
+    /// Disables sorting of the final results (`NOSORT`).
+    #[must_use]
+    pub fn nosort(mut self) -> Self {
+        self.nosort = true;
+        self
+    }
+
+    /// Loads the given document fields (`LOAD count field ...`).
+    #[must_use]
+    pub fn load(mut self, fields: impl IntoIterator<Item = &'a str>) -> Self {
+        self.load = FtHybridLoad::Fields(fields.into_iter().collect());
+        self
+    }
+
+    /// Loads all document fields (`LOAD *`).
+    #[must_use]
+    pub fn load_all(mut self) -> Self {
+        self.load = FtHybridLoad::All;
+        self
+    }
+
+    /// Applies a transformation, storing the result as `name` (`APPLY expr AS name`).
+    /// Can be called multiple times.
+    #[must_use]
+    pub fn apply(mut self, expr: &'a str, name: &'a str) -> Self {
+        self.apply.push((expr, name));
+        self
+    }
+
+    /// Adds a query parameter (referenced as `$name` in expressions); the value may
+    /// be a binary vector blob. Can be called multiple times.
+    #[must_use]
+    pub fn param(mut self, name: &'a str, value: &'a [u8]) -> Self {
+        self.params.push((name, value));
+        self
+    }
+
+    /// Sets a runtime timeout for the query, in milliseconds.
+    #[must_use]
+    pub fn timeout(mut self, milliseconds: u64) -> Self {
+        self.timeout = Some(milliseconds);
+        self
+    }
+}
+
 /// Options for the [`ft_create`](SearchCommands::ft_aggregate) command
 #[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -2104,6 +2428,14 @@ pub struct FtIndexAttribute {
     pub case_sensitive: bool,
     /// suffixe trie
     pub with_suffixe_trie: bool,
+    /// vector index algorithm (e.g. `FLAT`, `HNSW`); only for `VECTOR` fields
+    pub algorithm: Option<String>,
+    /// vector element data type (e.g. `FLOAT32`); only for `VECTOR` fields
+    pub data_type: Option<String>,
+    /// vector dimensionality; only for `VECTOR` fields
+    pub dim: Option<usize>,
+    /// vector distance metric (e.g. `L2`, `COSINE`); only for `VECTOR` fields
+    pub distance_metric: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for FtIndexAttribute {
@@ -2194,7 +2526,18 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
                         "PHONETIC" => {
                             attribute.phonetic = Some(map.next_value::<FtPhoneticMatcher>()?)
                         }
-                        _ => (),
+                        "algorithm" => attribute.algorithm = Some(map.next_value::<String>()?),
+                        "data_type" => attribute.data_type = Some(map.next_value::<String>()?),
+                        "dim" => attribute.dim = Some(map.next_value::<usize>()?),
+                        "distance_metric" => {
+                            attribute.distance_metric = Some(map.next_value::<String>()?)
+                        }
+                        // Any other key (present for some field types) must still
+                        // have its value consumed, or the map access desyncs and the
+                        // next key/value pair is misread.
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
                     }
                 }
                 Ok(attribute)

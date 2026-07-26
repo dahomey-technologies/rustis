@@ -4,13 +4,14 @@ use crate::{
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
         FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtGroupBy,
+        FtHybridCombine, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery, FtHybridVsim,
         FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult,
         FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions,
         FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
         FtWithCursorOptions, HashCommands, JsonCommands, SearchCommands, ServerCommands, SortOrder,
     },
     network::sleep,
-    resp::Value,
+    resp::{RefBulkString, Value},
     tests::{get_test_client, log_try_init},
 };
 use rand::{Rng, seq::IndexedRandom};
@@ -531,6 +532,86 @@ async fn ft_create() -> Result<()> {
                 ),
         )
         .await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_hybrid() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // A small hash index with a text field and a 4-dimensional FLAT float32 vector.
+    client
+        .ft_create(
+            "hybrid_idx",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc:")
+                .schema(FtFieldSchema::identifier("content").field_type(FtFieldType::Text))
+                .schema(
+                    FtFieldSchema::identifier("embedding").field_type(FtFieldType::Vector(Some(
+                        FtVectorFieldAlgorithm::Flat(FtFlatVectorFieldAttributes::new(
+                            FtVectorType::Float32,
+                            4,
+                            FtVectorDistanceMetric::L2,
+                        )),
+                    ))),
+                ),
+        )
+        .await?;
+
+    let embedding = |v: [f32; 4]| v.iter().flat_map(|f| f.to_le_bytes()).collect::<Vec<u8>>();
+
+    let doc1 = embedding([1.0, 0.0, 0.0, 0.0]);
+    let doc2 = embedding([0.0, 1.0, 0.0, 0.0]);
+    client
+        .hset(
+            "doc:1",
+            [
+                ("content", RefBulkString::new(b"red bicycle")),
+                ("embedding", RefBulkString::new(&doc1)),
+            ],
+        )
+        .await?;
+    client
+        .hset(
+            "doc:2",
+            [
+                ("content", RefBulkString::new(b"blue car")),
+                ("embedding", RefBulkString::new(&doc2)),
+            ],
+        )
+        .await?;
+
+    wait_for_index_scanned(&client, "hybrid_idx").await?;
+
+    // Hybrid query: text search for "bicycle" fused with a KNN vector search,
+    // the query vector supplied through PARAMS.
+    let query_vector = embedding([1.0, 0.0, 0.0, 0.0]);
+    let result: Value = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: None,
+            }),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: None,
+                    window: Some(40),
+                })
+                .limit(0, 10)
+                .load(["@content"])
+                .param("vec", &query_vector),
+        )
+        .await?;
+
+    // A successful hybrid query returns a non-null reply describing the matches.
+    assert!(!matches!(result, Value::Null));
 
     Ok(())
 }

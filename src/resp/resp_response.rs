@@ -2,12 +2,15 @@ use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
         ARRAY_TAG, ElementKind, MAP_TAG, NULL_TAG, PUSH_TAG, RespBuf, RespDeserializer, SET_TAG,
-        element_bounds, is_container_tag, node_payload, node_tag, read_node,
+        TAPE_NODE_SIZE, element_bounds, is_container_tag, node_payload, node_tag, read_node,
     },
 };
 use bytes::Bytes;
 use serde::de::DeserializeOwned;
-use std::{fmt, ops::Range};
+use std::{
+    fmt::{self, Write as _},
+    ops::Range,
+};
 
 /// A decoded RESP frame.
 ///
@@ -20,7 +23,7 @@ use std::{fmt, ops::Range};
 /// > **Breaking change (unreleased).** The collection variants previously held
 /// > `{ len: usize, ranges: [Range<u32>; 5] }`; they now hold `{ tape: Bytes,
 /// > root: u32 }`. Code that matched on the old shape must be updated.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum RespFrame {
     SimpleString(Range<usize>),
     Integer(i64),
@@ -35,11 +38,118 @@ pub enum RespFrame {
     Null,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A frame carries no data buffer, so it cannot render the reply it describes;
+/// it reports its kind, and — for a collection — the shape it indexes. The tape
+/// itself stays out: it is an internal index whose raw bytes are unreadable and
+/// routinely larger than the reply. To see the decoded reply, format the
+/// enclosing [`RespResponse`].
+impl fmt::Debug for RespFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SimpleString(r) => f.debug_tuple("SimpleString").field(r).finish(),
+            Self::Integer(i) => f.debug_tuple("Integer").field(i).finish(),
+            Self::Double(d) => f.debug_tuple("Double").field(d).finish(),
+            Self::BulkString(r) => f.debug_tuple("BulkString").field(r).finish(),
+            Self::Boolean(b) => f.debug_tuple("Boolean").field(b).finish(),
+            Self::Error(r) => f.debug_tuple("Error").field(r).finish(),
+            Self::Null => f.write_str("Null"),
+            Self::Array { tape, root } => fmt_frame_shape(f, "Array", tape, *root),
+            Self::Map { tape, root } => fmt_frame_shape(f, "Map", tape, *root),
+            Self::Set { tape, root } => fmt_frame_shape(f, "Set", tape, *root),
+            Self::Push { tape, root } => fmt_frame_shape(f, "Push", tape, *root),
+        }
+    }
+}
+
+/// Renders a collection frame as `Kind { root, len }`. `len` lives in the head's
+/// companion node; a tape too short to hold it means the frame was not produced
+/// by the parser, so the count is reported as unknown rather than panicking in a
+/// formatter.
+fn fmt_frame_shape(f: &mut fmt::Formatter<'_>, kind: &str, tape: &Bytes, root: u32) -> fmt::Result {
+    let mut s = f.debug_struct(kind);
+    s.field("root", &root);
+    match tape_len(tape, root as usize) {
+        Some(len) => s.field("len", &len),
+        None => s.field("len", &format_args!("<unreadable tape>")),
+    };
+    s.finish()
+}
+
+/// Reads a container's element count from its companion node, or `None` when the
+/// tape is too short to hold one.
+fn tape_len(tape: &[u8], root: usize) -> Option<usize> {
+    let companion = root.checked_add(1)?;
+    if tape.len() / TAPE_NODE_SIZE <= companion {
+        return None;
+    }
+    Some(node_payload(read_node(tape, companion)) as usize)
+}
+
+#[derive(Clone, PartialEq)]
 pub enum RespResponse {
     IntegerArray(Vec<i64>),
     OwnedArray(Vec<RespResponse>),
     Frame(RespBuf, RespFrame),
+}
+
+/// Above this many characters, the rendering stops and is marked as truncated.
+/// A response is formatted on the connection's debug-log path, where a
+/// multi-megabyte reply would otherwise build a multi-megabyte log line.
+const DEBUG_RENDER_LIMIT: usize = 1000;
+
+/// Renders the decoded reply — the buffer read through the frame — rather than
+/// the two raw fields, which would print the parse tape's bytes. Formatting goes
+/// straight to the output through a capped writer: no intermediate [`Value`] is
+/// materialized, so a large reply costs no allocation beyond the cap.
+///
+/// [`Value`]: crate::resp::Value
+impl fmt::Debug for RespResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let truncated = {
+            let mut writer = TruncatingWriter::new(f, DEBUG_RENDER_LIMIT);
+            write!(writer, "{:?}", self.view())?;
+            writer.truncated
+        };
+        if truncated {
+            f.write_str("<truncated>")?;
+        }
+        Ok(())
+    }
+}
+
+/// Forwards to a formatter until `remaining` characters have been written, then
+/// silently drops the rest and raises `truncated`.
+struct TruncatingWriter<'a, 'b> {
+    inner: &'a mut fmt::Formatter<'b>,
+    remaining: usize,
+    truncated: bool,
+}
+
+impl<'a, 'b> TruncatingWriter<'a, 'b> {
+    fn new(inner: &'a mut fmt::Formatter<'b>, limit: usize) -> Self {
+        Self {
+            inner,
+            remaining: limit,
+            truncated: false,
+        }
+    }
+}
+
+impl fmt::Write for TruncatingWriter<'_, '_> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        if s.len() <= self.remaining {
+            self.remaining -= s.len();
+            return self.inner.write_str(s);
+        }
+        // Cut on a char boundary: slicing mid-code-point would panic.
+        let mut end = self.remaining;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.remaining = 0;
+        self.truncated = true;
+        self.inner.write_str(&s[..end])
+    }
 }
 
 impl RespResponse {
@@ -321,7 +431,11 @@ impl<'a> fmt::Debug for RespView<'a> {
             Self::IntegerArray(arg0) => f.debug_tuple("IntegerArray").field(arg0).finish(),
             Self::OwnedArray(arg0) => f.debug_tuple("OwnedArray").field(arg0).finish(),
             Self::Array(arg0) => f.debug_tuple("Array").field(arg0).finish(),
-            Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
+            Self::Map(arg0) => {
+                f.write_str("Map(")?;
+                fmt_pairs(f, arg0)?;
+                f.write_str(")")
+            }
             Self::Set(arg0) => f.debug_tuple("Set").field(arg0).finish(),
             Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
             Self::Error(arg0) => f
@@ -333,10 +447,41 @@ impl<'a> fmt::Debug for RespView<'a> {
     }
 }
 
+/// Renders a map's flat element sequence as `{key: value, …}`. An element that
+/// the tape cannot resolve is rendered in place instead of aborting the whole
+/// rendering — a formatter cannot report an error other than "formatting
+/// failed", and a debug line showing where a reply went wrong beats no line.
+fn fmt_pairs(f: &mut fmt::Formatter<'_>, view: &RespArrayView<'_>) -> fmt::Result {
+    let mut map = f.debug_map();
+    let mut it = view.clone().into_iter();
+    while let Some(key) = it.next() {
+        match (key, it.next()) {
+            (Ok(k), Some(Ok(v))) => map.entry(&k, &v),
+            (Ok(k), Some(Err(e))) => map.entry(&k, &UnreadableElement(e)),
+            (Ok(k), None) => map.entry(&k, &format_args!("<missing value>")),
+            (Err(e), v) => match v {
+                Some(Ok(v)) => map.entry(&UnreadableElement(e), &v),
+                Some(Err(e2)) => map.entry(&UnreadableElement(e), &UnreadableElement(e2)),
+                None => map.entry(&UnreadableElement(e), &format_args!("<missing value>")),
+            },
+        };
+    }
+    map.finish()
+}
+
+/// Stands in for an element the tape could not resolve while formatting.
+struct UnreadableElement(Error);
+
+impl fmt::Debug for UnreadableElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<unreadable element: {}>", self.0)
+    }
+}
+
 /// A borrowed view over a collection: the data buffer, the parse tape, and the
 /// tape index of the container's head node. `len` (the exact element count) is
 /// read once from the head's companion node, so it is O(1).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct RespArrayView<'a> {
     buf: &'a [u8],
     tape: &'a [u8],
@@ -359,6 +504,21 @@ impl<'a> RespArrayView<'a> {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
+    }
+}
+
+/// Renders the elements, not the two raw buffers the view borrows. Unresolvable
+/// elements are rendered in place, as in [`fmt_pairs`].
+impl fmt::Debug for RespArrayView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut list = f.debug_list();
+        for element in self.clone() {
+            match element {
+                Ok(view) => list.entry(&view),
+                Err(e) => list.entry(&UnreadableElement(e)),
+            };
+        }
+        list.finish()
     }
 }
 

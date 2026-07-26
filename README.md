@@ -21,7 +21,7 @@ An asynchronous Redis client for Rust.
 # Features
 
 * Full documentation with multiple examples
-* Support all [Redis Commands](https://redis.io/commands/) until Redis 8.0
+* Support all [Redis Commands](https://redis.io/commands/) until Redis 8.4
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client modes:
   * Single client
@@ -87,9 +87,15 @@ async fn main() -> Result<()> {
 # Tests
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
-2. run `cargo test --features pool,tokio-rustls,json,client-cache` (Tokio runtime)
-3. run `cargo test --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache` (async-std runtime)
+2. run `./run_tests.sh` (Tokio runtime)
+3. run `cargo test --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache -- --test-threads=1` (async-std runtime)
 4. run `cargo fmt --all -- --check`
+
+The test suite **requires `--test-threads=1`**: tests share a single Redis instance
+and flush the database, so running them in parallel produces spurious failures.
+That is the only thing `run_tests.sh` does beyond selecting the features —
+`cargo test --features tokio-rustls,pool,json,client-cache -- --test-threads=1`.
+Extra arguments are forwarded, so `./run_tests.sh string` filters by name.
 
 # Benchmarks
 

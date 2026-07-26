@@ -201,6 +201,10 @@ name = "strace_workload"
 required-features = ["bench"]
 
 [[example]]
+name = "cache_stampede_probe"
+required-features = ["client-cache"]
+
+[[example]]
 name = "simple"
 
 [profile.dev]

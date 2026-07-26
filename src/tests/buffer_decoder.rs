@@ -1,9 +1,7 @@
 use crate::{
     ClientError, Error, Result,
-    resp::{
-        BufferDecoder, RespBuf, RespFrame, RespResponse, TAPE_SHRINK_HYSTERESIS,
-        TARGET_TAPE_CAPACITY,
-    },
+    client::{BufferConfig, RespLimits},
+    resp::{BufferDecoder, RespBuf, RespFrame, RespResponse},
 };
 use bytes::{Bytes, BytesMut};
 use tokio_util::codec::Decoder;
@@ -413,15 +411,76 @@ fn tape_buffer_shrinks_back_after_a_large_collection_spike() {
 
     // Small collections (which do touch the tape) reclaim the oversized block,
     // then trip the reset once the hysteresis window elapses.
-    for _ in 0..TAPE_SHRINK_HYSTERESIS + 2 {
+    for _ in 0..BufferConfig::default().shrink_hysteresis + 2 {
         let mut small = BytesMut::new();
         small.extend_from_slice(b"*1\r\n:1\r\n");
         drop(decoder.decode(&mut small).unwrap());
     }
 
     assert!(
-        decoder.tape_capacity() <= TARGET_TAPE_CAPACITY,
+        decoder.tape_capacity() <= BufferConfig::default().tape_capacity,
         "tape buffer should shrink back to the target after a spike, got {} bytes",
         decoder.tape_capacity()
     );
+}
+
+#[test]
+fn the_tape_shrinks_at_the_configured_capacity_and_hysteresis() {
+    // Same policy as the test above, but driven entirely from `BufferConfig`
+    // rather than the historical constants: a caller who lowers the target and
+    // shortens the hysteresis must see the tape released sooner and smaller.
+    let buffers = BufferConfig {
+        tape_capacity: 4 * 1024,
+        shrink_factor: 2,
+        shrink_hysteresis: 3,
+        ..Default::default()
+    };
+    let mut decoder = BufferDecoder::with_config(buffers, RespLimits::default());
+
+    // 5_000 elements => 5_002 nodes => ~39 KiB of tape, past 2 x 4 KiB.
+    let mut big = format!("*{}\r\n", 5_000).into_bytes();
+    for _ in 0..5_000 {
+        big.extend_from_slice(b":1\r\n");
+    }
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(&big);
+    drop(decoder.decode(&mut buf).unwrap());
+
+    // Two quiet frames are one short of the configured hysteresis of 3.
+    for _ in 0..2 {
+        let mut small = BytesMut::new();
+        small.extend_from_slice(b"*1\r\n:1\r\n");
+        drop(decoder.decode(&mut small).unwrap());
+    }
+    assert!(
+        decoder.tape_capacity() > buffers.tape_capacity,
+        "must not shrink before the configured hysteresis"
+    );
+
+    let mut small = BytesMut::new();
+    small.extend_from_slice(b"*1\r\n:1\r\n");
+    drop(decoder.decode(&mut small).unwrap());
+    assert!(
+        decoder.tape_capacity() <= buffers.tape_capacity,
+        "tape should shrink to the configured target, got {} bytes",
+        decoder.tape_capacity()
+    );
+}
+
+#[test]
+fn the_decoder_enforces_the_configured_parser_limits() {
+    // The decoder builds the parser, so a limit set on the config must reach it
+    // — otherwise the knob would only work on the one-shot parsing path.
+    let limits = RespLimits {
+        max_collection_length: 2,
+        ..Default::default()
+    };
+    let mut decoder = BufferDecoder::with_config(BufferConfig::default(), limits);
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(b"*3\r\n:1\r\n:2\r\n:3\r\n");
+
+    assert!(matches!(
+        decoder.decode(&mut buf),
+        Err(Error::Client(ClientError::CollectionLengthTooLarge))
+    ));
 }

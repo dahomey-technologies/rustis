@@ -78,10 +78,10 @@ pub fn bench_decode_stream_prereserve(data: &[u8], chunk: usize) -> Result<usize
 /// incomplete, reserve then copy the next `chunk`-sized slice from `data`.
 #[inline(always)]
 fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
-    use crate::network::TARGET_BUFFER_CAPACITY;
+    use crate::client::BufferConfig;
 
     let mut decoder = BufferDecoder::new();
-    let mut src = BytesMut::with_capacity(TARGET_BUFFER_CAPACITY);
+    let mut src = BytesMut::with_capacity(BufferConfig::DEFAULT.read_capacity);
     let mut pos = 0usize;
     let mut reserved = false;
     loop {

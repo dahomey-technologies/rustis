@@ -1,6 +1,6 @@
 use crate::{
     Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
-    client::{Config, PreparedCommand},
+    client::{BufferConfig, Config, PreparedCommand},
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
@@ -21,47 +21,31 @@ use std::{
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-/// Initial capacity of the read framing buffer, and the target both the read
-/// and write buffers are shrunk back to once they have grown oversized.
-/// `FramedRead` otherwise starts at tokio-util's 8 KiB default; a 64 KiB start
-/// matches the shrink target so the two are one parameter (a knob that could
-/// later move to `Config`).
-pub(crate) const TARGET_BUFFER_CAPACITY: usize = 64 * 1024;
-
-/// A buffer is only considered for shrinking once its capacity exceeds this
-/// multiple of the target, so a workload alternating large and small replies
-/// does not reallocate every cycle (hysteresis, part 1).
-const BUFFER_SHRINK_FACTOR: usize = 8;
-
-/// Consecutive under-target observations required before actually paying for
-/// the shrink realloc (hysteresis, part 2).
-const BUFFER_SHRINK_HYSTERESIS: usize = 16;
-
-/// Replaces `buf` with a fresh `TARGET_BUFFER_CAPACITY` buffer once it has been
+/// Replaces `buf` with a fresh `buffers.read_capacity` buffer once it has been
 /// oversized and near-empty for long enough, returning its high-water-mark
 /// memory to the allocator. `BytesMut` has no `shrink_to_fit`, so replacement
 /// is the only lever.
 ///
 /// `small_streak` is the caller-owned hysteresis counter for this buffer.
-fn maybe_shrink_buffer(buf: &mut BytesMut, small_streak: &mut usize) {
+fn maybe_shrink_buffer(buf: &mut BytesMut, small_streak: &mut usize, buffers: &BufferConfig) {
     // Part 1: ignore buffers that have not grown well past the target.
-    if buf.capacity() <= TARGET_BUFFER_CAPACITY * BUFFER_SHRINK_FACTOR {
+    if buf.capacity() <= buffers.read_capacity * buffers.shrink_factor {
         *small_streak = 0;
         return;
     }
     // The residue must fit the fresh buffer for the copy below to stay within
     // the target; if it does not, the buffer is legitimately busy right now.
-    if buf.len() > TARGET_BUFFER_CAPACITY {
+    if buf.len() > buffers.read_capacity {
         *small_streak = 0;
         return;
     }
     // Part 2: require a streak of quiet observations before reallocating.
     *small_streak += 1;
-    if *small_streak < BUFFER_SHRINK_HYSTERESIS {
+    if *small_streak < buffers.shrink_hysteresis {
         return;
     }
     *small_streak = 0;
-    let mut replacement = BytesMut::with_capacity(TARGET_BUFFER_CAPACITY);
+    let mut replacement = BytesMut::with_capacity(buffers.read_capacity);
     replacement.extend_from_slice(buf);
     *buf = replacement;
 }
@@ -84,8 +68,11 @@ impl Streams {
         if let Some(tls_config) = &config.tls_config {
             let (reader, writer) =
                 tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
-            let framed_read =
-                FramedRead::with_capacity(reader, BufferDecoder::new(), TARGET_BUFFER_CAPACITY);
+            let framed_read = FramedRead::with_capacity(
+                reader,
+                BufferDecoder::with_config(config.buffers, config.limits),
+                config.buffers.read_capacity,
+            );
             let framed_write = FramedWrite::new(writer, CommandEncoder);
             Ok(Streams::TcpTls(framed_read, framed_write))
         } else {
@@ -98,7 +85,11 @@ impl Streams {
 
     pub async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
-        let framed_read = FramedRead::new(reader, BufferDecoder::new());
+        let framed_read = FramedRead::with_capacity(
+            reader,
+            BufferDecoder::with_config(config.buffers, config.limits),
+            config.buffers.read_capacity,
+        );
         let framed_write = FramedWrite::new(writer, CommandEncoder);
         Ok(Streams::Tcp(framed_read, framed_write))
     }
@@ -152,26 +143,28 @@ impl StandaloneConnection {
     /// `streams` be mutated together.
     fn shrink_read_buffer(&mut self) {
         let streak = &mut self.read_buffer_small_streak;
+        let buffers = &self.config.buffers;
         match &mut self.streams {
             Streams::Tcp(framed_read, _) => {
-                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak)
+                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak, buffers)
             }
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(framed_read, _) => {
-                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak)
+                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak, buffers)
             }
         }
     }
 
     fn shrink_write_buffer(&mut self) {
         let streak = &mut self.write_buffer_small_streak;
+        let buffers = &self.config.buffers;
         match &mut self.streams {
             Streams::Tcp(_, framed_write) => {
-                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak)
+                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak, buffers)
             }
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             Streams::TcpTls(_, framed_write) => {
-                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak)
+                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak, buffers)
             }
         }
     }
@@ -401,11 +394,14 @@ impl<'a> ServerCommands<'a> for &'a mut StandaloneConnection {}
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BUFFER_SHRINK_FACTOR, BUFFER_SHRINK_HYSTERESIS, TARGET_BUFFER_CAPACITY, maybe_shrink_buffer,
-    };
+    use super::maybe_shrink_buffer;
+    use crate::client::BufferConfig;
     use bytes::BytesMut;
 
+    const BUFFERS: BufferConfig = BufferConfig::DEFAULT;
+    const TARGET_BUFFER_CAPACITY: usize = BUFFERS.read_capacity;
+    const BUFFER_SHRINK_FACTOR: usize = BUFFERS.shrink_factor;
+    const BUFFER_SHRINK_HYSTERESIS: usize = BUFFERS.shrink_hysteresis;
     const OVERSIZED: usize = TARGET_BUFFER_CAPACITY * BUFFER_SHRINK_FACTOR + 1;
 
     #[test]
@@ -415,7 +411,7 @@ mod tests {
         let mut buf = BytesMut::with_capacity(TARGET_BUFFER_CAPACITY);
         let mut streak = 0;
         for _ in 0..BUFFER_SHRINK_HYSTERESIS * 2 {
-            maybe_shrink_buffer(&mut buf, &mut streak);
+            maybe_shrink_buffer(&mut buf, &mut streak, &BUFFERS);
         }
         assert_eq!(streak, 0);
         assert_eq!(buf.capacity(), TARGET_BUFFER_CAPACITY);
@@ -431,10 +427,10 @@ mod tests {
         let mut streak = 0;
 
         for _ in 0..BUFFER_SHRINK_HYSTERESIS - 1 {
-            maybe_shrink_buffer(&mut buf, &mut streak);
+            maybe_shrink_buffer(&mut buf, &mut streak, &BUFFERS);
             assert_eq!(buf.capacity(), grown, "must not shrink before hysteresis");
         }
-        maybe_shrink_buffer(&mut buf, &mut streak);
+        maybe_shrink_buffer(&mut buf, &mut streak, &BUFFERS);
         assert_eq!(buf.capacity(), TARGET_BUFFER_CAPACITY);
         assert_eq!(streak, 0);
     }
@@ -449,14 +445,37 @@ mod tests {
 
         // Build a partial streak on an empty buffer.
         for _ in 0..BUFFER_SHRINK_HYSTERESIS - 1 {
-            maybe_shrink_buffer(&mut buf, &mut streak);
+            maybe_shrink_buffer(&mut buf, &mut streak, &BUFFERS);
         }
         assert_eq!(streak, BUFFER_SHRINK_HYSTERESIS - 1);
 
         // A large residue arrives: streak resets, no shrink.
         buf.resize(TARGET_BUFFER_CAPACITY + 1, 0);
-        maybe_shrink_buffer(&mut buf, &mut streak);
+        maybe_shrink_buffer(&mut buf, &mut streak, &BUFFERS);
         assert_eq!(streak, 0);
         assert_eq!(buf.capacity(), grown);
+    }
+
+    #[test]
+    fn shrinks_to_the_configured_target_after_the_configured_hysteresis() {
+        // The policy must follow `BufferConfig`, not the historical constants:
+        // a caller who lowers the target and shortens the streak sees the buffer
+        // released sooner and to their own size.
+        let buffers = BufferConfig {
+            read_capacity: 4 * 1024,
+            shrink_factor: 2,
+            shrink_hysteresis: 3,
+            ..BufferConfig::DEFAULT
+        };
+        let mut buf = BytesMut::with_capacity(buffers.read_capacity * buffers.shrink_factor + 1);
+        let grown = buf.capacity();
+        let mut streak = 0;
+
+        for _ in 0..buffers.shrink_hysteresis - 1 {
+            maybe_shrink_buffer(&mut buf, &mut streak, &buffers);
+            assert_eq!(buf.capacity(), grown, "must not shrink before hysteresis");
+        }
+        maybe_shrink_buffer(&mut buf, &mut streak, &buffers);
+        assert_eq!(buf.capacity(), buffers.read_capacity);
     }
 }

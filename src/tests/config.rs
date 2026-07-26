@@ -1,6 +1,6 @@
 use crate::{
-    Result,
-    client::{Client, IntoConfig},
+    ClientError, Error, Result,
+    client::{Client, Config, IntoConfig, SentinelConfig, ServerConfig},
     commands::{ClientKillOptions, ConnectionCommands, FlushingMode, ServerCommands},
     tests::{get_default_host, get_default_port, get_test_client, log_try_init},
 };
@@ -274,4 +274,91 @@ async fn connect_timeout() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     Ok(())
+}
+
+#[test]
+fn tuning_defaults_preserve_the_historical_hardcoded_values() {
+    // These knobs were compile-time constants before they became configurable.
+    // Their defaults are the values that shipped, so exposing them changes
+    // nothing for a caller who does not touch them.
+    let config = Config::default();
+
+    assert_eq!(64 * 1024, config.buffers.read_capacity);
+    assert_eq!(64 * 1024, config.buffers.tape_capacity);
+    assert_eq!(8, config.buffers.shrink_factor);
+    assert_eq!(16, config.buffers.shrink_hysteresis);
+
+    assert_eq!(128, config.limits.max_nesting_depth);
+    assert_eq!(512 * 1024 * 1024, config.limits.max_bulk_length);
+    assert_eq!(128 * 1024 * 1024, config.limits.max_collection_length);
+
+    assert_eq!(48, config.max_messages_per_wave);
+    assert_eq!(10, SentinelConfig::default().max_discovery_rounds);
+}
+
+#[test]
+fn a_default_config_validates() {
+    assert!(Config::default().validate().is_ok());
+}
+
+#[test]
+fn validate_rejects_knobs_whose_zero_value_would_break_the_connection() {
+    // Every one of these is a divisor, a loop bound or a capacity whose zero
+    // value does not degrade behaviour but removes it: no message is ever
+    // flushed, no collection is ever accepted, no discovery round is ever run.
+    fn assert_rejected(name: &str, zero_it: impl FnOnce(&mut Config)) {
+        let mut config = Config::default();
+        zero_it(&mut config);
+        assert!(
+            matches!(
+                config.validate(),
+                Err(Error::Client(ClientError::InvalidConfig(_)))
+            ),
+            "{name} = 0 must be rejected"
+        );
+    }
+
+    assert_rejected("read_capacity", |c| c.buffers.read_capacity = 0);
+    assert_rejected("tape_capacity", |c| c.buffers.tape_capacity = 0);
+    assert_rejected("shrink_factor", |c| c.buffers.shrink_factor = 0);
+    assert_rejected("shrink_hysteresis", |c| c.buffers.shrink_hysteresis = 0);
+    assert_rejected("max_nesting_depth", |c| c.limits.max_nesting_depth = 0);
+    assert_rejected("max_bulk_length", |c| c.limits.max_bulk_length = 0);
+    assert_rejected("max_collection_length", |c| {
+        c.limits.max_collection_length = 0
+    });
+    assert_rejected("max_messages_per_wave", |c| c.max_messages_per_wave = 0);
+}
+
+#[test]
+fn validate_rejects_a_zero_sentinel_discovery_round_cap() {
+    // Zero rounds means discovery gives up before contacting any Sentinel.
+    let mut config = Config::default();
+    let mut sentinel_config = SentinelConfig {
+        instances: vec![("127.0.0.1".to_owned(), 26379)],
+        service_name: "myservice".to_owned(),
+        ..Default::default()
+    };
+    sentinel_config.max_discovery_rounds = 0;
+    config.server = ServerConfig::Sentinel(sentinel_config);
+
+    assert!(matches!(
+        config.validate(),
+        Err(Error::Client(ClientError::InvalidConfig(_)))
+    ));
+}
+
+#[test]
+fn validate_names_the_offending_knob() {
+    // The error must say which knob is wrong: a config rejected at connect time
+    // with an opaque message is the worst kind of startup failure.
+    let mut config = Config::default();
+    config.limits.max_bulk_length = 0;
+    let Err(Error::Client(ClientError::InvalidConfig(message))) = config.validate() else {
+        panic!("expected an InvalidConfig error");
+    };
+    assert!(
+        message.contains("max_bulk_length"),
+        "message did not name the knob: {message}"
+    );
 }

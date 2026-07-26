@@ -141,22 +141,19 @@ impl SendBatchTestHook {
     }
 }
 
-/// Maximum number of messages collected into a single write (see
-/// [`NetworkHandler::try_handle_message`]).
-///
-/// Draining the message channel until it is empty convoys the entire in-flight
-/// concurrency into one `writev`, so every caller waits for the whole batch to be
-/// written *and* answered. Capping the wave keeps a batch in flight at the server
-/// while the next one is being collected.
-///
-/// Calibrated against a live Redis over concurrency levels 64 → 1024 (see
-/// `RUSTIS_VS_REDIS_RS.md`, H13). The optimum is flat between 32 and 128 and only
-/// mildly concurrency-dependent; what matters is that the cap stays *below* the
-/// in-flight concurrency, otherwise it never fires and the convoy returns. 48 is
-/// within ~12% of the per-level optimum everywhere and beats the uncapped drain
-/// at every level from 64 tasks up. Below 48 concurrent in-flight messages the cap
-/// never fires, so low-concurrency behaviour is unchanged.
-const MAX_MESSAGES_PER_WAVE: usize = 48;
+// Why `Config::max_messages_per_wave` exists, kept next to the code that obeys
+// it in `try_handle_message`.
+//
+// Draining the message channel until it is empty convoys the entire in-flight
+// concurrency into one `writev`, so every caller waits for the whole batch to be
+// written *and* answered. Capping the wave keeps a batch in flight at the server
+// while the next one is being collected.
+//
+// The default (48) was calibrated against a live Redis over concurrency levels
+// 64 → 1024 (see `RUSTIS_VS_REDIS_RS.md`, H13): the optimum is flat between 32
+// and 128, 48 is within ~12% of the per-level optimum everywhere, and below 48
+// in-flight messages the cap never fires, so low-concurrency behaviour is
+// unchanged whatever it is set to.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Status {
@@ -232,6 +229,8 @@ pub(crate) struct NetworkHandler {
     reconnection_state: ReconnectionState,
     /// Per-message retry cap from `Config::max_command_attempts` (`0` = unlimited).
     max_command_attempts: usize,
+    /// Send-wave cap from `Config::max_messages_per_wave`.
+    max_messages_per_wave: usize,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
@@ -243,10 +242,15 @@ impl NetworkHandler {
     pub async fn connect(
         config: Config,
     ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, Arc<str>)> {
+        // Reject an incoherent config here rather than letting a zeroed knob
+        // surface later as a stall or a rejected reply.
+        config.validate()?;
+
         // options
         let auto_resubscribe = config.auto_resubscribe;
         let auto_remonitor = config.auto_remonitor;
         let max_command_attempts = config.max_command_attempts;
+        let max_messages_per_wave = config.max_messages_per_wave;
         let reconnection_config = config.reconnection.clone();
         #[cfg(test)]
         let send_batch_test_hook = config.send_batch_test_hook.clone();
@@ -276,6 +280,7 @@ impl NetworkHandler {
             tag: tag.clone(),
             reconnection_state: ReconnectionState::new(reconnection_config),
             max_command_attempts,
+            max_messages_per_wave,
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
@@ -321,8 +326,8 @@ impl NetworkHandler {
             }
 
             // Send in waves rather than accumulating the whole channel into
-            // one write (see `MAX_MESSAGES_PER_WAVE`).
-            if queued >= MAX_MESSAGES_PER_WAVE {
+            // one write (see `Config::max_messages_per_wave`).
+            if queued >= self.max_messages_per_wave {
                 if self.status != Status::Disconnected {
                     self.send_messages().await;
                 }

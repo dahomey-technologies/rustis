@@ -105,9 +105,11 @@ impl Pipeline<'_> {
             .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
-        // Forget-flag filtering runs unconditionally: a single forgotten command
-        // must have its response dropped just like it would in a multi-command batch.
-        if !self.forget_flags.is_empty() {
+        // Forget-flag filtering runs whenever at least one command is forgotten,
+        // regardless of the batch size: a single forgotten command must have its
+        // response dropped just like it would in a multi-command batch. When
+        // nothing is forgotten the whole `retain` pass is skipped.
+        if self.forget_flags.iter().any(|&forget| forget) {
             let mut idx = 0;
             results.retain(|_| {
                 let keep = !self.forget_flags[idx];

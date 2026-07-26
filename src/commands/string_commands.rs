@@ -130,6 +130,43 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(self, cmd("GETDEL").key(key))
     }
 
+    /// Returns the hash digest of a string value as a hexadecimal string.
+    ///
+    /// The digest is stable for a given value, so it can be captured and later
+    /// passed to [`delex`](StringCommands::delex) or `SET`'s `IFDEQ`/`IFDNE`
+    /// conditions for compare-and-delete / compare-and-set flows.
+    ///
+    /// # Return
+    /// the hexadecimal digest of the value, or `nil` when the key does not exist.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/digest/>](https://redis.io/commands/digest/)
+    #[must_use]
+    fn digest<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("DIGEST").key(key))
+    }
+
+    /// Conditionally removes `key` based on a value or digest comparison.
+    ///
+    /// With no condition the key is deleted unconditionally (like `DEL` on a
+    /// single key). With a [`DelexCondition`] the key is deleted only if its
+    /// current value (or its digest) satisfies the comparison.
+    ///
+    /// # Return
+    /// * `1` if the key was deleted.
+    /// * `0` if the key does not exist or the condition was not met.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/delex/>](https://redis.io/commands/delex/)
+    #[must_use]
+    fn delex<'b>(
+        self,
+        key: impl Serialize,
+        condition: impl Into<Option<DelexCondition<'b>>>,
+    ) -> PreparedCommand<'a, Self, i64> {
+        prepare_command(self, cmd("DELEX").key(key).arg(condition.into()))
+    }
+
     /// Get the value of key and optionally set its expiration. GETEX is similar to GET, but is a write command with additional options.
     ///
     /// Decrements the number stored at key by decrement.
@@ -744,6 +781,24 @@ pub enum SetExpiration {
     Pxat(u64),
     /// Retain the time to live associated with the key.
     KeepTtl,
+}
+
+/// Condition option for the [`delex`](StringCommands::delex) command.
+///
+/// Mirrors the `IFEQ`/`IFNE`/`IFDEQ`/`IFDNE` value/digest comparisons of
+/// [`SetCondition`], without the `NX`/`XX` existence conditions, which `DELEX`
+/// does not accept.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum DelexCondition<'a> {
+    /// Delete only if the current value is equal to the provided value.
+    IFEQ(&'a str),
+    /// Delete only if the current value is not equal to the provided value.
+    IFNE(&'a str),
+    /// Delete only if the digest of the current value is equal to the provided digest.
+    IFDEQ(&'a str),
+    /// Delete only if the digest of the current value is not equal to the provided digest.
+    IFDNE(&'a str),
 }
 
 /// Condition option for the [`set_with_options`](StringCommands::set_with_options) command

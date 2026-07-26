@@ -1,8 +1,8 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
     commands::{
-        FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands, SetCondition,
-        SetExpiration, StringCommands,
+        DelexCondition, FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands,
+        SetCondition, SetExpiration, StringCommands,
     },
     resp::Value,
     tests::get_test_client,
@@ -25,6 +25,46 @@ async fn append() -> Result<()> {
 
     let value: String = client.get("key").await?;
     assert_eq!("value12", value);
+
+    client.close().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn digest_and_delex() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.set("key", "hello").await?;
+
+    // DIGEST returns the value's hash as a hex string; equal values hash equally.
+    let digest: String = client.digest("key").await?;
+    assert!(!digest.is_empty());
+    client.set("key2", "hello").await?;
+    let digest2: String = client.digest("key2").await?;
+    assert_eq!(digest, digest2);
+
+    // DELEX with a non-matching value must not delete.
+    let deleted = client.delex("key", DelexCondition::IFEQ("world")).await?;
+    assert_eq!(0, deleted);
+    assert_eq!(1, client.exists("key").await?);
+
+    // DELEX with a matching digest deletes.
+    let deleted = client.delex("key", DelexCondition::IFDEQ(&digest)).await?;
+    assert_eq!(1, deleted);
+    assert_eq!(0, client.exists("key").await?);
+
+    // DELEX without a condition deletes unconditionally.
+    let deleted = client.delex("key2", None).await?;
+    assert_eq!(1, deleted);
+
+    // DELEX on a missing key returns 0.
+    let deleted = client.delex("missing", None).await?;
+    assert_eq!(0, deleted);
 
     client.close().await?;
 

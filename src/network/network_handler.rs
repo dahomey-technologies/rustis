@@ -20,6 +20,16 @@ use std::{
 };
 use tokio::{sync::broadcast, time::Instant};
 
+// Backpressure note: every channel in the crate — request, pub/sub and push —
+// is deliberately unbounded. This is a design choice of the lock-free
+// multiplexer: senders never block or await capacity, keeping the hot send path
+// allocation-and-await-free and the network task's accounting simple. The
+// trade-off is that memory is bounded by consumer behaviour rather than by the
+// channel: a pub/sub subscriber that stops polling its stream, or a reconnect
+// storm accumulating retryable traffic in `messages_to_send`, grows client-side
+// memory unbounded. Callers with slow or paused consumers should drop the
+// stream (or drain it) promptly; a bounded variant would trade this for
+// send-path blocking and is intentionally not used here.
 pub(crate) type MsgSender = tokio::sync::mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = tokio::sync::mpsc::UnboundedReceiver<Message>;
 /// Retry-only handle the network task keeps on the message channel. It is

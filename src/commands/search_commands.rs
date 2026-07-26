@@ -384,12 +384,14 @@ pub trait SearchCommands<'a>: Sized {
     /// Performs a hybrid search combining a text search ([`FtHybridSearch`]) and a
     /// vector similarity search ([`FtHybridVsim`]), fusing their results.
     ///
-    /// The aggregation-style post-processing ([`FtHybridOptions`]) covers the core
-    /// clauses: `COMBINE` (RRF/LINEAR), `LIMIT`, `SORTBY`/`NOSORT`, `LOAD`, `APPLY`,
-    /// `PARAMS` and `TIMEOUT`. The vector query blob is passed by reference (e.g.
-    /// `$vec`) and its bytes supplied through `PARAMS`. Advanced options not yet
-    /// modelled (`POLICY`, `SHARD_K_RATIO`, `FORMAT`, `GROUPBY`/`REDUCE`) can be
-    /// added later; see the command reference.
+    /// The aggregation-style post-processing ([`FtHybridOptions`]) covers the
+    /// clauses accepted by the server: `COMBINE` (RRF/LINEAR), `LIMIT`,
+    /// `SORTBY`/`NOSORT`, `LOAD`, `GROUPBY`/`REDUCE`, `APPLY`, a post-combine
+    /// `FILTER`, `FORMAT`, `PARAMS` and `TIMEOUT`. The vector query blob is passed
+    /// by reference (e.g. `$vec`) and its bytes supplied through `PARAMS`. The
+    /// `SHARD_K_RATIO`, per-clause `YIELD_SCORE_AS` and vector `POLICY` arguments
+    /// appear in the command reference but are rejected by the search module, so
+    /// they are intentionally not exposed.
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.hybrid/>](https://redis.io/commands/ft.hybrid/)
@@ -478,14 +480,9 @@ pub trait SearchCommands<'a>: Sized {
             None => {}
         }
 
-        if let Some((offset, num)) = options.limit {
-            command = command.arg("LIMIT").arg(offset).arg(num);
-        }
-        if options.nosort {
-            command = command.arg("NOSORT");
-        } else if let Some((field, order)) = options.sortby {
-            command = command.arg("SORTBY").arg(1).arg(field).arg(order);
-        }
+        // Post-processing pipeline, emitted in execution order so later stages can
+        // reference fields produced by earlier ones (e.g. SORTBY on a GROUPBY
+        // reducer): LOAD → GROUPBY → APPLY → FILTER → SORTBY/NOSORT → LIMIT.
         match options.load {
             FtHybridLoad::All => command = command.arg("LOAD").arg("*"),
             FtHybridLoad::Fields(fields) if !fields.is_empty() => {
@@ -493,8 +490,27 @@ pub trait SearchCommands<'a>: Sized {
             }
             _ => {}
         }
+        if let Some(groupby) = options.groupby {
+            command = command.arg("GROUPBY").arg(groupby);
+        }
         for (expr, name) in options.apply {
             command = command.arg("APPLY").arg(expr).arg("AS").arg(name);
+        }
+        if let Some(filter) = options.filter {
+            command = command.arg("FILTER").arg(filter);
+        }
+        if options.nosort {
+            command = command.arg("NOSORT");
+        } else if let Some((field, order)) = options.sortby {
+            // `SORTBY count field [ASC|DESC]` — the count spans every token that
+            // follows, so it is 2 once the order keyword is included.
+            command = command.arg("SORTBY").arg(2).arg(field).arg(order);
+        }
+        if let Some((offset, num)) = options.limit {
+            command = command.arg("LIMIT").arg(offset).arg(num);
+        }
+        if let Some(format) = options.format {
+            command = command.arg("FORMAT").arg(format);
         }
         if !options.params.is_empty() {
             // PARAMS nargs name value [name value ...] — nargs counts every token,
@@ -1540,6 +1556,16 @@ pub enum FtHybridCombine {
     },
 }
 
+/// Result serialization format for [`FtHybridOptions`].
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum FtHybridFormat {
+    /// `FORMAT STRING` — return attribute values as strings (default).
+    String,
+    /// `FORMAT EXPAND` — return attribute values in their expanded form.
+    Expand,
+}
+
 /// `LOAD` selection for [`FtHybridOptions`].
 #[derive(Default)]
 pub enum FtHybridLoad<'a> {
@@ -1560,7 +1586,10 @@ pub struct FtHybridOptions<'a> {
     sortby: Option<(&'a str, SortOrder)>,
     nosort: bool,
     load: FtHybridLoad<'a>,
+    groupby: Option<FtGroupBy<'a>>,
     apply: SmallVec<[(&'a str, &'a str); 2]>,
+    filter: Option<&'a str>,
+    format: Option<FtHybridFormat>,
     params: SmallVec<[(&'a str, &'a [u8]); 2]>,
     timeout: Option<u64>,
 }
@@ -1608,11 +1637,34 @@ impl<'a> FtHybridOptions<'a> {
         self
     }
 
+    /// Groups the fused results by one or more properties, applying reduction
+    /// functions (`GROUPBY count property ... REDUCE ...`).
+    #[must_use]
+    pub fn groupby(mut self, groupby: FtGroupBy<'a>) -> Self {
+        self.groupby = Some(groupby);
+        self
+    }
+
     /// Applies a transformation, storing the result as `name` (`APPLY expr AS name`).
     /// Can be called multiple times.
     #[must_use]
     pub fn apply(mut self, expr: &'a str, name: &'a str) -> Self {
         self.apply.push((expr, name));
+        self
+    }
+
+    /// Post-filters the fused results with a search expression, applied after
+    /// `COMBINE`/`GROUPBY`/`APPLY` (`FILTER expr`).
+    #[must_use]
+    pub fn filter(mut self, filter: &'a str) -> Self {
+        self.filter = Some(filter);
+        self
+    }
+
+    /// Sets the serialization format of the returned attribute values (`FORMAT`).
+    #[must_use]
+    pub fn format(mut self, format: FtHybridFormat) -> Self {
+        self.format = Some(format);
         self
     }
 

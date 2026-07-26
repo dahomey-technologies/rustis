@@ -93,11 +93,23 @@ async fn hexpireat() -> Result<()> {
         .unwrap()
         .as_secs();
 
+    // Absolute expiries are set relative to `now` (captured in whole seconds),
+    // but the server evaluates HTTL against its own clock; a second boundary
+    // crossed between the two makes the remaining TTL one lower. Assert HTTL
+    // within that one-second window rather than on an exact value.
+    let assert_httl_near = |ttl: Vec<i64>, expected: i64| {
+        assert_eq!(ttl.len(), 1, "unexpected httl shape: {ttl:?}");
+        assert!(
+            (expected - 1..=expected).contains(&ttl[0]),
+            "httl {ttl:?} not within one second of {expected}"
+        );
+    };
+
     // no option
     client.hset("key", ("field", "value")).await?;
     let result: Vec<i64> = client.hexpireat("key", now + 10, None, "field").await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
+    assert_httl_near(client.httl("key", "field").await?, 10);
 
     // xx
     client.hset("key", ("field", "value")).await?;
@@ -112,31 +124,31 @@ async fn hexpireat() -> Result<()> {
         .hexpireat("key", now + 10, ExpireOption::Nx, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
+    assert_httl_near(client.httl("key", "field").await?, 10);
 
     // gt
     let result: Vec<i64> = client
         .hexpireat("key", now + 5, ExpireOption::Gt, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![10]);
+    assert_httl_near(client.httl("key", "field").await?, 10);
     let result: Vec<i64> = client
         .hexpireat("key", now + 15, ExpireOption::Gt, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
+    assert_httl_near(client.httl("key", "field").await?, 15);
 
     // lt
     let result: Vec<i64> = client
         .hexpireat("key", now + 20, ExpireOption::Lt, "field")
         .await?;
     assert_eq!(result, vec![0]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![15]);
+    assert_httl_near(client.httl("key", "field").await?, 15);
     let result: Vec<i64> = client
         .hexpireat("key", now + 5, ExpireOption::Lt, "field")
         .await?;
     assert_eq!(result, vec![1]);
-    assert_eq!(client.httl::<Vec<i64>>("key", "field").await?, vec![5]);
+    assert_httl_near(client.httl("key", "field").await?, 5);
 
     Ok(())
 }

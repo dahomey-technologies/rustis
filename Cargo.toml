@@ -145,67 +145,71 @@ required-features = ["bench"]
 
 [[example]]
 name = "actix_crud"
-required-features = ["web-examples"]
+required-features = ["tokio-runtime", "web-examples"]
 
 [[example]]
 name = "actix_long_polling_pubsub"
-required-features = ["web-examples"]
+required-features = ["tokio-runtime", "web-examples"]
 
 [[example]]
 name = "axum_crud"
-required-features = ["web-examples"]
+required-features = ["tokio-runtime", "web-examples"]
 
 [[example]]
 name = "axum_long_polling_pubsub"
-required-features = ["web-examples"]
+required-features = ["tokio-runtime", "web-examples"]
 
 [[example]]
 name = "cbor"
+required-features = ["tokio-runtime"]
 
 [[example]]
 name = "loop"
+required-features = ["tokio-runtime"]
 
 [[example]]
 name = "pprof_pipeline"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "resp_profiling"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "command_construction_profiling"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "pprof_multiplexer_get"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "pprof_send_vs_receive"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "conn_scaling_probe"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "head_to_head"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "wakeup_cost_probe"
+required-features = ["tokio-runtime"]
 
 [[example]]
 name = "strace_workload"
-required-features = ["bench"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "cache_stampede_probe"
-required-features = ["client-cache"]
+required-features = ["tokio-runtime", "client-cache"]
 
 [[example]]
 name = "simple"
+required-features = ["tokio-runtime"]
 
 [profile.dev]
 opt-level = 0

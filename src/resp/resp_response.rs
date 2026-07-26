@@ -20,10 +20,6 @@ use std::{
 /// element, all nesting levels — rooted at node `root`, so reading an element is
 /// an O(1) node lookup instead of re-parsing the collection from the start. See
 /// [`crate::resp::resp_tape`] for the node layout.
-///
-/// > **Breaking change (unreleased).** The collection variants previously held
-/// > `{ len: usize, ranges: [Range<u32>; 5] }`; they now hold `{ tape: Bytes,
-/// > root: u32 }`. Code that matched on the old shape must be updated.
 #[derive(Clone, PartialEq)]
 pub enum RespFrame {
     SimpleString(Range<usize>),
@@ -322,7 +318,7 @@ fn compact_frame(data: &[u8], frame: &RespFrame) -> (RespBuf, RespFrame) {
 
 /// Reads the scalar node with tag `tag` at byte offset `off` into a borrowed
 /// [`RespView`]. Returns `None` when the element's content fails to parse (a
-/// malformed integer or double), which ends iteration — the pre-tape behaviour.
+/// malformed integer or double), which ends iteration.
 ///
 /// A [`NULL_TAG`] node is `Null` without touching the data buffer: it may stand
 /// in for a null collection (`*-1`), whose offset points at `*`, not a scalar.

@@ -1,4 +1,4 @@
-//! Read-buffer reservation benchmark (arbitrates STRUCT-05).
+//! Read-buffer reservation benchmark.
 //!
 //! A large RESP reply arrives from the socket in TCP-sized slices. `FramedRead`
 //! today reserves one byte before each read, so its `BytesMut` read buffer grows
@@ -11,8 +11,8 @@
 //! that reserves the whole reply once — with no socket, so the reallocation cost
 //! is isolated from network time.
 //!
-//! Now that the decoder itself reserves the announced bulk length (STRUCT-05),
-//! the two converge: the first variant relies solely on the decoder's internal
+//! The decoder itself now reserves the announced bulk length, so the two
+//! converge: the first variant relies solely on the decoder's internal
 //! reservation, so it doubles as a **regression guard** — if that reservation is
 //! ever removed, `grow_by_doubling` blows back up (~3.7× on 16 MiB, measured).
 //!

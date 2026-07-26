@@ -62,7 +62,7 @@ pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> 
 /// Drives [`BufferDecoder`] over `data` delivered in `chunk`-byte slices while
 /// growing the read buffer the way `FramedRead` does today: `reserve(1)` before
 /// each read, so the `BytesMut` doubles every time it fills. This is the
-/// realloc-by-doubling cost STRUCT-05 targets — a multi-MB reply is memcpy'd
+/// realloc-by-doubling cost — a multi-MB reply is memcpy'd
 /// ~log2(size) times as the buffer grows. Returns the decoded frame's byte
 /// length; the frame itself is dropped (no deserialize), so the measurement
 /// isolates buffer growth from serde.
@@ -72,7 +72,7 @@ pub fn bench_decode_stream_grow(data: &[u8], chunk: usize) -> Result<usize> {
 }
 
 /// Same as [`bench_decode_stream_grow`], but reserves the announced frame size
-/// once (the STRUCT-05 fix): the read buffer reaches its final capacity in a
+/// once: the read buffer reaches its final capacity in a
 /// single allocation and never doubles. Compare the two to decide whether the
 /// reallocation cost is worth re-plumbing the decoder's EOF contract.
 #[inline(never)]

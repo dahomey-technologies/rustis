@@ -388,6 +388,7 @@ pub trait TDigestCommands<'a> {
 
 /// Result for the [`tdigest_info`](TDigestCommands::tdigest_info) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct TDigestInfoResult {
     /// The compression (controllable trade-off between accuracy and memory consumption) of the sketch
     #[serde(rename = "Compression")]

@@ -230,6 +230,7 @@ pub trait SentinelCommands<'a>: Sized {
 /// Result for the [`sentinel_master`](SentinelCommands::sentinel_master) command.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct SentinelMasterInfo {
     pub name: String,
     pub ip: String,
@@ -256,6 +257,7 @@ pub struct SentinelMasterInfo {
 /// /// Result for the [`sentinel_replicas`](SentinelCommands::sentinel_replicas) command.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct SentinelReplicaInfo {
     pub name: String,
     pub ip: String,
@@ -283,6 +285,7 @@ pub struct SentinelReplicaInfo {
 /// Result for the [`sentinel_sentinels`](SentinelCommands::sentinel_sentinels) command.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct SentinelInfo {
     pub name: String,
     pub ip: String,
@@ -304,6 +307,7 @@ pub struct SentinelInfo {
 /// the [`sentinel_simulate_failure`](SentinelCommands::sentinel_simulate_failure) command
 #[derive(Serialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+#[non_exhaustive]
 pub enum SentinelSimulateFailureMode {
     CrashAfterElection,
     CrashAfterPromotion,

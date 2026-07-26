@@ -260,6 +260,7 @@ pub trait BloomCommands<'a>: Sized {
 ///
 /// Used to query a specific parameter.
 #[derive(Serialize)]
+#[non_exhaustive]
 pub enum BfInfoParameter {
     #[serde(rename = "CAPACITY")]
     Capacity,
@@ -275,6 +276,7 @@ pub enum BfInfoParameter {
 
 /// Result for the [`bf_info`](BloomCommands::bf_info) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct BfInfoResult {
     #[serde(rename = "Capacity")]
     pub capacity: usize,
@@ -406,6 +408,7 @@ impl BfReserveOptions {
 
 /// Result for the [`bf_scandump`](BloomCommands::bf_scandump) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct BfScanDumpResult {
     pub iterator: i64,
     pub data: BulkString,

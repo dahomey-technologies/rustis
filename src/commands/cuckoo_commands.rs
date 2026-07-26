@@ -324,6 +324,7 @@ pub trait CuckooCommands<'a>: Sized {
 
 /// Result for the [`cf_info`](CuckooCommands::cf_info) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct CfInfoResult {
     /// Size
     #[serde(rename = "Size")]
@@ -435,6 +436,7 @@ impl CfReserveOptions {
 
 /// Result for the [`cf_scandump`](CuckooCommands::cf_scandump) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct CfScanDumpResult {
     pub iterator: i64,
     pub data: BulkString,

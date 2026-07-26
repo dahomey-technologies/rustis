@@ -651,6 +651,7 @@ pub enum KeyType {
 /// Options for the [`expire`](GenericCommands::expire) and [`hexpire`](crate::commands::HashCommands::hexpire) commands
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ExpireOption {
     /// Set expiry only when the key has no expiry
     Nx,
@@ -765,6 +766,7 @@ impl RestoreOptions {
 /// Order option of the [`sort`](GenericCommands::sort) command
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum SortOrder {
     Asc,
     Desc,

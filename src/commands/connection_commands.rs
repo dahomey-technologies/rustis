@@ -411,6 +411,7 @@ pub trait ConnectionCommands<'a>: Sized {
 /// Client caching mode for the [`client_caching`](ConnectionCommands::client_caching) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientCachingMode {
     Yes,
     No,
@@ -419,6 +420,7 @@ pub enum ClientCachingMode {
 /// Client info results for the [`client_info`](ConnectionCommands::client_info)
 /// & [`client_list`](ConnectionCommands::client_list) commands.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ClientInfo {
     /// a unique 64-bit client ID
     pub id: i64,
@@ -620,6 +622,7 @@ impl<'de> Deserialize<'de> for ClientInfo {
 /// Client type options for the [`client_list`](ConnectionCommands::client_list) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientType {
     Normal,
     Master,
@@ -656,6 +659,7 @@ impl ClientListOptions {
 
 /// Result for the [`client_list`](ConnectionCommands::client_list) command.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ClientListResult {
     pub client_infos: Vec<ClientInfo>,
 }
@@ -757,6 +761,7 @@ impl<'a> ClientKillOptions<'a> {
 /// Mode options for the [`client_pause`](ConnectionCommands::client_pause) command.
 #[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientPauseMode {
     /// Clients are only blocked if they attempt to execute a write command.
     Write,
@@ -768,6 +773,7 @@ pub enum ClientPauseMode {
 /// Mode options for the [`client_reply`](ConnectionCommands::client_reply) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientReplyMode {
     On,
     Off,
@@ -777,6 +783,7 @@ pub enum ClientReplyMode {
 /// Status options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientTrackingStatus {
     On,
     Off,
@@ -858,6 +865,7 @@ impl ClientTrackingOptions {
 
 /// Result for the [`client_trackinginfo`](ConnectionCommands::client_trackinginfo) command.
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct ClientTrackingInfo {
     /// A list of tracking flags used by the connection.
     pub flags: Vec<String>,
@@ -872,6 +880,7 @@ pub struct ClientTrackingInfo {
 /// Mode options for the [`client_unblock`](ConnectionCommands::client_unblock) command.
 #[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ClientUnblockMode {
     /// By default the client is unblocked as if the timeout of the command was reached,
     #[default]
@@ -918,6 +927,7 @@ impl<'a> HelloOptions<'a> {
 
 /// Result for the [`hello`](ConnectionCommands::hello) command
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct HelloResult {
     pub server: String,
     pub version: String,
@@ -933,6 +943,7 @@ pub struct HelloResult {
 // Info options for the [`client_setinfo`](ConnectionCommands::client_setinfo) command.
 #[derive(Serialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+#[non_exhaustive]
 pub enum ClientInfoAttribute {
     LibName,
     LibVer,

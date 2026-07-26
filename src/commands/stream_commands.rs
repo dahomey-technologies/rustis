@@ -505,6 +505,7 @@ pub trait StreamCommands<'a>: Sized {
 /// Consumer group options for the [`xadd`](StreamCommands::xadd) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum ConsumerGroupOptions {
     /// When trimming, removes entries from the stream according to the specified strategy (MAXLEN or MINID),
     /// regardless of whether they are referenced by any consumer groups, but preserves existing references
@@ -558,6 +559,7 @@ impl<'a> XAddOptions<'a> {
 /// and [`xtrim`](StreamCommands::xtrim) commands
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum XTrimOperator {
     /// =
     Equal,
@@ -619,6 +621,7 @@ impl<'a> XTrimOptions<'a> {
 /// [`xtrim`](StreamCommands::xtrim).
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum StreamEntryDeletionPolicy {
     /// Remove the entry but keep consumer-group references (default, preserves
     /// pre-8.2 behaviour).
@@ -659,6 +662,7 @@ impl XAutoClaimOptions {
 /// Result for the [`xrange`](StreamCommands::xrange) and other associated commands.
 #[derive(Deserialize)]
 #[serde(bound = "V: DeserializeOwned")]
+#[non_exhaustive]
 pub struct StreamEntry<V>
 where
     V: Response,
@@ -673,6 +677,7 @@ where
 /// Result for the [`xautoclaim`](StreamCommands::xautoclaim) command.
 #[derive(Deserialize)]
 #[serde(bound = "V: DeserializeOwned")]
+#[non_exhaustive]
 pub struct XAutoClaimResult<V>
 where
     V: Response,
@@ -787,6 +792,7 @@ impl XGroupCreateOptions {
 
 /// Result entry for the [`xinfo_consumers`](StreamCommands::xinfo_consumers) command.
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct XConsumerInfo {
     /// the consumer's name
     pub name: String,
@@ -804,6 +810,7 @@ pub struct XConsumerInfo {
 /// Result entry for the [`xinfo_groups`](StreamCommands::xinfo_groups) command.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct XGroupInfo {
     /// the consumer group's name
     pub name: String,
@@ -861,6 +868,7 @@ impl XInfoStreamOptions {
 /// Stream info returned by the [`xinfo_stream`](StreamCommands::xinfo_stream) command.
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub struct XStreamInfo {
     /// the number of entries in the stream (see [`xlen`](StreamCommands::xlen))
     pub length: usize,
@@ -1021,6 +1029,7 @@ impl<'a> XPendingOptions<'a> {
 
 /// Result for the [`xpending`](StreamCommands::xpending) command
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct XPendingResult {
     pub num_pending_messages: usize,
     pub smallest_id: String,
@@ -1030,6 +1039,7 @@ pub struct XPendingResult {
 
 /// Customer info result for the [`xpending`](StreamCommands::xpending) command
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct XPendingConsumer {
     pub consumer: String,
     pub num_messages: usize,
@@ -1037,6 +1047,7 @@ pub struct XPendingConsumer {
 
 /// Message result for the [`xpending_with_options`](StreamCommands::xpending_with_options) command
 #[derive(Deserialize)]
+#[non_exhaustive]
 pub struct XPendingMessageResult {
     pub message_id: String,
     pub consumer: String,

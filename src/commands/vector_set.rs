@@ -320,6 +320,7 @@ impl<'a> VAddOptions<'a> {
 /// Quantization options for [`vadd`](VectorSetCommands::vadd) command.
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum QuantizationOptions {
     /// in the first VADD call for a given key, NOQUANT forces the vector to be created without int8 quantization,
     /// which is otherwise the default.
@@ -335,6 +336,7 @@ pub enum QuantizationOptions {
 
 /// Result for the [`vinfo`](VectorSetCommands::vinfo) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct VInfoResult {
     #[serde(rename = "quant-type")]
     pub quant_type: String,
@@ -351,6 +353,7 @@ pub struct VInfoResult {
 
 /// Argument of the [`vsim`](VectorSetCommands::vsim) command
 #[derive(Serialize)]
+#[non_exhaustive]
 pub enum VectorOrElement<'a> {
     #[serde(rename = "FP32")]
     Vector(&'a [f32]),

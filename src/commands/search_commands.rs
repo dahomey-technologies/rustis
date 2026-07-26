@@ -809,6 +809,7 @@ pub trait SearchCommands<'a>: Sized {
 
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtVectorType {
     Float64,
     Float32,
@@ -816,6 +817,7 @@ pub enum FtVectorType {
 
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtVectorDistanceMetric {
     L2,
     IP,
@@ -824,6 +826,7 @@ pub enum FtVectorDistanceMetric {
 
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub struct FtFlatVectorFieldAttributes {
     pub r#type: FtVectorType,
     pub dim: usize,
@@ -876,6 +879,7 @@ impl FtFlatVectorFieldAttributes {
 
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub struct FtHnswVectorFieldAttributes {
     pub r#type: FtVectorType,
     pub dim: usize,
@@ -962,6 +966,7 @@ impl FtHnswVectorFieldAttributes {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum FtVectorFieldAlgorithm {
     /// Brute force algorithm.
     Flat(FtFlatVectorFieldAttributes),
@@ -1489,6 +1494,7 @@ impl<'a> FtHybridSearch<'a> {
 }
 
 /// Vector query type for the [`FtHybridVsim`] clause.
+#[non_exhaustive]
 pub enum FtHybridVectorQuery {
     /// K-nearest-neighbors search.
     Knn { k: u32, ef_runtime: Option<u32> },
@@ -1542,6 +1548,7 @@ impl<'a> FtHybridVsim<'a> {
 }
 
 /// Fusion method for the `COMBINE` clause of [`ft_hybrid`](SearchCommands::ft_hybrid).
+#[non_exhaustive]
 pub enum FtHybridCombine {
     /// Reciprocal Rank Fusion.
     Rrf {
@@ -1559,6 +1566,7 @@ pub enum FtHybridCombine {
 /// Result serialization format for [`FtHybridOptions`].
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtHybridFormat {
     /// `FORMAT STRING` — return attribute values as strings (default).
     String,
@@ -1568,6 +1576,7 @@ pub enum FtHybridFormat {
 
 /// `LOAD` selection for [`FtHybridOptions`].
 #[derive(Default)]
+#[non_exhaustive]
 pub enum FtHybridLoad<'a> {
     /// Do not load any document fields (default).
     #[default]
@@ -2275,6 +2284,7 @@ impl FtWithCursorOptions {
 
 /// options for the [`scorer`](FtAggregateOptions::scorer) aggregate option
 #[derive(Serialize)]
+#[non_exhaustive]
 pub enum FtScorerOptions<'a> {
     #[serde(rename = "TFIDF")]
     TfIdf,
@@ -2302,6 +2312,7 @@ pub enum FtScorerOptions<'a> {
 /* */
 /// Result for the [`ft_aggregate`](SearchCommands::ft_aggregate) command
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct FtAggregateResult {
     pub attributes: Vec<String>,
     pub format: String,
@@ -2369,6 +2380,7 @@ impl<'de> Deserialize<'de> for FtAggregateResult {
 
 /// Result for the [`ft_search`](SearchCommands::ft_search) and [`ft_aggregate`](SearchCommands::ft_aggregate) commands
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtSearchResult {
     pub attributes: Vec<String>,
     pub format: String,
@@ -2379,6 +2391,7 @@ pub struct FtSearchResult {
 
 /// A row in a [`FtSearchResult`](FtSearchResult)
 #[derive(Debug, Default, Deserialize)]
+#[non_exhaustive]
 pub struct FtSearchResultRow {
     /// Document id. Will be empty for [`ft_aggregate`](SearchCommands::ft_aggregate)
     #[serde(default)]
@@ -2401,6 +2414,7 @@ pub struct FtSearchResultRow {
 
 /// Result for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtInfoResult {
     /// Name of the index
     pub index_name: String,
@@ -2455,6 +2469,7 @@ pub struct FtInfoResult {
 
 /// Index attribute info
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct FtIndexAttribute {
     /// field identifier
     pub identifier: String,
@@ -2602,6 +2617,7 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
 
 /// Garbage collector stats for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtGcStats {
     pub bytes_collected: usize,
     pub total_ms_run: usize,
@@ -2614,6 +2630,7 @@ pub struct FtGcStats {
 
 /// Cursor stats for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtCursorStats {
     pub global_idle: usize,
     pub global_total: usize,
@@ -2623,6 +2640,7 @@ pub struct FtCursorStats {
 
 /// Index definitin for the [`ft_info`](SearchCommands::ft_info) command
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtIndexDefinition {
     pub key_type: FtIndexDataType,
     pub prefixes: Vec<String>,
@@ -3112,6 +3130,7 @@ impl<'a> FtSearchHighlightOptions<'a> {
 /// See. [`Supported Languages`](https://redis.io/docs/stack/search/reference/stemming/#supported-languages)
 #[derive(Default, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum FtLanguage {
     Arabic,
     Armenian,
@@ -3201,6 +3220,7 @@ struct FtSpellCheckTermsOption<'a> {
 /// Term type for the option [`terms`](FtSpellCheckOptions::terms)
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtTermType {
     Include,
     Exclude,
@@ -3208,6 +3228,7 @@ pub enum FtTermType {
 
 /// Result for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtSpellCheckResult {
     /// a collection where each element represents a misspelled term from the query + suggestions for this term
     ///
@@ -3218,6 +3239,7 @@ pub struct FtSpellCheckResult {
 
 /// Misspelled term + suggestions for the [`ft_spellcheck`](SearchCommands::ft_spellcheck) command.
 #[derive(Debug, Deserialize)]
+#[non_exhaustive]
 pub struct FtMisspelledTerm {
     /// Misspelled term
     pub misspelled_term: String,

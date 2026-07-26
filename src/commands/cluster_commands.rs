@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
+    commands::SortOrder,
     resp::{Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{
@@ -363,6 +364,106 @@ pub trait ClusterCommands<'a>: Sized {
         prepare_command(self, cmd("CLUSTER").arg("SLOTS"))
     }
 
+    /// Returns per-slot usage statistics for the slots assigned to the current node.
+    ///
+    /// Select the slots with a [`ClusterSlotStatsFilter`]: an inclusive slot range
+    /// (always sorted by slot number), or an `ORDERBY` a metric with an optional
+    /// `LIMIT` and sort order. All metrics except `KEY-COUNT` require
+    /// `cluster-slot-stats-enabled yes` in the server configuration.
+    ///
+    /// # Return
+    /// A nested list of per-slot statistics.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-slot-stats/>](https://redis.io/commands/cluster-slot-stats/)
+    #[must_use]
+    fn cluster_slot_stats<R: Response>(
+        self,
+        filter: ClusterSlotStatsFilter,
+    ) -> PreparedCommand<'a, Self, R> {
+        let command = cmd("CLUSTER").arg("SLOT-STATS");
+        let command = match filter {
+            ClusterSlotStatsFilter::SlotsRange { start, end } => {
+                command.arg("SLOTSRANGE").arg(start).arg(end)
+            }
+            ClusterSlotStatsFilter::OrderBy {
+                metric,
+                limit,
+                order,
+            } => command
+                .arg("ORDERBY")
+                .arg(metric)
+                .arg(limit.map(|limit| ("LIMIT", limit)))
+                .arg(order),
+        };
+        prepare_command(self, command)
+    }
+
+    /// Starts an atomic migration importing the given inclusive slot ranges onto
+    /// the current (destination) master.
+    ///
+    /// `slot_ranges` is a flat sequence of `start end` pairs, e.g.
+    /// `[(0, 1000), (2000, 3000)]`.
+    ///
+    /// # Return
+    /// the task id, which can be passed to
+    /// [`cluster_migration_status`](ClusterCommands::cluster_migration_status) or
+    /// [`cluster_migration_cancel`](ClusterCommands::cluster_migration_cancel).
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-migration/>](https://redis.io/commands/cluster-migration/)
+    #[must_use]
+    fn cluster_migration_import<R: Response>(
+        self,
+        slot_ranges: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("CLUSTER")
+                .arg("MIGRATION")
+                .arg("IMPORT")
+                .arg(slot_ranges),
+        )
+    }
+
+    /// Cancels an ongoing atomic migration task by id, or all of them.
+    ///
+    /// # Return
+    /// the number of cancelled tasks.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-migration/>](https://redis.io/commands/cluster-migration/)
+    #[must_use]
+    fn cluster_migration_cancel(
+        self,
+        target: ClusterMigrationTarget,
+    ) -> PreparedCommand<'a, Self, usize> {
+        prepare_command(
+            self,
+            cmd("CLUSTER").arg("MIGRATION").arg("CANCEL").arg(target),
+        )
+    }
+
+    /// Returns the status of atomic migration tasks: a single task for a
+    /// [`ClusterMigrationTarget::Id`], or all tasks for
+    /// [`ClusterMigrationTarget::All`].
+    ///
+    /// # Return
+    /// A list of migration task details (field/value pairs per task).
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-migration/>](https://redis.io/commands/cluster-migration/)
+    #[must_use]
+    fn cluster_migration_status<R: Response>(
+        self,
+        target: ClusterMigrationTarget,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("CLUSTER").arg("MIGRATION").arg("STATUS").arg(target),
+        )
+    }
+
     /// Enables read queries for a connection to a Redis Cluster replica node.
     ///
     /// # See Also
@@ -584,6 +685,46 @@ pub enum ClusterSetSlotSubCommand<'a> {
     Node(&'a str),
     /// Clear any importing / migrating state from hash slot.
     Stable,
+}
+
+/// Slot selection for the [`cluster_slot_stats`](ClusterCommands::cluster_slot_stats) command.
+pub enum ClusterSlotStatsFilter {
+    /// Limit the results to an inclusive range of slots, sorted by slot number.
+    SlotsRange { start: u16, end: u16 },
+    /// Sort the statistics by `metric`, optionally limiting the number of results
+    /// and choosing the sort order.
+    OrderBy {
+        metric: ClusterSlotStatMetric,
+        limit: Option<usize>,
+        order: Option<SortOrder>,
+    },
+}
+
+/// Metric to sort by in [`ClusterSlotStatsFilter::OrderBy`].
+#[derive(Serialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+pub enum ClusterSlotStatMetric {
+    /// Number of keys stored in the slot.
+    KeyCount,
+    /// CPU time (in microseconds) spent handling the slot.
+    CpuUsec,
+    /// Number of bytes allocated by the slot.
+    MemoryBytes,
+    /// Total inbound network traffic (in bytes) received by the slot.
+    NetworkBytesIn,
+    /// Total outbound network traffic (in bytes) sent from the slot.
+    NetworkBytesOut,
+}
+
+/// Task selector for the [`cluster_migration_cancel`](ClusterCommands::cluster_migration_cancel)
+/// and [`cluster_migration_status`](ClusterCommands::cluster_migration_status) commands.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ClusterMigrationTarget<'a> {
+    /// A single migration task, by id.
+    Id(&'a str),
+    /// All migration tasks.
+    All,
 }
 
 /// Result for the [`cluster_shards`](ClusterCommands::cluster_shards) command.

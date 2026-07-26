@@ -98,6 +98,131 @@ async fn xdel() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn xdelex() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let id1: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+    let id2: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    client
+        .xgroup_create("mystream", "mygroup", "0", XGroupCreateOptions::default())
+        .await?;
+    // Read `id1` into the group's PEL, leaving `id2` untouched.
+    let _: Vec<(String, Vec<StreamEntry<String>>)> = client
+        .xreadgroup(
+            "mygroup",
+            "myconsumer",
+            XReadGroupOptions::default().count(1),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    // `ACKED` refuses to delete an entry still pending in a group: 2.
+    let results = client
+        .xdelex("mystream", StreamEntryDeletionPolicy::Acked, &id1)
+        .await?;
+    assert_eq!(vec![2], results);
+
+    // `KEEPREF` deletes unconditionally: 1. An unknown id yields -1.
+    let results = client
+        .xdelex(
+            "mystream",
+            StreamEntryDeletionPolicy::KeepRef,
+            [id2.as_str(), "999999999999-0"],
+        )
+        .await?;
+    assert_eq!(vec![1, -1], results);
+
+    // Omitting the policy defaults to `KEEPREF` server-side.
+    let results = client.xdelex("mystream", None, &id1).await?;
+    assert_eq!(vec![1], results);
+
+    let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;
+    assert!(results.is_empty());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xackdel() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let id1: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+    let id2: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    client
+        .xgroup_create("mystream", "mygroup", "0", XGroupCreateOptions::default())
+        .await?;
+    let _: Vec<(String, Vec<StreamEntry<String>>)> = client
+        .xreadgroup(
+            "mygroup",
+            "myconsumer",
+            XReadGroupOptions::default(),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    // Acknowledge and delete in one round trip: 1 for `id1`, -1 for an unknown id.
+    let results = client
+        .xackdel(
+            "mystream",
+            "mygroup",
+            StreamEntryDeletionPolicy::DelRef,
+            [id1.as_str(), "999999999999-0"],
+        )
+        .await?;
+    assert_eq!(vec![1, -1], results);
+
+    let results = client.xackdel("mystream", "mygroup", None, &id2).await?;
+    assert_eq!(vec![1], results);
+
+    // Both entries are gone and the PEL is empty.
+    let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;
+    assert!(results.is_empty());
+
+    let pending = client.xpending("mystream", "mygroup").await?;
+    assert_eq!(0, pending.num_pending_messages);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn xgroup() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;

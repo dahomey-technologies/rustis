@@ -117,6 +117,14 @@ contains breaking changes; read that section before upgrading.
   post-processing options), `CLUSTER SLOT-STATS`, `CLUSTER MIGRATION`, `DIGEST`
   and `DELEX`. Plus the options that were missing from various Redis 8.x
   commands, and `XADD`/`XTRIM`'s entries-deletion policy.
+- `StreamCommands::xdelex` and `StreamCommands::xackdel` (Redis 8.2), which
+  delete — and for `XACKDEL` acknowledge — stream entries under an explicit
+  `StreamEntryDeletionPolicy`, and report per-id whether each entry was removed,
+  was missing, or was kept because the policy forbade it.
+- The examples now declare `tokio-runtime` in their `required-features`. They are
+  written with `#[tokio::main]`, so `cargo test --no-default-features --features
+  async-std-runtime,…` used to fail to build on them rather than run the suite;
+  the whole suite now runs under async-std.
 - `Config` now exposes the constants that were hardcoded, each defaulting to its
   previous value: `Config::buffers` (`BufferConfig` — read/write buffer initial
   and shrink-back capacities), `Config::limits` (`RespLimits` — maximum nesting

@@ -127,6 +127,70 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(self, cmd("XDEL").key(key).arg(ids))
     }
 
+    /// Removes the specified entries from a stream, controlling what happens to
+    /// the consumer-group references of the removed entries (Redis 8.2).
+    ///
+    /// `policy` accepts a [`StreamEntryDeletionPolicy`] or `None`, in which case
+    /// the server applies `KEEPREF`.
+    ///
+    /// # Return
+    /// One status code per requested id, in request order:
+    /// * `1` the entry was deleted
+    /// * `-1` no such entry
+    /// * `2` the entry was not deleted because the policy forbade it
+    ///   (`ACKED` with the entry still pending in a consumer group)
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xdelex/>](https://redis.io/commands/xdelex/)
+    fn xdelex(
+        self,
+        key: impl Serialize,
+        policy: impl Into<Option<StreamEntryDeletionPolicy>>,
+        ids: impl Serialize,
+    ) -> PreparedCommand<'a, Self, Vec<i64>> {
+        prepare_command(
+            self,
+            cmd("XDELEX")
+                .key(key)
+                .arg(policy.into())
+                .arg("IDS")
+                .arg_with_count(ids),
+        )
+    }
+
+    /// Acknowledges and deletes one or multiple messages for a stream consumer
+    /// group in a single round trip (Redis 8.2).
+    ///
+    /// `policy` accepts a [`StreamEntryDeletionPolicy`] or `None`, in which case
+    /// the server applies `KEEPREF`.
+    ///
+    /// # Return
+    /// One status code per requested id, in request order:
+    /// * `1` the entry was acknowledged and deleted
+    /// * `-1` no such entry
+    /// * `2` the entry was acknowledged but not deleted because the policy
+    ///   forbade it (`ACKED` with the entry still pending in another group)
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xackdel/>](https://redis.io/commands/xackdel/)
+    fn xackdel(
+        self,
+        key: impl Serialize,
+        group: impl Serialize,
+        policy: impl Into<Option<StreamEntryDeletionPolicy>>,
+        ids: impl Serialize,
+    ) -> PreparedCommand<'a, Self, Vec<i64>> {
+        prepare_command(
+            self,
+            cmd("XACKDEL")
+                .key(key)
+                .arg(group)
+                .arg(policy.into())
+                .arg("IDS")
+                .arg_with_count(ids),
+        )
+    }
+
     /// This command creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
     ///
     /// # Return
@@ -617,8 +681,9 @@ impl<'a> XTrimOptions<'a> {
 
 /// Controls how consumer-group references are handled when stream entries are
 /// removed. Shared by every entry-removing command since Redis 8.2 — here the
-/// trimming clause of [`xadd`](StreamCommands::xadd) and
-/// [`xtrim`](StreamCommands::xtrim).
+/// trimming clause of [`xadd`](StreamCommands::xadd),
+/// [`xtrim`](StreamCommands::xtrim), [`xdelex`](StreamCommands::xdelex) and
+/// [`xackdel`](StreamCommands::xackdel).
 #[derive(Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 #[non_exhaustive]

@@ -1,17 +1,15 @@
-//! Per-wakeup allocation cost of the cluster read fan-out (arbitrates CLU-07).
+//! Per-wakeup allocation cost of the cluster read fan-out.
 //!
 //! `ClusterConnection::read` rebuilds, on every wakeup, one boxed future per node
 //! (`nodes.iter_mut().map(|n| n.connection.read().boxed())`) and hands the `Vec`
-//! to `future::select_all`. CLU-07 proposes replacing this with a manual poll
-//! loop that keeps persistent per-node read futures — a change that must register
-//! the task waker across all nodes without `Context`, and getting it wrong
-//! reintroduces the missed-wakeup hangs Wave 1 closed.
+//! to `future::select_all`. The alternative is a manual poll loop keeping
+//! persistent per-node read futures, which must register the task waker across
+//! all nodes without a `Context` — getting that wrong causes missed-wakeup hangs.
 //!
-//! Before taking that risk, this bench quantifies the burst the rewrite would
-//! remove: N `Box::pin` allocations + the `select_all` `Vec`, per wakeup, for
-//! realistic and pathological node counts. If it is trivial next to the µs-scale
-//! per-reply parse/dispatch work and the loopback RTT, the "profile first" gate
-//! is not met and the rewrite is not justified.
+//! This bench quantifies the burst such a rewrite would remove: N `Box::pin`
+//! allocations + the `select_all` `Vec`, per wakeup, for realistic and
+//! pathological node counts. Compare it against the µs-scale per-reply
+//! parse/dispatch work and the loopback RTT to decide whether it is worth it.
 //!
 //! This isolates the allocation/setup only: the per-node futures resolve
 //! immediately, so no socket or real I/O is involved.

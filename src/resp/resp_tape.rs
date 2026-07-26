@@ -3,8 +3,7 @@
 //! A collection reply is parsed once into a sequence of fixed-width nodes stored
 //! in a recycled `BytesMut`. Reading an element is then an O(1) node lookup plus
 //! a content-length read of its own bytes, instead of re-parsing the RESP
-//! structure from the start — the re-parse that corrupted elements 6+ of a
-//! collection and made a chunked large reply quadratic.
+//! structure from the start.
 //!
 //! # Node layout — 8 bytes, little-endian `u64`
 //!
@@ -31,8 +30,7 @@
 //! Every offset is relative to the frame slice ([`RespBuf`](super::RespBuf)),
 //! never to the shared read buffer. `BytesMut` moves bytes to a new base address
 //! on realloc/reclaim, so a buffer-absolute offset would silently address the
-//! wrong bytes on the next reused frame — the exact class of bug (a range read
-//! against the wrong base) that this tape exists to remove.
+//! wrong bytes on the next reused frame.
 
 use crate::resp::{ARRAY_TAG, MAP_TAG, PUSH_TAG, SET_TAG};
 use bytes::{BufMut, BytesMut};

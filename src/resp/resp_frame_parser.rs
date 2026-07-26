@@ -52,8 +52,7 @@ pub(crate) enum ElementKind {
 /// by the write side (the parser's forward pass, which needs only `end` to
 /// advance) and the read side (the tape reader, which needs `kind` + `value` to
 /// build a view). Keeping one function means the two passes can never disagree
-/// on where an element ends — the divergence class of bug that corrupted
-/// elements read against a mismatched layout.
+/// on where an element ends.
 pub(crate) struct ElementBounds {
     pub kind: ElementKind,
     pub value: Range<usize>,
@@ -508,8 +507,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     ///
     /// The scalar branch is fully inline and never names a `Vec`: the collection
     /// stack is created only inside the container branch, so a scalar reply — the
-    /// hot request/response path — stays exactly as flat as it was before the tape
-    /// existed. The skeleton mirrors [`Self::parse_resumable`]; both defer the
+    /// hot request/response path — stays flat and allocation-free. The skeleton
+    /// mirrors [`Self::parse_resumable`]; both defer the
     /// actual work to `skip_leading_attributes`, `parse_inline_scalar` and
     /// `begin_collection`, so the two cannot diverge on how a value is decoded.
     #[inline(always)]
@@ -716,9 +715,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// Decodes an inline scalar whose tag byte is at `self.pos`, advancing past
     /// it. Top-level scalars carry no tape; this is the allocation- and node-free
     /// hot path. Forced inline so the frame is built directly in the caller's
-    /// frame rather than returned across a call boundary, keeping a scalar reply
-    /// as flat as it was before the tape. [`Error::EOF`] if the scalar is not
-    /// fully present.
+    /// frame rather than returned across a call boundary. [`Error::EOF`] if the
+    /// scalar is not fully present.
     #[inline(always)]
     fn parse_inline_scalar(&mut self, tag: u8) -> Result<RespFrame> {
         self.pos += 1;

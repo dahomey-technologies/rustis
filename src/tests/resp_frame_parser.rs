@@ -1,4 +1,7 @@
-use crate::resp::{RespBuf, RespFrame, RespFrameParser, RespResponse};
+use crate::{
+    client::RespLimits,
+    resp::{RespBuf, RespFrame, RespFrameParser, RespResponse},
+};
 use bytes::BytesMut;
 
 /// Parses a complete frame with a throwaway tape buffer.
@@ -180,4 +183,104 @@ fn parse_map() {
         .unwrap();
     assert_eq!(1, map.len());
     assert_eq!(Some(&"bar".to_owned()), map.get("foo"));
+}
+
+/// Parses a complete frame under caller-chosen limits.
+fn parse_with_limits(resp: &[u8], limits: RespLimits) -> crate::Result<(RespFrame, usize)> {
+    let mut tape = BytesMut::new();
+    RespFrameParser::with_limits(resp, &mut tape, limits).parse()
+}
+
+#[test]
+fn a_lowered_nesting_limit_rejects_a_frame_the_default_accepts() {
+    // 50 levels are far below the 128 default, so only the lowered limit can
+    // reject this frame — proving the knob is the value actually enforced.
+    let mut resp = b"*1\r\n".repeat(50);
+    resp.extend_from_slice(b":7\r\n");
+    assert!(parse(&resp).is_ok());
+
+    let limits = RespLimits {
+        max_nesting_depth: 10,
+        ..Default::default()
+    };
+    assert!(matches!(
+        parse_with_limits(&resp, limits),
+        Err(crate::Error::Client(
+            crate::ClientError::MaxNestingDepthExceeded
+        ))
+    ));
+}
+
+#[test]
+fn a_lowered_bulk_limit_rejects_a_length_the_default_accepts() {
+    let resp = b"$16\r\n0123456789abcdef\r\n";
+    assert!(parse(resp).is_ok());
+
+    let limits = RespLimits {
+        max_bulk_length: 8,
+        ..Default::default()
+    };
+    assert!(matches!(
+        parse_with_limits(resp, limits),
+        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+    ));
+}
+
+#[test]
+fn a_lowered_collection_limit_rejects_a_cardinality_the_default_accepts() {
+    let resp = b"*3\r\n:1\r\n:2\r\n:3\r\n";
+    assert!(parse(resp).is_ok());
+
+    let limits = RespLimits {
+        max_collection_length: 2,
+        ..Default::default()
+    };
+    assert!(matches!(
+        parse_with_limits(resp, limits),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+}
+
+#[test]
+fn a_raised_bulk_limit_reads_back_without_being_re_capped() {
+    // Raising the cap must work end-to-end: the frame has to parse *and* read
+    // back. The read-back path re-derives element bounds, so if it re-applied
+    // the default cap instead of trusting the already-validated frame, a value
+    // legal under the raised limit would decode as garbage or vanish.
+    let payload = "x".repeat(600);
+    let resp = format!("*1\r\n${}\r\n{payload}\r\n", payload.len()).into_bytes();
+
+    let limits = RespLimits {
+        max_bulk_length: 1024,
+        ..Default::default()
+    };
+    let mut tape = BytesMut::new();
+    let (frame, len) = RespFrameParser::with_limits(&resp, &mut tape, limits)
+        .parse()
+        .unwrap();
+    assert_eq!(resp.len(), len);
+
+    let response = RespResponse::new(RespBuf::from_slice(&resp), frame);
+    assert_eq!(vec![payload], response.to::<Vec<String>>().unwrap());
+}
+
+#[test]
+fn a_lowered_bulk_limit_is_enforced_inside_a_collection() {
+    // The element loop reaches bulk values through `element_bounds`, a separate
+    // path from a top-level scalar. An oversized element there must be rejected
+    // outright rather than reported as EOF, which would leave the streaming
+    // decoder buffering for bytes that will never come.
+    let resp = b"*1\r\n$16\r\n0123456789abcdef\r\n";
+    assert!(parse(resp).is_ok());
+
+    let limits = RespLimits {
+        max_bulk_length: 8,
+        ..Default::default()
+    };
+    assert!(matches!(
+        parse_with_limits(resp, limits),
+        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+    ));
 }

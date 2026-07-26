@@ -22,6 +22,176 @@ const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
 const DEFAULT_RETRY_ON_ERROR: bool = false;
 const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 0;
+const DEFAULT_MAX_MESSAGES_PER_WAVE: usize = 48;
+const DEFAULT_MAX_DISCOVERY_ROUNDS: usize = 10;
+
+/// Sizing and recycling policy for the buffers a connection keeps alive between
+/// commands: the read/write framing buffers and the RESP parse tape.
+///
+/// Every field defaults to the value that was hardcoded before these became
+/// configurable, so leaving this alone reproduces the historical behavior
+/// exactly. The knobs trade steady-state memory against reallocation: a larger
+/// capacity avoids growth on big replies, a smaller one returns memory sooner.
+///
+/// Both buffers deliberately share one shrink policy — they grow for the same
+/// reason (one oversized reply) and should reclaim on the same terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufferConfig {
+    /// Initial capacity of the read framing buffer, and the target both the read
+    /// and write buffers are shrunk back to once they have grown oversized.
+    ///
+    /// These are one parameter, not two: starting below the shrink target would
+    /// make the first large reply grow the buffer only to have it reclaimed.
+    ///
+    /// The default is 64 KiB.
+    pub read_capacity: usize,
+    /// Capacity a recycled parse-tape buffer is reset to once it has been
+    /// oversized and quiet for long enough. 64 KiB = 8192 tape nodes, deep
+    /// enough that a normal reply's tape never reallocates.
+    ///
+    /// The default is 64 KiB.
+    pub tape_capacity: usize,
+    /// A buffer is only considered for shrinking once it exceeds this multiple
+    /// of its target, so a workload alternating large and small replies does not
+    /// reallocate every cycle.
+    ///
+    /// The default is `8`.
+    pub shrink_factor: usize,
+    /// Consecutive quiet observations required before actually paying for the
+    /// shrink realloc.
+    ///
+    /// The default is `16`.
+    pub shrink_hysteresis: usize,
+}
+
+impl BufferConfig {
+    /// The default policy, usable in a `const` context.
+    pub const DEFAULT: Self = Self {
+        read_capacity: 64 * 1024,
+        tape_capacity: 64 * 1024,
+        shrink_factor: 8,
+        shrink_hysteresis: 16,
+    };
+
+    fn validate(&self) -> Result<()> {
+        // Each of these is a capacity, a multiplier or a streak length whose zero
+        // value does not soften the policy but removes it.
+        if self.read_capacity == 0 {
+            return Err(invalid_config(
+                "buffers.read_capacity must be greater than 0",
+            ));
+        }
+        if self.tape_capacity == 0 {
+            return Err(invalid_config(
+                "buffers.tape_capacity must be greater than 0",
+            ));
+        }
+        if self.shrink_factor == 0 {
+            return Err(invalid_config(
+                "buffers.shrink_factor must be greater than 0",
+            ));
+        }
+        if self.shrink_hysteresis == 0 {
+            return Err(invalid_config(
+                "buffers.shrink_hysteresis must be greater than 0",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Default for BufferConfig {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// Limits the RESP parser enforces against hostile or corrupt server input.
+///
+/// These bound pathology, they do not police normal use: every default is
+/// generous enough for any legitimate reply, and is the value that was hardcoded
+/// before these became configurable. Raising one widens the resources a single
+/// reply can command; lowering one can reject replies a real server sends.
+///
+/// A frame breaching any limit fails the connection with the matching
+/// [`ClientError`](crate::ClientError) rather than being reported as a truncated
+/// read, so the streaming decoder never waits for bytes that will never come.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RespLimits {
+    /// Maximum collection-nesting depth accepted before a frame is rejected with
+    /// [`MaxNestingDepthExceeded`](crate::ClientError::MaxNestingDepthExceeded).
+    ///
+    /// RESP replies are shallow in practice — a handful of levels for the
+    /// deepest cluster and stream introspection commands — so this stops a
+    /// crafted `*1\r\n*1\r\n…` reply from driving the parser into a stack
+    /// overflow, which unlike a panic is not catchable and aborts the whole
+    /// process. The element loop is iterative, so this bounds the parser's
+    /// explicit stack (and the recursion left in attribute skipping) rather than
+    /// the call stack.
+    ///
+    /// The default is `128`.
+    pub max_nesting_depth: usize,
+    /// Maximum byte length accepted for a single bulk string, bulk error or
+    /// verbatim string, checked against the declared header before the payload
+    /// is trusted; breaching it raises
+    /// [`BulkLengthTooLarge`](crate::ClientError::BulkLengthTooLarge).
+    ///
+    /// Matches Redis's own `proto-max-bulk-len` default. Raise it only if the
+    /// server's is also raised.
+    ///
+    /// The default is 512 MiB.
+    pub max_bulk_length: usize,
+    /// Maximum number of elements accepted in a single collection — array, set,
+    /// push or map, counted after the map key/value doubling; breaching it raises
+    /// [`CollectionLengthTooLarge`](crate::ClientError::CollectionLengthTooLarge).
+    ///
+    /// Bounds an attacker-controlled loop count and the buffer pre-reservation
+    /// derived from it.
+    ///
+    /// The default is 128 Mi elements.
+    pub max_collection_length: usize,
+}
+
+impl RespLimits {
+    /// The default limits, usable in a `const` context.
+    pub const DEFAULT: Self = Self {
+        max_nesting_depth: 128,
+        max_bulk_length: 512 * 1024 * 1024,
+        max_collection_length: 128 * 1024 * 1024,
+    };
+
+    fn validate(&self) -> Result<()> {
+        // A zero limit rejects every collection or every bulk value, which is not
+        // a stricter client but an unusable one.
+        if self.max_nesting_depth == 0 {
+            return Err(invalid_config(
+                "limits.max_nesting_depth must be greater than 0",
+            ));
+        }
+        if self.max_bulk_length == 0 {
+            return Err(invalid_config(
+                "limits.max_bulk_length must be greater than 0",
+            ));
+        }
+        if self.max_collection_length == 0 {
+            return Err(invalid_config(
+                "limits.max_collection_length must be greater than 0",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Default for RespLimits {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+#[inline]
+fn invalid_config(message: &'static str) -> Error {
+    Error::Client(ClientError::InvalidConfig(message))
+}
 
 type Uri<'a> = (
     &'a str,
@@ -118,6 +288,23 @@ pub struct Config {
     ///
     /// The default is `0`, meaning unlimited (the historical behavior).
     pub max_command_attempts: usize,
+    /// Sizing and recycling policy for the connection's internal buffers.
+    pub buffers: BufferConfig,
+    /// Limits the RESP parser enforces against hostile or corrupt server input.
+    pub limits: RespLimits,
+    /// Maximum number of queued commands the network task writes in one wave
+    /// before flushing, instead of draining its whole channel into a single
+    /// write. Capping the wave lets the first commands reach the server while
+    /// the next ones are still being collected, which removes the convoy effect
+    /// under high concurrency.
+    ///
+    /// The cap only fires above its own value of in-flight commands, so lower
+    /// concurrencies are unaffected whatever it is set to. The optimum is flat
+    /// between 32 and 128 and only mildly concurrency-dependent; what matters is
+    /// that it stays *below* the in-flight concurrency, otherwise it never fires.
+    ///
+    /// The default is `48`.
+    pub max_messages_per_wave: usize,
     /// Test-only hook to observe and inject retry reasons in the send batch.
     ///
     /// Only present in debug builds; it carries no cost in release builds.
@@ -150,6 +337,10 @@ impl fmt::Debug for Config {
             .field("no_delay", &self.no_delay)
             .field("retry_on_error", &self.retry_on_error)
             .field("reconnection", &self.reconnection)
+            .field("max_command_attempts", &self.max_command_attempts)
+            .field("buffers", &self.buffers)
+            .field("limits", &self.limits)
+            .field("max_messages_per_wave", &self.max_messages_per_wave)
             .finish()
     }
 }
@@ -173,6 +364,9 @@ impl Default for Config {
             retry_on_error: DEFAULT_RETRY_ON_ERROR,
             reconnection: Default::default(),
             max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
+            buffers: Default::default(),
+            limits: Default::default(),
+            max_messages_per_wave: DEFAULT_MAX_MESSAGES_PER_WAVE,
             #[cfg(test)]
             send_batch_test_hook: None,
             #[cfg(test)]
@@ -200,6 +394,40 @@ impl Config {
     /// Build a config from an URI in the format `redis[s]://[[username]:password@]host[:port]/[database]`
     pub fn from_uri(uri: Url) -> Result<Config> {
         Self::from_str(uri.as_str())
+    }
+
+    /// Checks the tuning knobs for values that would disable behavior rather
+    /// than tune it, returning
+    /// [`ClientError::InvalidConfig`](crate::ClientError::InvalidConfig) naming
+    /// the offending one.
+    ///
+    /// Called for you when a client connects. It is public so a config assembled
+    /// programmatically can be checked up front rather than at connect time.
+    ///
+    /// This validates *coherence*, not taste: a capacity of 1 byte or a limit of
+    /// 1 element is accepted, because bad-but-working values are the caller's
+    /// call. Only values that remove a behavior outright are rejected — the
+    /// fields are public, so nothing stops a caller from zeroing one after
+    /// [`Default`] filled it in.
+    pub fn validate(&self) -> Result<()> {
+        self.buffers.validate()?;
+        self.limits.validate()?;
+        // A wave of zero flushes before any message is queued, so the network
+        // task would spin without ever writing.
+        if self.max_messages_per_wave == 0 {
+            return Err(invalid_config(
+                "max_messages_per_wave must be greater than 0",
+            ));
+        }
+        if let ServerConfig::Sentinel(sentinel_config) = &self.server {
+            // Zero rounds gives up before contacting any Sentinel instance.
+            if sentinel_config.max_discovery_rounds == 0 {
+                return Err(invalid_config(
+                    "sentinel max_discovery_rounds must be greater than 0",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Parse address in the standard format `host`:`port`, including bracketed
@@ -550,6 +778,7 @@ impl Display for Config {
                 instances,
                 service_name,
                 wait_between_failures: _,
+                max_discovery_rounds: _,
                 password: _,
                 username: _,
             }) => {
@@ -669,6 +898,7 @@ impl Display for Config {
             instances: _,
             service_name: _,
             wait_between_failures: wait_beetween_failures,
+            max_discovery_rounds: _,
             password,
             username,
         }) = &self.server
@@ -747,6 +977,17 @@ pub struct SentinelConfig {
     /// Waiting time after failing before connecting to the next Sentinel instance (default 250ms).
     pub wait_between_failures: Duration,
 
+    /// Maximum number of full discovery rounds before giving up.
+    ///
+    /// One round tries every known instance in turn. The cap bounds an otherwise
+    /// unbounded restart loop: a stale Sentinel persistently announcing a
+    /// non-master instance would spin forever, one
+    /// [`wait_between_failures`](Self::wait_between_failures) apart. Raise it for
+    /// a cluster whose failovers routinely outlast ten rounds.
+    ///
+    /// The default is `10`.
+    pub max_discovery_rounds: usize,
+
     /// Sentinel username
     pub username: Option<String>,
 
@@ -760,6 +1001,7 @@ impl fmt::Debug for SentinelConfig {
             .field("instances", &self.instances)
             .field("service_name", &self.service_name)
             .field("wait_between_failures", &self.wait_between_failures)
+            .field("max_discovery_rounds", &self.max_discovery_rounds)
             .field("username", &self.username)
             // never leak the password in clear text
             .field("password", &self.password.as_ref().map(|_| "***"))
@@ -773,6 +1015,7 @@ impl Default for SentinelConfig {
             instances: Default::default(),
             service_name: Default::default(),
             wait_between_failures: Duration::from_millis(DEFAULT_WAIT_BETWEEN_FAILURES),
+            max_discovery_rounds: DEFAULT_MAX_DISCOVERY_ROUNDS,
             password: None,
             username: None,
         }

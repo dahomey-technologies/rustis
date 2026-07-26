@@ -135,6 +135,11 @@ pub enum ClientError {
     /// Raised if an error occurs in the [`Config`](crate::client::Config) parsing
     #[error("Cannot parse config")]
     ConfigParseError,
+    /// Raised at connection time when a [`Config`](crate::client::Config) knob
+    /// holds a value that would disable behavior rather than tune it — a zero
+    /// buffer capacity, a zero loop bound. The message names the offending knob.
+    #[error("Invalid config: {0}")]
+    InvalidConfig(&'static str),
     /// Raised if an error occurs in the [`ClusterConfig`](crate::client::ClusterConfig)
     #[error("Cluster misconfiguration")]
     ClusterConfig,

@@ -1,24 +1,10 @@
 use crate::{
     Error, Result,
+    client::{BufferConfig, RespLimits},
     resp::{PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse, bulk_value_end},
 };
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
-
-/// Capacity a recycled tape buffer is reset to once it has been oversized and
-/// quiet for long enough. 64 KiB = 8192 nodes, deep enough that a normal reply's
-/// tape never reallocates. Mirrors `TARGET_BUFFER_CAPACITY` for the read/write
-/// buffers; the two share the same shrink policy.
-pub(crate) const TARGET_TAPE_CAPACITY: usize = 64 * 1024;
-
-/// A tape only marks its recycled block "oversized" once a single frame's tape
-/// exceeds this multiple of the target, so a workload of merely largish replies
-/// does not trip the reset (hysteresis, part 1).
-const TAPE_SHRINK_FACTOR: usize = 8;
-
-/// Consecutive small/scalar frames required after an oversized spike before the
-/// block is actually released (hysteresis, part 2).
-pub(crate) const TAPE_SHRINK_HYSTERESIS: usize = 16;
 
 /// Streaming RESP decoder.
 ///
@@ -36,6 +22,11 @@ pub(crate) const TAPE_SHRINK_HYSTERESIS: usize = 16;
 /// it from the start — removing the quadratic re-scan of large chunked replies.
 #[derive(Default)]
 pub(crate) struct BufferDecoder {
+    /// Tape sizing and shrink policy, from the connection's
+    /// [`Config`](crate::client::Config).
+    buffers: BufferConfig,
+    /// Hostile-input bounds handed to every parser this decoder builds.
+    limits: RespLimits,
     tape_buf: BytesMut,
     /// `true` once a frame's tape has grown the recycled block past the shrink
     /// bound. The block then stays pinned — including by `tape_buf`'s own
@@ -56,9 +47,24 @@ pub(crate) struct BufferDecoder {
 }
 
 impl BufferDecoder {
+    /// A decoder on the default policy and limits. The connection path always
+    /// goes through [`with_config`](Self::with_config); this is for the harnesses
+    /// that drive the decoder outside a connection.
+    #[cfg(any(test, feature = "bench", feature = "fuzzing"))]
     #[inline]
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    /// A decoder driven by the connection's configured buffer policy and parser
+    /// limits, rather than the defaults [`new`](Self::new) applies.
+    #[inline]
+    pub(crate) fn with_config(buffers: BufferConfig, limits: RespLimits) -> Self {
+        Self {
+            buffers,
+            limits,
+            ..Self::default()
+        }
     }
 
     /// Returns the recycled tape buffer's block to the allocator once an
@@ -75,13 +81,13 @@ impl BufferDecoder {
     /// pinning oversized memory.
     #[inline]
     fn recycle_tape(&mut self, last_tape_len: usize) {
-        if last_tape_len > TARGET_TAPE_CAPACITY * TAPE_SHRINK_FACTOR {
+        if last_tape_len > self.buffers.tape_capacity * self.buffers.shrink_factor {
             // The block just grew large; it is legitimately in use this frame.
             self.tape_oversized = true;
             self.quiet_streak = 0;
             return;
         }
-        if last_tape_len > TARGET_TAPE_CAPACITY {
+        if last_tape_len > self.buffers.tape_capacity {
             // Moderately busy — not a spike to reclaim, but not quiet either.
             self.quiet_streak = 0;
             return;
@@ -90,12 +96,12 @@ impl BufferDecoder {
             return;
         }
         self.quiet_streak += 1;
-        if self.quiet_streak < TAPE_SHRINK_HYSTERESIS {
+        if self.quiet_streak < self.buffers.shrink_hysteresis {
             return;
         }
         self.quiet_streak = 0;
         self.tape_oversized = false;
-        self.tape_buf = BytesMut::with_capacity(TARGET_TAPE_CAPACITY);
+        self.tape_buf = BytesMut::with_capacity(self.buffers.tape_capacity);
     }
 
     #[cfg(test)]
@@ -135,7 +141,8 @@ impl Decoder for BufferDecoder {
         // Scope the parser so its borrow of `tape_buf` ends before the outcome is
         // acted on; `stack` is the decoder's reused buffer, threaded in by ref.
         let (outcome, end_pos) = {
-            let mut parser = RespFrameParser::at(src.as_ref(), &mut self.tape_buf, pos);
+            let mut parser =
+                RespFrameParser::at(src.as_ref(), &mut self.tape_buf, pos, self.limits);
             let outcome = parser.parse_resumable(&mut self.stack);
             (outcome, parser.pos())
         };
@@ -158,7 +165,7 @@ impl Decoder for BufferDecoder {
                 // the whole accumulated reply ~log2(size) times — measurably costly
                 // on multi-MB replies (see `benches/large_reply_reserve.rs`). The
                 // reservation is bounded by the parser's own bulk-length cap.
-                if let Some(end) = bulk_value_end(src, end_pos)
+                if let Some(end) = bulk_value_end(src, end_pos, self.limits.max_bulk_length)
                     && end > src.len()
                 {
                     src.reserve(end - src.len());

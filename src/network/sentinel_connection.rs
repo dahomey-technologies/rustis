@@ -85,10 +85,11 @@ impl SentinelConnection {
         loop {
             // Bound the restart loop: a stale Sentinel stuck announcing a
             // non-master would otherwise spin forever.
-            if rounds >= MAX_DISCOVERY_ROUNDS {
-                return Err(
-                    DiscoveryOutcome::RoundsExhausted.into_error(&sentinel_config.service_name)
-                );
+            if rounds >= sentinel_config.max_discovery_rounds {
+                return Err(DiscoveryOutcome::RoundsExhausted.into_error(
+                    &sentinel_config.service_name,
+                    sentinel_config.max_discovery_rounds,
+                ));
             }
             rounds += 1;
 
@@ -183,18 +184,16 @@ impl SentinelConnection {
         } else {
             DiscoveryOutcome::MasterUnknown
         };
-        Err(outcome.into_error(&sentinel_config.service_name))
+        Err(outcome.into_error(
+            &sentinel_config.service_name,
+            sentinel_config.max_discovery_rounds,
+        ))
     }
 
     pub(crate) fn tag(&self) -> Arc<str> {
         self.inner_connection.tag()
     }
 }
-
-/// Maximum number of full discovery rounds before giving up, bounding the
-/// otherwise unbounded restart loop: a stale Sentinel persistently announcing a
-/// non-master instance would spin forever, one `wait_between_failures` apart.
-const MAX_DISCOVERY_ROUNDS: usize = 10;
 
 /// Why sentinel discovery exhausted every instance, used to pick an accurate
 /// error. Split out from the I/O loop so the message selection is unit-testable.
@@ -212,7 +211,7 @@ enum DiscoveryOutcome {
 }
 
 impl DiscoveryOutcome {
-    fn into_error(self, service_name: &str) -> Error {
+    fn into_error(self, service_name: &str, max_discovery_rounds: usize) -> Error {
         match self {
             DiscoveryOutcome::AllUnreachable => {
                 Error::Sentinel("All Sentinel instances are unreachable".to_owned())
@@ -224,7 +223,7 @@ impl DiscoveryOutcome {
                 "master {service_name} could not be reached through any Sentinel"
             )),
             DiscoveryOutcome::RoundsExhausted => Error::Sentinel(format!(
-                "master {service_name} did not stabilize after {MAX_DISCOVERY_ROUNDS} discovery rounds"
+                "master {service_name} did not stabilize after {max_discovery_rounds} discovery rounds"
             )),
         }
     }
@@ -232,14 +231,20 @@ impl DiscoveryOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiscoveryOutcome, MAX_DISCOVERY_ROUNDS};
+    use super::DiscoveryOutcome;
+
+    /// Deliberately not the configured default: the message must report the cap
+    /// it was given, not a value baked into the format string.
+    const MAX_DISCOVERY_ROUNDS: usize = 7;
 
     #[test]
     fn outcome_messages_are_distinct_and_named() {
-        let all = DiscoveryOutcome::AllUnreachable.into_error("mymaster");
-        let unknown = DiscoveryOutcome::MasterUnknown.into_error("mymaster");
-        let unreachable = DiscoveryOutcome::MasterUnreachable.into_error("mymaster");
-        let exhausted = DiscoveryOutcome::RoundsExhausted.into_error("mymaster");
+        let all = DiscoveryOutcome::AllUnreachable.into_error("mymaster", MAX_DISCOVERY_ROUNDS);
+        let unknown = DiscoveryOutcome::MasterUnknown.into_error("mymaster", MAX_DISCOVERY_ROUNDS);
+        let unreachable =
+            DiscoveryOutcome::MasterUnreachable.into_error("mymaster", MAX_DISCOVERY_ROUNDS);
+        let exhausted =
+            DiscoveryOutcome::RoundsExhausted.into_error("mymaster", MAX_DISCOVERY_ROUNDS);
 
         assert!(all.to_string().contains("unreachable"));
         // A step-3 failure must not be reported as "all Sentinels unreachable".

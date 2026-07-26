@@ -1,8 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
-        ARRAY_TAG, ElementKind, MAP_TAG, NULL_TAG, PUSH_TAG, RespBuf, RespDeserializer, SET_TAG,
-        TAPE_NODE_SIZE, element_bounds, is_container_tag, node_payload, node_tag, read_node,
+        ARRAY_TAG, ElementKind, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG, RespBuf,
+        RespDeserializer, SET_TAG, TAPE_NODE_SIZE, element_bounds, is_container_tag, node_payload,
+        node_tag, read_node,
     },
 };
 use bytes::Bytes;
@@ -324,7 +325,9 @@ fn read_scalar_view<'a>(tag: u8, data: &'a [u8], off: usize) -> Option<RespView<
     if tag == NULL_TAG {
         return Some(RespView::Null);
     }
-    let bounds = element_bounds(data, off).ok()?;
+    // Read-back of a frame the decoder already validated: re-applying a bulk
+    // cap here would reject values a raised limit legitimately let through.
+    let bounds = element_bounds(data, off, NO_BULK_LIMIT).ok()?;
     Some(match bounds.kind {
         ElementKind::SimpleString => RespView::SimpleString(&data[bounds.value]),
         ElementKind::Error => RespView::Error(&data[bounds.value]),
@@ -343,7 +346,9 @@ fn read_scalar_frame(tag: u8, data: &[u8], off: usize) -> Option<RespFrame> {
     if tag == NULL_TAG {
         return Some(RespFrame::Null);
     }
-    let bounds = element_bounds(data, off).ok()?;
+    // Read-back of a frame the decoder already validated: re-applying a bulk
+    // cap here would reject values a raised limit legitimately let through.
+    let bounds = element_bounds(data, off, NO_BULK_LIMIT).ok()?;
     Some(match bounds.kind {
         ElementKind::SimpleString => RespFrame::SimpleString(bounds.value),
         ElementKind::Error => RespFrame::Error(bounds.value),

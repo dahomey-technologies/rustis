@@ -1,5 +1,6 @@
 use crate::{
     ClientError, Error, Result,
+    client::RespLimits,
     resp::{RespFrame, TAPE_LEN_TAG, is_container_tag, node_count, patch_node, push_node},
 };
 use bytes::BytesMut;
@@ -22,28 +23,12 @@ pub(crate) const PUSH_TAG: u8 = b'>';
 pub(crate) const ATTRIBUTE_TAG: u8 = b'|';
 pub(crate) const BIG_NUMBER_TAG: u8 = b'(';
 
-/// Maximum collection-nesting depth the parser will descend into before
-/// rejecting a frame. RESP replies are shallow in practice (a handful of levels
-/// for the deepest cluster/stream introspection commands), so this bound is
-/// generous for legitimate traffic while stopping a crafted `*1\r\n*1\r\n…`
-/// reply from driving the parser into a stack overflow, which — unlike a panic —
-/// is not catchable and aborts the whole process. The element loop is iterative,
-/// so this bounds the explicit stack (and the recursion left in attribute
-/// skipping) rather than the call stack.
-pub(crate) const MAX_NESTING_DEPTH: usize = 128;
-
-/// Maximum byte length the parser accepts for a single bulk string, bulk error
-/// or verbatim string, checked against the declared header before the payload
-/// is trusted. Matches Redis's default `proto-max-bulk-len` (512 MiB): generous
-/// for any legitimate reply, while stopping a crafted `$999999999999\r\n` header
-/// from making the streaming decoder accumulate an unbounded buffer.
-pub(crate) const MAX_BULK_LENGTH: usize = 512 * 1024 * 1024;
-
-/// Maximum number of elements the parser accepts in a single collection (array,
-/// set, push, or map — counted after the map key/value doubling). Bounds an
-/// attacker-controlled loop count and any future pre-reservation; generous for
-/// real replies.
-pub(crate) const MAX_COLLECTION_LENGTH: usize = 128 * 1024 * 1024;
+/// Sentinel meaning "this data was already validated when it was parsed, do not
+/// re-apply a cap". Used by the tape read-back path, which walks a frame the
+/// decoder has already accepted: re-checking it against the *current* default
+/// would wrongly reject a frame that a raised
+/// [`RespLimits::max_bulk_length`] legitimately let through.
+pub(crate) const NO_BULK_LIMIT: usize = usize::MAX;
 
 /// The normalized kind of a scalar element, as recovered from its bytes by
 /// [`element_bounds`]. This is what the tape reader dispatches on, independent
@@ -75,11 +60,11 @@ pub(crate) struct ElementBounds {
     pub end: usize,
 }
 
-/// Rejects a bulk-family length that exceeds [`MAX_BULK_LENGTH`]. `len` must
+/// Rejects a bulk-family length that exceeds `max_bulk_length`. `len` must
 /// already be known non-negative.
 #[inline]
-fn check_bulk_len(len: i64) -> Result<()> {
-    if len as usize > MAX_BULK_LENGTH {
+fn check_bulk_len(len: i64, max_bulk_length: usize) -> Result<()> {
+    if len as usize > max_bulk_length {
         return Err(Error::Client(ClientError::BulkLengthTooLarge));
     }
     Ok(())
@@ -91,14 +76,14 @@ fn check_bulk_len(len: i64) -> Result<()> {
 /// when `pos` is not a length-prefixed scalar, when its header line has not
 /// arrived yet (only a few bytes are pending — the doubling fallback is cheap
 /// there), or when the announced length is negative/nil or exceeds
-/// [`MAX_BULK_LENGTH`] (the same cap the parser enforces, so a hostile length
+/// `max_bulk_length` (the same cap the parser enforces, so a hostile length
 /// cannot drive an unbounded reservation).
 ///
 /// Only `$` bulk strings and `=` verbatim strings are considered: they are the
 /// scalars whose payload is large enough for the reallocation cost to bite. All
 /// other frames stay on the existing incremental-growth path.
 #[inline]
-pub(crate) fn bulk_value_end(data: &[u8], pos: usize) -> Option<usize> {
+pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) -> Option<usize> {
     let tag = *data.get(pos)?;
     if tag != b'$' && tag != b'=' {
         return None;
@@ -107,7 +92,7 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize) -> Option<usize> {
     if len < 0 {
         return None;
     }
-    check_bulk_len(len).ok()?;
+    check_bulk_len(len, max_bulk_length).ok()?;
     // payload + trailing CRLF
     Some(after + len as usize + 2)
 }
@@ -179,7 +164,11 @@ fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
 ///
 /// The validation here is exactly the parser's original per-tag validation, so
 /// a frame the decoder accepted reads back byte-identically.
-pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
+pub(crate) fn element_bounds(
+    data: &[u8],
+    off: usize,
+    max_bulk_length: usize,
+) -> Result<ElementBounds> {
     let tag = *data.get(off).ok_or_else(|| Error::EOF)?;
     let start = off + 1;
 
@@ -263,7 +252,7 @@ pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
             if len < 0 {
                 return Err(Error::Client(ClientError::CannotParseBulkString));
             }
-            check_bulk_len(len)?;
+            check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
             if data.len() < end {
                 return Err(Error::EOF);
@@ -291,7 +280,7 @@ pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
             if len < 4 {
                 return Err(Error::Client(ClientError::VerbatimStringTooShort));
             }
-            check_bulk_len(len)?;
+            check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
             if data.len() < end {
                 return Err(Error::EOF);
@@ -310,7 +299,7 @@ pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
             if len < 0 {
                 return Err(Error::Client(ClientError::CannotParseBulkError));
             }
-            check_bulk_len(len)?;
+            check_bulk_len(len, max_bulk_length)?;
             let end = after + len as usize + 2;
             if data.len() < end {
                 return Err(Error::EOF);
@@ -328,11 +317,11 @@ pub(crate) fn element_bounds(data: &[u8], off: usize) -> Result<ElementBounds> {
     }
 }
 
-/// Rejects a collection cardinality that exceeds [`MAX_COLLECTION_LENGTH`],
+/// Rejects a collection cardinality that exceeds `max_collection_length`,
 /// bounding an attacker-controlled loop count.
 #[inline]
-fn check_collection_len(len: usize) -> Result<()> {
-    if len > MAX_COLLECTION_LENGTH {
+fn check_collection_len(len: usize, max_collection_length: usize) -> Result<()> {
+    if len > max_collection_length {
         return Err(Error::Client(ClientError::CollectionLengthTooLarge));
     }
     Ok(())
@@ -378,9 +367,14 @@ fn parse_container_header(data: &[u8], at: usize) -> Result<ContainerHeader> {
 /// precede any value, so they are skipped wherever a value is expected and never
 /// surfaced — neither as a frame nor as a tape node. [`Error::EOF`] if an
 /// attribute is only partially present; the caller then rewinds and retries.
-fn skip_leading_attributes(data: &[u8], mut pos: usize, depth: usize) -> Result<usize> {
+fn skip_leading_attributes(
+    data: &[u8],
+    mut pos: usize,
+    depth: usize,
+    limits: &RespLimits,
+) -> Result<usize> {
     while pos < data.len() && data[pos] == ATTRIBUTE_TAG {
-        if depth + 1 > MAX_NESTING_DEPTH {
+        if depth + 1 > limits.max_nesting_depth {
             return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
         }
         let (n, after) = parse_int_at(data, pos + 1)?;
@@ -388,10 +382,10 @@ fn skip_leading_attributes(data: &[u8], mut pos: usize, depth: usize) -> Result<
             return Err(Error::Client(ClientError::CannotParseMap));
         }
         let count = n as usize * 2;
-        check_collection_len(count)?;
+        check_collection_len(count, limits.max_collection_length)?;
         let mut child = after;
         for _ in 0..count {
-            child = skip_one_value(data, child, depth + 1)?;
+            child = skip_one_value(data, child, depth + 1, limits)?;
         }
         pos = child;
     }
@@ -401,28 +395,28 @@ fn skip_leading_attributes(data: &[u8], mut pos: usize, depth: usize) -> Result<
 /// Advances past exactly one value at `pos` — a scalar, or a nested collection
 /// with all of its descendants — returning the offset just past it. Used only to
 /// consume attribute payloads, which carry no tape, so it walks the structure
-/// without recording anything. Recursion is bounded by [`MAX_NESTING_DEPTH`].
+/// without recording anything. Recursion is bounded by `limits.max_nesting_depth`.
 /// [`Error::EOF`] if the value is incomplete.
-fn skip_one_value(data: &[u8], pos: usize, depth: usize) -> Result<usize> {
-    let pos = skip_leading_attributes(data, pos, depth)?;
+fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) -> Result<usize> {
+    let pos = skip_leading_attributes(data, pos, depth, limits)?;
     let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
     if is_container_tag(tag) {
         match parse_container_header(data, pos)? {
             ContainerHeader::Null { end } => Ok(end),
             ContainerHeader::Open { count, end } => {
-                check_collection_len(count)?;
-                if depth + 1 > MAX_NESTING_DEPTH {
+                check_collection_len(count, limits.max_collection_length)?;
+                if depth + 1 > limits.max_nesting_depth {
                     return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                 }
                 let mut child = end;
                 for _ in 0..count {
-                    child = skip_one_value(data, child, depth + 1)?;
+                    child = skip_one_value(data, child, depth + 1, limits)?;
                 }
                 Ok(child)
             }
         }
     } else {
-        Ok(element_bounds(data, pos)?.end)
+        Ok(element_bounds(data, pos, limits.max_bulk_length)?.end)
     }
 }
 
@@ -456,6 +450,10 @@ pub(crate) struct PendingContainer {
 /// deeply-nested reply from overflowing the call stack.
 pub struct RespFrameParser<'a, 'b> {
     buf: &'a [u8],
+    /// Hostile-input bounds this parser enforces, resolved from the connection's
+    /// [`Config`](crate::client::Config) so a frame is checked against the same
+    /// limits wherever it is parsed.
+    limits: RespLimits,
     /// Tape builder, borrowed so the decoder can recycle one `BytesMut` across
     /// frames (`split().freeze()` per frame keeps its capacity). While a frame is
     /// incomplete the partial tape stays here, accumulating across chunks.
@@ -468,15 +466,36 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// of a complete buffer and as the streaming decoder's entry point for a
     /// brand-new frame.
     pub fn new(buf: &'a [u8], tape: &'b mut BytesMut) -> Self {
-        Self { buf, tape, pos: 0 }
+        Self::with_limits(buf, tape, RespLimits::DEFAULT)
+    }
+
+    /// A parser positioned at the start of `buf`, enforcing caller-chosen
+    /// limits instead of the defaults.
+    pub fn with_limits(buf: &'a [u8], tape: &'b mut BytesMut, limits: RespLimits) -> Self {
+        Self {
+            buf,
+            limits,
+            tape,
+            pos: 0,
+        }
     }
 
     /// A parser positioned at `pos`, used by the streaming decoder to resume a
     /// frame it previously suspended. The partial tape is expected to already be
     /// present in `tape`, and the open-collection stack is passed to
     /// [`Self::parse_resumable`].
-    pub(crate) fn at(buf: &'a [u8], tape: &'b mut BytesMut, pos: usize) -> Self {
-        Self { buf, tape, pos }
+    pub(crate) fn at(
+        buf: &'a [u8],
+        tape: &'b mut BytesMut,
+        pos: usize,
+        limits: RespLimits,
+    ) -> Self {
+        Self {
+            buf,
+            limits,
+            tape,
+            pos,
+        }
     }
 
     /// The byte offset the parser has reached — the frame length once a frame is
@@ -499,7 +518,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     #[inline(always)]
     pub fn parse(&mut self) -> Result<(RespFrame, usize)> {
         if self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
-            self.pos = skip_leading_attributes(self.buf, self.pos, 0)?;
+            self.pos = skip_leading_attributes(self.buf, self.pos, 0, &self.limits)?;
         }
         let tag = *self.buf.get(self.pos).ok_or_else(|| Error::EOF)?;
         if is_container_tag(tag) {
@@ -533,7 +552,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         // the common scalar path pays nothing. A partial attribute rewinds to the
         // frame start; a complete run is consumed and stays in the buffer.
         if self.pos < self.buf.len() && self.buf[self.pos] == ATTRIBUTE_TAG {
-            match skip_leading_attributes(self.buf, self.pos, 0) {
+            match skip_leading_attributes(self.buf, self.pos, 0, &self.limits) {
                 Ok(at) => self.pos = at,
                 Err(Error::EOF) => {
                     self.pos = frame_start;
@@ -578,7 +597,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 Ok(Some(RespFrame::Null))
             }
             Ok(ContainerHeader::Open { count, end }) => {
-                check_collection_len(count)?;
+                check_collection_len(count, self.limits.max_collection_length)?;
                 debug_assert!(self.tape.is_empty(), "tape must start empty per frame");
                 let head = push_node(self.tape, tag, 0);
                 push_node(self.tape, TAPE_LEN_TAG, count as u64);
@@ -656,7 +675,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         // (non-inlinable, recursive) skip call, so the common case is one compare.
         let mut at = self.pos;
         if at < self.buf.len() && self.buf[at] == ATTRIBUTE_TAG {
-            at = skip_leading_attributes(self.buf, at, stack.len())?;
+            at = skip_leading_attributes(self.buf, at, stack.len(), &self.limits)?;
         }
         let tag = *self.buf.get(at).ok_or_else(|| Error::EOF)?;
 
@@ -670,8 +689,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     credit_open_collection(stack);
                 }
                 ContainerHeader::Open { count, end } => {
-                    check_collection_len(count)?;
-                    if stack.len() + 1 > MAX_NESTING_DEPTH {
+                    check_collection_len(count, self.limits.max_collection_length)?;
+                    if stack.len() + 1 > self.limits.max_nesting_depth {
                         return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                     }
                     let head = push_node(self.tape, tag, 0);
@@ -686,7 +705,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 }
             }
         } else {
-            let bounds = element_bounds(self.buf, at)?;
+            let bounds = element_bounds(self.buf, at, self.limits.max_bulk_length)?;
             push_node(self.tape, tag, at as u64);
             self.pos = bounds.end;
             credit_open_collection(stack);
@@ -752,7 +771,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     if len < 0 {
                         return Err(Error::Client(ClientError::CannotParseBulkString));
                     }
-                    check_bulk_len(len)?;
+                    check_bulk_len(len, self.limits.max_bulk_length)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -776,7 +795,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     if len < 4 {
                         return Err(Error::Client(ClientError::VerbatimStringTooShort));
                     }
-                    check_bulk_len(len)?;
+                    check_bulk_len(len, self.limits.max_bulk_length)?;
                     let start = self.pos;
                     let need = self.pos + len as usize + 2;
                     if self.buf.len() < need {
@@ -794,7 +813,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 if len < 0 {
                     return Err(Error::Client(ClientError::CannotParseBulkError));
                 }
-                check_bulk_len(len)?;
+                check_bulk_len(len, self.limits.max_bulk_length)?;
                 let start = self.pos;
                 let need = self.pos + len as usize + 2;
                 if self.buf.len() < need {

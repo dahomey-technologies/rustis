@@ -275,7 +275,6 @@ pub struct Config {
     /// * [`Transaction::retry_on_error`](crate::client::Transaction::retry_on_error)
     /// * [`Client::send`](crate::client::Client::send)
     /// * [`Client::send_and_forget`](crate::client::Client::send_and_forget)
-    /// * [`Client::send_batch`](crate::client::Client::send_batch)
     pub retry_on_error: bool,
     /// Reconnection policy configuration (Constant, Linear or Exponential)
     pub reconnection: ReconnectionConfig,

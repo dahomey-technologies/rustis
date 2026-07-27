@@ -56,6 +56,40 @@ redis-cli --raw HELLO 3
 If you see server info (role, version, etc.), you're good to go.
 If you get an error, upgrade Redis.
 
+# Minimum Supported Rust Version
+
+**Rust 1.88**, declared as `rust-version` in `Cargo.toml` and verified by a CI
+job that compiles both runtimes with exactly that toolchain. Let chains hold the
+floor there; edition 2024 on its own would allow 1.85.
+
+Raising it is treated as a breaking change and is announced in `CHANGELOG.md`.
+
+# Safety
+
+Rustis is `#![forbid(unsafe_code)]`, and that is a deliberate position rather
+than an accident of never having needed unsafe.
+
+It costs less here than it would elsewhere. RESP is length-delimited, so the
+parser reads a header and skips the announced number of bytes instead of
+searching for delimiters — which leaves little for the usual payoff of unsafe in
+a parser, SIMD structural scanning, to find. Hardware CRC16 for cluster slots is
+the other candidate, and standalone clients skip slot computation entirely.
+
+What it buys is that a malformed or hostile reply can never become a
+memory-safety bug. The real hostile-input surface is then panics and unbounded
+allocation, and both are addressed directly:
+
+* The explicit-panic lint family (`unwrap_used`, `expect_used`, `panic`,
+  `unreachable`, `todo`, `unimplemented`) is `deny` crate-wide, and
+  `clippy::indexing_slicing` is `deny` in `resp/` and `network/` — the two zones
+  where a panic is fatal rather than merely wrong. Surviving sites carry an
+  `#[allow(…, reason = "…")]` naming the invariant that makes them unreachable.
+* Frame size, nesting depth and element counts are bounded and configurable
+  (`Config::limits`), so a crafted reply cannot drive an unbounded allocation or
+  a stack overflow.
+* Four `cargo-fuzz` targets exercise the frame parser, both deserializers, and
+  the chunked decode path.
+
 # Basic Usage
 
 ```rust

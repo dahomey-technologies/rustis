@@ -65,8 +65,43 @@ where
 }
 
 /// A group of blocking commands
+///
+/// # ⚠ These commands require a dedicated connection
+///
+/// A blocking command occupies its connection until it returns. On a
+/// multiplexed [`Client`](crate::client::Client) — one instance cloned across
+/// threads — that connection is shared, so every other caller queued behind it
+/// waits for the block to end, however unrelated their commands are. A `BLPOP`
+/// with a 30-second timeout stalls the whole client for 30 seconds.
+///
+/// [`command_timeout`](crate::client::Config::command_timeout) does not rescue
+/// this. It bounds how long *the caller* waits for a reply, and then returns
+/// [`Error::Timeout`](crate::Error::Timeout) — the server keeps blocking the
+/// connection until the command's own `timeout` argument expires, so the
+/// commands queued behind it are still stuck.
+///
+/// Give these commands a connection of their own:
+///
+/// ```
+/// use rustis::{client::Client, commands::BlockingCommands, Result};
+///
+/// # async fn example() -> Result<()> {
+/// // A separate `connect` is a separate connection — not a clone of an
+/// // existing client, which would share one.
+/// let blocking_client = Client::connect("127.0.0.1:6379").await?;
+/// let result: Option<(String, String)> = blocking_client.blpop("key", 30.).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// A [`PooledClientManager`](crate::client::PooledClientManager) works too: the
+/// borrowed client is returned to the pool only once the command completes, so
+/// the block stays confined to one pooled connection.
 pub trait BlockingCommands<'a>: Sized {
     /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
+    ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
     ///
     /// # Return
     /// the element being popped from `source` and pushed to `destination`.
@@ -95,6 +130,9 @@ pub trait BlockingCommands<'a>: Sized {
     }
 
     /// This command is the blocking variant of [`lmpop`](crate::commands::ListCommands::lmpop).
+    ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
     ///
     /// # Return
     /// - None when no element could be popped, and timeout is reached.
@@ -126,6 +164,9 @@ pub trait BlockingCommands<'a>: Sized {
     /// It is the blocking version of [`lpop`](crate::commands::ListCommands::lpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
+    ///
     /// An element is popped from the head of the first list that is non-empty,
     /// with the given keys being checked in the order that they are given.
     ///
@@ -150,6 +191,9 @@ pub trait BlockingCommands<'a>: Sized {
     /// It is the blocking version of [`rpop`](crate::commands::ListCommands::rpop) because it
     /// blocks the connection when there are no elements to pop from any of the given lists.
     ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
+    ///
     /// An element is popped from the tail of the first list that is non-empty,
     /// with the given keys being checked in the order that they are given.
     ///
@@ -170,6 +214,9 @@ pub trait BlockingCommands<'a>: Sized {
     }
 
     /// This command is the blocking variant of [`zmpop`](crate::commands::SortedSetCommands::zmpop).
+    ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
     ///
     /// # Return
     /// * `None` if no element could be popped
@@ -200,6 +247,9 @@ pub trait BlockingCommands<'a>: Sized {
 
     /// This command is the blocking variant of [`zpopmax`](crate::commands::SortedSetCommands::zpopmax).
     ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
+    ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.
     /// * The list of tuple with
@@ -220,6 +270,9 @@ pub trait BlockingCommands<'a>: Sized {
 
     /// This command is the blocking variant of [`zpopmin`](crate::commands::SortedSetCommands::zpopmin).
     ///
+    /// **Blocks its connection.** Call it on a client dedicated to blocking
+    /// commands — see [the trait documentation](BlockingCommands).
+    ///
     /// # Return
     /// * `None` when no element could be popped and the timeout expired.
     /// * The list of tuple with
@@ -239,6 +292,12 @@ pub trait BlockingCommands<'a>: Sized {
     }
 
     /// Debugging command that streams back every command processed by the Redis server.
+    ///
+    /// **Takes over its connection for as long as the stream lives**, which is
+    /// until the returned [`MonitorStream`](crate::client::MonitorStream) is
+    /// closed or dropped — either sends `RESET` to leave monitor mode. Call it
+    /// on a client dedicated to it — see
+    /// [the trait documentation](BlockingCommands).
     ///
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)

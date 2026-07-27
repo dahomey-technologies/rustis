@@ -41,7 +41,7 @@ rustis is a Redis client for Rust.
 * Rust idiomatic API
 
 # Features
-* Support all [Redis Commands](https://redis.io/commands/) until Redis 8.0
+* Support all [Redis Commands](https://redis.io/commands/) until Redis 8.4
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client types:
   * Single client
@@ -131,7 +131,8 @@ allows programmers to communicate with Redis in a Rust idiomatic way.
 
 You will learn how to:
 * Manipulate the **rustis** object model, the enum [`Value`](resp::Value), which is a generic Rust data structure over RESP.
-* Convert Rust type into Rust Commands with the [`Command`](resp::Command) struct and the [`Args`](resp::Args) trait.
+* Convert Rust types into Rust Commands with the [`Command`](resp::Command) struct, whose
+  arguments are any type implementing serde's [`Serialize`](serde::Serialize).
 * Convert Rust command responses into Rust type with serde and helpful marker traits.
 
 # Commands
@@ -149,13 +150,13 @@ See the module [`commands`] to discover how Redis built-in commands are organize
 
 ## Generic command API
 To use the generic command API, you can use the [`cmd`](crate::resp::cmd) function to specify the name of the command,
-followed by one or multiple calls to the [`Commmand::arg`](crate::resp::Command::arg) associated function to add arguments to the command.
+followed by one or multiple calls to [`CommandBuilder::arg`](crate::resp::CommandBuilder::arg) to add arguments to the command.
 
 This command can then be passed as a parameter to one of the following associated functions,
 depending on the client, transaction or pipeline struct used:
 * [`send`](crate::client::Client::send)
 * [`send_and_forget`](crate::client::Client::send_and_forget)
-* [`send_batch`](crate::client::Client::send_batch)
+* [`Pipeline::queue`](crate::client::Pipeline::queue), to batch several of them
 
 ```
 use rustis::{client::Client, resp::cmd, Result};

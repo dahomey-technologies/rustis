@@ -1166,7 +1166,7 @@ pub struct TsSample {
     ///
     /// * By default, an empty list is reported
     /// * If [`withlabels`](TsMGetOptions::withlabels) is specified, all labels associated with this time series are reported
-    /// * If [`selected_labels`](TsMGetOptions::selected_labels) is specified, the selected labels are reported
+    /// * If [`selected_label`](TsMGetOptions::selected_label) is specified, the selected labels are reported
     pub labels: HashMap<String, String>,
     /// Timestamp-value pairs for all samples/aggregations matching the range
     pub timestamp_value: (u64, f64),
@@ -1343,7 +1343,7 @@ pub struct TsRangeSample {
     ///
     /// * By default, an empty list is reported
     /// * If [`withlabels`](TsMGetOptions::withlabels) is specified, all labels associated with this time series are reported
-    /// * If [`selected_labels`](TsMGetOptions::selected_labels) is specified, the selected labels are reported
+    /// * If [`selected_label`](TsMGetOptions::selected_label) is specified, the selected labels are reported
     pub labels: Vec<(String, String)>,
     pub reducers: Vec<String>,
     pub sources: Vec<String>,

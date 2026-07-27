@@ -8,6 +8,48 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Added
+
+- **A declared minimum supported Rust version: 1.88.** `Cargo.toml` now carries
+  `rust-version`, and a CI job compiles both runtimes with exactly that
+  toolchain, so the number is verified rather than asserted. Let chains hold the
+  floor there; edition 2024 on its own would allow 1.85. Raising the MSRV will be
+  treated as a breaking change and announced here.
+
+### Changed
+
+- Three `if let` guards in the `Value` deserializer were rewritten as plain
+  matches. They were the only construct in the crate requiring Rust 1.95, so
+  removing them lowered the compiler floor by seven releases. Behavior is
+  unchanged.
+- Documentation only, no API change:
+  - `BlockingCommands` and each of its methods now state prominently that a
+    blocking command monopolizes its connection, that `command_timeout` bounds
+    only the caller's wait and does not free the connection server-side, and
+    that these commands belong on a dedicated client. The constraint was
+    documented before, but only in the client module's *Limitations* paragraph.
+  - The README gained a *Safety* section explaining `#![forbid(unsafe_code)]` as
+    a deliberate position — what it costs on a length-delimited protocol, and
+    what actually guards the hostile-input surface instead (the panic lint
+    policy, the configurable RESP limits, the fuzz targets).
+  - The `check_resp2_array` heuristic in the `Value` deserializer is now
+    documented, including where it is looser than the equivalent rule in the
+    RESP deserializer.
+  - The crate-level documentation claimed command coverage "until Redis 8.0";
+    it is 8.4, as the README already said.
+
+### Fixed
+
+- Eleven broken links in the published documentation, which rendered as dead
+  text on docs.rs: `resp::Args` (a trait that does not exist — arguments are any
+  `serde::Serialize`), `Command::arg` (it is `CommandBuilder::arg`),
+  `Client::send_batch` (removed from the public API, still linked from three
+  places — use `Pipeline`), `FtAggregateOptions::reduce` (it is on `FtGroupBy`),
+  `FtSugGetOptions::withpayload` (plural), `TsMGetOptions::selected_labels` (the
+  method is `selected_label`), `Command::compute_slots` (private), a bare
+  `Serialize`, and a doubled parenthesis swallowing a URL. `cargo doc` now runs
+  in CI with warnings denied, so these cannot come back unnoticed.
+
 ## [0.20.0] - 2026-07-27
 
 This release closes a large correctness and performance pass over the RESP

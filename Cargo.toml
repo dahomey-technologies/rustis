@@ -10,6 +10,9 @@ documentation = "https://docs.rs/rustis"
 readme = "README.md"
 license-file = "LICENSE"
 edition = "2024"
+# Held here by let chains, used in 63 places. Edition 2024 alone would allow
+# 1.85. Verified by the `msrv` CI job, which is what keeps this number true.
+rust-version = "1.88"
 
 [features]
 default = ["tokio-runtime"]

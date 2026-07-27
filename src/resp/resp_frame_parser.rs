@@ -164,10 +164,7 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
 /// rebuild the frame and back-patch its head node's `next`), the tape index of
 /// that head node, and how many of its children are still unparsed.
 ///
-/// The stack of these is owned by the caller (a local for one-shot parsing, the
-/// streaming decoder's reused buffer for the network path) and threaded through
-/// the element loop, so the parser itself stays a lightweight cursor with no
-/// heap field on the hot scalar path.
+/// Why that stack is explicit and left to the caller: see [`RespFrameParser`].
 pub(crate) struct OpenCollection {
     tag: u8,
     head_index: usize,
@@ -181,15 +178,18 @@ pub(crate) struct OpenCollection {
 /// [`crate::resp::resp_tape`]).
 ///
 /// The collection pass is an **iterative state machine** over an explicit stack
-/// (owned by the caller, see [`OpenCollection`]), not recursion: each step
-/// consumes exactly one unit (an element, a collection header, or a run of
-/// attributes) and is atomic with respect to `pos` — it either advances past its
-/// whole unit or, on [`Error::EOF`], leaves `pos` at the unit's start.
+/// of [`OpenCollection`], not recursion: each step consumes exactly one unit (an
+/// element, a collection header, or a run of attributes) and is atomic with
+/// respect to `pos` — it either advances past its whole unit or, on
+/// [`Error::EOF`], leaves `pos` at the unit's start.
 ///
 /// The stack is explicit so that a half-received frame can be suspended and
 /// resumed byte-for-byte across TCP chunks: the collections still open live in a
-/// structure the caller holds on to, where a recursive parser would keep them in
-/// call frames it has no way to hand back. What bounds nesting is
+/// structure the caller holds on to — a local for one-shot parsing, the streaming
+/// decoder's reused buffer for the network path — where a recursive parser would
+/// keep them in call frames it has no way to hand back. Leaving it to the caller
+/// is also what keeps the parser itself a cursor with no heap field, so nothing
+/// on the hot scalar path allocates. What bounds nesting is
 /// [`RespLimits::max_nesting_depth`], and it bounds it on both sides — this stack
 /// and the recursion left in attribute skipping.
 pub struct RespFrameParser<'a, 'b> {
@@ -225,9 +225,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     }
 
     /// A parser positioned at `pos`, used by the streaming decoder to resume a
-    /// frame it previously suspended. The partial tape is expected to already be
-    /// present in `tape`, and the open-collection stack is passed to
-    /// [`Self::parse_resumable`].
+    /// frame it previously suspended. Expects the partial tape already in `tape`,
+    /// and the matching open-collection stack handed to [`Self::parse_resumable`].
     pub(crate) fn at(
         buf: &'a [u8],
         tape: &'b mut RespTapeMut,
@@ -254,11 +253,10 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// one-shot caller has no next chunk, so where [`Self::parse_resumable`]
     /// suspends, this reports an error.
     ///
-    /// That is the whole difference between the two. The stack below is a local
-    /// nothing ever resumes from, and `Vec::new()` allocates nothing, so a scalar
-    /// reply still reaches no heap. The network path is the streaming decoder's;
-    /// this one serves [`crate::resp::RespBuf::to`], the fuzz harness and the
-    /// tests.
+    /// That is the whole difference between the two. `Vec::new()` allocates
+    /// nothing, so routing a scalar reply through the resumable path still reaches
+    /// no heap. The network path is the streaming decoder's; this one serves
+    /// [`crate::resp::RespBuf::to`], the fuzz harness and the tests.
     pub fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
         let mut stack = Vec::new();
         match self.parse_resumable(&mut stack)? {

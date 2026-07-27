@@ -133,11 +133,6 @@ pub(crate) use resp_buf::*;
 pub use resp_deserializer::*;
 pub(crate) use resp_frame_parser::*;
 pub(crate) use resp_response::*;
-/// The tape builder the benchmark shims take by reference, so an external
-/// `benches`/`examples` crate can recycle one across calls the way the decoder
-/// does. Reachable only under the `bench` feature, like `bench_support` itself.
-#[cfg(feature = "bench")]
-pub use resp_tape::RespTapeMut;
 pub(crate) use resp_tape::*;
 pub use response::*;
 pub use util::*;

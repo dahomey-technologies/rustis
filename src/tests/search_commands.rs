@@ -1013,7 +1013,7 @@ async fn ft_info() -> Result<()> {
         .await?;
 
     let info = client.ft_info("index").await?;
-    log::debug!("info: {info:?}");
+    tracing::debug!("info: {info:?}");
 
     Ok(())
 }
@@ -1153,12 +1153,12 @@ async fn ft_profile() -> Result<()> {
         )
         .await?;
 
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
 
     // Under RESP3, FT.PROFILE answers a map holding the query's own reply next
     // to the profiling report.
     let result = client.ft_profile_search("index", false, "*").await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     let Value::Map(parts) = result else {
         panic!("expected a map, got {result:?}");
     };
@@ -1230,14 +1230,14 @@ async fn ft_search() -> Result<()> {
     let result = client
         .ft_search("index", "wizard", FtSearchOptions::default())
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
 
     let result = client
         .ft_search("index", "@title:dogs", FtSearchOptions::default())
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
     assert_eq!(1, result.results.len());
 
@@ -1248,14 +1248,14 @@ async fn ft_search() -> Result<()> {
             FtSearchOptions::default(),
         )
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
     assert_eq!(1, result.results.len());
 
     let result = client
         .ft_search("index", "*", FtSearchOptions::default().nocontent())
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
 
@@ -1270,7 +1270,7 @@ async fn ft_search() -> Result<()> {
                 .sortby("title", SortOrder::Asc, false),
         )
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
 
@@ -1280,7 +1280,7 @@ async fn ft_search() -> Result<()> {
         .ft_search("index", "wizard", FtSearchOptions::default())
         .queue();
     let result: FtSearchResult = pipeline.execute().await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(2, result.total_results);
     assert_eq!(2, result.results.len());
 
@@ -1323,7 +1323,7 @@ async fn ft_search_empty_index() -> Result<()> {
     let result = client
         .ft_search("index", "wizard", FtSearchOptions::default())
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(0, result.total_results);
     assert_eq!(0, result.results.len());
 
@@ -1413,7 +1413,7 @@ async fn ft_syn() -> Result<()> {
     let result = client
         .ft_search("index", "hello", FtSearchOptions::default())
         .await?;
-    log::debug!("result: {result:?}");
+    tracing::debug!("result: {result:?}");
     assert_eq!(1, result.total_results);
     assert_eq!(1, result.results.len());
     assert_eq!("foo", result.results[0].id);

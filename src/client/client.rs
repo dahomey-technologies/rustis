@@ -22,9 +22,9 @@ use crate::{
     resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
 use futures_channel::mpsc;
-use log::{info, trace};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{future::IntoFuture, sync::Arc, time::Duration};
+use tracing::{info, trace};
 
 /// Client with a unique connection to a Redis server.
 /// State shared by every clone of a [`Client`] over a single connection.
@@ -300,8 +300,8 @@ impl Client {
 
         if let Some(shared) = self.shared.as_ref() {
             trace!(
-                "[{}], Will enqueue message: {message:?}",
-                self.connection_tag
+                tag = %self.connection_tag,
+                "Will enqueue message: {message:?}"
             );
             Ok(shared.msg_sender.send(message).map_err(|e| {
                 info!("{e}");

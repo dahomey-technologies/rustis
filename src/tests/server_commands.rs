@@ -112,7 +112,7 @@ async fn acl_getuser() -> Result<()> {
 
     client.acl_setuser("foo", Vec::<String>::new()).await?;
     let rules: HashMap<String, Value> = client.acl_getuser("foo").await?;
-    log::debug!("rules: {rules:?}");
+    tracing::debug!("rules: {rules:?}");
     // default `commands` rule
     assert!(matches!(rules.get("commands"), Some(Value::BulkString(rule)) if rule == b"-@all"));
 
@@ -1072,7 +1072,7 @@ async fn role() -> Result<()> {
     let client = get_test_client().await?;
 
     let role_result = client.role().await?;
-    log::debug!("role_result: {role_result:?}");
+    tracing::debug!("role_result: {role_result:?}");
     assert!(matches!(
         role_result,
         RoleResult::Master {
@@ -1086,7 +1086,7 @@ async fn role() -> Result<()> {
         .await?;
 
     let role_result = client.role().await?;
-    log::debug!("role_result: {role_result:?}");
+    tracing::debug!("role_result: {role_result:?}");
     assert!(matches!(
         role_result,
         RoleResult::Replica {
@@ -1101,7 +1101,7 @@ async fn role() -> Result<()> {
 
     let sentinel_client = get_sentinel_test_client().await?;
     let role_result = sentinel_client.role().await?;
-    log::debug!("role_result: {role_result:?}");
+    tracing::debug!("role_result: {role_result:?}");
     assert!(matches!(
         role_result,
         RoleResult::Sentinel {

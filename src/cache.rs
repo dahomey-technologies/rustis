@@ -119,9 +119,9 @@ impl Cache {
             let mut stream = stream;
             while let Some(keys) = stream.next().await {
                 for key in keys {
-                    log::debug!(
-                        "[{}] Invalidating key `{key}` from client cache",
-                        connection_tag
+                    tracing::debug!(
+                        tag = %connection_tag,
+                        "Invalidating key `{key}` from client cache"
                     );
                     // Record the invalidation before removing the entry, so a
                     // fetch that samples the counter after this point and inserts
@@ -145,7 +145,7 @@ impl Cache {
         let mut on_reconnect = client.on_reconnect();
         let reconnection_task = spawn(async move {
             while on_reconnect.recv().await.is_ok() {
-                log::debug!("[{connection_tag}] Re-enabling client tracking after reconnection");
+                tracing::debug!(tag = %connection_tag, "Re-enabling client tracking after reconnection");
 
                 // Invalidations emitted while the connection was down are lost for
                 // good, so every entry must be considered stale. A partial refresh
@@ -156,8 +156,9 @@ impl Cache {
                     .client_tracking(ClientTrackingStatus::On, tracking_opts.clone())
                     .await
                 {
-                    log::error!(
-                        "[{connection_tag}] Cannot re-enable client tracking after reconnection: {e}"
+                    tracing::error!(
+                        tag = %connection_tag,
+                        "Cannot re-enable client tracking after reconnection: {e}"
                     );
                 }
             }
@@ -208,17 +209,15 @@ impl Cache {
             if let Some(values) = self.cache.get(&key).await
                 && let Some(response) = values.get(&subcache_key)
             {
-                log::debug!(
-                    "[{}] Cache hit on key `{}`",
-                    self.client.connection_tag(),
-                    key
+                tracing::debug!(
+                    tag = %self.client.connection_tag(),
+                    "Cache hit on key `{key}`"
                 );
                 responses.push(response.clone());
             } else {
-                log::debug!(
-                    "[{}] Cache miss on key `{}`",
-                    self.client.connection_tag(),
-                    key
+                tracing::debug!(
+                    tag = %self.client.connection_tag(),
+                    "Cache miss on key `{key}`"
                 );
                 responses.push(RespResponse::null());
                 missing_indices.push(i);
@@ -266,7 +265,7 @@ impl Cache {
                 responses[original_idx] = response;
             }
         } else {
-            log::debug!("[{}] Cache hit on mget", self.client.connection_tag());
+            tracing::debug!(tag = %self.client.connection_tag(), "Cache hit on mget");
         }
 
         // 3. deserialize
@@ -529,20 +528,18 @@ impl Cache {
         if let Some(values) = self.cache.get(&key).await
             && let Some(response) = values.get(command.bytes())
         {
-            log::debug!(
-                "[{}] Cache hit on key `{}`",
-                self.client.connection_tag(),
-                key
+            tracing::debug!(
+                tag = %self.client.connection_tag(),
+                "Cache hit on key `{key}`"
             );
             let deserializer = RespDeserializer::new(response.view()?);
             return R::deserialize(deserializer);
         }
 
         // Cache miss: fetch from Redis
-        log::debug!(
-            "[{}] Cache miss on key `{}`",
-            self.client.connection_tag(),
-            key
+        tracing::debug!(
+            tag = %self.client.connection_tag(),
+            "Cache miss on key `{key}`"
         );
 
         // Sample the invalidation counter *before* sending: any invalidation for

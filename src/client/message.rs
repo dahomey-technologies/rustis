@@ -4,9 +4,9 @@ use crate::{
     resp::{Command, SubscriptionType},
 };
 use bytes::Bytes;
-use log::warn;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tracing::warn;
 
 #[cfg(test)]
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -188,7 +188,9 @@ impl Message {
         }
     }
 
-    pub fn send_error(self, tag: &str, error: Error) {
+    /// The connection identity comes from the surrounding span, so this takes no
+    /// tag: every caller is the network task, which is already inside it.
+    pub fn send_error(self, error: Error) {
         match self.kind {
             MessageKind::Single {
                 result_sender: Some(result_sender),
@@ -196,28 +198,28 @@ impl Message {
             } => {
                 if let Err(e) = result_sender.send(Err(error)) {
                     warn!(
-                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
                     );
                 }
             }
             MessageKind::Batch { results_sender, .. } => {
                 if let Err(e) = results_sender.send(Err(error)) {
                     warn!(
-                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
                     );
                 }
             }
             MessageKind::PubSub { result_sender, .. } => {
                 if let Err(e) = result_sender.send(Err(error)) {
                     warn!(
-                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
                     );
                 }
             }
             MessageKind::Monitor { result_sender, .. } => {
                 if let Err(e) = result_sender.send(Err(error)) {
                     warn!(
-                        "[{tag}] Cannot send value to caller because receiver is not there anymore: {e:?}",
+                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
                     );
                 }
             }

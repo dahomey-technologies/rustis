@@ -5,8 +5,8 @@ use crate::{
     resp::{Command, RespResponse},
     sleep,
 };
-use log::debug;
 use std::{sync::Arc, task::Poll};
+use tracing::debug;
 
 pub struct SentinelConnection {
     sentinel_config: SentinelConfig,

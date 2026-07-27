@@ -11,7 +11,6 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
-use log::{debug, info, trace, warn};
 use rand::Rng;
 use smallvec::{SmallVec, smallvec};
 use std::{
@@ -22,6 +21,7 @@ use std::{
     sync::Arc,
     task::Poll,
 };
+use tracing::{debug, error, info, trace, warn};
 
 /// Test-only handle used to make the cluster topology-change failure path
 /// observable. Shared (via `Arc`) between a test and the `ClusterConnection`
@@ -344,7 +344,7 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
-        trace!("[{}] Analyzing command {command:?}", self.tag);
+        trace!("Analyzing command {command:?}");
         let request_policy = command.request_policy();
 
         if let Some(request_policy) = request_policy {
@@ -483,7 +483,7 @@ impl ClusterConnection {
         }
 
         node_slot_keys_ask.sort();
-        trace!("[{}] node_slot_keys_ask: {node_slot_keys_ask:?}", self.tag);
+        trace!("node_slot_keys_ask: {node_slot_keys_ask:?}");
 
         let mut current_slot_keys = SmallVec::<[Bytes; 10]>::new();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
@@ -659,7 +659,7 @@ impl ClusterConnection {
         }
 
         self.nodes.retain(|node| node.id != victim);
-        debug!("[{}] test hook removed node {victim:?}", self.tag);
+        debug!("test hook removed node {victim:?}");
     }
 
     /// Drops the pending request a subscription command left behind, now that
@@ -731,7 +731,7 @@ impl ClusterConnection {
             if let Some(ri) = self.pending_requests.front()
                 && ri.sub_requests.iter().all(|sr| sr.result.is_some())
             {
-                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                trace!("fulfilled request_info: {ri:?}");
                 if let Some(ri) = self.pending_requests.pop_front() {
                     match self.internal_read(ri) {
                         ReadOutcome::Ready(result) => return result,
@@ -745,7 +745,7 @@ impl ClusterConnection {
             // disconnection so the handler reconnects and rediscovers the
             // topology, rather than taking the whole network task down.
             if self.nodes.is_empty() {
-                warn!("[{}] No cluster node available to read from", self.tag);
+                warn!("No cluster node available to read from");
                 return None;
             }
 
@@ -782,9 +782,8 @@ impl ClusterConnection {
                         Some((req_idx, sub_req_idx))
                     })
             else {
-                log::error!(
-                    "[{}] Received unexpected message: {result:?} from {}",
-                    self.tag,
+                error!(
+                    "Received unexpected message: {result:?} from {}",
                     node.connection.tag()
                 );
                 return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
@@ -816,7 +815,7 @@ impl ClusterConnection {
             if let Some(ri) = self.pending_requests.front()
                 && ri.sub_requests.iter().all(|sr| sr.result.is_some())
             {
-                trace!("[{}] fulfilled request_info: {ri:?}", self.tag);
+                trace!("fulfilled request_info: {ri:?}");
                 if let Some(ri) = self.pending_requests.pop_front() {
                     match self.internal_read(ri) {
                         ReadOutcome::Ready(result) => return Poll::Ready(result),
@@ -827,7 +826,7 @@ impl ClusterConnection {
 
             // See `read()`: a node-less connection cannot serve anything.
             if self.nodes.is_empty() {
-                warn!("[{}] No cluster node available to read from", self.tag);
+                warn!("No cluster node available to read from");
                 return Poll::Ready(None);
             }
 
@@ -871,9 +870,9 @@ impl ClusterConnection {
                         Some((req_idx, sub_req_idx))
                     })
             else {
-                log::error!(
-                    "[{}] Received unexpected message: {result:?}",
-                    node.connection.tag()
+                error!(
+                    node = %node.connection.tag(),
+                    "Received unexpected message: {result:?}"
                 );
                 return Poll::Ready(Some(Err(Error::Client(
                     ClientError::UnexpectedMessageReceived,
@@ -909,8 +908,7 @@ impl ClusterConnection {
         };
         sub_request.result = Some(result);
         trace!(
-            "[{}] Did store sub-request result into {:?}",
-            self.tag,
+            "Did store sub-request result into {:?}",
             self.pending_requests.get(req_idx)
         );
         true
@@ -1017,10 +1015,7 @@ impl ClusterConnection {
         if redirections.iter().any(|r| !r.should_ask)
             && let Err(e) = self.refresh_nodes_and_slot_ranges().await
         {
-            warn!(
-                "[{}] Cannot refresh the topology after a redirection: {e}",
-                self.tag
-            );
+            warn!("Cannot refresh the topology after a redirection: {e}");
         }
 
         for redirection in redirections {
@@ -1028,10 +1023,7 @@ impl ClusterConnection {
             // unfulfilled; the orphan check at the top of `read` turns that into
             // a reported failure rather than an endless wait.
             let Some(node_index) = self.get_node_index_by_id(&redirection.node_id) else {
-                warn!(
-                    "[{}] Redirection target {:?} is gone",
-                    self.tag, redirection.node_id
-                );
+                warn!("Redirection target {:?} is gone", redirection.node_id);
                 continue;
             };
 
@@ -1060,8 +1052,7 @@ impl ClusterConnection {
             && self.rearm_redirected_sub_requests(&mut request_info, &redirections)
         {
             debug!(
-                "[{}] partially redirected request, re-sending {} of {} sub-requests. reasons: {:?}",
-                self.tag,
+                "partially redirected request, re-sending {} of {} sub-requests. reasons: {:?}",
                 redirections.len(),
                 request_info.sub_requests.len(),
                 redirections.iter().map(|(_, r)| r).collect::<Vec<_>>()
@@ -1114,8 +1105,8 @@ impl ClusterConnection {
 
         if !retry_reasons.is_empty() {
             debug!(
-                "[{}] read failed and will be retried. reasons: {:?}",
-                self.tag, retry_reasons
+                "read failed and will be retried. reasons: {:?}",
+                retry_reasons
             );
             return Some(Err(Error::Retry(retry_reasons)));
         }
@@ -1264,7 +1255,7 @@ impl ClusterConnection {
         sub_results: Vec<Result<RespResponse>>,
         request_info: &RequestInfo,
     ) -> Option<Result<RespResponse>> {
-        log::trace!("[{}] no_response_policy", self.tag);
+        trace!("no_response_policy");
 
         if sub_results.len() == 1 {
             // when there is a single sub request, we just read the response
@@ -1332,10 +1323,10 @@ impl ClusterConnection {
     }
 
     pub async fn reconnect(&mut self) -> Result<()> {
-        info!("[{}] Reconnecting to cluster...", self.tag);
+        info!("Reconnecting to cluster...");
         let (nodes, slot_ranges) =
             Self::connect_to_cluster(&self.cluster_config, &self.config).await?;
-        info!("[{}] Reconnected to cluster!", self.tag);
+        info!("Reconnected to cluster!");
 
         self.nodes = nodes;
         self.slot_ranges = slot_ranges;
@@ -1382,7 +1373,7 @@ impl ClusterConnection {
 
             let version: Result<Version> = connection.get_version().try_into();
             let Ok(version) = version else {
-                warn!("[{}] Cannot get Redis version", connection.tag());
+                warn!(node = %connection.tag(), "Cannot get Redis version");
                 continue;
             };
 
@@ -1399,8 +1390,8 @@ impl ClusterConnection {
             match shard_info_list {
                 Ok(shard_info_list) => return Some(shard_info_list),
                 Err(e) => warn!(
-                    "[{}] Cannot discover cluster shards on node ({host}:{port}): {e}",
-                    connection.tag()
+                    node = %connection.tag(),
+                    "Cannot discover cluster shards on node ({host}:{port}): {e}"
                 ),
             }
         }
@@ -1475,7 +1466,7 @@ impl ClusterConnection {
     }
 
     async fn connect_replicas(&mut self) -> Result<()> {
-        debug!("[{}] Connecting replicas...", self.tag);
+        debug!("Connecting replicas...");
 
         let addresses = self.discovery_addresses();
         let Some(shard_info_list) = Self::discover_shards(&addresses, &self.config).await else {
@@ -1511,8 +1502,8 @@ impl ClusterConnection {
         self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
 
         debug!(
-            "[{}] Cluster replicas connected: nodes={:?}, slot_ranges={:?}",
-            self.tag, self.nodes, self.slot_ranges
+            "Cluster replicas connected: nodes={:?}, slot_ranges={:?}",
+            self.nodes, self.slot_ranges
         );
 
         Ok(())
@@ -1521,7 +1512,7 @@ impl ClusterConnection {
     /// Keep existing connection, connect new nodes, remove obsolte ones
     /// Rebuild slot_ranges from scratch
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
-        debug!("[{}] Reloading slot ranges", self.tag);
+        debug!("Reloading slot ranges");
 
         let addresses = self.discovery_addresses();
         #[cfg_attr(not(test), allow(unused_mut))]
@@ -1544,10 +1535,7 @@ impl ClusterConnection {
         // panic the network task, which owns all routing state. Nothing has been
         // mutated at this point, so the previous topology stays in place.
         if shard_info_list.is_empty() {
-            warn!(
-                "[{}] Ignoring a cluster topology describing no node",
-                self.tag
-            );
+            warn!("Ignoring a cluster topology describing no node");
             return Err(Error::Client(ClientError::ClusterConfig));
         }
 
@@ -1623,8 +1611,8 @@ impl ClusterConnection {
         self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
 
         debug!(
-            "[{}] Cluster new setup: nodes={:?}, slot_ranges={:?}",
-            self.tag, self.nodes, self.slot_ranges
+            "Cluster new setup: nodes={:?}, slot_ranges={:?}",
+            self.nodes, self.slot_ranges
         );
 
         Ok(())

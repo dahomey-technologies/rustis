@@ -124,7 +124,7 @@ async fn cf_info() -> Result<()> {
     client.cf_del("key", "item1").await?;
 
     let info = client.cf_info("key").await?;
-    log::debug!("info: {info:?}");
+    tracing::debug!("info: {info:?}");
     assert_eq!(3, info.num_items_inserted);
     assert_eq!(1, info.num_items_deleted);
 

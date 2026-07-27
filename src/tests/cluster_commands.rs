@@ -9,8 +9,8 @@ use crate::{
     resp::Value,
     tests::log_try_init,
 };
-use log::debug;
 use serial_test::serial;
+use tracing::debug;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]

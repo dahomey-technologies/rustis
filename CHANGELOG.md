@@ -8,23 +8,22 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
-### Fixed
-
-- **A cluster client deadlocked after any subscription.** A subscription is
-  acknowledged by a push frame, which the cluster connection hands straight to
-  the network task instead of filing it as the answer to the request it sent.
-  That request stayed at the head of the pending queue forever, and since
-  replies are reported in order, the first reply coming from any other node
-  waited behind it — the connection stopped answering entirely. The
-  acknowledgement now retires the request; an error reply such as `MOVED` is
-  still filed as a result, so redirections keep working.
-- **`spublish` was sent to an arbitrary node.** Its shard channel was passed as
-  a plain argument rather than as a key, so the cluster client could not route
-  it and relied on the server's `MOVED` to find the shard — one useless round
-  trip per call, on the path that then hit the deadlock above. `ssubscribe` and
-  `sunsubscribe` already routed by slot.
-
 ### Added
+
+- **Rustis now emits [`tracing`](https://docs.rs/tracing) events and spans**
+  instead of plain `log` records.
+
+  **If you use `log`, nothing changes and you need to do nothing.** The `log`
+  feature of `tracing` is enabled, so every event also emits a `log` record and
+  existing `env_logger`-style setups keep receiving the same output.
+
+  What you gain by installing a `tracing` subscriber instead: every event from
+  the network task is wrapped in a `connection` span carrying a `tag` field, so
+  output from several clients stays attributable; reconnections open a nested
+  `reconnect` span grouping the in-flight purge, the retries and the
+  subscription replay; and in cluster mode, events about a specific node carry a
+  `node` field. Connection identity is no longer duplicated into each message —
+  it is a structured field a collector can index.
 
 - **A declared minimum supported Rust version: 1.88.** `Cargo.toml` now carries
   `rust-version`, and a CI job compiles both runtimes with exactly that
@@ -56,6 +55,19 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **A cluster client deadlocked after any subscription.** A subscription is
+  acknowledged by a push frame, which the cluster connection hands straight to
+  the network task instead of filing it as the answer to the request it sent.
+  That request stayed at the head of the pending queue forever, and since
+  replies are reported in order, the first reply coming from any other node
+  waited behind it — the connection stopped answering entirely. The
+  acknowledgement now retires the request; an error reply such as `MOVED` is
+  still filed as a result, so redirections keep working.
+- **`spublish` was sent to an arbitrary node.** Its shard channel was passed as
+  a plain argument rather than as a key, so the cluster client could not route
+  it and relied on the server's `MOVED` to find the shard — one useless round
+  trip per call, on the path that then hit the deadlock above. `ssubscribe` and
+  `sunsubscribe` already routed by slot.
 - Eleven broken links in the published documentation, which rendered as dead
   text on docs.rs: `resp::Args` (a trait that does not exist — arguments are any
   `serde::Serialize`), `Command::arg` (it is `CommandBuilder::arg`),

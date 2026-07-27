@@ -1,4 +1,7 @@
-use std::{collections::HashSet, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use crate::{
     Result,
@@ -206,6 +209,39 @@ async fn vlinks() -> Result<()> {
 
     let result: Vec<Option<String>> = client.vlinks("key", "element").await?;
     assert!(result.into_iter().all(|r| r.is_none()));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn vlinks_with_score() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    for i in 0..5 {
+        client
+            .vadd(
+                "key",
+                None,
+                &[0.1 * i as f32, 1.2, 0.5],
+                format!("element{i}"),
+                VAddOptions::default(),
+            )
+            .await?;
+    }
+
+    // One entry per HNSW layer, each holding the neighbours of `element0` with
+    // their similarity score. The upper layers are empty on a set this small.
+    let layers: Vec<HashMap<String, f64>> = client.vlinks_with_score("key", "element0").await?;
+    assert!(!layers.is_empty());
+
+    let neighbours = layers.last().unwrap();
+    assert_eq!(4, neighbours.len());
+    assert!(neighbours.keys().all(|n| n != "element0"));
+    assert!(neighbours.values().all(|s| (0. ..=1.).contains(s)));
 
     Ok(())
 }

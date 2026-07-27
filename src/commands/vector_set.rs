@@ -135,7 +135,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VLINKS").key(key).arg(element))
+        prepare_command(self, cmd("VLINKS").key(key).arg(element).arg("WITHSCORES"))
     }
 
     /// Return one or more random elements from a vector set.

@@ -1020,35 +1020,33 @@ impl ClusterConnection {
         let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
 
         for sub_request in request_info.sub_requests.iter_mut() {
-            let result = sub_request.result.take()?;
+            // A sub-request still waiting for its result, or one whose node stream
+            // ended, leaves nothing to aggregate.
+            let result = sub_request.result.take()??;
 
-            if let Some(result) = result {
-                if let Ok(result) = result {
-                    match result.view() {
-                        Ok(RespView::Error(error)) => match RedisError::try_from(error) {
-                            Ok(RedisError {
-                                kind: RedisErrorKind::Ask { hash_slot, address },
-                                description: _,
-                            }) => retry_reasons.push(RetryReason::Ask {
-                                hash_slot,
-                                address: address.clone(),
-                            }),
-                            Ok(RedisError {
-                                kind: RedisErrorKind::Moved { hash_slot, address },
-                                description: _,
-                            }) => retry_reasons.push(RetryReason::Moved {
-                                hash_slot,
-                                address: address.clone(),
-                            }),
-                            _ => sub_results.push(Ok(result)),
-                        },
+            if let Ok(result) = result {
+                match result.view() {
+                    Ok(RespView::Error(error)) => match RedisError::try_from(error) {
+                        Ok(RedisError {
+                            kind: RedisErrorKind::Ask { hash_slot, address },
+                            description: _,
+                        }) => retry_reasons.push(RetryReason::Ask {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
+                        Ok(RedisError {
+                            kind: RedisErrorKind::Moved { hash_slot, address },
+                            description: _,
+                        }) => retry_reasons.push(RetryReason::Moved {
+                            hash_slot,
+                            address: address.clone(),
+                        }),
                         _ => sub_results.push(Ok(result)),
-                    }
-                } else {
-                    sub_results.push(result);
+                    },
+                    _ => sub_results.push(Ok(result)),
                 }
             } else {
-                return None;
+                sub_results.push(result);
             }
         }
 

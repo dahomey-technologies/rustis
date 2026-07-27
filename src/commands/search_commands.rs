@@ -520,7 +520,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.profile/>](https://redis.io/commands/ft.profile/)
     #[must_use]
-    fn ft_profile_search<I>(
+    fn ft_profile_search(
         self,
         index: impl Serialize,
         limited: bool,

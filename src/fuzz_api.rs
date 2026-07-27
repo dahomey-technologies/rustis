@@ -11,7 +11,7 @@
 //! parser / deserializer must return an error, never panic or abort.
 #![allow(missing_docs)]
 
-use crate::resp::{BufferDecoder, RespBuf, RespFrameParser, Value};
+use crate::resp::{BufferDecoder, RespBuf, RespFrameParser, RespTapeMut, Value};
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
@@ -26,7 +26,7 @@ pub fn parse_frame(data: &[u8]) {
     if data.is_empty() {
         return;
     }
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let _ = RespFrameParser::new(data, &mut tape).parse();
 }
 

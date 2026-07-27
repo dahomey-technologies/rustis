@@ -6,9 +6,6 @@
 //! network, so the parser can be measured on hand-built RESP buffers. They are
 //! gated behind the `bench` feature and compiled out of shipped builds, like
 //! the `pprof` profiling example.
-//!
-//! This is the arbitration instrument for the tape rework: the baseline numbers
-//! it produces are what the tape is measured against.
 #![allow(
     clippy::indexing_slicing,
     clippy::expect_used,
@@ -19,7 +16,9 @@
 
 use crate::{
     Error, Result,
-    resp::{BufferDecoder, Command, CommandEncoder, RespBuf, RespFrameParser, RespResponse},
+    resp::{
+        BufferDecoder, Command, CommandEncoder, RespBuf, RespFrameParser, RespResponse, RespTapeMut,
+    },
 };
 use bytes::{Bytes, BytesMut};
 use serde::de::DeserializeOwned;
@@ -31,7 +30,7 @@ use tokio_util::codec::{Decoder, Encoder as _};
 /// the parser's forward pass plus the deserializer, with no resume/EOF handling.
 #[inline]
 pub fn bench_decode_to<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let (frame, frame_len) = RespFrameParser::new(bytes, &mut tape).parse()?;
     let buf = RespBuf::from(Bytes::copy_from_slice(&bytes[..frame_len]));
     RespResponse::new(buf, frame).to()
@@ -124,7 +123,7 @@ fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
 /// call, as prompt consumption would. For the CPU profiler (`resp_profiling`);
 /// `#[inline(never)]` so it shows as a frame boundary in the sampler.
 #[inline(never)]
-pub fn bench_parse_only(bytes: &[u8], tape: &mut BytesMut) {
+pub fn bench_parse_only(bytes: &[u8], tape: &mut RespTapeMut) {
     let (frame, frame_len) = RespFrameParser::new(bytes, tape)
         .parse()
         .expect("bench_parse_only fed a valid frame");

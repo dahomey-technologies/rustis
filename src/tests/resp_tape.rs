@@ -1,11 +1,10 @@
 //! Unit tests for the fixed-width tape node codec (`resp_tape`).
 
 use crate::resp::{
-    ARRAY_TAG, BULK_STRING_TAG, INTEGER_TAG, MAP_TAG, MAX_TAPE_PAYLOAD, PUSH_TAG, SET_TAG,
-    SIMPLE_STRING_TAG, TAPE_LEN_TAG, TAPE_NODE_SIZE, encode, is_container_tag, node_count,
-    node_payload, node_tag, patch_node, push_node, read_node,
+    ARRAY_TAG, BULK_STRING_TAG, INTEGER_TAG, MAP_TAG, MAX_TAPE_PAYLOAD, PUSH_TAG, RespTape,
+    RespTapeMut, SET_TAG, SIMPLE_STRING_TAG, TAPE_LEN_TAG, TAPE_NODE_SIZE, TapeNode,
+    is_container_tag,
 };
-use bytes::BytesMut;
 
 #[test]
 fn encode_decode_roundtrip() {
@@ -19,9 +18,9 @@ fn encode_decode_roundtrip() {
         0xFF,
     ] {
         for &payload in &[0u64, 1, 42, 0xABCD, MAX_TAPE_PAYLOAD / 2, MAX_TAPE_PAYLOAD] {
-            let node = encode(tag, payload);
-            assert_eq!(tag, node_tag(node), "tag lost for payload {payload:#x}");
-            assert_eq!(payload, node_payload(node), "payload lost for tag {tag:#x}");
+            let node = TapeNode::new(tag, payload);
+            assert_eq!(tag, node.tag(), "tag lost for payload {payload:#x}");
+            assert_eq!(payload, node.payload(), "payload lost for tag {tag:#x}");
         }
     }
 }
@@ -30,13 +29,13 @@ fn encode_decode_roundtrip() {
 fn tag_and_payload_do_not_bleed_into_each_other() {
     // A maximal payload must not flip any tag bit, and a full tag byte must not
     // corrupt the payload.
-    let node = encode(0xFF, MAX_TAPE_PAYLOAD);
-    assert_eq!(0xFF, node_tag(node));
-    assert_eq!(MAX_TAPE_PAYLOAD, node_payload(node));
+    let node = TapeNode::new(0xFF, MAX_TAPE_PAYLOAD);
+    assert_eq!(0xFF, node.tag());
+    assert_eq!(MAX_TAPE_PAYLOAD, node.payload());
 
-    let node = encode(0x00, MAX_TAPE_PAYLOAD);
-    assert_eq!(0x00, node_tag(node));
-    assert_eq!(MAX_TAPE_PAYLOAD, node_payload(node));
+    let node = TapeNode::new(0x00, MAX_TAPE_PAYLOAD);
+    assert_eq!(0x00, node.tag());
+    assert_eq!(MAX_TAPE_PAYLOAD, node.payload());
 }
 
 #[test]
@@ -46,9 +45,15 @@ fn max_payload_is_56_bits() {
 }
 
 #[test]
+fn node_size_is_a_power_of_two() {
+    assert_eq!(8, TAPE_NODE_SIZE);
+}
+
+#[test]
 fn is_container_tag_matches_only_containers() {
     for &tag in &[ARRAY_TAG, MAP_TAG, SET_TAG, PUSH_TAG] {
         assert!(is_container_tag(tag), "{tag:#x} should be a container tag");
+        assert!(TapeNode::new(tag, 0).is_container());
     }
     for &tag in &[
         SIMPLE_STRING_TAG,
@@ -66,13 +71,15 @@ fn is_container_tag_matches_only_containers() {
             !is_container_tag(tag),
             "{tag:#x} should not be a container tag"
         );
+        assert!(!TapeNode::new(tag, 0).is_container());
     }
 }
 
 #[test]
-fn push_node_returns_sequential_indices_and_reads_back() {
-    let mut tape = BytesMut::new();
-    assert_eq!(0, node_count(&tape));
+fn push_returns_sequential_indices_and_reads_back() {
+    let mut builder = RespTapeMut::default();
+    assert_eq!(0, builder.node_count());
+    assert!(builder.is_empty());
 
     let nodes = [
         (ARRAY_TAG, 4u64),
@@ -82,47 +89,51 @@ fn push_node_returns_sequential_indices_and_reads_back() {
     ];
 
     for (i, &(tag, payload)) in nodes.iter().enumerate() {
-        assert_eq!(i, push_node(&mut tape, tag, payload));
-        assert_eq!(i + 1, node_count(&tape));
+        assert_eq!(i, builder.push(tag, payload));
+        assert_eq!(i + 1, builder.node_count());
     }
 
-    // The buffer is exactly one node per entry, fixed width.
-    assert_eq!(nodes.len() * TAPE_NODE_SIZE, tape.len());
+    let tape = builder.split_freeze();
+    // Splitting hands the frame its nodes and leaves the builder empty for the next.
+    assert_eq!(nodes.len(), tape.node_count());
+    assert_eq!(nodes.len() * TAPE_NODE_SIZE, tape.byte_len());
+    assert!(builder.is_empty());
 
     for (i, &(tag, payload)) in nodes.iter().enumerate() {
-        let node = read_node(&tape, i);
-        assert_eq!(tag, node_tag(node));
-        assert_eq!(payload, node_payload(node));
+        let node = tape.node(i);
+        assert_eq!(tag, node.tag());
+        assert_eq!(payload, node.payload());
     }
 }
 
 #[test]
-fn patch_node_overwrites_payload_and_keeps_tag() {
-    let mut tape = BytesMut::new();
+fn patch_overwrites_payload_and_keeps_tag() {
+    let mut builder = RespTapeMut::default();
     // A container head is emitted with a placeholder `next`, then back-patched
     // once its subtree is known.
-    let head = push_node(&mut tape, ARRAY_TAG, 0);
-    push_node(&mut tape, TAPE_LEN_TAG, 3);
+    let head = builder.push(ARRAY_TAG, 0);
+    builder.push(TAPE_LEN_TAG, 3);
 
-    patch_node(&mut tape, head, ARRAY_TAG, 42);
+    builder.patch(head, ARRAY_TAG, 42);
 
-    let node = read_node(&tape, head);
-    assert_eq!(ARRAY_TAG, node_tag(node));
-    assert_eq!(42, node_payload(node));
+    let tape = builder.split_freeze();
+    let node = tape.node(head);
+    assert_eq!(ARRAY_TAG, node.tag());
+    assert_eq!(42, node.payload());
     // The neighbouring len node is untouched.
-    let len_node = read_node(&tape, head + 1);
-    assert_eq!(TAPE_LEN_TAG, node_tag(len_node));
-    assert_eq!(3, node_payload(len_node));
+    let len_node = tape.node(head + 1);
+    assert_eq!(TAPE_LEN_TAG, len_node.tag());
+    assert_eq!(3, len_node.payload());
 }
 
 #[test]
-fn patch_node_can_change_the_tag_too() {
-    let mut tape = BytesMut::new();
-    let idx = push_node(&mut tape, ARRAY_TAG, 1);
-    patch_node(&mut tape, idx, MAP_TAG, 9);
-    let node = read_node(&tape, idx);
-    assert_eq!(MAP_TAG, node_tag(node));
-    assert_eq!(9, node_payload(node));
+fn patch_can_change_the_tag_too() {
+    let mut builder = RespTapeMut::default();
+    let idx = builder.push(ARRAY_TAG, 1);
+    builder.patch(idx, MAP_TAG, 9);
+    let node = builder.split_freeze().node(idx);
+    assert_eq!(MAP_TAG, node.tag());
+    assert_eq!(9, node.payload());
 }
 
 #[test]
@@ -132,21 +143,35 @@ fn manual_flat_container_layout_walks_correctly() {
     //   [1] len   (2)
     //   [2] scalar integer, offset 4
     //   [3] scalar integer, offset 9
-    let mut tape = BytesMut::new();
-    let head = push_node(&mut tape, ARRAY_TAG, 0);
-    push_node(&mut tape, TAPE_LEN_TAG, 2);
-    push_node(&mut tape, INTEGER_TAG, 4);
-    push_node(&mut tape, INTEGER_TAG, 9);
-    let next = node_count(&tape) as u64;
-    patch_node(&mut tape, head, ARRAY_TAG, next);
+    let mut builder = RespTapeMut::default();
+    let head = builder.push(ARRAY_TAG, 0);
+    builder.push(TAPE_LEN_TAG, 2);
+    builder.push(INTEGER_TAG, 4);
+    builder.push(INTEGER_TAG, 9);
+    let next = builder.node_count() as u64;
+    builder.patch(head, ARRAY_TAG, next);
+    let tape = builder.split_freeze();
 
     // Head reads back as a container skipping to index 4 (one past the tape).
-    let head_node = read_node(&tape, head);
-    assert!(is_container_tag(node_tag(head_node)));
-    assert_eq!(4, node_payload(head_node));
-    // Its companion len node gives the exact child count.
-    assert_eq!(2, node_payload(read_node(&tape, head + 1)));
+    let head_node = tape.node(head);
+    assert!(head_node.is_container());
+    assert_eq!(4, head_node.payload());
+    // Its companion len node gives the exact child count, also via `container_len`.
+    assert_eq!(2, tape.node(head + 1).payload());
+    assert_eq!(Some(2), tape.container_len(head));
     // Children start at head + 2 and are scalars.
-    assert!(!is_container_tag(node_tag(read_node(&tape, head + 2))));
-    assert!(!is_container_tag(node_tag(read_node(&tape, head + 3))));
+    assert!(!tape.node(head + 2).is_container());
+    assert!(!tape.node(head + 3).is_container());
+}
+
+#[test]
+fn container_len_reports_unreadable_rather_than_panicking() {
+    // A tape too short to hold the companion node was not produced by the parser;
+    // the formatters rely on `None` instead of an out-of-bounds read.
+    let mut builder = RespTapeMut::default();
+    builder.push(ARRAY_TAG, 0);
+    let tape = builder.split_freeze();
+    assert_eq!(None, tape.container_len(0));
+
+    assert_eq!(None, RespTape::default().container_len(0));
 }

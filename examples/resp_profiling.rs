@@ -16,9 +16,8 @@
 //!   PPROF_ITERS  parse iterations per shape to sample (default 150000)
 //!   PPROF_HZ     sampling frequency in Hz (default 4000)
 
-use bytes::BytesMut;
 use pprof::ProfilerGuardBuilder;
-use rustis::resp::bench_parse_only;
+use rustis::resp::{RespTapeMut, bench_parse_only};
 use std::{collections::HashMap, fs::File, hint::black_box};
 
 fn env_usize(key: &str, default: usize) -> usize {
@@ -64,7 +63,7 @@ fn main() {
 
     let flat = build_array(5_000, 50);
     let nested = build_nested(500, 10, 20);
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
 
     let guard = ProfilerGuardBuilder::default()
         .frequency(hz)

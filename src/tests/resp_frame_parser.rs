@@ -1,12 +1,11 @@
 use crate::{
     client::RespLimits,
-    resp::{RespBuf, RespFrame, RespFrameParser, RespResponse},
+    resp::{RespBuf, RespFrame, RespFrameParser, RespResponse, RespTapeMut},
 };
-use bytes::BytesMut;
 
 /// Parses a complete frame with a throwaway tape buffer.
 fn parse(resp: &[u8]) -> crate::Result<(RespFrame, usize)> {
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     RespFrameParser::new(resp, &mut tape).parse()
 }
 
@@ -187,7 +186,7 @@ fn parse_map() {
 
 /// Parses a complete frame under caller-chosen limits.
 fn parse_with_limits(resp: &[u8], limits: RespLimits) -> crate::Result<(RespFrame, usize)> {
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     RespFrameParser::with_limits(resp, &mut tape, limits).parse()
 }
 
@@ -256,7 +255,7 @@ fn a_raised_bulk_limit_reads_back_without_being_re_capped() {
         max_bulk_length: 1024,
         ..Default::default()
     };
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let (frame, len) = RespFrameParser::with_limits(&resp, &mut tape, limits)
         .parse()
         .unwrap();

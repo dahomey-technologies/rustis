@@ -1,13 +1,13 @@
 use crate::{
     Result,
-    resp::{RespFrameParser, RespResponse, RespView},
+    resp::{RespFrameParser, RespResponse, RespTapeMut, RespView},
 };
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 
 /// Parses a complete RESP reply into a self-contained response.
 fn parse(resp: &'static [u8]) -> RespResponse {
     let resp = Bytes::from_static(resp);
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     RespResponse::new(resp.into(), frame)
@@ -16,7 +16,7 @@ fn parse(resp: &'static [u8]) -> RespResponse {
 #[test]
 fn array() -> Result<()> {
     let resp = Bytes::from_static(b"*6\r\n$4\r\nelt1\r\n$4\r\nelt2\r\n$4\r\nelt3\r\n$4\r\nelt4\r\n$4\r\nelt5\r\n$4\r\nelt6\r\n"); // ["elt1", "elt2", "elt3", "elt4", "elt5", "elt6"]
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse()?;
     let response = RespResponse::new(resp.into(), frame);
@@ -42,7 +42,7 @@ fn array() -> Result<()> {
 #[test]
 fn into_array_iter() {
     let resp = Bytes::from_static(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     let response = RespResponse::new(resp.into(), frame);
@@ -110,7 +110,7 @@ fn debug_truncates_a_large_reply() {
         resp.extend_from_slice(b"$10\r\nelement123\r\n");
     }
     let resp = Bytes::from(resp);
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     let response = RespResponse::new(resp.into(), frame);
@@ -130,7 +130,7 @@ fn debug_truncates_a_large_reply() {
 #[test]
 fn frame_debug_reports_the_shape_instead_of_the_tape() {
     let resp = Bytes::from_static(b"*2\r\n$3\r\nfoo\r\n:1\r\n");
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
 
@@ -148,7 +148,7 @@ fn into_array_iter_beyond_inline_ranges() {
     let resp = Bytes::from_static(
         b"*8\r\n$4\r\nelt1\r\n$4\r\nelt2\r\n$4\r\nelt3\r\n$4\r\nelt4\r\n$4\r\nelt5\r\n$4\r\nelt6\r\n$4\r\nelt7\r\n$4\r\nelt8\r\n",
     );
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     let response = RespResponse::new(resp.into(), frame);

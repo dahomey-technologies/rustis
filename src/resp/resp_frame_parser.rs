@@ -135,8 +135,13 @@ fn skip_children(
 /// Advances past exactly one value at `pos` — a scalar, or a nested collection
 /// with all of its descendants — returning the offset just past it. Used only to
 /// consume attribute payloads, which carry no tape, so it walks the structure
-/// without recording anything. Recursion is bounded by `limits.max_nesting_depth`.
-/// [`Error::EOF`] if the value is incomplete.
+/// without recording anything. [`Error::EOF`] if the value is incomplete.
+///
+/// This is the one place that recurses where the element loop does not, and it
+/// can afford to: an attribute is never suspended half-way. A truncated one
+/// leaves `pos` at its tag and is replayed whole once more bytes arrive, so no
+/// state has to survive between chunks. Its depth is held to
+/// [`RespLimits::max_nesting_depth`] like any other nesting.
 fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) -> Result<usize> {
     let pos = skip_leading_attributes(data, pos, depth, limits)?;
     let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
@@ -179,10 +184,14 @@ pub(crate) struct OpenCollection {
 /// (owned by the caller, see [`OpenCollection`]), not recursion: each step
 /// consumes exactly one unit (an element, a collection header, or a run of
 /// attributes) and is atomic with respect to `pos` — it either advances past its
-/// whole unit or, on [`Error::EOF`], leaves `pos` at the unit's start. That
-/// atomicity is what lets a partially-received frame be suspended and resumed
-/// byte-for-byte across TCP chunks, and the explicit stack keeps a crafted
-/// deeply-nested reply from overflowing the call stack.
+/// whole unit or, on [`Error::EOF`], leaves `pos` at the unit's start.
+///
+/// The stack is explicit so that a half-received frame can be suspended and
+/// resumed byte-for-byte across TCP chunks: the collections still open live in a
+/// structure the caller holds on to, where a recursive parser would keep them in
+/// call frames it has no way to hand back. What bounds nesting is
+/// [`RespLimits::max_nesting_depth`], and it bounds it on both sides — this stack
+/// and the recursion left in attribute skipping.
 pub struct RespFrameParser<'a, 'b> {
     buf: &'a [u8],
     /// Hostile-input bounds this parser enforces, resolved from the connection's

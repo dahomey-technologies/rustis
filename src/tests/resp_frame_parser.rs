@@ -158,6 +158,22 @@ fn parse_attribute_preceding_an_array_element_is_skipped() {
 }
 
 #[test]
+fn an_attribute_header_with_a_negative_length_errors_as_a_map() {
+    // An attribute is a map, and a map header carries no negative length: `-1`
+    // would be a null attribute, which RESP3 does not define, and any other
+    // negative value is malformed. Both report the map error, so neither is
+    // mistaken for a reply that simply carried no attribute.
+    assert!(matches!(
+        parse(b"|-1\r\n"),
+        Err(crate::Error::Client(crate::ClientError::CannotParseMap))
+    ));
+    assert!(matches!(
+        parse(b"|-2\r\n"),
+        Err(crate::Error::Client(crate::ClientError::CannotParseMap))
+    ));
+}
+
+#[test]
 fn parse_big_number_is_exposed_as_its_string_payload() {
     // A big number does not fit in an i64 and is surfaced as its
     // decimal-string payload.
@@ -235,6 +251,26 @@ fn a_lowered_collection_limit_rejects_a_cardinality_the_default_accepts() {
 
     let limits = RespLimits {
         max_collection_length: 2,
+        ..Default::default()
+    };
+    assert!(matches!(
+        parse_with_limits(resp, limits),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+}
+
+#[test]
+fn a_lowered_collection_limit_is_enforced_on_an_attribute_header() {
+    // An attribute header carries its own attacker-controlled pair count and is
+    // consumed by a skip loop of its own, so the cardinality bound has to hold
+    // there as well as on a collection that reaches the tape.
+    let resp = b"|1\r\n$1\r\na\r\n$1\r\nb\r\n:1\r\n";
+    assert!(parse(resp).is_ok());
+
+    let limits = RespLimits {
+        max_collection_length: 1,
         ..Default::default()
     };
     assert!(matches!(

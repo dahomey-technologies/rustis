@@ -49,13 +49,13 @@ fn array() -> Result<()> {
 }
 
 #[test]
-fn into_array_iter() {
+fn into_collection_iter() {
     let resp = Bytes::from_static(b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n");
     let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     let response = RespResponse::new(resp.into(), frame);
-    let mut iter = response.into_array_iter().unwrap();
+    let mut iter = response.into_collection_iter().unwrap();
 
     assert_eq!(
         RespView::BulkString(b"foo"),
@@ -157,7 +157,7 @@ fn a_parsed_frame_reports_its_shape_instead_of_the_tape() {
 /// relative to a sub-slice while binding them to the full buffer, corrupting
 /// elements 6+. The tape indexes every element uniformly, removing that path.
 #[test]
-fn into_array_iter_beyond_inline_ranges() {
+fn into_collection_iter_beyond_inline_ranges() {
     // 8 bulk strings — well past the 5 the old design cached inline.
     let resp = Bytes::from_static(
         b"*8\r\n$4\r\nelt1\r\n$4\r\nelt2\r\n$4\r\nelt3\r\n$4\r\nelt4\r\n$4\r\nelt5\r\n$4\r\nelt6\r\n$4\r\nelt7\r\n$4\r\nelt8\r\n",
@@ -166,7 +166,7 @@ fn into_array_iter_beyond_inline_ranges() {
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
     let response = RespResponse::new(resp.into(), frame);
-    let iter = response.into_array_iter().unwrap();
+    let iter = response.into_collection_iter().unwrap();
 
     let values: Vec<_> = iter
         .map(|r| match r.unwrap().view().unwrap() {
@@ -191,8 +191,8 @@ fn into_array_iter_beyond_inline_ranges() {
 }
 
 #[test]
-fn into_array_iter_accepts_every_container_tag() {
-    // The four container tags index their elements the same way, so all four are
+fn into_collection_iter_accepts_every_collection_tag() {
+    // The four collection tags index their elements the same way, so all four are
     // iterable. A map yields its keys and values flattened in wire order, and a
     // push yields its kind as the first element.
     for resp in [
@@ -203,7 +203,7 @@ fn into_array_iter_accepts_every_container_tag() {
     ] {
         let response = parse_owned(resp);
         let values: Vec<i64> = response
-            .into_array_iter()
+            .into_collection_iter()
             .unwrap()
             .map(|r| r.unwrap().to::<i64>().unwrap())
             .collect();
@@ -211,14 +211,14 @@ fn into_array_iter_accepts_every_container_tag() {
     }
 
     // A scalar has no elements to walk.
-    assert!(parse_owned(b":1\r\n").into_array_iter().is_err());
+    assert!(parse_owned(b":1\r\n").into_collection_iter().is_err());
 }
 
 /// An error reply is surfaced as the Redis error itself rather than as an empty
 /// sequence, so a caller iterating a reply cannot mistake a failure for no rows.
 #[test]
-fn into_array_iter_on_an_error_reply_yields_the_redis_error() {
-    let err = parse_owned(b"-ERR nope\r\n").into_array_iter();
+fn into_collection_iter_on_an_error_reply_yields_the_redis_error() {
+    let err = parse_owned(b"-ERR nope\r\n").into_collection_iter();
     assert!(matches!(err, Err(crate::Error::Redis(_))));
 }
 

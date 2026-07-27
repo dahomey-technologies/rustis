@@ -3,7 +3,7 @@
 use crate::resp::{
     ARRAY_TAG, BULK_STRING_TAG, INTEGER_TAG, MAP_TAG, MAX_TAPE_PAYLOAD, PUSH_TAG, RespTape,
     RespTapeMut, SET_TAG, SIMPLE_STRING_TAG, TAPE_LEN_TAG, TAPE_NODE_SIZE, TapeNode,
-    is_container_tag,
+    is_collection_tag,
 };
 
 #[test]
@@ -50,10 +50,13 @@ fn node_size_is_a_power_of_two() {
 }
 
 #[test]
-fn is_container_tag_matches_only_containers() {
+fn is_collection_tag_matches_only_collections() {
     for &tag in &[ARRAY_TAG, MAP_TAG, SET_TAG, PUSH_TAG] {
-        assert!(is_container_tag(tag), "{tag:#x} should be a container tag");
-        assert!(TapeNode::new(tag, 0).is_container());
+        assert!(
+            is_collection_tag(tag),
+            "{tag:#x} should be a collection tag"
+        );
+        assert!(TapeNode::new(tag, 0).is_collection());
     }
     for &tag in &[
         SIMPLE_STRING_TAG,
@@ -68,10 +71,10 @@ fn is_container_tag_matches_only_containers() {
         b'!',
     ] {
         assert!(
-            !is_container_tag(tag),
-            "{tag:#x} should not be a container tag"
+            !is_collection_tag(tag),
+            "{tag:#x} should not be a collection tag"
         );
-        assert!(!TapeNode::new(tag, 0).is_container());
+        assert!(!TapeNode::new(tag, 0).is_collection());
     }
 }
 
@@ -109,7 +112,7 @@ fn push_returns_sequential_indices_and_reads_back() {
 #[test]
 fn patch_overwrites_payload_and_keeps_tag() {
     let mut builder = RespTapeMut::default();
-    // A container head is emitted with a placeholder `next`, then back-patched
+    // A collection head is emitted with a placeholder `next`, then back-patched
     // once its subtree is known.
     let head = builder.push(ARRAY_TAG, 0);
     builder.push(TAPE_LEN_TAG, 3);
@@ -137,9 +140,9 @@ fn patch_can_change_the_tag_too() {
 }
 
 #[test]
-fn manual_flat_container_layout_walks_correctly() {
+fn manual_flat_collection_layout_walks_correctly() {
     // Build the tape the parser would emit for a 2-element array `[10, 20]`:
-    //   [0] head  (next = 4, past the whole container)
+    //   [0] head  (next = 4, past the whole collection)
     //   [1] len   (2)
     //   [2] scalar integer, offset 4
     //   [3] scalar integer, offset 9
@@ -152,26 +155,26 @@ fn manual_flat_container_layout_walks_correctly() {
     builder.patch(head, ARRAY_TAG, next);
     let tape = builder.split_freeze();
 
-    // Head reads back as a container skipping to index 4 (one past the tape).
+    // Head reads back as a collection skipping to index 4 (one past the tape).
     let head_node = tape.node(head);
-    assert!(head_node.is_container());
+    assert!(head_node.is_collection());
     assert_eq!(4, head_node.payload());
-    // Its companion len node gives the exact child count, also via `container_len`.
+    // Its companion len node gives the exact child count, also via `collection_len`.
     assert_eq!(2, tape.node(head + 1).payload());
-    assert_eq!(Some(2), tape.container_len(head));
+    assert_eq!(Some(2), tape.collection_len(head));
     // Children start at head + 2 and are scalars.
-    assert!(!tape.node(head + 2).is_container());
-    assert!(!tape.node(head + 3).is_container());
+    assert!(!tape.node(head + 2).is_collection());
+    assert!(!tape.node(head + 3).is_collection());
 }
 
 #[test]
-fn container_len_reports_unreadable_rather_than_panicking() {
+fn collection_len_reports_unreadable_rather_than_panicking() {
     // A tape too short to hold the companion node was not produced by the parser;
     // the formatters rely on `None` instead of an out-of-bounds read.
     let mut builder = RespTapeMut::default();
     builder.push(ARRAY_TAG, 0);
     let tape = builder.split_freeze();
-    assert_eq!(None, tape.container_len(0));
+    assert_eq!(None, tape.collection_len(0));
 
-    assert_eq!(None, RespTape::default().container_len(0));
+    assert_eq!(None, RespTape::default().collection_len(0));
 }

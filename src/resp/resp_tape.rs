@@ -9,7 +9,7 @@
 //!
 //! - [`TapeNode`] — one node word, giving access to its tag and payload.
 //! - [`RespTapeMut`] — the write side, owned by the decoder and recycled across
-//!   frames. The parser appends nodes into it and back-patches container heads.
+//!   frames. The parser appends nodes into it and back-patches collection heads.
 //! - [`RespTape`] — the read side: one frame's frozen tape, produced by
 //!   [`RespTapeMut::split_freeze`] and carried by the decoded response.
 //!
@@ -23,12 +23,12 @@
 //!   in the data buffer. Its value is recovered by re-reading from that offset
 //!   ([`element_bounds`](super::element_bounds)), a content-length read that
 //!   touches only this element — never a structural re-parse of the collection.
-//! - **Container node** (tag = `* % ~ >`): a container occupies **two**
+//! - **Collection node** (tag = `* % ~ >`): a collection occupies **two**
 //!   consecutive nodes. The *head* carries `next` = the tape index one past the
-//!   whole container (all descendants included), giving an O(1) skip to the next
+//!   whole collection (all descendants included), giving an O(1) skip to the next
 //!   sibling. The node right after the head carries `len` (tag [`TAPE_LEN_TAG`]) =
 //!   the element count, giving O(1) size hints and RESP2 struct detection. The
-//!   container's children start at `head + 2`.
+//!   collection's children start at `head + 2`.
 //!
 //! A null collection (`*-1`) parsed as an element emits a single [`NULL_TAG`]
 //! scalar node, so it is counted and deserializes to `Null` like any other.
@@ -56,19 +56,19 @@ const PAYLOAD_MASK: u64 = 0x00FF_FFFF_FFFF_FFFF;
 /// length) and tape indices stay far below this in any real reply.
 pub(crate) const MAX_TAPE_PAYLOAD: u64 = PAYLOAD_MASK;
 
-/// Tag of the second node of a container pair, whose payload is the container's
+/// Tag of the second node of a collection pair, whose payload is the collection's
 /// element count. Never used for dispatch (the node is reached positionally, at
 /// `head + 1`), so any value outside the RESP tag set is fine; `0` is chosen so
 /// a stray read of it is obviously not a real element.
 pub(crate) const TAPE_LEN_TAG: u8 = 0;
 
-/// `true` if `tag` marks a container head (array, map, set or push). Every other
+/// `true` if `tag` marks a collection head (array, map, set or push). Every other
 /// emitted tag marks a scalar node.
 ///
 /// A free function rather than a [`TapeNode`] method because the parser also
 /// applies it to a tag byte read straight from the wire, before any node exists.
 #[inline(always)]
-pub(crate) fn is_container_tag(tag: u8) -> bool {
+pub(crate) fn is_collection_tag(tag: u8) -> bool {
     matches!(tag, ARRAY_TAG | MAP_TAG | SET_TAG | PUSH_TAG)
 }
 
@@ -95,16 +95,16 @@ impl TapeNode {
     }
 
     /// The node's 56-bit payload: a frame-relative byte offset for a scalar, a
-    /// tape index for a container head, an element count for a `len` node.
+    /// tape index for a collection head, an element count for a `len` node.
     #[inline(always)]
     pub fn payload(self) -> u64 {
         self.0 & PAYLOAD_MASK
     }
 
-    /// `true` if this node is a container head.
+    /// `true` if this node is a collection head.
     #[inline(always)]
-    pub fn is_container(self) -> bool {
-        is_container_tag(self.tag())
+    pub fn is_collection(self) -> bool {
+        is_collection_tag(self.tag())
     }
 }
 
@@ -167,12 +167,12 @@ impl RespTape {
         RespTape(Bytes::copy_from_slice(&self.0))
     }
 
-    /// Element count of the container whose head is at `root`, read from its
+    /// Element count of the collection whose head is at `root`, read from its
     /// companion node. `None` when the tape is too short to hold one, which means
     /// it was not produced by the parser — used by the formatters, which must not
     /// panic on a hand-built tape.
     #[inline]
-    pub fn container_len(&self, root: usize) -> Option<usize> {
+    pub fn collection_len(&self, root: usize) -> Option<usize> {
         let companion = root.checked_add(1)?;
         if self.node_count() <= companion {
             return None;
@@ -222,7 +222,7 @@ impl RespTapeMut {
         index
     }
 
-    /// Overwrites an already-emitted node, used to back-patch a container head's
+    /// Overwrites an already-emitted node, used to back-patch a collection head's
     /// `next` once its whole subtree has been written. `index` must have been
     /// returned by [`push`](Self::push) on this same builder.
     #[inline(always)]

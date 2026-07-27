@@ -1,6 +1,6 @@
 use crate::{
     ClientError, Error, RedisError, Result,
-    resp::{PUSH_FAKE_FIELD, RespArrayIter, RespArrayView, RespResponse, RespView},
+    resp::{PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView},
 };
 use serde::{
     Deserializer,
@@ -624,7 +624,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         // decodes; document the boundary before changing it.
         #[inline]
         fn check_resp2_array(
-            view: RespArrayView<'_>,
+            view: RespCollectionView<'_>,
             fields: &'static [&'static str],
         ) -> Result<bool> {
             if view.len() >= 2 * fields.len() {
@@ -949,12 +949,12 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
 }
 
 struct SeqAccess<'de> {
-    iter: RespArrayIter<'de>,
+    iter: RespCollectionIter<'de>,
 }
 
 impl<'de> SeqAccess<'de> {
     #[inline(always)]
-    fn new(iter: RespArrayIter<'de>) -> Self {
+    fn new(iter: RespCollectionIter<'de>) -> Self {
         Self { iter }
     }
 }
@@ -1060,12 +1060,12 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
 }
 
 struct MapAccess<'a> {
-    iter: RespArrayIter<'a>,
+    iter: RespCollectionIter<'a>,
 }
 
 impl<'a> MapAccess<'a> {
     #[inline(always)]
-    fn new(iter: RespArrayIter<'a>) -> Self {
+    fn new(iter: RespCollectionIter<'a>) -> Self {
         Self { iter }
     }
 }
@@ -1126,7 +1126,7 @@ impl<'de> de::SeqAccess<'de> for MapAccess<'de> {
 }
 
 struct RespTuple2Deserializer<'a, 'de> {
-    iter: &'a mut RespArrayIter<'de>,
+    iter: &'a mut RespCollectionIter<'de>,
 }
 
 impl<'de, 'a> de::Deserializer<'de> for RespTuple2Deserializer<'a, 'de> {
@@ -1243,13 +1243,13 @@ impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
 }
 
 struct PushMapAccess<'de> {
-    view: RespArrayView<'de>,
+    view: RespCollectionView<'de>,
     visited: bool,
 }
 
 impl<'de> PushMapAccess<'de> {
     #[inline(always)]
-    const fn new(view: RespArrayView<'de>) -> Self {
+    const fn new(view: RespCollectionView<'de>) -> Self {
         Self {
             view,
             visited: false,
@@ -1308,12 +1308,12 @@ impl<'de> de::Deserializer<'de> for PushFieldDeserializer {
 }
 
 struct PushDeserializer<'de> {
-    view: RespArrayView<'de>,
+    view: RespCollectionView<'de>,
 }
 
 impl<'de> PushDeserializer<'de> {
     #[inline(always)]
-    const fn new(view: RespArrayView<'de>) -> Self {
+    const fn new(view: RespCollectionView<'de>) -> Self {
         Self { view }
     }
 }

@@ -1,10 +1,10 @@
 use crate::{network::PushReceiver, resp::BulkString};
 use futures_util::{Stream, StreamExt};
-use log::warn;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+use tracing::warn;
 
 pub struct ClientTrackingInvalidationStream {
     receiver: PushReceiver,

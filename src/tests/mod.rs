@@ -30,6 +30,7 @@ mod generic_commands;
 mod geo_commands;
 mod hash_commands;
 mod hyper_log_log_commands;
+mod instrumentation;
 #[cfg(feature = "json")]
 mod json;
 mod json_commands;

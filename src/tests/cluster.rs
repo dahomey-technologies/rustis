@@ -268,7 +268,7 @@ async fn ask() -> Result<()> {
         client.cluster_shards().await?
     };
 
-    log::debug!("shard_info_list: {shard_info_list:?}");
+    tracing::debug!("shard_info_list: {shard_info_list:?}");
 
     let slot = client.cluster_keyslot("key").await?;
 

@@ -5,13 +5,13 @@ use crate::{
     network::PushReceiver,
 };
 use futures_util::{Stream, StreamExt};
-use log::warn;
 use serde::{Deserialize, Deserializer, de};
 use std::{
     net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
 };
+use tracing::warn;
 
 /// Stream to get [`MONITOR`](https://redis.io/commands/monitor/) command events
 /// when the stream is dropped or closed, a reset command is sent to the Redis server

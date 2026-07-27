@@ -362,10 +362,10 @@ async fn ts_info() -> Result<()> {
         .await?;
 
     let info = client.ts_info("key", true).await?;
-    log::debug!("key info: {info:?}");
+    tracing::debug!("key info: {info:?}");
 
     let info = client.ts_info("dst", true).await?;
-    log::debug!("dst info: {info:?}");
+    tracing::debug!("dst info: {info:?}");
 
     Ok(())
 }
@@ -550,7 +550,7 @@ async fn ts_mrange() -> Result<()> {
             TsGroupByOptions::new("metric_name", TsAggregationType::Max),
         )
         .await?;
-    log::debug!("results: {results:?}");
+    tracing::debug!("results: {results:?}");
     assert_eq!(
         vec![(1548149180000, 90.), (1548149185000, 45.)],
         results[0].1.values
@@ -654,7 +654,7 @@ async fn ts_mrevrange() -> Result<()> {
             TsGroupByOptions::new("metric_name", TsAggregationType::Max),
         )
         .await?;
-    log::debug!("results: {results:?}");
+    tracing::debug!("results: {results:?}");
     assert_eq!(
         vec![(1548149185000, 45.), (1548149180000, 90.)],
         results[0].1.values

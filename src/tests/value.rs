@@ -82,25 +82,26 @@ fn tuple() -> Result<()> {
 fn display() {
     log_try_init();
 
-    log::debug!(
-        "{}",
-        Value::Array(vec![
-            Value::Integer(12),
-            Value::Double(12.12),
-            Value::SimpleString("OK".to_owned()),
-            Value::BulkString(b"mystring".to_vec()),
-            Value::Boolean(true),
-            Value::Error(RedisError {
-                kind: RedisErrorKind::Err,
-                description: "MyError".to_owned()
-            }),
-            Value::Null,
-            Value::Map(HashMap::from([
-                (Value::BulkString(b"field1".to_vec()), Value::Integer(12)),
-                (Value::BulkString(b"field2".to_vec()), Value::Double(12.12))
-            ]))
-        ])
-    );
+    // Bound first on purpose: a bare path passed positionally to a `tracing`
+    // macro is parsed as a field name, not as a value to format.
+    let value = Value::Array(vec![
+        Value::Integer(12),
+        Value::Double(12.12),
+        Value::SimpleString("OK".to_owned()),
+        Value::BulkString(b"mystring".to_vec()),
+        Value::Boolean(true),
+        Value::Error(RedisError {
+            kind: RedisErrorKind::Err,
+            description: "MyError".to_owned(),
+        }),
+        Value::Null,
+        Value::Map(HashMap::from([
+            (Value::BulkString(b"field1".to_vec()), Value::Integer(12)),
+            (Value::BulkString(b"field2".to_vec()), Value::Double(12.12)),
+        ])),
+    ]);
+
+    tracing::debug!("{value}");
 }
 
 #[test]

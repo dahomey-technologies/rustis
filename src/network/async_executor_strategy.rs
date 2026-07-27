@@ -2,7 +2,6 @@
 use crate::client::TlsConfig;
 use crate::{Error, Result, client::Config};
 use futures_util::{Future, FutureExt};
-use log::{debug, info};
 use socket2::TcpKeepalive;
 #[cfg(feature = "tokio-runtime")]
 use std::sync::Arc;
@@ -11,6 +10,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+use tracing::{debug, info};
 
 // `into_split` gives owned halves that share the `TcpStream` through an `Arc`
 // with no per-operation lock, unlike `tokio::io::split`'s `BiLock` which is

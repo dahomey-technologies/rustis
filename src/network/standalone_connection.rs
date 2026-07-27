@@ -11,7 +11,6 @@ use crate::{
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
 use bytes::BytesMut;
 use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
-use log::{Level, debug, log_enabled, trace};
 use serde::de::DeserializeOwned;
 use std::{
     future::IntoFuture,
@@ -20,6 +19,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
+use tracing::{Instrument, debug, info_span, trace};
 
 /// Replaces `buf` with a fresh `buffers.read_capacity` buffer once it has been
 /// oversized and near-empty for long enough, returning its high-water-mark
@@ -133,7 +133,11 @@ impl StandaloneConnection {
             kill_connection_on_read_countdown: 0,
         };
 
-        connection.post_connect().await?;
+        // The handshake commands are logged like any other, so they need the same
+        // span the network loop will run under. It can only exist from here: the
+        // tag identifying the connection is what the lines above just built.
+        let span = info_span!("connection", tag = %connection.tag);
+        connection.post_connect().instrument(span).await?;
 
         Ok(connection)
     }
@@ -170,7 +174,7 @@ impl StandaloneConnection {
     }
 
     async fn write(&mut self, command: &Command) -> Result<()> {
-        debug!("[{}] Sending command: {command}", self.tag);
+        debug!("Sending command: {command}");
         let result = match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.send(command).await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -183,7 +187,7 @@ impl StandaloneConnection {
     }
 
     pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
-        debug!("[{}] Sending command: {command}", self.tag);
+        debug!("Sending command: {command}");
 
         #[cfg(test)]
         if command.try_decrement_kill_connection_on_write() {
@@ -217,7 +221,7 @@ impl StandaloneConnection {
     }
 
     pub async fn flush(&mut self) -> Result<()> {
-        trace!("[{}] Flushing...", self.tag);
+        trace!("Flushing...");
         let result = match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.flush().await,
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -235,7 +239,7 @@ impl StandaloneConnection {
         if self.kill_connection_on_read_countdown > 0 {
             self.kill_connection_on_read_countdown -= 1;
             if self.kill_connection_on_read_countdown == 0 {
-                debug!("[{}] Simulating a closed socket on read", self.tag);
+                debug!("Simulating a closed socket on read");
                 return None;
             }
         }
@@ -251,15 +255,13 @@ impl StandaloneConnection {
         self.shrink_read_buffer();
 
         if let Some(result) = next {
-            if log_enabled!(Level::Debug) {
-                match &result {
-                    Ok(response) => debug!("[{}] Received response {response:?}", self.tag),
-                    Err(err) => debug!("[{}] Received response {err:?}", self.tag),
-                }
+            match &result {
+                Ok(response) => debug!("Received response {response:?}"),
+                Err(err) => debug!("Received response {err:?}"),
             }
             Some(result)
         } else {
-            debug!("[{}] Socked is closed", self.tag);
+            debug!("Socked is closed");
             None
         }
     }
@@ -270,10 +272,7 @@ impl StandaloneConnection {
         if self.kill_connection_on_read_countdown > 0 {
             self.kill_connection_on_read_countdown -= 1;
             if self.kill_connection_on_read_countdown == 0 {
-                debug!(
-                    "[{}] (try_read) Simulating a closed socket on read",
-                    self.tag
-                );
+                debug!("(try_read) Simulating a closed socket on read");
                 return Poll::Ready(None);
             }
         }
@@ -293,18 +292,14 @@ impl StandaloneConnection {
 
         match poll_result {
             Poll::Ready(Some(result)) => {
-                if log_enabled!(Level::Debug) {
-                    match &result {
-                        Ok(response) => {
-                            debug!("[{}] (try_read) Received result {response:?}", self.tag)
-                        }
-                        Err(err) => debug!("[{}] (try_read) Received result {err:?}", self.tag),
-                    }
+                match &result {
+                    Ok(response) => debug!("(try_read) Received result {response:?}"),
+                    Err(err) => debug!("(try_read) Received result {err:?}"),
                 }
                 Poll::Ready(Some(result))
             }
             Poll::Ready(None) => {
-                debug!("[{}] Socket is closed", self.tag);
+                debug!("Socket is closed");
                 Poll::Ready(None)
             }
             Poll::Pending => Poll::Pending, // Nothing to read right now

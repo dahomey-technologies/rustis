@@ -97,7 +97,7 @@ async fn client_info() -> Result<()> {
     let client = get_test_client().await?;
 
     let client_info = client.client_info().await?;
-    log::debug!("client_info: {client_info:?}");
+    tracing::debug!("client_info: {client_info:?}");
     assert!(client_info.id != 0);
 
     Ok(())

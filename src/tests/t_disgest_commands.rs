@@ -177,7 +177,7 @@ async fn tdigest_info() -> Result<()> {
         .await?;
 
     let info = client.tdigest_info("key").await?;
-    log::debug!("info: {info:?}");
+    tracing::debug!("info: {info:?}");
     assert_eq!(15, info.observations);
 
     Ok(())

@@ -56,6 +56,30 @@ redis-cli --raw HELLO 3
 If you see server info (role, version, etc.), you're good to go.
 If you get an error, upgrade Redis.
 
+# Observability
+
+Rustis emits [`tracing`](https://docs.rs/tracing) events and spans. Install any
+subscriber to see them:
+
+```rust,ignore
+tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
+```
+
+Every event from the network task is wrapped in a `connection` span carrying a
+`tag` field — `host:port`, or `name:host:port` when `connection_name` is set — so
+output from several clients stays attributable without any per-message prefix.
+Reconnections open a nested `reconnect` span, which groups the in-flight purge,
+the retries and the subscription replay into one identifiable unit. In cluster
+mode, events about a specific node carry a `node` field.
+
+**If you use `log` rather than `tracing`, you need to change nothing.** Rustis
+enables tracing's `log` feature, so every event also emits a `log` record and
+existing `env_logger`-style setups keep working unchanged.
+
+Levels follow the usual convention: `error` and `warn` for conditions that need
+attention, `info` for connection lifecycle, `debug` for per-command traffic, and
+`trace` for the message-queue internals.
+
 # Minimum Supported Rust Version
 
 **Rust 1.88**, declared as `rust-version` in `Cargo.toml` and verified by a CI

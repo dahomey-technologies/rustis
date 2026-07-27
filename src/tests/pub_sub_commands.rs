@@ -8,8 +8,8 @@ use crate::{
     network::SendBatchTestHook,
     spawn,
     tests::{
-        get_cluster_test_client, get_default_addr, get_default_config, get_test_client,
-        get_test_client_with_config, log_try_init,
+        get_cluster_test_client, get_cluster_test_client_with_command_timeout, get_default_addr,
+        get_default_config, get_test_client, get_test_client_with_config, log_try_init,
     },
 };
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
@@ -403,6 +403,47 @@ async fn pub_sub_shardchannels() -> Result<()> {
     Ok(())
 }
 
+/// A subscription is confirmed by a push frame, which the cluster connection
+/// hands straight to the network handler instead of filing it as the answer to
+/// the request it sent. That request stays at the head of the pending queue,
+/// and every later reply coming from another node waits behind it forever.
+/// The command timeout is what turns that wait into a failure this test can
+/// report instead of hanging the whole suite.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn a_subscription_does_not_block_replies_from_other_nodes() -> Result<()> {
+    let client = get_cluster_test_client_with_command_timeout().await?;
+
+    // A hashtag served by another master than the one holding the subscription.
+    let shard_results: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let subscribed_slot = client.cluster_keyslot("{1}").await?;
+    let subscribed_shard = shard_results
+        .iter()
+        .position(|s| s.slots[0].0 <= subscribed_slot && subscribed_slot <= s.slots[0].1)
+        .unwrap();
+
+    let mut other_key = None;
+    for i in 2..100 {
+        let candidate = format!("{{{i}}}key");
+        let slot = client.cluster_keyslot(candidate.as_str()).await?;
+        let (start, end) = shard_results[subscribed_shard].slots[0];
+        if slot < start || slot > end {
+            other_key = Some(candidate);
+            break;
+        }
+    }
+    let other_key = other_key.expect("no hashtag maps outside the subscribed shard");
+
+    let _pub_sub_stream = client.ssubscribe("mychannel{1}").await?;
+
+    client.set(other_key.as_str(), "value").await?;
+    let value: String = client.get(other_key.as_str()).await?;
+    assert_eq!("value", value);
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
@@ -682,17 +723,24 @@ async fn concurrent_subscribe() -> Result<()> {
         pub_sub_client2.subscribe("mychannel2"),
         regular_client.lpop("key", 2).into_future(),
         regular_client.lpop("key", 2).into_future(),
-        regular_client.publish("mychannel1", "new").into_future()
     );
 
     let mut pub_sub_stream1 = results.0?;
     let _pub_sub_stream2 = results.1?;
     let values1: Vec<String> = results.2?;
     let values2: Vec<String> = results.3?;
-    let message1 = pub_sub_stream1.next().await.unwrap()?;
 
     assert_eq!(vec!["value2".to_owned(), "value1".to_owned()], values1);
     assert_eq!(Vec::<String>::new(), values2);
+
+    // Published once the subscriptions are confirmed. Joining the publish with
+    // them would assert an order nothing provides: it travels on another
+    // connection, and the server owes no ordering between two of them — it
+    // reaches an empty channel whenever it wins the race, and the message is
+    // dropped rather than delivered.
+    regular_client.publish("mychannel1", "new").await?;
+
+    let message1 = pub_sub_stream1.next().await.unwrap()?;
     assert_eq!(b"new".to_vec(), message1.payload);
 
     Ok(())

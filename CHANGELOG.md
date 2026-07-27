@@ -8,6 +8,22 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Fixed
+
+- **A cluster client deadlocked after any subscription.** A subscription is
+  acknowledged by a push frame, which the cluster connection hands straight to
+  the network task instead of filing it as the answer to the request it sent.
+  That request stayed at the head of the pending queue forever, and since
+  replies are reported in order, the first reply coming from any other node
+  waited behind it — the connection stopped answering entirely. The
+  acknowledgement now retires the request; an error reply such as `MOVED` is
+  still filed as a result, so redirections keep working.
+- **`spublish` was sent to an arbitrary node.** Its shard channel was passed as
+  a plain argument rather than as a key, so the cluster client could not route
+  it and relied on the server's `MOVED` to find the shard — one useless round
+  trip per call, on the path that then hit the deadlock above. `ssubscribe` and
+  `sunsubscribe` already routed by slot.
+
 ### Added
 
 - **A declared minimum supported Rust version: 1.88.** `Cargo.toml` now carries

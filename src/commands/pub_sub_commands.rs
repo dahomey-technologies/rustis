@@ -181,7 +181,7 @@ pub trait PubSubCommands<'a>: Sized {
         shardchannel: impl Serialize,
         message: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SPUBLISH").arg(shardchannel).arg(message))
+        prepare_command(self, cmd("SPUBLISH").key(shardchannel).arg(message))
     }
 
     /// Subscribes the client to the specified channels.

@@ -1,3 +1,4 @@
+use super::pub_sub_message::PubSubMessage;
 use crate::{
     ClientError, Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config},
@@ -154,9 +155,28 @@ struct RequestInfo {
     /// across several shards. Everything else is retried as a whole and does not
     /// pay for the clone.
     pub command: Option<Command>,
+    /// Whether the command is a subscription one, whose answer is a push frame
+    /// the network handler consumes on its own. See `retire_pub_sub_request`.
+    pub is_pub_sub: bool,
     #[allow(unused)]
     #[cfg(test)]
     pub command_seq: usize,
+}
+
+/// A subscription command is acknowledged by a push frame, not by an ordinary
+/// reply: `read` hands it to the network handler, which matches it against the
+/// caller itself. Nothing therefore ever fills the sub-request the connection
+/// filed for it.
+fn is_pub_sub_command(command: &Command) -> bool {
+    matches!(
+        command.name(),
+        b"SUBSCRIBE"
+            | b"PSUBSCRIBE"
+            | b"SSUBSCRIBE"
+            | b"UNSUBSCRIBE"
+            | b"PUNSUBSCRIBE"
+            | b"SUNSUBSCRIBE"
+    )
 }
 
 /// A sub-request that must be re-sent to another node before its request can be
@@ -393,6 +413,7 @@ impl ClusterConnection {
             sub_requests,
             keys: command.keys().collect(),
             command: None,
+            is_pub_sub: is_pub_sub_command(command),
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -426,6 +447,7 @@ impl ClusterConnection {
             sub_requests,
             keys: command.keys().collect(),
             command: None,
+            is_pub_sub: is_pub_sub_command(command),
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -526,6 +548,7 @@ impl ClusterConnection {
             keys: command.keys().collect(),
             sub_requests,
             command: (sub_requests_len > 1).then(|| command.clone()),
+            is_pub_sub: is_pub_sub_command(command),
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -593,6 +616,7 @@ impl ClusterConnection {
             }],
             keys,
             command: None,
+            is_pub_sub: is_pub_sub_command(command),
             #[cfg(test)]
             command_seq: command.command_seq,
         };
@@ -636,6 +660,38 @@ impl ClusterConnection {
 
         self.nodes.retain(|node| node.id != victim);
         debug!("[{}] test hook removed node {victim:?}", self.tag);
+    }
+
+    /// Drops the pending request a subscription command left behind, now that
+    /// the server has acknowledged it with a push frame. Without this the
+    /// request waits for a reply that never comes, and since `read` reports the
+    /// queue in order, it blocks every later reply from any other node — the
+    /// whole connection deadlocks. Only a subscription acknowledgement retires
+    /// one: an error reply such as `MOVED` is filed as a result like any other,
+    /// so the redirection path keeps working.
+    fn retire_pub_sub_request(&mut self, node_id: &NodeId, response: &RespResponse) {
+        if !matches!(
+            PubSubMessage::try_from(response),
+            Ok(PubSubMessage::Subscribe(_)
+                | PubSubMessage::PSubscribe(_)
+                | PubSubMessage::SSubscribe(_)
+                | PubSubMessage::Unsubscribe(_)
+                | PubSubMessage::PUnsubscribe(_)
+                | PubSubMessage::SUnsubscribe(_))
+        ) {
+            return;
+        }
+
+        let Some(index) = self.pending_requests.iter().position(|request| {
+            request.is_pub_sub
+                && request.sub_requests.iter().any(|sub_request| {
+                    sub_request.node_id == *node_id && sub_request.result.is_none()
+                })
+        }) else {
+            return;
+        };
+
+        self.pending_requests.remove(index);
     }
 
     fn front_request_references_missing_node(&self) -> bool {
@@ -698,9 +754,12 @@ impl ClusterConnection {
 
             result.as_ref()?;
 
-            if let Some(Ok(bytes)) = &result
-                && bytes.is_push()
+            if let Some(Ok(response)) = &result
+                && response.is_push()
             {
+                if let Some(node_id) = self.nodes.get(node_idx).map(|node| node.id.clone()) {
+                    self.retire_pub_sub_request(&node_id, response);
+                }
                 return result;
             }
 
@@ -786,6 +845,9 @@ impl ClusterConnection {
             if let Some(Ok(response)) = &result
                 && response.is_push()
             {
+                if let Some(node_id) = self.nodes.get(node_idx).map(|node| node.id.clone()) {
+                    self.retire_pub_sub_request(&node_id, response);
+                }
                 return Poll::Ready(result);
             }
 

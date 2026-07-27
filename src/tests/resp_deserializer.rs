@@ -186,6 +186,72 @@ fn string() -> Result<()> {
     Ok(())
 }
 
+/// A numeric reply read as a `String` gives back the bytes the server sent,
+/// verbatim. Decoding the number and re-rendering it would not round-trip: the
+/// text Redis chose carries precision and notation that an `f64` does not keep.
+#[test]
+fn a_numeric_reply_read_as_a_string_is_verbatim() -> Result<()> {
+    log_try_init();
+
+    let result: String = deserialize(":12\r\n")?;
+    assert_eq!("12", result);
+
+    let result: String = deserialize(":-9223372036854775808\r\n")?;
+    assert_eq!("-9223372036854775808", result);
+
+    // A trailing zero is significant to whoever sent it, and re-rendering the
+    // `f64` would drop it.
+    let result: String = deserialize(",12.50\r\n")?;
+    assert_eq!("12.50", result);
+
+    // Redis's own notation is preserved in both directions: an exponent is not
+    // expanded, and an integral double keeps no spurious `.0`.
+    let result: String = deserialize(",1e21\r\n")?;
+    assert_eq!("1e21", result);
+
+    let result: String = deserialize(",12\r\n")?;
+    assert_eq!("12", result);
+
+    let result: String = deserialize(",inf\r\n")?;
+    assert_eq!("inf", result);
+
+    // A big number is already surfaced as its digits, and stays exact.
+    let result: String = deserialize("(3492890328409238509324850943850943825024385\r\n")?;
+    assert_eq!("3492890328409238509324850943850943825024385", result);
+
+    Ok(())
+}
+
+/// A reply the client synthesized never came off the wire, so it has no bytes to
+/// hand back and renders from its value instead.
+#[test]
+fn a_synthesized_numeric_reply_renders_from_its_value() -> Result<()> {
+    log_try_init();
+
+    let result: String = deserialize_from_resp_response(RespResponse::integer(42))?;
+    assert_eq!("42", result);
+
+    Ok(())
+}
+
+/// Non-numeric scalars keep their rendering: `#t` is a boolean, and `"t"` would
+/// be a worse answer than `"true"` for the caller that asked for text.
+#[test]
+fn a_boolean_reply_read_as_a_string_renders_as_true_or_false() -> Result<()> {
+    log_try_init();
+
+    let result: String = deserialize("#t\r\n")?;
+    assert_eq!("true", result);
+
+    let result: String = deserialize("#f\r\n")?;
+    assert_eq!("false", result);
+
+    let result: String = deserialize("_\r\n")?;
+    assert_eq!("", result);
+
+    Ok(())
+}
+
 #[test]
 fn option() -> Result<()> {
     log_try_init();

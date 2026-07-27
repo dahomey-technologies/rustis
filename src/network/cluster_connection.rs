@@ -1135,7 +1135,7 @@ impl ClusterConnection {
                 Err(e) => return Some(Err(e)),
             };
             match view {
-                RespView::Integer(i) => match &mut integer {
+                RespView::Integer(i, _) => match &mut integer {
                     Integer::Single(current) => *current = f(*current, i),
                     Integer::Null => integer = Integer::Single(i),
                     Integer::Array(_) => return Some(Err(Error::Client(ClientError::Unexpected))),
@@ -1155,7 +1155,7 @@ impl ClusterConnection {
                         }
                         for (item, view) in items.iter_mut().zip(resp_array) {
                             match view {
-                                Ok(RespView::Integer(i)) => *item = f(*item, i),
+                                Ok(RespView::Integer(i, _)) => *item = f(*item, i),
                                 Ok(_) => {
                                     return Some(Err(Error::Client(ClientError::Unexpected)));
                                 }
@@ -1168,7 +1168,7 @@ impl ClusterConnection {
 
                         for view in resp_array {
                             match view {
-                                Ok(RespView::Integer(i)) => int_array.push(i),
+                                Ok(RespView::Integer(i, _)) => int_array.push(i),
                                 Ok(_) => {
                                     return Some(Err(Error::Client(ClientError::Unexpected)));
                                 }

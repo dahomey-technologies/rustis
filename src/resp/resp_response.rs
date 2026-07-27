@@ -1,8 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
-        ARRAY_TAG, ElementKind, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG, RespBuf,
-        RespDeserializer, RespTape, SET_TAG, element_bounds,
+        ARRAY_TAG, BULK_ERROR_TAG, ElementKind, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG,
+        ParsedFrame, RespBuf, RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG,
+        SIMPLE_STRING_TAG, TapeNode, element_bounds, frame_scalar_bounds,
     },
 };
 use bytes::Bytes;
@@ -12,75 +13,34 @@ use std::{
     ops::Range,
 };
 
-/// A decoded RESP frame.
+/// A decoded RESP reply, either as it came off the wire or synthesized by the
+/// cluster and cache layers.
 ///
-/// Scalars carry their value inline (or, for strings, a frame-relative byte
-/// range). A collection carries a flat parse **tape** — one fixed-width node per
-/// element, all nesting levels — rooted at node `root`, so reading an element is
-/// an O(1) node lookup instead of re-parsing the collection from the start. See
-/// [`crate::resp::resp_tape`] for the node layout.
-#[derive(Clone, PartialEq)]
-pub enum RespFrame {
-    SimpleString(Range<usize>),
-    Integer(i64),
-    Double(f64),
-    BulkString(Range<usize>),
-    Boolean(bool),
-    Array { tape: RespTape, root: u32 },
-    Map { tape: RespTape, root: u32 },
-    Set { tape: RespTape, root: u32 },
-    Push { tape: RespTape, root: u32 },
-    Error(Range<usize>),
-    Null,
-}
-
-/// A frame carries no data buffer, so it cannot render the reply it describes;
-/// it reports its kind, and — for a collection — the shape it indexes. The tape
-/// itself stays out: it is an internal index whose raw bytes are unreadable and
-/// routinely larger than the reply. To see the decoded reply, format the
-/// enclosing [`RespResponse`].
-impl fmt::Debug for RespFrame {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::SimpleString(r) => f.debug_tuple("SimpleString").field(r).finish(),
-            Self::Integer(i) => f.debug_tuple("Integer").field(i).finish(),
-            Self::Double(d) => f.debug_tuple("Double").field(d).finish(),
-            Self::BulkString(r) => f.debug_tuple("BulkString").field(r).finish(),
-            Self::Boolean(b) => f.debug_tuple("Boolean").field(b).finish(),
-            Self::Error(r) => f.debug_tuple("Error").field(r).finish(),
-            Self::Null => f.write_str("Null"),
-            Self::Array { tape, root } => fmt_frame_shape(f, "Array", tape, *root),
-            Self::Map { tape, root } => fmt_frame_shape(f, "Map", tape, *root),
-            Self::Set { tape, root } => fmt_frame_shape(f, "Set", tape, *root),
-            Self::Push { tape, root } => fmt_frame_shape(f, "Push", tape, *root),
-        }
-    }
-}
-
-/// Renders a collection frame as `Kind { root, len }`. `len` lives in the head's
-/// companion node; a tape too short to hold it means the frame was not produced
-/// by the parser, so the count is reported as unknown rather than panicking in a
-/// formatter.
-fn fmt_frame_shape(
-    f: &mut fmt::Formatter<'_>,
-    kind: &str,
-    tape: &RespTape,
-    root: u32,
-) -> fmt::Result {
-    let mut s = f.debug_struct(kind);
-    s.field("root", &root);
-    match tape.container_len(root as usize) {
-        Some(len) => s.field("len", &len),
-        None => s.field("len", &format_args!("<unreadable tape>")),
-    };
-    s.finish()
-}
-
+/// The wire form keeps the frame's bytes undecoded and reads a value only when
+/// the caller asks for one, so the decode runs in the calling task rather than
+/// in the connection's shared network task.
 #[derive(Clone, PartialEq)]
 pub enum RespResponse {
+    Null,
+    Integer(i64),
+    Double(f64),
     IntegerArray(Vec<i64>),
     OwnedArray(Vec<RespResponse>),
-    Frame(RespBuf, RespFrame),
+    /// A frame's bytes plus the flat parse **tape** indexing it — one
+    /// fixed-width node per element, all nesting levels — with `root` the tape
+    /// index of the container's head node, so reading an element is an O(1) node
+    /// lookup instead of a re-parse. See [`crate::resp::resp_tape`].
+    ///
+    /// An **empty tape** means the frame is a lone scalar, which no node would
+    /// help to index. `buf` is then exactly that scalar's RESP bytes, tag byte
+    /// first and terminating `\r\n` last — every producer slices to it, and the
+    /// read path relies on it to locate the value without scanning for the
+    /// terminator.
+    Frame {
+        buf: RespBuf,
+        tape: RespTape,
+        root: u32,
+    },
 }
 
 /// Above this many characters, the rendering stops and is marked as truncated.
@@ -98,7 +58,10 @@ impl fmt::Debug for RespResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let truncated = {
             let mut writer = TruncatingWriter::new(f, DEBUG_RENDER_LIMIT);
-            write!(writer, "{:?}", self.view())?;
+            match self.view() {
+                Ok(view) => write!(writer, "{view:?}")?,
+                Err(e) => write!(writer, "{:?}", UnreadableElement(e))?,
+            }
             writer.truncated
         };
         if truncated {
@@ -144,46 +107,95 @@ impl fmt::Write for TruncatingWriter<'_, '_> {
 }
 
 impl RespResponse {
+    /// Pairs a frame's bytes with what one parse pass recovered from them.
     #[inline(always)]
-    pub fn new(buf: RespBuf, frame: RespFrame) -> Self {
-        Self::Frame(buf, frame)
+    pub fn new(buf: RespBuf, parsed: ParsedFrame) -> Self {
+        match parsed {
+            ParsedFrame::Scalar { at } => Self::Frame {
+                // A frame opening on an attribute leaves the scalar past `at`;
+                // slicing to it drops the metadata nobody reads and leaves `buf`
+                // as the scalar's own bytes.
+                buf: if at == 0 {
+                    buf
+                } else {
+                    RespBuf::from(buf.slice(at..))
+                },
+                tape: RespTape::default(),
+                root: 0,
+            },
+            ParsedFrame::Collection(tape) => Self::Frame { buf, tape, root: 0 },
+            // A null collection carries nothing to read back, so its bytes go.
+            ParsedFrame::Null => Self::Null,
+        }
     }
 
+    /// Reads this response as a borrowed view, decoding a scalar's bytes on the
+    /// way. Fails when those bytes are not a value of the kind their tag
+    /// announces — a malformed numeric, which framing accepted and only the read
+    /// can catch.
     #[inline(always)]
-    pub fn view(&self) -> RespView<'_> {
+    pub fn view(&self) -> Result<RespView<'_>> {
         match self {
-            RespResponse::IntegerArray(a) => RespView::IntegerArray(a),
-            RespResponse::OwnedArray(a) => RespView::OwnedArray(a),
-            RespResponse::Frame(buf, frame) => RespView::from_frame(buf.as_ref(), frame),
+            RespResponse::Null => Ok(RespView::Null),
+            RespResponse::Integer(i) => Ok(RespView::Integer(*i)),
+            RespResponse::Double(d) => Ok(RespView::Double(*d)),
+            RespResponse::IntegerArray(a) => Ok(RespView::IntegerArray(a)),
+            RespResponse::OwnedArray(a) => Ok(RespView::OwnedArray(a)),
+            RespResponse::Frame { buf, tape, root } => view_at(buf.as_ref(), tape, *root as usize),
+        }
+    }
+
+    /// The RESP tag of the value this response points at, for the callers that
+    /// only need to classify a reply. `None` for a synthesized response, which
+    /// never came off the wire and has no tag.
+    #[inline(always)]
+    fn frame_tag(&self) -> Option<u8> {
+        match self {
+            RespResponse::Frame { buf, tape, root } => {
+                if tape.is_empty() {
+                    buf.first().copied()
+                } else {
+                    Some(tape.node(*root as usize).tag())
+                }
+            }
+            _ => None,
         }
     }
 
     /// Returns `true` if the RESP Response is a push message
     #[inline(always)]
     pub fn is_push(&self) -> bool {
-        matches!(self, RespResponse::Frame(_, RespFrame::Push { .. }))
+        self.frame_tag() == Some(PUSH_TAG)
     }
 
     /// Returns `true` if the RESP Response is a monitor message
+    ///
+    /// A monitor line is a simple string opening on the event's timestamp, which
+    /// is what tells it apart from any other simple-string reply.
     #[inline(always)]
     pub fn is_monitor(&self) -> bool {
-        matches!(self, RespResponse::Frame(buf, RespFrame::SimpleString(r)) if buf.as_ref().get(r.start).is_some_and(|f| f.is_ascii_digit()))
+        match self {
+            RespResponse::Frame { buf, tape, .. } if tape.is_empty() => {
+                matches!(buf.as_ref(), [SIMPLE_STRING_TAG, second, ..] if second.is_ascii_digit())
+            }
+            _ => false,
+        }
     }
 
     /// Returns `true` if the RESP Response is a Redis error
     #[inline(always)]
     pub fn is_error(&self) -> bool {
-        matches!(self, RespResponse::Frame(_, RespFrame::Error(_)))
+        matches!(self.frame_tag(), Some(SIMPLE_ERROR_TAG | BULK_ERROR_TAG))
     }
 
     #[inline(always)]
     pub fn null() -> RespResponse {
-        Self::Frame(RespBuf::default(), RespFrame::Null)
+        Self::Null
     }
 
     #[inline(always)]
     pub fn integer(i: i64) -> RespResponse {
-        Self::Frame(RespBuf::default(), RespFrame::Integer(i))
+        Self::Integer(i)
     }
 
     #[inline(always)]
@@ -199,160 +211,169 @@ impl RespResponse {
     /// Constructs a new `Response` as a RESP Ok message (+OK\r\n)
     #[inline(always)]
     pub fn ok() -> RespResponse {
-        Self::Frame(
-            RespBuf::from(Bytes::from_static(b"+OK\r\n")),
-            RespFrame::SimpleString(1..3),
-        )
+        Self::Frame {
+            buf: RespBuf::from(Bytes::from_static(b"+OK\r\n")),
+            tape: RespTape::default(),
+            root: 0,
+        }
     }
 
     /// Convert the RESP Response to a Rust type `T` by using serde deserialization
     #[inline]
     pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
-        T::deserialize(RespDeserializer::new(self.view()))
+        T::deserialize(RespDeserializer::new(self.view()?))
     }
 
-    /// Returns a self-contained copy whose buffers hold **only** the bytes this
-    /// response actually references, releasing any larger shared block it was
-    /// carved from.
+    /// Returns a self-contained copy that holds **only** what this response
+    /// needs, releasing any larger shared block it was carved from.
     ///
     /// A response kept alive long after decoding (a cache entry, a buffered
     /// stream item) pins the whole recycled block its data — and, for a
     /// collection, its tape — was split from: a 50-byte cached value can pin a
-    /// 64 KiB block. Compacting before retaining copies the referenced bytes out
-    /// so the block can be reclaimed. Callers that consume a response promptly
-    /// (the normal request/response path) never need this.
+    /// 64 KiB block. Compacting before retaining copies out what is referenced so
+    /// the block can be reclaimed. Callers that consume a response promptly (the
+    /// normal request/response path) never need this.
+    ///
+    /// A numeric scalar is decoded here rather than copied, because a retained
+    /// response is read repeatedly — a cache entry hit a thousand times would
+    /// otherwise decode a thousand times. Strings keep their RESP header: the
+    /// read path recovers the value from the tag, so the bytes have to stay a
+    /// readable element.
     pub fn compact(&self) -> RespResponse {
         match self {
+            RespResponse::Null => RespResponse::Null,
+            RespResponse::Integer(i) => RespResponse::Integer(*i),
+            RespResponse::Double(d) => RespResponse::Double(*d),
             RespResponse::IntegerArray(a) => RespResponse::IntegerArray(a.clone()),
             RespResponse::OwnedArray(a) => {
                 RespResponse::OwnedArray(a.iter().map(RespResponse::compact).collect())
             }
-            RespResponse::Frame(buf, frame) => {
-                let (buf, frame) = compact_frame(buf.as_ref(), frame);
-                RespResponse::Frame(buf, frame)
+            RespResponse::Frame { buf, tape, .. } if tape.is_empty() => {
+                let data = buf.as_ref();
+                match read_frame_view(data) {
+                    Ok(RespView::Integer(i)) => RespResponse::Integer(i),
+                    Ok(RespView::Double(d)) => RespResponse::Double(d),
+                    Ok(RespView::Null) => RespResponse::Null,
+                    // Anything else copies its bytes out as they are. A scalar
+                    // that does not read back keeps them too, so the failure
+                    // survives compaction instead of becoming another one.
+                    _ => RespResponse::Frame {
+                        buf: RespBuf::from(Bytes::copy_from_slice(data)),
+                        tape: RespTape::default(),
+                        root: 0,
+                    },
+                }
             }
+            RespResponse::Frame { buf, tape, root } => RespResponse::Frame {
+                buf: RespBuf::from(Bytes::copy_from_slice(buf.as_ref())),
+                tape: tape.compact(),
+                root: *root,
+            },
         }
     }
 
+    /// Walks a container's elements as owned responses, in wire order.
+    ///
+    /// All four container tags are accepted: a map yields its keys and values
+    /// flattened, a push yields its kind as the first element. An error reply is
+    /// surfaced as the Redis error itself, so a caller cannot mistake a failure
+    /// for an empty reply.
     pub fn into_array_iter(self) -> Result<RespResponseIter> {
+        // `is_error` is a tag check, so a non-error reply does not pay for a view.
+        if self.is_error()
+            && let Ok(RespView::Error(message)) = self.view()
+        {
+            return Err(Error::Redis(RedisError::try_from(message)?));
+        }
         match self {
-            RespResponse::Frame(
-                buf,
-                RespFrame::Array { tape, root } | RespFrame::Set { tape, root },
-            ) => {
-                let len = tape.node(root as usize + 1).payload() as usize;
-                Ok(RespResponseIter::new(buf, tape, root as usize, len))
-            }
-            RespResponse::Frame(buf, RespFrame::Error(r)) => {
-                Err(Error::Redis(RedisError::try_from(buf.slice(r).as_ref())?))
+            RespResponse::Frame { buf, tape, root }
+                if !tape.is_empty() && tape.node(root as usize).is_container() =>
+            {
+                let root = root as usize;
+                let len = tape.node(root + 1).payload() as usize;
+                Ok(RespResponseIter::new(buf, tape, root, len))
             }
             _ => Err(Error::Client(ClientError::Unexpected)),
         }
     }
 }
 
-/// Copies the bytes a single frame references into freshly-sized buffers. Scalar
-/// strings shrink to exactly their value; a collection copies its data and tape
-/// buffers wholesale (frame-sized at the top level), which is enough to release
-/// the shared block.
-#[expect(
-    clippy::indexing_slicing,
-    reason = "invariant: `frame`'s ranges were produced by the parser over this \
-              very `data`; `RespResponse` owns the two together and never pairs \
-              a frame with another buffer."
-)]
-fn compact_frame(data: &[u8], frame: &RespFrame) -> (RespBuf, RespFrame) {
-    match frame {
-        RespFrame::SimpleString(r) => (
-            RespBuf::from(Bytes::copy_from_slice(&data[r.clone()])),
-            RespFrame::SimpleString(0..r.end - r.start),
-        ),
-        RespFrame::BulkString(r) => (
-            RespBuf::from(Bytes::copy_from_slice(&data[r.clone()])),
-            RespFrame::BulkString(0..r.end - r.start),
-        ),
-        RespFrame::Error(r) => (
-            RespBuf::from(Bytes::copy_from_slice(&data[r.clone()])),
-            RespFrame::Error(0..r.end - r.start),
-        ),
-        RespFrame::Integer(i) => (RespBuf::default(), RespFrame::Integer(*i)),
-        RespFrame::Double(d) => (RespBuf::default(), RespFrame::Double(*d)),
-        RespFrame::Boolean(b) => (RespBuf::default(), RespFrame::Boolean(*b)),
-        RespFrame::Null => (RespBuf::default(), RespFrame::Null),
-        RespFrame::Array { tape, root } => (
-            RespBuf::from(Bytes::copy_from_slice(data)),
-            RespFrame::Array {
-                tape: tape.compact(),
-                root: *root,
-            },
-        ),
-        RespFrame::Map { tape, root } => (
-            RespBuf::from(Bytes::copy_from_slice(data)),
-            RespFrame::Map {
-                tape: tape.compact(),
-                root: *root,
-            },
-        ),
-        RespFrame::Set { tape, root } => (
-            RespBuf::from(Bytes::copy_from_slice(data)),
-            RespFrame::Set {
-                tape: tape.compact(),
-                root: *root,
-            },
-        ),
-        RespFrame::Push { tape, root } => (
-            RespBuf::from(Bytes::copy_from_slice(data)),
-            RespFrame::Push {
-                tape: tape.compact(),
-                root: *root,
-            },
-        ),
+/// Reads the value `root` points at: a tape node when the frame has a tape, the
+/// byte offset of a lone scalar when it does not.
+#[inline]
+fn view_at<'a>(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Result<RespView<'a>> {
+    if tape.is_empty() {
+        return read_frame_view(buf);
+    }
+    let node = tape.node(root);
+    if node.is_container() {
+        Ok(container_view(node.tag(), buf, tape, root))
+    } else {
+        read_node_view(node, buf)
     }
 }
 
-/// Reads the scalar node with tag `tag` at byte offset `off` into a borrowed
-/// [`RespView`]. Returns `None` when the element's content fails to parse (a
-/// malformed integer or double), which ends iteration.
+/// Reads the lone scalar a frame consists of, `data` being its own bytes.
 ///
-/// A [`NULL_TAG`] node is `Null` without touching the data buffer: it may stand
-/// in for a null collection (`*-1`), whose offset points at `*`, not a scalar.
+/// Nothing is scanned to find the terminator — see [`frame_scalar_bounds`]. That
+/// is what makes reading on demand about as cheap as decoding eagerly was.
 #[inline]
-fn read_scalar_view<'a>(tag: u8, data: &'a [u8], off: usize) -> Option<RespView<'a>> {
-    if tag == NULL_TAG {
-        return Some(RespView::Null);
-    }
-    // Read-back of a frame the decoder already validated: re-applying a bulk
-    // cap here would reject values a raised limit legitimately let through.
-    let bounds = element_bounds(data, off, NO_BULK_LIMIT).ok()?;
-    Some(match bounds.kind {
-        ElementKind::SimpleString => RespView::SimpleString(data.get(bounds.value)?),
-        ElementKind::Error => RespView::Error(data.get(bounds.value)?),
-        ElementKind::Integer => RespView::Integer(atoi::atoi(data.get(bounds.value)?)?),
-        ElementKind::Double => RespView::Double(fast_float2::parse(data.get(bounds.value)?).ok()?),
-        ElementKind::BulkString => RespView::BulkString(data.get(bounds.value)?),
-        ElementKind::Boolean => RespView::Boolean(*data.get(bounds.value.start)? == b't'),
-        ElementKind::Null => RespView::Null,
-    })
+fn read_frame_view(data: &[u8]) -> Result<RespView<'_>> {
+    let (kind, value) = frame_scalar_bounds(data)?;
+    decode_value(kind, data, value)
 }
 
-/// Owned equivalent of [`read_scalar_view`], producing a self-contained
-/// [`RespFrame`] for an element yielded by [`RespResponseIter`].
+/// Reads the scalar a non-container tape node points at.
+///
+/// A [`NULL_TAG`] node is `Null` without touching the data buffer: it stands in
+/// for a null child collection (`*-1`), whose offset points at `*`, not at a
+/// scalar.
 #[inline]
-fn read_scalar_frame(tag: u8, data: &[u8], off: usize) -> Option<RespFrame> {
-    if tag == NULL_TAG {
-        return Some(RespFrame::Null);
+fn read_node_view<'a>(node: TapeNode, data: &'a [u8]) -> Result<RespView<'a>> {
+    if node.tag() == NULL_TAG {
+        return Ok(RespView::Null);
     }
+    read_scalar_view(data, node.payload() as usize)
+}
+
+/// Decodes the scalar element whose tag byte is at `off`, whose end is unknown
+/// and has to be re-derived — the case of an element sitting inside a collection,
+/// where the surrounding bytes belong to its siblings.
+#[inline]
+fn read_scalar_view(data: &[u8], off: usize) -> Result<RespView<'_>> {
     // Read-back of a frame the decoder already validated: re-applying a bulk
     // cap here would reject values a raised limit legitimately let through.
-    let bounds = element_bounds(data, off, NO_BULK_LIMIT).ok()?;
-    Some(match bounds.kind {
-        ElementKind::SimpleString => RespFrame::SimpleString(bounds.value),
-        ElementKind::Error => RespFrame::Error(bounds.value),
-        ElementKind::Integer => RespFrame::Integer(atoi::atoi(data.get(bounds.value)?)?),
-        ElementKind::Double => RespFrame::Double(fast_float2::parse(data.get(bounds.value)?).ok()?),
-        ElementKind::BulkString => RespFrame::BulkString(bounds.value),
-        ElementKind::Boolean => RespFrame::Boolean(*data.get(bounds.value.start)? == b't'),
-        ElementKind::Null => RespFrame::Null,
+    let bounds = element_bounds(data, off, NO_BULK_LIMIT)?;
+    decode_value(bounds.kind, data, bounds.value)
+}
+
+/// Turns a scalar's bytes into a value.
+///
+/// This is where a number is actually parsed, deliberately: framing only needed
+/// the `\r\n`, so the arithmetic lands in whichever task asks for the value
+/// rather than in the connection's shared network task. Bytes that do not read
+/// back as the kind their tag announces fail here, failing one command instead of
+/// the whole connection.
+#[inline]
+fn decode_value(kind: ElementKind, data: &[u8], value: Range<usize>) -> Result<RespView<'_>> {
+    // `ok_or_else`, not `ok_or`: this runs per element, and `Error` is large
+    // enough that constructing one eagerly only to drop it costs measurably.
+    let value = data
+        .get(value)
+        .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
+    Ok(match kind {
+        ElementKind::SimpleString => RespView::SimpleString(value),
+        ElementKind::Error => RespView::Error(value),
+        ElementKind::Integer => RespView::Integer(
+            atoi::atoi(value).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?,
+        ),
+        ElementKind::Double => RespView::Double(
+            fast_float2::parse(value).map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+        ),
+        ElementKind::BulkString => RespView::BulkString(value),
+        // The framing pass already rejected anything but `t` and `f`.
+        ElementKind::Boolean => RespView::Boolean(value.first() == Some(&b't')),
+        ElementKind::Null => RespView::Null,
     })
 }
 
@@ -391,41 +412,6 @@ pub enum RespView<'a> {
     Push(RespArrayView<'a>),
     Error(&'a [u8]),
     Null,
-}
-
-impl<'a> RespView<'a> {
-    /// Borrows a decoded frame as a view. Collections read their structure from
-    /// the frame's tape; scalars read their bytes from `data`.
-    #[inline]
-    #[expect(
-        clippy::indexing_slicing,
-        reason = "invariant: `frame`'s ranges were produced by the parser over \
-                  this very `data`; the two travel together inside a \
-                  `RespResponse`."
-    )]
-    fn from_frame(data: &'a [u8], frame: &'a RespFrame) -> RespView<'a> {
-        match frame {
-            RespFrame::SimpleString(r) => RespView::SimpleString(&data[r.clone()]),
-            RespFrame::Integer(i) => RespView::Integer(*i),
-            RespFrame::Double(f) => RespView::Double(*f),
-            RespFrame::BulkString(r) => RespView::BulkString(&data[r.clone()]),
-            RespFrame::Boolean(b) => RespView::Boolean(*b),
-            RespFrame::Array { tape, root } => {
-                RespView::Array(RespArrayView::new(data, tape, *root as usize))
-            }
-            RespFrame::Map { tape, root } => {
-                RespView::Map(RespArrayView::new(data, tape, *root as usize))
-            }
-            RespFrame::Set { tape, root } => {
-                RespView::Set(RespArrayView::new(data, tape, *root as usize))
-            }
-            RespFrame::Push { tape, root } => {
-                RespView::Push(RespArrayView::new(data, tape, *root as usize))
-            }
-            RespFrame::Error(r) => RespView::Error(&data[r.clone()]),
-            RespFrame::Null => RespView::Null,
-        }
-    }
 }
 
 impl<'a> fmt::Debug for RespView<'a> {
@@ -594,21 +580,18 @@ impl<'a> Iterator for RespArrayIter<'a> {
             self.remaining -= 1;
             Some(Ok(container_view(tag, self.buf, self.tape, root)))
         } else {
-            let off = node.payload() as usize;
-            // A `None` here means the already-validated tape is inconsistent
-            // (effectively unreachable). Surface it as an error and end the
-            // iterator instead of silently truncating the array: the consumer
-            // must be able to tell "the array ended" from "an element could not
-            // be read".
-            match read_scalar_view(tag, self.buf, off) {
-                Some(view) => {
+            // Surface a read failure as an error and end the iterator rather
+            // than truncating the array silently: the consumer must be able to
+            // tell "the array ended" from "an element could not be read".
+            match read_node_view(node, self.buf) {
+                Ok(view) => {
                     self.cursor += 1;
                     self.remaining -= 1;
                     Some(Ok(view))
                 }
-                None => {
+                Err(e) => {
                     self.remaining = 0;
-                    Some(Err(Error::Client(ClientError::Unexpected)))
+                    Some(Err(e))
                 }
             }
         }
@@ -645,41 +628,53 @@ impl Iterator for RespResponseIter {
         }
 
         let node = self.tape.node(self.cursor);
-        let tag = node.tag();
 
+        // A container element is handed out over the same buffer and tape,
+        // re-rooted on its own node: no byte is copied and no value decoded, and
+        // it reads back exactly as it would through the parent.
         if node.is_container() {
             let root = self.cursor;
             self.cursor = node.payload() as usize;
             self.remaining -= 1;
-            let tape = self.tape.clone();
-            let root = root as u32;
-            #[expect(
-                clippy::unreachable,
-                reason = "invariant: guarded by `is_container_tag` just above, \
-                          whose `matches!` lists exactly these four tags."
-            )]
-            let frame = match tag {
-                ARRAY_TAG => RespFrame::Array { tape, root },
-                MAP_TAG => RespFrame::Map { tape, root },
-                SET_TAG => RespFrame::Set { tape, root },
-                PUSH_TAG => RespFrame::Push { tape, root },
-                _ => unreachable!("is_container_tag matched a non-container tag"),
+            // A tape node index is far below `u32::MAX` for any reply a server
+            // can send, but the tape's own payload is wider, so the conversion is
+            // checked rather than assumed: a truncated root would read a
+            // different element, silently.
+            let Ok(root) = u32::try_from(root) else {
+                self.remaining = 0;
+                return Some(Err(Error::Client(ClientError::Unexpected)));
             };
-            Some(Ok(RespResponse::Frame(self.buf.clone(), frame)))
-        } else {
-            let off = node.payload() as usize;
-            // Same surface-and-stop handling as `RespArrayIter`: an inconsistent
-            // tape yields an error, not a silent truncation.
-            match read_scalar_frame(tag, self.buf.as_ref(), off) {
-                Some(frame) => {
-                    self.cursor += 1;
-                    self.remaining -= 1;
-                    Some(Ok(RespResponse::Frame(self.buf.clone(), frame)))
-                }
-                None => {
-                    self.remaining = 0;
-                    Some(Err(Error::Client(ClientError::Unexpected)))
-                }
+            return Some(Ok(RespResponse::Frame {
+                buf: self.buf.clone(),
+                tape: self.tape.clone(),
+                root,
+            }));
+        }
+
+        self.cursor += 1;
+        self.remaining -= 1;
+        // A null child collection points at its `*`, which is not a scalar to
+        // read back; the tape node is all there is.
+        if node.tag() == NULL_TAG {
+            return Some(Ok(RespResponse::Null));
+        }
+        // A scalar element is handed out over its own bytes: the buffer is sliced
+        // down to the element — a refcount bump, not a copy — so the response
+        // holds to the invariant that a tapeless frame ends where its scalar does.
+        let at = node.payload() as usize;
+        let data = self.buf.as_ref();
+        match element_bounds(data, at, NO_BULK_LIMIT) {
+            Ok(bounds) => Some(Ok(RespResponse::Frame {
+                buf: RespBuf::from(self.buf.slice(at..bounds.end)),
+                tape: RespTape::default(),
+                root: 0,
+            })),
+            // Surface a failure rather than truncating the iteration silently: the
+            // consumer must be able to tell "the array ended" from "an element
+            // could not be read".
+            Err(e) => {
+                self.remaining = 0;
+                Some(Err(e))
             }
         }
     }

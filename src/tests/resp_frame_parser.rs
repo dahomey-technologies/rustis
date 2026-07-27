@@ -1,23 +1,28 @@
 use crate::{
     client::RespLimits,
-    resp::{RespBuf, RespFrame, RespFrameParser, RespResponse, RespTapeMut},
+    resp::{ParsedFrame, RespBuf, RespFrameParser, RespResponse, RespTapeMut, RespView},
 };
 
 /// Parses a complete frame with a throwaway tape buffer.
-fn parse(resp: &[u8]) -> crate::Result<(RespFrame, usize)> {
+fn parse(resp: &[u8]) -> crate::Result<(ParsedFrame, usize)> {
     let mut tape = RespTapeMut::default();
     RespFrameParser::new(resp, &mut tape).parse()
+}
+
+/// Parses a complete frame and pairs it with its bytes, so the test asserts on
+/// what the frame reads back as rather than on how it is represented.
+fn parse_response(resp: &[u8]) -> crate::Result<(RespResponse, usize)> {
+    let (frame, len) = parse(resp)?;
+    Ok((RespResponse::new(RespBuf::from_slice(resp), frame), len))
 }
 
 #[test]
 fn parse_array() {
     let resp = b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"; // ["foo", "bar"]
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(22, len);
-    assert!(matches!(frame, RespFrame::Array { root: 0, .. }));
-
-    let response = RespResponse::new(RespBuf::from_slice(resp), frame);
+    assert!(matches!(response.view(), Ok(RespView::Array(_))));
     assert_eq!(
         vec!["foo".to_owned(), "bar".to_owned()],
         response.to::<Vec<String>>().unwrap()
@@ -29,10 +34,10 @@ fn parse_null_array() {
     // `*-1\r\n` is a legal RESP2 null array and must decode to Null, not to a
     // collection of `usize::MAX` elements.
     let resp = b"*-1\r\n";
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(5, len);
-    assert!(matches!(frame, RespFrame::Null));
+    assert!(matches!(response.view(), Ok(RespView::Null)));
 }
 
 #[test]
@@ -133,10 +138,10 @@ fn parse_leading_attribute_is_skipped_and_reply_decodes() {
     // reconnect.
     // |1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n  then  :42\r\n
     let resp = b"|1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n:42\r\n";
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(resp.len(), len);
-    assert!(matches!(frame, RespFrame::Integer(42)));
+    assert!(matches!(response.view(), Ok(RespView::Integer(42))));
 }
 
 #[test]
@@ -145,12 +150,10 @@ fn parse_attribute_preceding_an_array_element_is_skipped() {
     // happen at frame-dispatch level, not only at the top level.
     // *2\r\n :1\r\n  |1\r\n$1\r\na\r\n$1\r\nb\r\n :2\r\n
     let resp = b"*2\r\n:1\r\n|1\r\n$1\r\na\r\n$1\r\nb\r\n:2\r\n";
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(resp.len(), len);
-    assert!(matches!(frame, RespFrame::Array { root: 0, .. }));
-
-    let response = RespResponse::new(RespBuf::from_slice(resp), frame);
+    assert!(matches!(response.view(), Ok(RespView::Array(_))));
     assert_eq!(vec![1i64, 2], response.to::<Vec<i64>>().unwrap());
 }
 
@@ -159,24 +162,24 @@ fn parse_big_number_is_exposed_as_its_string_payload() {
     // A big number does not fit in an i64 and is surfaced as its
     // decimal-string payload.
     let resp = b"(3492890328409238509324850943850943825024385\r\n";
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(resp.len(), len);
-    let RespFrame::BulkString(r) = frame else {
-        panic!("expected a big number surfaced as a bulk string, got {frame:?}");
-    };
-    assert_eq!(&resp[r], b"3492890328409238509324850943850943825024385");
+    assert!(matches!(
+        response.view(),
+        Ok(RespView::BulkString(
+            b"3492890328409238509324850943850943825024385"
+        ))
+    ));
 }
 
 #[test]
 fn parse_map() {
     let resp = b"%1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"; // {"foo": "bar"}
-    let (frame, len) = parse(resp).unwrap();
+    let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(22, len);
-    assert!(matches!(frame, RespFrame::Map { root: 0, .. }));
-
-    let response = RespResponse::new(RespBuf::from_slice(resp), frame);
+    assert!(matches!(response.view(), Ok(RespView::Map(_))));
     let map = response
         .to::<std::collections::HashMap<String, String>>()
         .unwrap();
@@ -185,7 +188,7 @@ fn parse_map() {
 }
 
 /// Parses a complete frame under caller-chosen limits.
-fn parse_with_limits(resp: &[u8], limits: RespLimits) -> crate::Result<(RespFrame, usize)> {
+fn parse_with_limits(resp: &[u8], limits: RespLimits) -> crate::Result<(ParsedFrame, usize)> {
     let mut tape = RespTapeMut::default();
     RespFrameParser::with_limits(resp, &mut tape, limits).parse()
 }

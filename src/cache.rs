@@ -271,7 +271,7 @@ impl Cache {
 
         // 3. deserialize
         let response = RespResponse::owned_array(responses);
-        let deserializer = RespDeserializer::new(response.view());
+        let deserializer = RespDeserializer::new(response.view()?);
         R::deserialize(deserializer)
     }
 
@@ -534,7 +534,7 @@ impl Cache {
                 self.client.connection_tag(),
                 key
             );
-            let deserializer = RespDeserializer::new(response.view());
+            let deserializer = RespDeserializer::new(response.view()?);
             return R::deserialize(deserializer);
         }
 
@@ -552,7 +552,7 @@ impl Cache {
 
         let command_bytes = command.bytes().clone();
         let response = self.client.internal_send(command, None).await?;
-        let deserializer = RespDeserializer::new(response.view());
+        let deserializer = RespDeserializer::new(response.view()?);
         let deserialized = R::deserialize(deserializer)?;
 
         // Insert into cache. Compact first so a retained entry holds only its

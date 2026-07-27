@@ -864,7 +864,7 @@ impl ClusterConnection {
                 continue;
             };
 
-            let RespView::Error(error) = result.view() else {
+            let Ok(RespView::Error(error)) = result.view() else {
                 continue;
             };
 
@@ -1025,7 +1025,7 @@ impl ClusterConnection {
             if let Some(result) = result {
                 if let Ok(result) = result {
                     match result.view() {
-                        RespView::Error(error) => match RedisError::try_from(error) {
+                        Ok(RespView::Error(error)) => match RedisError::try_from(error) {
                             Ok(RedisError {
                                 kind: RedisErrorKind::Ask { hash_slot, address },
                                 description: _,
@@ -1130,7 +1130,11 @@ impl ClusterConnection {
                 return Some(sub_result);
             };
 
-            match sub_result.view() {
+            let view = match sub_result.view() {
+                Ok(view) => view,
+                Err(e) => return Some(Err(e)),
+            };
+            match view {
                 RespView::Integer(i) => match &mut integer {
                     Integer::Single(current) => *current = f(*current, i),
                     Integer::Null => integer = Integer::Single(i),

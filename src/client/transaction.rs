@@ -122,7 +122,7 @@ impl Transaction {
         // EXEC
         if let Some(result) = iter.next() {
             match TransactionResultSeed::new(self.forget_flags)
-                .deserialize(RespDeserializer::new(result.view()))
+                .deserialize(RespDeserializer::new(result.view()?))
             {
                 Ok(Some(t)) => Ok(t),
                 Ok(None) => Err(Error::Aborted),

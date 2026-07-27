@@ -2,7 +2,7 @@ use crate::{
     Error, Result,
     client::{BufferConfig, RespLimits},
     resp::{
-        PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse, RespTapeMut,
+        ParsedFrame, PendingContainer, RespBuf, RespFrameParser, RespResponse, RespTapeMut,
         bulk_value_end,
     },
 };
@@ -115,12 +115,9 @@ impl BufferDecoder {
 
 /// Byte length of a frame's tape, or `0` for a scalar frame (which carries none).
 #[inline]
-fn frame_tape_len(frame: &RespFrame) -> usize {
+fn frame_tape_len(frame: &ParsedFrame) -> usize {
     match frame {
-        RespFrame::Array { tape, .. }
-        | RespFrame::Map { tape, .. }
-        | RespFrame::Set { tape, .. }
-        | RespFrame::Push { tape, .. } => tape.byte_len(),
+        ParsedFrame::Collection(tape) => tape.byte_len(),
         _ => 0,
     }
 }

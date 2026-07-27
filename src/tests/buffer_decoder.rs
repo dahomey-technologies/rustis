@@ -1,9 +1,9 @@
 use crate::{
     ClientError, Error, Result,
     client::{BufferConfig, RespLimits},
-    resp::{BufferDecoder, RespBuf, RespFrame, RespResponse},
+    resp::{BufferDecoder, RespResponse, RespView},
 };
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
 fn decode(str: &str) -> Result<Option<RespResponse>> {
@@ -12,40 +12,27 @@ fn decode(str: &str) -> Result<Option<RespResponse>> {
     buffer_decoder.decode(&mut buf)
 }
 
+/// Decodes `str`, which must hold exactly one complete frame.
+fn decode_one(str: &str) -> RespResponse {
+    decode(str).unwrap().expect("one complete frame")
+}
+
 #[test]
 fn integer() {
-    let result = decode(":12\r\n").unwrap();
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b":12\r\n")),
-            RespFrame::Integer(12)
-        )),
-        result
-    );
+    let response = decode_one(":12\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Integer(12))));
 
     let result = decode(":12\r").unwrap();
     assert_eq!(None, result);
 
     let result = decode(":12").unwrap();
     assert_eq!(None, result);
-
-    let result = decode(":a\r\n");
-    assert!(matches!(
-        result,
-        Err(Error::Client(ClientError::CannotParseInteger))
-    ));
 }
 
 #[test]
 fn string() -> Result<()> {
-    let result = decode("+OK\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"+OK\r\n")),
-            RespFrame::SimpleString(1..3)
-        )),
-        result
-    );
+    let response = decode_one("+OK\r\n");
+    assert!(matches!(response.view(), Ok(RespView::SimpleString(b"OK"))));
 
     let result = decode("+OK\r")?;
     assert_eq!(None, result);
@@ -58,14 +45,9 @@ fn string() -> Result<()> {
 
 #[test]
 fn error() -> Result<()> {
-    let result = decode("-ERR error\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"-ERR error\r\n")),
-            RespFrame::Error(1..10)
-        )),
-        result
-    );
+    let response = decode_one("-ERR error\r\n");
+    assert!(response.is_error());
+    assert!(matches!(response.view(), Ok(RespView::Error(b"ERR error"))));
 
     let result = decode("-ERR error\r")?;
     assert_eq!(None, result);
@@ -78,14 +60,8 @@ fn error() -> Result<()> {
 
 #[test]
 fn double() -> Result<()> {
-    let result = decode(",12.12\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b",12.12\r\n")),
-            RespFrame::Double(12.12)
-        )),
-        result
-    );
+    let response = decode_one(",12.12\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Double(d)) if d == 12.12));
 
     let result = decode(",12.12\r")?;
     assert_eq!(None, result);
@@ -93,25 +69,13 @@ fn double() -> Result<()> {
     let result = decode(",12.12")?;
     assert_eq!(None, result);
 
-    let result = decode(",a\r\n");
-    assert!(matches!(
-        result,
-        Err(Error::Client(ClientError::CannotParseDouble))
-    ));
-
     Ok(())
 }
 
 #[test]
 fn bool() -> Result<()> {
-    let result = decode("#f\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"#f\r\n")),
-            RespFrame::Boolean(false)
-        )),
-        result
-    );
+    let response = decode_one("#f\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Boolean(false))));
 
     let result = decode("#f\r")?;
     assert_eq!(None, result);
@@ -119,6 +83,9 @@ fn bool() -> Result<()> {
     let result = decode("#f")?;
     assert_eq!(None, result);
 
+    // Unlike a malformed number, a malformed boolean is a *framing* failure: the
+    // frame is `#` plus exactly one of `t`/`f` plus CRLF, so anything else means
+    // the frame boundary itself is unknown.
     let result = decode("#a\r\n");
     assert!(matches!(
         result,
@@ -130,14 +97,8 @@ fn bool() -> Result<()> {
 
 #[test]
 fn null() -> Result<()> {
-    let result = decode("_\r\n")?;
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"_\r\n")),
-            RespFrame::Null
-        )),
-        result
-    );
+    let response = decode_one("_\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Null)));
 
     let result = decode("_\r")?;
     assert_eq!(None, result);
@@ -150,32 +111,21 @@ fn null() -> Result<()> {
 
 #[test]
 fn bulk_string() {
-    let result = decode("$5\r\nhello\r\n").unwrap();
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"$5\r\nhello\r\n")),
-            RespFrame::BulkString(4..9)
-        )),
-        result
-    );
+    let response = decode_one("$5\r\nhello\r\n");
+    assert!(matches!(
+        response.view(),
+        Ok(RespView::BulkString(b"hello"))
+    ));
 
-    let result = decode("$7\r\nhel\r\nlo\r\n").unwrap(); // b"hel\r\nlo"
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"$7\r\nhel\r\nlo\r\n")),
-            RespFrame::BulkString(4..11)
-        )),
-        result
-    );
+    // A bulk string is length-prefixed, so an embedded CRLF is payload.
+    let response = decode_one("$7\r\nhel\r\nlo\r\n");
+    assert!(matches!(
+        response.view(),
+        Ok(RespView::BulkString(b"hel\r\nlo"))
+    ));
 
-    let result = decode("$0\r\n\r\n").unwrap(); // b""
-    assert_eq!(
-        Some(RespResponse::Frame(
-            RespBuf::from(Bytes::from_static(b"$0\r\n\r\n")),
-            RespFrame::BulkString(4..4)
-        )),
-        result
-    );
+    let response = decode_one("$0\r\n\r\n");
+    assert!(matches!(response.view(), Ok(RespView::BulkString(b""))));
 
     let result = decode("$5").unwrap();
     assert_eq!(None, result);
@@ -202,10 +152,7 @@ fn bulk_string() {
 #[test]
 fn array() -> Result<()> {
     let response = decode("*2\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?.expect("a complete array frame");
-    assert!(matches!(
-        response,
-        RespResponse::Frame(_, RespFrame::Array { root: 0, .. })
-    ));
+    assert!(matches!(response.view(), Ok(RespView::Array(_))));
     assert_eq!(
         vec!["hello".to_owned(), "world".to_owned()],
         response.to::<Vec<String>>()?
@@ -244,10 +191,7 @@ fn array() -> Result<()> {
 #[test]
 fn map() -> Result<()> {
     let response = decode("%1\r\n$5\r\nhello\r\n$5\r\nworld\r\n")?.expect("a complete map frame");
-    assert!(matches!(
-        response,
-        RespResponse::Frame(_, RespFrame::Map { root: 0, .. })
-    ));
+    assert!(matches!(response.view(), Ok(RespView::Map(_))));
     let map = response.to::<std::collections::HashMap<String, String>>()?;
     assert_eq!(Some(&"world".to_owned()), map.get("hello"));
 
@@ -483,4 +427,65 @@ fn the_decoder_enforces_the_configured_parser_limits() {
         decoder.decode(&mut buf),
         Err(Error::Client(ClientError::CollectionLengthTooLarge))
     ));
+}
+
+#[test]
+fn a_malformed_scalar_frames_and_fails_at_read() {
+    // RESP framing only needs the `\r\n`, so a scalar whose payload does not
+    // parse still delimits a frame. Rejecting it at decode time would tear down
+    // the socket and take every other in-flight command with it; rejecting it at
+    // read time fails only the command that received it, and the stream stays
+    // aligned on the next frame.
+    for malformed in [":a\r\n", ",abc\r\n"] {
+        let response = decode_one(malformed);
+        assert!(
+            response.to::<i64>().is_err(),
+            "{malformed} must fail at read"
+        );
+    }
+}
+
+#[test]
+fn a_malformed_scalar_leaves_the_next_frame_readable() {
+    // The point of framing a malformed payload: the bytes after it are still a
+    // frame boundary, so a pipelined reply behind a bad one still decodes.
+    let mut decoder = BufferDecoder::new();
+    let mut buf = BytesMut::new();
+    buf.extend_from_slice(b":a\r\n:12\r\n");
+
+    let bad = decoder
+        .decode(&mut buf)
+        .unwrap()
+        .expect("first frame framed");
+    assert!(bad.to::<i64>().is_err());
+
+    let good = decoder
+        .decode(&mut buf)
+        .unwrap()
+        .expect("second frame complete");
+    assert_eq!(12i64, good.to::<i64>().unwrap());
+    assert!(buf.is_empty());
+}
+
+#[test]
+fn a_top_level_null_collection_decodes_as_null() {
+    // `*-1\r\n` is a RESP2 null array: a collection tag with no collection. The
+    // decoder must surface it as Null, and its `*` must never be read back as a
+    // scalar.
+    let response = decode_one("*-1\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Null)));
+    assert_eq!(None, response.to::<Option<String>>().unwrap());
+}
+
+#[test]
+fn a_top_level_scalar_reads_the_same_value_twice() {
+    // A response is read once on the normal path but repeatedly when retained
+    // (a cache entry). Reading must be idempotent, not consume anything.
+    let response = decode_one(":12\r\n");
+    assert_eq!(12i64, response.to::<i64>().unwrap());
+    assert_eq!(12i64, response.to::<i64>().unwrap());
+
+    let response = decode_one("$5\r\nhello\r\n");
+    assert_eq!("hello", response.to::<String>().unwrap());
+    assert_eq!("hello", response.to::<String>().unwrap());
 }

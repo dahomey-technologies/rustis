@@ -85,6 +85,12 @@ contains breaking changes; read that section before upgrading.
   of all three collapsing to `Value::Null`. RESP's empty-versus-nil distinction
   is preserved: a nil reply (`_` / `*-1`) still decodes to `Value::Null`. Typed
   deserialization (`Vec<T>` → `[]`) is unaffected.
+- **Behavior change** — a malformed numeric reply (`:a\r\n`, `,abc\r\n`) now fails
+  the command that received it instead of tearing down the connection. RESP
+  framing only needs the terminating `\r\n`, so the stream stays aligned and the
+  other in-flight commands on the connection are unaffected. A malformed boolean
+  (`#a\r\n`) still fails the connection: its frame length depends on the payload
+  being `t` or `f`, so anything else leaves the frame boundary unknown.
 - **Behavior change** — an integer reply that does not fit the requested type is
   now an error instead of a silent truncation. `Integer(300)` deserialized as
   `u8` used to yield `44`; it now fails. `i64::MIN` is accepted (it was
@@ -136,7 +142,8 @@ contains breaking changes; read that section before upgrading.
 - `RespResponse::compact()` copies a response's referenced bytes into
   freshly-sized buffers, releasing the larger recycled network block a retained
   response would otherwise pin. The client-side cache now compacts entries before
-  storing them.
+  storing them. A numeric reply is decoded on the spot rather than copied, so a
+  cache entry read a thousand times is decoded once.
 - `cargo-fuzz` targets over the RESP read path, and a `fuzz_api` module exposing
   the parser entry points they drive.
 
@@ -148,6 +155,14 @@ contains breaking changes; read that section before upgrading.
   lookup instead of re-parsing the collection from the start. This removes the
   double-parse that the previous 5-range frame cache fell back to beyond its
   fifth element, and makes descending into nested replies O(1) per subtree.
+  Walking a collection allocates nothing per element, which makes a large reply
+  about 10 % faster to decode end to end.
+- **A reply's value is produced when it is read, not when it is received.** The
+  parser frames — it finds where a reply ends and indexes a collection's elements
+  — and the value itself is decoded by whichever task asks for it. A connection's
+  network task is shared by all of its callers, so the arithmetic of an integer or
+  a double reply no longer runs there. End-to-end throughput is unchanged; what
+  changes is where the work happens, not how much of it there is.
 - **The streaming decoder now resumes across TCP chunks.** A reply split over
   several network reads is parsed incrementally — the partial tape and an
   explicit parse stack are carried forward — instead of re-parsing the whole
@@ -162,7 +177,7 @@ contains breaking changes; read that section before upgrading.
   shapes.
 - **The network task was optimized for throughput**, cutting per-command
   overhead: the message and result channels moved to tokio's `mpsc`/`oneshot`,
-  `Message` shrank from 2536 to 288 bytes, replies are dispatched straight to the
+  `Message` shrank from 2536 to 232 bytes, replies are dispatched straight to the
   waiting caller as they decode rather than after the batch completes, the send
   wave is capped so reading is never starved by writing, and the TCP stream is
   split without a `BiLock`. Measured against `0.19.3` on a single connection to a

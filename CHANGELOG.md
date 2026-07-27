@@ -8,7 +8,7 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
-## [0.20.0] - 2026-07-26
+## [0.20.0] - 2026-07-27
 
 This release closes a large correctness and performance pass over the RESP
 layer, the network task, the cluster client and the client-side cache. It
@@ -142,6 +142,13 @@ contains breaking changes; read that section before upgrading.
   the number of arguments it contains — the shape `SORTBY 2 field ASC` and
   `PARAMS 4 n1 v1 n2 v2` require. The count comes from a dry run of the same
   serialization, so it cannot drift from what is written.
+- `resp::CommandBuilder::arg_with_count_and_step` and
+  `resp::CommandBuilder::key_with_count_and_step`, which prefix a collection with
+  the number of `step`-sized groups it holds rather than its raw argument count —
+  the shapes `HSETEX key FIELDS numfields field value …` and `MSETEX numkeys key
+  value …` require. The `key_` form additionally marks every `step`-th element as
+  a routing key for the cluster client. Both derive their count the same way
+  `arg_counted` does.
 - The examples now declare `tokio-runtime` in their `required-features`. They are
   written with `#[tokio::main]`, so `cargo test --no-default-features --features
   async-std-runtime,…` used to fail to build on them rather than run the suite;
@@ -152,7 +159,8 @@ contains breaking changes; read that section before upgrading.
   depth, bulk length and collection length), `Config::max_messages_per_wave`,
   `Config::max_command_attempts` and `SentinelConfig::max_discovery_rounds`.
   `Config::validate()` runs at connection time and rejects a value that would
-  disable a behavior.
+  disable a behavior. `RespLimits::DEFAULT` and `BufferConfig::DEFAULT` give the
+  same defaults in a `const` context.
 - The parser accepts RESP3 attribute (`|`) and big number (`(`) frames.
 - `RespResponse::compact()` copies a response's referenced bytes into
   freshly-sized buffers, releasing the larger recycled network block a retained
@@ -161,6 +169,10 @@ contains breaking changes; read that section before upgrading.
   cache entry read a thousand times is decoded once.
 - `cargo-fuzz` targets over the RESP read path, and a `fuzz_api` module exposing
   the parser entry points they drive.
+- `resp::bench_support`, the benchmark counterpart to `fuzz_api`: thin entry
+  points into the decode-and-deserialize path, isolated from the network, so an
+  external `benches/*.rs` crate can measure the parser on hand-built RESP
+  buffers. Gated behind the `bench` feature and compiled out of shipped builds.
 
 ### Changed
 

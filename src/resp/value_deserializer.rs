@@ -138,7 +138,10 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
-            Value::Array(a) if let [single] = a.as_slice() => i64::deserialize(single)?,
+            Value::Array(a) => match a.as_slice() {
+                [single] => i64::deserialize(single)?,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -223,7 +226,10 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
-            Value::Array(a) if let [single] = a.as_slice() => u64::deserialize(single)?,
+            Value::Array(a) => match a.as_slice() {
+                [single] => u64::deserialize(single)?,
+                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            },
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -464,6 +470,21 @@ impl<'de> Deserializer<'de> for &'de Value {
     where
         V: Visitor<'de>,
     {
+        // Heuristic for decoding a struct out of a flat RESP2 array; RESP3 maps
+        // take the `Value::Map` path below and need no guessing. An array is
+        // read as field/value pairs when it holds more elements than the struct
+        // has fields, or when its first element is a simple string naming one of
+        // them; otherwise it is read as a positional tuple.
+        //
+        // This is looser than the rule in `resp_deserializer.rs`, which requires
+        // `len >= 2 * fields` *and* a matching first field name and errors
+        // otherwise. Here a 4-element array for a 3-field struct is read as
+        // pairs rather than rejected, and the name check only fires on
+        // `SimpleString` — field names arrive as bulk strings.
+        //
+        // The boundary is narrow either way: the crate forces `HELLO 3`, so this
+        // is only reachable for the commands that still answer a flat array
+        // under RESP3.
         fn check_resp2_array(values: &[Value], fields: &'static [&'static str]) -> bool {
             if values.len() > fields.len() {
                 true
@@ -594,13 +615,16 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess<'de> {
         K: DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(key) => match key {
-                Value::Array(values) if let [key, value] = values.as_slice() => {
+            Some(entry) => {
+                if let Value::Array(values) = entry
+                    && let [key, value] = values.as_slice()
+                {
                     self.value = Some(value);
                     seed.deserialize(key).map(Some)
+                } else {
+                    seed.deserialize(entry).map(Some)
                 }
-                _ => seed.deserialize(key).map(Some),
-            },
+            }
             None => Ok(None),
         }
     }

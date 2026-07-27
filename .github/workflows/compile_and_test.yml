@@ -35,6 +35,54 @@ jobs:
         run: cargo check --release
       - name: Checking style
         run: cargo fmt --all -- --check
+      # Broken intra-doc links compile fine and only show up as dead links on
+      # docs.rs, so nothing here caught them until this step existed. Denying
+      # rustdoc warnings also covers links from public docs into private items,
+      # which promise the reader a page that will never be rendered.
+      - name: Checking documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache
+
+  # Compile with the exact toolchain `rust-version` promises, so the promise is
+  # verified rather than asserted. The version is read from `Cargo.toml` and not
+  # repeated here: one source of truth, and raising the floor stays a one-line
+  # manifest change.
+  #
+  # `cargo check` rather than `--all-targets`: the MSRV covers the library a
+  # downstream crate compiles, not the dev-dependencies of our own test suite,
+  # which are free to require a newer compiler. Both runtimes are checked —
+  # `async-std-runtime` pulls a different dependency tree, so it can carry a
+  # different floor.
+  #
+  # Cargo's v3 resolver reads `rust-version` when picking dependency versions,
+  # so a dependency that raises its own MSRV is resolved away instead of
+  # breaking this job. `Cargo.lock` is not committed, which is what makes that
+  # resolution happen on every run.
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: Read the MSRV from Cargo.toml
+        id: msrv
+        run: |
+          VERSION=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
+          test -n "$VERSION" || { echo "no rust-version in Cargo.toml"; exit 1; }
+          echo "declared MSRV: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Install the declared toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - name: cargo check (tokio)
+        run: cargo check --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache
+      - name: cargo check (async-std)
+        run: cargo check --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache
 
   # Enforce the panic policy declared in `src/lib.rs`: the explicit-panic family
   # crate-wide, plus `clippy::indexing_slicing` in `network/` and `resp/`. Those

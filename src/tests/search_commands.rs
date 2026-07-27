@@ -12,7 +12,7 @@ use crate::{
     },
     network::sleep,
     resp::{RefBulkString, Value},
-    tests::{get_test_client, log_try_init},
+    tests::{TestClient, get_test_client, log_try_init},
 };
 use rand::{Rng, seq::IndexedRandom};
 use serial_test::serial;
@@ -1587,6 +1587,282 @@ async fn ft_suglen() -> Result<()> {
 
     let len = client.ft_suglen("key").await?;
     assert_eq!(2, len);
+
+    Ok(())
+}
+
+/// `FT.AGGREGATE ... LOAD count ...` — `count` is the number of arguments that
+/// follow, so an attribute renamed with `AS` accounts for three of them.
+#[test]
+fn ft_aggregate_load_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_aggregate(
+            "index",
+            "*",
+            FtAggregateOptions::default()
+                .load(FtAttribute::new("@a"))
+                .load(FtAttribute::new("@b").r#as("c")),
+        )
+        .command;
+    assert_eq!("FT.AGGREGATE index * LOAD 4 @a @b AS c", &cmd.to_string());
+
+    Ok(())
+}
+
+/// `FT.SEARCH ... RETURN count ...` — same argument-counting rule as LOAD.
+#[test]
+fn ft_search_return_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default()
+                ._return(FtAttribute::new("@a"))
+                ._return(FtAttribute::new("@b").r#as("c")),
+        )
+        .command;
+    assert_eq!("FT.SEARCH index * RETURN 4 @a @b AS c", &cmd.to_string());
+
+    Ok(())
+}
+
+/// `PARAMS nargs name value ...` — `nargs` counts every token, so two per pair.
+#[test]
+fn ft_aggregate_params_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_aggregate(
+            "index",
+            "*",
+            FtAggregateOptions::default()
+                .param("n1", "v1")
+                .param("n2", "v2"),
+        )
+        .command;
+    assert_eq!(
+        "FT.AGGREGATE index * PARAMS 4 n1 v1 n2 v2",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn ft_search_params_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default()
+                .param("n1", "v1")
+                .param("n2", "v2"),
+        )
+        .command;
+    assert_eq!("FT.SEARCH index * PARAMS 4 n1 v1 n2 v2", &cmd.to_string());
+
+    Ok(())
+}
+
+/// `FT.SPELLCHECK ... TERMS {INCLUDE|EXCLUDE} dictionary` takes no count.
+#[test]
+fn ft_spellcheck_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_spellcheck(
+            "index",
+            "query",
+            FtSpellCheckOptions::default()
+                .distance(2)
+                .terms(FtTermType::Include, "dict"),
+        )
+        .command;
+    assert_eq!(
+        "FT.SPELLCHECK index query DISTANCE 2 TERMS INCLUDE dict",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+/// Renaming an attribute with `AS`, and passing more than one query parameter,
+/// are the two shapes whose argument count used to be under-reported. Both are
+/// rejected outright by the server when the count is wrong, so this exercises
+/// them end to end.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_renamed_attributes_and_params() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc:")
+                .schema(FtFieldSchema::identifier("a").field_type(FtFieldType::Text))
+                .schema(FtFieldSchema::identifier("b").field_type(FtFieldType::Text)),
+        )
+        .await?;
+    wait_for_index_scanned(&client, "index").await?;
+
+    client
+        .hset("doc:1", [("a", "hello"), ("b", "world")])
+        .await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "@a:($p1) | @b:($p2)",
+            FtSearchOptions::default()
+                ._return(FtAttribute::new("b").r#as("renamed"))
+                .param("p1", "hello")
+                .param("p2", "nothing")
+                .dialect(2),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!(
+        vec![("renamed".to_owned(), "world".to_owned())],
+        result.results[0].extra_attributes
+    );
+
+    let result = client
+        .ft_aggregate(
+            "index",
+            "@a:($p1) | @b:($p2)",
+            FtAggregateOptions::default()
+                .load(FtAttribute::new("b").r#as("renamed"))
+                .param("p1", "hello")
+                .param("p2", "nothing")
+                .dialect(2),
+        )
+        .await?;
+    assert_eq!(1, result.results.len());
+    assert_eq!(
+        vec![("renamed".to_owned(), "world".to_owned())],
+        result.results[0].extra_attributes
+    );
+
+    Ok(())
+}
+
+/// `FT.HYBRID` declares an argument count for most of its clauses. This pins the
+/// exact bytes of the ones that do, so that deriving those counts cannot change
+/// what goes on the wire.
+#[test]
+fn ft_hybrid_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_hybrid::<Value>(
+            "index",
+            FtHybridSearch::new("bicycle").scorer(["BM25"]),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: Some(30),
+            }),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: Some(60.0),
+                    window: Some(40),
+                })
+                .load(["@content"])
+                .sortby("@content", SortOrder::Desc)
+                .param("vec", b"ab"),
+        )
+        .command;
+    assert_eq!(
+        "FT.HYBRID index SEARCH bicycle SCORER 1 BM25 VSIM @embedding $vec KNN 4 K 2 EF_RUNTIME 30 \
+         COMBINE RRF 4 CONSTANT 60.0 WINDOW 40 LOAD 1 @content SORTBY 2 @content DESC \
+         PARAMS 2 vec ab",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .ft_hybrid::<Value>(
+            "index",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Range {
+                radius: 0.5,
+                epsilon: None,
+            }),
+            FtHybridOptions::default().combine(FtHybridCombine::Linear {
+                alpha: 0.3,
+                beta: 0.7,
+                window: None,
+            }),
+        )
+        .command;
+    assert_eq!(
+        "FT.HYBRID index SEARCH bicycle VSIM @embedding $vec RANGE 2 RADIUS 0.5 \
+         COMBINE LINEAR 4 ALPHA 0.3 BETA 0.7",
+        &cmd.to_string()
+    );
+
+    // `COMBINE RRF` with no argument at all is dropped: RRF is already the default.
+    let cmd = TestClient
+        .ft_hybrid::<Value>(
+            "index",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec"),
+            FtHybridOptions::default().combine(FtHybridCombine::Rrf {
+                constant: None,
+                window: None,
+            }),
+        )
+        .command;
+    assert_eq!(
+        "FT.HYBRID index SEARCH bicycle VSIM @embedding $vec",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+/// The `FLAT` and `HNSW` vector field clauses declare the number of attribute
+/// tokens that follow them.
+#[test]
+fn ft_create_vector_field_args() -> Result<()> {
+    let cmd = TestClient
+        .ft_create(
+            "index",
+            FtCreateOptions::default().schema(FtFieldSchema::identifier("v").field_type(
+                FtFieldType::Vector(Some(FtVectorFieldAlgorithm::Flat(
+                    FtFlatVectorFieldAttributes::new(
+                        FtVectorType::Float32,
+                        4,
+                        FtVectorDistanceMetric::L2,
+                    ),
+                ))),
+            )),
+        )
+        .command;
+    assert_eq!(
+        "FT.CREATE index SCHEMA v VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC L2",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .ft_create(
+            "index",
+            FtCreateOptions::default().schema(
+                FtFieldSchema::identifier("v").field_type(FtFieldType::Vector(Some(
+                    FtVectorFieldAlgorithm::Flat(
+                        FtFlatVectorFieldAttributes::new(
+                            FtVectorType::Float32,
+                            4,
+                            FtVectorDistanceMetric::L2,
+                        )
+                        .initial_cap(100)
+                        .block_size(10),
+                    ),
+                ))),
+            ),
+        )
+        .command;
+    assert_eq!(
+        "FT.CREATE index SCHEMA v VECTOR FLAT 10 TYPE FLOAT32 DIM 4 DISTANCE_METRIC L2 \
+         INITIAL_CAP 100 BLOCK_SIZE 10",
+        &cmd.to_string()
+    );
 
     Ok(())
 }

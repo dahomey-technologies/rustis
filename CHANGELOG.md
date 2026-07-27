@@ -69,6 +69,12 @@ contains breaking changes; read that section before upgrading.
   `data_type`, `dim`, `distance_metric`). All of these types are
   `#[non_exhaustive]` as of this release, so equivalent additions will not break
   again.
+- `FtFlatVectorFieldAttributes::num_attributes` and
+  `FtHnswVectorFieldAttributes::num_attributes` were removed, along with the
+  unused `resp::SmallVecWithCounter`. The two `num_attributes` were
+  hand-maintained mirrors of the fields their struct serializes, which a new
+  field would have silently invalidated; the count now comes from the
+  serialization itself.
 - `CommandBuilder::kill_connection_on_write` is no longer public. It is a
   failure-injection hook for the crate's own tests and is now gated behind
   `cfg(test)`, so it is absent from shipped builds instead of being part of the
@@ -132,6 +138,10 @@ contains breaking changes; read that section before upgrading.
   delete — and for `XACKDEL` acknowledge — stream entries under an explicit
   `StreamEntryDeletionPolicy`, and report per-id whether each entry was removed,
   was missing, or was kept because the policy forbade it.
+- `resp::CommandBuilder::arg_counted`, which writes a labeled clause followed by
+  the number of arguments it contains — the shape `SORTBY 2 field ASC` and
+  `PARAMS 4 n1 v1 n2 v2` require. The count comes from a dry run of the same
+  serialization, so it cannot drift from what is written.
 - The examples now declare `tokio-runtime` in their `required-features`. They are
   written with `#[tokio::main]`, so `cargo test --no-default-features --features
   async-std-runtime,…` used to fail to build on them rather than run the suite;
@@ -242,6 +252,15 @@ contains breaking changes; read that section before upgrading.
   typo in command-kind detection is corrected; and a command-builder
   serialization error is deferred to send time instead of panicking during the
   build.
+- **Search: several clauses declared the wrong argument count and were rejected
+  by the server.** `FT.AGGREGATE`'s `LOAD` and `FT.SEARCH`'s `RETURN` announced
+  the number of attributes where Redis counts arguments, so renaming an attribute
+  (`FtAttribute::new("a").r#as("b")`) produced `LOAD 1 a AS b` and failed with
+  `Unknown argument AS`. `PARAMS` announced the number of pairs instead of twice
+  that, so any query with more than one parameter failed. `FT.SPELLCHECK`'s
+  `TERMS` was prefixed with a count the syntax does not take. These counts are
+  now derived from what is actually written rather than from the collection's
+  length, so they cannot disagree with it.
 - `resp::Value`'s `Boolean` compares by value rather than by discriminant.
 - Closing the last `Client` clone closes the connection race-free.
 - A collection element that fails to parse mid-iteration now surfaces an error

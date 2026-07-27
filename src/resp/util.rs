@@ -1,8 +1,8 @@
+use crate::resp::ArgCounter;
 use serde::{
     Deserializer, Serialize, Serializer,
     de::{self, DeserializeOwned, DeserializeSeed, Visitor},
 };
-use smallvec::SmallVec;
 use std::{fmt, marker::PhantomData};
 
 /// Deserialize a Vec of pairs from a sequence
@@ -251,22 +251,39 @@ pub(crate) fn serialize_flag<S: serde::Serializer>(
     serializer.serialize_unit()
 }
 
-/// Serializes a slice prefixed by its length.
-/// Use with #[serde(serialize_with = "serialize_slice_with_len")]
-pub(crate) fn serialize_slice_with_len<S, T>(slice: &[T], serializer: S) -> Result<S::Ok, S::Error>
+/// Serializes a slice prefixed by the number of command arguments it produces.
+/// Use with #[serde(serialize_with = "serialize_slice_with_arg_count")]
+///
+/// Clauses such as `LOAD count field [field ...]` or `PARAMS nargs name value
+/// [name value ...]` count the *arguments* that follow, not the elements of the
+/// collection they came from — one element can produce several arguments, as
+/// `identifier AS property` and `name value` do. The count therefore comes from
+/// an [`ArgCounter`] dry run rather than from `slice.len()`.
+///
+/// The dry run is independent of `S`, so this works whichever serializer the
+/// value is being written to. When the enclosing value is itself passed to a
+/// counting builder method the slice is walked twice, which costs nothing but
+/// CPU on a few elements.
+pub(crate) fn serialize_slice_with_arg_count<S, T>(
+    slice: &[T],
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     T: Serialize,
 {
-    // Astuce : Le tuple (usize, &[T]) est sérialisé séquentiellement
-    (slice.len(), slice).serialize(serializer)
+    // The tuple `(usize, &[T])` is serialized sequentially.
+    (count_args::<_, S::Error>(&slice)?, slice).serialize(serializer)
 }
 
-pub struct SmallVecWithCounter<T, const N: usize>(usize, SmallVec<[T; N]>);
-
-impl<T, const N: usize> SmallVecWithCounter<T, N> {
-    pub fn push(&mut self, value: T) {
-        self.0 += 1;
-        self.1.push(value);
-    }
+/// Counts the command arguments a value produces, for the clauses that must
+/// declare that number to the server.
+pub(crate) fn count_args<T, E>(value: &T) -> Result<usize, E>
+where
+    T: Serialize + ?Sized,
+    E: serde::ser::Error,
+{
+    let mut counter = ArgCounter::default();
+    value.serialize(&mut counter).map_err(E::custom)?;
+    Ok(counter.count)
 }

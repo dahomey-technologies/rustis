@@ -107,6 +107,15 @@ contains breaking changes; read that section before upgrading.
   `u8` used to yield `44`; it now fails. `i64::MIN` is accepted (it was
   previously rejected). This applies to both the RESP deserializer and the
   `Value` deserializer, which stay consistent with each other.
+- Repairing the commands listed under *Fixed* changed four signatures:
+  - `ClusterCommands::cluster_info` takes no argument (was `slot`, `count`).
+  - `ClusterCommands::cluster_getkeysinslot` returns `R: Response` (was `()`).
+  - `TimeSeriesCommands::ts_decrby` returns `u64` (was `()`).
+  - Eight methods lost a generic type parameter — `ClusterCommands::cluster_addslots`,
+    `cluster_addslotsrange`, `cluster_count_failure_reports`, `cluster_delslots`,
+    `cluster_delslotsrange`, `cluster_forget`, `SearchCommands::ft_profile_search`
+    and `SentinelCommands::sentinel_failover`. Only a call site passing the
+    parameter explicitly (`cluster_forget::<T>(…)`) needs changing.
 
 ### Security
 
@@ -222,6 +231,29 @@ contains breaking changes; read that section before upgrading.
 
 ### Fixed
 
+- **`zadd_incr` never incremented anything.** It omitted the `INCR` keyword, so
+  it sent a plain `ZADD` and answered the number of elements added — `Some(0.0)`
+  for an existing member — instead of the member's new score.
+- **`vlinks_with_score` never asked for the scores.** It emitted the same
+  `VLINKS` command as `vlinks`, so it answered bare neighbour names and any
+  attempt to deserialize the scores failed.
+- **`cluster_info` could not succeed.** It sent two arguments `CLUSTER INFO` does
+  not accept, and `ClusterInfo` was derived as if the reply were a map when the
+  server answers a text blob of `field:value` lines. The type now parses that
+  text, tolerating both the counters a server omits and the fields a newer one
+  adds.
+- **`cluster_getkeysinslot` and `ts_decrby` threw their reply away.** Both were
+  typed `()` where the server does answer something — the names of the keys in
+  the slot, and the timestamp of the upserted sample.
+- **Eight command methods were effectively uncallable.** They carried a generic
+  type parameter that appeared nowhere in their signature, so it could not be
+  inferred and reaching them required a turbofish naming a type that was never
+  used: `cluster_addslots`, `cluster_addslotsrange`,
+  `cluster_count_failure_reports`, `cluster_delslots`, `cluster_delslotsrange`,
+  `cluster_forget`, `ft_profile_search` and `sentinel_failover`.
+- `ClusterInfo`, `ClusterState`, `ClusterBumpEpochResult`, `ClusterLinkInfo` and
+  `ClusterLinkDirection` now derive `Debug`, and the two enums `PartialEq`, like
+  the other types decoded from a cluster reply.
 - **Concurrent pipelines could return each other's replies.** `pending_responses`
   was shared across batches instead of being scoped to one, corrupting results
   under concurrent pipelined use.

@@ -421,9 +421,15 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             }
             RespView::Null => "",
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
-            // A synthesized number has no wire bytes to borrow, so it cannot be
-            // served as a borrowed `&str`; `deserialize_string` renders it.
-            RespView::Integer(..) | RespView::Double(..) => {
+            // Nothing to borrow: a boolean was never text on the wire, and a
+            // synthesized number has no wire bytes at all. Both are rendered, and
+            // the rendering lives in `deserialize_string` so the two entry points
+            // cannot disagree on which replies are readable as text, nor on the
+            // text they produce. Serde reaches this one through
+            // `deserialize_identifier` — struct field names, enum variant names —
+            // and the other for a `String`, so a caller's choice of target type
+            // must not decide whether their command succeeds.
+            RespView::Boolean(_) | RespView::Integer(..) | RespView::Double(..) => {
                 return self.deserialize_string(visitor);
             }
             _ => return Err(Error::Client(ClientError::CannotParseStr)),

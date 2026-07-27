@@ -247,3 +247,7 @@ contains breaking changes; read that section before upgrading.
 - A collection element that fails to parse mid-iteration now surfaces an error
   instead of silently truncating the iteration.
 - `Debug` on a response renders the decoded reply rather than the internal tape.
+- The deserializer's two string entry points agree. A reply readable as a `String`
+  is now equally readable where serde asks for a borrowed string — a struct field
+  name or an enum variant name — instead of the target type deciding whether the
+  command succeeds.

@@ -51,7 +51,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// (however a new version of the configuration will be published
     /// so that the other Sentinels will update their configurations).
     #[must_use]
-    fn sentinel_failover<N>(self, master_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_failover(self, master_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SENTINEL").arg("FAILOVER").arg(master_name))
     }
 

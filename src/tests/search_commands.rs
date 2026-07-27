@@ -1155,6 +1155,19 @@ async fn ft_profile() -> Result<()> {
 
     log::debug!("result: {result:?}");
 
+    // Under RESP3, FT.PROFILE answers a map holding the query's own reply next
+    // to the profiling report.
+    let result = client.ft_profile_search("index", false, "*").await?;
+    log::debug!("result: {result:?}");
+    let Value::Map(parts) = result else {
+        panic!("expected a map, got {result:?}");
+    };
+    assert!(parts.contains_key(&Value::SimpleString("Profile".to_owned())));
+    assert!(parts.contains_key(&Value::SimpleString("Results".to_owned())));
+
+    let result = client.ft_profile_search("index", true, "*").await?;
+    assert!(matches!(result, Value::Map(_)));
+
     Ok(())
 }
 

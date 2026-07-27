@@ -232,40 +232,30 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     }
 
     /// One-shot parse of a single frame from a complete buffer. Returns the frame
-    /// and its byte length, or [`Error::EOF`] if the buffer stops mid-frame — the
-    /// one-shot callers treat a truncated buffer as an error, not a suspension.
+    /// and its byte length, or [`Error::EOF`] if the buffer stops mid-frame: a
+    /// one-shot caller has no next chunk, so where [`Self::parse_resumable`]
+    /// suspends, this reports an error.
     ///
-    /// The scalar branch never names a `Vec`: the collection stack is created only
-    /// inside the collection branch, so a scalar reply — the hot request/response
-    /// path — stays flat and allocation-free. The skeleton mirrors
-    /// [`Self::parse_resumable`]; both defer the actual work to
-    /// `skip_leading_attributes`, [`scalar_end`] and `begin_collection`, so
-    /// the two cannot diverge on where a value ends.
-    #[inline(always)]
+    /// That is the whole difference between the two. The stack below is a local
+    /// nothing ever resumes from, and `Vec::new()` allocates nothing, so a scalar
+    /// reply still reaches no heap. The network path is the streaming decoder's;
+    /// this one serves [`crate::resp::RespBuf::to`], the fuzz harness and the
+    /// tests.
     pub fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
-        if self.buf.get(self.pos) == Some(&ATTRIBUTE_TAG) {
-            self.pos = skip_leading_attributes(self.buf, self.pos, 0, &self.limits)?;
+        let mut stack = Vec::new();
+        match self.parse_resumable(&mut stack)? {
+            Some(frame) => Ok((frame, self.pos)),
+            None => Err(Error::EOF),
         }
-        let tag = *self.buf.get(self.pos).ok_or_else(|| Error::EOF)?;
-        if is_collection_tag(tag) {
-            let mut stack = Vec::new();
-            return match self.begin_collection(tag, &mut stack)? {
-                Some(frame) => Ok((frame, self.pos)),
-                None => Err(Error::EOF),
-            };
-        }
-        let at = self.pos;
-        self.pos = scalar_end(self.buf, at, self.limits.max_bulk_length)?;
-        Ok((ParsedFrame::Scalar { at }, self.pos))
     }
 
     /// Resumable parse driven by the streaming decoder, over a caller-owned
     /// `stack`: `Ok(Some(frame))` = a whole frame is ready; `Ok(None)` = more
     /// bytes are needed (the decoder keeps `stack`, the partial tape, and
     /// [`Self::pos`] to resume); `Err` = a malformed frame. A suspended frame
-    /// (non-empty `stack`) re-enters its element loop directly; a fresh one takes
-    /// the same scalar-inline / collection-delegate path as [`Self::parse`], but
-    /// rewinds `pos` on a partial value so the next chunk re-attempts it.
+    /// (non-empty `stack`) re-enters its element loop directly; a fresh one reads a
+    /// scalar inline and hands a collection to `begin_collection`, rewinding `pos`
+    /// on a partial value so the next chunk re-attempts it.
     pub(crate) fn parse_resumable(
         &mut self,
         stack: &mut Vec<OpenCollection>,
@@ -312,9 +302,9 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
 
     /// Opens the collection whose header is at `self.pos` and runs the element
     /// loop to build its tape. The out-of-line, cold counterpart to the scalar
-    /// path in [`Self::parse`] / [`Self::parse_resumable`]. On a partial header it
-    /// rewinds `pos` to the collection tag (any leading attributes are already
-    /// consumed and remain buffered), so a later chunk re-reads the header.
+    /// path in [`Self::parse_resumable`]. On a partial header it rewinds `pos` to
+    /// the collection tag (any leading attributes are already consumed and remain
+    /// buffered), so a later chunk re-reads the header.
     fn begin_collection(
         &mut self,
         tag: u8,

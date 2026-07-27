@@ -42,7 +42,7 @@
 //!
 //! [`NULL_TAG`]: super::NULL_TAG
 
-use crate::resp::{ARRAY_TAG, MAP_TAG, PUSH_TAG, SET_TAG};
+use crate::resp::is_collection_tag;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// Width of one tape node, in bytes. A power of two so node `i` starts at
@@ -61,16 +61,6 @@ pub(crate) const MAX_TAPE_PAYLOAD: u64 = PAYLOAD_MASK;
 /// `head + 1`), so any value outside the RESP tag set is fine; `0` is chosen so
 /// a stray read of it is obviously not a real element.
 pub(crate) const TAPE_LEN_TAG: u8 = 0;
-
-/// `true` if `tag` marks a collection head (array, map, set or push). Every other
-/// emitted tag marks a scalar node.
-///
-/// A free function rather than a [`TapeNode`] method because the parser also
-/// applies it to a tag byte read straight from the wire, before any node exists.
-#[inline(always)]
-pub(crate) fn is_collection_tag(tag: u8) -> bool {
-    matches!(tag, ARRAY_TAG | MAP_TAG | SET_TAG | PUSH_TAG)
-}
 
 /// One tape node: a tag byte packed with a 56-bit payload.
 #[repr(transparent)]

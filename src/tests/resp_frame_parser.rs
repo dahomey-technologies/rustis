@@ -282,6 +282,31 @@ fn a_lowered_collection_limit_is_enforced_on_an_attribute_header() {
 }
 
 #[test]
+fn a_lowered_nesting_limit_counts_depth_inside_an_attribute_payload() {
+    // An attribute's values are skipped by a loop of their own, and they nest as
+    // deeply as any reply. They must be counted one level below the attribute that
+    // carries them, or a crafted attribute would buy back a level of nesting per
+    // attribute and walk past the bound the reply itself is held to.
+    // |1\r\n $1\r\na\r\n  then a value nested two, then three, levels deep.
+    let within = b"|1\r\n$1\r\na\r\n*1\r\n*1\r\n:1\r\n:9\r\n";
+    let beyond = b"|1\r\n$1\r\na\r\n*1\r\n*1\r\n*1\r\n:1\r\n:9\r\n";
+    assert!(parse(within).is_ok());
+    assert!(parse(beyond).is_ok());
+
+    let limits = RespLimits {
+        max_nesting_depth: 3,
+        ..Default::default()
+    };
+    assert!(parse_with_limits(within, limits).is_ok());
+    assert!(matches!(
+        parse_with_limits(beyond, limits),
+        Err(crate::Error::Client(
+            crate::ClientError::MaxNestingDepthExceeded
+        ))
+    ));
+}
+
+#[test]
 fn a_raised_bulk_limit_reads_back_without_being_re_capped() {
     // Raising the cap must work end-to-end: the frame has to parse *and* read
     // back. The read-back path re-derives each scalar's layout, so if it re-applied

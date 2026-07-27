@@ -248,7 +248,7 @@ fn a_lowered_collection_limit_rejects_a_cardinality_the_default_accepts() {
 #[test]
 fn a_raised_bulk_limit_reads_back_without_being_re_capped() {
     // Raising the cap must work end-to-end: the frame has to parse *and* read
-    // back. The read-back path re-derives element bounds, so if it re-applied
+    // back. The read-back path re-derives each scalar's layout, so if it re-applied
     // the default cap instead of trusting the already-validated frame, a value
     // legal under the raised limit would decode as garbage or vanish.
     let payload = "x".repeat(600);
@@ -270,7 +270,7 @@ fn a_raised_bulk_limit_reads_back_without_being_re_capped() {
 
 #[test]
 fn a_lowered_bulk_limit_is_enforced_inside_a_collection() {
-    // The element loop reaches bulk values through `element_bounds`, a separate
+    // The element loop reaches bulk values through `scalar_end`, a separate
     // path from a top-level scalar. An oversized element there must be rejected
     // outright rather than reported as EOF, which would leave the streaming
     // decoder buffering for bytes that will never come.

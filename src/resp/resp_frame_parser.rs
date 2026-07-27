@@ -2,8 +2,8 @@ use crate::{
     ClientError, Error, Result,
     client::RespLimits,
     resp::{
-        ATTRIBUTE_TAG, MAP_TAG, NULL_TAG, RespTape, RespTapeMut, TAPE_LEN_TAG, element_bounds,
-        is_collection_tag, parse_int_at,
+        ATTRIBUTE_TAG, MAP_TAG, NULL_TAG, RespTape, RespTapeMut, TAPE_LEN_TAG, is_collection_tag,
+        parse_int_at, scalar_end,
     },
 };
 use std::fmt;
@@ -142,7 +142,7 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
             }
         }
     } else {
-        Ok(element_bounds(data, pos, limits.max_bulk_length)?.end)
+        scalar_end(data, pos, limits.max_bulk_length)
     }
 }
 
@@ -239,7 +239,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// inside the collection branch, so a scalar reply — the hot request/response
     /// path — stays flat and allocation-free. The skeleton mirrors
     /// [`Self::parse_resumable`]; both defer the actual work to
-    /// `skip_leading_attributes`, [`element_bounds`] and `begin_collection`, so
+    /// `skip_leading_attributes`, [`scalar_end`] and `begin_collection`, so
     /// the two cannot diverge on where a value ends.
     #[inline(always)]
     pub fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
@@ -255,7 +255,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             };
         }
         let at = self.pos;
-        self.pos = element_bounds(self.buf, at, self.limits.max_bulk_length)?.end;
+        self.pos = scalar_end(self.buf, at, self.limits.max_bulk_length)?;
         Ok((ParsedFrame::Scalar { at }, self.pos))
     }
 
@@ -297,9 +297,9 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         if is_collection_tag(tag) {
             return self.begin_collection(tag, stack);
         }
-        match element_bounds(self.buf, value_pos, self.limits.max_bulk_length) {
-            Ok(bounds) => {
-                self.pos = bounds.end;
+        match scalar_end(self.buf, value_pos, self.limits.max_bulk_length) {
+            Ok(end) => {
+                self.pos = end;
                 Ok(Some(ParsedFrame::Scalar { at: value_pos }))
             }
             Err(Error::EOF) => {
@@ -434,9 +434,9 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 }
             }
         } else {
-            let bounds = element_bounds(self.buf, at, self.limits.max_bulk_length)?;
+            let end = scalar_end(self.buf, at, self.limits.max_bulk_length)?;
             self.tape.push(tag, at as u64);
-            self.pos = bounds.end;
+            self.pos = end;
             credit_open_collection(stack);
         }
         Ok(())

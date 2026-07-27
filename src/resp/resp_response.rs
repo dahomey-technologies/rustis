@@ -1,9 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
-        ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG, ParsedFrame,
-        RespBuf, RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG,
-        ScalarKind, TapeNode, element_bounds, frame_scalar_bounds,
+        ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RespBuf,
+        RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, ScalarKind,
+        TapeNode, frame_scalar_bounds, scalar_span, scalar_value,
     },
 };
 use bytes::Bytes;
@@ -343,10 +343,8 @@ fn read_node_view<'a>(node: TapeNode, data: &'a [u8]) -> Result<RespView<'a>> {
 /// where the surrounding bytes belong to its siblings.
 #[inline]
 fn read_scalar_view(data: &[u8], off: usize) -> Result<RespView<'_>> {
-    // Read-back of a frame the decoder already validated: re-applying a bulk
-    // cap here would reject values a raised limit legitimately let through.
-    let bounds = element_bounds(data, off, NO_BULK_LIMIT)?;
-    decode_value(bounds.kind, data, bounds.value)
+    let (kind, value) = scalar_value(data, off)?;
+    decode_value(kind, data, value)
 }
 
 /// Turns a scalar's bytes into a value.
@@ -679,9 +677,9 @@ impl Iterator for RespResponseIter {
         // holds to the invariant that a tapeless frame ends where its scalar does.
         let at = node.payload() as usize;
         let data = self.buf.as_ref();
-        match element_bounds(data, at, NO_BULK_LIMIT) {
-            Ok(bounds) => Some(Ok(RespResponse::Frame {
-                buf: RespBuf::from(self.buf.slice(at..bounds.end)),
+        match scalar_span(data, at) {
+            Ok(span) => Some(Ok(RespResponse::Frame {
+                buf: RespBuf::from(self.buf.slice(span)),
                 tape: RespTape::default(),
                 root: 0,
             })),

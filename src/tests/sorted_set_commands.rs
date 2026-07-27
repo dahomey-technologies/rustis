@@ -2,8 +2,8 @@ use crate::{
     Result,
     commands::{
         BZpopMinMaxResult, BlockingCommands, FlushingMode, GenericCommands, ServerCommands,
-        SortedSetCommands, ZAddCondition, ZAddOptions, ZRangeOptions, ZRangeSortBy, ZScanOptions,
-        ZScanResult, ZWhere,
+        SortedSetCommands, ZAddComparison, ZAddCondition, ZAddOptions, ZRangeOptions, ZRangeSortBy,
+        ZScanOptions, ZScanResult, ZWhere,
     },
     sleep, spawn,
     tests::get_test_client,
@@ -943,6 +943,152 @@ async fn zremrangebyrank() -> Result<()> {
         .await?;
     assert_eq!(1, values.len());
     assert_eq!(("three".to_owned(), 3.0), values[0]);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zremrangebyscore() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("key").await?;
+
+    client
+        .zadd(
+            "key",
+            [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
+        )
+        .await?;
+
+    let len = client.zremrangebyscore("key", 1.0, 2.0).await?;
+    assert_eq!(2, len);
+
+    let values: Vec<(String, f64)> = client
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(1, values.len());
+    assert_eq!(("three".to_owned(), 3.0), values[0]);
+
+    // Exclusive and infinite bounds use the score-range syntax.
+    let len = client.zremrangebyscore("key", "(3", "+inf").await?;
+    assert_eq!(0, len);
+
+    let len = client.zremrangebyscore("key", "-inf", "+inf").await?;
+    assert_eq!(1, len);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zadd_incr() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("key").await?;
+
+    let score = client
+        .zadd_incr("key", None, None, false, 1.0, "one")
+        .await?;
+    assert_eq!(Some(1.0), score);
+
+    let score = client
+        .zadd_incr("key", None, None, false, 2.5, "one")
+        .await?;
+    assert_eq!(Some(3.5), score);
+
+    // XX on a missing member increments nothing and answers nil.
+    let score = client
+        .zadd_incr("key", ZAddCondition::XX, None, false, 1.0, "two")
+        .await?;
+    assert_eq!(None, score);
+
+    // NX on an existing member does the same.
+    let score = client
+        .zadd_incr("key", ZAddCondition::NX, None, false, 1.0, "one")
+        .await?;
+    assert_eq!(None, score);
+
+    // GT refuses an increment that would lower the score.
+    let score = client
+        .zadd_incr("key", None, ZAddComparison::GT, false, -1.0, "one")
+        .await?;
+    assert_eq!(None, score);
+
+    let values: Vec<(String, f64)> = client
+        .zrange_with_scores("key", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(vec![("one".to_owned(), 3.5)], values);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zintercard() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del(["key1", "key2"]).await?;
+
+    client
+        .zadd(
+            "key1",
+            [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
+        )
+        .await?;
+    client
+        .zadd(
+            "key2",
+            [(1.0, "one"), (2.0, "two"), (4.0, "four")],
+            ZAddOptions::default(),
+        )
+        .await?;
+
+    // A zero limit means unlimited.
+    let len = client.zintercard(["key1", "key2"], 0).await?;
+    assert_eq!(2, len);
+
+    let len = client.zintercard(["key1", "key2"], 1).await?;
+    assert_eq!(1, len);
+
+    let len = client.zintercard(["key1", "unknown"], 0).await?;
+    assert_eq!(0, len);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zrandmembers() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("key").await?;
+
+    let values = [(1.0, "one"), (2.0, "two"), (3.0, "three")];
+    client.zadd("key", values, ZAddOptions::default()).await?;
+
+    // A positive count cannot repeat a member.
+    let members: Vec<String> = client.zrandmembers("key", 5).await?;
+    assert_eq!(3, members.len());
+    assert!(members.iter().all(|m| values.iter().any(|v| v.1 == m)));
+
+    // A negative count may, and returns exactly that many.
+    let members: Vec<String> = client.zrandmembers("key", -5).await?;
+    assert_eq!(5, members.len());
+    assert!(members.iter().all(|m| values.iter().any(|v| v.1 == m)));
+
+    let members: Vec<String> = client.zrandmembers("unknown", 5).await?;
+    assert!(members.is_empty());
 
     Ok(())
 }

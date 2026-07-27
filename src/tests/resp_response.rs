@@ -1,6 +1,6 @@
 use crate::{
-    Result,
-    resp::{RespFrameParser, RespResponse, RespTapeMut, RespView},
+    ClientError, Error, Result,
+    resp::{RespBuf, RespFrameParser, RespResponse, RespTape, RespTapeMut, RespView},
 };
 use bytes::Bytes;
 
@@ -267,4 +267,58 @@ fn compact_preserves_the_value_it_copies_out() {
 
     let synthesized = RespResponse::owned_array(vec![RespResponse::integer(7)]);
     assert_eq!(vec![7i64], synthesized.compact().to::<Vec<i64>>().unwrap());
+}
+
+/// Builds a tapeless frame — a lone scalar, indexed by no tape node — straight
+/// from bytes, without going through the parser. Most of the frames below are ones
+/// the parser rejects, so this is the only way to reach the read-back path with
+/// them.
+fn tapeless_frame(resp: &'static [u8]) -> RespResponse {
+    RespResponse::Frame {
+        buf: RespBuf::from(Bytes::from_static(resp)),
+        tape: RespTape::default(),
+        root: 0,
+    }
+}
+
+#[test]
+fn a_tapeless_frame_reads_the_scalar_its_own_bytes_hold() {
+    let response = tapeless_frame(b"+OK\r\n");
+    assert!(matches!(response.view(), Ok(RespView::SimpleString(b"OK"))));
+
+    // A nil bulk has no payload, wherever its empty range lands.
+    let response = tapeless_frame(b"$-1\r\n");
+    assert!(matches!(response.view(), Ok(RespView::Null)));
+}
+
+/// The read path takes a tapeless frame's bytes to be exactly its scalar instead
+/// of searching for the terminator, which is what keeps reading a `+OK` reply as
+/// cheap as decoding it eagerly was. Only a producer can break that, so it is a
+/// debug assertion rather than a runtime error — and this pins that the assertion
+/// is the *exact* one: `+OK\r\nZZ` ends with no `\r\n`, but `+OK\r\n\r\n` would
+/// pass a mere `ends_with` and is two frames.
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "must end at its scalar's terminator")]
+fn a_tapeless_frame_carrying_bytes_past_its_scalar_trips_the_invariant() {
+    let _ = tapeless_frame(b"+OK\r\n\r\n").view();
+}
+
+#[test]
+fn a_malformed_tapeless_frame_is_rejected_rather_than_misread() {
+    // A boolean is `t` or `f`; nothing else may decode as `false`.
+    assert!(matches!(
+        tapeless_frame(b"#x\r\n").view(),
+        Err(Error::Client(ClientError::CannotParseBoolean))
+    ));
+    // Only -1 is nil. Any other negative length is malformed, not null.
+    assert!(matches!(
+        tapeless_frame(b"$-2\r\n").view(),
+        Err(Error::Client(ClientError::CannotParseBulkString))
+    ));
+    // A verbatim string must have room for its 4-byte format prefix.
+    assert!(matches!(
+        tapeless_frame(b"=2\r\nab\r\n").view(),
+        Err(Error::Client(ClientError::VerbatimStringTooShort))
+    ));
 }

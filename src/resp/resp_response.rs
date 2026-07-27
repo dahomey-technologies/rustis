@@ -3,7 +3,7 @@ use crate::{
     resp::{
         ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RespBuf,
         RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, ScalarKind,
-        TapeNode, frame_scalar_bounds, scalar_span, scalar_value,
+        TapeNode, frame_scalar_value, scalar_span, scalar_value,
     },
 };
 use bytes::Bytes;
@@ -34,8 +34,8 @@ pub enum RespResponse {
     /// An **empty tape** means the frame is a lone scalar, which no node would
     /// help to index. `buf` is then exactly that scalar's RESP bytes, tag byte
     /// first and terminating `\r\n` last — every producer slices to it, and the
-    /// read path relies on it to locate the value without scanning for the
-    /// terminator.
+    /// read path takes it rather than scanning for the terminator, checking it in
+    /// debug builds. See [`frame_scalar_value`].
     Frame {
         buf: RespBuf,
         tape: RespTape,
@@ -317,11 +317,11 @@ fn view_at<'a>(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Result<RespVie
 
 /// Reads the lone scalar a frame consists of, `data` being its own bytes.
 ///
-/// Nothing is scanned to find the terminator — see [`frame_scalar_bounds`]. That
+/// Nothing is scanned to find the terminator — see [`frame_scalar_value`]. That
 /// is what makes reading on demand about as cheap as decoding eagerly was.
 #[inline]
 fn read_frame_view(data: &[u8]) -> Result<RespView<'_>> {
-    let (kind, value) = frame_scalar_bounds(data)?;
+    let (kind, value) = frame_scalar_value(data)?;
     decode_value(kind, data, value)
 }
 

@@ -19,8 +19,8 @@ use crate::{
 use memchr::memchr;
 use std::ops::Range;
 
-/// A `max_bulk_length` that caps nothing. See [`scalar_value`] and
-/// [`scalar_span`] for why the read-back path passes it.
+/// A `max_bulk_length` that caps nothing. See [`scalar_value`] for why the
+/// read-back path passes it.
 const NO_BULK_LIMIT: usize = usize::MAX;
 
 /// The normalized kind of a scalar element, as recovered from its bytes by
@@ -42,8 +42,8 @@ pub(crate) enum ScalarKind {
 /// value payload, and the offset one past the whole element.
 ///
 /// Never handed out whole. Each caller goes through the projection that answers
-/// its own question — [`scalar_end`], [`scalar_value`] or [`scalar_span`] — so no
-/// call site carries a field it does not read.
+/// its own question — [`scalar_end`], [`scalar_value`], [`scalar_span`] or
+/// [`frame_scalar_value`] — so no call site carries a field it does not read.
 struct ScalarLayout {
     kind: ScalarKind,
     value: Range<usize>,
@@ -111,6 +111,37 @@ fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
     Ok(from + i)
 }
 
+/// Where the `\r` terminating a line-shaped scalar's payload sits, when the
+/// payload starts at `from`.
+///
+/// `FRAME` says the scalar is a whole frame's content, so `data` stops right after
+/// its terminator and the position is arithmetic instead of a search. That is the
+/// caller's invariant, not something the bytes prove, so debug builds check it
+/// against the search — exactly, because `data.ends_with(b"\r\n")` would accept
+/// `+OK\r\n\r\n`, which is two frames.
+///
+/// The search costs a `memchr` over a payload that is often two or three bytes
+/// (`OK`, `12`), and on the read-back of a lone scalar it is a second one after
+/// the framing pass already did it. Measured on `+OK\r\n`, that is 4.6 ns of the
+/// 61 ns a caller spends parsing and deserializing the reply, and 4.9 of 49 on
+/// `:1000\r\n` — the reply shape of every `SET` and every `INCR`.
+#[inline(always)]
+fn crlf_at<const FRAME: bool>(data: &[u8], from: usize) -> Result<usize> {
+    if !FRAME {
+        return find_crlf(data, from);
+    }
+    let cr = data.len().checked_sub(2).ok_or_else(|| Error::EOF)?;
+    if cr < from {
+        return Err(Error::EOF);
+    }
+    debug_assert_eq!(
+        Some(cr),
+        find_crlf(data, from).ok(),
+        "a frame's own bytes must end at its scalar's terminator"
+    );
+    Ok(cr)
+}
+
 /// Parses a RESP integer header starting at `from`, returning `(value, end)`
 /// where `end` is the offset just past the terminating `\r\n`. Every announced
 /// length on the wire goes through here — a bulk payload's, a collection's
@@ -167,23 +198,31 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
 ///
 /// The one tag table in the crate for scalar byte layout: the framing pass and
 /// the read-back pass reach it through different projections, so they can never
-/// disagree on where an element ends. The validation is exactly the parser's
-/// original per-tag validation, so a frame the decoder accepted reads back
-/// byte-identically.
+/// disagree on where an element ends or what it validates. Every malformation the
+/// parser rejects is rejected here too, on both sides.
 ///
-/// Inlined, and so are its three projections, because this is the whole of the
+/// `FRAME` is the one thing the two sides do not share: it says `data` holds
+/// nothing but this scalar, which lets a line-shaped payload's terminator be
+/// computed rather than searched for. See [`crlf_at`]. It is `true` only under
+/// [`frame_scalar_value`], and only with `at` at 0.
+///
+/// Inlined, and so are its four projections, because this is the whole of the
 /// scalar hot path on both sides: out of line, each side pays a call plus the
 /// full tag dispatch, where inlining lets a call site keep only the arm its tag
 /// selects, and lets the fields that site does not read be dropped rather than
 /// built and spilled.
 #[inline(always)]
-fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<ScalarLayout> {
+fn scalar_layout<const FRAME: bool>(
+    data: &[u8],
+    at: usize,
+    max_bulk_length: usize,
+) -> Result<ScalarLayout> {
     let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
     let start = at + 1;
 
     match tag {
         SIMPLE_STRING_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::SimpleString,
                 value: start..cr,
@@ -191,7 +230,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
             })
         }
         SIMPLE_ERROR_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::Error,
                 value: start..cr,
@@ -199,7 +238,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
             })
         }
         INTEGER_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::Integer,
                 value: start..cr,
@@ -207,7 +246,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
             })
         }
         DOUBLE_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::Double,
                 value: start..cr,
@@ -217,7 +256,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
         // A big number is an arbitrary-precision integer surfaced as its
         // decimal-string payload so the caller can read it as a string.
         BIG_NUMBER_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
                 value: start..cr,
@@ -225,7 +264,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
             })
         }
         NULL_TAG => {
-            let cr = find_crlf(data, start)?;
+            let cr = crlf_at::<FRAME>(data, start)?;
             Ok(ScalarLayout {
                 kind: ScalarKind::Null,
                 value: start..start,
@@ -319,7 +358,7 @@ fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<Scala
 /// is rejected here rather than turned into an offset.
 #[inline(always)]
 pub(crate) fn scalar_end(data: &[u8], at: usize, max_bulk_length: usize) -> Result<usize> {
-    Ok(scalar_layout(data, at, max_bulk_length)?.end)
+    Ok(scalar_layout::<false>(data, at, max_bulk_length)?.end)
 }
 
 /// What the scalar at `at` is worth: its kind and the byte range of its payload,
@@ -333,7 +372,7 @@ pub(crate) fn scalar_end(data: &[u8], at: usize, max_bulk_length: usize) -> Resu
 /// legitimately let through.
 #[inline(always)]
 pub(crate) fn scalar_value(data: &[u8], at: usize) -> Result<(ScalarKind, Range<usize>)> {
-    let layout = scalar_layout(data, at, NO_BULK_LIMIT)?;
+    let layout = scalar_layout::<false>(data, at, NO_BULK_LIMIT)?;
     Ok((layout.kind, layout.value))
 }
 
@@ -344,51 +383,25 @@ pub(crate) fn scalar_value(data: &[u8], at: usize) -> Result<(ScalarKind, Range<
 /// No bulk cap is applied, for the reason given on [`scalar_value`].
 #[inline(always)]
 pub(crate) fn scalar_span(data: &[u8], at: usize) -> Result<Range<usize>> {
-    Ok(at..scalar_layout(data, at, NO_BULK_LIMIT)?.end)
+    Ok(at..scalar_layout::<false>(data, at, NO_BULK_LIMIT)?.end)
 }
 
-/// Kind and value range of a scalar whose bytes are `data` in their entirety.
+/// What a lone scalar is worth, when `data` is that scalar's own bytes and nothing
+/// else — the shape a tapeless frame holds. Same answer as [`scalar_value`] at
+/// offset 0, for less work: the caller's bytes already say where the scalar ends.
 ///
-/// The caller guarantees that: the tag is the first byte and the terminating
-/// `\r\n` the last two, so nothing is scanned to find the end — the value stops
-/// at `data.len() - 2`. Only the length-prefixed family reads its header, to
-/// learn where its payload starts. The layout the framing pass already validated
-/// is not re-checked.
-#[inline]
-pub(crate) fn frame_scalar_bounds(data: &[u8]) -> Result<(ScalarKind, Range<usize>)> {
-    let tag = *data.first().ok_or_else(|| Error::EOF)?;
-    let start = 1;
-    let end = data.len().checked_sub(2).ok_or_else(|| Error::EOF)?;
-
-    let kind = match tag {
-        SIMPLE_STRING_TAG => ScalarKind::SimpleString,
-        SIMPLE_ERROR_TAG => ScalarKind::Error,
-        INTEGER_TAG => ScalarKind::Integer,
-        DOUBLE_TAG => ScalarKind::Double,
-        // A big number is surfaced as its decimal-string payload.
-        BIG_NUMBER_TAG => ScalarKind::BulkString,
-        NULL_TAG => return Ok((ScalarKind::Null, start..start)),
-        BOOL_TAG => return Ok((ScalarKind::Boolean, start..start + 1)),
-        BULK_STRING_TAG | VERBATIM_STRING_TAG | BULK_ERROR_TAG => {
-            let (len, after) = parse_int_at(data, start)?;
-            // A nil bulk (`$-1\r\n`) has no payload at all.
-            if len < 0 {
-                return Ok((ScalarKind::Null, start..start));
-            }
-            let kind = if tag == BULK_ERROR_TAG {
-                ScalarKind::Error
-            } else {
-                ScalarKind::BulkString
-            };
-            // A verbatim string spends its first four bytes on the format prefix.
-            let value = if tag == VERBATIM_STRING_TAG {
-                after + 4
-            } else {
-                after
-            };
-            return Ok((kind, value..end));
-        }
-        _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
-    };
-    Ok((kind, start..end))
+/// The invariant is the caller's to keep, so debug builds check both halves of it:
+/// [`crlf_at`] checks that a line-shaped payload really stops at the last two
+/// bytes, and the assertion below that no other shape leaves bytes over.
+///
+/// No bulk cap is applied, for the reason given on [`scalar_value`].
+#[inline(always)]
+pub(crate) fn frame_scalar_value(data: &[u8]) -> Result<(ScalarKind, Range<usize>)> {
+    let layout = scalar_layout::<true>(data, 0, NO_BULK_LIMIT)?;
+    debug_assert_eq!(
+        layout.end,
+        data.len(),
+        "a frame's own bytes must hold nothing but its scalar"
+    );
+    Ok((layout.kind, layout.value))
 }

@@ -137,8 +137,10 @@ impl RespResponse {
     pub fn view(&self) -> Result<RespView<'_>> {
         match self {
             RespResponse::Null => Ok(RespView::Null),
-            RespResponse::Integer(i) => Ok(RespView::Integer(*i)),
-            RespResponse::Double(d) => Ok(RespView::Double(*d)),
+            // Synthesized: no wire bytes to hand back, so a string rendering has
+            // to be built from the value.
+            RespResponse::Integer(i) => Ok(RespView::Integer(*i, b"")),
+            RespResponse::Double(d) => Ok(RespView::Double(*d, b"")),
             RespResponse::IntegerArray(a) => Ok(RespView::IntegerArray(a)),
             RespResponse::OwnedArray(a) => Ok(RespView::OwnedArray(a)),
             RespResponse::Frame { buf, tape, root } => view_at(buf.as_ref(), tape, *root as usize),
@@ -251,8 +253,8 @@ impl RespResponse {
             RespResponse::Frame { buf, tape, .. } if tape.is_empty() => {
                 let data = buf.as_ref();
                 match read_frame_view(data) {
-                    Ok(RespView::Integer(i)) => RespResponse::Integer(i),
-                    Ok(RespView::Double(d)) => RespResponse::Double(d),
+                    Ok(RespView::Integer(i, _)) => RespResponse::Integer(i),
+                    Ok(RespView::Double(d, _)) => RespResponse::Double(d),
                     Ok(RespView::Null) => RespResponse::Null,
                     // Anything else copies its bytes out as they are. A scalar
                     // that does not read back keeps them too, so the failure
@@ -366,9 +368,11 @@ fn decode_value(kind: ElementKind, data: &[u8], value: Range<usize>) -> Result<R
         ElementKind::Error => RespView::Error(value),
         ElementKind::Integer => RespView::Integer(
             atoi::atoi(value).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?,
+            value,
         ),
         ElementKind::Double => RespView::Double(
             fast_float2::parse(value).map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+            value,
         ),
         ElementKind::BulkString => RespView::BulkString(value),
         // The framing pass already rejected anything but `t` and `f`.
@@ -397,11 +401,20 @@ fn container_view<'a>(tag: u8, buf: &'a [u8], tape: &'a RespTape, root: usize) -
     }
 }
 
+/// A borrowed, decoded view of one reply.
+///
+/// The two numeric variants carry both their decoded value and the bytes the
+/// server sent, because the two are not interchangeable: a caller asking for a
+/// number wants the value, and a caller asking for a string wants the text
+/// Redis chose. Re-rendering the value does not round-trip — `,12.50` would come
+/// back as `12.5` and `,1e21` as twenty-two digits — so the text is kept rather
+/// than reconstructed. The bytes are empty for a reply the client synthesized,
+/// which never came off the wire.
 #[derive(PartialEq)]
 pub enum RespView<'a> {
     SimpleString(&'a [u8]),
-    Integer(i64),
-    Double(f64),
+    Integer(i64, &'a [u8]),
+    Double(f64, &'a [u8]),
     BulkString(&'a [u8]),
     Boolean(bool),
     IntegerArray(&'a [i64]),
@@ -421,8 +434,10 @@ impl<'a> fmt::Debug for RespView<'a> {
                 .debug_tuple("SimpleString")
                 .field(&String::from_utf8_lossy(arg0))
                 .finish(),
-            Self::Integer(arg0) => f.debug_tuple("Integer").field(arg0).finish(),
-            Self::Double(arg0) => f.debug_tuple("Double").field(arg0).finish(),
+            // The value, not the wire bytes: the two say the same thing, and the
+            // value is the readable one.
+            Self::Integer(arg0, _) => f.debug_tuple("Integer").field(arg0).finish(),
+            Self::Double(arg0, _) => f.debug_tuple("Double").field(arg0).finish(),
             Self::BulkString(arg0) => f
                 .debug_tuple("BulkString")
                 .field(&String::from_utf8_lossy(arg0))

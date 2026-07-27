@@ -141,7 +141,7 @@ fn parse_leading_attribute_is_skipped_and_reply_decodes() {
     let (response, len) = parse_response(resp).unwrap();
 
     assert_eq!(resp.len(), len);
-    assert!(matches!(response.view(), Ok(RespView::Integer(42))));
+    assert!(matches!(response.view(), Ok(RespView::Integer(42, _))));
 }
 
 #[test]

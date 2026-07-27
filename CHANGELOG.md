@@ -91,6 +91,11 @@ contains breaking changes; read that section before upgrading.
   other in-flight commands on the connection are unaffected. A malformed boolean
   (`#a\r\n`) still fails the connection: its frame length depends on the payload
   being `t` or `f`, so anything else leaves the frame boundary unknown.
+- **Behavior change** — a numeric reply deserialized into a `String` now gives
+  back the bytes the server sent rather than a re-rendering of the decoded value.
+  A reply of `,12.50` used to come back as `"12.50"` → `f64` → `"12.5"`, and
+  `,1e21` as twenty-two digits; both are now verbatim. Deserializing into a
+  numeric type is unaffected.
 - **Behavior change** — an integer reply that does not fit the requested type is
   now an error instead of a silent truncation. `Integer(300)` deserialized as
   `u8` used to yield `44`; it now fails. `i64::MIN` is accepted (it was

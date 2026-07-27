@@ -20,7 +20,7 @@ fn decode_one(str: &str) -> RespResponse {
 #[test]
 fn integer() {
     let response = decode_one(":12\r\n");
-    assert!(matches!(response.view(), Ok(RespView::Integer(12))));
+    assert!(matches!(response.view(), Ok(RespView::Integer(12, _))));
 
     let result = decode(":12\r").unwrap();
     assert_eq!(None, result);
@@ -61,7 +61,7 @@ fn error() -> Result<()> {
 #[test]
 fn double() -> Result<()> {
     let response = decode_one(",12.12\r\n");
-    assert!(matches!(response.view(), Ok(RespView::Double(d)) if d == 12.12));
+    assert!(matches!(response.view(), Ok(RespView::Double(d, _)) if d == 12.12));
 
     let result = decode(",12.12\r")?;
     assert_eq!(None, result);

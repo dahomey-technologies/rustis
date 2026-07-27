@@ -54,6 +54,7 @@ pub trait SortedSetCommands<'a>: Sized {
                 .arg(condition.into())
                 .arg(comparison.into())
                 .arg_if(change, "CH")
+                .arg("INCR")
                 .arg(score)
                 .arg(member),
         )

@@ -4,6 +4,15 @@ use crate::{
 };
 use bytes::Bytes;
 
+/// Parses a complete RESP reply, owning a copy of its bytes.
+fn parse_owned(resp: &[u8]) -> RespResponse {
+    let resp = Bytes::copy_from_slice(resp);
+    let mut tape = RespTapeMut::default();
+    let mut parser = RespFrameParser::new(&resp, &mut tape);
+    let (frame, _) = parser.parse().unwrap();
+    RespResponse::new(resp.into(), frame)
+}
+
 /// Parses a complete RESP reply into a self-contained response.
 fn parse(resp: &'static [u8]) -> RespResponse {
     let resp = Bytes::from_static(resp);
@@ -20,7 +29,7 @@ fn array() -> Result<()> {
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse()?;
     let response = RespResponse::new(resp.into(), frame);
-    let view = response.view();
+    let view = response.view()?;
     assert!(matches!(view, RespView::Array(_)));
 
     let RespView::Array(array) = view else {
@@ -50,11 +59,11 @@ fn into_array_iter() {
 
     assert_eq!(
         RespView::BulkString(b"foo"),
-        iter.next().unwrap().unwrap().view()
+        iter.next().unwrap().unwrap().view().unwrap()
     );
     assert_eq!(
         RespView::BulkString(b"bar"),
-        iter.next().unwrap().unwrap().view()
+        iter.next().unwrap().unwrap().view().unwrap()
     );
     assert!(iter.next().is_none());
 }
@@ -125,16 +134,21 @@ fn debug_truncates_a_large_reply() {
     );
 }
 
-/// A bare frame is logged on its own in a few places (parser assertions); it has
-/// no buffer to decode against, so it renders its shape — still never the tape.
+/// The parser's own output is logged on a few debug paths. It has no buffer to
+/// decode against, so it reports its shape — and never the tape, whose raw bytes
+/// are unreadable and larger than the reply.
 #[test]
-fn frame_debug_reports_the_shape_instead_of_the_tape() {
+fn a_parsed_frame_reports_its_shape_instead_of_the_tape() {
     let resp = Bytes::from_static(b"*2\r\n$3\r\nfoo\r\n:1\r\n");
     let mut tape = RespTapeMut::default();
     let mut parser = RespFrameParser::new(&resp, &mut tape);
     let (frame, _) = parser.parse().unwrap();
 
-    assert_eq!("Array { root: 0, len: 2 }", format!("{frame:?}"));
+    assert_eq!("Collection { nodes: 4 }", format!("{frame:?}"));
+
+    let mut tape = RespTapeMut::default();
+    let (frame, _) = RespFrameParser::new(b":12\r\n", &mut tape).parse().unwrap();
+    assert_eq!("Scalar { at: 0 }", format!("{frame:?}"));
 }
 
 /// Regression test: iterating a collection must yield correct data for every
@@ -155,7 +169,7 @@ fn into_array_iter_beyond_inline_ranges() {
     let iter = response.into_array_iter().unwrap();
 
     let values: Vec<_> = iter
-        .map(|r| match r.unwrap().view() {
+        .map(|r| match r.unwrap().view().unwrap() {
             RespView::BulkString(b) => b.to_vec(),
             other => panic!("unexpected view: {other:?}"),
         })
@@ -174,4 +188,83 @@ fn into_array_iter_beyond_inline_ranges() {
         ],
         values
     );
+}
+
+#[test]
+fn into_array_iter_accepts_every_container_tag() {
+    // The four container tags index their elements the same way, so all four are
+    // iterable. A map yields its keys and values flattened in wire order, and a
+    // push yields its kind as the first element.
+    for resp in [
+        b"*2\r\n:1\r\n:2\r\n".as_slice(),
+        b"%1\r\n:1\r\n:2\r\n".as_slice(),
+        b"~2\r\n:1\r\n:2\r\n".as_slice(),
+        b">2\r\n:1\r\n:2\r\n".as_slice(),
+    ] {
+        let response = parse_owned(resp);
+        let values: Vec<i64> = response
+            .into_array_iter()
+            .unwrap()
+            .map(|r| r.unwrap().to::<i64>().unwrap())
+            .collect();
+        assert_eq!(vec![1i64, 2], values, "failed on {}", resp[0] as char);
+    }
+
+    // A scalar has no elements to walk.
+    assert!(parse_owned(b":1\r\n").into_array_iter().is_err());
+}
+
+/// An error reply is surfaced as the Redis error itself rather than as an empty
+/// sequence, so a caller iterating a reply cannot mistake a failure for no rows.
+#[test]
+fn into_array_iter_on_an_error_reply_yields_the_redis_error() {
+    let err = parse_owned(b"-ERR nope\r\n").into_array_iter();
+    assert!(matches!(err, Err(crate::Error::Redis(_))));
+}
+
+#[test]
+fn a_synthesized_response_reads_back_its_value() {
+    // The cluster and the cache build responses that never came off the wire.
+    // They must read back like a parsed one.
+    assert_eq!(42i64, RespResponse::integer(42).to::<i64>().unwrap());
+    assert_eq!(None, RespResponse::null().to::<Option<String>>().unwrap());
+    assert_eq!("OK", RespResponse::ok().to::<String>().unwrap());
+    assert_eq!(
+        vec![1i64, 2],
+        RespResponse::integer_array(vec![1, 2])
+            .to::<Vec<i64>>()
+            .unwrap()
+    );
+    assert_eq!(
+        vec![1i64, 2],
+        RespResponse::owned_array(vec![RespResponse::integer(1), RespResponse::integer(2)])
+            .to::<Vec<i64>>()
+            .unwrap()
+    );
+}
+
+#[test]
+fn compact_preserves_the_value_it_copies_out() {
+    // Compacting releases the shared block a response was carved from. Whatever
+    // it does to the representation, the value read back must be identical.
+    let scalar = parse_owned(b"$5\r\nhello\r\n");
+    assert_eq!("hello", scalar.compact().to::<String>().unwrap());
+
+    let integer = parse_owned(b":12\r\n");
+    assert_eq!(12i64, integer.compact().to::<i64>().unwrap());
+
+    let double = parse_owned(b",12.5\r\n");
+    assert_eq!(12.5f64, double.compact().to::<f64>().unwrap());
+
+    let null = parse_owned(b"_\r\n");
+    assert_eq!(None, null.compact().to::<Option<String>>().unwrap());
+
+    let collection = parse_owned(b"*2\r\n$3\r\nfoo\r\n:1\r\n");
+    assert_eq!(
+        r#"Array([BulkString("foo"), Integer(1)])"#,
+        format!("{:?}", collection.compact())
+    );
+
+    let synthesized = RespResponse::owned_array(vec![RespResponse::integer(7)]);
+    assert_eq!(vec![7i64], synthesized.compact().to::<Vec<i64>>().unwrap());
 }

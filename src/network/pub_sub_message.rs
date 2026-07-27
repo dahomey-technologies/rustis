@@ -64,7 +64,7 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
     type Error = ();
 
     fn try_from(response: &'a RespResponse) -> Result<Self, Self::Error> {
-        if let RespView::Push(resp_array) = response.view() {
+        if let Ok(RespView::Push(resp_array)) = response.view() {
             if resp_array.len() < 2 {
                 return Err(());
             }

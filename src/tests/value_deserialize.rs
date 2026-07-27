@@ -12,7 +12,7 @@ fn deserialize_value(str: &str) -> Result<Value> {
     let mut tape = RespTapeMut::default();
     let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
     let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
-    let deserializer = RespDeserializer::new(response.view());
+    let deserializer = RespDeserializer::new(response.view()?);
     Value::deserialize(deserializer)
 }
 

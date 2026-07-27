@@ -66,9 +66,12 @@ impl RespBuf {
     #[inline]
     pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
         let mut tape = RespTapeMut::default();
-        let (frame, _) = RespFrameParser::new(&self.0, &mut tape).parse()?;
-        let response = RespResponse::new(self.clone(), frame);
-        T::deserialize(RespDeserializer::new(response.view()))
+        let (frame, len) = RespFrameParser::new(&self.0, &mut tape).parse()?;
+        // Slice to the frame the parser actually read — a refcount bump, not a
+        // copy. `RespResponse` requires a tapeless frame to end where its scalar
+        // does, which a buffer holding trailing bytes would break.
+        let response = RespResponse::new(RespBuf(self.0.slice(..len)), frame);
+        T::deserialize(RespDeserializer::new(response.view()?))
     }
 
     #[inline(always)]

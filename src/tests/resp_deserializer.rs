@@ -23,7 +23,7 @@ fn deserialize_from_resp_response<T>(response: RespResponse) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    let deserializer = RespDeserializer::new(response.view());
+    let deserializer = RespDeserializer::new(response.view()?);
     T::deserialize(deserializer)
 }
 

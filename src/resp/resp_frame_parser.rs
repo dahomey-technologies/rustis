@@ -1,10 +1,10 @@
 use crate::{
     ClientError, Error, Result,
     client::RespLimits,
-    resp::{RespFrame, RespTapeMut, TAPE_LEN_TAG, is_container_tag},
+    resp::{RespTape, RespTapeMut, TAPE_LEN_TAG, is_container_tag},
 };
 use memchr::memchr;
-use std::ops::Range;
+use std::{fmt, ops::Range};
 
 pub(crate) const SIMPLE_STRING_TAG: u8 = b'+';
 pub(crate) const SIMPLE_ERROR_TAG: u8 = b'-';
@@ -28,6 +28,41 @@ pub(crate) const BIG_NUMBER_TAG: u8 = b'(';
 /// would wrongly reject a frame that a raised
 /// [`RespLimits::max_bulk_length`] legitimately let through.
 pub(crate) const NO_BULK_LIMIT: usize = usize::MAX;
+
+/// What one forward pass recovers from a frame's bytes.
+///
+/// The parser only *frames*: it finds where the frame ends so the buffer can be
+/// sliced, and indexes a container's elements. It decodes no value — the tag
+/// alone says how to read one, and the read happens in the calling task rather
+/// than in the shared network task.
+pub enum ParsedFrame {
+    /// A single scalar, whose tag byte sits at `at` in the frame. It carries no
+    /// tape: one node for one value would buy nothing, and keeping the hot
+    /// request/response path node-free keeps the recycled tape buffer untouched.
+    Scalar { at: usize },
+    /// A container, with the tape indexing it and all of its descendants, rooted
+    /// at node 0.
+    Collection(RespTape),
+    /// A null collection (`*-1\r\n`): a container tag with no container. Its
+    /// bytes hold nothing to read back, so they are dropped.
+    Null,
+}
+
+/// Reports the shape, never the tape — an internal index whose raw bytes are
+/// unreadable and routinely larger than the reply itself. Format the enclosing
+/// [`RespResponse`](crate::resp::RespResponse) to see the decoded reply.
+impl fmt::Debug for ParsedFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Scalar { at } => f.debug_struct("Scalar").field("at", at).finish(),
+            Self::Collection(tape) => f
+                .debug_struct("Collection")
+                .field("nodes", &tape.node_count())
+                .finish(),
+            Self::Null => f.write_str("Null"),
+        }
+    }
+}
 
 /// The normalized kind of a scalar element, as recovered from its bytes by
 /// [`element_bounds`]. This is what the tape reader dispatches on, independent
@@ -121,8 +156,8 @@ fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
 
 /// Parses a RESP integer header starting at `from`, returning `(value, end)`
 /// where `end` is the offset just past the terminating `\r\n`. Mirrors
-/// [`RespFrameParser::parse_integer`] but over a free slice, for reading a node
-/// back without a parser instance.
+/// the same accumulation the collection and bulk headers rely on, over a free
+/// slice rather than a parser instance.
 #[inline]
 fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
     let digits = data.get(from..).ok_or_else(|| Error::EOF)?;
@@ -174,6 +209,13 @@ fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
 ///
 /// The validation here is exactly the parser's original per-tag validation, so
 /// a frame the decoder accepted reads back byte-identically.
+///
+/// Inlined because it is the whole of the scalar hot path, on both the framing
+/// and the reading side: out of line, each side pays a call plus the full tag
+/// dispatch, where inlining lets the caller keep only the arm its tag selects.
+/// The framing side reads only `end`, so inlining is also what lets the rest of
+/// the struct be dropped there rather than built and spilled.
+#[inline(always)]
 pub(crate) fn element_bounds(
     data: &[u8],
     off: usize,
@@ -312,6 +354,52 @@ pub(crate) fn element_bounds(
     }
 }
 
+/// Kind and value range of a scalar whose bytes are `data` in their entirety.
+///
+/// The caller guarantees that: the tag is the first byte and the terminating
+/// `\r\n` the last two, so nothing is scanned to find the end — the value stops
+/// at `data.len() - 2`. Only the length-prefixed family reads its header, to
+/// learn where its payload starts. The layout the framing pass already validated
+/// is not re-checked.
+#[inline]
+pub(crate) fn frame_scalar_bounds(data: &[u8]) -> Result<(ElementKind, Range<usize>)> {
+    let tag = *data.first().ok_or_else(|| Error::EOF)?;
+    let start = 1;
+    let end = data.len().checked_sub(2).ok_or_else(|| Error::EOF)?;
+
+    let kind = match tag {
+        SIMPLE_STRING_TAG => ElementKind::SimpleString,
+        SIMPLE_ERROR_TAG => ElementKind::Error,
+        INTEGER_TAG => ElementKind::Integer,
+        DOUBLE_TAG => ElementKind::Double,
+        // A big number is surfaced as its decimal-string payload.
+        BIG_NUMBER_TAG => ElementKind::BulkString,
+        NULL_TAG => return Ok((ElementKind::Null, start..start)),
+        BOOL_TAG => return Ok((ElementKind::Boolean, start..start + 1)),
+        BULK_STRING_TAG | VERBATIM_STRING_TAG | BULK_ERROR_TAG => {
+            let (len, after) = parse_int_at(data, start)?;
+            // A nil bulk (`$-1\r\n`) has no payload at all.
+            if len < 0 {
+                return Ok((ElementKind::Null, start..start));
+            }
+            let kind = if tag == BULK_ERROR_TAG {
+                ElementKind::Error
+            } else {
+                ElementKind::BulkString
+            };
+            // A verbatim string spends its first four bytes on the format prefix.
+            let value = if tag == VERBATIM_STRING_TAG {
+                after + 4
+            } else {
+                after
+            };
+            return Ok((kind, value..end));
+        }
+        _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
+    };
+    Ok((kind, start..end))
+}
+
 /// Rejects a collection cardinality that exceeds `max_collection_length`,
 /// bounding an attacker-controlled loop count.
 #[inline]
@@ -430,9 +518,9 @@ pub(crate) struct PendingContainer {
 }
 
 /// Streaming RESP parser — a lightweight cursor over a byte slice plus the tape
-/// builder it writes into. One forward pass produces either an inline scalar
-/// [`RespFrame`] (top-level scalars carry no tape) or, for a collection, a flat
-/// tape of fixed-width nodes written into the borrowed `tape` buffer (see
+/// builder it writes into. One forward pass produces a [`ParsedFrame`]: the
+/// offset of a top-level scalar, or, for a collection, a flat tape of
+/// fixed-width nodes written into the borrowed `tape` buffer (see
 /// [`crate::resp::resp_tape`]).
 ///
 /// The collection pass is an **iterative state machine** over an explicit stack
@@ -504,14 +592,14 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// and its byte length, or [`Error::EOF`] if the buffer stops mid-frame — the
     /// one-shot callers treat a truncated buffer as an error, not a suspension.
     ///
-    /// The scalar branch is fully inline and never names a `Vec`: the collection
-    /// stack is created only inside the container branch, so a scalar reply — the
-    /// hot request/response path — stays flat and allocation-free. The skeleton
-    /// mirrors [`Self::parse_resumable`]; both defer the
-    /// actual work to `skip_leading_attributes`, `parse_inline_scalar` and
-    /// `begin_collection`, so the two cannot diverge on how a value is decoded.
+    /// The scalar branch never names a `Vec`: the collection stack is created only
+    /// inside the container branch, so a scalar reply — the hot request/response
+    /// path — stays flat and allocation-free. The skeleton mirrors
+    /// [`Self::parse_resumable`]; both defer the actual work to
+    /// `skip_leading_attributes`, [`element_bounds`] and `begin_collection`, so
+    /// the two cannot diverge on where a value ends.
     #[inline(always)]
-    pub fn parse(&mut self) -> Result<(RespFrame, usize)> {
+    pub fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
         if self.buf.get(self.pos) == Some(&ATTRIBUTE_TAG) {
             self.pos = skip_leading_attributes(self.buf, self.pos, 0, &self.limits)?;
         }
@@ -523,8 +611,9 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 None => Err(Error::EOF),
             };
         }
-        let frame = self.parse_inline_scalar(tag)?;
-        Ok((frame, self.pos))
+        let at = self.pos;
+        self.pos = element_bounds(self.buf, at, self.limits.max_bulk_length)?.end;
+        Ok((ParsedFrame::Scalar { at }, self.pos))
     }
 
     /// Resumable parse driven by the streaming decoder, over a caller-owned
@@ -537,7 +626,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     pub(crate) fn parse_resumable(
         &mut self,
         stack: &mut Vec<PendingContainer>,
-    ) -> Result<Option<RespFrame>> {
+    ) -> Result<Option<ParsedFrame>> {
         if !stack.is_empty() {
             return self.run_collection_loop(stack);
         }
@@ -565,8 +654,11 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         if is_container_tag(tag) {
             return self.begin_collection(tag, stack);
         }
-        match self.parse_inline_scalar(tag) {
-            Ok(frame) => Ok(Some(frame)),
+        match element_bounds(self.buf, value_pos, self.limits.max_bulk_length) {
+            Ok(bounds) => {
+                self.pos = bounds.end;
+                Ok(Some(ParsedFrame::Scalar { at: value_pos }))
+            }
             Err(Error::EOF) => {
                 self.pos = value_pos;
                 Ok(None)
@@ -584,12 +676,12 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         &mut self,
         tag: u8,
         stack: &mut Vec<PendingContainer>,
-    ) -> Result<Option<RespFrame>> {
+    ) -> Result<Option<ParsedFrame>> {
         let at = self.pos;
         match parse_container_header(self.buf, at) {
             Ok(ContainerHeader::Null { end }) => {
                 self.pos = end;
-                Ok(Some(RespFrame::Null))
+                Ok(Some(ParsedFrame::Null))
             }
             Ok(ContainerHeader::Open { count, end }) => {
                 check_collection_len(count, self.limits.max_collection_length)?;
@@ -617,7 +709,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     fn run_collection_loop(
         &mut self,
         stack: &mut Vec<PendingContainer>,
-    ) -> Result<Option<RespFrame>> {
+    ) -> Result<Option<ParsedFrame>> {
         // The loop is entered with at least one open collection and returns the
         // moment the root closes, so neither the empty stack nor the non-container
         // tag below is reachable. Both are written as a malformed-frame error
@@ -636,14 +728,10 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     parent.remaining -= 1;
                     continue;
                 }
-                let tape = self.tape.split_freeze();
-                return Ok(Some(match done.tag {
-                    ARRAY_TAG => RespFrame::Array { tape, root: 0 },
-                    MAP_TAG => RespFrame::Map { tape, root: 0 },
-                    SET_TAG => RespFrame::Set { tape, root: 0 },
-                    PUSH_TAG => RespFrame::Push { tape, root: 0 },
-                    _ => return Err(Error::Client(ClientError::Unexpected)),
-                }));
+                if !is_container_tag(done.tag) {
+                    return Err(Error::Client(ClientError::Unexpected));
+                }
+                return Ok(Some(ParsedFrame::Collection(self.tape.split_freeze())));
             }
 
             // Parse one child; on EOF rewind to its start so the resumed parse
@@ -709,130 +797,6 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             credit_open_collection(stack);
         }
         Ok(())
-    }
-
-    /// Decodes an inline scalar whose tag byte is at `self.pos`, advancing past
-    /// it. Top-level scalars carry no tape; this is the allocation- and node-free
-    /// hot path. Forced inline so the frame is built directly in the caller's
-    /// frame rather than returned across a call boundary. [`Error::EOF`] if the
-    /// scalar is not fully present.
-    #[inline(always)]
-    fn parse_inline_scalar(&mut self, tag: u8) -> Result<RespFrame> {
-        self.pos += 1;
-        let frame = match tag {
-            SIMPLE_STRING_TAG => {
-                let start = self.pos;
-                self.parse_crlf()?;
-                RespFrame::SimpleString(start..self.pos - 2)
-            }
-            SIMPLE_ERROR_TAG => {
-                let start = self.pos;
-                self.parse_crlf()?;
-                RespFrame::Error(start..self.pos - 2)
-            }
-            INTEGER_TAG => {
-                let val = self.parse_integer()?;
-                RespFrame::Integer(val)
-            }
-            DOUBLE_TAG => {
-                let start = self.pos;
-                self.parse_crlf()?;
-                let val = fast_float2::parse(slice(self.buf, start..self.pos - 2)?)
-                    .map_err(|_| Error::Client(ClientError::CannotParseDouble))?;
-                RespFrame::Double(val)
-            }
-            NULL_TAG => {
-                self.parse_crlf()?;
-                RespFrame::Null
-            }
-            BOOL_TAG => {
-                let b = match slice(self.buf, self.pos..self.pos + 3)? {
-                    [b't', b'\r', b'\n'] => true,
-                    [b'f', b'\r', b'\n'] => false,
-                    _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
-                };
-                self.pos += 3;
-                RespFrame::Boolean(b)
-            }
-            BULK_STRING_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    RespFrame::Null
-                } else {
-                    if len < 0 {
-                        return Err(Error::Client(ClientError::CannotParseBulkString));
-                    }
-                    check_bulk_len(len, self.limits.max_bulk_length)?;
-                    let start = self.pos;
-                    let need = self.pos + len as usize + 2;
-                    if slice(self.buf, need - 2..need)? != b"\r\n" {
-                        return Err(Error::Client(ClientError::CannotParseBulkString));
-                    }
-                    self.pos = need;
-                    RespFrame::BulkString(start..need - 2)
-                }
-            }
-            // The first three bytes provide information about the format of the following string,
-            // which can be txt for plain text, or mkd for markdown.
-            // The fourth byte is always :. Then the real string follows.
-            VERBATIM_STRING_TAG => {
-                let len = self.parse_integer()?;
-                if len == -1 {
-                    RespFrame::Null
-                } else {
-                    if len < 4 {
-                        return Err(Error::Client(ClientError::VerbatimStringTooShort));
-                    }
-                    check_bulk_len(len, self.limits.max_bulk_length)?;
-                    let start = self.pos;
-                    let need = self.pos + len as usize + 2;
-                    if slice(self.buf, need - 2..need)? != b"\r\n" {
-                        return Err(Error::Client(ClientError::CannotParseVerbatimString));
-                    }
-                    self.pos = need;
-                    RespFrame::BulkString(start + 4..need - 2)
-                }
-            }
-            BULK_ERROR_TAG => {
-                let len = self.parse_integer()?;
-                if len < 0 {
-                    return Err(Error::Client(ClientError::CannotParseBulkError));
-                }
-                check_bulk_len(len, self.limits.max_bulk_length)?;
-                let start = self.pos;
-                let need = self.pos + len as usize + 2;
-                if slice(self.buf, need - 2..need)? != b"\r\n" {
-                    return Err(Error::Client(ClientError::CannotParseBulkError));
-                }
-                self.pos = need;
-                RespFrame::Error(start..need - 2)
-            }
-            // A big number does not fit in an i64; surface it as its
-            // decimal-string payload so the caller can read it as a string.
-            BIG_NUMBER_TAG => {
-                let start = self.pos;
-                self.parse_crlf()?;
-                RespFrame::BulkString(start..self.pos - 2)
-            }
-            _ => return Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
-        };
-
-        Ok(frame)
-    }
-
-    /// Advances past the next `\r\n`. The same scan as [`find_crlf`], which it
-    /// delegates to so the two cannot disagree on what terminates a scalar.
-    #[inline]
-    fn parse_crlf(&mut self) -> Result<()> {
-        self.pos = find_crlf(self.buf, self.pos)? + 2;
-        Ok(())
-    }
-
-    #[inline]
-    fn parse_integer(&mut self) -> Result<i64> {
-        let (val, end) = parse_int_at(self.buf, self.pos)?;
-        self.pos = end;
-        Ok(val)
     }
 }
 

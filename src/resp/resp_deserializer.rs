@@ -819,7 +819,7 @@ impl<'de> de::SeqAccess<'de> for OwnedArraySeqAccess<'de> {
     {
         match self.iter.next() {
             Some(resp) => {
-                let view = resp.view();
+                let view = resp.view()?;
                 let deserializer = RespDeserializer::new(view);
                 seed.deserialize(deserializer).map(Some)
             }
@@ -840,7 +840,7 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        match self.iter.next().map(|r| r.view()) {
+        match self.iter.next().map(|r| r.view()).transpose()? {
             Some(view) => {
                 if let RespView::Array(array_view) = &view
                     && array_view.len() == 2
@@ -863,7 +863,7 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
         V: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(r) => seed.deserialize(RespDeserializer::new(r.view())),
+            Some(r) => seed.deserialize(RespDeserializer::new(r.view()?)),
             None => Err(Error::Client(ClientError::CannotParseMap)),
         }
     }
@@ -873,7 +873,7 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
         K: de::DeserializeSeed<'de>,
         V: de::DeserializeSeed<'de>,
     {
-        match self.iter.next().map(|r| r.view()) {
+        match self.iter.next().map(|r| r.view()).transpose()? {
             Some(view) => {
                 if let RespView::Array(ref array_view) = view
                     && array_view.len() == 2
@@ -899,8 +899,8 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
                 let vview = self
                     .iter
                     .next()
-                    .map(|r| r.view())
-                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?;
+                    .ok_or_else(|| Error::Client(ClientError::CannotParseMap))?
+                    .view()?;
                 let value = vseed.deserialize(RespDeserializer::new(vview))?;
 
                 Ok(Some((key, value)))

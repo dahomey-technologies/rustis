@@ -93,7 +93,7 @@ fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
     loop {
         if let Some(resp) = decoder.decode(&mut src)? {
             let len = match std::hint::black_box(&resp) {
-                RespResponse::Frame(buf, _) => buf.as_ref().len(),
+                RespResponse::Frame { buf, .. } => buf.as_ref().len(),
                 _ => 0,
             };
             return Ok(len);

@@ -4,7 +4,7 @@ use crate::{
     tests::log_try_init,
 };
 use bytes::Bytes;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
@@ -230,6 +230,73 @@ fn a_synthesized_numeric_reply_renders_from_its_value() -> Result<()> {
 
     let result: String = deserialize_from_resp_response(RespResponse::integer(42))?;
     assert_eq!("42", result);
+
+    Ok(())
+}
+
+/// Captures whatever text a deserialize method hands a visitor, so the two string
+/// entry points can be compared directly instead of through a guess about which
+/// target type serde routes where.
+struct CaptureStr;
+
+impl<'de> serde::de::Visitor<'de> for CaptureStr {
+    type Value = String;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a string")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<String, E> {
+        Ok(v.to_owned())
+    }
+}
+
+/// `deserialize_str` and `deserialize_string` answer the same question, so they
+/// must answer it identically. They are reached by different targets — the former
+/// through `deserialize_identifier`, which serde uses for struct field names and
+/// enum variant names, the latter for a `String` — so a disagreement means the
+/// type a caller picked decides whether their command succeeds.
+#[test]
+fn the_two_string_entry_points_agree() -> Result<()> {
+    log_try_init();
+
+    let cases = [
+        "+hello\r\n",
+        "$5\r\nhello\r\n",
+        "$0\r\n\r\n",
+        ":12\r\n",
+        ",12.50\r\n",
+        "#t\r\n",
+        "#f\r\n",
+        "_\r\n",
+    ];
+
+    for resp in cases {
+        let buf = resp.as_bytes();
+        let mut tape = RespTapeMut::default();
+        let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
+        let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
+
+        let as_str =
+            Deserializer::deserialize_str(RespDeserializer::new(response.view()?), CaptureStr);
+        let as_string =
+            Deserializer::deserialize_string(RespDeserializer::new(response.view()?), CaptureStr);
+
+        match (as_str, as_string) {
+            (Ok(a), Ok(b)) => assert_eq!(a, b, "different text for {resp:?}"),
+            (Err(_), Err(_)) => {}
+            (a, b) => panic!("{resp:?} readable through one entry point only: {a:?} / {b:?}"),
+        }
+    }
+
+    // Same for a reply the client synthesized, which has no bytes to borrow.
+    let response = RespResponse::integer(42);
+    let as_str =
+        Deserializer::deserialize_str(RespDeserializer::new(response.view()?), CaptureStr)?;
+    let as_string =
+        Deserializer::deserialize_string(RespDeserializer::new(response.view()?), CaptureStr)?;
+    assert_eq!(as_str, as_string);
+    assert_eq!("42", as_str);
 
     Ok(())
 }

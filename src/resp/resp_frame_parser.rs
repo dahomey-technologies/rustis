@@ -1,7 +1,7 @@
 use crate::{
     ClientError, Error, Result,
     client::RespLimits,
-    resp::{RespTape, RespTapeMut, TAPE_LEN_TAG, is_container_tag},
+    resp::{RespTape, RespTapeMut, TAPE_LEN_TAG, is_collection_tag},
 };
 use memchr::memchr;
 use std::{fmt, ops::Range};
@@ -32,7 +32,7 @@ pub(crate) const NO_BULK_LIMIT: usize = usize::MAX;
 /// What one forward pass recovers from a frame's bytes.
 ///
 /// The parser only *frames*: it finds where the frame ends so the buffer can be
-/// sliced, and indexes a container's elements. It decodes no value — the tag
+/// sliced, and indexes a collection's elements. It decodes no value — the tag
 /// alone says how to read one, and the read happens in the calling task rather
 /// than in the shared network task.
 pub enum ParsedFrame {
@@ -40,11 +40,11 @@ pub enum ParsedFrame {
     /// tape: one node for one value would buy nothing, and keeping the hot
     /// request/response path node-free keeps the recycled tape buffer untouched.
     Scalar { at: usize },
-    /// A container, with the tape indexing it and all of its descendants, rooted
+    /// A collection, with the tape indexing it and all of its descendants, rooted
     /// at node 0.
     Collection(RespTape),
-    /// A null collection (`*-1\r\n`): a container tag with no container. Its
-    /// bytes hold nothing to read back, so they are dropped.
+    /// A null collection (`*-1\r\n`): a collection tag introducing no element.
+    /// Its bytes hold nothing to read back, so they are dropped.
     Null,
 }
 
@@ -203,8 +203,8 @@ fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
 }
 
 /// Computes the [`ElementBounds`] of the scalar element whose tag byte is at
-/// `off` in `data`. `off` must point at a non-container, non-attribute tag (the
-/// parser dispatches containers and skips attributes before recording a node's
+/// `off` in `data`. `off` must point at a non-collection, non-attribute tag (the
+/// parser dispatches collections and skips attributes before recording a node's
 /// offset), so those tags are rejected as unknown.
 ///
 /// The validation here is exactly the parser's original per-tag validation, so
@@ -411,7 +411,7 @@ fn check_collection_len(len: usize, max_collection_length: usize) -> Result<()> 
 }
 
 /// Outcome of reading a collection header (`*<n>\r\n`, `%<n>\r\n`, `~`, `>`).
-enum ContainerHeader {
+enum CollectionHeader {
     /// A null collection (`*-1\r\n`): it has no children and deserializes to
     /// `Null`, but is still counted as one element by its parent.
     Null { end: usize },
@@ -422,13 +422,13 @@ enum ContainerHeader {
 
 /// Reads the header of the collection whose tag byte is at `at`, returning its
 /// child count (doubled for maps) and the offset just past the `\r\n`. `at` must
-/// point at a container tag. [`Error::EOF`] when the header has not fully
+/// point at a collection tag. [`Error::EOF`] when the header has not fully
 /// arrived, so the streaming decoder can retry once more bytes are read.
-fn parse_container_header(data: &[u8], at: usize) -> Result<ContainerHeader> {
+fn parse_collection_header(data: &[u8], at: usize) -> Result<CollectionHeader> {
     let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
     let (n, end) = parse_int_at(data, at + 1)?;
     if n == -1 {
-        return Ok(ContainerHeader::Null { end });
+        return Ok(CollectionHeader::Null { end });
     }
     if n < 0 {
         return Err(Error::Client(if tag == MAP_TAG {
@@ -438,7 +438,7 @@ fn parse_container_header(data: &[u8], at: usize) -> Result<ContainerHeader> {
         }));
     }
     let multiplier = if tag == MAP_TAG { 2 } else { 1 };
-    Ok(ContainerHeader::Open {
+    Ok(CollectionHeader::Open {
         count: n as usize * multiplier,
         end,
     })
@@ -483,10 +483,10 @@ fn skip_leading_attributes(
 fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) -> Result<usize> {
     let pos = skip_leading_attributes(data, pos, depth, limits)?;
     let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
-    if is_container_tag(tag) {
-        match parse_container_header(data, pos)? {
-            ContainerHeader::Null { end } => Ok(end),
-            ContainerHeader::Open { count, end } => {
+    if is_collection_tag(tag) {
+        match parse_collection_header(data, pos)? {
+            CollectionHeader::Null { end } => Ok(end),
+            CollectionHeader::Open { count, end } => {
                 check_collection_len(count, limits.max_collection_length)?;
                 if depth + 1 > limits.max_nesting_depth {
                     return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
@@ -511,7 +511,7 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
 /// streaming decoder's reused buffer for the network path) and threaded through
 /// the element loop, so the parser itself stays a lightweight cursor with no
 /// heap field on the hot scalar path.
-pub(crate) struct PendingContainer {
+pub(crate) struct OpenCollection {
     tag: u8,
     head_index: usize,
     remaining: usize,
@@ -524,7 +524,7 @@ pub(crate) struct PendingContainer {
 /// [`crate::resp::resp_tape`]).
 ///
 /// The collection pass is an **iterative state machine** over an explicit stack
-/// (owned by the caller, see [`PendingContainer`]), not recursion: each step
+/// (owned by the caller, see [`OpenCollection`]), not recursion: each step
 /// consumes exactly one unit (an element, a collection header, or a run of
 /// attributes) and is atomic with respect to `pos` — it either advances past its
 /// whole unit or, on [`Error::EOF`], leaves `pos` at the unit's start. That
@@ -593,7 +593,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// one-shot callers treat a truncated buffer as an error, not a suspension.
     ///
     /// The scalar branch never names a `Vec`: the collection stack is created only
-    /// inside the container branch, so a scalar reply — the hot request/response
+    /// inside the collection branch, so a scalar reply — the hot request/response
     /// path — stays flat and allocation-free. The skeleton mirrors
     /// [`Self::parse_resumable`]; both defer the actual work to
     /// `skip_leading_attributes`, [`element_bounds`] and `begin_collection`, so
@@ -604,7 +604,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             self.pos = skip_leading_attributes(self.buf, self.pos, 0, &self.limits)?;
         }
         let tag = *self.buf.get(self.pos).ok_or_else(|| Error::EOF)?;
-        if is_container_tag(tag) {
+        if is_collection_tag(tag) {
             let mut stack = Vec::new();
             return match self.begin_collection(tag, &mut stack)? {
                 Some(frame) => Ok((frame, self.pos)),
@@ -625,7 +625,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// rewinds `pos` on a partial value so the next chunk re-attempts it.
     pub(crate) fn parse_resumable(
         &mut self,
-        stack: &mut Vec<PendingContainer>,
+        stack: &mut Vec<OpenCollection>,
     ) -> Result<Option<ParsedFrame>> {
         if !stack.is_empty() {
             return self.run_collection_loop(stack);
@@ -651,7 +651,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         let Some(&tag) = self.buf.get(value_pos) else {
             return Ok(None);
         };
-        if is_container_tag(tag) {
+        if is_collection_tag(tag) {
             return self.begin_collection(tag, stack);
         }
         match element_bounds(self.buf, value_pos, self.limits.max_bulk_length) {
@@ -670,26 +670,26 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// Opens the collection whose header is at `self.pos` and runs the element
     /// loop to build its tape. The out-of-line, cold counterpart to the scalar
     /// path in [`Self::parse`] / [`Self::parse_resumable`]. On a partial header it
-    /// rewinds `pos` to the container tag (any leading attributes are already
+    /// rewinds `pos` to the collection tag (any leading attributes are already
     /// consumed and remain buffered), so a later chunk re-reads the header.
     fn begin_collection(
         &mut self,
         tag: u8,
-        stack: &mut Vec<PendingContainer>,
+        stack: &mut Vec<OpenCollection>,
     ) -> Result<Option<ParsedFrame>> {
         let at = self.pos;
-        match parse_container_header(self.buf, at) {
-            Ok(ContainerHeader::Null { end }) => {
+        match parse_collection_header(self.buf, at) {
+            Ok(CollectionHeader::Null { end }) => {
                 self.pos = end;
                 Ok(Some(ParsedFrame::Null))
             }
-            Ok(ContainerHeader::Open { count, end }) => {
+            Ok(CollectionHeader::Open { count, end }) => {
                 check_collection_len(count, self.limits.max_collection_length)?;
                 debug_assert!(self.tape.is_empty(), "tape must start empty per frame");
                 let head = self.tape.push(tag, 0);
                 self.tape.push(TAPE_LEN_TAG, count as u64);
                 self.pos = end;
-                stack.push(PendingContainer {
+                stack.push(OpenCollection {
                     tag,
                     head_index: head,
                     remaining: count,
@@ -708,10 +708,10 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// complete (`Ok(Some)`) or a child needs more bytes (`Ok(None)`, resumable).
     fn run_collection_loop(
         &mut self,
-        stack: &mut Vec<PendingContainer>,
+        stack: &mut Vec<OpenCollection>,
     ) -> Result<Option<ParsedFrame>> {
         // The loop is entered with at least one open collection and returns the
-        // moment the root closes, so neither the empty stack nor the non-container
+        // moment the root closes, so neither the empty stack nor the non-collection
         // tag below is reachable. Both are written as a malformed-frame error
         // rather than an assertion: this runs on the network task, where a panic
         // takes the client down with every in-flight command and no reconnect,
@@ -728,7 +728,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     parent.remaining -= 1;
                     continue;
                 }
-                if !is_container_tag(done.tag) {
+                if !is_collection_tag(done.tag) {
                     return Err(Error::Client(ClientError::Unexpected));
                 }
                 return Ok(Some(ParsedFrame::Collection(self.tape.split_freeze())));
@@ -756,7 +756,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// later credits this one. Writes nothing on [`Error::EOF`], so the caller can
     /// rewind and resume.
     #[inline]
-    fn emit_one_child(&mut self, stack: &mut Vec<PendingContainer>) -> Result<()> {
+    fn emit_one_child(&mut self, stack: &mut Vec<OpenCollection>) -> Result<()> {
         // Elements rarely carry a leading attribute; peek before paying for the
         // (non-inlinable, recursive) skip call, so the common case is one compare.
         let mut at = self.pos;
@@ -765,16 +765,16 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         }
         let tag = *self.buf.get(at).ok_or_else(|| Error::EOF)?;
 
-        if is_container_tag(tag) {
-            match parse_container_header(self.buf, at)? {
-                ContainerHeader::Null { end } => {
+        if is_collection_tag(tag) {
+            match parse_collection_header(self.buf, at)? {
+                CollectionHeader::Null { end } => {
                     // A null child collection is one counted element that reads
                     // back as `Null`; its stored offset is never dereferenced.
                     self.tape.push(NULL_TAG, at as u64);
                     self.pos = end;
                     credit_open_collection(stack);
                 }
-                ContainerHeader::Open { count, end } => {
+                CollectionHeader::Open { count, end } => {
                     check_collection_len(count, self.limits.max_collection_length)?;
                     if stack.len() + 1 > self.limits.max_nesting_depth {
                         return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
@@ -782,7 +782,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     let head = self.tape.push(tag, 0);
                     self.tape.push(TAPE_LEN_TAG, count as u64);
                     self.pos = end;
-                    stack.push(PendingContainer {
+                    stack.push(OpenCollection {
                         tag,
                         head_index: head,
                         remaining: count,
@@ -805,7 +805,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
 /// A no-op on an empty stack, which the collection loop never produces: it is
 /// the only caller of `emit_one_child` and always holds at least one open level.
 #[inline]
-fn credit_open_collection(stack: &mut [PendingContainer]) {
+fn credit_open_collection(stack: &mut [OpenCollection]) {
     if let Some(open) = stack.last_mut() {
         open.remaining -= 1;
     }

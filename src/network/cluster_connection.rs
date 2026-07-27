@@ -1221,7 +1221,7 @@ impl ClusterConnection {
                 // would mean "disconnected" to the network handler, which would
                 // reconnect the whole cluster over what is merely one shard
                 // answering an error.
-                let iter = match sub_result.and_then(RespResponse::into_array_iter) {
+                let iter = match sub_result.and_then(RespResponse::into_collection_iter) {
                     Ok(iter) => iter,
                     Err(e) => return Some(Err(e)),
                 };
@@ -1243,7 +1243,7 @@ impl ClusterConnection {
             for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
                 // Same reasoning as above: one shard's error is an error for the
                 // caller, not a lost connection.
-                let iter = match sub_result.and_then(RespResponse::into_array_iter) {
+                let iter = match sub_result.and_then(RespResponse::into_collection_iter) {
                     Ok(iter) => iter,
                     Err(e) => return Some(Err(e)),
                 };

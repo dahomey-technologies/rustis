@@ -28,7 +28,7 @@ pub enum RespResponse {
     OwnedArray(Vec<RespResponse>),
     /// A frame's bytes plus the flat parse **tape** indexing it — one
     /// fixed-width node per element, all nesting levels — with `root` the tape
-    /// index of the container's head node, so reading an element is an O(1) node
+    /// index of the collection's head node, so reading an element is an O(1) node
     /// lookup instead of a re-parse. See [`crate::resp::resp_tape`].
     ///
     /// An **empty tape** means the frame is a lone scalar, which no node would
@@ -274,13 +274,13 @@ impl RespResponse {
         }
     }
 
-    /// Walks a container's elements as owned responses, in wire order.
+    /// Walks a collection's elements as owned responses, in wire order.
     ///
-    /// All four container tags are accepted: a map yields its keys and values
+    /// All four collection tags are accepted: a map yields its keys and values
     /// flattened, a push yields its kind as the first element. An error reply is
     /// surfaced as the Redis error itself, so a caller cannot mistake a failure
     /// for an empty reply.
-    pub fn into_array_iter(self) -> Result<RespResponseIter> {
+    pub fn into_collection_iter(self) -> Result<RespResponseIter> {
         // `is_error` is a tag check, so a non-error reply does not pay for a view.
         if self.is_error()
             && let Ok(RespView::Error(message)) = self.view()
@@ -289,7 +289,7 @@ impl RespResponse {
         }
         match self {
             RespResponse::Frame { buf, tape, root }
-                if !tape.is_empty() && tape.node(root as usize).is_container() =>
+                if !tape.is_empty() && tape.node(root as usize).is_collection() =>
             {
                 let root = root as usize;
                 let len = tape.node(root + 1).payload() as usize;
@@ -308,8 +308,8 @@ fn view_at<'a>(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Result<RespVie
         return read_frame_view(buf);
     }
     let node = tape.node(root);
-    if node.is_container() {
-        Ok(container_view(node.tag(), buf, tape, root))
+    if node.is_collection() {
+        Ok(collection_view(node.tag(), buf, tape, root))
     } else {
         read_node_view(node, buf)
     }
@@ -325,7 +325,7 @@ fn read_frame_view(data: &[u8]) -> Result<RespView<'_>> {
     decode_value(kind, data, value)
 }
 
-/// Reads the scalar a non-container tape node points at.
+/// Reads the scalar a non-collection tape node points at.
 ///
 /// A [`NULL_TAG`] node is `Null` without touching the data buffer: it stands in
 /// for a null child collection (`*-1`), whose offset points at `*`, not at a
@@ -381,23 +381,24 @@ fn decode_value(kind: ElementKind, data: &[u8], value: Range<usize>) -> Result<R
     })
 }
 
-/// Builds the borrowed collection view for a container node at tape index `root`.
+/// Builds the borrowed view of the collection whose head node is at tape index
+/// `root`.
 #[inline]
 #[expect(
     clippy::unreachable,
-    reason = "invariant: callers gate on `is_container_tag`, whose `matches!` \
+    reason = "invariant: callers gate on `is_collection_tag`, whose `matches!` \
               lists exactly these four tags. The arm asserts that pairing; a \
               fallback would have to invent a view for a tag that is not a \
-              container."
+              collection."
 )]
-fn container_view<'a>(tag: u8, buf: &'a [u8], tape: &'a RespTape, root: usize) -> RespView<'a> {
-    let view = RespArrayView::new(buf, tape, root);
+fn collection_view<'a>(tag: u8, buf: &'a [u8], tape: &'a RespTape, root: usize) -> RespView<'a> {
+    let view = RespCollectionView::new(buf, tape, root);
     match tag {
         ARRAY_TAG => RespView::Array(view),
         MAP_TAG => RespView::Map(view),
         SET_TAG => RespView::Set(view),
         PUSH_TAG => RespView::Push(view),
-        _ => unreachable!("container_view called with a non-container tag"),
+        _ => unreachable!("collection_view called with a non-collection tag"),
     }
 }
 
@@ -419,10 +420,10 @@ pub enum RespView<'a> {
     Boolean(bool),
     IntegerArray(&'a [i64]),
     OwnedArray(&'a [RespResponse]),
-    Array(RespArrayView<'a>),
-    Map(RespArrayView<'a>),
-    Set(RespArrayView<'a>),
-    Push(RespArrayView<'a>),
+    Array(RespCollectionView<'a>),
+    Map(RespCollectionView<'a>),
+    Set(RespCollectionView<'a>),
+    Push(RespCollectionView<'a>),
     Error(&'a [u8]),
     Null,
 }
@@ -466,7 +467,7 @@ impl<'a> fmt::Debug for RespView<'a> {
 /// the tape cannot resolve is rendered in place instead of aborting the whole
 /// rendering — a formatter cannot report an error other than "formatting
 /// failed", and a debug line showing where a reply went wrong beats no line.
-fn fmt_pairs(f: &mut fmt::Formatter<'_>, view: &RespArrayView<'_>) -> fmt::Result {
+fn fmt_pairs(f: &mut fmt::Formatter<'_>, view: &RespCollectionView<'_>) -> fmt::Result {
     let mut map = f.debug_map();
     let mut it = view.clone().into_iter();
     while let Some(key) = it.next() {
@@ -494,17 +495,17 @@ impl fmt::Debug for UnreadableElement {
 }
 
 /// A borrowed view over a collection: the data buffer, the parse tape, and the
-/// tape index of the container's head node. `len` (the exact element count) is
+/// tape index of the collection's head node. `len` (the exact element count) is
 /// read once from the head's companion node, so it is O(1).
 #[derive(Clone, PartialEq)]
-pub struct RespArrayView<'a> {
+pub struct RespCollectionView<'a> {
     buf: &'a [u8],
     tape: &'a RespTape,
     root: usize,
     len: usize,
 }
 
-impl<'a> RespArrayView<'a> {
+impl<'a> RespCollectionView<'a> {
     #[inline(always)]
     pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
         let len = tape.node(root + 1).payload() as usize;
@@ -524,7 +525,7 @@ impl<'a> RespArrayView<'a> {
 
 /// Renders the elements, not the two raw buffers the view borrows. Unresolvable
 /// elements are rendered in place, as in [`fmt_pairs`].
-impl fmt::Debug for RespArrayView<'_> {
+impl fmt::Debug for RespCollectionView<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut list = f.debug_list();
         for element in self.clone() {
@@ -537,26 +538,26 @@ impl fmt::Debug for RespArrayView<'_> {
     }
 }
 
-impl<'a> IntoIterator for RespArrayView<'a> {
+impl<'a> IntoIterator for RespCollectionView<'a> {
     type Item = Result<RespView<'a>>;
-    type IntoIter = RespArrayIter<'a>;
+    type IntoIter = RespCollectionIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        RespArrayIter::new(self.buf, self.tape, self.root, self.len)
+        RespCollectionIter::new(self.buf, self.tape, self.root, self.len)
     }
 }
 
 /// Walks the direct children of a collection by stepping the tape: a scalar
-/// advances one node, a nested container skips its whole subtree in O(1) via its
+/// advances one node, a nested collection skips its whole subtree in O(1) via its
 /// head's back-patched `next`.
-pub struct RespArrayIter<'a> {
+pub struct RespCollectionIter<'a> {
     buf: &'a [u8],
     tape: &'a RespTape,
     cursor: usize,
     remaining: usize,
 }
 
-impl<'a> RespArrayIter<'a> {
+impl<'a> RespCollectionIter<'a> {
     #[inline(always)]
     pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize, len: usize) -> Self {
         Self {
@@ -578,7 +579,7 @@ impl<'a> RespArrayIter<'a> {
     }
 }
 
-impl<'a> Iterator for RespArrayIter<'a> {
+impl<'a> Iterator for RespCollectionIter<'a> {
     type Item = Result<RespView<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -589,11 +590,11 @@ impl<'a> Iterator for RespArrayIter<'a> {
         let node = self.tape.node(self.cursor);
         let tag = node.tag();
 
-        if node.is_container() {
+        if node.is_collection() {
             let root = self.cursor;
             self.cursor = node.payload() as usize;
             self.remaining -= 1;
-            Some(Ok(container_view(tag, self.buf, self.tape, root)))
+            Some(Ok(collection_view(tag, self.buf, self.tape, root)))
         } else {
             // Surface a read failure as an error and end the iterator rather
             // than truncating the array silently: the consumer must be able to
@@ -613,7 +614,7 @@ impl<'a> Iterator for RespArrayIter<'a> {
     }
 }
 
-/// Owned equivalent of [`RespArrayIter`], yielding a self-contained
+/// Owned equivalent of [`RespCollectionIter`], yielding a self-contained
 /// [`RespResponse`] per element (used by cluster aggregation and the cache,
 /// which retain elements past the borrow of the parent response).
 pub struct RespResponseIter {
@@ -644,10 +645,10 @@ impl Iterator for RespResponseIter {
 
         let node = self.tape.node(self.cursor);
 
-        // A container element is handed out over the same buffer and tape,
+        // A collection element is handed out over the same buffer and tape,
         // re-rooted on its own node: no byte is copied and no value decoded, and
         // it reads back exactly as it would through the parent.
-        if node.is_container() {
+        if node.is_collection() {
             let root = self.cursor;
             self.cursor = node.payload() as usize;
             self.remaining -= 1;

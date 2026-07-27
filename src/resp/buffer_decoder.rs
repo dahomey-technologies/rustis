@@ -2,7 +2,7 @@ use crate::{
     Error, Result,
     client::{BufferConfig, RespLimits},
     resp::{
-        ParsedFrame, PendingContainer, RespBuf, RespFrameParser, RespResponse, RespTapeMut,
+        OpenCollection, ParsedFrame, RespBuf, RespFrameParser, RespResponse, RespTapeMut,
         bulk_value_end,
     },
 };
@@ -43,7 +43,7 @@ pub(crate) struct BufferDecoder {
     /// Open-collection stack, reused across frames. Non-empty only while a
     /// collection reply is mid-flight; combined with `resume_pos` it lets the next
     /// chunk continue the frame instead of re-parsing it from the start.
-    stack: Vec<PendingContainer>,
+    stack: Vec<OpenCollection>,
     /// Parse offset to resume from, `Some` only while a frame's bytes are still
     /// arriving. Its partial tape lives in `tape_buf`.
     resume_pos: Option<usize>,

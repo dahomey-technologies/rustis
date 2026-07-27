@@ -234,11 +234,11 @@ impl Cache {
                 .client
                 .internal_send(missing_prepared_command.command, None)
                 .await?;
-            let Ok(array_iter) = response.clone().into_array_iter() else {
+            let Ok(collection_iter) = response.clone().into_collection_iter() else {
                 return Err(Error::Client(ClientError::ExpectedArrayForMGet));
             };
 
-            for (idx_in_missing, response) in array_iter.enumerate() {
+            for (idx_in_missing, response) in collection_iter.enumerate() {
                 let response = response?;
                 let original_idx = missing_indices[idx_in_missing];
 

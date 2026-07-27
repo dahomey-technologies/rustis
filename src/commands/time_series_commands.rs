@@ -168,6 +168,9 @@ pub trait TimeSeriesCommands<'a>: Sized {
     ///   or [`ts_decrby`](TimeSeriesCommands::ts_decrby)) may result in inconsistencies between the raw and the compacted data.
     ///   The compaction process may override such samples.
     ///
+    /// # Return
+    /// The timestamp of the upserted sample.
+    ///
     /// # See Also
     /// * [<https://redis.io/commands/ts.decrby/>](https://redis.io/commands/ts.decrby/)
     #[must_use]
@@ -176,7 +179,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         key: impl Serialize,
         value: f64,
         options: TsIncrByDecrByOptions,
-    ) -> PreparedCommand<'a, Self, ()> {
+    ) -> PreparedCommand<'a, Self, u64> {
         prepare_command(self, cmd("TS.DECRBY").key(key).arg(value).arg(options))
     }
 

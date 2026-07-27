@@ -1,26 +1,14 @@
 use crate::{
     ClientError, Error, Result,
     client::RespLimits,
-    resp::{RespTape, RespTapeMut, TAPE_LEN_TAG, is_collection_tag},
+    resp::{
+        ATTRIBUTE_TAG, BIG_NUMBER_TAG, BOOL_TAG, BULK_ERROR_TAG, BULK_STRING_TAG, DOUBLE_TAG,
+        INTEGER_TAG, MAP_TAG, NULL_TAG, RespTape, RespTapeMut, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG,
+        TAPE_LEN_TAG, VERBATIM_STRING_TAG, is_collection_tag,
+    },
 };
 use memchr::memchr;
 use std::{fmt, ops::Range};
-
-pub(crate) const SIMPLE_STRING_TAG: u8 = b'+';
-pub(crate) const SIMPLE_ERROR_TAG: u8 = b'-';
-pub(crate) const INTEGER_TAG: u8 = b':';
-pub(crate) const BULK_STRING_TAG: u8 = b'$';
-pub(crate) const ARRAY_TAG: u8 = b'*';
-pub(crate) const NULL_TAG: u8 = b'_';
-pub(crate) const BOOL_TAG: u8 = b'#';
-pub(crate) const DOUBLE_TAG: u8 = b',';
-pub(crate) const BULK_ERROR_TAG: u8 = b'!';
-pub(crate) const VERBATIM_STRING_TAG: u8 = b'=';
-pub(crate) const MAP_TAG: u8 = b'%';
-pub(crate) const SET_TAG: u8 = b'~';
-pub(crate) const PUSH_TAG: u8 = b'>';
-pub(crate) const ATTRIBUTE_TAG: u8 = b'|';
-pub(crate) const BIG_NUMBER_TAG: u8 = b'(';
 
 /// Sentinel meaning "this data was already validated when it was parsed, do not
 /// re-apply a cap". Used by the tape read-back path, which walks a frame the

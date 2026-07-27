@@ -1,11 +1,11 @@
 use crate::{
     Result,
     resp::{
-        ARRAY_TAG, BULK_ERROR_TAG, PUSH_TAG, RespDeserializer, RespFrameParser, RespResponse,
-        RespTapeMut, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, Value,
+        BULK_ERROR_TAG, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut,
+        SIMPLE_ERROR_TAG, Value,
     },
 };
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use serde::de::DeserializeOwned;
 use std::{fmt, ops::Deref};
 
@@ -14,46 +14,10 @@ use std::{fmt, ops::Deref};
 pub struct RespBuf(Bytes);
 
 impl RespBuf {
-    /// Constructs a new `RespBuf` from a `Bytes` buffer
-    #[inline(always)]
-    pub fn new() -> Self {
-        Self(Bytes::new())
-    }
-
-    /// Constructs a new `RespBuf` as a RESP Array from a collection of chunks (byte slices)
-    pub fn from_chunks(chunks: &Vec<&[u8]>) -> Self {
-        let mut bytes = BytesMut::new();
-
-        bytes.put_u8(ARRAY_TAG);
-
-        let mut temp = itoa::Buffer::new();
-        let str = temp.format(chunks.len());
-        bytes.put_slice(str.as_bytes());
-        bytes.put_slice(b"\r\n");
-
-        for chunk in chunks {
-            bytes.put_slice(chunk)
-        }
-
-        Self(bytes.freeze())
-    }
-
     /// Constructs a new `RespBuf` from a byte slice
     #[inline]
     pub fn from_slice(data: &[u8]) -> RespBuf {
         RespBuf(Bytes::copy_from_slice(data))
-    }
-
-    /// Returns `true` if the RESP Buffer is a push message
-    #[inline]
-    pub fn is_push_message(&self) -> bool {
-        matches!(self.0.first(), Some(&PUSH_TAG)) || self.is_monitor_message()
-    }
-
-    /// Returns `true` if the RESP Buffer is a monitor message
-    #[inline]
-    pub fn is_monitor_message(&self) -> bool {
-        matches!(self.0.as_ref(), [SIMPLE_STRING_TAG, second, ..] if (*second as char).is_numeric())
     }
 
     /// Returns `true` if the RESP Buffer is a Redis error
@@ -83,18 +47,6 @@ impl RespBuf {
     #[inline(always)]
     pub fn into_bytes(self) -> Bytes {
         self.0
-    }
-
-    /// Constructs a new `RespBuf` as a RESP Ok message (+OK\r\n)
-    #[inline]
-    pub fn ok() -> RespBuf {
-        RespBuf(Bytes::from_static(b"+OK\r\n"))
-    }
-
-    /// Constructs a new `RespBuf` as a RESP Nil message (_\r\n)
-    #[inline]
-    pub fn nil() -> RespBuf {
-        RespBuf(Bytes::from_static(b"_\r\n"))
     }
 }
 

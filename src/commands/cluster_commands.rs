@@ -35,7 +35,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslots/>](https://redis.io/commands/cluster-addslots/)
     #[must_use]
-    fn cluster_addslots<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_addslots(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTS").arg(slots))
     }
 
@@ -49,7 +49,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-addslotsrange/>](https://redis.io/commands/cluster-addslotsrange/)
     #[must_use]
-    fn cluster_addslotsrange<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_addslotsrange(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("ADDSLOTSRANGE").arg(slots))
     }
 
@@ -74,7 +74,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-count-failure-reports/>](https://redis.io/commands/cluster-count-failure-reports/)
     #[must_use]
-    fn cluster_count_failure_reports<I>(
+    fn cluster_count_failure_reports(
         self,
         node_id: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
@@ -103,7 +103,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslots/>](https://redis.io/commands/cluster-delslots/)
     #[must_use]
-    fn cluster_delslots<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_delslots(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTS").arg(slots))
     }
 
@@ -116,7 +116,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-delslotsrange/>](https://redis.io/commands/cluster-delslotsrange/)
     #[must_use]
-    fn cluster_delslotsrange<S>(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_delslotsrange(self, slots: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("DELSLOTSRANGE").arg(slots))
     }
 
@@ -153,7 +153,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-forget/>](https://redis.io/commands/cluster-forget/)
     #[must_use]
-    fn cluster_forget<I>(self, node_id: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_forget(self, node_id: impl Serialize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("CLUSTER").arg("FORGET").arg(node_id))
     }
 
@@ -163,10 +163,17 @@ pub trait ClusterCommands<'a>: Sized {
     /// The maximum number of keys to return is specified via the count argument,
     /// so that it is possible for the user of this API to batch-processing keys.
     ///
+    /// # Return
+    /// The names of the keys stored in the contacted node and hashing to `slot`.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/cluster-getkeysinslot/>](https://redis.io/commands/cluster-getkeysinslot/)
     #[must_use]
-    fn cluster_getkeysinslot(self, slot: u16, count: usize) -> PreparedCommand<'a, Self, ()> {
+    fn cluster_getkeysinslot<R: Response>(
+        self,
+        slot: u16,
+        count: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("CLUSTER").arg("GETKEYSINSLOT").arg(slot).arg(count),
@@ -181,8 +188,8 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-info/>](https://redis.io/commands/cluster-info/)
     #[must_use]
-    fn cluster_info(self, slot: u16, count: usize) -> PreparedCommand<'a, Self, ClusterInfo> {
-        prepare_command(self, cmd("CLUSTER").arg("INFO").arg(slot).arg(count))
+    fn cluster_info(self) -> PreparedCommand<'a, Self, ClusterInfo> {
+        prepare_command(self, cmd("CLUSTER").arg("INFO"))
     }
 
     /// Returns an integer identifying the hash slot the specified key hashes to.
@@ -484,7 +491,7 @@ pub trait ClusterCommands<'a>: Sized {
 }
 
 /// Result for the [`cluster_bumpepoch`](ClusterCommands::cluster_bumpepoch) command
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ClusterBumpEpochResult {
     /// if the epoch was incremented
@@ -505,7 +512,7 @@ pub enum ClusterFailoverOption {
 }
 
 /// Cluster state used in the `cluster_state` field of [`ClusterInfo`](ClusterInfo)
-#[derive(Deserialize)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ClusterState {
     /// State is `ok` if the node is able to receive queries.
@@ -513,11 +520,12 @@ pub enum ClusterState {
     /// `fail` if there is at least one hash slot which is unbound (no node associated),
     /// in error state (node serving it is flagged with FAIL flag),
     /// or if the majority of masters can't be reached by this node.
+    #[default]
     Fail,
 }
 
 /// Result for the [`cluster_info`](ClusterCommands::cluster_info) command
-#[derive(Deserialize)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct ClusterInfo {
     /// State is ok if the node is able to receive queries.
@@ -637,8 +645,97 @@ pub struct ClusterInfo {
     pub cluster_stats_messages_publishshard_received: usize,
 }
 
+impl<'de> Deserialize<'de> for ClusterInfo {
+    /// `CLUSTER INFO` answers with a single text blob of `field:value` lines, the
+    /// same shape as [`info`](crate::commands::ServerCommands::info), so the
+    /// fields are read from that text rather than from a map.
+    ///
+    /// A counter the server has never incremented is simply absent from the
+    /// reply, and a newer server sends fields this struct does not know: missing
+    /// fields keep their zero value and unknown ones are skipped.
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        macro_rules! read_counters {
+            ($info:ident, $field:ident, $value:ident, $($name:ident),+ $(,)?) => {
+                match $field {
+                    $(stringify!($name) => {
+                        $info.$name = $value.parse().map_err(de::Error::custom)?;
+                    })+
+                    _ => {}
+                }
+            };
+        }
+
+        let text = String::deserialize(deserializer)?;
+        let mut info = ClusterInfo::default();
+
+        for line in text.lines() {
+            let Some((field, value)) = line.split_once(':') else {
+                continue;
+            };
+            let value = value.trim_end();
+
+            if field == "cluster_state" {
+                info.cluster_state = match value {
+                    "ok" => ClusterState::Ok,
+                    "fail" => ClusterState::Fail,
+                    other => {
+                        return Err(de::Error::custom(format!(
+                            "unknown cluster state `{other}`"
+                        )));
+                    }
+                };
+                continue;
+            }
+
+            read_counters!(
+                info,
+                field,
+                value,
+                cluster_slots_assigned,
+                cluster_slots_ok,
+                cluster_slots_pfail,
+                cluster_slots_fail,
+                cluster_known_nodes,
+                cluster_size,
+                cluster_current_epoch,
+                cluster_my_epoch,
+                cluster_stats_messages_sent,
+                cluster_stats_messages_received,
+                total_cluster_links_buffer_limit_exceeded,
+                cluster_stats_messages_ping_sent,
+                cluster_stats_messages_ping_received,
+                cluster_stats_messages_pong_sent,
+                cluster_stats_messages_pong_received,
+                cluster_stats_messages_meet_sent,
+                cluster_stats_messages_meet_received,
+                cluster_stats_messages_fail_sent,
+                cluster_stats_messages_fail_received,
+                cluster_stats_messages_publish_sent,
+                cluster_stats_messages_publish_received,
+                cluster_stats_messages_auth_req_sent,
+                cluster_stats_messages_auth_req_received,
+                cluster_stats_messages_auth_ack_sent,
+                cluster_stats_messages_auth_ack_received,
+                cluster_stats_messages_update_sent,
+                cluster_stats_messages_update_received,
+                cluster_stats_messages_mfstart_sent,
+                cluster_stats_messages_mfstart_received,
+                cluster_stats_messages_module_sent,
+                cluster_stats_messages_module_received,
+                cluster_stats_messages_publishshard_sent,
+                cluster_stats_messages_publishshard_received,
+            );
+        }
+
+        Ok(info)
+    }
+}
+
 /// This link is established by the local node to the peer, or accepted by the local node from the peer.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ClusterLinkDirection {
     To,
@@ -646,7 +743,7 @@ pub enum ClusterLinkDirection {
 }
 
 /// Result for the [`cluster_links`](ClusterCommands::cluster_links) command
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub struct ClusterLinkInfo {

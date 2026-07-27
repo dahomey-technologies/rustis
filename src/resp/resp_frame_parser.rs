@@ -43,48 +43,48 @@ impl fmt::Debug for ParsedFrame {
     }
 }
 
-/// Rejects a collection cardinality that exceeds `max_collection_length`,
-/// bounding an attacker-controlled loop count.
-#[inline]
-fn check_collection_len(len: usize, max_collection_length: usize) -> Result<()> {
-    if len > max_collection_length {
-        return Err(Error::Client(ClientError::CollectionLengthTooLarge));
-    }
-    Ok(())
-}
-
-/// Outcome of reading a collection header (`*<n>\r\n`, `%<n>\r\n`, `~`, `>`).
+/// Outcome of reading a collection header (`*<n>\r\n`, `%<n>\r\n`, `~`, `>`, `|`).
 enum CollectionHeader {
     /// A null collection (`*-1\r\n`): it has no children and deserializes to
     /// `Null`, but is still counted as one element by its parent.
     Null { end: usize },
     /// A present collection with `count` children to follow (already doubled for
-    /// maps), whose first child begins at `end`.
+    /// a map-shaped tag), whose first child begins at `end`.
     Open { count: usize, end: usize },
 }
 
-/// Reads the header of the collection whose tag byte is at `at`, returning its
-/// child count (doubled for maps) and the offset just past the `\r\n`. `at` must
-/// point at a collection tag. [`Error::EOF`] when the header has not fully
+/// Reads and validates the header of the collection whose tag byte is at `at`,
+/// returning its child count (doubled for the two map-shaped tags) and the offset
+/// just past the `\r\n`. `at` must point at one of `*`, `%`, `~`, `>` or `|` — an
+/// attribute is a map that never reaches the tape, and is read here so its header
+/// is bounded by the same rules. A cardinality above `max_collection_length` is
+/// rejected here, where the count is known, so no caller can forget to bound an
+/// attacker-controlled loop. [`Error::EOF`] when the header has not fully
 /// arrived, so the streaming decoder can retry once more bytes are read.
-fn parse_collection_header(data: &[u8], at: usize) -> Result<CollectionHeader> {
+fn parse_collection_header(
+    data: &[u8],
+    at: usize,
+    max_collection_length: usize,
+) -> Result<CollectionHeader> {
     let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
     let (n, end) = parse_int_at(data, at + 1)?;
     if n == -1 {
         return Ok(CollectionHeader::Null { end });
     }
+    let is_map_shaped = matches!(tag, MAP_TAG | ATTRIBUTE_TAG);
     if n < 0 {
-        return Err(Error::Client(if tag == MAP_TAG {
+        return Err(Error::Client(if is_map_shaped {
             ClientError::CannotParseMap
         } else {
             ClientError::CannotParseSequence
         }));
     }
-    let multiplier = if tag == MAP_TAG { 2 } else { 1 };
-    Ok(CollectionHeader::Open {
-        count: n as usize * multiplier,
-        end,
-    })
+    let multiplier = if is_map_shaped { 2 } else { 1 };
+    let count = n as usize * multiplier;
+    if count > max_collection_length {
+        return Err(Error::Client(ClientError::CollectionLengthTooLarge));
+    }
+    Ok(CollectionHeader::Open { count, end })
 }
 
 /// Advances past zero or more consecutive RESP3 attribute frames (`|<n>\r\n`
@@ -103,13 +103,14 @@ fn skip_leading_attributes(
         if depth + 1 > limits.max_nesting_depth {
             return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
         }
-        let (n, after) = parse_int_at(data, pos + 1)?;
-        if n < 0 {
+        let CollectionHeader::Open { count, end } =
+            parse_collection_header(data, pos, limits.max_collection_length)?
+        else {
+            // RESP3 defines no null attribute: `|-1\r\n` is malformed, not an
+            // attribute with nothing to skip.
             return Err(Error::Client(ClientError::CannotParseMap));
-        }
-        let count = n as usize * 2;
-        check_collection_len(count, limits.max_collection_length)?;
-        let mut child = after;
+        };
+        let mut child = end;
         for _ in 0..count {
             child = skip_one_value(data, child, depth + 1, limits)?;
         }
@@ -127,10 +128,9 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
     let pos = skip_leading_attributes(data, pos, depth, limits)?;
     let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
     if is_collection_tag(tag) {
-        match parse_collection_header(data, pos)? {
+        match parse_collection_header(data, pos, limits.max_collection_length)? {
             CollectionHeader::Null { end } => Ok(end),
             CollectionHeader::Open { count, end } => {
-                check_collection_len(count, limits.max_collection_length)?;
                 if depth + 1 > limits.max_nesting_depth {
                     return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                 }
@@ -311,13 +311,12 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         stack: &mut Vec<OpenCollection>,
     ) -> Result<Option<ParsedFrame>> {
         let at = self.pos;
-        match parse_collection_header(self.buf, at) {
+        match parse_collection_header(self.buf, at, self.limits.max_collection_length) {
             Ok(CollectionHeader::Null { end }) => {
                 self.pos = end;
                 Ok(Some(ParsedFrame::Null))
             }
             Ok(CollectionHeader::Open { count, end }) => {
-                check_collection_len(count, self.limits.max_collection_length)?;
                 debug_assert!(self.tape.is_empty(), "tape must start empty per frame");
                 let head = self.tape.push(tag, 0);
                 self.tape.push(TAPE_LEN_TAG, count as u64);
@@ -399,7 +398,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         let tag = *self.buf.get(at).ok_or_else(|| Error::EOF)?;
 
         if is_collection_tag(tag) {
-            match parse_collection_header(self.buf, at)? {
+            match parse_collection_header(self.buf, at, self.limits.max_collection_length)? {
                 CollectionHeader::Null { end } => {
                     // A null child collection is one counted element that reads
                     // back as `Null`; its stored offset is never dereferenced.
@@ -408,7 +407,6 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     credit_open_collection(stack);
                 }
                 CollectionHeader::Open { count, end } => {
-                    check_collection_len(count, self.limits.max_collection_length)?;
                     if stack.len() + 1 > self.limits.max_nesting_depth {
                         return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                     }

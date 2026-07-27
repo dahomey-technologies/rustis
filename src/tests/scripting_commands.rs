@@ -116,6 +116,99 @@ async fn fcall() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn eval_readonly() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.set("key", "hello").await?;
+
+    let result: String = client
+        .eval_readonly("return redis.call('GET', KEYS[1])", "key", ())
+        .await?;
+    assert_eq!("hello", result);
+
+    let result: String = client
+        .eval_readonly(
+            "return redis.call('GET', KEYS[1])..\" \"..ARGV[1]..\"!\"",
+            "key",
+            "world",
+        )
+        .await?;
+    assert_eq!("hello world!", result);
+
+    // A write from a read-only script is rejected by the server.
+    let result: Result<()> = client
+        .eval_readonly("return redis.call('SET', KEYS[1], 'other')", "key", ())
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn evalsha_readonly() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.set("key", "hello").await?;
+
+    let sha1: String = client
+        .script_load("return redis.call('GET', KEYS[1])")
+        .await?;
+
+    let result: String = client.evalsha_readonly(sha1.clone(), "key", ()).await?;
+    assert_eq!("hello", result);
+
+    let sha1: String = client
+        .script_load("return redis.call('SET', KEYS[1], 'other')")
+        .await?;
+
+    let result: Result<()> = client.evalsha_readonly(sha1, "key", ()).await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn fcall_readonly() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.function_flush(FlushingMode::Sync).await?;
+
+    // Only a function registered with the `no-writes` flag is callable through
+    // FCALL_RO.
+    let library: String = client
+        .function_load(
+            true,
+            "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) return args[1] end, flags={'no-writes'}}",
+        )
+        .await?;
+    assert_eq!("mylib", library);
+
+    let result: String = client.fcall_readonly("myfunc", (), "hello").await?;
+    assert_eq!("hello", result);
+
+    let library: String = client
+        .function_load(
+            true,
+            "#!lua name=writelib \n redis.register_function('writefunc', function(keys, args) return redis.call('SET', keys[1], args[1]) end)",
+        )
+        .await?;
+    assert_eq!("writelib", library);
+
+    let result: Result<()> = client.fcall_readonly("writefunc", "key", "value").await;
+    assert!(result.is_err());
+
+    client.function_flush(FlushingMode::Sync).await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn fcall_tuple_response() -> Result<()> {
     let client = get_test_client().await?;
 

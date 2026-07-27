@@ -6,6 +6,7 @@ use crate::{
         XInfoStreamOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions,
         XReadOptions, XTrimOptions,
     },
+    resp::Value,
     tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
@@ -259,6 +260,97 @@ async fn xgroup() -> Result<()> {
 
     let result = client.xgroup_destroy("mystream", "mygroup").await?;
     assert!(result);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xgroup_setid() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let id: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    client
+        .xgroup_create("mystream", "mygroup", "$", XGroupCreateOptions::default())
+        .await?;
+
+    let results = client.xinfo_groups("mystream").await?;
+    assert_eq!(id, results[0].last_delivered_id);
+
+    // Rewinding to 0-0 makes the group deliver the existing entry again.
+    client
+        .xgroup_setid("mystream", "mygroup", "0-0", None)
+        .await?;
+
+    let results = client.xinfo_groups("mystream").await?;
+    assert_eq!("0-0", results[0].last_delivered_id);
+    assert_eq!(None, results[0].entries_read);
+
+    // ENTRIESREAD seeds the counter the lag is derived from.
+    client
+        .xgroup_setid("mystream", "mygroup", "0-0", Some(1))
+        .await?;
+
+    let results = client.xinfo_groups("mystream").await?;
+    assert_eq!(Some(1), results[0].entries_read);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xgroup_delconsumer() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let _: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+    client
+        .xgroup_create("mystream", "mygroup", "0-0", XGroupCreateOptions::default())
+        .await?;
+
+    // Bob reads the entry without acknowledging it, so deleting him reports the
+    // one message he still owned.
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "Bob",
+            XReadGroupOptions::default().count(1),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    let pending = client
+        .xgroup_delconsumer("mystream", "mygroup", "Bob")
+        .await?;
+    assert_eq!(1, pending);
+
+    let results = client.xinfo_consumers("mystream", "mygroup").await?;
+    assert!(results.is_empty());
+
+    // Deleting an unknown consumer is not an error.
+    let pending = client
+        .xgroup_delconsumer("mystream", "mygroup", "Alice")
+        .await?;
+    assert_eq!(0, pending);
 
     Ok(())
 }

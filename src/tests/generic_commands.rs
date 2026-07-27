@@ -618,6 +618,55 @@ async fn sort() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn sort_readonly() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .rpush("key", ["member3", "member1", "member2"])
+        .await?;
+
+    let values: Vec<String> = client
+        .sort_readonly("key", SortOptions::default().alpha())
+        .await?;
+    assert_eq!(
+        vec![
+            "member1".to_owned(),
+            "member2".to_owned(),
+            "member3".to_owned()
+        ],
+        values
+    );
+
+    let values: Vec<String> = client
+        .sort_readonly("key", SortOptions::default().alpha().limit(1, 1))
+        .await?;
+    assert_eq!(vec!["member2".to_owned()], values);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn waitaof() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.set("key", "value").await?;
+
+    // The test server has no AOF replica, so asking for one times out and
+    // answers the counts reached instead of failing.
+    let (num_local, num_replicas) = client.waitaof(0, 0, 0).await?;
+    assert_eq!(0, num_replicas);
+    assert!(num_local <= 1);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn touch() -> Result<()> {
     let client = get_test_client().await?;
 

@@ -307,6 +307,28 @@ async fn getrange() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn getdel() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.set("key", "value").await?;
+
+    let value: String = client.getdel("key").await?;
+    assert_eq!("value", value);
+
+    // The key is gone, so a second call answers nil.
+    let value: Value = client.getdel("key").await?;
+    assert!(matches!(value, Value::Null));
+
+    assert_eq!(0, client.exists("key").await?);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn getset() -> Result<()> {
     let client = get_test_client().await?;
 

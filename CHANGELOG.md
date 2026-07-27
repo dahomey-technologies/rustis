@@ -162,11 +162,11 @@ contains breaking changes; read that section before upgrading.
   disable a behavior. `RespLimits::DEFAULT` and `BufferConfig::DEFAULT` give the
   same defaults in a `const` context.
 - The parser accepts RESP3 attribute (`|`) and big number (`(`) frames.
-- `RespResponse::compact()` copies a response's referenced bytes into
-  freshly-sized buffers, releasing the larger recycled network block a retained
-  response would otherwise pin. The client-side cache now compacts entries before
-  storing them. A numeric reply is decoded on the spot rather than copied, so a
-  cache entry read a thousand times is decoded once.
+- The client-side cache now compacts an entry before storing it: the response's
+  bytes are copied into freshly-sized buffers instead of pinning the larger
+  recycled network block they were read from. A numeric reply is decoded on the
+  spot rather than copied, so a cache entry read a thousand times is decoded
+  once.
 - `cargo-fuzz` targets over the RESP read path, and a `fuzz_api` module exposing
   the parser entry points they drive.
 - `resp::bench_support`, the benchmark counterpart to `fuzz_api`: thin entry
@@ -282,3 +282,6 @@ contains breaking changes; read that section before upgrading.
   is now equally readable where serde asks for a borrowed string — a struct field
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
+
+[Unreleased]: https://github.com/dahomey-technologies/rustis/compare/0.20.0...HEAD
+[0.20.0]: https://github.com/dahomey-technologies/rustis/compare/0.19.3...0.20.0

@@ -276,6 +276,42 @@ async fn ts_incrby() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn ts_decrby() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let timestamp = client
+        .ts_decrby(
+            "a",
+            232.,
+            TsIncrByDecrByOptions::default().timestamp(TsTimestamp::Value(1657811829000)),
+        )
+        .await?;
+    assert_eq!(1657811829000u64, timestamp);
+
+    let timestamp = client
+        .ts_decrby(
+            "a",
+            32.,
+            TsIncrByDecrByOptions::default().timestamp(TsTimestamp::Value(1657811829000)),
+        )
+        .await?;
+    assert_eq!(1657811829000u64, timestamp);
+
+    let sample = client.ts_get("a", TsGetOptions::default()).await?;
+    assert_eq!(Some((1657811829000, -264.)), sample);
+
+    let timestamp = client
+        .ts_decrby("b", 1., TsIncrByDecrByOptions::default())
+        .await?;
+    assert!(timestamp > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn ts_info() -> Result<()> {
     let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;

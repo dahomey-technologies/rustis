@@ -1,9 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
-        ARRAY_TAG, BULK_ERROR_TAG, ElementKind, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG,
-        ParsedFrame, RespBuf, RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG,
-        SIMPLE_STRING_TAG, TapeNode, element_bounds, frame_scalar_bounds,
+        ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG, ParsedFrame,
+        RespBuf, RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG,
+        ScalarKind, TapeNode, element_bounds, frame_scalar_bounds,
     },
 };
 use bytes::Bytes;
@@ -357,27 +357,27 @@ fn read_scalar_view(data: &[u8], off: usize) -> Result<RespView<'_>> {
 /// back as the kind their tag announces fail here, failing one command instead of
 /// the whole connection.
 #[inline]
-fn decode_value(kind: ElementKind, data: &[u8], value: Range<usize>) -> Result<RespView<'_>> {
+fn decode_value(kind: ScalarKind, data: &[u8], value: Range<usize>) -> Result<RespView<'_>> {
     // `ok_or_else`, not `ok_or`: this runs per element, and `Error` is large
     // enough that constructing one eagerly only to drop it costs measurably.
     let value = data
         .get(value)
         .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
     Ok(match kind {
-        ElementKind::SimpleString => RespView::SimpleString(value),
-        ElementKind::Error => RespView::Error(value),
-        ElementKind::Integer => RespView::Integer(
+        ScalarKind::SimpleString => RespView::SimpleString(value),
+        ScalarKind::Error => RespView::Error(value),
+        ScalarKind::Integer => RespView::Integer(
             atoi::atoi(value).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?,
             value,
         ),
-        ElementKind::Double => RespView::Double(
+        ScalarKind::Double => RespView::Double(
             fast_float2::parse(value).map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
             value,
         ),
-        ElementKind::BulkString => RespView::BulkString(value),
+        ScalarKind::BulkString => RespView::BulkString(value),
         // The framing pass already rejected anything but `t` and `f`.
-        ElementKind::Boolean => RespView::Boolean(value.first() == Some(&b't')),
-        ElementKind::Null => RespView::Null,
+        ScalarKind::Boolean => RespView::Boolean(value.first() == Some(&b't')),
+        ScalarKind::Null => RespView::Null,
     })
 }
 

@@ -110,11 +110,24 @@ fn skip_leading_attributes(
             // attribute with nothing to skip.
             return Err(Error::Client(ClientError::CannotParseMap));
         };
-        let mut child = end;
-        for _ in 0..count {
-            child = skip_one_value(data, child, depth + 1, limits)?;
-        }
-        pos = child;
+        pos = skip_children(data, end, count, depth + 1, limits)?;
+    }
+    Ok(pos)
+}
+
+/// Advances past `count` consecutive values starting at `from`, returning the
+/// offset just past the last one. `depth` is the depth of those children, not of
+/// the collection holding them.
+fn skip_children(
+    data: &[u8],
+    from: usize,
+    count: usize,
+    depth: usize,
+    limits: &RespLimits,
+) -> Result<usize> {
+    let mut pos = from;
+    for _ in 0..count {
+        pos = skip_one_value(data, pos, depth, limits)?;
     }
     Ok(pos)
 }
@@ -134,11 +147,7 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
                 if depth + 1 > limits.max_nesting_depth {
                     return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                 }
-                let mut child = end;
-                for _ in 0..count {
-                    child = skip_one_value(data, child, depth + 1, limits)?;
-                }
-                Ok(child)
+                skip_children(data, end, count, depth + 1, limits)
             }
         }
     } else {

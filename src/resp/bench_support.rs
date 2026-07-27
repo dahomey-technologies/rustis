@@ -116,6 +116,20 @@ fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
     }
 }
 
+/// A parse tape a benchmark can carry across calls, the way the decoder carries
+/// its recycled one.
+///
+/// Opaque on purpose: the tape types stay `pub(crate)`, so a benchmark holds one
+/// without the parser's internals becoming reachable from outside the crate.
+#[derive(Default)]
+pub struct BenchTape(RespTapeMut);
+
+impl BenchTape {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Parses one complete RESP frame from `bytes` into the reused `tape`, without
 /// deserializing it — isolating the parser and tape build from serde and
 /// allocation cost. Reusing `tape` across calls mirrors the decoder's recycled
@@ -123,7 +137,8 @@ fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
 /// call, as prompt consumption would. For the CPU profiler (`resp_profiling`);
 /// `#[inline(never)]` so it shows as a frame boundary in the sampler.
 #[inline(never)]
-pub fn bench_parse_only(bytes: &[u8], tape: &mut RespTapeMut) {
+pub fn bench_parse_only(bytes: &[u8], tape: &mut BenchTape) {
+    let tape = &mut tape.0;
     let (frame, frame_len) = RespFrameParser::new(bytes, tape)
         .parse()
         .expect("bench_parse_only fed a valid frame");

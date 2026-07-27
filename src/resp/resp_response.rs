@@ -2,8 +2,7 @@ use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
         ARRAY_TAG, ElementKind, MAP_TAG, NO_BULK_LIMIT, NULL_TAG, PUSH_TAG, RespBuf,
-        RespDeserializer, SET_TAG, TAPE_NODE_SIZE, element_bounds, is_container_tag, node_payload,
-        node_tag, read_node,
+        RespDeserializer, RespTape, SET_TAG, element_bounds,
     },
 };
 use bytes::Bytes;
@@ -27,10 +26,10 @@ pub enum RespFrame {
     Double(f64),
     BulkString(Range<usize>),
     Boolean(bool),
-    Array { tape: Bytes, root: u32 },
-    Map { tape: Bytes, root: u32 },
-    Set { tape: Bytes, root: u32 },
-    Push { tape: Bytes, root: u32 },
+    Array { tape: RespTape, root: u32 },
+    Map { tape: RespTape, root: u32 },
+    Set { tape: RespTape, root: u32 },
+    Push { tape: RespTape, root: u32 },
     Error(Range<usize>),
     Null,
 }
@@ -62,24 +61,19 @@ impl fmt::Debug for RespFrame {
 /// companion node; a tape too short to hold it means the frame was not produced
 /// by the parser, so the count is reported as unknown rather than panicking in a
 /// formatter.
-fn fmt_frame_shape(f: &mut fmt::Formatter<'_>, kind: &str, tape: &Bytes, root: u32) -> fmt::Result {
+fn fmt_frame_shape(
+    f: &mut fmt::Formatter<'_>,
+    kind: &str,
+    tape: &RespTape,
+    root: u32,
+) -> fmt::Result {
     let mut s = f.debug_struct(kind);
     s.field("root", &root);
-    match tape_len(tape, root as usize) {
+    match tape.container_len(root as usize) {
         Some(len) => s.field("len", &len),
         None => s.field("len", &format_args!("<unreadable tape>")),
     };
     s.finish()
-}
-
-/// Reads a container's element count from its companion node, or `None` when the
-/// tape is too short to hold one.
-fn tape_len(tape: &[u8], root: usize) -> Option<usize> {
-    let companion = root.checked_add(1)?;
-    if tape.len() / TAPE_NODE_SIZE <= companion {
-        return None;
-    }
-    Some(node_payload(read_node(tape, companion)) as usize)
 }
 
 #[derive(Clone, PartialEq)]
@@ -246,7 +240,7 @@ impl RespResponse {
                 buf,
                 RespFrame::Array { tape, root } | RespFrame::Set { tape, root },
             ) => {
-                let len = node_payload(read_node(&tape, root as usize + 1)) as usize;
+                let len = tape.node(root as usize + 1).payload() as usize;
                 Ok(RespResponseIter::new(buf, tape, root as usize, len))
             }
             RespResponse::Frame(buf, RespFrame::Error(r)) => {
@@ -288,28 +282,28 @@ fn compact_frame(data: &[u8], frame: &RespFrame) -> (RespBuf, RespFrame) {
         RespFrame::Array { tape, root } => (
             RespBuf::from(Bytes::copy_from_slice(data)),
             RespFrame::Array {
-                tape: Bytes::copy_from_slice(tape),
+                tape: tape.compact(),
                 root: *root,
             },
         ),
         RespFrame::Map { tape, root } => (
             RespBuf::from(Bytes::copy_from_slice(data)),
             RespFrame::Map {
-                tape: Bytes::copy_from_slice(tape),
+                tape: tape.compact(),
                 root: *root,
             },
         ),
         RespFrame::Set { tape, root } => (
             RespBuf::from(Bytes::copy_from_slice(data)),
             RespFrame::Set {
-                tape: Bytes::copy_from_slice(tape),
+                tape: tape.compact(),
                 root: *root,
             },
         ),
         RespFrame::Push { tape, root } => (
             RespBuf::from(Bytes::copy_from_slice(data)),
             RespFrame::Push {
-                tape: Bytes::copy_from_slice(tape),
+                tape: tape.compact(),
                 root: *root,
             },
         ),
@@ -371,7 +365,7 @@ fn read_scalar_frame(tag: u8, data: &[u8], off: usize) -> Option<RespFrame> {
               fallback would have to invent a view for a tag that is not a \
               container."
 )]
-fn container_view<'a>(tag: u8, buf: &'a [u8], tape: &'a [u8], root: usize) -> RespView<'a> {
+fn container_view<'a>(tag: u8, buf: &'a [u8], tape: &'a RespTape, root: usize) -> RespView<'a> {
     let view = RespArrayView::new(buf, tape, root);
     match tag {
         ARRAY_TAG => RespView::Array(view),
@@ -417,16 +411,16 @@ impl<'a> RespView<'a> {
             RespFrame::BulkString(r) => RespView::BulkString(&data[r.clone()]),
             RespFrame::Boolean(b) => RespView::Boolean(*b),
             RespFrame::Array { tape, root } => {
-                RespView::Array(RespArrayView::new(data, tape.as_ref(), *root as usize))
+                RespView::Array(RespArrayView::new(data, tape, *root as usize))
             }
             RespFrame::Map { tape, root } => {
-                RespView::Map(RespArrayView::new(data, tape.as_ref(), *root as usize))
+                RespView::Map(RespArrayView::new(data, tape, *root as usize))
             }
             RespFrame::Set { tape, root } => {
-                RespView::Set(RespArrayView::new(data, tape.as_ref(), *root as usize))
+                RespView::Set(RespArrayView::new(data, tape, *root as usize))
             }
             RespFrame::Push { tape, root } => {
-                RespView::Push(RespArrayView::new(data, tape.as_ref(), *root as usize))
+                RespView::Push(RespArrayView::new(data, tape, *root as usize))
             }
             RespFrame::Error(r) => RespView::Error(&data[r.clone()]),
             RespFrame::Null => RespView::Null,
@@ -504,15 +498,15 @@ impl fmt::Debug for UnreadableElement {
 #[derive(Clone, PartialEq)]
 pub struct RespArrayView<'a> {
     buf: &'a [u8],
-    tape: &'a [u8],
+    tape: &'a RespTape,
     root: usize,
     len: usize,
 }
 
 impl<'a> RespArrayView<'a> {
     #[inline(always)]
-    pub fn new(buf: &'a [u8], tape: &'a [u8], root: usize) -> Self {
-        let len = node_payload(read_node(tape, root + 1)) as usize;
+    pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
+        let len = tape.node(root + 1).payload() as usize;
         Self {
             buf,
             tape,
@@ -556,14 +550,14 @@ impl<'a> IntoIterator for RespArrayView<'a> {
 /// head's back-patched `next`.
 pub struct RespArrayIter<'a> {
     buf: &'a [u8],
-    tape: &'a [u8],
+    tape: &'a RespTape,
     cursor: usize,
     remaining: usize,
 }
 
 impl<'a> RespArrayIter<'a> {
     #[inline(always)]
-    pub fn new(buf: &'a [u8], tape: &'a [u8], root: usize, len: usize) -> Self {
+    pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
             tape,
@@ -591,16 +585,16 @@ impl<'a> Iterator for RespArrayIter<'a> {
             return None;
         }
 
-        let node = read_node(self.tape, self.cursor);
-        let tag = node_tag(node);
+        let node = self.tape.node(self.cursor);
+        let tag = node.tag();
 
-        if is_container_tag(tag) {
+        if node.is_container() {
             let root = self.cursor;
-            self.cursor = node_payload(node) as usize;
+            self.cursor = node.payload() as usize;
             self.remaining -= 1;
             Some(Ok(container_view(tag, self.buf, self.tape, root)))
         } else {
-            let off = node_payload(node) as usize;
+            let off = node.payload() as usize;
             // A `None` here means the already-validated tape is inconsistent
             // (effectively unreachable). Surface it as an error and end the
             // iterator instead of silently truncating the array: the consumer
@@ -626,13 +620,13 @@ impl<'a> Iterator for RespArrayIter<'a> {
 /// which retain elements past the borrow of the parent response).
 pub struct RespResponseIter {
     buf: RespBuf,
-    tape: Bytes,
+    tape: RespTape,
     cursor: usize,
     remaining: usize,
 }
 
 impl RespResponseIter {
-    pub fn new(buf: RespBuf, tape: Bytes, root: usize, len: usize) -> Self {
+    pub fn new(buf: RespBuf, tape: RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
             tape,
@@ -650,12 +644,12 @@ impl Iterator for RespResponseIter {
             return None;
         }
 
-        let node = read_node(&self.tape, self.cursor);
-        let tag = node_tag(node);
+        let node = self.tape.node(self.cursor);
+        let tag = node.tag();
 
-        if is_container_tag(tag) {
+        if node.is_container() {
             let root = self.cursor;
-            self.cursor = node_payload(node) as usize;
+            self.cursor = node.payload() as usize;
             self.remaining -= 1;
             let tape = self.tape.clone();
             let root = root as u32;
@@ -673,7 +667,7 @@ impl Iterator for RespResponseIter {
             };
             Some(Ok(RespResponse::Frame(self.buf.clone(), frame)))
         } else {
-            let off = node_payload(node) as usize;
+            let off = node.payload() as usize;
             // Same surface-and-stop handling as `RespArrayIter`: an inconsistent
             // tape yields an error, not a silent truncation.
             match read_scalar_frame(tag, self.buf.as_ref(), off) {

@@ -1,9 +1,8 @@
 use crate::{
     ClientError, Error, Result,
     client::RespLimits,
-    resp::{RespFrame, TAPE_LEN_TAG, is_container_tag, node_count, patch_node, push_node},
+    resp::{RespFrame, RespTapeMut, TAPE_LEN_TAG, is_container_tag},
 };
-use bytes::BytesMut;
 use memchr::memchr;
 use std::ops::Range;
 
@@ -450,10 +449,10 @@ pub struct RespFrameParser<'a, 'b> {
     /// [`Config`](crate::client::Config) so a frame is checked against the same
     /// limits wherever it is parsed.
     limits: RespLimits,
-    /// Tape builder, borrowed so the decoder can recycle one `BytesMut` across
-    /// frames (`split().freeze()` per frame keeps its capacity). While a frame is
-    /// incomplete the partial tape stays here, accumulating across chunks.
-    tape: &'b mut BytesMut,
+    /// Tape builder, borrowed so the decoder can recycle one across frames
+    /// ([`RespTapeMut::split_freeze`] per frame keeps its capacity). While a frame
+    /// is incomplete the partial tape stays here, accumulating across chunks.
+    tape: &'b mut RespTapeMut,
     pos: usize,
 }
 
@@ -461,13 +460,13 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// A parser positioned at the start of `buf`. Used both for one-shot parsing
     /// of a complete buffer and as the streaming decoder's entry point for a
     /// brand-new frame.
-    pub fn new(buf: &'a [u8], tape: &'b mut BytesMut) -> Self {
+    pub fn new(buf: &'a [u8], tape: &'b mut RespTapeMut) -> Self {
         Self::with_limits(buf, tape, RespLimits::DEFAULT)
     }
 
     /// A parser positioned at the start of `buf`, enforcing caller-chosen
     /// limits instead of the defaults.
-    pub fn with_limits(buf: &'a [u8], tape: &'b mut BytesMut, limits: RespLimits) -> Self {
+    pub fn with_limits(buf: &'a [u8], tape: &'b mut RespTapeMut, limits: RespLimits) -> Self {
         Self {
             buf,
             limits,
@@ -482,7 +481,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// [`Self::parse_resumable`].
     pub(crate) fn at(
         buf: &'a [u8],
-        tape: &'b mut BytesMut,
+        tape: &'b mut RespTapeMut,
         pos: usize,
         limits: RespLimits,
     ) -> Self {
@@ -595,8 +594,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             Ok(ContainerHeader::Open { count, end }) => {
                 check_collection_len(count, self.limits.max_collection_length)?;
                 debug_assert!(self.tape.is_empty(), "tape must start empty per frame");
-                let head = push_node(self.tape, tag, 0);
-                push_node(self.tape, TAPE_LEN_TAG, count as u64);
+                let head = self.tape.push(tag, 0);
+                self.tape.push(TAPE_LEN_TAG, count as u64);
                 self.pos = end;
                 stack.push(PendingContainer {
                     tag,
@@ -631,13 +630,13 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 // `next` to the tape end (the reader's O(1) sibling skip) and close
                 // the level, crediting the parent — or finish the frame at the root.
                 let Some(done) = stack.pop() else { break };
-                let next = node_count(self.tape) as u64;
-                patch_node(self.tape, done.head_index, done.tag, next);
+                let next = self.tape.node_count() as u64;
+                self.tape.patch(done.head_index, done.tag, next);
                 if let Some(parent) = stack.last_mut() {
                     parent.remaining -= 1;
                     continue;
                 }
-                let tape = self.tape.split().freeze();
+                let tape = self.tape.split_freeze();
                 return Ok(Some(match done.tag {
                     ARRAY_TAG => RespFrame::Array { tape, root: 0 },
                     MAP_TAG => RespFrame::Map { tape, root: 0 },
@@ -683,7 +682,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 ContainerHeader::Null { end } => {
                     // A null child collection is one counted element that reads
                     // back as `Null`; its stored offset is never dereferenced.
-                    push_node(self.tape, NULL_TAG, at as u64);
+                    self.tape.push(NULL_TAG, at as u64);
                     self.pos = end;
                     credit_open_collection(stack);
                 }
@@ -692,8 +691,8 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     if stack.len() + 1 > self.limits.max_nesting_depth {
                         return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                     }
-                    let head = push_node(self.tape, tag, 0);
-                    push_node(self.tape, TAPE_LEN_TAG, count as u64);
+                    let head = self.tape.push(tag, 0);
+                    self.tape.push(TAPE_LEN_TAG, count as u64);
                     self.pos = end;
                     stack.push(PendingContainer {
                         tag,
@@ -705,7 +704,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             }
         } else {
             let bounds = element_bounds(self.buf, at, self.limits.max_bulk_length)?;
-            push_node(self.tape, tag, at as u64);
+            self.tape.push(tag, at as u64);
             self.pos = bounds.end;
             credit_open_collection(stack);
         }

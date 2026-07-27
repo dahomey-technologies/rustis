@@ -1,7 +1,10 @@
 use crate::{
     Error, Result,
     client::{BufferConfig, RespLimits},
-    resp::{PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse, bulk_value_end},
+    resp::{
+        PendingContainer, RespBuf, RespFrame, RespFrameParser, RespResponse, RespTapeMut,
+        bulk_value_end,
+    },
 };
 use bytes::BytesMut;
 use tokio_util::codec::Decoder;
@@ -9,9 +12,9 @@ use tokio_util::codec::Decoder;
 /// Streaming RESP decoder.
 ///
 /// Holds one `tape_buf` recycled across frames: [`RespFrameParser`] writes a
-/// collection's parse tape into it, then `split().freeze()` per frame hands the
-/// frame its own immutable tape while the buffer keeps its capacity for the
-/// next one. With prompt consumption (deserialize then drop, the normal
+/// collection's parse tape into it, then [`RespTapeMut::split_freeze`] per frame
+/// hands the frame its own immutable tape while the buffer keeps its capacity for
+/// the next one. With prompt consumption (deserialize then drop, the normal
 /// request/response path) this reaches a zero-allocation steady state; a
 /// retained response pins its split-off tape and forces at most one
 /// reallocation of the block.
@@ -27,12 +30,12 @@ pub(crate) struct BufferDecoder {
     buffers: BufferConfig,
     /// Hostile-input bounds handed to every parser this decoder builds.
     limits: RespLimits,
-    tape_buf: BytesMut,
+    tape_buf: RespTapeMut,
     /// `true` once a frame's tape has grown the recycled block past the shrink
     /// bound. The block then stays pinned — including by `tape_buf`'s own
-    /// zero-length tail after a `split()`, whose `capacity()` hides the block
-    /// size — until it is explicitly released, so this is tracked directly
-    /// rather than inferred from `capacity()`.
+    /// zero-length tail after a split, whose capacity hides the block size — until
+    /// it is explicitly released, so this is tracked directly rather than inferred
+    /// from the capacity.
     tape_oversized: bool,
     /// Consecutive small/scalar frames seen while `tape_oversized`, gating the
     /// shrink hysteresis.
@@ -70,7 +73,7 @@ impl BufferDecoder {
     /// Returns the recycled tape buffer's block to the allocator once an
     /// oversized spike has been followed by a quiet streak.
     ///
-    /// `BytesMut` has no `shrink_to_fit`, and after a `split()` the buffer is an
+    /// `BytesMut` has no `shrink_to_fit`, and after a split the buffer is an
     /// empty tail that still holds a reference to the whole (possibly huge)
     /// block, so `capacity()` cannot tell us the block is oversized. We instead
     /// remember that a large tape was built, then — after enough quiet frames
@@ -101,12 +104,12 @@ impl BufferDecoder {
         }
         self.quiet_streak = 0;
         self.tape_oversized = false;
-        self.tape_buf = BytesMut::with_capacity(self.buffers.tape_capacity);
+        self.tape_buf = RespTapeMut::with_capacity(self.buffers.tape_capacity);
     }
 
     #[cfg(test)]
     pub(crate) fn tape_capacity(&self) -> usize {
-        self.tape_buf.capacity()
+        self.tape_buf.byte_capacity()
     }
 }
 
@@ -117,7 +120,7 @@ fn frame_tape_len(frame: &RespFrame) -> usize {
         RespFrame::Array { tape, .. }
         | RespFrame::Map { tape, .. }
         | RespFrame::Set { tape, .. }
-        | RespFrame::Push { tape, .. } => tape.len(),
+        | RespFrame::Push { tape, .. } => tape.byte_len(),
         _ => 0,
     }
 }

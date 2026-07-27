@@ -1,9 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, RedisErrorKind, Result,
-    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse},
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut},
     tests::log_try_init,
 };
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use serde::Deserialize;
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -13,7 +13,7 @@ where
     T: serde::de::DeserializeOwned,
 {
     let buf = str.as_bytes();
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
     let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
     deserialize_from_resp_response(response)

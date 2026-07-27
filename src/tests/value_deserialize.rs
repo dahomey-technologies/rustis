@@ -1,15 +1,15 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
-    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, Value},
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut, Value},
     tests::log_try_init,
 };
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use serde::Deserialize;
 use std::collections::HashMap;
 
 fn deserialize_value(str: &str) -> Result<Value> {
     let buf = str.as_bytes();
-    let mut tape = BytesMut::new();
+    let mut tape = RespTapeMut::default();
     let (frame, _) = RespFrameParser::new(buf, &mut tape).parse()?;
     let response = RespResponse::new(RespBuf::from(Bytes::copy_from_slice(buf)), frame);
     let deserializer = RespDeserializer::new(response.view());

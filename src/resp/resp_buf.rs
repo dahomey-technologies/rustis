@@ -2,7 +2,7 @@ use crate::{
     Result,
     resp::{
         ARRAY_TAG, BULK_ERROR_TAG, PUSH_TAG, RespDeserializer, RespFrameParser, RespResponse,
-        SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, Value,
+        RespTapeMut, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, Value,
     },
 };
 use bytes::{BufMut, Bytes, BytesMut};
@@ -65,7 +65,7 @@ impl RespBuf {
     /// Convert the RESP Buffer to a Rust type `T` by using serde deserialization
     #[inline]
     pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
-        let mut tape = BytesMut::new();
+        let mut tape = RespTapeMut::default();
         let (frame, _) = RespFrameParser::new(&self.0, &mut tape).parse()?;
         let response = RespResponse::new(self.clone(), frame);
         T::deserialize(RespDeserializer::new(response.view()))

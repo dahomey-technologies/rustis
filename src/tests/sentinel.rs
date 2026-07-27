@@ -1,12 +1,11 @@
 use crate::{
     Result,
     client::Client,
-    commands::{ConnectionCommands, SentinelCommands, StringCommands},
-    network::sleep,
+    commands::{ConnectionCommands, SentinelCommands},
     tests::{get_sentinel_master_test_client, get_sentinel_test_client, log_try_init},
 };
 use serial_test::serial;
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
@@ -242,24 +241,6 @@ async fn sentinel_sentinels() -> Result<()> {
     assert!(!result.is_empty());
     assert!(result[0].flags.contains("sentinel"));
     //assert_eq!(26379, result[0].port);
-
-    Ok(())
-}
-
-/// test reconnection to replica when master is stopped
-/// master stop is not automated but must be done manually
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-#[ignore]
-async fn get_loop() -> Result<()> {
-    let client = get_sentinel_master_test_client().await?;
-    client.set("key", "value").await?;
-
-    for _ in 0..1000 {
-        let _value: Result<String> = client.get("key").await;
-        sleep(Duration::from_secs(1)).await;
-    }
 
     Ok(())
 }

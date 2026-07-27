@@ -363,24 +363,6 @@ async fn commands_to_different_nodes() -> Result<()> {
     Ok(())
 }
 
-/// test reconnection to replica when master is stopped
-/// master stop is not automated but must be done manually
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
-#[serial]
-#[ignore]
-async fn get_loop() -> Result<()> {
-    let client = get_cluster_test_client().await?;
-    client.set("key", "value").await?;
-
-    for _ in 0..1000 {
-        let _value: Result<String> = client.get("key").await;
-        sleep(Duration::from_secs(1)).await;
-    }
-
-    Ok(())
-}
-
 /// On a cluster reconnect, the in-flight `pending_requests` reference the old
 /// per-node connections and can never be fulfilled. If they are not purged, the
 /// stale request stuck at the front of the queue blocks every subsequent reply

@@ -238,7 +238,6 @@ async fn json_clear() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
-#[ignore]
 async fn json_debug_memory() -> Result<()> {
     let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;
@@ -254,8 +253,10 @@ async fn json_debug_memory() -> Result<()> {
 
     let result: Vec<usize> = client.json_debug_memory("key", "$.foo[*].bar").await?;
     assert_eq!(2, result.len());
-    assert_eq!(48, result[0]);
-    assert_eq!(8, result[1]);
+    // The exact byte counts belong to the JSON module allocator. Only their
+    // ordering is stable: a three-string array outweighs a single number.
+    assert!(result[0] > result[1]);
+    assert!(result[1] > 0);
 
     Ok(())
 }

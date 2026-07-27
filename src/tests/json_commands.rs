@@ -338,6 +338,36 @@ async fn json_get() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn json_mset() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // JSON.MSET takes key/path/value triplets and creates the documents in one
+    // atomic call.
+    client
+        .json_mset([
+            ("key1", "$", r#"{"a":1, "nested": {"a": 3}}"#),
+            ("key2", "$", r#"{"a":4, "nested": {"a": 6}}"#),
+        ])
+        .await?;
+
+    let jsons: SmallVec<[String; 2]> = client.json_mget(["key1", "key2"], "$..a").await?;
+    assert_eq!(2, jsons.len());
+    assert_eq!("[1,3]", jsons[0]);
+    assert_eq!("[4,6]", jsons[1]);
+
+    // A path inside an existing document updates just that member.
+    client.json_mset([("key1", "$.a", "2")]).await?;
+
+    let json: String = client.json_get("key1", JsonGetOptions::default()).await?;
+    assert_eq!(r#"{"a":2,"nested":{"a":3}}"#, json);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn json_mget() -> Result<()> {
     let client = get_test_client().await?;
     client.flushall(FlushingMode::Sync).await?;

@@ -406,6 +406,57 @@ async fn pub_sub_shardchannels() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn sunsubscribe() -> Result<()> {
+    let pub_sub_client = get_cluster_test_client().await?;
+    pub_sub_client.flushall(FlushingMode::Sync).await?;
+
+    // find the master node matching the {1} hashtag
+    let slot = pub_sub_client.cluster_keyslot("{1}").await?;
+    let shard_results: Vec<ClusterShardResult> = pub_sub_client.cluster_shards().await?;
+    let shard_index = shard_results
+        .iter()
+        .position(|s| s.slots[0].0 <= slot && slot <= s.slots[0].1)
+        .unwrap();
+    let master_node = shard_results[shard_index]
+        .nodes
+        .iter()
+        .find(|n| n.role == "master")
+        .unwrap();
+
+    let master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+
+    let mut pub_sub_stream = pub_sub_client
+        .ssubscribe(["mychannel1{1}", "mychannel2{1}"])
+        .await?;
+
+    // Unsubscribing from one shard channel leaves the other one subscribed —
+    // unlike `close`, which drops them all.
+    pub_sub_stream.sunsubscribe("mychannel1{1}").await?;
+
+    let channels: HashSet<String> = master_client.pub_sub_shardchannels(()).await?;
+    assert_eq!(1, channels.len());
+    assert!(channels.contains("mychannel2{1}"));
+
+    // The stream still delivers on the channel it kept.
+    pub_sub_client
+        .spublish("mychannel2{1}", "mymessage")
+        .await?;
+    let message = pub_sub_stream.next().await.unwrap()?;
+    assert_eq!(b"mychannel2{1}".to_vec(), message.channel);
+    assert_eq!(b"mymessage".to_vec(), message.payload);
+
+    pub_sub_stream.close().await?;
+
+    let channels: HashSet<String> = master_client.pub_sub_shardchannels(()).await?;
+    assert_eq!(0, channels.len());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn pub_sub_shardnumsub() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
 

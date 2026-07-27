@@ -615,6 +615,14 @@ impl<'a> Iterator for RespCollectionIter<'a> {
 /// Owned equivalent of [`RespCollectionIter`], yielding a self-contained
 /// [`RespResponse`] per element (used by cluster aggregation and the cache,
 /// which retain elements past the borrow of the parent response).
+///
+/// A scalar element has its layout worked out twice: once here, to know which
+/// bytes to slice, and once when whoever received it reads it back. Carrying the
+/// kind across instead would widen [`RespResponse`], a type cloned once per
+/// element on this path, to spare a `memchr` over a slice that is already short.
+/// The two also happen at different times and in different places — handing an
+/// element out and decoding it are not the same job — which is the point of
+/// yielding a response rather than a value.
 pub struct RespResponseIter {
     buf: RespBuf,
     tape: RespTape,

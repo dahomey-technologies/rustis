@@ -495,14 +495,7 @@ pub trait SearchCommands<'a>: Sized {
         if let Some(format) = options.format {
             command = command.arg("FORMAT").arg(format);
         }
-        // The values are arbitrary bytes — a vector, typically — so they are
-        // wrapped rather than serialized as a sequence of integers.
-        let params: SmallVec<[(&str, RefBulkString); 2]> = options
-            .params
-            .iter()
-            .map(|(name, value)| (*name, RefBulkString::new(value)))
-            .collect();
-        command = command.arg_counted("PARAMS", params);
+        command = command.arg_counted("PARAMS", ByteParams(&options.params));
         if let Some(timeout) = options.timeout {
             command = command.arg("TIMEOUT").arg(timeout);
         }
@@ -1547,6 +1540,27 @@ pub struct FtHybridOptions<'a> {
     format: Option<FtHybridFormat>,
     params: SmallVec<[(&'a str, &'a [u8]); 2]>,
     timeout: Option<u64>,
+}
+
+/// Serializes `name value` pairs flat, as `PARAMS` expects them. The values are
+/// arbitrary bytes — a vector, typically — so each one goes on the wire as a
+/// bulk string rather than as a sequence of integers.
+struct ByteParams<'a>(&'a [(&'a str, &'a [u8])]);
+
+impl Serialize for ByteParams<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.0.len() * 2))?;
+
+        for (name, value) in self.0 {
+            seq.serialize_element(name)?;
+            seq.serialize_element(&RefBulkString::new(value))?;
+        }
+
+        seq.end()
+    }
 }
 
 impl<'a> FtHybridOptions<'a> {

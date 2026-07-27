@@ -471,7 +471,7 @@ impl CommandBuilder {
         self = self.arg(counter.count);
 
         // 3. Write the elements
-        self.arg(arg)
+        self.arg_checking_count(arg, counter.count)
     }
 
     /// Adds a collection prefixed by the number of `step`-sized groups it
@@ -501,7 +501,7 @@ impl CommandBuilder {
 
         // 2. Write the group count, then the elements.
         self = self.arg(counter.count / step);
-        self.arg(arg)
+        self.arg_checking_count(arg, counter.count)
     }
 
     #[must_use]
@@ -520,6 +520,60 @@ impl CommandBuilder {
         } else {
             self
         }
+    }
+
+    /// Adds a labeled clause whose label is followed by the number of arguments
+    /// the clause contains, as `SORTBY 2 field ASC` or `PARAMS 4 n1 v1 n2 v2`
+    /// require. The count is derived from an `ArgCounter` dry run, so it cannot
+    /// disagree with what is actually written; the label itself is not counted.
+    ///
+    /// `label` is serialized like any other argument, so a clause introduced by
+    /// several tokens (`COMBINE RRF <count>`) can pass a tuple.
+    ///
+    /// The whole clause is skipped when it would contain no argument. A command
+    /// that needs an explicit zero — RediSearch's `GROUPBY 0` means "group over
+    /// everything" — must use `.arg(label).arg_with_count(arg)` instead.
+    #[must_use]
+    #[inline(always)]
+    pub fn arg_counted(mut self, label: impl Serialize, arg: impl Serialize) -> Self {
+        // 1. Dry Run (CPU only, No Alloc)
+        let mut counter = ArgCounter::default();
+        if let Err(e) = arg.serialize(&mut counter) {
+            self.record_serialization_error(e);
+            return self;
+        }
+        if counter.count == 0 {
+            return self;
+        }
+
+        // 2. Write the label and the count, then the elements.
+        self = self.arg(label).arg(counter.count);
+        self.arg_checking_count(arg, counter.count)
+    }
+
+    /// Appends `arg` and, in debug builds, checks that it produced exactly
+    /// `expected` arguments.
+    ///
+    /// The count a command declares to the server always comes from an
+    /// `ArgCounter` dry run, which makes it correct only insofar as `ArgCounter`
+    /// and `ArgSerializer` agree. They are two separate implementations of the
+    /// same traversal and have already drifted apart once, on empty-named
+    /// struct fields. This turns every call site into a check of that
+    /// agreement, at no cost in release builds.
+    #[must_use]
+    #[inline(always)]
+    fn arg_checking_count(mut self, arg: impl Serialize, expected: usize) -> Self {
+        let before = self.args_layout.len();
+        self = self.arg(arg);
+
+        // A failed write stops part-way through, so the shortfall is expected.
+        debug_assert!(
+            self.pending_error.is_some() || self.args_layout.len() - before == expected,
+            "the dry run counted {expected} arguments but {} were written",
+            self.args_layout.len() - before
+        );
+
+        self
     }
 
     /// Adds a Key argument, marking it for Cluster routing. The CRC16 slot is
@@ -601,7 +655,7 @@ impl CommandBuilder {
 
         // 3. Write the elements, marking every step-th one (after the count) as a key.
         let old_len = self.args_layout.len();
-        self = self.arg(args);
+        self = self.arg_checking_count(args, counter.count);
 
         for layout in self.args_layout.iter_mut().skip(old_len).step_by(step) {
             layout.flags |= ArgLayout::IS_KEY;

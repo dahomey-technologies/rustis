@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::{Client, Config, IntoConfig},
-    commands::{ClusterCommands, StreamCommands, VectorSetCommands},
+    commands::{ClusterCommands, SearchCommands, StreamCommands, VectorSetCommands},
 };
 #[cfg(feature = "native-tls")]
 use native_tls::Certificate;
@@ -177,3 +177,4 @@ pub struct TestClient;
 impl<'a> StreamCommands<'a> for TestClient {}
 impl<'a> VectorSetCommands<'a> for TestClient {}
 impl<'a> ClusterCommands<'a> for TestClient {}
+impl<'a> SearchCommands<'a> for TestClient {}

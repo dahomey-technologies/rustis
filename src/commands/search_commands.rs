@@ -2,8 +2,8 @@ use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        RefBulkString, Response, Value, cmd, serialize_byte_buf_option, serialize_flag,
-        serialize_slice_with_len,
+        RefBulkString, Response, Value, cmd, count_args, serialize_byte_buf_option, serialize_flag,
+        serialize_slice_with_arg_count,
     },
 };
 use serde::{
@@ -406,13 +406,10 @@ pub trait SearchCommands<'a>: Sized {
         let mut command = cmd("FT.HYBRID").arg(index);
 
         // SEARCH query [SCORER count ...] [YIELD_SCORE_AS name]
-        command = command.arg("SEARCH").arg(search.query);
-        if !search.scorer.is_empty() {
-            command = command
-                .arg("SCORER")
-                .arg(search.scorer.len())
-                .arg(search.scorer);
-        }
+        command = command
+            .arg("SEARCH")
+            .arg(search.query)
+            .arg_counted("SCORER", search.scorer);
         if let Some(name) = search.yield_score_as {
             command = command.arg("YIELD_SCORE_AS").arg(name);
         }
@@ -421,18 +418,14 @@ pub trait SearchCommands<'a>: Sized {
         command = command.arg("VSIM").arg(vsim.field).arg(vsim.vector);
         match vsim.query {
             Some(FtHybridVectorQuery::Knn { k, ef_runtime }) => {
-                let count = if ef_runtime.is_some() { 4 } else { 2 };
-                command = command.arg("KNN").arg(count).arg("K").arg(k);
-                if let Some(ef_runtime) = ef_runtime {
-                    command = command.arg("EF_RUNTIME").arg(ef_runtime);
-                }
+                command =
+                    command.arg_counted("KNN", (("K", k), ef_runtime.map(|e| ("EF_RUNTIME", e))));
             }
             Some(FtHybridVectorQuery::Range { radius, epsilon }) => {
-                let count = if epsilon.is_some() { 4 } else { 2 };
-                command = command.arg("RANGE").arg(count).arg("RADIUS").arg(radius);
-                if let Some(epsilon) = epsilon {
-                    command = command.arg("EPSILON").arg(epsilon);
-                }
+                command = command.arg_counted(
+                    "RANGE",
+                    (("RADIUS", radius), epsilon.map(|e| ("EPSILON", e))),
+                );
             }
             None => {}
         }
@@ -446,36 +439,30 @@ pub trait SearchCommands<'a>: Sized {
         // COMBINE <RRF count ... | LINEAR count ...>
         match options.combine {
             Some(FtHybridCombine::Rrf { constant, window }) => {
-                let count = 2 * (constant.is_some() as usize + window.is_some() as usize);
                 // `COMBINE RRF` requires at least one argument; with none, RRF is
-                // already the default, so the clause is omitted entirely.
-                if count > 0 {
-                    command = command.arg("COMBINE").arg("RRF").arg(count);
-                    if let Some(constant) = constant {
-                        command = command.arg("CONSTANT").arg(constant);
-                    }
-                    if let Some(window) = window {
-                        command = command.arg("WINDOW").arg(window);
-                    }
-                }
+                // already the default, so the clause is omitted entirely — which
+                // is what `arg_counted` does with an empty clause.
+                command = command.arg_counted(
+                    ("COMBINE", "RRF"),
+                    (
+                        constant.map(|c| ("CONSTANT", c)),
+                        window.map(|w| ("WINDOW", w)),
+                    ),
+                );
             }
             Some(FtHybridCombine::Linear {
                 alpha,
                 beta,
                 window,
             }) => {
-                let count = 4 + 2 * window.is_some() as usize;
-                command = command
-                    .arg("COMBINE")
-                    .arg("LINEAR")
-                    .arg(count)
-                    .arg("ALPHA")
-                    .arg(alpha)
-                    .arg("BETA")
-                    .arg(beta);
-                if let Some(window) = window {
-                    command = command.arg("WINDOW").arg(window);
-                }
+                command = command.arg_counted(
+                    ("COMBINE", "LINEAR"),
+                    (
+                        ("ALPHA", alpha),
+                        ("BETA", beta),
+                        window.map(|w| ("WINDOW", w)),
+                    ),
+                );
             }
             None => {}
         }
@@ -485,10 +472,8 @@ pub trait SearchCommands<'a>: Sized {
         // reducer): LOAD → GROUPBY → APPLY → FILTER → SORTBY/NOSORT → LIMIT.
         match options.load {
             FtHybridLoad::All => command = command.arg("LOAD").arg("*"),
-            FtHybridLoad::Fields(fields) if !fields.is_empty() => {
-                command = command.arg("LOAD").arg(fields.len()).arg(fields);
-            }
-            _ => {}
+            FtHybridLoad::Fields(fields) => command = command.arg_counted("LOAD", fields),
+            FtHybridLoad::None => {}
         }
         if let Some(groupby) = options.groupby {
             command = command.arg("GROUPBY").arg(groupby);
@@ -502,9 +487,7 @@ pub trait SearchCommands<'a>: Sized {
         if options.nosort {
             command = command.arg("NOSORT");
         } else if let Some((field, order)) = options.sortby {
-            // `SORTBY count field [ASC|DESC]` — the count spans every token that
-            // follows, so it is 2 once the order keyword is included.
-            command = command.arg("SORTBY").arg(2).arg(field).arg(order);
+            command = command.arg_counted("SORTBY", (field, order));
         }
         if let Some((offset, num)) = options.limit {
             command = command.arg("LIMIT").arg(offset).arg(num);
@@ -512,14 +495,14 @@ pub trait SearchCommands<'a>: Sized {
         if let Some(format) = options.format {
             command = command.arg("FORMAT").arg(format);
         }
-        if !options.params.is_empty() {
-            // PARAMS nargs name value [name value ...] — nargs counts every token,
-            // i.e. two per pair.
-            command = command.arg("PARAMS").arg(options.params.len() * 2);
-            for (name, value) in options.params {
-                command = command.arg(name).arg(RefBulkString::new(value));
-            }
-        }
+        // The values are arbitrary bytes — a vector, typically — so they are
+        // wrapped rather than serialized as a sequence of integers.
+        let params: SmallVec<[(&str, RefBulkString); 2]> = options
+            .params
+            .iter()
+            .map(|(name, value)| (*name, RefBulkString::new(value)))
+            .collect();
+        command = command.arg_counted("PARAMS", params);
         if let Some(timeout) = options.timeout {
             command = command.arg("TIMEOUT").arg(timeout);
         }
@@ -861,20 +844,6 @@ impl FtFlatVectorFieldAttributes {
             ..self
         }
     }
-
-    pub fn num_attributes(&self) -> usize {
-        let mut num = 6;
-
-        if self.initial_cap.is_some() {
-            num += 2
-        }
-
-        if self.block_size.is_some() {
-            num += 2
-        }
-
-        num
-    }
 }
 
 #[derive(Debug, Copy, Clone, Serialize)]
@@ -937,32 +906,6 @@ impl FtHnswVectorFieldAttributes {
             ..self
         }
     }
-
-    pub fn num_attributes(&self) -> usize {
-        let mut num = 6;
-
-        if self.initial_cap.is_some() {
-            num += 2
-        }
-
-        if self.m.is_some() {
-            num += 2
-        }
-
-        if self.ef_construction.is_some() {
-            num += 2
-        }
-
-        if self.ef_runtime.is_some() {
-            num += 2
-        }
-
-        if self.epsilon.is_some() {
-            num += 2
-        }
-
-        num
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -982,15 +925,18 @@ impl Serialize for FtVectorFieldAlgorithm {
     {
         let mut seq = serializer.serialize_seq(None)?;
 
+        // `<algorithm> count attribute value [attribute value ...]` — the count
+        // comes from a dry run so that adding an attribute to either struct
+        // cannot leave it behind.
         match self {
             FtVectorFieldAlgorithm::Flat(attributes) => {
                 seq.serialize_element("FLAT")?;
-                seq.serialize_element(&attributes.num_attributes())?;
+                seq.serialize_element(&count_args(attributes)?)?;
                 seq.serialize_element(attributes)?;
             }
             FtVectorFieldAlgorithm::HNSW(attributes) => {
                 seq.serialize_element("HNSW")?;
-                seq.serialize_element(&attributes.num_attributes())?;
+                seq.serialize_element(&count_args(attributes)?)?;
                 seq.serialize_element(attributes)?;
             }
         }
@@ -1228,7 +1174,7 @@ pub struct FtCreateOptions<'a> {
     on: Option<FtIndexDataType>,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     prefix: SmallVec<[&'a str; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1277,7 +1223,7 @@ pub struct FtCreateOptions<'a> {
     skipinitialscan: bool,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     stopwords: SmallVec<[&'a str; 10]>,
     #[serde(skip_serializing_if = "SmallVec::is_empty")]
@@ -1704,7 +1650,7 @@ pub struct FtAggregateOptions<'a> {
     verbatim: bool,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     load: SmallVec<[FtAttribute<'a>; 10]>,
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
@@ -1719,7 +1665,7 @@ pub struct FtAggregateOptions<'a> {
     timeout: Option<u64>,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     params: SmallVec<[(&'a str, &'a str); 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1932,7 +1878,7 @@ impl<'a> FtAttribute<'a> {
 
 #[derive(Default, Serialize)]
 pub struct FtGroupBy<'a> {
-    #[serde(rename = "", serialize_with = "serialize_slice_with_len")]
+    #[serde(rename = "", serialize_with = "serialize_slice_with_arg_count")]
     properties: SmallVec<[&'a str; 10]>,
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
     reducers: SmallVec<[FtReduceOptions<'a>; 10]>,
@@ -2186,7 +2132,7 @@ pub struct FtSortBy<'a> {
     #[serde(
         rename = "",
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     properties: SmallVec<[&'a str; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2700,18 +2646,18 @@ pub struct FtSearchOptions<'a> {
     #[serde(
         rename = "",
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     inkeys: SmallVec<[&'a str; 10]>,
     #[serde(
         rename = "",
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     infields: SmallVec<[&'a str; 10]>,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     r#return: SmallVec<[FtAttribute<'a>; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2756,7 +2702,7 @@ pub struct FtSearchOptions<'a> {
     limit: Option<(u32, u32)>,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     params: SmallVec<[(&'a str, &'a str); 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3037,7 +2983,7 @@ struct FtGeoFilterOptions<'a> {
 pub struct FtSearchSummarizeOptions<'a> {
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     fields: SmallVec<[&'a str; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3097,7 +3043,7 @@ impl<'a> FtSearchSummarizeOptions<'a> {
 pub struct FtSearchHighlightOptions<'a> {
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
+        serialize_with = "serialize_slice_with_arg_count"
     )]
     fields: SmallVec<[&'a str; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3169,11 +3115,9 @@ pub enum FtLanguage {
 pub struct FtSpellCheckOptions<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     distance: Option<u64>,
-    #[serde(
-        rename = "",
-        skip_serializing_if = "SmallVec::is_empty",
-        serialize_with = "serialize_slice_with_len"
-    )]
+    // `TERMS {INCLUDE|EXCLUDE} dictionary` takes no argument count, unlike most
+    // of the repeatable clauses in this module.
+    #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
     terms: SmallVec<[FtSpellCheckTermsOption<'a>; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dialect: Option<u64>,

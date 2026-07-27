@@ -19,7 +19,7 @@ This conversion is easily accessible through the associate function [`Value::int
 **rustis** provides an idiomatic way to pass arguments to [commands](crate::commands).
 Basically a [`Command`] is a built through a builder which accepts a command name and one ore more command arguments.
 
-The only requirement for the command argument is that they must implement the serde [`Serialize`] trait.
+The only requirement for the command argument is that they must implement the serde [`Serialize`](serde::Serialize) trait.
 It gives to **rustis** a great flexibility to accept many type of arguments for the same command.
 
 #### Example

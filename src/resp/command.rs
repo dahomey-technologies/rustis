@@ -577,7 +577,7 @@ impl CommandBuilder {
     }
 
     /// Adds a Key argument, marking it for Cluster routing. The CRC16 slot is
-    /// computed later by [`Command::compute_slots`], on the caller thread and
+    /// computed later by `Command::compute_slots`, on the caller thread and
     /// only in Cluster mode.
     #[must_use]
     #[inline(always)]

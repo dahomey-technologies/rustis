@@ -1728,7 +1728,7 @@ impl<'a> FtAggregateOptions<'a> {
     /// Each group should have at least one reducer,
     /// a function that handles the group entries,
     /// either counting them,
-    /// or performing multiple aggregate operations (see [`reduce`](FtAggregateOptions::reduce)).
+    /// or performing multiple aggregate operations (see [`reduce`](FtGroupBy::reduce)).
     #[must_use]
     pub fn groupby(mut self, options: FtGroupBy<'a>) -> Self {
         self.expressions
@@ -2916,7 +2916,7 @@ impl<'a> FtSearchOptions<'a> {
 
     /// adds an arbitrary, binary safe `payload` that is exposed to custom scoring functions.
     ///
-    /// See [`Extensions`]((https://redis.io/docs/latest/develop/ai/search-and-query/administration/extensions/).
+    /// See [Extensions](https://redis.io/docs/latest/develop/ai/search-and-query/administration/extensions/).
     #[must_use]
     pub fn payload(mut self, payload: &'a [u8]) -> Self {
         self.payload = Some(payload);
@@ -3336,7 +3336,7 @@ impl<'a> FtSugAddOptions<'a> {
     }
 
     /// saves an extra payload with the suggestion, that can be fetched by adding the
-    /// [`WITHPAYLOADS`](FtSugGetOptions::withpayload) argument to [`FT.SUGGET`](SearchCommands::ft_sugget).
+    /// [`WITHPAYLOADS`](FtSugGetOptions::withpayloads) argument to [`FT.SUGGET`](SearchCommands::ft_sugget).
     #[must_use]
     pub fn payload(mut self, payload: &'a [u8]) -> Self {
         self.payload = Some(payload);

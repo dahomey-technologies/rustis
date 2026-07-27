@@ -1766,13 +1766,15 @@ fn ft_hybrid_args() -> Result<()> {
                 })
                 .load(["@content"])
                 .sortby("@content", SortOrder::Desc)
-                .param("vec", b"ab"),
+                .param("vec", b"ab")
+                .param("other", b"cd")
+                .param("third", b"ef"),
         )
         .command;
     assert_eq!(
         "FT.HYBRID index SEARCH bicycle SCORER 1 BM25 VSIM @embedding $vec KNN 4 K 2 EF_RUNTIME 30 \
          COMBINE RRF 4 CONSTANT 60.0 WINDOW 40 LOAD 1 @content SORTBY 2 @content DESC \
-         PARAMS 2 vec ab",
+         PARAMS 6 vec ab other cd third ef",
         &cmd.to_string()
     );
 

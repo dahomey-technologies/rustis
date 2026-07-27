@@ -19,16 +19,12 @@ use crate::{
 use memchr::memchr;
 use std::ops::Range;
 
-/// Sentinel meaning "this data was already validated when it was parsed, do not
-/// re-apply a cap". Used by the tape read-back path, which walks a frame the
-/// decoder has already accepted: re-checking it against the *current* default
-/// would wrongly reject a frame that a raised
-/// [`RespLimits::max_bulk_length`](crate::client::RespLimits::max_bulk_length)
-/// legitimately let through.
-pub(crate) const NO_BULK_LIMIT: usize = usize::MAX;
+/// A `max_bulk_length` that caps nothing. See [`scalar_value`] and
+/// [`scalar_span`] for why the read-back path passes it.
+const NO_BULK_LIMIT: usize = usize::MAX;
 
 /// The normalized kind of a scalar element, as recovered from its bytes by
-/// [`element_bounds`]. This is what the tape reader dispatches on, independent
+/// [`scalar_value`]. This is what the tape reader dispatches on, independent
 /// of the exact RESP tag (a big number and a bulk string both read back as
 /// [`ScalarKind::BulkString`], for instance).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,18 +38,16 @@ pub(crate) enum ScalarKind {
     Null,
 }
 
-/// The layout of one scalar element within the data buffer: its kind, the byte
-/// range of its value payload, and the offset one past the whole element.
+/// Everything one read of a scalar recovers: its kind, the byte range of its
+/// value payload, and the offset one past the whole element.
 ///
-/// This is the **single source of truth** for per-element byte layout, shared
-/// by the write side (the parser's forward pass, which needs only `end` to
-/// advance) and the read side (the tape reader, which needs `kind` + `value` to
-/// build a view). Keeping one function means the two passes can never disagree
-/// on where an element ends.
-pub(crate) struct ElementBounds {
-    pub kind: ScalarKind,
-    pub value: Range<usize>,
-    pub end: usize,
+/// Never handed out whole. Each caller goes through the projection that answers
+/// its own question — [`scalar_end`], [`scalar_value`] or [`scalar_span`] — so no
+/// call site carries a field it does not read.
+struct ScalarLayout {
+    kind: ScalarKind,
+    value: Range<usize>,
+    end: usize,
 }
 
 /// Rejects a bulk-family length that exceeds `max_bulk_length`. `len` must
@@ -166,32 +160,31 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
     Err(Error::EOF)
 }
 
-/// Computes the [`ElementBounds`] of the scalar element whose tag byte is at
-/// `off` in `data`. `off` must point at a non-collection, non-attribute tag (the
-/// parser dispatches collections and skips attributes before recording a node's
-/// offset), so those tags are rejected as unknown.
+/// Reads the [`ScalarLayout`] of the scalar element whose tag byte is at `at` in
+/// `data`. `at` must point at a non-collection, non-attribute tag (the parser
+/// dispatches collections and skips attributes before recording a node's offset),
+/// so those tags are rejected as unknown.
 ///
-/// The validation here is exactly the parser's original per-tag validation, so
-/// a frame the decoder accepted reads back byte-identically.
+/// The one tag table in the crate for scalar byte layout: the framing pass and
+/// the read-back pass reach it through different projections, so they can never
+/// disagree on where an element ends. The validation is exactly the parser's
+/// original per-tag validation, so a frame the decoder accepted reads back
+/// byte-identically.
 ///
-/// Inlined because it is the whole of the scalar hot path, on both the framing
-/// and the reading side: out of line, each side pays a call plus the full tag
-/// dispatch, where inlining lets the caller keep only the arm its tag selects.
-/// The framing side reads only `end`, so inlining is also what lets the rest of
-/// the struct be dropped there rather than built and spilled.
+/// Inlined, and so are its three projections, because this is the whole of the
+/// scalar hot path on both sides: out of line, each side pays a call plus the
+/// full tag dispatch, where inlining lets a call site keep only the arm its tag
+/// selects, and lets the fields that site does not read be dropped rather than
+/// built and spilled.
 #[inline(always)]
-pub(crate) fn element_bounds(
-    data: &[u8],
-    off: usize,
-    max_bulk_length: usize,
-) -> Result<ElementBounds> {
-    let tag = *data.get(off).ok_or_else(|| Error::EOF)?;
-    let start = off + 1;
+fn scalar_layout(data: &[u8], at: usize, max_bulk_length: usize) -> Result<ScalarLayout> {
+    let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
+    let start = at + 1;
 
     match tag {
         SIMPLE_STRING_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::SimpleString,
                 value: start..cr,
                 end: cr + 2,
@@ -199,7 +192,7 @@ pub(crate) fn element_bounds(
         }
         SIMPLE_ERROR_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Error,
                 value: start..cr,
                 end: cr + 2,
@@ -207,7 +200,7 @@ pub(crate) fn element_bounds(
         }
         INTEGER_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Integer,
                 value: start..cr,
                 end: cr + 2,
@@ -215,7 +208,7 @@ pub(crate) fn element_bounds(
         }
         DOUBLE_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Double,
                 value: start..cr,
                 end: cr + 2,
@@ -225,7 +218,7 @@ pub(crate) fn element_bounds(
         // decimal-string payload so the caller can read it as a string.
         BIG_NUMBER_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
                 value: start..cr,
                 end: cr + 2,
@@ -233,7 +226,7 @@ pub(crate) fn element_bounds(
         }
         NULL_TAG => {
             let cr = find_crlf(data, start)?;
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Null,
                 value: start..start,
                 end: cr + 2,
@@ -244,7 +237,7 @@ pub(crate) fn element_bounds(
                 [b't' | b'f', b'\r', b'\n'] => {}
                 _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
             }
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Boolean,
                 value: start..start + 1,
                 end: start + 3,
@@ -253,7 +246,7 @@ pub(crate) fn element_bounds(
         BULK_STRING_TAG => {
             let (len, after) = parse_int_at(data, start)?;
             if len == -1 {
-                return Ok(ElementBounds {
+                return Ok(ScalarLayout {
                     kind: ScalarKind::Null,
                     value: after..after,
                     end: after,
@@ -267,7 +260,7 @@ pub(crate) fn element_bounds(
             if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseBulkString));
             }
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
                 value: after..after + len as usize,
                 end,
@@ -278,7 +271,7 @@ pub(crate) fn element_bounds(
         VERBATIM_STRING_TAG => {
             let (len, after) = parse_int_at(data, start)?;
             if len == -1 {
-                return Ok(ElementBounds {
+                return Ok(ScalarLayout {
                     kind: ScalarKind::Null,
                     value: after..after,
                     end: after,
@@ -292,7 +285,7 @@ pub(crate) fn element_bounds(
             if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseVerbatimString));
             }
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
                 value: after + 4..after + len as usize,
                 end,
@@ -308,7 +301,7 @@ pub(crate) fn element_bounds(
             if slice(data, end - 2..end)? != b"\r\n" {
                 return Err(Error::Client(ClientError::CannotParseBulkError));
             }
-            Ok(ElementBounds {
+            Ok(ScalarLayout {
                 kind: ScalarKind::Error,
                 value: after..after + len as usize,
                 end,
@@ -316,6 +309,42 @@ pub(crate) fn element_bounds(
         }
         _ => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
     }
+}
+
+/// Where the scalar at `at` ends: the offset just past its trailing `\r\n`, and
+/// with it the proof that the element is well-formed. This is the framing
+/// question, asked once per element by the forward pass.
+///
+/// `max_bulk_length` caps what a length header may announce, so a hostile length
+/// is rejected here rather than turned into an offset.
+#[inline(always)]
+pub(crate) fn scalar_end(data: &[u8], at: usize, max_bulk_length: usize) -> Result<usize> {
+    Ok(scalar_layout(data, at, max_bulk_length)?.end)
+}
+
+/// What the scalar at `at` is worth: its kind and the byte range of its payload,
+/// for the reader to decode.
+///
+/// No bulk cap is applied, deliberately. These bytes were validated when the
+/// frame was parsed, against the limits of the connection that received them; the
+/// read-back happens in the calling task, which no longer knows those limits.
+/// Re-checking against the *default* would wrongly reject a frame that a raised
+/// [`RespLimits::max_bulk_length`](crate::client::RespLimits::max_bulk_length)
+/// legitimately let through.
+#[inline(always)]
+pub(crate) fn scalar_value(data: &[u8], at: usize) -> Result<(ScalarKind, Range<usize>)> {
+    let layout = scalar_layout(data, at, NO_BULK_LIMIT)?;
+    Ok((layout.kind, layout.value))
+}
+
+/// Which bytes the scalar at `at` occupies — `at..end`, tag and terminator
+/// included. The range to slice when one element of a collection has to be handed
+/// out as a frame of its own.
+///
+/// No bulk cap is applied, for the reason given on [`scalar_value`].
+#[inline(always)]
+pub(crate) fn scalar_span(data: &[u8], at: usize) -> Result<Range<usize>> {
+    Ok(at..scalar_layout(data, at, NO_BULK_LIMIT)?.end)
 }
 
 /// Kind and value range of a scalar whose bytes are `data` in their entirety.

@@ -21,7 +21,7 @@
 //! - **Scalar node** (tag = the RESP tag byte `+ - : $ , # _ ( = !`): payload is
 //!   the element's **start offset**, frame-relative, pointing at its own tag byte
 //!   in the data buffer. Its value is recovered by re-reading from that offset
-//!   ([`element_bounds`](super::element_bounds)), a content-length read that
+//!   ([`scalar_value`](super::scalar_value)), a content-length read that
 //!   touches only this element — never a structural re-parse of the collection.
 //! - **Collection node** (tag = `* % ~ >`): a collection occupies **two**
 //!   consecutive nodes. The *head* carries `next` = the tape index one past the

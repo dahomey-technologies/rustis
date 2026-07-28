@@ -177,10 +177,14 @@ contains breaking changes; read that section before upgrading.
   `u8` used to yield `44`; it now fails. `i64::MIN` is accepted (it was
   previously rejected). This applies to both the RESP deserializer and the
   `Value` deserializer, which stay consistent with each other.
-- Repairing the commands listed under *Fixed* changed four signatures:
+- Repairing the commands listed under *Fixed* changed five signatures:
   - `ClusterCommands::cluster_info` takes no argument (was `slot`, `count`).
   - `ClusterCommands::cluster_getkeysinslot` returns `R: Response` (was `()`).
   - `TimeSeriesCommands::ts_decrby` returns `u64` (was `()`).
+  - `ClusterBumpEpochResult::Bumped` and `Still` now carry the config epoch the
+    node ends up with (`Bumped(u64)` / `Still(u64)`), and the enum became
+    `#[non_exhaustive]`. Match arms binding no field need updating; the new
+    `ClusterBumpEpochResult::epoch()` reads the value whichever the outcome.
   - Eight methods lost a generic type parameter — `ClusterCommands::cluster_addslots`,
     `cluster_addslotsrange`, `cluster_count_failure_reports`, `cluster_delslots`,
     `cluster_delslotsrange`, `cluster_forget`, `SearchCommands::ft_profile_search`
@@ -315,6 +319,11 @@ contains breaking changes; read that section before upgrading.
 - **`cluster_getkeysinslot` and `ts_decrby` threw their reply away.** Both were
   typed `()` where the server does answer something — the names of the keys in
   the slot, and the timestamp of the upserted sample.
+- **`cluster_bumpepoch` could not succeed.** `CLUSTER BUMPEPOCH` answers a single
+  line holding both the outcome and the resulting epoch, as in `STILL 84`, while
+  `ClusterBumpEpochResult` was derived as a plain lowercase enum tag. Every call
+  failed with `unknown variant`. The type now parses that line and carries the
+  epoch.
 - **Eight command methods were effectively uncallable.** They carried a generic
   type parameter that appeared nowhere in their signature, so it could not be
   inferred and reaching them required a turbofish naming a type that was never

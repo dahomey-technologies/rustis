@@ -6,12 +6,13 @@ use crate::{
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
         CommandListOptions, ConnectionCommands, DebugCommands, FailOverOptions, FlushingMode,
         InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ReplicaOfOptions,
-        RoleResult, ServerCommands, SlowLogGetOptions, StringCommands,
+        RoleResult, ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
     },
     resp::Value,
     spawn,
     tests::{
-        get_default_config, get_sentinel_test_client, get_test_client, get_test_client_with_config,
+        TestClient, get_default_config, get_sentinel_test_client, get_test_client,
+        get_test_client_with_config,
     },
 };
 use futures_util::StreamExt;
@@ -1198,4 +1199,46 @@ async fn time() -> Result<()> {
     let (_unix_timestamp, _microseconds) = client.time().await?;
 
     Ok(())
+}
+
+/// `SHUTDOWN [NOSAVE | SAVE] [NOW] [FORCE] [ABORT]` takes the server down, and
+/// it exits cleanly, so the container's restart-on-failure policy would not
+/// bring it back and the rest of the suite would run against nothing. `ABORT`
+/// is the one form that leaves the server up: it cancels a shutdown in
+/// progress, and answers an error when there is none — which is still the
+/// server accepting the command and reading its flag.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn shutdown_abort() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let result = client.shutdown(ShutdownOptions::default().abort()).await;
+
+    let Err(Error::Redis(e)) = result else {
+        panic!("expected the server to report that nothing is shutting down: {result:?}");
+    };
+    assert!(e.description.contains("No shutdown in progress"));
+
+    client.ping::<()>(()).await?;
+
+    Ok(())
+}
+
+/// The forms that do take the server down can only have their wire form
+/// checked, against the syntax published for `SHUTDOWN`.
+#[test]
+fn shutdown_command() {
+    let cmd = TestClient.shutdown(ShutdownOptions::default()).command;
+    assert_eq!("SHUTDOWN", cmd.to_string());
+
+    let cmd = TestClient
+        .shutdown(ShutdownOptions::default().save(false).now().force())
+        .command;
+    assert_eq!("SHUTDOWN NOSAVE NOW FORCE", cmd.to_string());
+
+    let cmd = TestClient
+        .shutdown(ShutdownOptions::default().save(true))
+        .command;
+    assert_eq!("SHUTDOWN SAVE", cmd.to_string());
 }

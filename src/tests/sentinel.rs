@@ -1,8 +1,8 @@
 use crate::{
     Result,
     client::Client,
-    commands::{ConnectionCommands, SentinelCommands},
-    tests::{get_sentinel_master_test_client, get_sentinel_test_client, log_try_init},
+    commands::{ConnectionCommands, SentinelCommands, SentinelSimulateFailureMode},
+    tests::{TestClient, get_sentinel_master_test_client, get_sentinel_test_client, log_try_init},
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -257,3 +257,54 @@ async fn sentinel_sentinels() -> Result<()> {
 
 //     Ok(())
 // }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn sentinel_get_master_addr_by_name() -> Result<()> {
+    // connect to the sentinel instance directly for this command
+    let client = get_sentinel_test_client().await?;
+
+    let addr = client.sentinel_get_master_addr_by_name("myservice").await?;
+    let Some((ip, port)) = addr else {
+        panic!("sentinel does not know the master of a service it monitors");
+    };
+    assert!(!ip.is_empty());
+    assert_eq!(6381, port);
+
+    // An unmonitored service has no address, which is the whole point of the
+    // `Option`: the server answers a null array rather than an error.
+    let addr = client.sentinel_get_master_addr_by_name("unknown").await?;
+    assert!(addr.is_none());
+
+    Ok(())
+}
+
+// The two commands below take the monitored master down on purpose, so neither
+// can be sent against the shared sentinel set-up. What is still checkable is
+// the wire form, against the syntax the server prints under `SENTINEL HELP`.
+
+#[test]
+fn sentinel_failover_command() {
+    let cmd = TestClient.sentinel_failover("myservice").command;
+    assert_eq!("SENTINEL FAILOVER myservice", cmd.to_string());
+}
+
+#[test]
+fn sentinel_simulate_failure_command() {
+    let cmd = TestClient
+        .sentinel_simulate_failure(SentinelSimulateFailureMode::CrashAfterElection)
+        .command;
+    assert_eq!(
+        "SENTINEL SIMULATE-FAILURE CRASH-AFTER-ELECTION",
+        cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .sentinel_simulate_failure(SentinelSimulateFailureMode::CrashAfterPromotion)
+        .command;
+    assert_eq!(
+        "SENTINEL SIMULATE-FAILURE CRASH-AFTER-PROMOTION",
+        cmd.to_string()
+    );
+}

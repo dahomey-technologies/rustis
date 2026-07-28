@@ -1116,3 +1116,33 @@ async fn xtrim_entries_deletion_policy() -> Result<()> {
 
     Ok(())
 }
+
+/// `XGROUP HELP` answers the subcommand list as a flat array of text lines,
+/// which is the shape the declared return type claims.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xgroup_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let help = client.xgroup_help().await?;
+
+    assert!(help.iter().any(|line| line.contains("CREATE")));
+
+    Ok(())
+}
+
+/// `XINFO HELP` answers the subcommand list as a flat array of text lines,
+/// which is the shape the declared return type claims.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xinfo_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let help = client.xinfo_help().await?;
+
+    assert!(help.iter().any(|line| line.contains("STREAM")));
+
+    Ok(())
+}

@@ -2,8 +2,8 @@ use crate::{
     Result,
     client::ClientPreparedCommand,
     commands::{
-        FlushingMode, FunctionListOptions, LibraryInfo, ScriptingCommands, ServerCommands,
-        StringCommands,
+        FlushingMode, FunctionListOptions, LibraryInfo, ScriptDebugMode, ScriptingCommands,
+        ServerCommands, StringCommands,
     },
     error::{Error, RedisErrorKind},
     sleep, spawn,
@@ -450,6 +450,38 @@ async fn script_kill() -> Result<()> {
     sleep(std::time::Duration::from_millis(100)).await;
 
     client.script_kill().await?;
+
+    Ok(())
+}
+
+/// `FUNCTION HELP` answers the subcommand list as a flat array of text lines,
+/// which is the shape the declared return type claims.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn function_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let help = client.function_help().await?;
+
+    assert!(help.iter().any(|line| line.contains("LOAD")));
+
+    Ok(())
+}
+
+/// `SCRIPT DEBUG` takes one of three modes. `No` is the server default, so it
+/// is the one mode a test can send without leaving the connection in a state
+/// that stalls every script the rest of the suite runs.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn script_debug() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.script_debug(ScriptDebugMode::No).await?;
+
+    let result: String = client.eval("return ARGV[1]", (), "hello").await?;
+    assert_eq!("hello", result);
 
     Ok(())
 }

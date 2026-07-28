@@ -937,3 +937,18 @@ async fn subscribe_multiple_times_to_the_same_channel() -> Result<()> {
 
     Ok(())
 }
+
+/// `PUBSUB HELP` answers the subcommand list as a flat array of text lines,
+/// which is the shape the declared return type claims.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn pub_sub_help() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let help = client.pub_sub_help().await?;
+
+    assert!(help.iter().any(|line| line.contains("CHANNELS")));
+
+    Ok(())
+}

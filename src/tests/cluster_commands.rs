@@ -2,12 +2,13 @@ use crate::{
     Result,
     client::{Client, IntoConfig},
     commands::{
-        ClusterCommands, ClusterLinkDirection, ClusterLinkInfo, ClusterMigrationTarget,
-        ClusterShardResult, ClusterSlotStatMetric, ClusterSlotStatsFilter, ClusterState,
-        GenericCommands, LegacyClusterShardResult, SortOrder, StringCommands,
+        ClusterCommands, ClusterFailoverOption, ClusterLinkDirection, ClusterLinkInfo,
+        ClusterMigrationTarget, ClusterResetType, ClusterShardResult, ClusterSlotStatMetric,
+        ClusterSlotStatsFilter, ClusterState, GenericCommands, LegacyClusterShardResult, SortOrder,
+        StringCommands,
     },
     resp::Value,
-    tests::log_try_init,
+    tests::{TestClient, log_try_init},
 };
 use serial_test::serial;
 use tracing::debug;
@@ -253,4 +254,170 @@ async fn cluster_migration_status() -> Result<()> {
     assert!(tasks.is_empty());
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cluster_saveconfig() -> Result<()> {
+    log_try_init();
+    let client = Client::connect("127.0.0.1:7000").await?;
+
+    client.cluster_saveconfig().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cluster_bumpepoch() -> Result<()> {
+    log_try_init();
+    let client = Client::connect("127.0.0.1:7000").await?;
+
+    // The outcome depends on where this node's epoch sits among its peers, and
+    // both outcomes carry the epoch it ends up with — which a cluster that has
+    // ever elected anything has advanced past zero.
+    let result = client.cluster_bumpepoch().await?;
+    debug!("bumpepoch: {result:?}");
+    assert!(result.epoch() > 0);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cluster_migration_cancel() -> Result<()> {
+    log_try_init();
+    let client = Client::connect("127.0.0.1:7000").await?;
+
+    // Nothing is migrating in a healthy test cluster, so there is nothing to
+    // cancel; what the call proves is that the command is accepted as written.
+    let cancelled = client
+        .cluster_migration_cancel(ClusterMigrationTarget::All)
+        .await?;
+    assert_eq!(0, cancelled);
+
+    let cancelled = client
+        .cluster_migration_cancel(ClusterMigrationTarget::Id("no-such-task"))
+        .await?;
+    assert_eq!(0, cancelled);
+
+    Ok(())
+}
+
+// The commands below reconfigure the topology, and the test cluster is shared
+// by every other cluster test, so none of them can be sent. What is still
+// checkable is the wire form: each expectation below is the syntax the server
+// prints for itself under `CLUSTER HELP`.
+
+#[test]
+fn cluster_addslots_command() {
+    let cmd = TestClient.cluster_addslots([0u16, 1, 2]).command;
+    assert_eq!("CLUSTER ADDSLOTS 0 1 2", cmd.to_string());
+}
+
+#[test]
+fn cluster_addslotsrange_command() {
+    let cmd = TestClient
+        .cluster_addslotsrange([(0u16, 100u16), (200, 300)])
+        .command;
+    assert_eq!("CLUSTER ADDSLOTSRANGE 0 100 200 300", cmd.to_string());
+}
+
+#[test]
+fn cluster_delslots_command() {
+    let cmd = TestClient.cluster_delslots([0u16, 1, 2]).command;
+    assert_eq!("CLUSTER DELSLOTS 0 1 2", cmd.to_string());
+}
+
+#[test]
+fn cluster_delslotsrange_command() {
+    let cmd = TestClient
+        .cluster_delslotsrange([(0u16, 100u16), (200, 300)])
+        .command;
+    assert_eq!("CLUSTER DELSLOTSRANGE 0 100 200 300", cmd.to_string());
+}
+
+/// The option is what to watch: omitted, it must leave no trailing token.
+#[test]
+fn cluster_failover_command() {
+    let cmd = TestClient.cluster_failover(None).command;
+    assert_eq!("CLUSTER FAILOVER", cmd.to_string());
+
+    let cmd = TestClient
+        .cluster_failover(Some(ClusterFailoverOption::Force))
+        .command;
+    assert_eq!("CLUSTER FAILOVER FORCE", cmd.to_string());
+
+    let cmd = TestClient
+        .cluster_failover(Some(ClusterFailoverOption::Takeover))
+        .command;
+    assert_eq!("CLUSTER FAILOVER TAKEOVER", cmd.to_string());
+}
+
+#[test]
+fn cluster_flushslots_command() {
+    let cmd = TestClient.cluster_flushslots().command;
+    assert_eq!("CLUSTER FLUSHSLOTS", cmd.to_string());
+}
+
+#[test]
+fn cluster_forget_command() {
+    let cmd = TestClient
+        .cluster_forget("37618c7eec0dd58e946e1ef0df02d8c5a9a14235")
+        .command;
+    assert_eq!(
+        "CLUSTER FORGET 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
+        cmd.to_string()
+    );
+}
+
+/// The cluster bus port is optional and comes last.
+#[test]
+fn cluster_meet_command() {
+    let cmd = TestClient.cluster_meet("127.0.0.1", 7000, None).command;
+    assert_eq!("CLUSTER MEET 127.0.0.1 7000", cmd.to_string());
+
+    let cmd = TestClient
+        .cluster_meet("127.0.0.1", 7000, Some(17000))
+        .command;
+    assert_eq!("CLUSTER MEET 127.0.0.1 7000 17000", cmd.to_string());
+}
+
+#[test]
+fn cluster_replicate_command() {
+    let cmd = TestClient
+        .cluster_replicate("37618c7eec0dd58e946e1ef0df02d8c5a9a14235")
+        .command;
+    assert_eq!(
+        "CLUSTER REPLICATE 37618c7eec0dd58e946e1ef0df02d8c5a9a14235",
+        cmd.to_string()
+    );
+}
+
+#[test]
+fn cluster_reset_command() {
+    let cmd = TestClient.cluster_reset(ClusterResetType::Hard).command;
+    assert_eq!("CLUSTER RESET HARD", cmd.to_string());
+
+    let cmd = TestClient.cluster_reset(ClusterResetType::Soft).command;
+    assert_eq!("CLUSTER RESET SOFT", cmd.to_string());
+}
+
+#[test]
+fn cluster_set_config_epoch_command() {
+    let cmd = TestClient.cluster_set_config_epoch(12).command;
+    assert_eq!("CLUSTER SET-CONFIG-EPOCH 12", cmd.to_string());
+}
+
+/// `CLUSTER MIGRATION IMPORT` takes slot ranges, two tokens per range, like
+/// `ADDSLOTSRANGE` and unlike the single slots of `ADDSLOTS`.
+#[test]
+fn cluster_migration_import_command() {
+    let cmd = TestClient
+        .cluster_migration_import::<()>([(0u16, 100u16), (200, 300)])
+        .command;
+    assert_eq!("CLUSTER MIGRATION IMPORT 0 100 200 300", cmd.to_string());
 }

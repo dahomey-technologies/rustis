@@ -11,7 +11,11 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
-    command: redis-server --enable-debug-command yes
+    # Absolute path on purpose: DEBUG RESTART and DEBUG CRASH-AND-RECOVER
+    # re-execute argv[0] resolved against the working directory, which is /data
+    # here. Started as a bare name, the server can only answer "no permissions
+    # to execute /data/redis-server" and the two commands are untestable.
+    command: /usr/local/bin/redis-server --enable-debug-command yes
 
 # TLS
   redis-tls:

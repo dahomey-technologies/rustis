@@ -31,6 +31,12 @@
     clippy::todo,
     clippy::unimplemented
 )]
+// `pub` on an item the outside world cannot reach is a lie the compiler does not
+// otherwise report: it suppresses `dead_code`, and a reader — or a CHANGELOG
+// entry — takes it for public API. This lint covers the method-level half of the
+// problem. It does not fire on a type re-exported by a `pub(crate) use` glob, so
+// the module boundary in `resp/mod.rs` still has to be read, not trusted.
+#![warn(unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 /*!
 rustis is a Redis client for Rust.

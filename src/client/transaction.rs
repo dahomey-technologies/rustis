@@ -167,7 +167,7 @@ struct TransactionResultSeed<T: DeserializeOwned> {
 }
 
 impl<T: DeserializeOwned> TransactionResultSeed<T> {
-    pub fn new(forget_flags: SmallVec<[bool; 10]>) -> Self {
+    pub(crate) fn new(forget_flags: SmallVec<[bool; 10]>) -> Self {
         Self {
             phantom: PhantomData,
             forget_flags,

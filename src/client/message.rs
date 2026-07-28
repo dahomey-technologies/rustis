@@ -12,7 +12,7 @@ use tracing::warn;
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
-pub enum CommandsIteratorRef<'a> {
+pub(crate) enum CommandsIteratorRef<'a> {
     Single(Option<&'a Command>),
     Batch(std::slice::Iter<'a, Command>),
 }
@@ -29,7 +29,7 @@ impl<'a> Iterator for CommandsIteratorRef<'a> {
 }
 
 #[derive(Debug)]
-pub enum CommandsIteratorMut<'a> {
+pub(crate) enum CommandsIteratorMut<'a> {
     Single(Option<&'a mut Command>),
     Batch(std::slice::IterMut<'a, Command>),
 }
@@ -88,7 +88,11 @@ pub(crate) struct Message {
 
 impl Message {
     #[inline(always)]
-    pub fn single(command: Command, result_sender: ResultSender, retry_on_error: bool) -> Self {
+    pub(crate) fn single(
+        command: Command,
+        result_sender: ResultSender,
+        retry_on_error: bool,
+    ) -> Self {
         Message {
             kind: MessageKind::Single {
                 command,
@@ -103,7 +107,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn single_forget(command: Command, retry_on_error: bool) -> Self {
+    pub(crate) fn single_forget(command: Command, retry_on_error: bool) -> Self {
         Message {
             kind: MessageKind::Single {
                 command,
@@ -118,7 +122,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn batch(
+    pub(crate) fn batch(
         commands: Vec<Command>,
         results_sender: ResultsSender,
         retry_on_error: bool,
@@ -137,7 +141,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn pub_sub(
+    pub(crate) fn pub_sub(
         command: Command,
         result_sender: ResultSender,
         subscription_type: SubscriptionType,
@@ -159,7 +163,11 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn monitor(command: Command, result_sender: ResultSender, push_sender: PushSender) -> Self {
+    pub(crate) fn monitor(
+        command: Command,
+        result_sender: ResultSender,
+        push_sender: PushSender,
+    ) -> Self {
         Message {
             kind: MessageKind::Monitor {
                 command,
@@ -175,7 +183,7 @@ impl Message {
     }
 
     #[inline(always)]
-    pub fn client_tracking_invalidation(push_sender: PushSender) -> Self {
+    pub(crate) fn client_tracking_invalidation(push_sender: PushSender) -> Self {
         Message {
             kind: MessageKind::Invalidation {
                 push_sender: Some(push_sender),
@@ -190,7 +198,7 @@ impl Message {
 
     /// The connection identity comes from the surrounding span, so this takes no
     /// tag: every caller is the network task, which is already inside it.
-    pub fn send_error(self, error: Error) {
+    pub(crate) fn send_error(self, error: Error) {
         match self.kind {
             MessageKind::Single {
                 result_sender: Some(result_sender),
@@ -227,7 +235,7 @@ impl Message {
         }
     }
 
-    pub fn num_commands(&self) -> usize {
+    pub(crate) fn num_commands(&self) -> usize {
         match &self.kind {
             MessageKind::Single { .. } => 1,
             MessageKind::Batch { commands, .. } => commands.len(),
@@ -237,7 +245,7 @@ impl Message {
         }
     }
 
-    pub fn commands(&self) -> CommandsIteratorRef<'_> {
+    pub(crate) fn commands(&self) -> CommandsIteratorRef<'_> {
         match &self.kind {
             MessageKind::Single { command, .. } => CommandsIteratorRef::Single(Some(command)),
             MessageKind::Batch { commands, .. } => CommandsIteratorRef::Batch(commands.iter()),
@@ -247,7 +255,7 @@ impl Message {
         }
     }
 
-    pub fn commands_mut(&mut self) -> CommandsIteratorMut<'_> {
+    pub(crate) fn commands_mut(&mut self) -> CommandsIteratorMut<'_> {
         match &mut self.kind {
             MessageKind::Single { command, .. } => CommandsIteratorMut::Single(Some(command)),
             MessageKind::Batch { commands, .. } => CommandsIteratorMut::Batch(commands.iter_mut()),

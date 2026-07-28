@@ -20,9 +20,13 @@ use std::{
 /// the caller asks for one, so the decode runs in the calling task rather than
 /// in the connection's shared network task.
 #[derive(Clone, PartialEq)]
-pub enum RespResponse {
+pub(crate) enum RespResponse {
     Null,
     Integer(i64),
+    #[allow(
+        dead_code,
+        reason = "produced by `compact`, which only the client-side cache and the tests build"
+    )]
     Double(f64),
     IntegerArray(Vec<i64>),
     OwnedArray(Vec<RespResponse>),
@@ -109,7 +113,7 @@ impl fmt::Write for TruncatingWriter<'_, '_> {
 impl RespResponse {
     /// Pairs a frame's bytes with what one parse pass recovered from them.
     #[inline(always)]
-    pub fn new(buf: RespBuf, parsed: ParsedFrame) -> Self {
+    pub(crate) fn new(buf: RespBuf, parsed: ParsedFrame) -> Self {
         match parsed {
             ParsedFrame::Scalar { at } => Self::Frame {
                 // A frame opening on an attribute leaves the scalar past `at`;
@@ -134,7 +138,7 @@ impl RespResponse {
     /// announces — a malformed numeric, which framing accepted and only the read
     /// can catch.
     #[inline(always)]
-    pub fn view(&self) -> Result<RespView<'_>> {
+    pub(crate) fn view(&self) -> Result<RespView<'_>> {
         match self {
             RespResponse::Null => Ok(RespView::Null),
             // Synthesized: no wire bytes to hand back, so a string rendering has
@@ -166,7 +170,7 @@ impl RespResponse {
 
     /// Returns `true` if the RESP Response is a push message
     #[inline(always)]
-    pub fn is_push(&self) -> bool {
+    pub(crate) fn is_push(&self) -> bool {
         self.frame_tag() == Some(PUSH_TAG)
     }
 
@@ -175,7 +179,7 @@ impl RespResponse {
     /// A monitor line is a simple string opening on the event's timestamp, which
     /// is what tells it apart from any other simple-string reply.
     #[inline(always)]
-    pub fn is_monitor(&self) -> bool {
+    pub(crate) fn is_monitor(&self) -> bool {
         match self {
             RespResponse::Frame { buf, tape, .. } if tape.is_empty() => {
                 matches!(buf.as_ref(), [SIMPLE_STRING_TAG, second, ..] if second.is_ascii_digit())
@@ -186,33 +190,33 @@ impl RespResponse {
 
     /// Returns `true` if the RESP Response is a Redis error
     #[inline(always)]
-    pub fn is_error(&self) -> bool {
+    pub(crate) fn is_error(&self) -> bool {
         matches!(self.frame_tag(), Some(SIMPLE_ERROR_TAG | BULK_ERROR_TAG))
     }
 
     #[inline(always)]
-    pub fn null() -> RespResponse {
+    pub(crate) fn null() -> RespResponse {
         Self::Null
     }
 
     #[inline(always)]
-    pub fn integer(i: i64) -> RespResponse {
+    pub(crate) fn integer(i: i64) -> RespResponse {
         Self::Integer(i)
     }
 
     #[inline(always)]
-    pub fn integer_array(a: Vec<i64>) -> RespResponse {
+    pub(crate) fn integer_array(a: Vec<i64>) -> RespResponse {
         Self::IntegerArray(a)
     }
 
     #[inline(always)]
-    pub fn owned_array(a: Vec<RespResponse>) -> RespResponse {
+    pub(crate) fn owned_array(a: Vec<RespResponse>) -> RespResponse {
         Self::OwnedArray(a)
     }
 
     /// Constructs a new `Response` as a RESP Ok message (+OK\r\n)
     #[inline(always)]
-    pub fn ok() -> RespResponse {
+    pub(crate) fn ok() -> RespResponse {
         Self::Frame {
             buf: RespBuf::from(Bytes::from_static(b"+OK\r\n")),
             tape: RespTape::default(),
@@ -222,7 +226,7 @@ impl RespResponse {
 
     /// Convert the RESP Response to a Rust type `T` by using serde deserialization
     #[inline]
-    pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
+    pub(crate) fn to<T: DeserializeOwned>(&self) -> Result<T> {
         T::deserialize(RespDeserializer::new(self.view()?))
     }
 
@@ -241,7 +245,8 @@ impl RespResponse {
     /// otherwise decode a thousand times. Strings keep their RESP header: the
     /// read path recovers the value from the tag, so the bytes have to stay a
     /// readable element.
-    pub fn compact(&self) -> RespResponse {
+    #[cfg(any(test, feature = "client-cache"))]
+    pub(crate) fn compact(&self) -> RespResponse {
         match self {
             RespResponse::Null => RespResponse::Null,
             RespResponse::Integer(i) => RespResponse::Integer(*i),
@@ -280,7 +285,7 @@ impl RespResponse {
     /// flattened, a push yields its kind as the first element. An error reply is
     /// surfaced as the Redis error itself, so a caller cannot mistake a failure
     /// for an empty reply.
-    pub fn into_collection_iter(self) -> Result<RespResponseIter> {
+    pub(crate) fn into_collection_iter(self) -> Result<RespResponseIter> {
         // `is_error` is a tag check, so a non-error reply does not pay for a view.
         if self.is_error()
             && let Ok(RespView::Error(message)) = self.view()
@@ -410,7 +415,7 @@ fn collection_view<'a>(tag: u8, buf: &'a [u8], tape: &'a RespTape, root: usize) 
 /// than reconstructed. The bytes are empty for a reply the client synthesized,
 /// which never came off the wire.
 #[derive(PartialEq)]
-pub enum RespView<'a> {
+pub(crate) enum RespView<'a> {
     SimpleString(&'a [u8]),
     Integer(i64, &'a [u8]),
     Double(f64, &'a [u8]),
@@ -496,7 +501,7 @@ impl fmt::Debug for UnreadableElement {
 /// tape index of the collection's head node. `len` (the exact element count) is
 /// read once from the head's companion node, so it is O(1).
 #[derive(Clone, PartialEq)]
-pub struct RespCollectionView<'a> {
+pub(crate) struct RespCollectionView<'a> {
     buf: &'a [u8],
     tape: &'a RespTape,
     root: usize,
@@ -505,7 +510,7 @@ pub struct RespCollectionView<'a> {
 
 impl<'a> RespCollectionView<'a> {
     #[inline(always)]
-    pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
+    pub(crate) fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
         let len = tape.node(root + 1).payload() as usize;
         Self {
             buf,
@@ -516,7 +521,7 @@ impl<'a> RespCollectionView<'a> {
     }
 
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.len
     }
 }
@@ -548,7 +553,7 @@ impl<'a> IntoIterator for RespCollectionView<'a> {
 /// Walks the direct children of a collection by stepping the tape: a scalar
 /// advances one node, a nested collection skips its whole subtree in O(1) via its
 /// head's back-patched `next`.
-pub struct RespCollectionIter<'a> {
+pub(crate) struct RespCollectionIter<'a> {
     buf: &'a [u8],
     tape: &'a RespTape,
     cursor: usize,
@@ -557,7 +562,7 @@ pub struct RespCollectionIter<'a> {
 
 impl<'a> RespCollectionIter<'a> {
     #[inline(always)]
-    pub fn new(buf: &'a [u8], tape: &'a RespTape, root: usize, len: usize) -> Self {
+    pub(crate) fn new(buf: &'a [u8], tape: &'a RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
             tape,
@@ -567,12 +572,12 @@ impl<'a> RespCollectionIter<'a> {
     }
 
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.remaining
     }
 
     #[inline(always)]
-    pub fn has_next(&self) -> bool {
+    pub(crate) fn has_next(&self) -> bool {
         self.remaining > 0
     }
 }
@@ -623,7 +628,7 @@ impl<'a> Iterator for RespCollectionIter<'a> {
 /// The two also happen at different times and in different places — handing an
 /// element out and decoding it are not the same job — which is the point of
 /// yielding a response rather than a value.
-pub struct RespResponseIter {
+pub(crate) struct RespResponseIter {
     buf: RespBuf,
     tape: RespTape,
     cursor: usize,
@@ -631,7 +636,7 @@ pub struct RespResponseIter {
 }
 
 impl RespResponseIter {
-    pub fn new(buf: RespBuf, tape: RespTape, root: usize, len: usize) -> Self {
+    pub(crate) fn new(buf: RespBuf, tape: RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
             tape,

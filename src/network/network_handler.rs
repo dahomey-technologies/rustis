@@ -85,13 +85,13 @@ pub(crate) struct SendBatchTestHook {
     reason = "test-support code: a panic is how a test reports failure"
 )]
 impl SendBatchTestHook {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Queues retry reasons to be forced onto the first message of the next
     /// send drain (or `None` to skip that drain).
-    pub fn push_injection(&self, reasons: Option<Vec<RetryReason>>) {
+    pub(crate) fn push_injection(&self, reasons: Option<Vec<RetryReason>>) {
         self.inject_first_message_reasons
             .lock()
             .expect("send batch test hook mutex poisoned")
@@ -100,7 +100,7 @@ impl SendBatchTestHook {
 
     /// Returns the recorded `(command name, number of retry reasons fed)`
     /// entries, in feed order.
-    pub fn fed_retry_reasons(&self) -> Vec<(String, usize)> {
+    pub(crate) fn fed_retry_reasons(&self) -> Vec<(String, usize)> {
         self.fed_retry_reasons
             .lock()
             .expect("send batch test hook mutex poisoned")
@@ -124,7 +124,7 @@ impl SendBatchTestHook {
 
     /// Arms the connection to be killed on the `num_reads`-th read following the
     /// next fed command named `command_name`.
-    pub fn arm_kill_on_read_for(&self, command_name: &str, num_reads: usize) {
+    pub(crate) fn arm_kill_on_read_for(&self, command_name: &str, num_reads: usize) {
         *self
             .kill_on_read_by_name
             .lock()
@@ -174,7 +174,7 @@ struct MessageToSend {
 }
 
 impl MessageToSend {
-    pub fn new(message: Message) -> Self {
+    pub(crate) fn new(message: Message) -> Self {
         Self { message }
     }
 }
@@ -187,7 +187,7 @@ struct MessageToReceive {
 }
 
 impl MessageToReceive {
-    pub fn new(message: Message, num_commands: usize) -> Self {
+    pub(crate) fn new(message: Message, num_commands: usize) -> Self {
         Self {
             message,
             num_commands,
@@ -250,7 +250,7 @@ pub(crate) struct NetworkHandler {
 }
 
 impl NetworkHandler {
-    pub async fn connect(
+    pub(crate) async fn connect(
         config: Config,
     ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, Arc<str>)> {
         // Reject an incoherent config here rather than letting a zeroed knob

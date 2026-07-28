@@ -51,13 +51,13 @@ pub(crate) struct ClusterTestHook {
     reason = "test-support code: a panic is how a test reports failure"
 )]
 impl ClusterTestHook {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Arms a one-shot removal of the node serving the oldest in-flight request.
     /// It is consumed only once such a request actually exists.
-    pub fn arm_drop_front_pending_node(&self) {
+    pub(crate) fn arm_drop_front_pending_node(&self) {
         self.drop_front_pending_node
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -68,7 +68,7 @@ impl ClusterTestHook {
     }
 
     /// Arms a one-shot empty topology discovery on the next refresh.
-    pub fn arm_empty_topology_on_refresh(&self) {
+    pub(crate) fn arm_empty_topology_on_refresh(&self) {
         self.empty_topology_on_refresh
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -80,7 +80,7 @@ impl ClusterTestHook {
 
     /// Hides the shard holding `node_id` from the initial discovery only, so
     /// that a later refresh sees the real topology again.
-    pub fn hide_node_on_initial_discovery(&self, node_id: &str) {
+    pub(crate) fn hide_node_on_initial_discovery(&self, node_id: &str) {
         *self.hidden_node_id.lock().unwrap() = Some(node_id.to_owned());
     }
 
@@ -121,7 +121,11 @@ impl Node {
     /// suppresses the reply of whatever the node receives next, so sending it to a
     /// node the command never reaches would leave that node swallowing the reply of
     /// some unrelated later command.
-    pub async fn feed(&mut self, command: &Command, reply_skip: Option<&Command>) -> Result<()> {
+    pub(crate) async fn feed(
+        &mut self,
+        command: &Command,
+        reply_skip: Option<&Command>,
+    ) -> Result<()> {
         if let Some(reply_skip) = reply_skip {
             self.connection.feed(reply_skip, &[]).await?;
         }
@@ -230,7 +234,7 @@ impl ClusterNodeResult {
 /// Cluster connection
 /// read & write_batch functions are implemented following Redis Command Tips
 /// See <https://redis.io/docs/reference/command-tips/>
-pub struct ClusterConnection {
+pub(crate) struct ClusterConnection {
     cluster_config: ClusterConfig,
     config: Config,
     /// Read-only copy of the handler's connection-state registry, refreshed through
@@ -304,7 +308,11 @@ impl ClusterConnection {
     }
 
     #[inline]
-    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+    pub(crate) async fn feed(
+        &mut self,
+        command: &Command,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         // The mode has to move before the command is routed, so that `file_request`
         // sees it: `CLIENT REPLY ON` is itself answered and must be filed, while
         // `OFF` is not answered and must not be.
@@ -453,7 +461,7 @@ impl ClusterConnection {
     }
 
     #[inline]
-    pub async fn flush(&mut self) -> Result<()> {
+    pub(crate) async fn flush(&mut self) -> Result<()> {
         // End of the send batch: allow the next one to refresh again if needed.
         self.refreshed_in_current_batch = false;
 
@@ -793,7 +801,7 @@ impl ClusterConnection {
             .any(|sr| sr.result.is_none() && self.get_node_index_by_id(&sr.node_id).is_none())
     }
 
-    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
+    pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
         loop {
             #[cfg(test)]
             self.apply_test_node_drop();
@@ -883,7 +891,7 @@ impl ClusterConnection {
         }
     }
 
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
+    pub(crate) fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         loop {
             #[cfg(test)]
             self.apply_test_node_drop();
@@ -1863,7 +1871,7 @@ impl ClusterConnection {
     }
 }
 
-pub fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Command {
+pub(crate) fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes]) -> Command {
     // Initialize a new command with the same base name
     let mut shard_command = CommandBuilder::new(command.name());
 

@@ -1,9 +1,6 @@
 use crate::{
     Result,
-    resp::{
-        BULK_ERROR_TAG, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut,
-        SIMPLE_ERROR_TAG, Value,
-    },
+    resp::{RespDeserializer, RespFrameParser, RespResponse, RespTapeMut, Value},
 };
 use bytes::Bytes;
 use serde::de::DeserializeOwned;
@@ -11,24 +8,19 @@ use std::{fmt, ops::Deref};
 
 /// Represents a [RESP](https://redis.io/docs/reference/protocol-spec/) Buffer incoming from the network
 #[derive(Clone, Default, PartialEq, Eq, Hash)]
-pub struct RespBuf(Bytes);
+pub(crate) struct RespBuf(Bytes);
 
 impl RespBuf {
     /// Constructs a new `RespBuf` from a byte slice
+    #[cfg(any(test, feature = "fuzzing"))]
     #[inline]
-    pub fn from_slice(data: &[u8]) -> RespBuf {
+    pub(crate) fn from_slice(data: &[u8]) -> RespBuf {
         RespBuf(Bytes::copy_from_slice(data))
-    }
-
-    /// Returns `true` if the RESP Buffer is a Redis error
-    #[inline]
-    pub fn is_error(&self) -> bool {
-        matches!(self.0.as_ref(), [SIMPLE_ERROR_TAG | BULK_ERROR_TAG, _, ..])
     }
 
     /// Convert the RESP Buffer to a Rust type `T` by using serde deserialization
     #[inline]
-    pub fn to<T: DeserializeOwned>(&self) -> Result<T> {
+    pub(crate) fn to<T: DeserializeOwned>(&self) -> Result<T> {
         let mut tape = RespTapeMut::default();
         let (frame, len) = RespFrameParser::new(&self.0, &mut tape).parse()?;
         // Slice to the frame the parser actually read — a refcount bump, not a
@@ -36,17 +28,6 @@ impl RespBuf {
         // does, which a buffer holding trailing bytes would break.
         let response = RespResponse::new(RespBuf(self.0.slice(..len)), frame);
         T::deserialize(RespDeserializer::new(response.view()?))
-    }
-
-    #[inline(always)]
-    pub fn bytes(&self) -> &Bytes {
-        &self.0
-    }
-
-    /// Transform into Bytes
-    #[inline(always)]
-    pub fn into_bytes(self) -> Bytes {
-        self.0
     }
 }
 

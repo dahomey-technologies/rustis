@@ -220,7 +220,7 @@ where
     T2: DeserializeOwned,
 {
     #[allow(dead_code)]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phatom: PhantomData,
         }

@@ -10,7 +10,7 @@ pub(crate) struct RespBatchDeserializer<'de> {
 }
 
 impl<'de> RespBatchDeserializer<'de> {
-    pub fn new(responses: &'de [RespResponse]) -> RespBatchDeserializer<'de> {
+    pub(crate) fn new(responses: &'de [RespResponse]) -> RespBatchDeserializer<'de> {
         RespBatchDeserializer { responses }
     }
 }
@@ -56,7 +56,7 @@ struct SeqAccess<'de> {
 }
 
 impl<'de> SeqAccess<'de> {
-    pub fn new(bufs: &'de [RespResponse]) -> Self {
+    pub(crate) fn new(bufs: &'de [RespResponse]) -> Self {
         Self {
             len: bufs.len(),
             iter: bufs.iter(),

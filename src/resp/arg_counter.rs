@@ -1,7 +1,7 @@
 use serde::{Serializer, ser};
 
 #[derive(Default)]
-pub struct ArgCounter {
+pub(crate) struct ArgCounter {
     pub count: usize,
 }
 

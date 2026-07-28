@@ -103,7 +103,7 @@ The different command traits implementations ([`Client`](crate::client::Client),
  or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`:
  it must implement serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait.
 
- Indeed, **rustis** provides a serde implementation of a [`RESP deserializer`](RespDeserializer).
+ Indeed, **rustis** provides a serde deserializer over the RESP wire format.
  Each custom struct or enum defined as a response of a built-command implements
  serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
@@ -128,7 +128,7 @@ pub use fast_path_command_builder::*;
 pub use json::*;
 pub(crate) use resp_batch_deserializer::*;
 pub(crate) use resp_buf::*;
-pub use resp_deserializer::*;
+pub(crate) use resp_deserializer::*;
 pub(crate) use resp_frame_parser::*;
 pub(crate) use resp_response::*;
 pub(crate) use resp_scalar::*;

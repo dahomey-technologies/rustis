@@ -65,12 +65,12 @@ pub(crate) const TAPE_LEN_TAG: u8 = 0;
 /// One tape node: a tag byte packed with a 56-bit payload.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct TapeNode(u64);
+pub(crate) struct TapeNode(u64);
 
 impl TapeNode {
     /// Packs a `(tag, payload)` pair into a node word.
     #[inline(always)]
-    pub fn new(tag: u8, payload: u64) -> Self {
+    pub(crate) fn new(tag: u8, payload: u64) -> Self {
         debug_assert!(
             payload <= MAX_TAPE_PAYLOAD,
             "tape payload overflows 56 bits"
@@ -80,20 +80,20 @@ impl TapeNode {
 
     /// The node's tag byte.
     #[inline(always)]
-    pub fn tag(self) -> u8 {
+    pub(crate) fn tag(self) -> u8 {
         (self.0 >> 56) as u8
     }
 
     /// The node's 56-bit payload: a frame-relative byte offset for a scalar, a
     /// tape index for a collection head, an element count for a `len` node.
     #[inline(always)]
-    pub fn payload(self) -> u64 {
+    pub(crate) fn payload(self) -> u64 {
         self.0 & PAYLOAD_MASK
     }
 
     /// `true` if this node is a collection head.
     #[inline(always)]
-    pub fn is_collection(self) -> bool {
+    pub(crate) fn is_collection(self) -> bool {
         is_collection_tag(self.tag())
     }
 }
@@ -103,18 +103,18 @@ impl TapeNode {
 /// An empty tape means the frame is a top-level scalar and carries no nodes.
 #[repr(transparent)]
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct RespTape(Bytes);
+pub(crate) struct RespTape(Bytes);
 
 impl RespTape {
     /// Number of nodes in the tape.
     #[inline(always)]
-    pub fn node_count(&self) -> usize {
+    pub(crate) fn node_count(&self) -> usize {
         self.0.len() / TAPE_NODE_SIZE
     }
 
     /// `true` if the tape holds no node.
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -131,7 +131,7 @@ impl RespTape {
                   would have to invent a node word and corrupt the read silently, \
                   so the invariant is checked by the debug assertion instead."
     )]
-    pub fn node(&self, index: usize) -> TapeNode {
+    pub(crate) fn node(&self, index: usize) -> TapeNode {
         let start = index * TAPE_NODE_SIZE;
         debug_assert!(
             start + TAPE_NODE_SIZE <= self.0.len(),
@@ -146,23 +146,24 @@ impl RespTape {
 
     /// Byte length of the tape, for the decoder's recycling policy.
     #[inline(always)]
-    pub fn byte_len(&self) -> usize {
+    pub(crate) fn byte_len(&self) -> usize {
         self.0.len()
     }
 
     /// Copies the nodes into a freshly-sized buffer, releasing the larger recycled
     /// block this tape was split from. Used when a response is retained.
     #[inline]
-    pub fn compact(&self) -> RespTape {
+    #[cfg(any(test, feature = "client-cache"))]
+    pub(crate) fn compact(&self) -> RespTape {
         RespTape(Bytes::copy_from_slice(&self.0))
     }
 
     /// Element count of the collection whose head is at `root`, read from its
     /// companion node. `None` when the tape is too short to hold one, which means
-    /// it was not produced by the parser — used by the formatters, which must not
-    /// panic on a hand-built tape.
+    /// it was not produced by the parser.
+    #[cfg(test)]
     #[inline]
-    pub fn collection_len(&self, root: usize) -> Option<usize> {
+    pub(crate) fn collection_len(&self, root: usize) -> Option<usize> {
         let companion = root.checked_add(1)?;
         if self.node_count() <= companion {
             return None;
@@ -175,24 +176,24 @@ impl RespTape {
 /// frames. [`split_freeze`](Self::split_freeze) hands each frame its own
 /// [`RespTape`] while the buffer keeps its capacity for the next one.
 #[derive(Default)]
-pub struct RespTapeMut(BytesMut);
+pub(crate) struct RespTapeMut(BytesMut);
 
 impl RespTapeMut {
     /// A builder preallocated for `capacity` bytes.
     #[inline]
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self(BytesMut::with_capacity(capacity))
     }
 
     /// Number of nodes written so far.
     #[inline(always)]
-    pub fn node_count(&self) -> usize {
+    pub(crate) fn node_count(&self) -> usize {
         self.0.len() / TAPE_NODE_SIZE
     }
 
     /// `true` if no node has been written for the current frame.
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -200,13 +201,13 @@ impl RespTapeMut {
     /// recycling policy's effect on the block.
     #[cfg(test)]
     #[inline(always)]
-    pub fn byte_capacity(&self) -> usize {
+    pub(crate) fn byte_capacity(&self) -> usize {
         self.0.capacity()
     }
 
     /// Appends a node and returns its index.
     #[inline(always)]
-    pub fn push(&mut self, tag: u8, payload: u64) -> usize {
+    pub(crate) fn push(&mut self, tag: u8, payload: u64) -> usize {
         let index = self.node_count();
         self.0.put_u64_le(TapeNode::new(tag, payload).0);
         index
@@ -221,7 +222,7 @@ impl RespTapeMut {
         reason = "invariant: `index` was returned by `push` for this same tape, \
                   so the node it addresses has already been appended."
     )]
-    pub fn patch(&mut self, index: usize, tag: u8, payload: u64) {
+    pub(crate) fn patch(&mut self, index: usize, tag: u8, payload: u64) {
         let start = index * TAPE_NODE_SIZE;
         debug_assert!(
             start + TAPE_NODE_SIZE <= self.0.len(),
@@ -235,13 +236,13 @@ impl RespTapeMut {
     /// Detaches the nodes written so far as one frame's immutable tape, keeping
     /// the block's capacity for the next frame.
     #[inline]
-    pub fn split_freeze(&mut self) -> RespTape {
+    pub(crate) fn split_freeze(&mut self) -> RespTape {
         RespTape(self.0.split().freeze())
     }
 
     /// Discards a partially built tape, after a malformed frame.
     #[inline]
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.0.clear();
     }
 }

@@ -2313,7 +2313,7 @@ struct FtApplyOptions<'a> {
 
 impl<'a> FtApplyOptions<'a> {
     #[must_use]
-    pub fn new(expression: &'a str, as_name: &'a str) -> Self {
+    pub(crate) fn new(expression: &'a str, as_name: &'a str) -> Self {
         Self {
             expression,
             r#as: as_name,
@@ -2803,7 +2803,7 @@ impl<'de> Deserialize<'de> for FtIndexAttribute {
         }
 
         impl<'a> FlagsSeed<'a> {
-            pub fn new(attribute: &'a mut FtIndexAttribute) -> Self {
+            pub(crate) fn new(attribute: &'a mut FtIndexAttribute) -> Self {
                 Self { attribute }
             }
         }

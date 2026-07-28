@@ -13,7 +13,7 @@ use serial_test::serial;
 #[serial]
 async fn get_set_json() -> Result<()> {
     #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-    pub struct Person {
+    pub(crate) struct Person {
         pub id: u32,
         pub name: String,
     }
@@ -78,7 +78,7 @@ async fn a_value_that_cannot_be_serialized_fails_the_command() -> Result<()> {
 #[serial]
 async fn json_get_into_the_json_wrapper() -> Result<()> {
     #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
-    pub struct Person {
+    pub(crate) struct Person {
         pub id: u32,
         pub name: String,
     }

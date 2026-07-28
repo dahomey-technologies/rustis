@@ -150,7 +150,7 @@ impl ArgLayout {
     const IS_KEY: u16 = 1 << 0;
 
     #[inline(always)]
-    pub fn arg(range: std::ops::Range<usize>) -> Self {
+    pub(crate) fn arg(range: std::ops::Range<usize>) -> Self {
         Self {
             start: range.start as u32,
             len: range.end as u32 - range.start as u32,
@@ -160,7 +160,7 @@ impl ArgLayout {
     }
 
     #[inline(always)]
-    pub fn key(range: std::ops::Range<usize>) -> Self {
+    pub(crate) fn key(range: std::ops::Range<usize>) -> Self {
         Self {
             start: range.start as u32,
             len: range.end as u32 - range.start as u32,
@@ -170,17 +170,17 @@ impl ArgLayout {
     }
 
     #[inline(always)]
-    pub fn range(&self) -> std::ops::Range<usize> {
+    pub(crate) fn range(&self) -> std::ops::Range<usize> {
         self.start as usize..self.start as usize + self.len as usize
     }
 
     #[inline(always)]
-    pub fn is_key(&self) -> bool {
+    pub(crate) fn is_key(&self) -> bool {
         self.flags & Self::IS_KEY != 0
     }
 
     #[inline(always)]
-    pub fn set_key(&mut self) {
+    pub(crate) fn set_key(&mut self) {
         self.flags |= Self::IS_KEY;
     }
 }

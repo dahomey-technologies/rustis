@@ -94,7 +94,7 @@ pub struct Cache {
 impl Cache {
     /// Create cache from a moka CacheBuilder and activates Redis client tracking invalidations
     #[allow(clippy::type_complexity)]
-    pub async fn from_builder(
+    pub(crate) async fn from_builder(
         client: Client,
         builder: MokaCacheBuilder,
         tracking_opts: ClientTrackingOptions,

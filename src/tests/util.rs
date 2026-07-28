@@ -138,7 +138,7 @@ pub(crate) async fn get_sentinel_test_client() -> Result<Client> {
     Client::connect(format!("redis://{host}:26379")).await
 }
 
-pub fn get_sentinel_master_test_uri() -> String {
+pub(crate) fn get_sentinel_master_test_uri() -> String {
     let host = get_default_host();
     format!("redis+sentinel://{host}:26379,{host}:26380,{host}:26381/myservice")
 }
@@ -166,7 +166,7 @@ pub(crate) async fn get_cluster_test_client_with_command_timeout() -> Result<Cli
     .await
 }
 
-pub fn log_try_init() {
+pub(crate) fn log_try_init() {
     let _ = env_logger::builder()
         .format_target(false)
         .format_timestamp(None)
@@ -179,7 +179,7 @@ pub fn log_try_init() {
 
 /// Builds a command without a connection, so that a command no test can safely
 /// send to the shared servers can still have its wire form checked.
-pub struct TestClient;
+pub(crate) struct TestClient;
 impl<'a> ArrayCommands<'a> for TestClient {}
 impl<'a> StreamCommands<'a> for TestClient {}
 impl<'a> VectorSetCommands<'a> for TestClient {}

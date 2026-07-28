@@ -1,7 +1,7 @@
 use crate::resp::{RespResponse, RespView};
 use std::fmt;
 
-pub enum PubSubMessage<'a> {
+pub(super) enum PubSubMessage<'a> {
     Subscribe(&'a [u8]),
     PSubscribe(&'a [u8]),
     SSubscribe(&'a [u8]),

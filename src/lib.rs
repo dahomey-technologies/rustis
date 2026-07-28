@@ -68,12 +68,22 @@ rustis is a Redis client for Rust.
 # Optional Features
 | Feature | Description |
 | ------- | ----------- |
-| `tokio-runtime` | [Tokio](https://tokio.rs/) runime (default) |
-| `tokio-rustls` | Tokio Rustls TLS support (optional) |
-| `tokio-native-tls` | Tokio native_tls TLS support (optional) |
+| `tokio-runtime` | [Tokio](https://tokio.rs/) runtime (default) |
+| `tokio-rustls` | Tokio Rustls TLS support |
+| `tokio-native-tls` | Tokio native_tls TLS support |
 | `json` | Enables JSON (de)serialization support via `serde_json` |
 | `client-cache` | Enables client-side caching support |
-| `pool` | Pooled client manager (optional) |
+| `pool` | Pooled client manager |
+
+`tokio-rustls` and `tokio-native-tls` are **mutually exclusive**: enabling both is a
+compile error. Each implies the corresponding backend-only feature (`rustls`,
+`native-tls`), which exists so the TLS configuration types can be compiled without a
+runtime and is not meant to be enabled on its own.
+
+The remaining features are for developing rustis itself and carry **no stability
+guarantee**: `bench` (exposes internal RESP entry points to the benchmarks and pulls in
+`criterion`, `fred`, `redis` and `pprof`), `fuzzing` (same, for the `cargo-fuzz` targets
+in `fuzz/`) and `web-examples` (`axum` / `actix-web`, for the examples).
 
 # Protocol Compatibility
 
@@ -141,8 +151,8 @@ You will learn how to:
 # Commands
 In order to send [Commands](https://redis.io/commands/) to the Redis server,
 **rustis** offers two API levels:
-* High-level Built-in commands that implement all [Redis 7.0](https://redis.com/blog/redis-7-generally-available/) commands +
-  [Redis Stack](https://redis.io/docs/stack/) commands.
+* High-level Built-in commands that implement all documented Redis commands up to and
+  including Redis 8.8, plus the [Redis Stack](https://redis.io/docs/stack/) commands.
 * Low-level Generic command API to express any request that may not exist in **rustis**:
   * new official commands not yet implemented by **rustis**.
   * commands exposed by additional [Redis modules](https://redis.io/resources/modules/)

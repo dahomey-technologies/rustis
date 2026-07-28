@@ -67,7 +67,7 @@ contains breaking changes; read that section before upgrading.
   `SentinelConfig`, `ClusterConfig`, `TlsConfig`, `ServerConfig`,
   `ReconnectionConfig`, `BufferConfig`, `RespLimits`), every command-option enum
   that follows Redis's own vocabulary (`SetCondition`, `BitOperation`,
-  `ExpireOption`, `SortOrder`, `GeoUnit`, `FtLanguage`, `XTrimOperator`, … 60 in
+  `ExpireOption`, `SortOrder`, `GeoUnit`, `FtLanguage`, `XTrimOperator`, … 66 in
   total), and every struct deserialized from a server reply (`ClusterInfo`,
   `ClientInfo`, `FtInfoResult`, `MemoryStats`, `SentinelMasterInfo`,
   `XStreamInfo`, … 71 in total), where Redis adds fields between versions.
@@ -79,6 +79,19 @@ contains breaking changes; read that section before upgrading.
   variant is information rather than a nuisance. The builder-style `*Options`
   structs are also untouched — their fields are already private, so they were
   never literal-constructible and gain nothing.
+
+  Six of the 66 round-trip: `FtFieldType`, `FtIndexDataType`, `FtPhoneticMatcher`,
+  `KeyType`, `TsAggregationType` and `TsDuplicatePolicy` are both written into a
+  command and read back out of a reply. They are covered, because what a caller
+  does with them is build an option — and Redis does extend them: this release
+  alone adds `FtFieldType::Geoshape`, `TsAggregationType::CountNan` and
+  `CountAll`.
+- **`TsAggregationType`'s discriminants moved.** `CountNan` and `CountAll` were
+  inserted before `First`, so every variant from `First` onwards shifted by two.
+  Only code casting a variant to an integer (`aggregation as isize`) is affected;
+  the wire form is the variant's name and is unchanged.
+- **`ClientReplyMode` now implements `Copy`.** A non-`move` closure that used to
+  take it by value now captures it by reference.
 - `resp::Command::name()` now returns `&[u8]` instead of `Bytes`. It borrows from
   the command instead of bumping a reference count on every call. Callers that
   need an owned value can use `Bytes::copy_from_slice(command.name())`.
@@ -114,6 +127,22 @@ contains breaking changes; read that section before upgrading.
   failure-injection hook for the crate's own tests and is now gated behind
   `cfg(test)`, so it is absent from shipped builds instead of being part of the
   API.
+- **Five items that were `pub` without being usable are now private.** Each was
+  reachable in name only: no caller outside the crate could construct the
+  argument it needed or the type itself.
+  - `resp::RespDeserializer`, together with `resp::EnumAccess` and
+    `resp::VariantAccess`. `RespDeserializer::new` takes a `RespView`, which is
+    crate-private, so the type had no reachable constructor; the other two are
+    serde plumbing it hands to a visitor, and their names collided with serde's
+    own `EnumAccess` / `VariantAccess` traits under `use rustis::resp::*`.
+    Deserialize a reply through `Response` / `PreparedCommand` as before.
+  - `commands::deserialize_bzop_min_max_result`, a `#[serde(deserialize_with)]`
+    helper that a glob re-export made public.
+  - `cache::Cache::from_builder`. Its `builder` parameter is a
+    `moka::future::CacheBuilder` over the cache's internal representation, a
+    private type alias, so the method could not be called from outside. Use
+    `Cache::new`. Configuring the underlying moka cache is not currently
+    expressible in the public API; if you need it, open an issue.
 - `Command`, `CommandBuilder`, `PreparedCommand`, `CommandArgsMut`,
   `SortOptions`, `MigrateOptions`, `JsonGetOptions` and `AclDryRunOptions` no
   longer implement `UnwindSafe` and `RefUnwindSafe`. `Command` now carries the
@@ -236,6 +265,11 @@ contains breaking changes; read that section before upgrading.
   command along with the reconnection loop.
 
 ### Added
+
+- **`client::ClientTrackingInvalidationStream` is now exported.**
+  `Client::create_client_tracking_invalidation_stream` returns it, but a
+  `pub(crate)` re-export kept the name out of reach: the value could be used
+  inline and never stored in a field, named in a signature or boxed.
 
 - **Redis 8.8 support**, established the same way as the 8.6 pass below: the
   8.8 server's `COMMAND DOCS` diffed against a throwaway 8.6 server, so the

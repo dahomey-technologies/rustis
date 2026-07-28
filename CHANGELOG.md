@@ -10,6 +10,39 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Added
 
+- **Redis 8.8 support**, established the same way as the 8.6 pass below: the
+  8.8 server's `COMMAND DOCS` diffed against a throwaway 8.6 server, so the
+  delta is what the servers themselves disagree on rather than what a release
+  note mentions.
+
+  A new data type, with its own `ArrayCommands` trait: an **array** is
+  sparse and index-addressed, so unlike a list it has no push or pop — you
+  write at an index you choose (`arset`, `armset`) or at a cursor the array
+  carries (`arinsert`, `arring`, moved with `arseek`). Gaps cost nothing, which
+  is why `arlen` (highest index plus one) and `arcount` (slots that hold a
+  value) never coincide. All eighteen commands are covered: `arcount`, `ardel`,
+  `ardelrange`, `arget`, `argetrange`, `argrep`, `arinfo`, `arinsert`,
+  `arlastitems`, `arlen`, `armget`, `armset`, `arnext`, `arop`, `arring`,
+  `arscan`, `arseek`, `arset`, with `ArGrep`, `ArGrepPredicate`, `ArOperation`,
+  `ArInfoOptions`, `ArLastItemsOptions` and `ArrayInfo`.
+
+  Two more commands:
+  - `increx` (+ `IncrExOptions`), a bounded increment that sets the expiration
+    in the same atomic step. It returns both the new value and the increment
+    that was actually applied, which is `0` when a bound stopped it. With
+    `ubound_int` as the cap and `enx` to start the window only once, a window
+    counter rate limiter no longer needs a Lua script.
+  - `xnack` (+ `XNackMode`, `XNackOptions`), which releases pending messages
+    back to the group's PEL without acknowledging them. The entries lose their
+    owner and their idle time, so another consumer can claim them at once
+    instead of waiting out `min-idle-time`.
+
+  Arguments added to existing commands:
+  - `ZAggregate::Count` on `zinter`, `zinterstore`, `zunion` and `zunionstore`
+  - `FtFieldType::Geoshape` (+ `FtGeoShapeCoordSystem`) on `ft_create`
+  - `JsonSetOptions::fpha` (+ `JsonFpType`) on `json_set`, which declares the
+    storage type of a floating-point homogeneous array
+
 - **Complete command coverage up to Redis 8.6**, established by diffing the
   server's own `COMMAND DOCS` against the crate rather than by reading release
   notes, and verified against a Redis 8.6.5 server.
@@ -85,6 +118,18 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **`ZAggregate` was never introduced by its `AGGREGATE` token.** `zinter`,
+  `zinterstore`, `zunion` and `zunionstore` appended the bare value, so
+  `zinter(keys, None, ZAggregate::Sum)` sent `ZINTER 2 k1 k2 SUM` and failed
+  with `syntax error`. The whole enum was therefore unusable, and no test
+  passed one — the same blind spot as the two token bugs below. Found while
+  adding `ZAggregate::Count`.
+
+- **`XPendingMessageResult::elapsed_millis` could not hold the value the server
+  sends.** It was a `u64`, but `XPENDING` answers `-1` for an entry with no
+  delivery to measure from — the state `xnack` puts entries in — which failed
+  to deserialize. It is now an `i64`. See the breaking-changes section.
+
 - **Two option builders emitted a token the server rejects, so the options were
   unusable.** Both came from a `rename_all` rule silently producing the wrong
   spelling, and neither had a call site anywhere in the crate — which is why no
@@ -127,6 +172,17 @@ layer, the network task, the cluster client and the client-side cache. It
 contains breaking changes; read that section before upgrading.
 
 ### BREAKING CHANGES
+
+- **`json_set` takes a `JsonSetOptions` instead of a bare `SetCondition`.**
+  `JSON.SET` gained the `FPHA` argument in 8.8, so the last parameter had to
+  become extensible. Calls passing `None` are unaffected; a call passing a
+  condition becomes
+  `json_set(k, p, v, JsonSetOptions::default().condition(SetCondition::NX))`,
+  or keeps working as it is through `From<SetCondition> for JsonSetOptions`.
+
+- **`XPendingMessageResult::elapsed_millis` is an `i64`, not a `u64`.** The
+  server can answer `-1`, so the old type could not represent every reply. See
+  the fixes section.
 
 - **Many public types are now `#[non_exhaustive]`, so that adding a variant or a
   field to them stops being a breaking change.** This is a one-time cost taken

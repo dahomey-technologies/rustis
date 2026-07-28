@@ -29,6 +29,42 @@ pub trait StreamCommands<'a>: Sized {
         prepare_command(self, cmd("XACK").key(key).arg(group).arg(ids))
     }
 
+    /// Release pending messages back to the group's PEL without acknowledging
+    /// them, so another consumer can pick them up immediately.
+    ///
+    /// Unlike [`xack`](StreamCommands::xack), the entries stay in the PEL. They
+    /// lose their owner and their idle time is reset to `0`, which puts them at
+    /// the head of the PEL and makes them claimable right away — no waiting for
+    /// the `min-idle-time` of [`xclaim`](StreamCommands::xclaim) or
+    /// [`xautoclaim`](StreamCommands::xautoclaim). That is what makes it useful
+    /// on a graceful shutdown, a consumer-side failure, or a poison message.
+    ///
+    /// # Return
+    /// The number of messages released. Ids that were not pending in the group
+    /// are ignored and not counted.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xnack/>](https://redis.io/commands/xnack/)
+    fn xnack(
+        self,
+        key: impl Serialize,
+        group: impl Serialize,
+        mode: XNackMode,
+        ids: impl Serialize,
+        options: XNackOptions,
+    ) -> PreparedCommand<'a, Self, usize> {
+        prepare_command(
+            self,
+            cmd("XNACK")
+                .key(key)
+                .arg(group)
+                .arg(mode)
+                .arg("IDS")
+                .arg_with_count(ids)
+                .arg(options),
+        )
+    }
+
     /// Appends the specified stream entry to the stream at the specified key.
     ///
     /// # Return
@@ -715,6 +751,60 @@ impl XSetIdOptions {
     }
 }
 
+/// How [`xnack`](StreamCommands::xnack) adjusts the delivery counter of the
+/// released messages.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum XNackMode {
+    /// Decrement the counter by one, undoing the delivery that just failed. For
+    /// a graceful shutdown or an internal consumer failure, where the delivery
+    /// should not count against the message.
+    Silent,
+    /// Leave the counter as it is. For when this consumer could not process the
+    /// message and it is unclear whether the message or the consumer is at
+    /// fault, so another consumer should get a turn.
+    Fail,
+    /// Set the counter to its maximum, marking the message permanently failed.
+    /// For invalid or suspected malicious messages.
+    Fatal,
+}
+
+/// Options for the [`xnack`](StreamCommands::xnack) command.
+///
+/// Both options are meant for internal use; a consumer normally leaves them
+/// alone and lets the [`XNackMode`] decide.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct XNackOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retrycount: Option<i64>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    force: bool,
+}
+
+impl XNackOptions {
+    /// Set the delivery counter to this value, overriding the [`XNackMode`].
+    #[must_use]
+    pub fn retry_count(mut self, count: i64) -> Self {
+        self.retrycount = Some(count);
+        self
+    }
+
+    /// Create an unowned PEL entry for an id that is not pending yet. The entry
+    /// must exist in the stream. Its delivery counter starts at `0`, or at
+    /// [`retry_count`](XNackOptions::retry_count), or at the maximum under
+    /// [`Fatal`](XNackMode::Fatal).
+    #[must_use]
+    pub fn force(mut self) -> Self {
+        self.force = true;
+        self
+    }
+}
+
 /// Options for the [`xcfgset`](StreamCommands::xcfgset) command.
 #[derive(Default, Serialize)]
 pub struct XCfgSetOptions {
@@ -1278,7 +1368,12 @@ pub struct XPendingConsumer {
 #[non_exhaustive]
 pub struct XPendingMessageResult {
     pub message_id: String,
+    /// Empty for an entry that has no owner, which is what
+    /// [`xnack`](StreamCommands::xnack) leaves behind.
     pub consumer: String,
-    pub elapsed_millis: u64,
+    /// Milliseconds since the last delivery, or `-1` when the entry has no
+    /// delivery to measure from — the state [`xnack`](StreamCommands::xnack)
+    /// puts it in, so it is claimable whatever the `min-idle-time`.
+    pub elapsed_millis: i64,
     pub times_delivered: usize,
 }

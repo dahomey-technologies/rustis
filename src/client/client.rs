@@ -7,12 +7,12 @@ use crate::{
         PreparedCommand, PubSubStream, ServerConfig, Transaction,
     },
     commands::{
-        BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands, ConnectionCommands,
-        CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
-        HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands, PubSubCommands,
-        ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
-        TopKCommands, TransactionCommands, VectorSetCommands,
+        ArrayCommands, BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands,
+        ConnectionCommands, CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands,
+        HashCommands, HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands,
+        PubSubCommands, ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands,
+        SetCommands, SortedSetCommands, StreamCommands, StringCommands, TDigestCommands,
+        TimeSeriesCommands, TopKCommands, TransactionCommands, VectorSetCommands,
     },
     network::{
         JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
@@ -446,6 +446,7 @@ impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a,
     }
 }
 
+impl<'a> ArrayCommands<'a> for &'a Client {}
 impl<'a> BitmapCommands<'a> for &'a Client {}
 impl<'a> BloomCommands<'a> for &'a Client {}
 impl<'a> ClusterCommands<'a> for &'a Client {}

@@ -2,11 +2,11 @@ use crate::{
     Result,
     client::{Client, PreparedCommand},
     commands::{
-        BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands, CountMinSketchCommands,
-        CuckooCommands, GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands,
-        JsonCommands, ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
-        TopKCommands, VectorSetCommands,
+        ArrayCommands, BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands,
+        CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
+        HyperLogLogCommands, JsonCommands, ListCommands, ScriptingCommands, SearchCommands,
+        ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
+        TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
     },
     resp::{Command, RespBatchDeserializer, Response},
 };
@@ -158,6 +158,7 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipel
     }
 }
 
+impl<'a> ArrayCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> BitmapCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> BloomCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> ClusterCommands<'a> for &'a mut Pipeline<'_> {}

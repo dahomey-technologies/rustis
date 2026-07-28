@@ -41,7 +41,7 @@ rustis is a Redis client for Rust.
 * Rust idiomatic API
 
 # Features
-* Support all documented [Redis Commands](https://redis.io/commands/) up to and including Redis 8.6
+* Support all documented [Redis Commands](https://redis.io/commands/) up to and including Redis 8.8
 * Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
 * Different client types:
   * Single client

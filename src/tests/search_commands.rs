@@ -3,11 +3,11 @@ use crate::{
     client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
-        FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtGroupBy,
-        FtHybridCombine, FtHybridFormat, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery,
-        FtHybridVsim, FtIndexAll, FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer,
-        FtSearchOptions, FtSearchResult, FtSortBy, FtSortByProperty, FtSpellCheckOptions,
-        FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
+        FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes,
+        FtGeoShapeCoordSystem, FtGroupBy, FtHybridCombine, FtHybridFormat, FtHybridOptions,
+        FtHybridSearch, FtHybridVectorQuery, FtHybridVsim, FtIndexAll, FtIndexDataType, FtLanguage,
+        FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult, FtSortBy, FtSortByProperty,
+        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
         FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
         SearchCommands, ServerCommands, SortOrder,
     },
@@ -1881,6 +1881,83 @@ fn ft_create_vector_field_args() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_create_geoshape() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "idx",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("shape:")
+                .schema(
+                    FtFieldSchema::identifier("geom")
+                        .field_type(FtFieldType::Geoshape(Some(FtGeoShapeCoordSystem::Flat))),
+                ),
+        )
+        .await?;
+
+    client
+        .hset(
+            "shape:1",
+            [("geom", "POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))")],
+        )
+        .await?;
+    client
+        .hset(
+            "shape:2",
+            [("geom", "POLYGON((20 20, 20 30, 30 30, 30 20, 20 20))")],
+        )
+        .await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    let result: FtSearchResult = client
+        .ft_search(
+            "idx",
+            "@geom:[WITHIN $shape]",
+            FtSearchOptions::default()
+                .param("shape", "POLYGON((-1 -1, -1 11, 11 11, 11 -1, -1 -1))")
+                .dialect(2),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("shape:1", result.results[0].id);
+
+    Ok(())
+}
+
+#[test]
+fn ft_create_geoshape_args() {
+    // The coordinate system is an optional value following GEOSHAPE, not a flag.
+    let cmd = TestClient
+        .ft_create(
+            "idx",
+            FtCreateOptions::default().schema(FtFieldSchema::identifier("geom").field_type(
+                FtFieldType::Geoshape(Some(FtGeoShapeCoordSystem::Spherical)),
+            )),
+        )
+        .command;
+    assert_eq!(
+        "FT.CREATE idx SCHEMA geom GEOSHAPE SPHERICAL",
+        cmd.to_string()
+    );
+
+    // Omitted, the server defaults to SPHERICAL.
+    let cmd = TestClient
+        .ft_create(
+            "idx",
+            FtCreateOptions::default()
+                .schema(FtFieldSchema::identifier("geom").field_type(FtFieldType::Geoshape(None))),
+        )
+        .command;
+    assert_eq!("FT.CREATE idx SCHEMA geom GEOSHAPE", cmd.to_string());
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

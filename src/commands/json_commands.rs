@@ -467,7 +467,7 @@ pub trait JsonCommands<'a>: Sized {
     ///   For existing keys, when the entire path exists, the value that it contains is replaced with the json value.\
     ///   For existing keys, when the path exists, except for the last element, a new child is added with the json value.
     /// * `value`- The value to set at the specified path
-    /// * `condition`- See [`SetCondition`](crate::commands::SetCondition)
+    /// * `options` - See [`JsonSetOptions`](JsonSetOptions)
     ///
     /// # See Also
     /// [<https://redis.io/commands/json.set/>](https://redis.io/commands/json.set/)
@@ -477,7 +477,7 @@ pub trait JsonCommands<'a>: Sized {
         key: impl Serialize,
         path: impl Serialize,
         value: impl Serialize,
-        condition: impl Into<Option<SetCondition<'b>>>,
+        options: impl Into<Option<JsonSetOptions<'b>>>,
     ) -> PreparedCommand<'a, Self, ()> {
         prepare_command(
             self,
@@ -485,7 +485,7 @@ pub trait JsonCommands<'a>: Sized {
                 .key(key)
                 .arg(path)
                 .arg(value)
-                .arg(condition.into()),
+                .arg(options.into()),
         )
     }
 
@@ -641,6 +641,65 @@ pub enum JsonGetFormat {
     Expand1,
     /// Native RESP3 values instead of serialized JSON.
     Expand,
+}
+
+/// Options for the [`json_set`](JsonCommands::json_set) command
+#[derive(Default, Serialize)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub struct JsonSetOptions<'a> {
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    condition: Option<SetCondition<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fpha: Option<JsonFpType>,
+}
+
+impl<'a> JsonSetOptions<'a> {
+    /// Sets the value only if the condition holds.
+    ///
+    /// `JSON.SET` accepts only [`NX`](SetCondition::NX) and
+    /// [`XX`](SetCondition::XX); the value-comparison variants are rejected by
+    /// the server.
+    #[must_use]
+    pub fn condition(mut self, condition: SetCondition<'a>) -> Self {
+        self.condition = Some(condition);
+        self
+    }
+
+    /// Forces floating-point homogeneous arrays to use the given type.
+    ///
+    /// JSON stores numbers as text, so the server cannot infer the type an
+    /// array of floats was produced with. Declaring it trades precision for
+    /// memory: `FP64` and `FP32` keep more of it, `BF16` and `FP16` halve the
+    /// footprint of `FP32`. A value that does not fit the declared type makes
+    /// the command fail with a `value out of range` error.
+    #[must_use]
+    pub fn fpha(mut self, fp_type: JsonFpType) -> Self {
+        self.fpha = Some(fp_type);
+        self
+    }
+}
+
+impl<'a> From<SetCondition<'a>> for JsonSetOptions<'a> {
+    fn from(condition: SetCondition<'a>) -> Self {
+        Self::default().condition(condition)
+    }
+}
+
+/// Storage type of a floating-point homogeneous array, for the
+/// [`fpha`](JsonSetOptions::fpha) option of the
+/// [`json_set`](JsonCommands::json_set) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum JsonFpType {
+    /// 16-bit half precision.
+    Fp16,
+    /// 16-bit brain floating point.
+    Bf16,
+    /// 32-bit single precision.
+    Fp32,
+    /// 64-bit double precision.
+    Fp64,
 }
 
 /// Options for the [`json_arrindex`](JsonCommands::json_arrindex) command

@@ -2,8 +2,8 @@ use crate::{
     Result,
     client::{Client, Config, IntoConfig},
     commands::{
-        ClusterCommands, SearchCommands, SentinelCommands, ServerCommands, SortedSetCommands,
-        StreamCommands, VectorSetCommands,
+        ArrayCommands, ClusterCommands, JsonCommands, SearchCommands, SentinelCommands,
+        ServerCommands, SortedSetCommands, StreamCommands, StringCommands, VectorSetCommands,
     },
 };
 #[cfg(feature = "native-tls")]
@@ -179,10 +179,13 @@ pub fn log_try_init() {
 /// Builds a command without a connection, so that a command no test can safely
 /// send to the shared servers can still have its wire form checked.
 pub struct TestClient;
+impl<'a> ArrayCommands<'a> for TestClient {}
 impl<'a> StreamCommands<'a> for TestClient {}
 impl<'a> VectorSetCommands<'a> for TestClient {}
 impl<'a> ClusterCommands<'a> for TestClient {}
+impl<'a> JsonCommands<'a> for TestClient {}
 impl<'a> SearchCommands<'a> for TestClient {}
 impl<'a> SentinelCommands<'a> for TestClient {}
 impl<'a> ServerCommands<'a> for TestClient {}
 impl<'a> SortedSetCommands<'a> for TestClient {}
+impl<'a> StringCommands<'a> for TestClient {}

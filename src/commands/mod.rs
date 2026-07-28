@@ -10,6 +10,7 @@ Depending on the group of commands, traits will be implemented by [`Client`](cra
 [`Pipeline`](crate::client::Pipeline), [`Transaction`](crate::client::Transaction) or some of these structs.
 
 These is the list of existing command traits:
+* [`ArrayCommands`] — [Arrays](https://redis.io/docs/latest/commands/?group=array), the sparse index-addressed type introduced in Redis 8.8
 * [`BitmapCommands`] — [Bitmaps](https://redis.io/docs/data-types/bitmaps/) & [Bitfields](https://redis.io/docs/data-types/bitfields/)
 * [`BlockingCommands`] — commands that block the connection until the Redis server
   has a new element to send. This trait is implemented only by the [`Client`](crate::client::Client) struct.
@@ -43,11 +44,11 @@ These is the list of existing command traits:
 # Command coverage
 
 Every command documented on [redis.io](https://redis.io/commands/) up to and
-including **Redis 8.6** is implemented, together with its options — including
+including **Redis 8.8** is implemented, together with its options — including
 the commands of the bundled modules (RediSearch, RedisJSON, RedisTimeSeries,
 RedisBloom, vector sets).
 
-Two families are left out on purpose.
+Three families are left out on purpose.
 
 **Deprecated commands.** Their modern replacement is implemented instead, so
 there is one way to do each thing rather than two:
@@ -63,9 +64,16 @@ there is one way to do each thing rather than two:
 | `FT.ADD`, `FT.DEL`, `FT.GET`, `FT.MGET`, `FT.DROP`, `FT.SAFEADD`, `FT.SYNADD` | the hash/JSON document model ([`ft_create`](SearchCommands::ft_create), [`ft_search`](SearchCommands::ft_search)) |
 
 **Server-internal commands**, such as `PSYNC`, `SYNC`, `REPLCONF`,
-`RESTORE-ASKING`, `PFDEBUG`, `BF.DEBUG` or `CF.DEBUG`. These belong to the
-server-to-server or debugging surface; issuing them from a client can corrupt
-replication or cluster state.
+`RESTORE-ASKING`, `PFDEBUG`, `BF.DEBUG`, `CF.DEBUG` or `_FT.DEBUG`. These belong
+to the server-to-server or debugging surface; issuing them from a client can
+corrupt replication or cluster state.
+
+**Commands the server declares unstable.** The `COLLECT` reducer of
+`FT.AGGREGATE` and `FT.HYBRID` is documented, but the search module refuses it
+unless `search-enable-unstable-features` is set to `yes` — which means Redis
+reserves the right to change its grammar and its reply. It is not exposed while
+that is the case, rather than pin a public API to an interface its own vendor
+calls provisional.
 
 Note also that a handful of commands appear in `COMMAND LIST` without being
 public API — a module's private surface, recognizable by the absence of any
@@ -116,6 +124,7 @@ documentation found [here](https://github.com/redis/redis-doc) with the
 following [COPYRIGHT](https://github.com/redis/redis-doc/blob/master/COPYRIGHT).
 */
 
+mod array_commands;
 mod bitmap_commands;
 mod blocking_commands;
 mod bloom_commands;
@@ -147,6 +156,7 @@ mod top_k_commands;
 mod transaction_commands;
 mod vector_set;
 
+pub use array_commands::*;
 pub use bitmap_commands::*;
 pub use blocking_commands::*;
 pub use bloom_commands::*;

@@ -736,6 +736,18 @@ async fn restore_replace_and_abs_ttl() -> Result<()> {
     let ttl = client.ttl("key").await?;
     assert!(ttl > 90 && ttl <= 100);
 
+    // FREQ seeds the LFU counter of the restored key.
+    client
+        .restore(
+            "key",
+            0,
+            &dump,
+            RestoreOptions::default().replace().frequency(10),
+        )
+        .await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+
     Ok(())
 }
 

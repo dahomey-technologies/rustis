@@ -250,6 +250,19 @@ async fn argrep() -> Result<()> {
         .await?;
     assert_eq!(vec![1, 4], indices);
 
+    // Asking for OR explicitly emits the token and keeps the same result.
+    let indices: Vec<usize> = client
+        .argrep(
+            "log",
+            0,
+            4,
+            ArGrep::new(ArGrepPredicate::Glob("warn:*"))
+                .predicate(ArGrepPredicate::Glob("error:*"))
+                .or(),
+        )
+        .await?;
+    assert_eq!(vec![1, 4], indices);
+
     // AND narrows them instead.
     let indices: Vec<usize> = client
         .argrep(

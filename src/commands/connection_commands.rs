@@ -23,6 +23,11 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # Errors
     /// a Redis error if the password, or username/password pair, is invalid.
     ///
+    /// # Cluster
+    /// Authentication is per-connection, and a cluster client holds one connection
+    /// per node: authenticating on a single node would leave every other shard
+    /// answering as the previous identity.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/auth/>](https://redis.io/commands/auth/)
     #[must_use]
@@ -31,7 +36,14 @@ pub trait ConnectionCommands<'a>: Sized {
         username: impl Serialize,
         password: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("AUTH").arg(username).arg(password))
+        prepare_command(
+            self,
+            cmd("AUTH").arg(username).arg(password).cluster_info(
+                RequestPolicy::AllNodes,
+                ResponsePolicy::AllSucceeded,
+                1,
+            ),
+        )
     }
 
     /// This command controls the tracking of the keys in the next command executed by the connection,
@@ -161,7 +173,11 @@ pub trait ConnectionCommands<'a>: Sized {
             self,
             cmd("CLIENT")
                 .arg("NO-EVICT")
-                .arg(if no_evict { "ON" } else { "OFF" }),
+                .arg(if no_evict { "ON" } else { "OFF" })
+                // A cluster client is one connection per node, and eviction is
+                // decided by each node for its own clients. Exempting a single
+                // node exempts nothing.
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
         )
     }
 
@@ -197,7 +213,10 @@ pub trait ConnectionCommands<'a>: Sized {
             self,
             cmd("CLIENT")
                 .arg("NO-TOUCH")
-                .arg(if no_touch { "ON" } else { "OFF" }),
+                .arg(if no_touch { "ON" } else { "OFF" })
+                // Keys live on every shard, so idle times are only left alone if
+                // every node is told to leave them alone.
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
         )
     }
 
@@ -213,11 +232,30 @@ pub trait ConnectionCommands<'a>: Sized {
 
     /// Sometimes it can be useful for clients to completely disable replies from the Redis server.
     ///
+    /// # Cluster
+    /// A cluster client is one connection per node, so `ON` and `OFF` are sent to
+    /// every node: the mode has to be the same everywhere, or a node still answering
+    /// would produce a reply nobody accounted for and shift every response after it.
+    ///
+    /// `SKIP` carries **no routing policy of its own**, because it is only correct on
+    /// the nodes reached by the command it silences — one node for a key-routed
+    /// command, every shard for a multi-shard one. It is therefore held back and
+    /// emitted on exactly those nodes, immediately before that command.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/client-reply/>](https://redis.io/commands/client-reply/)
     #[must_use]
     fn client_reply(self, mode: ClientReplyMode) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CLIENT").arg("REPLY").arg(mode))
+        let command = cmd("CLIENT").arg("REPLY").arg(mode);
+        prepare_command(
+            self,
+            match mode {
+                ClientReplyMode::Skip => command,
+                ClientReplyMode::On | ClientReplyMode::Off => {
+                    command.cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1)
+                }
+            },
+        )
     }
 
     /// Assigns a name to the current connection.
@@ -287,6 +325,14 @@ pub trait ConnectionCommands<'a>: Sized {
     /// This command enables the tracking feature of the Redis server,
     /// that is used for [`server assisted client side caching`](https://redis.io/topics/client-side-caching).
     ///
+    /// # Cluster
+    /// Tracking is per-connection and each node only invalidates the keys it
+    /// holds, so this is sent to every node: armed on one shard, the keys of every
+    /// other shard would be cached and never invalidated.
+    ///
+    /// Broadcasting it is only sound because no redirection can be expressed — see
+    /// [`ClientTrackingOptions`] for why `REDIRECT` is not offered.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/client-tracking/>](https://redis.io/commands/client-tracking/)
     #[must_use]
@@ -295,7 +341,14 @@ pub trait ConnectionCommands<'a>: Sized {
         status: ClientTrackingStatus,
         options: ClientTrackingOptions,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("CLIENT").arg("TRACKING").arg(status).arg(options))
+        prepare_command(
+            self,
+            cmd("CLIENT")
+                .arg("TRACKING")
+                .arg(status)
+                .arg(options)
+                .cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// This command enables the tracking feature of the Redis server,
@@ -388,17 +441,32 @@ pub trait ConnectionCommands<'a>: Sized {
     /// This command performs a full reset of the connection's server-side context,
     /// mimicking the effect of disconnecting and reconnecting again.
     ///
+    /// # Cluster
+    /// Sent to every node: the client forgets the connection state it was
+    /// tracking, so leaving one node holding the old state would put the two out
+    /// of step in the direction that produces a stale replay on the next
+    /// reconnection.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
     #[must_use]
     fn reset(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("RESET"))
+        prepare_command(
+            self,
+            cmd("RESET").cluster_info(RequestPolicy::AllNodes, ResponsePolicy::AllSucceeded, 1),
+        )
     }
 
     /// Select the Redis logical database having the specified zero-based numeric index.
     ///
+    /// # Cluster
+    /// A cluster has a single database, and the server answers any non-zero index
+    /// with *"SELECT is not allowed in cluster mode"*. No routing policy is declared
+    /// for that reason: there is nothing to broadcast, and the server's own refusal
+    /// is clearer than one this client would invent.
+    ///
     /// # See Also
-    /// [<https://redis.io/commands/reset/>](https://redis.io/commands/reset/)
+    /// [<https://redis.io/commands/select/>](https://redis.io/commands/select/)
     #[must_use]
     fn select(self, index: usize) -> PreparedCommand<'a, Self, ()> {
         prepare_command(self, cmd("SELECT").arg(index))
@@ -773,7 +841,7 @@ pub enum ClientPauseMode {
 }
 
 /// Mode options for the [`client_reply`](ConnectionCommands::client_reply) command.
-#[derive(Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 #[non_exhaustive]
 pub enum ClientReplyMode {
@@ -792,11 +860,29 @@ pub enum ClientTrackingStatus {
 }
 
 /// Options for the [`client_tracking`](ConnectionCommands::client_tracking) command.
+///
+/// # `REDIRECT` is not offered
+///
+/// `CLIENT TRACKING … REDIRECT <client-id>` sends invalidations to another
+/// connection instead of this one. It exists for **RESP2**, which cannot deliver an
+/// invalidation on a connection that is also answering commands: the target
+/// subscribes to `__redis__:invalidate` and reads them as pub/sub messages.
+///
+/// rustis always negotiates **RESP3** (`HELLO 3`, at every connect and reconnect),
+/// where invalidations arrive as push frames on the very connection that enabled
+/// tracking — which is what
+/// [`create_client_tracking_invalidation_stream`](crate::client::Client::create_client_tracking_invalidation_stream)
+/// and [`Cache`](crate::cache::Cache) consume. A redirection therefore has no
+/// destination worth using, and setting one would silently starve both: they stay
+/// alive, report no error, and simply never fire again.
+///
+/// Two further reasons it is not merely useless but unexpressible here: a client id
+/// is a **per-node counter**, so on a cluster client the same number designates a
+/// different connection on each node; and the id names a connection this client does
+/// not own, whose lifetime it cannot track.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct ClientTrackingOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    redirect: Option<i64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     prefix: Vec<String>,
     #[serde(
@@ -822,13 +908,6 @@ pub struct ClientTrackingOptions {
 }
 
 impl ClientTrackingOptions {
-    #[must_use]
-    /// send invalidation messages to the connection with the specified ID.
-    pub fn redirect(mut self, client_id: i64) -> Self {
-        self.redirect = Some(client_id);
-        self
-    }
-
     /// enable tracking in broadcasting mode.
     pub fn broadcasting(mut self) -> Self {
         self.bcast = true;

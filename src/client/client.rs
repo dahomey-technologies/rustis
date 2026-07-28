@@ -93,6 +93,23 @@ impl Client {
         &self.connection_tag
     }
 
+    /// Whether the network task behind this client has ended.
+    ///
+    /// It ends when the connection is gone for good — the reconnection budget
+    /// exhausted, or the last sender dropped — after which the client can no
+    /// longer answer anything. Reading the join handle is non-blocking and says
+    /// nothing about a connection that is merely idle.
+    ///
+    /// Only the pool needs this: it is how a dead client is evicted instead of
+    /// being handed to the next borrower.
+    #[cfg(feature = "pool")]
+    pub(crate) fn is_network_task_finished(&self) -> bool {
+        self.shared
+            .as_ref()
+            .as_ref()
+            .is_some_and(|shared| shared.network_task_join_handle.is_finished())
+    }
+
     /// if this client is the last client on the shared connection, the channel to send messages
     /// to the underlying network handler will be closed explicitely.
     ///

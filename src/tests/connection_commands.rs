@@ -1,6 +1,6 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
-    client::{BatchPreparedCommand, Client, ClientPreparedCommand},
+    client::{BatchPreparedCommand, Client, ClientPreparedCommand, ReconnectionConfig},
     commands::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
         ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClientType,
@@ -10,7 +10,7 @@ use crate::{
     network::spawn,
     resp::{BulkString, cmd},
     sleep,
-    tests::{get_test_client, log_try_init},
+    tests::{get_default_config, get_test_client, get_test_client_with_config, log_try_init},
 };
 use futures_util::StreamExt;
 use serial_test::serial;
@@ -43,23 +43,24 @@ async fn auth() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+/// `CLIENT GETREDIR` reports where invalidations are being sent: `-1` when tracking
+/// is off, `0` when it is on without a redirection. Those are the only two answers
+/// rustis can produce — `REDIRECT` is deliberately not offered, see
+/// [`ClientTrackingOptions`].
 async fn client_getredir() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let client = get_test_client().await?;
 
-    let client1_id = client1.client_id().await?;
-
-    client2
-        .client_tracking(
-            ClientTrackingStatus::On,
-            ClientTrackingOptions::default().redirect(client1_id),
-        )
+    client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
         .await?;
+    assert_eq!(-1, client.client_getredir().await?);
 
-    let redir_id = client2.client_getredir().await?;
-    assert_eq!(client1_id, redir_id);
+    client
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
+        .await?;
+    assert_eq!(0, client.client_getredir().await?);
 
-    client2
+    client
         .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
         .await?;
 
@@ -467,29 +468,38 @@ async fn client_tracking_invalidation_survives_a_binary_key() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn client_tracking_info() -> Result<()> {
-    let client1 = get_test_client().await?;
-    let client2 = get_test_client().await?;
+    let client = get_test_client().await?;
 
-    let tracking_info = client1.client_trackinginfo().await?;
+    let tracking_info = client.client_trackinginfo().await?;
     assert_eq!(1, tracking_info.flags.len());
     assert!(tracking_info.flags.contains(&"off".to_owned()));
     assert_eq!(-1, tracking_info.redirect);
     assert_eq!(0, tracking_info.prefixes.len());
 
-    let client2_id = client2.client_id().await?;
-
-    client1
+    // `PREFIX` is only accepted alongside `BCAST`.
+    client
         .client_tracking(
             ClientTrackingStatus::On,
-            ClientTrackingOptions::default().redirect(client2_id),
+            ClientTrackingOptions::default()
+                .broadcasting()
+                .prefix("tracking_info_prefix"),
         )
         .await?;
 
-    let tracking_info = client1.client_trackinginfo().await?;
-    assert_eq!(1, tracking_info.flags.len());
+    let tracking_info = client.client_trackinginfo().await?;
     assert!(tracking_info.flags.contains(&"on".to_owned()));
-    assert_eq!(client2_id, tracking_info.redirect);
-    assert_eq!(0, tracking_info.prefixes.len());
+    assert!(tracking_info.flags.contains(&"bcast".to_owned()));
+    // No redirection is reachable through the API — see `ClientTrackingOptions` —
+    // so `0` is the only value this field can carry while tracking is on.
+    assert_eq!(0, tracking_info.redirect);
+    assert_eq!(
+        vec!["tracking_info_prefix".to_owned()],
+        tracking_info.prefixes
+    );
+
+    client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
 
     Ok(())
 }
@@ -597,5 +607,246 @@ async fn select() -> Result<()> {
     let value: String = client.get("key").await?;
     assert_eq!("value", value);
 
+    Ok(())
+}
+
+/// Connects a client whose reconnection delay is short enough for a test, kills
+/// its connection from the inside, and returns once the new one is up.
+///
+/// Every probe below shares the same shape: set a piece of connection-attached
+/// state, lose the socket, then ask the server what that state is now.
+async fn reconnecting_test_client() -> Result<Client> {
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    get_test_client_with_config(config).await
+}
+
+async fn force_reconnection(client: &Client) -> Result<()> {
+    let mut on_reconnect = client.on_reconnect();
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+    Ok(())
+}
+
+/// The database a caller selected is connection state: a fresh socket starts on
+/// database 0, so every key the caller reads afterwards silently comes from the
+/// wrong database.
+#[tokio::test]
+#[serial]
+async fn selected_database_is_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client.select(7).await?;
+    client.flushdb(FlushingMode::Sync).await?;
+    client.set("db_probe", "value").await?;
+
+    force_reconnection(&client).await?;
+
+    let value: Option<String> = client.get("db_probe").await?;
+    assert_eq!(
+        Some("value".to_owned()),
+        value,
+        "reads after a reconnection must still target the selected database"
+    );
+
+    client.flushdb(FlushingMode::Sync).await?;
+    Ok(())
+}
+
+/// When the config names a database and the caller has since selected another,
+/// the one the caller is on must win — and the config's must not be emitted at
+/// all, since the replay would overwrite it a round-trip later.
+#[tokio::test]
+#[serial]
+async fn a_runtime_select_wins_over_the_configured_database() -> Result<()> {
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    config.database = 1;
+    let client = get_test_client_with_config(config).await?;
+
+    client.select(7).await?;
+
+    force_reconnection(&client).await?;
+
+    let info: String = client.send(cmd("CLIENT").arg("INFO"), None).await?;
+    let db = info
+        .split(' ')
+        .find_map(|field| field.strip_prefix("db="))
+        .unwrap_or_default();
+    assert_eq!(
+        "7", db,
+        "the database the caller selected must win over the configured one"
+    );
+
+    Ok(())
+}
+
+/// A name set at runtime is what identifies the connection in `CLIENT LIST`,
+/// `SLOWLOG` and the server logs. Losing it on reconnect makes the connection
+/// anonymous exactly when an operator is looking for it.
+#[tokio::test]
+#[serial]
+async fn connection_name_is_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client.client_setname("name_probe").await?;
+
+    force_reconnection(&client).await?;
+
+    let name: Option<String> = client.client_getname().await?;
+    assert_eq!(
+        Some("name_probe".to_owned()),
+        name,
+        "a name set at runtime must survive a reconnection"
+    );
+
+    Ok(())
+}
+
+/// Same argument as the connection name, for the library identification the
+/// server reports in `CLIENT INFO`.
+#[tokio::test]
+#[serial]
+async fn client_setinfo_is_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client
+        .client_setinfo(ClientInfoAttribute::LibName, "rustis-probe")
+        .await?;
+    client
+        .client_setinfo(ClientInfoAttribute::LibVer, "9.9.9")
+        .await?;
+
+    force_reconnection(&client).await?;
+
+    let info: String = client.send(cmd("CLIENT").arg("INFO"), None).await?;
+    assert!(
+        info.contains("lib-name=rustis-probe lib-ver=9.9.9"),
+        "the library identification must survive a reconnection, got: {info}"
+    );
+
+    Ok(())
+}
+
+/// `CLIENT NO-EVICT` and `CLIENT NO-TOUCH` protect a connection from eviction
+/// and from bumping key idle times. Both are silently disarmed by a reconnection,
+/// and nothing tells the caller.
+#[tokio::test]
+#[serial]
+async fn no_evict_and_no_touch_are_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client.client_no_evict(true).await?;
+    client.client_no_touch(true).await?;
+
+    force_reconnection(&client).await?;
+
+    let info: String = client.send(cmd("CLIENT").arg("INFO"), None).await?;
+    let flags = info
+        .split(' ')
+        .find_map(|field| field.strip_prefix("flags="))
+        .unwrap_or_default();
+
+    assert!(
+        flags.contains('e'),
+        "NO-EVICT must survive a reconnection, flags: {flags}"
+    );
+    assert!(
+        flags.contains('T'),
+        "NO-TOUCH must survive a reconnection, flags: {flags}"
+    );
+
+    Ok(())
+}
+
+/// Client-side caching enabled directly, without going through `Cache`: the
+/// invalidation stream survives the reconnection, so a caller keeps consuming a
+/// channel the server no longer feeds.
+#[tokio::test]
+#[serial]
+async fn client_tracking_is_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
+        .await?;
+
+    force_reconnection(&client).await?;
+
+    let tracking_info = client.client_trackinginfo().await?;
+    assert!(
+        !tracking_info.flags.iter().any(|flag| flag == "off"),
+        "tracking must be re-armed after a reconnection, flags: {:?}",
+        tracking_info.flags
+    );
+
+    client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
+    Ok(())
+}
+
+/// `RESET` wipes the connection state server-side. The client must forget it too,
+/// otherwise a later reconnection restores state the caller explicitly discarded.
+#[tokio::test]
+#[serial]
+async fn reset_discards_the_state_the_reconnect_would_restore() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client.client_setname("reset_probe").await?;
+    client.select(7).await?;
+    client.reset().await?;
+
+    force_reconnection(&client).await?;
+
+    let name: Option<String> = client.client_getname().await?;
+    assert_eq!(
+        None, name,
+        "a name discarded by RESET must not come back on reconnection"
+    );
+
+    let info: String = client.send(cmd("CLIENT").arg("INFO"), None).await?;
+    let db = info
+        .split(' ')
+        .find_map(|field| field.strip_prefix("db="))
+        .unwrap_or_default();
+    assert_eq!(
+        "0", db,
+        "a database discarded by RESET must not come back on reconnection"
+    );
+
+    Ok(())
+}
+
+/// A caller that authenticates as another user at runtime keeps that identity
+/// only until the socket dies: the handshake re-authenticates from the config,
+/// so the connection silently comes back as whoever the config names.
+#[tokio::test]
+#[serial]
+async fn runtime_authentication_is_restored_after_reconnect() -> Result<()> {
+    let client = reconnecting_test_client().await?;
+
+    client
+        .acl_setuser(
+            "auth_probe",
+            ["on", ">auth_probe_password", "~*", "&*", "+@all"],
+        )
+        .await?;
+    client
+        .auth(Some("auth_probe"), "auth_probe_password")
+        .await?;
+
+    force_reconnection(&client).await?;
+
+    let whoami: String = client.acl_whoami().await?;
+    assert_eq!(
+        "auth_probe", whoami,
+        "the identity a caller authenticated as must survive a reconnection"
+    );
+
+    client.acl_deluser("auth_probe").await?;
     Ok(())
 }

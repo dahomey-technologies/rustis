@@ -1,8 +1,12 @@
 use crate::{
     Result,
-    client::Client,
+    client::{Client, IntoConfig, ReconnectionConfig},
     commands::{ConnectionCommands, SentinelCommands, SentinelSimulateFailureMode},
-    tests::{TestClient, get_sentinel_master_test_client, get_sentinel_test_client, log_try_init},
+    resp::cmd,
+    tests::{
+        TestClient, get_sentinel_master_test_client, get_sentinel_master_test_uri,
+        get_sentinel_test_client, log_try_init,
+    },
 };
 use serial_test::serial;
 use std::collections::HashMap;
@@ -32,6 +36,35 @@ async fn unknown_service() -> Result<()> {
 async fn connection() -> Result<()> {
     let client = get_sentinel_master_test_client().await?;
     client.hello(Default::default()).await?;
+
+    Ok(())
+}
+
+/// A sentinel connection redials through the sentinels to find the master, on a path
+/// of its own. The connection state the caller set must be replayed there too — it is
+/// the same socket loss as in the standalone case.
+#[tokio::test]
+#[serial]
+async fn sentinel_connection_state_is_restored_after_reconnect() -> Result<()> {
+    let mut config = get_sentinel_master_test_uri().into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let client = Client::connect(config).await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    client.client_setname("sentinel_restore").await?;
+
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+
+    let name: Option<String> = client.client_getname().await?;
+    assert_eq!(
+        Some("sentinel_restore".to_owned()),
+        name,
+        "a name set at runtime must survive a reconnection through the sentinels"
+    );
 
     Ok(())
 }

@@ -1,10 +1,10 @@
 use crate::{
-    Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
+    ConnectionState, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
     client::{BufferConfig, Config, PreparedCommand},
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
-    resp::{BufferDecoder, Command, CommandEncoder, RespResponse},
+    resp::{BufferDecoder, Command, CommandEncoder, RespResponse, StateSlot},
     tcp_connect,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
@@ -19,7 +19,15 @@ use std::{
     task::{Context, Poll},
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
-use tracing::{Instrument, debug, info_span, trace};
+use tracing::{Instrument, debug, info_span, trace, warn};
+
+/// Whether a recorded `CLIENT REPLY` command is the one that makes the connection
+/// answer again — the only mode of the three whose own reply arrives.
+fn command_turns_replies_on(command: &Command) -> bool {
+    command
+        .get_arg(1)
+        .is_none_or(|mode| mode.eq_ignore_ascii_case(b"ON"))
+}
 
 /// Replaces `buf` with a fresh `buffers.read_capacity` buffer once it has been
 /// oversized and near-empty for long enough, returning its high-water-mark
@@ -113,7 +121,31 @@ pub struct StandaloneConnection {
 }
 
 impl StandaloneConnection {
-    pub async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
+    /// Opens the client's own connection: the state a caller attached to the
+    /// previous socket is replayed onto this one.
+    pub(crate) async fn connect(
+        host: &str,
+        port: u16,
+        config: &Config,
+        connection_state: &mut ConnectionState,
+    ) -> Result<Self> {
+        Self::connect_inner(host, port, config, Some(connection_state)).await
+    }
+
+    /// Opens a connection that is **not** the caller's — cluster shard discovery,
+    /// a probe to a Sentinel, the test-only `CLIENT KILL` connection. It carries
+    /// no caller state: replaying their database, name or tracking mode onto a
+    /// node they never addressed would be wrong.
+    pub(crate) async fn connect_control(host: &str, port: u16, config: &Config) -> Result<Self> {
+        Self::connect_inner(host, port, config, None).await
+    }
+
+    async fn connect_inner(
+        host: &str,
+        port: u16,
+        config: &Config,
+        connection_state: Option<&mut ConnectionState>,
+    ) -> Result<Self> {
         let streams = Streams::connect(host, port, config).await?;
 
         let mut connection = Self {
@@ -137,7 +169,10 @@ impl StandaloneConnection {
         // span the network loop will run under. It can only exist from here: the
         // tag identifying the connection is what the lines above just built.
         let span = info_span!("connection", tag = %connection.tag);
-        connection.post_connect().instrument(span).await?;
+        connection
+            .post_connect(connection_state)
+            .instrument(span)
+            .await?;
 
         Ok(connection)
     }
@@ -195,7 +230,7 @@ impl StandaloneConnection {
             let mut config = self.config.clone();
             "killer".clone_into(&mut config.connection_name);
             let mut connection =
-                StandaloneConnection::connect(&self.host, self.port, &config).await?;
+                StandaloneConnection::connect_control(&self.host, self.port, &config).await?;
             connection
                 .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
                 .await?;
@@ -306,17 +341,20 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn reconnect(&mut self) -> Result<()> {
+    pub(crate) async fn reconnect(
+        &mut self,
+        connection_state: Option<&mut ConnectionState>,
+    ) -> Result<()> {
         self.streams = Streams::connect(&self.host, self.port, &self.config).await?;
         // Fresh streams carry fresh buffers, so the shrink hysteresis restarts.
         self.read_buffer_small_streak = 0;
         self.write_buffer_small_streak = 0;
-        self.post_connect().await?;
+        self.post_connect(connection_state).await?;
 
         Ok(())
     }
 
-    async fn post_connect(&mut self) -> Result<()> {
+    async fn post_connect(&mut self, connection_state: Option<&mut ConnectionState>) -> Result<()> {
         // RESP3
         let mut hello_options = HelloOptions::new(3);
 
@@ -343,12 +381,88 @@ impl StandaloneConnection {
         let hello_result = self.hello(hello_options).await?;
         self.version = hello_result.version;
 
-        // select database
-        if self.config.database != 0 {
+        // select database, unless the caller has since selected another one: the
+        // replay below would immediately overwrite this, so emitting it would cost
+        // a round-trip on every reconnection to reach a database nobody is on.
+        let runtime_select = connection_state
+            .as_ref()
+            .is_some_and(|state| state.holds(StateSlot::Select));
+        if self.config.database != 0 && !runtime_select {
             self.select(self.config.database).await?;
         }
 
+        if let Some(connection_state) = connection_state {
+            self.restore_connection_state(connection_state).await;
+        }
+
         Ok(())
+    }
+
+    /// Replays the connection-attached state the caller set at runtime, which the
+    /// handshake above cannot know about: it only ever restores what the config
+    /// describes.
+    ///
+    /// A rejected replay is logged and its slot **dropped**. The state it carries is
+    /// state the caller asked for and the server has now refused; a command that
+    /// fails once fails on every reconnection, and turning that into a dead client
+    /// would make a single bad `AUTH` fatal for the rest of the client's life.
+    async fn restore_connection_state(&mut self, connection_state: &mut ConnectionState) {
+        if let Some(refused) = self.replay_state(&connection_state.commands(), true).await {
+            connection_state.forget(refused);
+        }
+    }
+
+    /// Brings this connection up to `snapshot`, for a node a cluster topology change
+    /// brought into the topology after the client's state was set.
+    ///
+    /// The snapshot is read-only here — the handler owns the registry — so a refused
+    /// slot is logged and left in place rather than dropped.
+    pub(crate) async fn restore_from_snapshot(&mut self, snapshot: &ConnectionState) {
+        self.replay_state(&snapshot.commands(), false).await;
+    }
+
+    /// The single replay loop behind both entry points above. Returns the first slot
+    /// the server refused, if any.
+    ///
+    /// `with_reply_mode` is false for a cluster node: silencing it would strand the
+    /// read below, and `CLIENT REPLY OFF` is refused on a cluster client anyway.
+    async fn replay_state(
+        &mut self,
+        commands: &[(StateSlot, Command)],
+        with_reply_mode: bool,
+    ) -> Option<StateSlot> {
+        for (slot, command) in commands {
+            let slot = *slot;
+            if slot == StateSlot::ReplyMode && !with_reply_mode {
+                continue;
+            }
+
+            if let Err(e) = self.write(command).await {
+                warn!("Cannot restore {slot:?}: {e}");
+                return None;
+            }
+
+            // Silencing the connection is the one restore that is not answered,
+            // which is why `ReplyMode` is replayed last: nothing follows it that
+            // would wait for a reply that can no longer come.
+            if slot == StateSlot::ReplyMode && !command_turns_replies_on(command) {
+                continue;
+            }
+
+            match self.read().await {
+                Some(Ok(_)) => (),
+                Some(Err(e)) => {
+                    warn!("Cannot restore {slot:?}: {e}");
+                    return Some(slot);
+                }
+                None => {
+                    warn!("Connection closed while restoring {slot:?}");
+                    return None;
+                }
+            }
+        }
+
+        None
     }
 
     pub fn get_version(&self) -> &str {

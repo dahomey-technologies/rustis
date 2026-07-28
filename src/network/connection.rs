@@ -1,5 +1,5 @@
 use crate::{
-    ClusterConnection, Error, Future, Result, RetryReason, SentinelConnection,
+    ClusterConnection, ConnectionState, Error, Future, Result, RetryReason, SentinelConnection,
     StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
@@ -17,16 +17,19 @@ pub enum Connection {
 
 impl Connection {
     #[inline]
-    pub async fn connect(config: Config) -> Result<Self> {
+    pub(crate) async fn connect(
+        config: Config,
+        connection_state: &mut ConnectionState,
+    ) -> Result<Self> {
         match &config.server {
             ServerConfig::Standalone { host, port } => Ok(Connection::Standalone(
-                StandaloneConnection::connect(host, *port, &config).await?,
+                StandaloneConnection::connect(host, *port, &config, connection_state).await?,
             )),
             ServerConfig::Sentinel(sentinel_config) => Ok(Connection::Sentinel(
-                SentinelConnection::connect(sentinel_config, &config).await?,
+                SentinelConnection::connect(sentinel_config, &config, connection_state).await?,
             )),
             ServerConfig::Cluster(cluster_config) => Ok(Connection::Cluster(
-                ClusterConnection::connect(cluster_config, &config).await?,
+                ClusterConnection::connect(cluster_config, &config, connection_state).await?,
             )),
         }
     }
@@ -68,11 +71,13 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn reconnect(&mut self) -> Result<()> {
+    pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         match self {
-            Connection::Standalone(connection) => connection.reconnect().await,
-            Connection::Sentinel(connection) => connection.reconnect().await,
-            Connection::Cluster(connection) => connection.reconnect().await,
+            Connection::Standalone(connection) => {
+                connection.reconnect(Some(connection_state)).await
+            }
+            Connection::Sentinel(connection) => connection.reconnect(connection_state).await,
+            Connection::Cluster(connection) => connection.reconnect(connection_state).await,
         }
     }
 
@@ -81,6 +86,16 @@ impl Connection {
         self.feed(command, &[]).await?;
         self.flush().await?;
         self.read().await.ok_or_else(|| Error::DisconnectedByPeer)?
+    }
+
+    /// Hands the cluster variant a fresh copy of the connection-state registry, for
+    /// the nodes a topology change creates from inside `feed` / `read` — paths the
+    /// handler cannot lend its registry to. A no-op for the other variants, which
+    /// receive it directly at (re)connect.
+    pub(crate) fn sync_connection_state(&mut self, connection_state: &ConnectionState) {
+        if let Connection::Cluster(connection) = self {
+            connection.sync_connection_state(connection_state);
+        }
     }
 
     pub(crate) fn tag(&self) -> Arc<str> {

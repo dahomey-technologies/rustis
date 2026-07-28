@@ -489,6 +489,13 @@ pub trait ClusterCommands<'a>: Sized {
 
     /// Enables read queries for a connection to a Redis Cluster replica node.
     ///
+    /// # Cluster
+    /// **This has no effect on a rustis cluster client.** Slot-routed commands always
+    /// go to the shard's master; replica connections exist only to serve the
+    /// broadcast policies (`AllNodes`), so there is no read for `READONLY` to
+    /// redirect. It is left routed as an ordinary command rather than broadcast,
+    /// because broadcasting it would advertise a capability that does not exist.
+    ///
     /// # See Also
     /// [<https://redis.io/commands/readonly/>](https://redis.io/commands/readonly/)
     #[must_use]
@@ -497,6 +504,10 @@ pub trait ClusterCommands<'a>: Sized {
     }
 
     /// Disables read queries for a connection to a Redis Cluster replica node.
+    ///
+    /// # Cluster
+    /// See [`readonly`](ClusterCommands::readonly): rustis does not route reads to
+    /// replicas, so this command changes nothing for a cluster client.
     ///
     /// # See Also
     /// [<https://redis.io/commands/readwrite/>](https://redis.io/commands/readwrite/)

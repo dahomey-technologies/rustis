@@ -465,18 +465,22 @@ impl NetworkHandler {
     }
 
     async fn send_messages(&mut self) {
-        // The count is folded inside the macro argument on purpose: both the
-        // `tracing` path and the `log` bridge evaluate their arguments only once
-        // a sink has accepted the record, so a disabled debug level walks
-        // nothing. Guarding it with `enabled!` instead would silence the line
-        // for every `log`-only consumer, which the bridge exists to serve.
+        // The line is only worth emitting for an actual batch, and deciding that
+        // needs the count, so the count is taken here rather than inside the
+        // macro argument. Guarding it with `enabled!` instead would silence the
+        // line for every `log`-only consumer, which the bridge exists to serve.
+        //
+        // The walk is bounded by `max_messages_per_wave` and each step is a
+        // discriminant read; the loop below iterates the same queue and encodes
+        // every command in it.
         if !self.messages_to_send.is_empty() {
-            debug!(
-                "sending batch of {} commands",
-                self.messages_to_send
-                    .iter()
-                    .fold(0, |sum, msg| sum + msg.message.num_commands())
-            );
+            let num_commands = self
+                .messages_to_send
+                .iter()
+                .fold(0, |sum, msg| sum + msg.message.num_commands());
+            if num_commands > 1 {
+                debug!("sending batch of {num_commands} commands");
+            }
         }
 
         // Test-only: force retry reasons onto the first message of this drain so

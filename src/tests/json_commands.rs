@@ -885,3 +885,169 @@ async fn json_arrindex_stop() -> Result<()> {
 
     Ok(())
 }
+
+/// A negative `start` counts from the end, like `stop` and like every other
+/// index in this family.
+#[tokio::test]
+#[serial]
+async fn json_arrindex_negative_start() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .json_set("key", "$", r#"{"b":[1,2,3,2,1]}"#, None)
+        .await?;
+
+    // Searching the whole array finds the first 2, at index 1.
+    let result: Vec<Option<isize>> = client
+        .json_arrindex("key", "$.b", "2", JsonArrIndexOptions::default())
+        .await?;
+    assert_eq!(vec![Some(1)], result);
+
+    // -3 starts the search at index 2, so the second 2 is the first match.
+    let result: Vec<Option<isize>> = client
+        .json_arrindex("key", "$.b", "2", JsonArrIndexOptions::default().start(-3))
+        .await?;
+    assert_eq!(vec![Some(3)], result);
+
+    Ok(())
+}
+
+/// `JSON.SET key path value [NX | XX]`. The value-comparison conditions the
+/// string `SET` accepts are a syntax error here, which is why `condition` says
+/// so.
+#[tokio::test]
+#[serial]
+async fn json_set_condition() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // XX on a missing key writes nothing and answers nil.
+    client
+        .json_set(
+            "key",
+            "$",
+            "1",
+            JsonSetOptions::default().condition(SetCondition::XX),
+        )
+        .await?;
+    let types: Vec<Option<String>> = client.json_type("key", "$").await?;
+    assert_eq!(vec![None], types);
+
+    // Once the key exists, XX overwrites it and NX leaves it alone.
+    client.json_set("key", "$", "1", None).await?;
+    client
+        .json_set(
+            "key",
+            "$",
+            "2",
+            JsonSetOptions::default().condition(SetCondition::XX),
+        )
+        .await?;
+    let value: String = client.json_get("key", JsonGetOptions::default()).await?;
+    assert_eq!("2", value);
+
+    client
+        .json_set(
+            "key",
+            "$",
+            "3",
+            JsonSetOptions::default().condition(SetCondition::NX),
+        )
+        .await?;
+    let value: String = client.json_get("key", JsonGetOptions::default()).await?;
+    assert_eq!("2", value);
+
+    // The `From<SetCondition>` shorthand takes the same path as the builder.
+    client
+        .json_set("key", "$", "4", JsonSetOptions::from(SetCondition::XX))
+        .await?;
+    let value: String = client.json_get("key", JsonGetOptions::default()).await?;
+    assert_eq!("4", value);
+
+    // The value-comparison conditions are rejected by the server.
+    let result = client
+        .json_set(
+            "key",
+            "$",
+            "5",
+            JsonSetOptions::default().condition(SetCondition::IFEQ("4")),
+        )
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+/// Every `FPHA` storage type is accepted and keeps the precision it declares.
+#[tokio::test]
+#[serial]
+async fn json_set_fpha_types() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // FP32 keeps a value FP16 cannot hold.
+    client
+        .json_set(
+            "fp32",
+            "$",
+            "[1e30,2e30]",
+            JsonSetOptions::default().fpha(JsonFpType::Fp32),
+        )
+        .await?;
+    let value: String = client.json_get("fp32", JsonGetOptions::default()).await?;
+    assert!(value.starts_with("[1e30"), "unexpected value: {value}");
+
+    // FP64 keeps a value FP32 cannot hold.
+    client
+        .json_set(
+            "fp64",
+            "$",
+            "[1e300,2e300]",
+            JsonSetOptions::default().fpha(JsonFpType::Fp64),
+        )
+        .await?;
+    let value: String = client.json_get("fp64", JsonGetOptions::default()).await?;
+    assert!(value.starts_with("[1e300"), "unexpected value: {value}");
+
+    let result = client
+        .json_set(
+            "fp32_overflow",
+            "$",
+            "[1e300]",
+            JsonSetOptions::default().fpha(JsonFpType::Fp32),
+        )
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+/// `path` accumulates: `JSON.GET` takes several paths and answers a map keyed by
+/// path.
+#[tokio::test]
+#[serial]
+async fn json_get_multiple_paths() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .json_set("key", "$", r#"{"a":1,"b":2,"c":3}"#, None)
+        .await?;
+
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().path("$.a").path("$.c"))
+        .await?;
+    // The reply is a map keyed by path; the server does not order it.
+    assert!(json.contains(r#""$.a":[1]"#), "unexpected reply: {json}");
+    assert!(json.contains(r#""$.c":[3]"#), "unexpected reply: {json}");
+    assert!(!json.contains(r#""$.b""#), "unexpected reply: {json}");
+
+    // NEWLINE alone is the only formatting option applied.
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().newline("|").path("$.a"))
+        .await?;
+    assert_eq!("[|1|]", json);
+
+    Ok(())
+}

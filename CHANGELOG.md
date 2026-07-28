@@ -190,6 +190,31 @@ contains breaking changes; read that section before upgrading.
   `assert_eq!("40", value)` still compiles; code binding the value as a `String`
   needs `.as_str()` or a `match`.
 
+- **`JsonRef` is removed; `Json<T>` serializes as well as it deserializes.** The
+  JSON wrapper is now one name in both directions:
+  `client.set(key, Json(&value))` and
+  `let Json(value): Json<T> = client.get(key).await?`. `Json(&value)` borrows
+  exactly as `JsonRef(&value)` did — `&T` is itself `Serialize` — so the
+  migration is a rename, with `Json(value)` available when the value can be
+  moved.
+
+- **A value `serde_json` cannot encode now fails the command instead of being
+  stored as an empty one.** The wrapper's `Serialize` swallowed the error and
+  sent a unit argument in the value's place, so `client.set(key, Json(&value))`
+  returned `Ok(())` having written an absent value under `key`. It now returns
+  `Error::Client(ClientError::SerdeSerialize(_))` and sends nothing. Code that
+  treated a JSON argument as infallible has an error to handle.
+
+  Reading a nil reply as `Json<T>` also reports a different message — it now
+  names `Option<Json<T>>`, which is what a possibly-missing key needs, instead
+  of serde's `invalid type: Option`. Only the text changes.
+
+- **`JsonArrIndexOptions::start` and `stop` are `isize`.** They were `u32` and
+  `i32`, so a negative `start` — which `JSON.ARRINDEX` reads as an offset from
+  the end of the array, like every other index in this family — could not be
+  expressed. Literals still infer; a caller passing a `u32` or `i32` variable
+  needs a cast.
+
 ### Security
 
 - Passwords are no longer written in clear text by `Display for Config`. Both the

@@ -707,27 +707,29 @@ pub enum JsonFpType {
 #[serde(rename_all(serialize = "UPPERCASE"))]
 pub struct JsonArrIndexOptions {
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
-    start: Option<u32>,
+    start: Option<isize>,
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
-    stop: Option<i32>,
+    stop: Option<isize>,
 }
 
 impl JsonArrIndexOptions {
-    /// Inclusive start value to specify in a slice of the array to search.
+    /// Inclusive index of the first element of the slice to search.
     ///
-    /// Default is 0.
+    /// Default is 0, the first element.
+    /// Negative values are interpreted as starting from the end.
     #[must_use]
-    pub fn start(mut self, start: u32) -> Self {
+    pub fn start(mut self, start: isize) -> Self {
         self.start = Some(start);
         self
     }
 
-    /// Exclusive stop value to specify in a slice of the array to search, including the last element.
+    /// Exclusive index of the end of the slice to search.
     ///
-    /// Default is 0.
-    /// Negative values are interpreted as starting from the end.
+    /// Default is 0, the one value that means "to the end of the array".
+    /// Negative values are interpreted as starting from the end and stay
+    /// exclusive, so -1 drops the last element.
     #[must_use]
-    pub fn stop(mut self, stop: i32) -> Self {
+    pub fn stop(mut self, stop: isize) -> Self {
         self.stop = Some(stop);
         self
     }

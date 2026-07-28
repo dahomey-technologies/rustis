@@ -476,7 +476,7 @@ fn map() -> Result<()> {
 #[test]
 fn _struct() -> Result<()> {
     #[derive(Debug, Deserialize)]
-    pub struct Person {
+    pub(crate) struct Person {
         pub id: u64,
         pub name: String,
     }

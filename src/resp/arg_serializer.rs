@@ -4,7 +4,7 @@ use dtoa::Float;
 use itoa::Integer;
 use serde::{Serializer, ser};
 
-pub struct ArgSerializer<'a> {
+pub(crate) struct ArgSerializer<'a> {
     buffer: &'a mut BytesMut,
     args_layout: Option<&'a mut ArgsLayout>,
 }
@@ -18,8 +18,9 @@ impl<'a> ArgSerializer<'a> {
         }
     }
 
+    #[cfg(test)]
     #[inline]
-    pub fn from_buffer(buffer: &'a mut BytesMut) -> Self {
+    pub(crate) fn from_buffer(buffer: &'a mut BytesMut) -> Self {
         Self {
             buffer,
             args_layout: None,
@@ -43,7 +44,7 @@ impl<'a> ArgSerializer<'a> {
     /// # Format
     /// `$Length\r\n Data\r\n`
     #[inline]
-    pub fn write_arg(&mut self, data: &[u8]) {
+    pub(crate) fn write_arg(&mut self, data: &[u8]) {
         // 1. Write the RESP BulkString header ($Len\r\n)
         let data_len = data.len();
         let mut len_buf = itoa::Buffer::new();

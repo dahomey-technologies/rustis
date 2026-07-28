@@ -207,7 +207,7 @@ struct FastPathRespSerializer<'a> {
 
 impl<'a> FastPathRespSerializer<'a> {
     #[inline(always)]
-    pub fn new(buffer: &'a mut BytesMut) -> Self {
+    pub(crate) fn new(buffer: &'a mut BytesMut) -> Self {
         FastPathRespSerializer { buffer }
     }
 
@@ -228,7 +228,7 @@ impl<'a> FastPathRespSerializer<'a> {
     /// # Format
     /// `$Length\r\nData\r\n`
     #[inline]
-    pub fn write_arg(&mut self, data: &[u8]) -> Range<usize> {
+    pub(crate) fn write_arg(&mut self, data: &[u8]) -> Range<usize> {
         // 1. Write the RESP BulkString header ($Len\r\n)
         let data_len = data.len();
         let mut len_buf = itoa::Buffer::new();

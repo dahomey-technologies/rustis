@@ -14,7 +14,7 @@ use std::{collections::HashMap, fmt};
 /// proper fix if that ever changes.
 pub(crate) const PUSH_FAKE_FIELD: &str = ">>>PUSH>>>";
 
-/// Implementation meant to be used with [`RespDeserializer`](crate::resp::RespDeserializer)
+/// Implementation meant to be used with the crate's RESP deserializer.
 impl<'de> Deserialize<'de> for Value {
     #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

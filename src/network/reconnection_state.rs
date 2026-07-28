@@ -8,7 +8,7 @@ pub(crate) struct ReconnectionState {
 }
 
 impl ReconnectionState {
-    pub fn new(config: ReconnectionConfig) -> Self {
+    pub(crate) fn new(config: ReconnectionConfig) -> Self {
         Self {
             config,
             attempts: 0,
@@ -16,12 +16,12 @@ impl ReconnectionState {
     }
 
     /// Reset the number of reconnection attempts.
-    pub fn reset_attempts(&mut self) {
+    pub(crate) fn reset_attempts(&mut self) {
         self.attempts = 0;
     }
 
     /// Calculate the next delay, incrementing `attempts` in the process.
-    pub fn next_delay(&mut self) -> Option<u64> {
+    pub(crate) fn next_delay(&mut self) -> Option<u64> {
         match &self.config {
             ReconnectionConfig::Constant {
                 delay,

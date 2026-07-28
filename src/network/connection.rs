@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use std::{future::IntoFuture, sync::Arc, task::Poll};
 
 #[allow(clippy::large_enum_variant)]
-pub enum Connection {
+pub(crate) enum Connection {
     Standalone(StandaloneConnection),
     Sentinel(SentinelConnection),
     Cluster(ClusterConnection),
@@ -35,7 +35,11 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+    pub(crate) async fn feed(
+        &mut self,
+        command: &Command,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.feed(command, retry_reasons).await,
             Connection::Sentinel(connection) => connection.feed(command, retry_reasons).await,
@@ -44,7 +48,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn flush(&mut self) -> Result<()> {
+    pub(crate) async fn flush(&mut self) -> Result<()> {
         match self {
             Connection::Standalone(connection) => connection.flush().await,
             Connection::Sentinel(connection) => connection.flush().await,
@@ -53,7 +57,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
+    pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
         match self {
             Connection::Standalone(connection) => connection.read().await,
             Connection::Sentinel(connection) => connection.read().await,
@@ -62,7 +66,7 @@ impl Connection {
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
+    pub(crate) fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         match self {
             Connection::Standalone(connection) => connection.try_read(),
             Connection::Sentinel(connection) => connection.try_read(),
@@ -82,7 +86,7 @@ impl Connection {
     }
 
     #[inline]
-    pub async fn send(&mut self, command: &Command) -> Result<RespResponse> {
+    pub(crate) async fn send(&mut self, command: &Command) -> Result<RespResponse> {
         self.feed(command, &[]).await?;
         self.flush().await?;
         self.read().await.ok_or_else(|| Error::DisconnectedByPeer)?

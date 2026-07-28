@@ -117,7 +117,7 @@ pub(crate) async fn tcp_tls_connect(
     Ok((reader, writer))
 }
 
-pub enum JoinHandle<T> {
+pub(crate) enum JoinHandle<T> {
     #[cfg(feature = "tokio-runtime")]
     Tokio(tokio::task::JoinHandle<T>),
 }

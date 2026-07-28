@@ -347,6 +347,21 @@ impl Client {
         PubSubStream::new(pub_sub_sender, pub_sub_receiver, self.clone())
     }
 
+    /// Create a stream of client-side caching invalidations.
+    ///
+    /// The stream yields the keys Redis has invalidated, as
+    /// [`BulkString`](crate::resp::BulkString) — Redis keys are binary-safe.
+    /// Enable tracking on the same client with
+    /// [`client_tracking`](crate::commands::ConnectionCommands::client_tracking)
+    /// for the server to start sending them.
+    ///
+    /// ```
+    /// use rustis::{client::{Client, ClientTrackingInvalidationStream}, Result};
+    ///
+    /// async fn watch(client: &Client) -> Result<ClientTrackingInvalidationStream> {
+    ///     client.create_client_tracking_invalidation_stream()
+    /// }
+    /// ```
     pub fn create_client_tracking_invalidation_stream(
         &self,
     ) -> Result<ClientTrackingInvalidationStream> {

@@ -576,7 +576,7 @@ struct SeqAccess<'de> {
 }
 
 impl<'de> SeqAccess<'de> {
-    pub fn new(values: &'de [Value]) -> Self {
+    pub(crate) fn new(values: &'de [Value]) -> Self {
         Self {
             len: values.len(),
             iter: values.iter(),
@@ -656,7 +656,7 @@ struct MapAccess<'de> {
 }
 
 impl<'de> MapAccess<'de> {
-    pub fn new(values: &'de HashMap<Value, Value>) -> Self {
+    pub(crate) fn new(values: &'de HashMap<Value, Value>) -> Self {
         Self {
             len: values.len(),
             iter: values.iter(),
@@ -739,7 +739,7 @@ impl<'de> Deserializer<'de> for ValuePair<'de> {
     where
         V: Visitor<'de>,
     {
-        pub struct ValuePairSeqAccess<'de> {
+        pub(crate) struct ValuePairSeqAccess<'de> {
             first: Option<&'de Value>,
             second: Option<&'de Value>,
         }

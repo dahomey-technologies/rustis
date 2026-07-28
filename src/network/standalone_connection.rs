@@ -71,7 +71,7 @@ pub(crate) enum Streams {
 }
 
 impl Streams {
-    pub async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
+    pub(crate) async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
         #[cfg(any(feature = "native-tls", feature = "rustls"))]
         if let Some(tls_config) = &config.tls_config {
             let (reader, writer) =
@@ -91,7 +91,7 @@ impl Streams {
         Self::connect_non_secure(host, port, config).await
     }
 
-    pub async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
+    pub(crate) async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
         let framed_read = FramedRead::with_capacity(
             reader,
@@ -103,7 +103,7 @@ impl Streams {
     }
 }
 
-pub struct StandaloneConnection {
+pub(crate) struct StandaloneConnection {
     host: String,
     port: u16,
     config: Config,
@@ -221,7 +221,11 @@ impl StandaloneConnection {
         result
     }
 
-    pub async fn feed(&mut self, command: &Command, _retry_reasons: &[RetryReason]) -> Result<()> {
+    pub(crate) async fn feed(
+        &mut self,
+        command: &Command,
+        _retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         debug!("Sending command: {command}");
 
         #[cfg(test)]
@@ -255,7 +259,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub async fn flush(&mut self) -> Result<()> {
+    pub(crate) async fn flush(&mut self) -> Result<()> {
         trace!("Flushing...");
         let result = match &mut self.streams {
             Streams::Tcp(_, framed_write) => framed_write.flush().await,
@@ -267,7 +271,7 @@ impl StandaloneConnection {
         result
     }
 
-    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
+    pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
         // Test-only: simulate the connection being closed before any response
         // is delivered, once the armed countdown expires.
         #[cfg(test)]
@@ -301,7 +305,7 @@ impl StandaloneConnection {
         }
     }
 
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
+    pub(crate) fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         // Test-only: mirror `read`'s simulated close on the drain path.
         #[cfg(test)]
         if self.kill_connection_on_read_countdown > 0 {
@@ -465,7 +469,7 @@ impl StandaloneConnection {
         None
     }
 
-    pub fn get_version(&self) -> &str {
+    pub(crate) fn get_version(&self) -> &str {
         &self.version
     }
 

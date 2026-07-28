@@ -421,7 +421,7 @@ mod pub_sub_stream;
 mod transaction;
 
 pub use client::*;
-pub(crate) use client_tracking_invalidation_stream::*;
+pub use client_tracking_invalidation_stream::*;
 pub use config::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;

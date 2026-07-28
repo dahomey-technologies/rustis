@@ -1,7 +1,7 @@
 use crate::{ClientError, Error};
 
 /// Redis version returned by the hello command
-pub struct Version {
+pub(crate) struct Version {
     pub major: u8,
     #[allow(dead_code)]
     pub minor: u8,

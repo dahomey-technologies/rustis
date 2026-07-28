@@ -14,7 +14,7 @@ use std::fmt;
 /// sliced, and indexes a collection's elements. It decodes no value — the tag
 /// alone says how to read one, and the read happens in the calling task rather
 /// than in the shared network task.
-pub enum ParsedFrame {
+pub(crate) enum ParsedFrame {
     /// A single scalar, whose tag byte sits at `at` in the frame. It carries no
     /// tape: one node for one value would buy nothing, and keeping the hot
     /// request/response path node-free keeps the recycled tape buffer untouched.
@@ -192,7 +192,7 @@ pub(crate) struct OpenCollection {
 /// on the hot scalar path allocates. What bounds nesting is
 /// [`RespLimits::max_nesting_depth`], and it bounds it on both sides — this stack
 /// and the recursion left in attribute skipping.
-pub struct RespFrameParser<'a, 'b> {
+pub(crate) struct RespFrameParser<'a, 'b> {
     buf: &'a [u8],
     /// Hostile-input bounds this parser enforces, resolved from the connection's
     /// [`Config`](crate::client::Config) so a frame is checked against the same
@@ -209,13 +209,17 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// A parser positioned at the start of `buf`. Used both for one-shot parsing
     /// of a complete buffer and as the streaming decoder's entry point for a
     /// brand-new frame.
-    pub fn new(buf: &'a [u8], tape: &'b mut RespTapeMut) -> Self {
+    pub(crate) fn new(buf: &'a [u8], tape: &'b mut RespTapeMut) -> Self {
         Self::with_limits(buf, tape, RespLimits::DEFAULT)
     }
 
     /// A parser positioned at the start of `buf`, enforcing caller-chosen
     /// limits instead of the defaults.
-    pub fn with_limits(buf: &'a [u8], tape: &'b mut RespTapeMut, limits: RespLimits) -> Self {
+    pub(crate) fn with_limits(
+        buf: &'a [u8],
+        tape: &'b mut RespTapeMut,
+        limits: RespLimits,
+    ) -> Self {
         Self {
             buf,
             limits,
@@ -257,7 +261,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     /// nothing, so routing a scalar reply through the resumable path still reaches
     /// no heap. The network path is the streaming decoder's; this one serves
     /// [`crate::resp::RespBuf::to`], the fuzz harness and the tests.
-    pub fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
+    pub(crate) fn parse(&mut self) -> Result<(ParsedFrame, usize)> {
         let mut stack = Vec::new();
         match self.parse_resumable(&mut stack)? {
             Some(frame) => Ok((frame, self.pos)),

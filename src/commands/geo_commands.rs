@@ -315,7 +315,7 @@ impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R
     where
         D: Deserializer<'de>,
     {
-        pub enum GeoSearchResultField {
+        pub(crate) enum GeoSearchResultField {
             Distance(f64),
             GeoHash(i64),
             Coordinates((f64, f64)),
@@ -378,7 +378,7 @@ impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R
             }
         }
 
-        pub struct GeoSearchResultVisitor<R: Response> {
+        pub(crate) struct GeoSearchResultVisitor<R: Response> {
             phantom: PhantomData<R>,
         }
 

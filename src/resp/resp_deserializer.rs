@@ -10,14 +10,14 @@ use serde::{
 use std::str::{self};
 
 /// Serde deserializer for [`RESP3`](https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md)
-pub struct RespDeserializer<'de> {
+pub(crate) struct RespDeserializer<'de> {
     view: RespView<'de>,
 }
 
 impl<'de> RespDeserializer<'de> {
     /// Creates a new `RespDeserializer`
     #[inline]
-    pub const fn new(view: RespView<'de>) -> Self {
+    pub(crate) const fn new(view: RespView<'de>) -> Self {
         RespDeserializer { view }
     }
 }
@@ -1166,14 +1166,14 @@ impl<'de, 'a> de::SeqAccess<'de> for RespTuple2Deserializer<'a, 'de> {
     }
 }
 
-pub struct EnumAccess<'de> {
+pub(crate) struct EnumAccess<'de> {
     variant_name: RespView<'de>,
     content: RespView<'de>,
 }
 
 impl<'de> EnumAccess<'de> {
     #[inline(always)]
-    pub fn new(variant_name: RespView<'de>, content: RespView<'de>) -> Self {
+    pub(crate) fn new(variant_name: RespView<'de>, content: RespView<'de>) -> Self {
         Self {
             variant_name,
             content,
@@ -1194,13 +1194,13 @@ impl<'de> de::EnumAccess<'de> for EnumAccess<'de> {
     }
 }
 
-pub struct VariantAccess<'de> {
+pub(crate) struct VariantAccess<'de> {
     content: RespView<'de>,
 }
 
 impl<'de> VariantAccess<'de> {
     #[inline(always)]
-    pub fn new(content: RespView<'de>) -> Self {
+    pub(crate) fn new(content: RespView<'de>) -> Self {
         Self { content }
     }
 }

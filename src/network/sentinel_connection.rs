@@ -8,7 +8,7 @@ use crate::{
 use std::{sync::Arc, task::Poll};
 use tracing::debug;
 
-pub struct SentinelConnection {
+pub(crate) struct SentinelConnection {
     sentinel_config: SentinelConfig,
     config: Config,
     pub inner_connection: StandaloneConnection,
@@ -16,22 +16,26 @@ pub struct SentinelConnection {
 
 impl SentinelConnection {
     #[inline]
-    pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+    pub(crate) async fn feed(
+        &mut self,
+        command: &Command,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         self.inner_connection.feed(command, retry_reasons).await
     }
 
     #[inline]
-    pub async fn flush(&mut self) -> Result<()> {
+    pub(crate) async fn flush(&mut self) -> Result<()> {
         self.inner_connection.flush().await
     }
 
     #[inline]
-    pub async fn read(&mut self) -> Option<Result<RespResponse>> {
+    pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
         self.inner_connection.read().await
     }
 
     #[inline]
-    pub fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
+    pub(crate) fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         self.inner_connection.try_read()
     }
 

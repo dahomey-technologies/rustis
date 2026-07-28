@@ -21,7 +21,7 @@ where
     E: DeserializeOwned;
 
 #[allow(clippy::complexity)]
-pub fn deserialize_bzop_min_max_result<'de, D, K, V>(
+pub(crate) fn deserialize_bzop_min_max_result<'de, D, K, V>(
     deserializer: D,
 ) -> std::result::Result<Option<Vec<(K, V, f64)>>, D::Error>
 where

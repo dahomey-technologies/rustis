@@ -11,7 +11,7 @@ use bytes::BytesMut;
 use serde::Serialize;
 
 #[test]
-pub fn byte_slice() {
+pub(super) fn byte_slice() {
     let mut buffer = BytesMut::new();
     let mut serializer = ArgSerializer::from_buffer(&mut buffer);
     RefBulkString::from(b"foo")
@@ -27,7 +27,7 @@ pub fn byte_slice() {
 }
 
 #[test]
-pub fn bute_vec() {
+pub(super) fn bute_vec() {
     let mut buffer = BytesMut::new();
     let mut serializer = ArgSerializer::from_buffer(&mut buffer);
     BulkString::from(b"foo".to_vec())
@@ -50,7 +50,7 @@ pub fn bute_vec() {
 /// where it is not obvious: renamed and skipped fields, flags, nested options,
 /// enum variants and collections of structs.
 #[test]
-pub fn arg_counter_agrees_with_arg_serializer() {
+pub(super) fn arg_counter_agrees_with_arg_serializer() {
     fn assert_agree<T: Serialize>(label: &str, value: T) {
         let mut counter = ArgCounter::default();
         value.serialize(&mut counter).unwrap();

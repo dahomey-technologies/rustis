@@ -491,13 +491,51 @@ pub trait ClusterCommands<'a>: Sized {
 }
 
 /// Result for the [`cluster_bumpepoch`](ClusterCommands::cluster_bumpepoch) command
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ClusterBumpEpochResult {
-    /// if the epoch was incremented
-    Bumped,
-    /// if the node already has the greatest config epoch in the cluster.
-    Still,
+    /// The epoch was incremented, and the node now carries this one.
+    Bumped(u64),
+    /// The node already had the greatest config epoch in the cluster, this one.
+    Still(u64),
+}
+
+impl ClusterBumpEpochResult {
+    /// The config epoch the node carries now, whichever outcome it reported.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        match self {
+            ClusterBumpEpochResult::Bumped(epoch) | ClusterBumpEpochResult::Still(epoch) => *epoch,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ClusterBumpEpochResult {
+    /// `CLUSTER BUMPEPOCH` answers a single line holding both the outcome and
+    /// the resulting config epoch, as in `BUMPED 12`, so the two are read from
+    /// that text rather than from an enum tag alone.
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let reply = String::deserialize(deserializer)?;
+
+        let Some((outcome, epoch)) = reply.split_once(' ') else {
+            return Err(de::Error::custom(format!(
+                "expected `BUMPED <epoch>` or `STILL <epoch>`, got `{reply}`"
+            )));
+        };
+
+        let epoch = epoch.trim().parse().map_err(de::Error::custom)?;
+
+        match outcome {
+            "BUMPED" => Ok(ClusterBumpEpochResult::Bumped(epoch)),
+            "STILL" => Ok(ClusterBumpEpochResult::Still(epoch)),
+            other => Err(de::Error::custom(format!(
+                "unknown bumpepoch outcome `{other}`"
+            ))),
+        }
+    }
 }
 
 /// Options for the [`cluster_failover`](ClusterCommands::cluster_failover) command

@@ -13,8 +13,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hdel() -> Result<()> {
     let client = get_test_client().await?;
@@ -35,8 +34,7 @@ async fn hdel() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hexpire() -> Result<()> {
     let client = get_test_client().await?;
@@ -79,8 +77,7 @@ async fn hexpire() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hexpireat() -> Result<()> {
     let client = get_test_client().await?;
@@ -153,8 +150,7 @@ async fn hexpireat() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hexpiretime() -> Result<()> {
     let client = get_test_client().await?;
@@ -168,8 +164,7 @@ async fn hexpiretime() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hpersist() -> Result<()> {
     let client = get_test_client().await?;
@@ -195,8 +190,7 @@ async fn hpersist() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hexists() -> Result<()> {
     let client = get_test_client().await?;
@@ -217,8 +211,7 @@ async fn hexists() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hget() -> Result<()> {
     let client = get_test_client().await?;
@@ -233,8 +226,7 @@ async fn hget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hgetdel() {
     let client = get_test_client().await.unwrap();
@@ -268,8 +260,7 @@ async fn hgetdel() {
     assert_eq!(result, 0);
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hgetex() -> Result<()> {
     let client = get_test_client().await?;
@@ -297,8 +288,7 @@ async fn hgetex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hget_all() -> Result<()> {
     let client = get_test_client().await?;
@@ -317,8 +307,7 @@ async fn hget_all() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hincrby() -> Result<()> {
     let client = get_test_client().await?;
@@ -337,8 +326,7 @@ async fn hincrby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hincrbyfloat() -> Result<()> {
     let client = get_test_client().await?;
@@ -358,8 +346,7 @@ async fn hincrbyfloat() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hkeys() -> Result<()> {
     let client = get_test_client().await?;
@@ -378,8 +365,7 @@ async fn hkeys() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -396,8 +382,7 @@ async fn hlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hmget() -> Result<()> {
     let client = get_test_client().await?;
@@ -417,8 +402,7 @@ async fn hmget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hpexpire() -> Result<()> {
     let client = get_test_client().await?;
@@ -473,8 +457,7 @@ async fn hpexpire() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hpexpireat() -> Result<()> {
     let client = get_test_client().await?;
@@ -535,8 +518,7 @@ async fn hpexpireat() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hpexpiretime() -> Result<()> {
     let client = get_test_client().await?;
@@ -552,8 +534,7 @@ async fn hpexpiretime() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hrandfield() -> Result<()> {
     let client = get_test_client().await?;
@@ -592,8 +573,7 @@ async fn hrandfield() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hscan() -> Result<()> {
     let client = get_test_client().await?;
@@ -635,8 +615,7 @@ async fn hscan() -> Result<()> {
 
 /// `HSCAN key cursor [MATCH pattern] [COUNT count] [NOVALUES]`. With NOVALUES the
 /// server answers the field names alone, not field/value pairs.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hscan_no_values() -> Result<()> {
     let client = get_test_client().await?;
@@ -656,8 +635,7 @@ async fn hscan_no_values() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hsetex() -> Result<()> {
     let client = get_test_client().await?;
@@ -749,8 +727,7 @@ async fn hsetex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hsetnx() -> Result<()> {
     let client = get_test_client().await?;
@@ -770,8 +747,7 @@ async fn hsetnx() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hstrlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -787,8 +763,7 @@ async fn hstrlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hvals() -> Result<()> {
     let client = get_test_client().await?;

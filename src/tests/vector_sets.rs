@@ -13,8 +13,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vadd() -> Result<()> {
     let client = get_test_client().await?;
@@ -58,8 +57,7 @@ fn vadd_args() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vcard() -> Result<()> {
     let client = get_test_client().await?;
@@ -82,8 +80,7 @@ async fn vcard() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vdim() -> Result<()> {
     let client = get_test_client().await?;
@@ -110,8 +107,7 @@ fn vec_f32_approx_eq(a: &[f32], b: &[f32], epsilon: f32) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() < epsilon)
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vemb() -> Result<()> {
     let client = get_test_client().await?;
@@ -134,8 +130,7 @@ async fn vemb() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vgetattr() -> Result<()> {
     let client = get_test_client().await?;
@@ -163,8 +158,7 @@ async fn vgetattr() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vinfo() -> Result<()> {
     let client = get_test_client().await?;
@@ -189,8 +183,7 @@ async fn vinfo() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vlinks() -> Result<()> {
     let client = get_test_client().await?;
@@ -213,8 +206,7 @@ async fn vlinks() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vlinks_with_score() -> Result<()> {
     let client = get_test_client().await?;
@@ -251,8 +243,7 @@ fn are_all_unique<T: Eq + Hash>(vec: &[T]) -> bool {
     vec.iter().all(|item| set.insert(item))
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vrandmember() -> Result<()> {
     let client = get_test_client().await?;
@@ -321,8 +312,7 @@ async fn vrandmember() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vrem() -> Result<()> {
     let client = get_test_client().await?;
@@ -344,8 +334,7 @@ async fn vrem() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vsetattr() -> Result<()> {
     let client = get_test_client().await?;
@@ -386,8 +375,7 @@ async fn vsetattr() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vsim() -> Result<()> {
     let client = get_test_client().await?;
@@ -480,8 +468,7 @@ async fn vsim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vsim_with_attributes() -> Result<()> {
     let client = get_test_client().await?;
@@ -539,8 +526,7 @@ fn vsim_with_attributes_args() {
     assert_eq!("VSIM key ELE apple WITHSCORES WITHATTRIBS", cmd.to_string());
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vismember() -> Result<()> {
     let client = get_test_client().await?;
@@ -564,8 +550,7 @@ async fn vismember() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -607,8 +592,7 @@ async fn vrange() -> Result<()> {
 /// [EPSILON delta] [EF factor] [FILTER expr] [FILTER-EF max] [TRUTH] [NOTHREAD]`.
 /// TRUTH forces an exact linear scan and NOTHREAD keeps it on the main thread, so
 /// both must return the same neighbours as the default approximate search.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn vsim_truth_and_no_thread() -> Result<()> {
     let client = get_test_client().await?;

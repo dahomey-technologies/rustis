@@ -29,8 +29,7 @@ use rustis::{
     Result,
 };
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
     client.flushdb(FlushingMode::Sync).await?;
@@ -83,8 +82,7 @@ use rustis::{
 };
 use rustis::Result;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     #[cfg(feature = "pool")] {
         let manager = PooledClientManager::new("127.0.0.1:6379")?;
@@ -180,8 +178,7 @@ of the struct [`Config`] or its dependencies:
 ```
 use rustis::{client::Client, resp::cmd, Result};
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     // standalone, host=localhost, port=6379 (default), database=1
     let client = Client::connect("redis://localhost/1").await?;
@@ -225,8 +222,7 @@ use rustis::{
     resp::{cmd, Value}, Result,
 };
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
@@ -281,8 +277,7 @@ use rustis::{
     resp::{cmd, Value}, Result,
 };
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
@@ -339,8 +334,7 @@ use rustis::{
 };
 use futures_util::StreamExt;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let subscribing_client = Client::connect("127.0.0.1:6379").await?;
     let publishing_client = Client::connect("127.0.0.1:6379").await?;
@@ -383,8 +377,7 @@ use rustis::{
 };
 use futures_util::StreamExt;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let subscribing_client = Client::connect("127.0.0.1:6379").await?;
     let regular_client = Client::connect("127.0.0.1:6379").await?;

@@ -5,8 +5,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_incrby() -> Result<()> {
     let client = get_test_client().await?;
@@ -25,8 +24,7 @@ async fn cms_incrby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -47,8 +45,7 @@ async fn cms_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_initbydim() -> Result<()> {
     let client = get_test_client().await?;
@@ -59,8 +56,7 @@ async fn cms_initbydim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_initbyprob() -> Result<()> {
     let client = get_test_client().await?;
@@ -71,8 +67,7 @@ async fn cms_initbyprob() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_merge() -> Result<()> {
     let client = get_test_client().await?;
@@ -111,8 +106,7 @@ async fn cms_merge() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cms_query() -> Result<()> {
     let client = get_test_client().await?;

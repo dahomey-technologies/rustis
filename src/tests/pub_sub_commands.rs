@@ -19,8 +19,7 @@ use std::{
     future::IntoFuture,
 };
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pubsub() -> Result<()> {
     log_try_init();
@@ -62,8 +61,7 @@ async fn pubsub() -> Result<()> {
     Ok(())
 }
 
-// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[tokio::test]
 // #[serial]
 // async fn forbidden_command() -> Result<()> {
 //     let client = get_test_client().await?;
@@ -92,8 +90,7 @@ async fn pubsub() -> Result<()> {
 //     Ok(())
 // }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn subscribe_to_multiple_channels() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -127,8 +124,7 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn subscribe_to_multiple_patterns() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -187,8 +183,7 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_channels() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -219,8 +214,7 @@ async fn pub_sub_channels() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_numpat() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -239,8 +233,7 @@ async fn pub_sub_numpat() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_numsub() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -269,8 +262,7 @@ async fn pub_sub_numsub() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pubsub_shardchannels() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
@@ -310,8 +302,7 @@ async fn pubsub_shardchannels() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn subscribe_to_multiple_shardchannels() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
@@ -349,8 +340,7 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_shardchannels() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
@@ -409,8 +399,7 @@ async fn pub_sub_shardchannels() -> Result<()> {
 /// and every later reply coming from another node waits behind it forever.
 /// The command timeout is what turns that wait into a failure this test can
 /// report instead of hanging the whole suite.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn a_subscription_does_not_block_replies_from_other_nodes() -> Result<()> {
     let client = get_cluster_test_client_with_command_timeout().await?;
@@ -444,8 +433,7 @@ async fn a_subscription_does_not_block_replies_from_other_nodes() -> Result<()> 
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sunsubscribe() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
@@ -495,8 +483,7 @@ async fn sunsubscribe() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_shardnumsub() -> Result<()> {
     let pub_sub_client = get_cluster_test_client().await?;
@@ -541,8 +528,7 @@ async fn pub_sub_shardnumsub() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn additional_sub() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -620,8 +606,7 @@ async fn additional_sub() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn auto_resubscribe() -> Result<()> {
     let mut config = get_default_config()?;
@@ -666,8 +651,7 @@ async fn auto_resubscribe() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn no_auto_resubscribe() -> Result<()> {
     log_try_init();
@@ -705,8 +689,7 @@ async fn no_auto_resubscribe() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn concurrent_subscribe() -> Result<()> {
     let pub_sub_client1 = get_test_client().await?;
@@ -746,8 +729,7 @@ async fn concurrent_subscribe() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn unsubscribe() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -804,8 +786,7 @@ async fn unsubscribe() -> Result<()> {
 /// subscription still stands server-side, so forgetting it locally would leave a
 /// ghost the stream keeps receiving and `close`/`Drop` no longer cancel. The
 /// asymmetry with `subscribe`, which inserts only after success, is the defect.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn a_failed_unsubscribe_keeps_the_channel_tracked() -> Result<()> {
     log_try_init();
@@ -844,8 +825,7 @@ async fn a_failed_unsubscribe_keeps_the_channel_tracked() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn punsubscribe() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -872,8 +852,7 @@ async fn punsubscribe() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn split() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -912,8 +891,7 @@ async fn split() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn subscribe_multiple_times_to_the_same_channel() -> Result<()> {
     let pub_sub_client = get_test_client().await?;
@@ -940,8 +918,7 @@ async fn subscribe_multiple_times_to_the_same_channel() -> Result<()> {
 
 /// `PUBSUB HELP` answers the subcommand list as a flat array of text lines,
 /// which is the shape the declared return type claims.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pub_sub_help() -> Result<()> {
     let client = get_test_client().await?;

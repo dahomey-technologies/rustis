@@ -65,8 +65,7 @@ pub trait ServerCommands<'a>: Sized {
     ///     Result,
     /// };
     ///
-    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushall(FlushingMode::Sync).await?;
@@ -157,8 +156,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.acl_help().await?;
@@ -311,8 +309,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: String = client.bgrewriteaof().await?;
@@ -345,8 +342,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: String = client.bgsave(BgsaveOptions::default().schedule()).await?;
@@ -442,8 +438,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.command_help().await?;
@@ -517,8 +512,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.config_help().await?;
@@ -844,8 +838,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.latency_help().await?;
@@ -1007,8 +1000,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.memory_help().await?;
@@ -1168,8 +1160,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.module_help().await?;
@@ -1269,8 +1260,7 @@ pub trait ServerCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #    let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.slowlog_help().await?;

@@ -19,12 +19,6 @@ default = ["tokio-runtime"]
 tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]
 tokio-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "rustls"]
 tokio-native-tls = ["dep:tokio-native-tls", "native-tls"]
-async-std-runtime = [
-    "dep:async-std",
-    "async-std/attributes",
-    "tokio-util/compat",
-]
-async-std-native-tls = ["dep:async-native-tls", "native-tls"]
 pool = ["dep:bb8"]
 native-tls = ["dep:native-tls"]
 rustls = ["dep:rustls"]
@@ -37,8 +31,7 @@ fuzzing = []
 web-examples = ["dep:axum", "dep:actix-web"]
 
 [dependencies]
-async-std = { version = "1.13", features = ["attributes"], optional = true }
-futures-util = { version = "0.3", features = ["sink", "io"] }
+futures-util = { version = "0.3", features = ["sink"] }
 futures-channel = { version = "0.3", features = ["sink"] }
 bytes = { version = "1.11", features = ["serde"] }
 tokio = { version = "1.49", features = ["time", "io-util", "sync"] }
@@ -55,7 +48,6 @@ webpki-roots = { version = "1.0", optional = true }
 native-tls = { version = "0.2", optional = true }
 rustls = { version = "0.23", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
-async-native-tls = { version = "0.5", optional = true }
 # The `log` feature makes every event also emit a `log` record, so a downstream
 # crate wired to `env_logger` and friends keeps receiving output unchanged and
 # only sees a difference if it installs a `tracing` subscriber.

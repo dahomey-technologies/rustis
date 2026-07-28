@@ -7,8 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn get_set_json() -> Result<()> {
     #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]

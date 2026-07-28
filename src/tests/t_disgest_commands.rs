@@ -5,8 +5,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_add() -> Result<()> {
     let client = get_test_client().await?;
@@ -21,8 +20,7 @@ async fn tdigest_add() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_create() -> Result<()> {
     let client = get_test_client().await?;
@@ -33,8 +31,7 @@ async fn tdigest_create() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_byrank() -> Result<()> {
     let client = get_test_client().await?;
@@ -80,8 +77,7 @@ async fn tdigest_byrank() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_byrevrank() -> Result<()> {
     let client = get_test_client().await?;
@@ -127,8 +123,7 @@ async fn tdigest_byrevrank() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_cdf() -> Result<()> {
     let client = get_test_client().await?;
@@ -160,8 +155,7 @@ async fn tdigest_cdf() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -183,8 +177,7 @@ async fn tdigest_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_max() -> Result<()> {
     let client = get_test_client().await?;
@@ -208,8 +201,7 @@ async fn tdigest_max() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_merge() -> Result<()> {
     let client = get_test_client().await?;
@@ -231,8 +223,7 @@ async fn tdigest_merge() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_min() -> Result<()> {
     let client = get_test_client().await?;
@@ -256,8 +247,7 @@ async fn tdigest_min() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_quantile() -> Result<()> {
     let client = get_test_client().await?;
@@ -280,8 +270,7 @@ async fn tdigest_quantile() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_rank_revrank() -> Result<()> {
     let client = get_test_client().await?;
@@ -306,8 +295,7 @@ async fn tdigest_rank_revrank() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_reset() -> Result<()> {
     let client = get_test_client().await?;
@@ -330,8 +318,7 @@ async fn tdigest_reset() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_trimmed_mean() -> Result<()> {
     let client = get_test_client().await?;
@@ -359,8 +346,7 @@ async fn tdigest_trimmed_mean() -> Result<()> {
 /// [OVERRIDE]`. COMPRESSION is read back through the `Compression` field
 /// TDIGEST.INFO prints; OVERRIDE is what lets a merge into an existing sketch
 /// replace it rather than add to it.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn tdigest_merge_compression_and_override() -> Result<()> {
     let client = get_test_client().await?;

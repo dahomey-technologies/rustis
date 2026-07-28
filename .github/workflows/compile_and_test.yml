@@ -51,9 +51,7 @@ jobs:
   #
   # `cargo check` rather than `--all-targets`: the MSRV covers the library a
   # downstream crate compiles, not the dev-dependencies of our own test suite,
-  # which are free to require a newer compiler. Both runtimes are checked —
-  # `async-std-runtime` pulls a different dependency tree, so it can carry a
-  # different floor.
+  # which are free to require a newer compiler.
   #
   # Cargo's v3 resolver reads `rust-version` when picking dependency versions,
   # so a dependency that raises its own MSRV is resolved away instead of
@@ -79,20 +77,14 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
-      - name: cargo check (tokio)
+      - name: cargo check
         run: cargo check --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache
-      - name: cargo check (async-std)
-        run: cargo check --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache
 
   # Enforce the panic policy declared in `src/lib.rs`: the explicit-panic family
   # crate-wide, plus `clippy::indexing_slicing` in `network/` and `resp/`. Those
   # are `deny`, so they already fail without `-D warnings`; the flag is what
   # makes an *unfulfilled* `#[expect(...)]` fail too, so a justification that no
   # longer applies gets removed instead of quietly outliving its reason.
-  #
-  # `--all-targets` only on the tokio matrix: the examples are `#[tokio::main]`,
-  # so they do not build under `async-std-runtime` at all. That is why the
-  # feature-compile job below uses `cargo check` rather than `--all-targets`.
   clippy:
     name: Clippy (panic policy)
     runs-on: ubuntu-22.04
@@ -102,10 +94,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
-      - name: cargo clippy --all-targets (tokio)
+      - name: cargo clippy --all-targets
         run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache -- -D warnings
-      - name: cargo clippy --lib (async-std)
-        run: cargo clippy --lib --no-default-features --features async-std-runtime,async-std-native-tls,json,client-cache -- -D warnings
 
   # Check that the version bump in `Cargo.toml` matches what actually changed in
   # the public API. In 0.x, cargo treats the minor field as the major one, so a
@@ -152,10 +142,9 @@ jobs:
           cargo semver-checks --baseline-rev "$BASELINE" --default-features
 
   # Compile a curated set of feature combinations (compile-only, no server
-  # needed). Cargo features are additive, so `--no-default-features` is used to
-  # pin exactly one runtime per entry — otherwise the default `tokio-runtime`
-  # would mask a broken `async-std-runtime` build. This is what would have
-  # caught CACHE-04 (`client-cache` + `async-std-runtime` does not compile).
+  # needed). `--no-default-features` is used so each entry compiles exactly the
+  # features it names: the default set would otherwise mask a combination that
+  # only builds because something else pulled a dependency in.
   check-features:
     name: Check features (${{ matrix.features }})
     runs-on: ubuntu-22.04
@@ -166,15 +155,10 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          # tokio runtime
           - tokio-runtime
           - tokio-runtime,pool,json,client-cache
           - tokio-runtime,tokio-rustls,pool,json,client-cache
           - tokio-runtime,tokio-native-tls,pool,json,client-cache
-          # async-std runtime (pool is tokio-only by design — bb8 constraint)
-          - async-std-runtime
-          - async-std-runtime,json,client-cache
-          - async-std-runtime,async-std-native-tls,json,client-cache
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5

@@ -13,8 +13,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn send() -> Result<()> {
     let client = get_test_client().await?;
@@ -26,8 +25,7 @@ async fn send() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn failing_user_serialize_surfaces_as_error_not_panic() -> Result<()> {
     let client = get_test_client().await?;
@@ -55,8 +53,7 @@ async fn failing_user_serialize_surfaces_as_error_not_panic() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn forget() -> Result<()> {
     let client = get_test_client().await?;
@@ -69,8 +66,7 @@ async fn forget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn on_reconnect() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -104,8 +100,7 @@ async fn on_reconnect() -> Result<()> {
 /// each back off, so the message channel was never closed and the network task,
 /// socket and buffers leaked forever. A single shared refcount resolved with
 /// `Arc::into_inner` hands exactly one dropper the shutdown, race or not.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn concurrent_drop_of_the_last_clones_still_closes_the_connection() -> Result<()> {
     use std::sync::{Arc as StdArc, Barrier};
@@ -148,8 +143,7 @@ async fn concurrent_drop_of_the_last_clones_still_closes_the_connection() -> Res
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn command_timeout() -> Result<()> {
     log_try_init();
@@ -180,8 +174,7 @@ async fn command_timeout() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn connection_name() -> Result<()> {
     log_try_init();
@@ -201,8 +194,7 @@ async fn connection_name() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn mget_mset() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;

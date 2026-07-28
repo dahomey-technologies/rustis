@@ -12,8 +12,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xadd() -> Result<()> {
     let client = get_test_client().await?;
@@ -58,8 +57,7 @@ async fn xadd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xdel() -> Result<()> {
     let client = get_test_client().await?;
@@ -97,8 +95,7 @@ async fn xdel() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xdelex() -> Result<()> {
     let client = get_test_client().await?;
@@ -161,8 +158,7 @@ async fn xdelex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xackdel() -> Result<()> {
     let client = get_test_client().await?;
@@ -222,8 +218,7 @@ async fn xackdel() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xnack() -> Result<()> {
     let client = get_test_client().await?;
@@ -326,8 +321,7 @@ fn xnack_args() {
     assert_eq!("XNACK mystream mygroup SILENT IDS 1 1-1", cmd.to_string());
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xadd_idmp() -> Result<()> {
     let client = get_test_client().await?;
@@ -398,8 +392,7 @@ async fn xadd_idmp() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xcfgset() -> Result<()> {
     let client = get_test_client().await?;
@@ -459,8 +452,7 @@ async fn xcfgset() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xgroup() -> Result<()> {
     let client = get_test_client().await?;
@@ -502,8 +494,7 @@ async fn xgroup() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xgroup_setid() -> Result<()> {
     let client = get_test_client().await?;
@@ -545,8 +536,7 @@ async fn xgroup_setid() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xgroup_delconsumer() -> Result<()> {
     let client = get_test_client().await?;
@@ -593,8 +583,7 @@ async fn xgroup_delconsumer() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -630,8 +619,7 @@ async fn xlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -674,8 +662,7 @@ async fn xrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xread() -> Result<()> {
     let client = get_test_client().await?;
@@ -747,8 +734,7 @@ async fn xread() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xreadgroup() -> Result<()> {
     let client = get_test_client().await?;
@@ -928,8 +914,7 @@ async fn xreadgroup() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xclaim() -> Result<()> {
     let client = get_test_client().await?;
@@ -1057,8 +1042,7 @@ async fn xclaim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xautoclaim() -> Result<()> {
     let client = get_test_client().await?;
@@ -1200,8 +1184,7 @@ async fn xautoclaim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xsetid() -> Result<()> {
     let client = get_test_client().await?;
@@ -1416,8 +1399,7 @@ fn xautoclaim_args() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xrevrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -1460,8 +1442,7 @@ async fn xrevrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xtrim() -> Result<()> {
     let client = get_test_client().await?;
@@ -1501,8 +1482,7 @@ async fn xtrim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xtrim_entries_deletion_policy() -> Result<()> {
     let client = get_test_client().await?;
@@ -1548,8 +1528,7 @@ async fn xtrim_entries_deletion_policy() -> Result<()> {
 
 /// `XGROUP HELP` answers the subcommand list as a flat array of text lines,
 /// which is the shape the declared return type claims.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xgroup_help() -> Result<()> {
     let client = get_test_client().await?;
@@ -1563,8 +1542,7 @@ async fn xgroup_help() -> Result<()> {
 
 /// `XINFO HELP` answers the subcommand list as a flat array of text lines,
 /// which is the shape the declared return type claims.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xinfo_help() -> Result<()> {
     let client = get_test_client().await?;
@@ -1579,8 +1557,7 @@ async fn xinfo_help() -> Result<()> {
 /// `XGROUP CREATE key group id [MKSTREAM] [ENTRIESREAD entries-read]`.
 /// ENTRIESREAD seeds the group's read counter, which XINFO GROUPS reports back
 /// and which the lag is computed from.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xgroup_create_entries_read() -> Result<()> {
     let client = get_test_client().await?;
@@ -1630,8 +1607,7 @@ async fn xgroup_create_entries_read() -> Result<()> {
 /// `XPENDING key group [[IDLE min-idle-time] start end count [consumer]]`. IDLE
 /// filters on how long an entry has been pending and the trailing consumer name
 /// restricts the reply to that consumer's entries.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xpending_idle_and_consumer() -> Result<()> {
     let client = get_test_client().await?;
@@ -1734,8 +1710,7 @@ async fn xpending_idle_and_consumer() -> Result<()> {
 /// `XREADGROUP GROUP group consumer [COUNT n] [BLOCK ms] [CLAIM min-idle-time]
 /// [NOACK] STREAMS key... id...`. NOACK skips the PEL entirely, and CLAIM takes
 /// over another consumer's pending entries before reading new ones.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xreadgroup_claim_and_no_ack() -> Result<()> {
     let client = get_test_client().await?;
@@ -1814,8 +1789,7 @@ async fn xreadgroup_claim_and_no_ack() -> Result<()> {
 
 /// `XTRIM key MINID [=|~] threshold-id [LIMIT count]`. MINID evicts every entry
 /// whose ID is below the threshold, where MAXLEN counts instead.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn xtrim_min_id() -> Result<()> {
     let client = get_test_client().await?;

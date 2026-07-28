@@ -10,8 +10,7 @@ use crate::{
 use serial_test::serial;
 use smallvec::SmallVec;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrappend() -> Result<()> {
     let client = get_test_client().await?;
@@ -38,8 +37,7 @@ async fn json_arrappend() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrindex() -> Result<()> {
     let client = get_test_client().await?;
@@ -83,8 +81,7 @@ async fn json_arrindex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrinsert() -> Result<()> {
     let client = get_test_client().await?;
@@ -120,8 +117,7 @@ async fn json_arrinsert() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -146,8 +142,7 @@ async fn json_arrlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -184,8 +179,7 @@ async fn json_arrpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrtrim() -> Result<()> {
     let client = get_test_client().await?;
@@ -213,8 +207,7 @@ async fn json_arrtrim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_clear() -> Result<()> {
     let client = get_test_client().await?;
@@ -238,8 +231,7 @@ async fn json_clear() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_debug_memory() -> Result<()> {
     let client = get_test_client().await?;
@@ -264,8 +256,7 @@ async fn json_debug_memory() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_del() -> Result<()> {
     let client = get_test_client().await?;
@@ -289,8 +280,7 @@ async fn json_del() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_forget() -> Result<()> {
     let client = get_test_client().await?;
@@ -314,8 +304,7 @@ async fn json_forget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_get() -> Result<()> {
     let client = get_test_client().await?;
@@ -383,8 +372,7 @@ async fn json_get() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_set_fpha() -> Result<()> {
     let client = get_test_client().await?;
@@ -435,8 +423,7 @@ fn json_set_args() {
     assert_eq!("JSON.SET key $ [1.0]", cmd.to_string());
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_merge() -> Result<()> {
     let client = get_test_client().await?;
@@ -481,8 +468,7 @@ async fn json_merge() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_mset() -> Result<()> {
     let client = get_test_client().await?;
@@ -511,8 +497,7 @@ async fn json_mset() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_mget() -> Result<()> {
     let client = get_test_client().await?;
@@ -544,8 +529,7 @@ async fn json_mget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_numincrby() -> Result<()> {
     let client = get_test_client().await?;
@@ -569,8 +553,7 @@ async fn json_numincrby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_nummultby() -> Result<()> {
     let client = get_test_client().await?;
@@ -594,8 +577,7 @@ async fn json_nummultby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_objkeys() -> Result<()> {
     let client = get_test_client().await?;
@@ -620,8 +602,7 @@ async fn json_objkeys() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_objlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -644,8 +625,7 @@ async fn json_objlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_resp() -> Result<()> {
     let client = get_test_client().await?;
@@ -694,8 +674,7 @@ async fn json_resp() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_strappend() -> Result<()> {
     let client = get_test_client().await?;
@@ -719,8 +698,7 @@ async fn json_strappend() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_strlen() -> Result<()> {
     let client = get_test_client().await?;
@@ -744,8 +722,7 @@ async fn json_strlen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_toggle() -> Result<()> {
     let client = get_test_client().await?;
@@ -774,8 +751,7 @@ async fn json_toggle() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_type() -> Result<()> {
     let client = get_test_client().await?;
@@ -815,8 +791,7 @@ async fn json_type() -> Result<()> {
 /// `JSON.GET key [INDENT indent] [NEWLINE newline] [SPACE space] [path ...]`.
 /// The three formatting options are the server's own pretty-printer: INDENT per
 /// nesting level, NEWLINE at each line end, SPACE between a key and its value.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_get_formatting() -> Result<()> {
     let client = get_test_client().await?;
@@ -854,8 +829,7 @@ async fn json_get_formatting() -> Result<()> {
 /// `JSON.ARRINDEX key path value [start [stop]]`. start and stop are positional
 /// and slice the searched range; stop is exclusive except that 0 means "to the
 /// end".
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn json_arrindex_stop() -> Result<()> {
     let client = get_test_client().await?;

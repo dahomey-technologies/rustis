@@ -9,8 +9,7 @@ use std::time::Duration;
 
 /// A server that dies mid-command must surface an error to the caller instead
 /// of leaving it waiting for a reply that will never come.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn standalone_server_panic() -> Result<()> {
     let client = get_test_client().await?;
@@ -31,8 +30,7 @@ async fn standalone_server_panic() -> Result<()> {
 /// `DEBUG OOM` and `DEBUG ASSERT` are the two other ways of killing the server
 /// on purpose. They take no argument, so what a test can still catch is a
 /// misspelled subcommand: the server would answer an error instead of dying.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn standalone_server_oom() -> Result<()> {
     let client = get_test_client().await?;
@@ -44,8 +42,7 @@ async fn standalone_server_oom() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn standalone_server_assert() -> Result<()> {
     let client = get_test_client().await?;
@@ -60,8 +57,7 @@ async fn standalone_server_assert() -> Result<()> {
 /// `DEBUG RESTART [<milliseconds>]` and `DEBUG CRASH-AND-RECOVER
 /// [<milliseconds>]` take an optional delay, so both arms of the `Option` are
 /// exercised: omitted, it must leave no stray token behind.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn standalone_server_restart() -> Result<()> {
     let client = get_test_client().await?;
@@ -75,8 +71,7 @@ async fn standalone_server_restart() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn standalone_server_crash_and_recover() -> Result<()> {
     let client = get_test_client().await?;

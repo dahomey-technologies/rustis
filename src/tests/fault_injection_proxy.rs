@@ -249,7 +249,7 @@ mod tests {
     /// End-to-end proof the harness is usable by a real client: a transparent
     /// proxy in front of Redis must be indistinguishable from a direct
     /// connection.
-    #[cfg_attr(feature = "tokio-runtime", tokio::test)]
+    #[tokio::test]
     async fn a_real_client_round_trips_through_the_transparent_proxy() -> Result<()> {
         log_try_init();
         let proxy = FaultProxy::start(get_default_addr(), vec![]).await.unwrap();

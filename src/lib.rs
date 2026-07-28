@@ -42,7 +42,7 @@ rustis is a Redis client for Rust.
 
 # Features
 * Support all documented [Redis Commands](https://redis.io/commands/) up to and including Redis 8.8
-* Async support ([tokio](https://tokio.rs/) or [async-std](https://async.rs/))
+* Async support ([tokio](https://tokio.rs/))
 * Different client types:
   * Single client
   * [Multiplexed](https://redis.com/blog/multiplexing-explained/) client
@@ -63,10 +63,8 @@ rustis is a Redis client for Rust.
 | Feature | Description |
 | ------- | ----------- |
 | `tokio-runtime` | [Tokio](https://tokio.rs/) runime (default) |
-| `async-std-runtime` | [async-std](https://async.rs/) runtime (optional) |
 | `tokio-rustls` | Tokio Rustls TLS support (optional) |
 | `tokio-native-tls` | Tokio native_tls TLS support (optional) |
-| `async-std-native-tls` | async-std native_tls TLS support (optional) |
 | `json` | Enables JSON (de)serialization support via `serde_json` |
 | `client-cache` | Enables client-side caching support |
 | `pool` | Pooled client manager (optional) |
@@ -97,8 +95,7 @@ use rustis::{
     Result,
 };
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     // Connect the client to a Redis server from its IP and port
     let client = Client::connect("127.0.0.1:6379").await?;
@@ -161,8 +158,7 @@ depending on the client, transaction or pipeline struct used:
 ```
 use rustis::{client::Client, resp::cmd, Result};
 
-#[cfg_attr(feature = "tokio-runtime", tokio::main)]
-#[cfg_attr(feature = "async-std-runtime", async_std::main)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
 
@@ -217,14 +213,6 @@ use network::*;
 pub type Result<T> = std::result::Result<T, Error>;
 /// Library general future type.
 pub type Future<'a, T> = futures_util::future::BoxFuture<'a, Result<T>>;
-
-#[cfg(all(feature = "tokio-runtime", feature = "async-std-runtime"))]
-compile_error!(
-    "feature \"tokio-runtime\" and feature \"async-std-runtime\" cannot be enabled at the same time."
-);
-
-#[cfg(all(feature = "pool", feature = "async-std-runtime"))]
-compile_error!("feature \"pool\" is only compatible with \"tokio-runtime\" (bb8 constraint).");
 
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
 compile_error!(

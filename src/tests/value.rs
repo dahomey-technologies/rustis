@@ -7,8 +7,7 @@ use crate::{
 use serial_test::serial;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn from_single_value_array() -> Result<()> {
     let client = get_test_client().await?;

@@ -2,11 +2,11 @@ use crate::{
     ClientError, Error, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
-        BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands, GenericCommands,
-        GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands, ListCommands,
-        ScriptingCommands, SearchCommands, ServerCommands, SetCommands, SortedSetCommands,
-        StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands, TopKCommands,
-        VectorSetCommands,
+        ArrayCommands, BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands,
+        GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands,
+        ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
+        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
+        TopKCommands, VectorSetCommands,
     },
     resp::{Command, RespDeserializer, Response, cmd},
 };
@@ -302,6 +302,7 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Trans
     }
 }
 
+impl<'a> ArrayCommands<'a> for &'a mut Transaction {}
 impl<'a> BitmapCommands<'a> for &'a mut Transaction {}
 impl<'a> BloomCommands<'a> for &'a mut Transaction {}
 impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}

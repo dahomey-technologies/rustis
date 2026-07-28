@@ -3,9 +3,9 @@ use crate::{
     commands::{
         ConsumerGroupOptions, FlushingMode, ServerCommands, StreamCommands, StreamEntry,
         StreamEntryDeletionPolicy, XAddOptions, XAutoClaimOptions, XAutoClaimResult,
-        XCfgSetOptions, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions,
-        XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XSetIdOptions,
-        XTrimOptions,
+        XCfgSetOptions, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions, XNackMode,
+        XNackOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions,
+        XSetIdOptions, XTrimOptions,
     },
     resp::Value,
     tests::{TestClient, get_test_client},
@@ -220,6 +220,110 @@ async fn xackdel() -> Result<()> {
     assert_eq!(0, pending.num_pending_messages);
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xnack() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let id1: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value1")],
+            XAddOptions::default(),
+        )
+        .await?;
+    let id2: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value2")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    client
+        .xgroup_create("mystream", "mygroup", "0", XGroupCreateOptions::default())
+        .await?;
+    let _: Vec<(String, Vec<StreamEntry<String>>)> = client
+        .xreadgroup(
+            "mygroup",
+            "consumer1",
+            XReadGroupOptions::default(),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    let released = client
+        .xnack(
+            "mystream",
+            "mygroup",
+            XNackMode::Fail,
+            [id1.as_str(), id2.as_str()],
+            XNackOptions::default(),
+        )
+        .await?;
+    assert_eq!(2, released);
+
+    // The entries stay pending but lose their owner, so another consumer can
+    // take them without waiting for the idle timeout.
+    let pending = client.xpending("mystream", "mygroup").await?;
+    assert_eq!(2, pending.num_pending_messages);
+    let pending: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default().start("-").end("+").count(10),
+        )
+        .await?;
+    assert!(pending.iter().all(|message| message.consumer.is_empty()));
+
+    // An id that is not in the PEL is ignored rather than counted.
+    let released = client
+        .xnack(
+            "mystream",
+            "mygroup",
+            XNackMode::Silent,
+            "999999999999-0",
+            XNackOptions::default(),
+        )
+        .await?;
+    assert_eq!(0, released);
+
+    Ok(())
+}
+
+#[test]
+fn xnack_args() {
+    let cmd = TestClient
+        .xnack(
+            "mystream",
+            "mygroup",
+            XNackMode::Fatal,
+            ["1-1", "2-2"],
+            XNackOptions::default().retry_count(3).force(),
+        )
+        .command;
+    assert_eq!(
+        "XNACK mystream mygroup FATAL IDS 2 1-1 2-2 RETRYCOUNT 3 FORCE",
+        cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .xnack(
+            "mystream",
+            "mygroup",
+            XNackMode::Silent,
+            "1-1",
+            XNackOptions::default(),
+        )
+        .command;
+    assert_eq!("XNACK mystream mygroup SILENT IDS 1 1-1", cmd.to_string());
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

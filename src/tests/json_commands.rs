@@ -1,11 +1,11 @@
 use crate::{
     Result,
     commands::{
-        FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetFormat, JsonGetOptions,
-        ServerCommands,
+        FlushingMode, JsonArrIndexOptions, JsonCommands, JsonFpType, JsonGetFormat, JsonGetOptions,
+        JsonSetOptions, ServerCommands, SetCondition,
     },
     resp::Value,
-    tests::get_test_client,
+    tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
 use smallvec::SmallVec;
@@ -381,6 +381,58 @@ async fn json_get() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn json_set_fpha() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // FPHA forces the storage type of floating-point homogeneous arrays; the
+    // integers come back as floats because the array is stored as FP16.
+    client
+        .json_set(
+            "key",
+            "$",
+            "[[1,2,3,4e3],[5,6.0,7,8]]",
+            JsonSetOptions::default().fpha(JsonFpType::Fp16),
+        )
+        .await?;
+    let result: String = client.json_get("key", JsonGetOptions::default()).await?;
+    assert_eq!("[[1.0,2.0,3.0,4000.0],[5.0,6.0,7.0,8.0]]", result);
+
+    // A value that does not fit the requested type is rejected.
+    let result = client
+        .json_set(
+            "key2",
+            "$",
+            "[1e40]",
+            JsonSetOptions::default().fpha(JsonFpType::Fp16),
+        )
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[test]
+fn json_set_args() {
+    let cmd = TestClient
+        .json_set(
+            "key",
+            "$",
+            "[1.0]",
+            JsonSetOptions::default()
+                .condition(SetCondition::NX)
+                .fpha(JsonFpType::Bf16),
+        )
+        .command;
+    assert_eq!("JSON.SET key $ [1.0] NX FPHA BF16", cmd.to_string());
+
+    let cmd = TestClient.json_set("key", "$", "[1.0]", None).command;
+    assert_eq!("JSON.SET key $ [1.0]", cmd.to_string());
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

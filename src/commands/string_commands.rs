@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{FastPathCommandBuilder, Response, cmd},
+    resp::{FastPathCommandBuilder, Response, cmd, serialize_flag},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -319,6 +319,35 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn incrby(self, key: impl Serialize, increment: i64) -> PreparedCommand<'a, Self, i64> {
         prepare_command(self, cmd("INCRBY").key(key).arg(increment))
+    }
+
+    /// Increment the value at `key`, bounded, and set its expiration, atomically.
+    ///
+    /// The key is created at `0` when it does not exist. Without an increment
+    /// it is bumped by `1` in integer mode.
+    ///
+    /// Where [`incr`](StringCommands::incr) and [`expire`](crate::commands::GenericCommands::expire)
+    /// would need a Lua script to be atomic, this is one command — which is
+    /// what makes it a window-counter rate limiter:
+    /// [`ubound_int`](IncrExOptions::ubound_int) is the cap and
+    /// [`enx`](IncrExOptions::enx) starts the window only once.
+    ///
+    /// # Return
+    /// A pair of the value after the operation and the increment actually
+    /// applied. The applied increment is `0` when a bound stopped the operation,
+    /// and smaller than requested when [`saturate`](IncrExOptions::saturate)
+    /// capped it. Both are integers in integer mode, doubles under
+    /// [`by_float`](IncrExOptions::by_float) — so `(i64, i64)` or `(f64, f64)`.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/increx/>](https://redis.io/commands/increx/)
+    #[must_use]
+    fn increx<R: Response>(
+        self,
+        key: impl Serialize,
+        options: IncrExOptions,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("INCREX").key(key).arg(options))
     }
 
     ///Increment the string representing a floating point number stored at key by the specified increment.
@@ -768,6 +797,150 @@ impl<'de> Deserialize<'de> for LcsMatch {
 pub struct LcsResult {
     pub matches: Vec<LcsMatch>,
     pub len: usize,
+}
+
+/// Options for the [`increx`](StringCommands::increx) command
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct IncrExOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    byint: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    byfloat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lbound: Option<IncrExBound>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ubound: Option<IncrExBound>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    saturate: bool,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    expiration: Option<GetExOptions>,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    enx: bool,
+}
+
+/// A bound of the [`increx`](StringCommands::increx) command, in whichever mode
+/// the increment put it in.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum IncrExBound {
+    Int(i64),
+    Float(f64),
+}
+
+impl IncrExOptions {
+    /// Increment by a 64-bit signed integer. Negative decrements.
+    ///
+    /// The stored value must be integer-typed: a stored `"1.5"` cannot be read
+    /// back as an integer, exactly as with [`incrby`](StringCommands::incrby).
+    #[must_use]
+    pub fn by_int(increment: i64) -> Self {
+        Self {
+            byint: Some(increment),
+            ..Default::default()
+        }
+    }
+
+    /// Increment by a floating-point value.
+    ///
+    /// The stored value may be an integer or a float, since integers promote to
+    /// floats losslessly. A result of NaN or infinity is rejected.
+    #[must_use]
+    pub fn by_float(increment: f64) -> Self {
+        Self {
+            byfloat: Some(increment),
+            ..Default::default()
+        }
+    }
+
+    /// Lower bound, in integer mode.
+    #[must_use]
+    pub fn lbound_int(mut self, lower_bound: i64) -> Self {
+        self.lbound = Some(IncrExBound::Int(lower_bound));
+        self
+    }
+
+    /// Lower bound, in [`by_float`](IncrExOptions::by_float) mode.
+    #[must_use]
+    pub fn lbound_float(mut self, lower_bound: f64) -> Self {
+        self.lbound = Some(IncrExBound::Float(lower_bound));
+        self
+    }
+
+    /// Upper bound, in integer mode.
+    #[must_use]
+    pub fn ubound_int(mut self, upper_bound: i64) -> Self {
+        self.ubound = Some(IncrExBound::Int(upper_bound));
+        self
+    }
+
+    /// Upper bound, in [`by_float`](IncrExOptions::by_float) mode.
+    #[must_use]
+    pub fn ubound_float(mut self, upper_bound: f64) -> Self {
+        self.ubound = Some(IncrExBound::Float(upper_bound));
+        self
+    }
+
+    /// Cap an out-of-bounds result at the bound instead of skipping the
+    /// operation. Without it, a bound violation leaves the key and its TTL
+    /// untouched and reports a zero increment.
+    #[must_use]
+    pub fn saturate(mut self) -> Self {
+        self.saturate = true;
+        self
+    }
+
+    /// Set the expiration, in seconds.
+    #[must_use]
+    pub fn ex(mut self, seconds: u64) -> Self {
+        self.expiration = Some(GetExOptions::Ex(seconds));
+        self
+    }
+
+    /// Set the expiration, in milliseconds.
+    #[must_use]
+    pub fn px(mut self, milliseconds: u64) -> Self {
+        self.expiration = Some(GetExOptions::Px(milliseconds));
+        self
+    }
+
+    /// Set the Unix time at which the key expires, in seconds.
+    #[must_use]
+    pub fn exat(mut self, unix_time_seconds: u64) -> Self {
+        self.expiration = Some(GetExOptions::Exat(unix_time_seconds));
+        self
+    }
+
+    /// Set the Unix time at which the key expires, in milliseconds.
+    #[must_use]
+    pub fn pxat(mut self, unix_time_milliseconds: u64) -> Self {
+        self.expiration = Some(GetExOptions::Pxat(unix_time_milliseconds));
+        self
+    }
+
+    /// Remove the expiration of the key.
+    #[must_use]
+    pub fn persist(mut self) -> Self {
+        self.expiration = Some(GetExOptions::Persist);
+        self
+    }
+
+    /// Set the expiration only when the key has none. An existing TTL is kept
+    /// as it is, while the increment still applies. Requires one of
+    /// [`ex`](IncrExOptions::ex), [`px`](IncrExOptions::px),
+    /// [`exat`](IncrExOptions::exat) or [`pxat`](IncrExOptions::pxat), and is
+    /// incompatible with [`persist`](IncrExOptions::persist).
+    #[must_use]
+    pub fn enx(mut self) -> Self {
+        self.enx = true;
+        self
+    }
 }
 
 /// Expiration option for the [`set_with_options`](StringCommands::set_with_options) and [`hsetex`](crate::commands::HashCommands::hsetex) commands

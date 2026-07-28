@@ -1,11 +1,11 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
     commands::{
-        DelexCondition, FlushingMode, GenericCommands, GetExOptions, LcsMatch, ServerCommands,
-        SetCondition, SetExpiration, StringCommands,
+        DelexCondition, FlushingMode, GenericCommands, GetExOptions, IncrExOptions, LcsMatch,
+        ServerCommands, SetCondition, SetExpiration, StringCommands,
     },
     resp::Value,
-    tests::get_test_client,
+    tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
 use std::time::{Duration, SystemTime};
@@ -382,6 +382,90 @@ async fn incr() -> Result<()> {
     client.close().await?;
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn increx() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // Without an increment the key is created at 0 and bumped by 1.
+    let (value, applied): (i64, i64) = client.increx("key", IncrExOptions::default()).await?;
+    assert_eq!((1, 1), (value, applied));
+
+    let (value, applied): (i64, i64) = client
+        .increx("key", IncrExOptions::by_int(-10).ex(100))
+        .await?;
+    assert_eq!((-9, -10), (value, applied));
+    assert_eq!(100, client.ttl("key").await?);
+
+    // ENX leaves an existing TTL alone; the increment still lands.
+    let (value, _): (i64, i64) = client
+        .increx("key", IncrExOptions::by_int(1).ex(10).enx())
+        .await?;
+    assert_eq!(-8, value);
+    assert_eq!(100, client.ttl("key").await?);
+
+    // Out of bounds: the key is untouched and the applied increment is 0.
+    client.set("bounded", 99).await?;
+    let (value, applied): (i64, i64) = client
+        .increx("bounded", IncrExOptions::by_int(5).ubound_int(100))
+        .await?;
+    assert_eq!((99, 0), (value, applied));
+
+    // SATURATE caps at the bound instead, and reports the delta it did apply.
+    let (value, applied): (i64, i64) = client
+        .increx(
+            "bounded",
+            IncrExOptions::by_int(5).ubound_int(100).saturate(),
+        )
+        .await?;
+    assert_eq!((100, 1), (value, applied));
+
+    client.set("float", "1.5").await?;
+    let (value, applied): (f64, f64) = client
+        .increx("float", IncrExOptions::by_float(0.25).persist())
+        .await?;
+    assert_eq!((1.75, 0.25), (value, applied));
+
+    Ok(())
+}
+
+#[test]
+fn increx_args() {
+    let cmd = TestClient
+        .increx::<()>(
+            "key",
+            IncrExOptions::by_int(5)
+                .lbound_int(0)
+                .ubound_int(100)
+                .saturate()
+                .ex(60)
+                .enx(),
+        )
+        .command;
+    assert_eq!(
+        "INCREX key BYINT 5 LBOUND 0 UBOUND 100 SATURATE EX 60 ENX",
+        cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .increx::<()>(
+            "key",
+            IncrExOptions::by_float(0.5).lbound_float(-1.5).persist(),
+        )
+        .command;
+    assert_eq!(
+        "INCREX key BYFLOAT 0.5 LBOUND -1.5 PERSIST",
+        cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .increx::<()>("key", IncrExOptions::default())
+        .command;
+    assert_eq!("INCREX key", cmd.to_string());
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

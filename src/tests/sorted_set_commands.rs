@@ -2,8 +2,8 @@ use crate::{
     Result,
     commands::{
         BZpopMinMaxResult, BlockingCommands, FlushingMode, GenericCommands, ServerCommands,
-        SortedSetCommands, ZAddComparison, ZAddCondition, ZAddOptions, ZRangeOptions, ZRangeSortBy,
-        ZScanOptions, ZScanResult, ZWhere,
+        SortedSetCommands, ZAddComparison, ZAddCondition, ZAddOptions, ZAggregate, ZRangeOptions,
+        ZRangeSortBy, ZScanOptions, ZScanResult, ZWhere,
     },
     sleep, spawn,
     tests::{TestClient, get_test_client},
@@ -457,6 +457,80 @@ async fn zinter() -> Result<()> {
     assert_eq!(("two".to_owned(), 4.0), result[1]);
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zinter_aggregate_count() -> Result<()> {
+    let client = get_test_client().await?;
+    client.del(["key1", "key2"]).await?;
+
+    client
+        .zadd(
+            "key1",
+            [(1.0, "one"), (2.0, "two"), (3.0, "three")],
+            ZAddOptions::default(),
+        )
+        .await?;
+    client
+        .zadd("key2", [(1.0, "one"), (2.0, "two")], ZAddOptions::default())
+        .await?;
+
+    // COUNT scores each member by the number of input sets it belongs to.
+    let result: Vec<(String, f64)> = client
+        .zinter_with_scores(["key1", "key2"], None as Option<f64>, ZAggregate::Count)
+        .await?;
+    assert_eq!(
+        vec![("one".to_owned(), 2.0), ("two".to_owned(), 2.0)],
+        result
+    );
+
+    let len = client
+        .zunionstore(
+            "out",
+            ["key1", "key2"],
+            None as Option<f64>,
+            ZAggregate::Count,
+        )
+        .await?;
+    assert_eq!(3, len);
+    let result: Vec<(String, f64)> = client
+        .zrange_with_scores("out", 0, -1, ZRangeOptions::default())
+        .await?;
+    assert_eq!(
+        vec![
+            ("three".to_owned(), 1.0),
+            ("one".to_owned(), 2.0),
+            ("two".to_owned(), 2.0)
+        ],
+        result
+    );
+
+    Ok(())
+}
+
+#[test]
+fn zaggregate_args() {
+    // The aggregation value must be introduced by the AGGREGATE token.
+    let cmd = TestClient
+        .zinter::<()>(["key1", "key2"], None as Option<f64>, ZAggregate::Count)
+        .command;
+    assert_eq!("ZINTER 2 key1 key2 AGGREGATE COUNT", cmd.to_string());
+
+    let cmd = TestClient
+        .zunionstore("out", ["key1", "key2"], [2, 3], ZAggregate::Min)
+        .command;
+    assert_eq!(
+        "ZUNIONSTORE out 2 key1 key2 WEIGHTS 2 3 AGGREGATE MIN",
+        cmd.to_string()
+    );
+
+    // No aggregation means no token at all.
+    let cmd = TestClient
+        .zunion::<()>(["key1", "key2"], None as Option<f64>, None)
+        .command;
+    assert_eq!("ZUNION 2 key1 key2", cmd.to_string());
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]

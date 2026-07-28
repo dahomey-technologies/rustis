@@ -961,10 +961,31 @@ pub enum FtFieldType {
     ///
     /// The value of the attribute must be a string containing a longitude (first) and latitude separated by a comma.
     Geo,
+    /// Allows polygon queries against the value in this attribute.
+    ///
+    /// The value of the attribute must be a
+    /// [`WKT notation`](https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry)
+    /// list of 2D points representing the polygon edges, such as
+    /// `POLYGON((x1 y1, x2 y2, ...))`.
+    ///
+    /// The coordinate system is optional and defaults to
+    /// [`Spherical`](FtGeoShapeCoordSystem::Spherical).
+    Geoshape(#[serde(skip_deserializing)] Option<FtGeoShapeCoordSystem>),
     /// Allows vector similarity queries against the value in this attribute.
     ///
     /// For more information, see [`Vector Fields`](https://redis.io/docs/latest/develop/ai/search-and-query/vectors/).
     Vector(#[serde(skip_deserializing)] Option<FtVectorFieldAlgorithm>),
+}
+
+/// Coordinate system of a [`Geoshape`](FtFieldType::Geoshape) field
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum FtGeoShapeCoordSystem {
+    /// Cartesian X Y coordinates.
+    Flat,
+    /// Geographic longitude and latitude coordinates. This is the default.
+    Spherical,
 }
 
 /// Phonetic algorithm and language used for the [`FtFieldSchema::phonetic`](FtFieldSchema::phonetic) associated function

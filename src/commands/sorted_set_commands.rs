@@ -176,7 +176,7 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZINTER")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into()),
         )
     }
 
@@ -200,7 +200,7 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZINTER")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into())
+                .arg_labeled("AGGREGATE", aggregate.into())
                 .arg("WITHSCORES"),
         )
     }
@@ -246,7 +246,7 @@ pub trait SortedSetCommands<'a>: Sized {
                 .arg(destination)
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into()),
         )
     }
 
@@ -672,7 +672,7 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZUNION")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into()),
         )
     }
 
@@ -696,7 +696,7 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZUNION")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into())
+                .arg_labeled("AGGREGATE", aggregate.into())
                 .arg("WITHSCORES"),
         )
     }
@@ -723,7 +723,7 @@ pub trait SortedSetCommands<'a>: Sized {
                 .arg(destination)
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg(aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into()),
         )
     }
 }
@@ -784,6 +784,8 @@ pub enum ZAggregate {
     Min,
     /// The maximum score of an element across the inputs where it exists.
     Max,
+    /// The score of an element is the number of inputs it exists in.
+    Count,
 }
 
 /// Where option of the [`zmpop`](SortedSetCommands::zmpop) command

@@ -229,6 +229,18 @@ async fn geosearch() -> Result<()> {
     assert!(results.iter().any(|r| r.member == "Palermo",));
     assert!(results.iter().any(|r| r.member == "Catania"));
 
+    // The same area, anchored on an existing member instead of a coordinate pair.
+    let results: Vec<GeoSearchResult<String>> = client
+        .geosearch(
+            "Sicily",
+            GeoSearchFrom::from_member("Catania"),
+            GeoSearchBy::by_radius(200.0, GeoUnit::Kilometers),
+            GeoSearchOptions::default(),
+        )
+        .await?;
+    assert!(results.iter().any(|r| r.member == "Catania"));
+    assert!(results.iter().any(|r| r.member == "Palermo"));
+
     let results: Vec<GeoSearchResult<String>> = client
         .geosearch(
             "Sicily",

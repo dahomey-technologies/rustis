@@ -858,6 +858,68 @@ async fn ts_range_count_nan_aggregations() -> Result<()> {
     Ok(())
 }
 
+/// `EMPTY` reports the aggregation buckets that hold no sample at all, which are
+/// otherwise skipped. It applies to both `TS.RANGE` and `TS.MRANGE`.
+#[tokio::test]
+#[serial]
+async fn ts_range_empty_buckets() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create(
+            "temp:A",
+            TsCreateOptions::default().labels([("kind", "temp")]),
+        )
+        .await?;
+
+    // A one-second gap between the two samples leaves the middle bucket empty.
+    let _timestamps: Vec<u64> = client
+        .ts_madd([("temp:A", 1000, 30.), ("temp:A", 3000, 40.)])
+        .await?;
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp:A",
+            "-",
+            "+",
+            TsRangeOptions::default().aggregation(TsAggregationType::Count, 1000),
+        )
+        .await?;
+    assert_eq!(vec![(1000, 1.), (3000, 1.)], results);
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp:A",
+            "-",
+            "+",
+            TsRangeOptions::default()
+                .aggregation(TsAggregationType::Count, 1000)
+                .empty(),
+        )
+        .await?;
+    assert_eq!(vec![(1000, 1.), (2000, 0.), (3000, 1.)], results);
+
+    let results: Vec<(String, TsRangeSample)> = client
+        .ts_mrange(
+            "-",
+            "+",
+            TsMRangeOptions::default()
+                .aggregation(TsAggregationType::Count, 1000)
+                .empty(),
+            "kind=temp",
+            TsGroupByOptions::new("kind", TsAggregationType::Max),
+        )
+        .await?;
+    assert_eq!(1, results.len());
+    assert_eq!(
+        vec![(1000, 1.), (2000, 0.), (3000, 1.)],
+        results[0].1.values
+    );
+
+    Ok(())
+}
+
 /// `TS.CREATE key [ENCODING COMPRESSED|UNCOMPRESSED]` and
 /// `TS.ADD key timestamp value [ENCODING ...] [ON_DUPLICATE policy]`, plus
 /// `TS.INCRBY key value [UNCOMPRESSED]`. The chunk encoding and the duplicate

@@ -732,8 +732,8 @@ pub struct RestoreOptions {
     absttl: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     idletime: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    frequency: Option<f64>,
+    #[serde(rename = "FREQ", skip_serializing_if = "Option::is_none")]
+    frequency: Option<u8>,
 }
 
 impl RestoreOptions {
@@ -755,8 +755,10 @@ impl RestoreOptions {
         self
     }
 
+    /// Seeds the LFU access counter of the restored key, from 0 to 255.
+    /// Only meaningful under an LFU `maxmemory-policy`.
     #[must_use]
-    pub fn frequency(mut self, frequency: f64) -> Self {
+    pub fn frequency(mut self, frequency: u8) -> Self {
         self.frequency = Some(frequency);
         self
     }

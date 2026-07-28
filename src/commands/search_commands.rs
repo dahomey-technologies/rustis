@@ -2038,11 +2038,25 @@ pub struct FtReducer<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     tolist: Option<(u32, &'a str)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    first_value: Option<(u32, &'a str, Option<&'a str>, Option<SortOrder>)>,
+    first_value: Option<FtFirstValue<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     random_sample: Option<(u32, &'a str, u32)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     r#as: Option<&'a str>,
+}
+
+/// `FIRST_VALUE {count} {property} [BY {by_property} [ASC|DESC]]` argument of a
+/// [`FtReducer`].
+#[derive(Serialize)]
+struct FtFirstValue<'a> {
+    #[serde(rename = "")]
+    count: u32,
+    #[serde(rename = "")]
+    property: &'a str,
+    #[serde(rename = "BY", skip_serializing_if = "Option::is_none")]
+    by_property: Option<&'a str>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    order: Option<SortOrder>,
 }
 
 impl<'a> FtReducer<'a> {
@@ -2159,7 +2173,12 @@ impl<'a> FtReducer<'a> {
     /// but the same effect will be achieved by doing REDUCE FIRST_VALUE 4 @foo BY @foo DESC.
     pub fn first_value(property: &'a str) -> Self {
         Self {
-            first_value: Some((1, property, None, None)),
+            first_value: Some(FtFirstValue {
+                count: 1,
+                property,
+                by_property: None,
+                order: None,
+            }),
             ..Default::default()
         }
     }
@@ -2167,7 +2186,12 @@ impl<'a> FtReducer<'a> {
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
     pub fn first_value_by(property: &'a str, by_property: &'a str) -> Self {
         Self {
-            first_value: Some((2, property, Some(by_property), None)),
+            first_value: Some(FtFirstValue {
+                count: 3,
+                property,
+                by_property: Some(by_property),
+                order: None,
+            }),
             ..Default::default()
         }
     }
@@ -2175,7 +2199,12 @@ impl<'a> FtReducer<'a> {
     /// Return the first or top value of a given property in the group, optionally by comparing that or another property.
     pub fn first_value_by_order(property: &'a str, by_property: &'a str, order: SortOrder) -> Self {
         Self {
-            first_value: Some((3, property, Some(by_property), Some(order))),
+            first_value: Some(FtFirstValue {
+                count: 4,
+                property,
+                by_property: Some(by_property),
+                order: Some(order),
+            }),
             ..Default::default()
         }
     }
@@ -2448,10 +2477,155 @@ pub struct FtSearchResultRow {
     #[serde(default)]
     pub sortkey: String,
     /// collection of attribute/value pairs.
-    pub values: Vec<(String, String)>,
+    pub values: Vec<(String, FtAttributeValue)>,
     /// collection of attribute/value pairs.
     #[serde(default)]
-    pub extra_attributes: Vec<(String, String)>,
+    pub extra_attributes: Vec<(String, FtAttributeValue)>,
+}
+
+/// The value of one attribute of a [`FtSearchResultRow`].
+///
+/// Search attributes are strings. The `TOLIST` and `RANDOM_SAMPLE` reducers of
+/// [`ft_aggregate`](SearchCommands::ft_aggregate) are the exception: they return
+/// an array of strings per group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FtAttributeValue {
+    Text(String),
+    Array(Vec<String>),
+}
+
+impl FtAttributeValue {
+    /// The text of a [`Text`](FtAttributeValue::Text) attribute, `None` for an array.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Text(text) => Some(text),
+            Self::Array(_) => None,
+        }
+    }
+
+    /// The elements of an [`Array`](FtAttributeValue::Array) attribute, `None` for a text.
+    #[must_use]
+    pub fn as_array(&self) -> Option<&[String]> {
+        match self {
+            Self::Text(_) => None,
+            Self::Array(elements) => Some(elements),
+        }
+    }
+}
+
+impl From<String> for FtAttributeValue {
+    fn from(text: String) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl From<Vec<String>> for FtAttributeValue {
+    fn from(elements: Vec<String>) -> Self {
+        Self::Array(elements)
+    }
+}
+
+impl PartialEq<str> for FtAttributeValue {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == Some(other)
+    }
+}
+
+impl PartialEq<&str> for FtAttributeValue {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == Some(*other)
+    }
+}
+
+impl PartialEq<String> for FtAttributeValue {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == Some(other.as_str())
+    }
+}
+
+impl PartialEq<[String]> for FtAttributeValue {
+    fn eq(&self, other: &[String]) -> bool {
+        self.as_array() == Some(other)
+    }
+}
+
+impl PartialEq<FtAttributeValue> for str {
+    fn eq(&self, other: &FtAttributeValue) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<FtAttributeValue> for &str {
+    fn eq(&self, other: &FtAttributeValue) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<FtAttributeValue> for String {
+    fn eq(&self, other: &FtAttributeValue) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<FtAttributeValue> for [String] {
+    fn eq(&self, other: &FtAttributeValue) -> bool {
+        other == self
+    }
+}
+
+impl<'de> Deserialize<'de> for FtAttributeValue {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct FtAttributeValueVisitor;
+
+        impl<'de> Visitor<'de> for FtAttributeValueVisitor {
+            type Value = FtAttributeValue;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an attribute value: a string, or an array of strings")
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(FtAttributeValue::Text(value.to_owned()))
+            }
+
+            fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(FtAttributeValue::Text(value))
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(FtAttributeValue::Text(
+                    String::from_utf8_lossy(value).into_owned(),
+                ))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut elements = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                while let Some(element) = seq.next_element::<String>()? {
+                    elements.push(element);
+                }
+                Ok(FtAttributeValue::Array(elements))
+            }
+        }
+
+        deserializer.deserialize_any(FtAttributeValueVisitor)
+    }
 }
 
 /// A row's relevance score, as [`withscores`](FtSearchOptions::withscores) reports it.

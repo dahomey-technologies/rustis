@@ -159,6 +159,21 @@ contains breaking changes; read that section before upgrading.
   - `FtSearchOptions::inkey` and `FtSearchOptions::infields` lost an
     unconstrained generic parameter, which had made them uncallable without a
     turbofish naming an unused type — so no working caller can break.
+  - `RestoreOptions::frequency` takes a `u8`, not an `f64`. It emitted
+    `FREQUENCY 10.0` where `RESTORE` takes `FREQ 10`, so every call failed; `u8`
+    is the LFU counter's actual range.
+
+- **`FtSearchResultRow::values` and `extra_attributes` hold an
+  `FtAttributeValue`, not a `String`.** `FT.AGGREGATE`'s `TOLIST` and
+  `RANDOM_SAMPLE` reducers return an array of strings per group, which a
+  `Vec<(String, String)>` could not hold — both failed with
+  `CannotParseString`.
+
+  `FtAttributeValue` is `Text(String) | Array(Vec<String>)`. Read it with
+  `as_str()` or `as_array()`, which return `Option`. `PartialEq` against `str`,
+  `&str`, `String` and `[String]` is implemented in both directions, so
+  `assert_eq!("40", value)` still compiles; code binding the value as a `String`
+  needs `.as_str()` or a `match`.
 
 ### Security
 
@@ -418,6 +433,22 @@ contains breaking changes; read that section before upgrading.
 
   See `RUSTIS_AUDIT.md` §3.2 for the full table and what the pass says about
   reviewing builders by reading them.
+
+- **All 362 option builders in the commands layer are now covered by a test**,
+  including the ones on schemas, reducers and query clauses (`FtReducer`,
+  `FtSortBy`, `FtHnswVectorFieldAttributes`, `FtHybridSearch`, `FtHybridVsim`,
+  `ArGrep`, `GeoSearchFrom`). Two were broken:
+  - `FtReducer::first_value_by` and `first_value_by_order` never emitted the
+    `BY` keyword: they sent `FIRST_VALUE 2 @name @age` and
+    `FIRST_VALUE 3 @name @age DESC`, both rejected with
+    `Unknown argument @age at position 1 for FIRST_VALUE`. Now
+    `FIRST_VALUE 3 @name BY @age` and `FIRST_VALUE 4 @name BY @age DESC`.
+  - `RestoreOptions::frequency` emitted `FREQUENCY 10.0` where `RESTORE` takes
+    `FREQ 10`, so every call answered `syntax error`. See the breaking-changes
+    section.
+
+  `FT.HYBRID`'s per-clause `YIELD_SCORE_AS` is confirmed working on Redis 8.8,
+  on both the `SEARCH` and the `VSIM` clause.
 - **`ZAggregate` was never introduced by its `AGGREGATE` token.** `zinter`,
   `zinterstore`, `zunion` and `zunionstore` appended the bare value, so
   `zinter(keys, None, ZAggregate::Sum)` sent `ZINTER 2 k1 k2 SUM` and failed

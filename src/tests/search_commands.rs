@@ -3,10 +3,11 @@ use crate::{
     client::{BatchPreparedCommand, Client},
     commands::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
-        FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes,
-        FtGeoShapeCoordSystem, FtGroupBy, FtHybridCombine, FtHybridFormat, FtHybridOptions,
-        FtHybridSearch, FtHybridVectorQuery, FtHybridVsim, FtIndexAll, FtIndexDataType, FtLanguage,
-        FtPhoneticMatcher, FtReducer, FtSearchHighlightOptions, FtSearchOptions, FtSearchResult,
+        FtAttributeValue, FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes,
+        FtGeoShapeCoordSystem, FtGroupBy, FtHnswVectorFieldAttributes, FtHybridCombine,
+        FtHybridFormat, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery, FtHybridVsim,
+        FtIndexAll, FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer,
+        FtSearchHighlightOptions, FtSearchOptions, FtSearchResult, FtSearchResultRow,
         FtSearchSummarizeOptions, FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions,
         FtSugGetOptions, FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
         FtWithCursorOptions, GeoUnit, HashCommands, JsonCommands, SearchCommands, ServerCommands,
@@ -40,6 +41,25 @@ fn ft_aggregate_options_stay_small() {
         "FtGroupBy grew to {} bytes",
         size_of::<FtGroupBy<'_>>()
     );
+}
+
+/// The attribute pairs of a row as plain text. Every attribute a search returns
+/// is text; only the `TOLIST` and `RANDOM_SAMPLE` reducers return an array.
+fn attributes(row: &FtSearchResultRow) -> Vec<(&str, &str)> {
+    row.extra_attributes
+        .iter()
+        .chain(row.values.iter())
+        .map(|(name, value)| (name.as_str(), value.as_str().unwrap_or_default()))
+        .collect()
+}
+
+/// A numeric attribute, as the server prints it.
+fn as_f64(value: FtAttributeValue) -> f64 {
+    value
+        .as_str()
+        .expect("a numeric attribute")
+        .parse()
+        .expect("a number")
 }
 
 async fn wait_for_index_scanned(client: &Client, index: &str) -> Result<()> {
@@ -289,22 +309,20 @@ async fn ft_aggregate() -> Result<()> {
     assert_eq!(2, result.results.len());
     assert_eq!(2, result.results[0].extra_attributes.len());
     assert_eq!(2, result.results[1].extra_attributes.len());
+    assert_eq!("hour", result.results[0].extra_attributes[0].0);
     assert_eq!(
-        ("hour".to_owned(), "2022-11-16T22:00:00Z".to_owned()),
-        result.results[0].extra_attributes[0]
+        "2022-11-16T22:00:00Z",
+        result.results[0].extra_attributes[0].1
     );
+    assert_eq!("num_users", result.results[0].extra_attributes[1].0);
+    assert_eq!("2", result.results[0].extra_attributes[1].1);
+    assert_eq!("hour", result.results[1].extra_attributes[0].0);
     assert_eq!(
-        ("num_users".to_owned(), "2".to_owned()),
-        result.results[0].extra_attributes[1]
+        "2022-11-17T03:00:00Z",
+        result.results[1].extra_attributes[0].1
     );
-    assert_eq!(
-        ("hour".to_owned(), "2022-11-17T03:00:00Z".to_owned()),
-        result.results[1].extra_attributes[0]
-    );
-    assert_eq!(
-        ("num_users".to_owned(), "2".to_owned()),
-        result.results[1].extra_attributes[1]
-    );
+    assert_eq!("num_users", result.results[1].extra_attributes[1].0);
+    assert_eq!("2", result.results[1].extra_attributes[1].1);
 
     Ok(())
 }
@@ -656,6 +674,39 @@ async fn ft_hybrid() -> Result<()> {
         )
         .await?;
     assert!(!matches!(grouped, Value::Null));
+
+    // YIELD_SCORE_AS on both clauses: each clause score is exposed under the
+    // requested name, next to the fused `__score`.
+    #[derive(serde::Deserialize)]
+    struct HybridReply {
+        results: Vec<HashMap<String, String>>,
+    }
+
+    let scored: HybridReply = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle").yield_score_as("text_score"),
+            FtHybridVsim::new("@embedding", "$vec")
+                .query(FtHybridVectorQuery::Knn {
+                    k: 2,
+                    ef_runtime: None,
+                })
+                .yield_score_as("vector_score"),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: None,
+                    window: Some(40),
+                })
+                .limit(0, 10)
+                .param("vec", &query_vector),
+        )
+        .await?;
+    let top = &scored.results[0];
+    assert!(
+        top.contains_key("text_score") && top.contains_key("vector_score"),
+        "the aliased clause scores are missing from {:?}",
+        top.keys().collect::<Vec<_>>()
+    );
 
     // Post-combine FILTER on an APPLY-computed field.
     let filtered: Value = client
@@ -1419,11 +1470,7 @@ async fn ft_syn() -> Result<()> {
     assert_eq!(1, result.total_results);
     assert_eq!(1, result.results.len());
     assert_eq!("foo", result.results[0].id);
-    assert_eq!(1, result.results[0].extra_attributes.len());
-    assert_eq!(
-        ("t".to_owned(), "hello".to_owned()),
-        result.results[0].extra_attributes[0]
-    );
+    assert_eq!(vec![("t", "hello")], attributes(&result.results[0]));
 
     // Create a synonym group
     client
@@ -1458,17 +1505,9 @@ async fn ft_syn() -> Result<()> {
     }
     assert_eq!(2, result.total_results);
     assert_eq!("foo", result.results[0].id);
-    assert_eq!(1, result.results[0].extra_attributes.len());
-    assert_eq!(
-        ("t".to_owned(), "hello".to_owned()),
-        result.results[0].extra_attributes[0]
-    );
+    assert_eq!(vec![("t", "hello")], attributes(&result.results[0]));
     assert_eq!("bar", result.results[1].id);
-    assert_eq!(1, result.results[1].extra_attributes.len());
-    assert_eq!(
-        ("t".to_owned(), "world".to_owned()),
-        result.results[1].extra_attributes[0]
-    );
+    assert_eq!(vec![("t", "world")], attributes(&result.results[1]));
 
     Ok(())
 }
@@ -1730,10 +1769,7 @@ async fn ft_renamed_attributes_and_params() -> Result<()> {
         )
         .await?;
     assert_eq!(1, result.total_results);
-    assert_eq!(
-        vec![("renamed".to_owned(), "world".to_owned())],
-        result.results[0].extra_attributes
-    );
+    assert_eq!(vec![("renamed", "world")], attributes(&result.results[0]));
 
     let result = client
         .ft_aggregate(
@@ -1747,9 +1783,240 @@ async fn ft_renamed_attributes_and_params() -> Result<()> {
         )
         .await?;
     assert_eq!(1, result.results.len());
+    assert_eq!(vec![("renamed", "world")], attributes(&result.results[0]));
+
+    Ok(())
+}
+
+/// Every `REDUCE` function carries the number of arguments that follow it, and
+/// that count is hard-coded per reducer rather than derived. This pins the bytes
+/// of each one.
+#[test]
+fn ft_reducer_args() -> Result<()> {
+    fn reduce_args(reducer: FtReducer<'_>) -> String {
+        TestClient
+            .ft_aggregate(
+                "index",
+                "*",
+                FtAggregateOptions::default()
+                    .groupby(FtGroupBy::default().property("@a").reduce(reducer)),
+            )
+            .command
+            .to_string()
+            .replace("FT.AGGREGATE index * GROUPBY 1 @a ", "")
+    }
+
+    assert_eq!("REDUCE COUNT 0", reduce_args(FtReducer::count()));
     assert_eq!(
-        vec![("renamed".to_owned(), "world".to_owned())],
-        result.results[0].extra_attributes
+        "REDUCE COUNT_DISTINCT 1 @b",
+        reduce_args(FtReducer::count_distinct("@b"))
+    );
+    assert_eq!(
+        "REDUCE COUNT_DISTINCTISH 1 @b",
+        reduce_args(FtReducer::count_distinctish("@b"))
+    );
+    assert_eq!("REDUCE SUM 1 @b", reduce_args(FtReducer::sum("@b")));
+    assert_eq!("REDUCE MIN 1 @b", reduce_args(FtReducer::min("@b")));
+    assert_eq!("REDUCE MAX 1 @b", reduce_args(FtReducer::max("@b")));
+    assert_eq!("REDUCE AVG 1 @b", reduce_args(FtReducer::avg("@b")));
+    assert_eq!("REDUCE STDDEV 1 @b", reduce_args(FtReducer::stddev("@b")));
+    assert_eq!(
+        "REDUCE QUANTILE 2 @b 0.5",
+        reduce_args(FtReducer::quantile("@b", 0.5))
+    );
+    assert_eq!("REDUCE TOLIST 1 @b", reduce_args(FtReducer::tolist("@b")));
+    assert_eq!(
+        "REDUCE FIRST_VALUE 1 @b",
+        reduce_args(FtReducer::first_value("@b"))
+    );
+    assert_eq!(
+        "REDUCE FIRST_VALUE 3 @b BY @c",
+        reduce_args(FtReducer::first_value_by("@b", "@c"))
+    );
+    assert_eq!(
+        "REDUCE FIRST_VALUE 4 @b BY @c DESC",
+        reduce_args(FtReducer::first_value_by_order("@b", "@c", SortOrder::Desc))
+    );
+    assert_eq!(
+        "REDUCE RANDOM_SAMPLE 2 @b 3",
+        reduce_args(FtReducer::random_sample("@b", 3))
+    );
+    assert_eq!(
+        "REDUCE SUM 1 @b AS total",
+        reduce_args(FtReducer::sum("@b").as_name("total"))
+    );
+
+    Ok(())
+}
+
+/// Every reducer, run against a real index: a wrong argument count or a missing
+/// keyword is rejected by the server, which pinning the bytes alone cannot catch.
+#[tokio::test]
+#[serial]
+async fn ft_aggregate_reducers() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "people",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("person:")
+                .schema(
+                    FtFieldSchema::identifier("name")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("age")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("team")
+                        .field_type(FtFieldType::Tag)
+                        .sortable(),
+                ),
+        )
+        .await?;
+
+    client
+        .hset(
+            "person:1",
+            [("name", "alice"), ("age", "30"), ("team", "a")],
+        )
+        .await?;
+    client
+        .hset("person:2", [("name", "bob"), ("age", "40"), ("team", "a")])
+        .await?;
+    client
+        .hset(
+            "person:3",
+            [("name", "carol"), ("age", "40"), ("team", "a")],
+        )
+        .await?;
+    wait_for_index_scanned(&client, "people").await?;
+
+    async fn reduce(client: &Client, reducer: FtReducer<'_>) -> Result<FtAttributeValue> {
+        let result = client
+            .ft_aggregate(
+                "people",
+                "*",
+                FtAggregateOptions::default().groupby(
+                    FtGroupBy::default()
+                        .property("@team")
+                        .reduce(reducer.as_name("out")),
+                ),
+            )
+            .await?;
+        Ok(result.results[0]
+            .extra_attributes
+            .iter()
+            .find(|(name, _)| name == "out")
+            .map(|(_, value)| value.clone())
+            .expect("the reducer output"))
+    }
+
+    assert_eq!("3", reduce(&client, FtReducer::count()).await?);
+    assert_eq!(
+        "2",
+        reduce(&client, FtReducer::count_distinct("@age")).await?
+    );
+    // COUNT_DISTINCTISH is approximate; on three rows it is exact.
+    assert_eq!(
+        "2",
+        reduce(&client, FtReducer::count_distinctish("@age")).await?
+    );
+    assert_eq!("110", reduce(&client, FtReducer::sum("@age")).await?);
+    assert_eq!("30", reduce(&client, FtReducer::min("@age")).await?);
+    assert_eq!("40", reduce(&client, FtReducer::max("@age")).await?);
+    assert!((as_f64(reduce(&client, FtReducer::avg("@age")).await?) - 110. / 3.).abs() < 1e-6);
+    assert!(as_f64(reduce(&client, FtReducer::stddev("@age")).await?) > 0.);
+    assert_eq!(
+        "40",
+        reduce(&client, FtReducer::quantile("@age", 0.5)).await?
+    );
+    // TOLIST and RANDOM_SAMPLE are the two reducers that yield an array per group.
+    let mut ages = reduce(&client, FtReducer::tolist("@age"))
+        .await?
+        .as_array()
+        .expect("TOLIST returns an array")
+        .to_vec();
+    ages.sort();
+    assert_eq!(vec!["30".to_owned(), "40".to_owned()], ages);
+
+    let sample = reduce(&client, FtReducer::random_sample("@name", 2)).await?;
+    assert_eq!(
+        2,
+        sample
+            .as_array()
+            .expect("RANDOM_SAMPLE returns an array")
+            .len()
+    );
+
+    // FIRST_VALUE in its three forms. Only the ordered one has a defined answer.
+    for reducer in [
+        FtReducer::first_value("@name"),
+        FtReducer::first_value_by("@name", "@age"),
+    ] {
+        let name = reduce(&client, reducer).await?;
+        assert!(
+            ["alice", "bob", "carol"].iter().any(|n| name == *n),
+            "{name:?}"
+        );
+    }
+    assert_eq!(
+        "alice",
+        reduce(
+            &client,
+            FtReducer::first_value_by_order("@name", "@age", SortOrder::Asc)
+        )
+        .await?
+    );
+
+    Ok(())
+}
+
+/// `SORTBY` counts its property tokens, and `WITHCOUNT` / `WITHOUTCOUNT` are
+/// flags that follow that count without being part of it.
+#[test]
+fn ft_sortby_args() -> Result<()> {
+    let sortby_args = |sortby: FtSortBy<'_>| {
+        TestClient
+            .ft_aggregate("index", "*", FtAggregateOptions::default().sortby(sortby))
+            .command
+            .to_string()
+            .replace("FT.AGGREGATE index * ", "")
+    };
+
+    assert_eq!(
+        "SORTBY 2 @a ASC",
+        sortby_args(FtSortBy::default().property(FtSortByProperty::new("@a").asc()))
+    );
+    assert_eq!(
+        "SORTBY 2 @a DESC MAX 10",
+        sortby_args(
+            FtSortBy::default()
+                .property(FtSortByProperty::new("@a").desc())
+                .max(10)
+        )
+    );
+    assert_eq!(
+        "SORTBY 2 @a ASC WITHCOUNT",
+        sortby_args(
+            FtSortBy::default()
+                .property(FtSortByProperty::new("@a").asc())
+                .with_count()
+        )
+    );
+    assert_eq!(
+        "SORTBY 2 @a ASC WITHOUTCOUNT",
+        sortby_args(
+            FtSortBy::default()
+                .property(FtSortByProperty::new("@a").asc())
+                .without_count()
+        )
     );
 
     Ok(())
@@ -1805,6 +2072,27 @@ fn ft_hybrid_args() -> Result<()> {
     assert_eq!(
         "FT.HYBRID index SEARCH bicycle VSIM @embedding $vec RANGE 2 RADIUS 0.5 \
          COMBINE LINEAR 4 ALPHA 0.3 BETA 0.7",
+        &cmd.to_string()
+    );
+
+    // `YIELD_SCORE_AS` sits inside each clause, after that clause's own arguments,
+    // and is not part of any declared count.
+    let cmd = TestClient
+        .ft_hybrid::<Value>(
+            "index",
+            FtHybridSearch::new("bicycle").yield_score_as("text_score"),
+            FtHybridVsim::new("@embedding", "$vec")
+                .query(FtHybridVectorQuery::Knn {
+                    k: 2,
+                    ef_runtime: None,
+                })
+                .yield_score_as("vector_score"),
+            FtHybridOptions::default(),
+        )
+        .command;
+    assert_eq!(
+        "FT.HYBRID index SEARCH bicycle YIELD_SCORE_AS text_score \
+         VSIM @embedding $vec KNN 2 K 2 YIELD_SCORE_AS vector_score",
         &cmd.to_string()
     );
 
@@ -1872,6 +2160,33 @@ fn ft_create_vector_field_args() -> Result<()> {
     assert_eq!(
         "FT.CREATE index SCHEMA v VECTOR FLAT 10 TYPE FLOAT32 DIM 4 DISTANCE_METRIC L2 \
          INITIAL_CAP 100 BLOCK_SIZE 10",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .ft_create(
+            "index",
+            FtCreateOptions::default().schema(
+                FtFieldSchema::identifier("v").field_type(FtFieldType::Vector(Some(
+                    FtVectorFieldAlgorithm::HNSW(
+                        FtHnswVectorFieldAttributes::new(
+                            FtVectorType::Float32,
+                            4,
+                            FtVectorDistanceMetric::Cosine,
+                        )
+                        .initial_cap(100)
+                        .m(16)
+                        .ef_construction(200)
+                        .ef_runtime(10)
+                        .epsilon(0.01),
+                    ),
+                ))),
+            ),
+        )
+        .command;
+    assert_eq!(
+        "FT.CREATE index SCHEMA v VECTOR HNSW 16 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE \
+         INITIAL_CAP 100 M 16 EF_CONSTRUCTION 200 EF_RUNTIME 10 EPSILON 0.01",
         &cmd.to_string()
     );
 
@@ -2353,7 +2668,7 @@ async fn ft_search_summarize_and_highlight() -> Result<()> {
             .iter()
             .chain(row.values.iter())
             .find(|(name, _)| name == "data")
-            .map(|(_, value)| value.clone())
+            .and_then(|(_, value)| value.as_str())
             .expect("the data attribute");
         // The term is wrapped in the requested tags, and the snippet is cut down
         // to one short fragment closed by the requested separator.
@@ -2402,13 +2717,7 @@ async fn ft_search_return_as() -> Result<()> {
         .await?;
 
     assert_eq!(1, result.total_results);
-    let attributes: Vec<(String, String)> = result.results[0]
-        .extra_attributes
-        .iter()
-        .chain(result.results[0].values.iter())
-        .cloned()
-        .collect();
-    assert_eq!(vec![("name".to_owned(), "dogs".to_owned())], attributes);
+    assert_eq!(vec![("name", "dogs")], attributes(&result.results[0]));
 
     Ok(())
 }
@@ -2427,12 +2736,7 @@ async fn ft_aggregate_verbatim_load_all_and_add_scores() -> Result<()> {
         .ft_aggregate("index", "dog", FtAggregateOptions::default().load_all())
         .await?;
     assert_eq!(1, result.results.len());
-    let loaded: HashMap<String, String> = result.results[0]
-        .extra_attributes
-        .iter()
-        .chain(result.results[0].values.iter())
-        .cloned()
-        .collect();
+    let loaded: HashMap<&str, &str> = attributes(&result.results[0]).into_iter().collect();
     assert_eq!("dogs", loaded["title"]);
     assert_eq!("foo wizard bar", loaded["data"]);
 
@@ -2447,12 +2751,7 @@ async fn ft_aggregate_verbatim_load_all_and_add_scores() -> Result<()> {
         )
         .await?;
     assert_eq!(1, result.results.len());
-    let loaded: HashMap<String, String> = result.results[0]
-        .extra_attributes
-        .iter()
-        .chain(result.results[0].values.iter())
-        .cloned()
-        .collect();
+    let loaded: HashMap<&str, &str> = attributes(&result.results[0]).into_iter().collect();
     assert!(loaded.contains_key("__score"));
     assert!(loaded["__score"].parse::<f64>().unwrap() > 0.);
 

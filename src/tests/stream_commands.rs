@@ -1,10 +1,11 @@
 use crate::{
     Result,
     commands::{
-        FlushingMode, ServerCommands, StreamCommands, StreamEntry, StreamEntryDeletionPolicy,
-        XAddOptions, XAutoClaimOptions, XAutoClaimResult, XClaimOptions, XGroupCreateOptions,
-        XInfoStreamOptions, XPendingMessageResult, XPendingOptions, XReadGroupOptions,
-        XReadOptions, XTrimOptions,
+        ConsumerGroupOptions, FlushingMode, ServerCommands, StreamCommands, StreamEntry,
+        StreamEntryDeletionPolicy, XAddOptions, XAutoClaimOptions, XAutoClaimResult,
+        XCfgSetOptions, XClaimOptions, XGroupCreateOptions, XInfoStreamOptions,
+        XPendingMessageResult, XPendingOptions, XReadGroupOptions, XReadOptions, XSetIdOptions,
+        XTrimOptions,
     },
     resp::Value,
     tests::{TestClient, get_test_client},
@@ -217,6 +218,139 @@ async fn xackdel() -> Result<()> {
 
     let pending = client.xpending("mystream", "mygroup").await?;
     assert_eq!(0, pending.num_pending_messages);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xadd_idmp() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // Manual mode: the same (pid, iid) pair is added once and echoed back on
+    // every resend.
+    let id1: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default().idmp("producer-1", "iid-1"),
+        )
+        .await?;
+    let id1_again: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "other value")],
+            XAddOptions::default().idmp("producer-1", "iid-1"),
+        )
+        .await?;
+    assert_eq!(id1, id1_again);
+    assert_eq!(1, client.xlen("mystream").await?);
+
+    // A different producer may reuse the same iid: tracking is per producer.
+    let id2: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default().idmp("producer-2", "iid-1"),
+        )
+        .await?;
+    assert_ne!(id1, id2);
+    assert_eq!(2, client.xlen("mystream").await?);
+
+    // Automatic mode: the server derives the iid from the entry's content, so
+    // the same content sent twice is deduplicated.
+    let id3: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "auto")],
+            XAddOptions::default().idmp_auto("producer-3"),
+        )
+        .await?;
+    let id3_again: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "auto")],
+            XAddOptions::default().idmp_auto("producer-3"),
+        )
+        .await?;
+    assert_eq!(id3, id3_again);
+    assert_eq!(3, client.xlen("mystream").await?);
+
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!(Some(3), result.pids_tracked);
+    assert_eq!(Some(3), result.iids_tracked);
+    assert_eq!(Some(3), result.iids_added);
+    assert_eq!(Some(2), result.iids_duplicates);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xcfgset() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let _: String = client
+        .xadd(
+            "mystream",
+            "*",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    // Server-wide defaults, before any per-stream override.
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!(Some(100), result.idmp_duration);
+    assert_eq!(Some(100), result.idmp_maxsize);
+
+    client
+        .xcfgset(
+            "mystream",
+            XCfgSetOptions::default()
+                .idmp_duration(300)
+                .idmp_maxsize(50),
+        )
+        .await?;
+
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!(Some(300), result.idmp_duration);
+    assert_eq!(Some(50), result.idmp_maxsize);
+
+    // Each parameter can be set on its own.
+    client
+        .xcfgset("mystream", XCfgSetOptions::default().idmp_duration(600))
+        .await?;
+
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!(Some(600), result.idmp_duration);
+    assert_eq!(Some(50), result.idmp_maxsize);
+
+    // At least one parameter is required, and the stream must exist.
+    let result = client.xcfgset("mystream", XCfgSetOptions::default()).await;
+    assert!(result.is_err());
+
+    let result = client
+        .xcfgset("unknown", XCfgSetOptions::default().idmp_duration(300))
+        .await;
+    assert!(result.is_err());
 
     Ok(())
 }
@@ -958,6 +1092,197 @@ async fn xautoclaim() -> Result<()> {
     assert_eq!(1, results[0].1[0].items.len());
     assert_eq!(id5, results[0].1[1].stream_id);
     assert_eq!(1, results[0].1[1].items.len());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xsetid() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    let _: String = client
+        .xadd(
+            "mystream",
+            "5-1",
+            [("field", "value")],
+            XAddOptions::default(),
+        )
+        .await?;
+
+    // The last id can only move forward.
+    client
+        .xsetid("mystream", "100-0", XSetIdOptions::default())
+        .await?;
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!("100-0", result.last_generated_id);
+
+    let result = client
+        .xsetid("mystream", "1-1", XSetIdOptions::default())
+        .await;
+    assert!(result.is_err());
+
+    // The two counters a replica needs are settable on their own.
+    client
+        .xsetid(
+            "mystream",
+            "200-0",
+            XSetIdOptions::default()
+                .entries_added(42)
+                .max_deleted_id("7-3"),
+        )
+        .await?;
+    let result = client
+        .xinfo_stream("mystream", XInfoStreamOptions::default())
+        .await?;
+    assert_eq!("200-0", result.last_generated_id);
+    assert_eq!(42, result.entries_added);
+    assert_eq!("7-3", result.max_deleted_entry_id);
+
+    // The stream must exist.
+    let result = client
+        .xsetid("unknown", "1-1", XSetIdOptions::default())
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[test]
+fn xsetid_args() -> Result<()> {
+    let cmd = TestClient
+        .xsetid("key", "100-0", XSetIdOptions::default())
+        .command;
+    assert_eq!("XSETID key 100-0", &cmd.to_string());
+
+    let cmd = TestClient
+        .xsetid(
+            "key",
+            "100-0",
+            XSetIdOptions::default()
+                .entries_added(42)
+                .max_deleted_id("7-3"),
+        )
+        .command;
+    assert_eq!(
+        "XSETID key 100-0 ENTRIESADDED 42 MAXDELETEDID 7-3",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn xclaim_lastid_args() -> Result<()> {
+    let cmd = TestClient
+        .xclaim::<()>(
+            "key",
+            "group",
+            "consumer",
+            0,
+            "1-1",
+            XClaimOptions::default().last_id("5-5"),
+        )
+        .command;
+    assert_eq!(
+        "XCLAIM key group consumer 0 1-1 LASTID 5-5",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn xadd_idmp_args() -> Result<()> {
+    // The idempotency clause sits between the consumer-group policy and the
+    // trimming clause, as the XADD grammar requires.
+    let cmd = TestClient
+        .xadd::<()>(
+            "key",
+            "*",
+            [("field", "value")],
+            XAddOptions::default()
+                .no_mk_stream()
+                .consumer_group_options(ConsumerGroupOptions::DelRef)
+                .idmp("producer-1", "iid-1")
+                .trim_options(XTrimOptions::max_len(None, 1000)),
+        )
+        .command;
+    assert_eq!(
+        "XADD key NOMKSTREAM DELREF IDMP producer-1 iid-1 MAXLEN 1000 * field value",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .xadd::<()>(
+            "key",
+            "*",
+            [("field", "value")],
+            XAddOptions::default().idmp_auto("producer-1"),
+        )
+        .command;
+    assert_eq!(
+        "XADD key IDMPAUTO producer-1 * field value",
+        &cmd.to_string()
+    );
+
+    // The two modes are mutually exclusive: the last one set wins.
+    let cmd = TestClient
+        .xadd::<()>(
+            "key",
+            "*",
+            [("field", "value")],
+            XAddOptions::default()
+                .idmp("producer-1", "iid-1")
+                .idmp_auto("producer-1"),
+        )
+        .command;
+    assert_eq!(
+        "XADD key IDMPAUTO producer-1 * field value",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .xadd::<()>(
+            "key",
+            "*",
+            [("field", "value")],
+            XAddOptions::default()
+                .idmp_auto("producer-1")
+                .idmp("producer-1", "iid-1"),
+        )
+        .command;
+    assert_eq!(
+        "XADD key IDMP producer-1 iid-1 * field value",
+        &cmd.to_string()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn xcfgset_args() -> Result<()> {
+    let cmd = TestClient
+        .xcfgset(
+            "key",
+            XCfgSetOptions::default()
+                .idmp_duration(300)
+                .idmp_maxsize(50),
+        )
+        .command;
+    assert_eq!(
+        "XCFGSET key IDMP-DURATION 300 IDMP-MAXSIZE 50",
+        &cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .xcfgset("key", XCfgSetOptions::default().idmp_maxsize(50))
+        .command;
+    assert_eq!("XCFGSET key IDMP-MAXSIZE 50", &cmd.to_string());
 
     Ok(())
 }

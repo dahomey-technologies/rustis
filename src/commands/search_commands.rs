@@ -1032,6 +1032,16 @@ pub struct FtFieldSchema<'a> {
         serialize_with = "serialize_flag"
     )]
     withsuffixtrie: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    indexmissing: bool,
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    indexempty: bool,
 }
 
 impl<'a> FtFieldSchema<'a> {
@@ -1147,6 +1157,27 @@ impl<'a> FtFieldSchema<'a> {
         self.withsuffixtrie = true;
         self
     }
+
+    /// Indexes documents that do not contain this field at all, so that the
+    /// `ismissing(@field)` query operator can find them.
+    ///
+    /// Without it a document missing the field is simply absent from the index
+    /// and no query can reach it.
+    #[must_use]
+    pub fn index_missing(mut self) -> Self {
+        self.indexmissing = true;
+        self
+    }
+
+    /// Indexes documents whose value for this field is an empty string, which
+    /// is otherwise skipped.
+    ///
+    /// Applies to `TEXT` and `TAG` fields.
+    #[must_use]
+    pub fn index_empty(mut self) -> Self {
+        self.indexempty = true;
+        self
+    }
 }
 
 /// Redis Data type of an index defined in [`FtCreateOptions`](FtCreateOptions) struct
@@ -1219,6 +1250,8 @@ pub struct FtCreateOptions<'a> {
         serialize_with = "serialize_slice_with_arg_count"
     )]
     stopwords: SmallVec<[&'a str; 10]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    indexall: Option<FtIndexAll>,
     #[serde(skip_serializing_if = "SmallVec::is_empty")]
     schema: SmallVec<[FtFieldSchema<'a>; 10]>,
 }
@@ -1392,11 +1425,31 @@ impl<'a> FtCreateOptions<'a> {
         self
     }
 
+    /// Controls whether the index also holds documents that match no field of
+    /// the schema, so that a query can reach every document of the key space
+    /// the index covers.
+    #[must_use]
+    pub fn index_all(mut self, index_all: FtIndexAll) -> Self {
+        self.indexall = Some(index_all);
+        self
+    }
+
     /// Declares which fields to index
     pub fn schema(mut self, schema: FtFieldSchema<'a>) -> Self {
         self.schema.push(schema);
         self
     }
+}
+
+/// `INDEXALL` setting of the [`ft_create`](SearchCommands::ft_create) command.
+///
+/// The token carries an explicit `ENABLE`/`DISABLE` value; it is not a flag.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum FtIndexAll {
+    Enable,
+    Disable,
 }
 
 /// Text-search component of the [`ft_hybrid`](SearchCommands::ft_hybrid) command.

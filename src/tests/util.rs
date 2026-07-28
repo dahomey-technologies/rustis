@@ -2,8 +2,8 @@ use crate::{
     Result,
     client::{Client, Config, IntoConfig},
     commands::{
-        ClusterCommands, SearchCommands, SentinelCommands, ServerCommands, StreamCommands,
-        VectorSetCommands,
+        ClusterCommands, SearchCommands, SentinelCommands, ServerCommands, SortedSetCommands,
+        StreamCommands, VectorSetCommands,
     },
 };
 #[cfg(feature = "native-tls")]
@@ -185,3 +185,4 @@ impl<'a> ClusterCommands<'a> for TestClient {}
 impl<'a> SearchCommands<'a> for TestClient {}
 impl<'a> SentinelCommands<'a> for TestClient {}
 impl<'a> ServerCommands<'a> for TestClient {}
+impl<'a> SortedSetCommands<'a> for TestClient {}

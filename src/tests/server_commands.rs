@@ -5,8 +5,9 @@ use crate::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
         CommandListOptions, ConnectionCommands, DebugCommands, FailOverOptions, FlushingMode,
-        InfoSection, LatencyHistoryEvent, MemoryUsageOptions, ModuleInfo, ReplicaOfOptions,
-        RoleResult, ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
+        HotKeysInfo, HotKeysMetric, HotKeysStartOptions, InfoSection, LatencyHistoryEvent,
+        MemoryUsageOptions, ModuleInfo, ModuleLoadexOptions, ReplicaOfOptions, RoleResult,
+        ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
     },
     resp::Value,
     spawn,
@@ -672,6 +673,92 @@ async fn info() -> Result<()> {
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]
+async fn hotkeys() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // Leave no session behind from another run: STOP replies nil when nothing
+    // is being tracked, and RESET is refused while a session is active.
+    client.hotkeys_stop().await?;
+    client.hotkeys_reset().await?;
+
+    // Without a tracking session there is nothing to report at all.
+    let results: Option<Vec<HotKeysInfo>> = client.hotkeys_get().await?;
+    assert!(results.is_none());
+
+    client
+        .hotkeys_start(
+            [HotKeysMetric::Cpu, HotKeysMetric::Net],
+            HotKeysStartOptions::default()
+                .count(5)
+                .duration(60)
+                .sample(1),
+        )
+        .await?;
+
+    client.set("hot", "value").await?;
+    for _ in 0..20 {
+        let _: String = client.get("hot").await?;
+    }
+
+    // One entry per node; a standalone server reports a single one.
+    let results: Vec<HotKeysInfo> = client.hotkeys_get().await?;
+    assert_eq!(1, results.len());
+    let info = &results[0];
+    assert!(info.tracking_active);
+    assert_eq!(1, info.sample_ratio);
+    assert_eq!(vec![(0, 16383)], info.selected_slots);
+    assert!(info.collection_start_time_unix_ms > 0);
+
+    // Both metrics were requested, so both breakdowns are reported.
+    let by_cpu_time_us = info.by_cpu_time_us.as_ref().unwrap();
+    assert!(by_cpu_time_us.iter().any(|(key, _)| key == "hot"));
+    let by_net_bytes = info.by_net_bytes.as_ref().unwrap();
+    assert!(by_net_bytes.iter().any(|(key, _)| key == "hot"));
+    assert!(info.total_cpu_time_user_ms.is_some());
+    assert!(info.total_net_bytes.is_some());
+
+    // Stopping preserves the results, only the flag flips.
+    client.hotkeys_stop().await?;
+    let results: Vec<HotKeysInfo> = client.hotkeys_get().await?;
+    assert!(!results[0].tracking_active);
+    assert!(
+        results[0]
+            .by_cpu_time_us
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|(key, _)| key == "hot")
+    );
+
+    // A single metric leaves the other breakdown out of the reply entirely.
+    client.hotkeys_reset().await?;
+    client
+        .hotkeys_start(
+            [HotKeysMetric::Cpu],
+            HotKeysStartOptions::default().duration(60),
+        )
+        .await?;
+    let _: String = client.get("hot").await?;
+    let results: Vec<HotKeysInfo> = client.hotkeys_get().await?;
+    assert!(results[0].by_cpu_time_us.is_some());
+    assert!(results[0].by_net_bytes.is_none());
+    assert!(results[0].total_net_bytes.is_none());
+
+    client.hotkeys_stop().await?;
+    client.hotkeys_reset().await?;
+    let results: Option<Vec<HotKeysInfo>> = client.hotkeys_get().await?;
+    assert!(results.is_none());
+
+    let help: Vec<String> = client.hotkeys_help().await?;
+    assert!(!help.is_empty());
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
 async fn lastsave() -> Result<()> {
     let client = get_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
@@ -945,6 +1032,65 @@ async fn module_list() -> Result<()> {
     assert_eq!(5, modules.len());
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn module_unload_and_loadex() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // Only the error paths are exercised: unloading one of the bundled modules
+    // would break every search, json and probabilistic test that follows.
+    let result = client.module_unload("nosuchmodule").await;
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
+
+    let result = client
+        .module_loadex("/nonexistent/module.so", ModuleLoadexOptions::default())
+        .await;
+    assert!(matches!(
+        result,
+        Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description: _
+        }))
+    ));
+
+    // The five bundled modules are still there.
+    let modules: Vec<ModuleInfo> = client.module_list().await?;
+    assert_eq!(5, modules.len());
+
+    Ok(())
+}
+
+#[test]
+fn module_loadex_args() {
+    let cmd = TestClient
+        .module_loadex("/path/mod.so", ModuleLoadexOptions::default())
+        .command;
+    assert_eq!("MODULE LOADEX /path/mod.so", cmd.to_string());
+
+    // CONFIG is repeated once per name/value pair, and ARGS closes the command.
+    let cmd = TestClient
+        .module_loadex(
+            "/path/mod.so",
+            ModuleLoadexOptions::default()
+                .config("timeout", "100")
+                .config("mode", "fast")
+                .args(["arg1", "arg2"]),
+        )
+        .command;
+    assert_eq!(
+        "MODULE LOADEX /path/mod.so CONFIG timeout 100 CONFIG mode fast ARGS arg1 arg2",
+        cmd.to_string()
+    );
 }
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
@@ -1227,6 +1373,44 @@ async fn shutdown_abort() -> Result<()> {
 
 /// The forms that do take the server down can only have their wire form
 /// checked, against the syntax published for `SHUTDOWN`.
+#[test]
+fn hotkeys_start_args() {
+    let cmd = TestClient
+        .hotkeys_start(
+            [HotKeysMetric::Cpu, HotKeysMetric::Net],
+            HotKeysStartOptions::default(),
+        )
+        .command;
+    assert_eq!("HOTKEYS START METRICS 2 CPU NET", cmd.to_string());
+
+    // `SLOTS` carries its own count and is only accepted in cluster mode, which
+    // the integration test cannot reach.
+    let cmd = TestClient
+        .hotkeys_start(
+            [HotKeysMetric::Cpu],
+            HotKeysStartOptions::default()
+                .count(5)
+                .duration(60)
+                .sample(10)
+                .slots([0, 100, 16383]),
+        )
+        .command;
+    assert_eq!(
+        "HOTKEYS START METRICS 1 CPU COUNT 5 DURATION 60 SAMPLE 10 SLOTS 3 0 100 16383",
+        cmd.to_string()
+    );
+
+    // An empty slot list still emits the clause, so the server explains the
+    // mistake rather than the client silently tracking everything.
+    let cmd = TestClient
+        .hotkeys_start(
+            [HotKeysMetric::Cpu],
+            HotKeysStartOptions::default().slots([]),
+        )
+        .command;
+    assert_eq!("HOTKEYS START METRICS 1 CPU SLOTS 0", cmd.to_string());
+}
+
 #[test]
 fn shutdown_command() {
     let cmd = TestClient.shutdown(ShutdownOptions::default()).command;

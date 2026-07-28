@@ -123,3 +123,21 @@ async fn tdigest_reserve() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn topk_count() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.topk_reserve("key", 3, None).await?;
+    client.topk_add::<()>("key", ["a", "a", "a", "b"]).await?;
+
+    // One count per requested item, in the order they were given; an unknown
+    // item counts zero.
+    let counts: Vec<usize> = client.topk_count("key", ["a", "b", "unknown"]).await?;
+    assert_eq!(vec![3, 1, 0], counts);
+
+    Ok(())
+}

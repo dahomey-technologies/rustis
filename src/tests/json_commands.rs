@@ -1,6 +1,9 @@
 use crate::{
     Result,
-    commands::{FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetOptions, ServerCommands},
+    commands::{
+        FlushingMode, JsonArrIndexOptions, JsonCommands, JsonGetFormat, JsonGetOptions,
+        ServerCommands,
+    },
     resp::Value,
     tests::get_test_client,
 };
@@ -331,6 +334,97 @@ async fn json_get() -> Result<()> {
         .json_get("key", JsonGetOptions::default().path("$.foo[*].bar"))
         .await?;
     assert_eq!("[[1,2,3],[3,4,5],12]", json);
+
+    // `STRING` is the default: the whole reply as one serialized document.
+    let json: String = client
+        .json_get(
+            "key",
+            JsonGetOptions::default()
+                .path("$.foo[*].bar")
+                .format(JsonGetFormat::String),
+        )
+        .await?;
+    assert_eq!("[[1,2,3],[3,4,5],12]", json);
+
+    // `EXPAND1` groups the matches per path and serializes only the containers,
+    // leaving scalars native — hence the mixed element types.
+    let values: Vec<Vec<Value>> = client
+        .json_get(
+            "key",
+            JsonGetOptions::default()
+                .path("$.foo[*].bar")
+                .format(JsonGetFormat::Expand1),
+        )
+        .await?;
+    assert_eq!(1, values.len());
+    assert_eq!(3, values[0].len());
+    assert_eq!("[1,2,3]", values[0][0].to_string());
+    assert_eq!(Value::Integer(12), values[0][2]);
+
+    // `EXPAND` goes all the way down to native RESP3 values.
+    let values: Vec<Vec<Value>> = client
+        .json_get(
+            "key",
+            JsonGetOptions::default()
+                .path("$.foo[*].bar")
+                .format(JsonGetFormat::Expand),
+        )
+        .await?;
+    assert_eq!(1, values.len());
+    assert_eq!(
+        Value::Array(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3)
+        ]),
+        values[0][0]
+    );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn json_merge() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .json_set(
+            "key",
+            "$",
+            r#"{"a":2, "b":3, "nested":{"a":4, "b":5}}"#,
+            None,
+        )
+        .await?;
+
+    // A merge updates the keys it names and leaves the others alone. Assertions
+    // go through paths rather than the whole document, whose key order the
+    // server does not preserve across a delete.
+    client.json_merge("key", "$", r#"{"b":8}"#).await?;
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().path("$.b"))
+        .await?;
+    assert_eq!("[8]", json);
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().path("$.a"))
+        .await?;
+    assert_eq!("[2]", json);
+
+    // A null value deletes the key, which is what makes MERGE more than a set.
+    client.json_merge("key", "$", r#"{"a":null}"#).await?;
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().path("$.a"))
+        .await?;
+    assert_eq!("[]", json);
+
+    // The path can target a nested document, merging in place.
+    client.json_merge("key", "$.nested", r#"{"c":6}"#).await?;
+    let json: String = client
+        .json_get("key", JsonGetOptions::default().path("$.nested"))
+        .await?;
+    assert_eq!(r#"[{"a":4,"b":5,"c":6}]"#, json);
 
     Ok(())
 }

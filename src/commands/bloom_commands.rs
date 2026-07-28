@@ -47,6 +47,26 @@ pub trait BloomCommands<'a>: Sized {
         prepare_command(self, cmd("BF.EXISTS").key(key).arg(item))
     }
 
+    /// Returns the cardinality of a Bloom filter: the number of items
+    /// successfully added to it.
+    ///
+    /// Because adding an item already present is a no-op, this counts distinct
+    /// items — as estimated by the filter, which never over-counts but can
+    /// under-count when a false positive made an `add` look like a duplicate.
+    ///
+    /// # Arguments
+    /// * `key` - The name of the filter
+    ///
+    /// # Return
+    /// The number of items added to the filter, or 0 when the key does not exist.
+    ///
+    /// # See Also
+    /// * [<https://redis.io/commands/bf.card/>](https://redis.io/commands/bf.card/)
+    #[must_use]
+    fn bf_card(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
+        prepare_command(self, cmd("BF.CARD").key(key))
+    }
+
     /// Return information about key filter.
     ///
     /// # Arguments

@@ -132,6 +132,29 @@ pub trait TopKCommands<'a>: Sized {
         prepare_command(self, cmd("TOPK.QUERY").key(key).arg(items))
     }
 
+    /// Returns the count for one or more items in a sketch.
+    ///
+    /// The counts are estimates: the sketch never under-counts, but may
+    /// over-count an item it has evicted from the top-k.
+    ///
+    /// # Arguments
+    /// * `key` - Key under which the sketch is to be found.
+    /// * `items` - Item/s to be counted.
+    ///
+    /// # Return
+    /// One count per requested item, in the order they were given.
+    ///
+    /// # See Also
+    /// * [<https://redis.io/commands/topk.count/>](https://redis.io/commands/topk.count/)
+    #[must_use]
+    fn topk_count<R: Response>(
+        self,
+        key: impl Serialize,
+        items: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("TOPK.COUNT").key(key).arg(items))
+    }
+
     /// Initializes a TopK with specified parameters.
     ///
     /// # Arguments

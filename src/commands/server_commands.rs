@@ -1,7 +1,7 @@
 use crate::{
     ClientError, Error, Result,
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgsMut, Response, cmd, serialize_flag},
+    resp::{CommandArgsMut, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -675,6 +675,106 @@ pub trait ServerCommands<'a>: Sized {
         )
     }
 
+    /// Starts a hotkeys tracking session on the server.
+    ///
+    /// Hotkeys are ranked by the share of the server's CPU time and/or of its
+    /// network traffic they account for during the session. `metrics` selects
+    /// which of the two rankings are collected; at least one is required.
+    ///
+    /// A session must be stopped ([`hotkeys_stop`](ServerCommands::hotkeys_stop))
+    /// and its results released ([`hotkeys_reset`](ServerCommands::hotkeys_reset))
+    /// before another one can start.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hotkeys-start/>](https://redis.io/commands/hotkeys-start/)
+    #[must_use]
+    fn hotkeys_start(
+        self,
+        metrics: impl Serialize,
+        options: HotKeysStartOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(
+            self,
+            cmd("HOTKEYS")
+                .arg("START")
+                .arg("METRICS")
+                .arg_with_count(metrics)
+                .arg(options)
+                .cluster_info(RequestPolicy::Special, None, 0),
+        )
+    }
+
+    /// Stops the current hotkeys tracking session, keeping its results
+    /// available to [`hotkeys_get`](ServerCommands::hotkeys_get).
+    ///
+    /// Replies with nothing when no session is being tracked.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hotkeys-stop/>](https://redis.io/commands/hotkeys-stop/)
+    #[must_use]
+    fn hotkeys_stop(self) -> PreparedCommand<'a, Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(
+            self,
+            cmd("HOTKEYS")
+                .arg("STOP")
+                .cluster_info(RequestPolicy::Special, None, 0),
+        )
+    }
+
+    /// Returns the results of the hotkeys tracking session, one entry per node.
+    ///
+    /// # Return
+    /// A collection of [`HotKeysInfo`](HotKeysInfo), or nothing when no session
+    /// has been started or its results have been released. Deserialize into
+    /// `Option<Vec<HotKeysInfo>>` to tell the two apart.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hotkeys-get/>](https://redis.io/commands/hotkeys-get/)
+    #[must_use]
+    fn hotkeys_get<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("HOTKEYS").arg("GET").cluster_info(
+                RequestPolicy::Special,
+                ResponsePolicy::Special,
+                0,
+            ),
+        )
+    }
+
+    /// Releases the memory used by the hotkeys tracking session, discarding its
+    /// results. The session must have been stopped first.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hotkeys-reset/>](https://redis.io/commands/hotkeys-reset/)
+    #[must_use]
+    fn hotkeys_reset(self) -> PreparedCommand<'a, Self, ()>
+    where
+        Self: Sized,
+    {
+        prepare_command(
+            self,
+            cmd("HOTKEYS")
+                .arg("RESET")
+                .cluster_info(RequestPolicy::Special, None, 0),
+        )
+    }
+
+    /// The HOTKEYS HELP command returns a helpful text describing the different subcommands.
+    ///
+    /// # Return
+    /// An array of strings.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hotkeys/>](https://redis.io/commands/hotkeys/)
+    #[must_use]
+    fn hotkeys_help<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("HOTKEYS").arg("HELP"))
+    }
+
     /// Return the UNIX TIME of the last DB save executed with success.
     ///
     /// # See Also
@@ -1017,6 +1117,42 @@ pub trait ServerCommands<'a>: Sized {
     #[must_use]
     fn module_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("MODULE").arg("LIST"))
+    }
+
+    /// Loads a module from a dynamic library at runtime, setting its
+    /// configuration parameters before it initializes.
+    ///
+    /// Unlike `MODULE LOAD`, the configurations passed with
+    /// [`config`](ModuleLoadexOptions::config) are applied *before* the module's
+    /// `onload` callback runs, which is what modules requiring configuration at
+    /// startup need.
+    ///
+    /// The server refuses the whole MODULE container unless it was started with
+    /// `enable-module-command`.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/module-loadex/>](https://redis.io/commands/module-loadex/)
+    #[must_use]
+    fn module_loadex(
+        self,
+        path: impl Serialize,
+        options: ModuleLoadexOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(self, cmd("MODULE").arg("LOADEX").arg(path).arg(options))
+    }
+
+    /// Unloads a module by the name it registered itself under — which is the
+    /// `name` reported by [`module_list`](ServerCommands::module_list), not its
+    /// file path.
+    ///
+    /// The server refuses to unload a module that registered a data type or
+    /// that has background jobs running.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/module-unload/>](https://redis.io/commands/module-unload/)
+    #[must_use]
+    fn module_unload(self, name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(self, cmd("MODULE").arg("UNLOAD").arg(name))
     }
 
     /// The command returns a helpful text describing the different MODULE subcommands.
@@ -1838,6 +1974,148 @@ pub enum InfoSection {
     Everything,
 }
 
+/// Metric tracked by the [`hotkeys_start`](ServerCommands::hotkeys_start) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum HotKeysMetric {
+    /// Rank keys by the share of the server's CPU time they account for.
+    Cpu,
+    /// Rank keys by the share of the server's network bytes, input and output,
+    /// they account for.
+    Net,
+}
+
+/// Options for the [`hotkeys_start`](ServerCommands::hotkeys_start) command.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct HotKeysStartOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sample: Option<u32>,
+    #[serde(rename = "", skip_serializing_if = "Option::is_none")]
+    slots: Option<HotKeysSlots>,
+}
+
+impl HotKeysStartOptions {
+    /// How many keys each ranking holds. Defaults to 10.
+    #[must_use]
+    pub fn count(mut self, count: u32) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    /// For how long, in seconds, tracking runs before it stops on its own.
+    /// Defaults to 0, which tracks until
+    /// [`hotkeys_stop`](ServerCommands::hotkeys_stop) is called.
+    #[must_use]
+    pub fn duration(mut self, seconds: u64) -> Self {
+        self.duration = Some(seconds);
+        self
+    }
+
+    /// Keys are tracked with probability `1/ratio`. Defaults to 1, which tracks
+    /// every key.
+    #[must_use]
+    pub fn sample(mut self, ratio: u32) -> Self {
+        self.sample = Some(ratio);
+        self
+    }
+
+    /// Restricts tracking to keys hashing to the given slots. Cluster mode
+    /// only; the server rejects it otherwise. Defaults to all slots.
+    #[must_use]
+    pub fn slots(mut self, slots: impl IntoIterator<Item = u16>) -> Self {
+        self.slots = Some(HotKeysSlots(slots.into_iter().collect()));
+        self
+    }
+}
+
+/// The `SLOTS count slot...` clause, whose leading count the serializer emits.
+struct HotKeysSlots(SmallVec<[u16; 16]>);
+
+impl Serialize for HotKeysSlots {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+
+        let mut seq = serializer.serialize_seq(Some(self.0.len() + 2))?;
+        seq.serialize_element("SLOTS")?;
+        seq.serialize_element(&self.0.len())?;
+        for slot in &self.0 {
+            seq.serialize_element(slot)?;
+        }
+        seq.end()
+    }
+}
+
+/// Result of one node for the [`hotkeys_get`](ServerCommands::hotkeys_get) command.
+///
+/// The fields tied to a metric — the two `total_cpu_time_*`, `total_net_bytes`
+/// and the two rankings — are reported only for the metrics the session was
+/// started with, and are `None` otherwise.
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub struct HotKeysInfo {
+    /// whether tracking is still running
+    pub tracking_active: bool,
+
+    /// keys were tracked with probability `1/sample_ratio`
+    pub sample_ratio: u32,
+
+    /// the inclusive slot ranges tracking was restricted to
+    pub selected_slots: Vec<(u16, u16)>,
+
+    /// the CPU time, in microseconds, spent on every command of every tracked slot
+    pub all_commands_all_slots_us: u64,
+
+    /// the network bytes used by every command of every tracked slot
+    pub net_bytes_all_commands_all_slots: u64,
+
+    /// when the session started, as a unix timestamp in milliseconds
+    pub collection_start_time_unix_ms: u64,
+
+    /// for how long, in milliseconds, the session has been collecting
+    pub collection_duration_ms: u64,
+
+    /// the user CPU time, in milliseconds, consumed during the session
+    #[serde(default)]
+    pub total_cpu_time_user_ms: Option<u64>,
+
+    /// the system CPU time, in milliseconds, consumed during the session
+    #[serde(default)]
+    pub total_cpu_time_sys_ms: Option<u64>,
+
+    /// the network bytes used during the session
+    #[serde(default)]
+    pub total_net_bytes: Option<u64>,
+
+    /// the hottest keys by CPU time, in microseconds, hottest first
+    #[serde(default, deserialize_with = "deserialize_hot_keys_ranking")]
+    pub by_cpu_time_us: Option<Vec<(String, u64)>>,
+
+    /// the hottest keys by network bytes, hottest first
+    #[serde(default, deserialize_with = "deserialize_hot_keys_ranking")]
+    pub by_net_bytes: Option<Vec<(String, u64)>>,
+}
+
+/// A hotkeys ranking arrives as a flat `key, score, key, score…` sequence, and
+/// is absent altogether when its metric was not tracked.
+fn deserialize_hot_keys_ranking<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<Vec<(String, u64)>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_vec_of_pairs(deserializer).map(Some)
+}
+
 /// Latency history event for the [`latency_graph`](ServerCommands::latency_graph)
 /// & [`latency_history`](ServerCommands::latency_history) commands.
 #[derive(Serialize)]
@@ -2066,6 +2344,34 @@ impl MemoryUsageOptions {
     #[must_use]
     pub fn samples(mut self, count: u32) -> Self {
         self.samples = Some(count);
+        self
+    }
+}
+
+/// Options for the [`module_loadex`](ServerCommands::module_loadex) command.
+#[derive(Default, Serialize)]
+pub struct ModuleLoadexOptions {
+    /// `CONFIG` is repeated once per pair rather than introducing a list, so the
+    /// token travels with the arguments instead of being a field name.
+    #[serde(rename = "", skip_serializing_if = "CommandArgsMut::is_empty")]
+    config: CommandArgsMut,
+    #[serde(rename = "ARGS", skip_serializing_if = "CommandArgsMut::is_empty")]
+    args: CommandArgsMut,
+}
+
+impl ModuleLoadexOptions {
+    /// Sets one module configuration parameter, applied before the module
+    /// initializes. Call once per parameter.
+    #[must_use]
+    pub fn config(mut self, name: impl Serialize, value: impl Serialize) -> Self {
+        self.config = self.config.arg("CONFIG").arg(name).arg(value);
+        self
+    }
+
+    /// Extra arguments handed to the module's `onload` callback.
+    #[must_use]
+    pub fn args(mut self, args: impl Serialize) -> Self {
+        self.args = self.args.arg(args);
         self
     }
 }

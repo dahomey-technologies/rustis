@@ -138,6 +138,56 @@ pub trait VectorSetCommands<'a>: Sized {
         prepare_command(self, cmd("VLINKS").key(key).arg(element).arg("WITHSCORES"))
     }
 
+    /// Check if an element exists in a vector set.
+    ///
+    /// # Return
+    /// * `true` - if the element is a member of the vector set.
+    /// * `false` - if either the element or the key does not exist.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/vismember/>](https://redis.io/commands/vismember/)
+    #[must_use]
+    fn vismember(
+        self,
+        key: impl Serialize,
+        element: impl Serialize,
+    ) -> PreparedCommand<'a, Self, bool> {
+        prepare_command(self, cmd("VISMEMBER").key(key).arg(element))
+    }
+
+    /// Return vector set elements whose names fall in a lexicographic range.
+    ///
+    /// The range applies to the **element names**, not to the vectors, and uses
+    /// the same bound syntax as
+    /// [`zrangebylex`](https://redis.io/commands/zrangebylex/): `-` and `+` for
+    /// the extremes, `[name` for an inclusive bound, `(name` for an exclusive
+    /// one.
+    ///
+    /// # Arguments
+    /// * `key` - The vector set.
+    /// * `start` - The lower bound.
+    /// * `end` - The upper bound.
+    /// * `count` - Caps how many elements are returned; omit for all of them.
+    ///
+    /// # Return
+    /// The matching element names, in lexicographic order.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/vrange/>](https://redis.io/commands/vrange/)
+    #[must_use]
+    fn vrange<R: Response>(
+        self,
+        key: impl Serialize,
+        start: impl Serialize,
+        end: impl Serialize,
+        count: impl Into<Option<usize>>,
+    ) -> PreparedCommand<'a, Self, R> {
+        prepare_command(
+            self,
+            cmd("VRANGE").key(key).arg(start).arg(end).arg(count.into()),
+        )
+    }
+
     /// Return one or more random elements from a vector set.
     ///
     /// The behavior is similar to the SRANDMEMBER command:
@@ -371,6 +421,7 @@ pub struct VSimOptions<'a> {
     )]
     withscores: bool,
     #[serde(
+        rename = "WITHATTRIBS",
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
     )]

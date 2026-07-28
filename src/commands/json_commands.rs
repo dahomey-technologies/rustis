@@ -298,6 +298,30 @@ pub trait JsonCommands<'a>: Sized {
         prepare_command(self, cmd("JSON.MGET").key(keys).arg(path))
     }
 
+    /// Merge a given JSON value into matching paths.
+    ///
+    /// Applies [RFC 7386](https://datatracker.ietf.org/doc/html/rfc7386) merge
+    /// semantics, which is what makes this more than a set: a key present in
+    /// `value` replaces its counterpart, a key set to `null` **deletes** it, and
+    /// any key absent from `value` is left untouched.
+    ///
+    /// # Arguments
+    /// * `key` - The key to modify.
+    /// * `path` - The JSONPath to merge into.
+    /// * `value` - The JSON value to merge.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/json.merge/>](https://redis.io/commands/json.merge/)
+    #[must_use]
+    fn json_merge(
+        self,
+        key: impl Serialize,
+        path: impl Serialize,
+        value: impl Serialize,
+    ) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(self, cmd("JSON.MERGE").key(key).arg(path).arg(value))
+    }
+
     /// Set or update one or more JSON values according to the specified key-path-value triplets
     ///
     /// # Arguments
@@ -560,6 +584,8 @@ pub struct JsonGetOptions<'a> {
     newline: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     space: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<JsonGetFormat>,
     #[serde(rename = "", skip_serializing_if = "CommandArgsMut::is_empty")]
     path: CommandArgsMut,
 }
@@ -592,6 +618,29 @@ impl<'a> JsonGetOptions<'a> {
         self.path = self.path.arg(paths);
         self
     }
+
+    /// Chooses how the reply is shaped.
+    ///
+    /// Requires RESP3, which **rustis** always negotiates, so every variant is
+    /// usable here.
+    #[must_use]
+    pub fn format(mut self, format: JsonGetFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+}
+
+/// Reply format for the [`json_get`](JsonCommands::json_get) command.
+#[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum JsonGetFormat {
+    /// One serialized JSON document for the whole reply (the default).
+    String,
+    /// One serialized JSON string per matched path.
+    Expand1,
+    /// Native RESP3 values instead of serialized JSON.
+    Expand,
 }
 
 /// Options for the [`json_arrindex`](JsonCommands::json_arrindex) command

@@ -479,3 +479,126 @@ async fn vsim() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn vsim_with_attributes() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .vadd(
+            "key",
+            None,
+            &[0.1, 1.2, 0.5],
+            "apple",
+            VAddOptions::default(),
+        )
+        .await?;
+    client
+        .vadd(
+            "key",
+            None,
+            &[0.9, 0.1, 0.2],
+            "pear",
+            VAddOptions::default(),
+        )
+        .await?;
+    client
+        .vsetattr("key", "apple", r#"{"color":"red"}"#)
+        .await?;
+
+    // Each element comes back with its attributes, or nil when it has none.
+    let result: Vec<(String, Option<String>)> = client
+        .vsim(
+            "key",
+            VectorOrElement::Element("apple"),
+            VSimOptions::default().with_attributes(),
+        )
+        .await?;
+    assert_eq!(2, result.len());
+    let apple = result.iter().find(|(e, _)| e == "apple").unwrap();
+    assert_eq!(Some(r#"{"color":"red"}"#.to_owned()), apple.1);
+    let pear = result.iter().find(|(e, _)| e == "pear").unwrap();
+    assert_eq!(None, pear.1);
+
+    Ok(())
+}
+
+#[test]
+fn vsim_with_attributes_args() {
+    // The server's token is `WITHATTRIBS`; `WITHATTRIBUTES` is a syntax error.
+    let cmd = TestClient
+        .vsim::<()>(
+            "key",
+            VectorOrElement::Element("apple"),
+            VSimOptions::default().with_scores().with_attributes(),
+        )
+        .command;
+    assert_eq!("VSIM key ELE apple WITHSCORES WITHATTRIBS", cmd.to_string());
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn vismember() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .vadd(
+            "key",
+            None,
+            &[0.1, 1.2, 0.5],
+            "apple",
+            VAddOptions::default(),
+        )
+        .await?;
+
+    assert!(client.vismember("key", "apple").await?);
+    assert!(!client.vismember("key", "pear").await?);
+    // A missing key is not an error, just an absent element.
+    assert!(!client.vismember("unknown", "apple").await?);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn vrange() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    for element in ["apple", "banana", "cherry"] {
+        client
+            .vadd(
+                "key",
+                None,
+                &[0.1, 1.2, 0.5],
+                element,
+                VAddOptions::default(),
+            )
+            .await?;
+    }
+
+    // The range is lexicographic over element names, not over vectors.
+    let result: Vec<String> = client.vrange("key", "-", "+", None).await?;
+    assert_eq!(
+        vec!["apple".to_owned(), "banana".to_owned(), "cherry".to_owned()],
+        result
+    );
+
+    let result: Vec<String> = client.vrange("key", "[banana", "+", None).await?;
+    assert_eq!(vec!["banana".to_owned(), "cherry".to_owned()], result);
+
+    // The optional count caps the number of elements returned.
+    let result: Vec<String> = client.vrange("key", "-", "+", 2).await?;
+    assert_eq!(vec!["apple".to_owned(), "banana".to_owned()], result);
+
+    let result: Vec<String> = client.vrange("unknown", "-", "+", None).await?;
+    assert!(result.is_empty());
+
+    Ok(())
+}

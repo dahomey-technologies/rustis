@@ -257,6 +257,22 @@ pub trait ClusterCommands<'a>: Sized {
         prepare_command(self, cmd("CLUSTER").arg("MYID"))
     }
 
+    /// Returns the shard id of the node the client is connected to.
+    ///
+    /// A shard groups a master with its replicas, so every node of a shard
+    /// reports the same shard id while keeping its own distinct node id
+    /// (see [`cluster_myid`](ClusterCommands::cluster_myid)).
+    ///
+    /// # Return
+    /// The 40-character hexadecimal shard id.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/cluster-myshardid/>](https://redis.io/commands/cluster-myshardid/)
+    #[must_use]
+    fn cluster_myshardid<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+        prepare_command(self, cmd("CLUSTER").arg("MYSHARDID"))
+    }
+
     /// Each node in a Redis Cluster has its view of the current cluster configuration,
     /// given by the set of known nodes, the state of the connection we have with such nodes,
     /// their flags, properties and assigned slots, and so forth.

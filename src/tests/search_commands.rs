@@ -5,10 +5,11 @@ use crate::{
         ClientReplyMode, ConnectionCommands, FlushingMode, FtAggregateOptions, FtAttribute,
         FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes, FtGroupBy,
         FtHybridCombine, FtHybridFormat, FtHybridOptions, FtHybridSearch, FtHybridVectorQuery,
-        FtHybridVsim, FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer, FtSearchOptions,
-        FtSearchResult, FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions,
-        FtSugGetOptions, FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
-        FtWithCursorOptions, HashCommands, JsonCommands, SearchCommands, ServerCommands, SortOrder,
+        FtHybridVsim, FtIndexAll, FtIndexDataType, FtLanguage, FtPhoneticMatcher, FtReducer,
+        FtSearchOptions, FtSearchResult, FtSortBy, FtSortByProperty, FtSpellCheckOptions,
+        FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
+        FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
+        SearchCommands, ServerCommands, SortOrder,
     },
     network::sleep,
     resp::{RefBulkString, Value},
@@ -1880,4 +1881,90 @@ fn ft_create_vector_field_args() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_create_index_missing_and_empty() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "idx",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc:")
+                .schema(
+                    FtFieldSchema::identifier("title")
+                        .field_type(FtFieldType::Text)
+                        .index_missing()
+                        .index_empty(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("category")
+                        .field_type(FtFieldType::Tag)
+                        .index_missing()
+                        .index_empty(),
+                ),
+        )
+        .await?;
+
+    client
+        .hset("doc:1", [("title", "hello"), ("category", "a")])
+        .await?;
+    // An empty value, and a document missing `category` altogether.
+    client
+        .hset("doc:2", [("title", ""), ("category", "")])
+        .await?;
+    client.hset("doc:3", [("title", "world")]).await?;
+
+    sleep(Duration::from_millis(100)).await;
+
+    // Without INDEXMISSING, `doc:3` would be unreachable by any query.
+    // `ismissing` and the empty-tag syntax both require query dialect 2.
+    let result = client
+        .ft_search(
+            "idx",
+            "ismissing(@category)",
+            FtSearchOptions::default().dialect(2),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("doc:3", result.results[0].id);
+
+    // Without INDEXEMPTY, the empty tag of `doc:2` would not be indexed.
+    let result = client
+        .ft_search(
+            "idx",
+            "@category:{\"\"}",
+            FtSearchOptions::default().dialect(2),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("doc:2", result.results[0].id);
+
+    client.ft_dropindex("idx", false).await?;
+
+    Ok(())
+}
+
+#[test]
+fn ft_create_index_all_args() {
+    // INDEXALL carries an explicit value; emitting it as a bare flag is a
+    // server-side error.
+    let cmd = TestClient
+        .ft_create(
+            "idx",
+            FtCreateOptions::default()
+                .index_all(FtIndexAll::Enable)
+                .on(FtIndexDataType::Hash)
+                .schema(FtFieldSchema::identifier("t").field_type(FtFieldType::Text)),
+        )
+        .command;
+    assert_eq!(
+        "FT.CREATE idx ON HASH INDEXALL ENABLE SCHEMA t TEXT",
+        cmd.to_string()
+    );
 }

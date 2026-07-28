@@ -1,0 +1,52 @@
+# The fuzz targets under `fuzz/` are only as fresh as the last person who ran
+# one by hand. This workflow puts continuous adversarial pressure behind the
+# parser hardening: a short run per target, on a schedule, so a regression in
+# the frame parser or the deserializers surfaces without anyone thinking to look.
+#
+# It is deliberately not on `push`: a nightly toolchain plus a `cargo-fuzz`
+# build would add several minutes to every commit for a technique that pays off
+# over accumulated runs, not over a single one.
+name: Fuzz
+
+on:
+  schedule:
+    # Mondays, 03:17 UTC — off the hour, where scheduled-job congestion sits.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    strategy:
+      # One target crashing must not hide the state of the other three.
+      fail-fast: false
+      matrix:
+        target:
+          - frame_parser
+          - decode_chunked
+          - resp_deserializer
+          - value_deserializer
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      # cargo-fuzz needs nightly: it relies on `-Z` flags and the sanitizer
+      # support that only the nightly compiler exposes.
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run cargo fuzz ${{ matrix.target }}
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=60
+      # A crash is only useful if the input that produced it comes back with the
+      # failure report.
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

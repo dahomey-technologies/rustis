@@ -9,7 +9,7 @@ services:
   redis-standalone:
     image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-standalone
-    restart: on-failure:20
+    restart: always
     ports:
       - "6379:6379"
     healthcheck:
@@ -17,14 +17,14 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
-    # Absolute path on purpose: DEBUG RESTART and DEBUG CRASH-AND-RECOVER
-    # re-execute argv[0] resolved against the working directory, which is /data
-    # here. Started as a bare name, the server can only answer "no permissions
-    # to execute /data/redis-server" and the two commands are untestable.
-    # `--enable-module-command` makes MODULE reach the server at all; without it
-    # every subcommand is refused before parsing, so the MODULE UNLOAD / LOADEX
-    # tests could not tell a correctly-encoded command from a broken one. The
-    # tests only exercise the error path and never unload a bundled module.
+    # Absolute path: DEBUG RESTART and CRASH-AND-RECOVER re-execute argv[0] from
+    # /data. --enable-module-command lets MODULE reach the server at all. The loop
+    # restarts it with no Docker backoff, via the entrypoint that loads the modules.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'trap "exit 0" TERM; while true; do /usr/local/bin/docker-entrypoint.sh "$$@" & wait $$!; done'
+      - redis-restart-loop
     command: /usr/local/bin/redis-server --enable-debug-command yes --enable-module-command yes
 
 # TLS

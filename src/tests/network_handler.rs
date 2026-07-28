@@ -1,7 +1,9 @@
 use crate::{
     ClientError, Error, Result, RetryReason,
-    client::{Client, ReconnectionConfig},
-    commands::{GenericCommands, PubSubCommands, StringCommands},
+    client::{Client, ClientPreparedCommand, ReconnectionConfig},
+    commands::{
+        ClientReplyMode, ConnectionCommands, GenericCommands, PubSubCommands, StringCommands,
+    },
     network::{SendBatchTestHook, sleep, timeout},
     resp::cmd,
     tests::{
@@ -10,6 +12,7 @@ use crate::{
     },
 };
 use serial_test::serial;
+use std::future::IntoFuture;
 use std::{collections::HashMap, time::Duration};
 
 /// Retry reasons accumulated for one message must not be applied to the other
@@ -221,6 +224,98 @@ async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
             Err(Error::Client(ClientError::MaxCommandAttemptsReached))
         ),
         "expected MaxCommandAttemptsReached, got {result:?}"
+    );
+
+    Ok(())
+}
+
+/// `CLIENT REPLY OFF` is connection state, and the handler mirrors it to know how
+/// many responses each command it writes will produce. A reconnection must leave
+/// the two in agreement: if the socket comes back answering while the mirror still
+/// says it is silent, every unexpected reply shifts the following responses by one.
+#[tokio::test]
+#[serial]
+async fn reply_mode_is_restored_after_reconnect() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let client = get_test_client_with_config(config).await?;
+
+    client.del(["reply_a", "reply_b"]).await?;
+
+    let mut on_reconnect = client.on_reconnect();
+
+    // Silence the connection, then lose it while it is silent.
+    client.client_reply(ClientReplyMode::Off).forget()?;
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+
+    // Two writes over the reconnected socket, then speech again.
+    client.set("reply_a", "a").forget()?;
+    client.set("reply_b", "b").forget()?;
+    timeout(
+        Duration::from_secs(5),
+        client.client_reply(ClientReplyMode::On).into_future(),
+    )
+    .await??;
+
+    // Each response must reach the caller that asked for it.
+    let a: String = timeout(Duration::from_secs(5), client.get("reply_a").into_future()).await??;
+    let b: String = timeout(Duration::from_secs(5), client.get("reply_b").into_future()).await??;
+    assert_eq!("a", a, "responses must not be shifted after a reconnection");
+    assert_eq!("b", b, "responses must not be shifted after a reconnection");
+
+    client.del(["reply_a", "reply_b"]).await?;
+    Ok(())
+}
+
+/// `CLIENT REPLY SKIP` silences the next command and nothing beyond it. Treating
+/// it as a sticky `OFF` makes the handler expect one reply where the server sends
+/// several, and the surplus shifts every response that follows.
+#[tokio::test]
+#[serial]
+async fn reply_skip_silences_only_the_next_command() -> Result<()> {
+    log_try_init();
+
+    let client = get_test_client().await?;
+    client.del(["skip_a", "skip_b"]).await?;
+
+    // SKIP suppresses the reply of `skip_a` only; `skip_b` is answered.
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    client.set("skip_a", "a").forget()?;
+    client.set("skip_b", "b").forget()?;
+
+    let a: String = timeout(Duration::from_secs(5), client.get("skip_a").into_future()).await??;
+    let b: String = timeout(Duration::from_secs(5), client.get("skip_b").into_future()).await??;
+    assert_eq!("a", a, "responses must not be shifted after a SKIP");
+    assert_eq!("b", b, "responses must not be shifted after a SKIP");
+
+    client.del(["skip_a", "skip_b"]).await?;
+    Ok(())
+}
+
+/// `RESET` restores every per-connection default server-side, reply mode
+/// included. A client that keeps mirroring the pre-`RESET` mode stops accounting
+/// for the replies the server is once again sending.
+#[tokio::test]
+#[serial]
+async fn reset_restores_the_reply_mode_the_server_restored() -> Result<()> {
+    log_try_init();
+
+    let client = get_test_client().await?;
+
+    client.client_reply(ClientReplyMode::Off).forget()?;
+    client.send_and_forget(cmd("RESET"), None)?;
+
+    let pong: String = timeout(Duration::from_secs(5), client.send(cmd("PING"), None)).await??;
+    assert_eq!(
+        "PONG", pong,
+        "RESET turns replies back on, and the client must expect them again"
     );
 
     Ok(())

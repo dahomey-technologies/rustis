@@ -1,13 +1,14 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
-    ClientError, Error, RedisError, RedisErrorKind, Result, RetryReason, StandaloneConnection,
+    ClientError, ConnectionState, Error, RedisError, RedisErrorKind, Result, RetryReason,
+    StandaloneConnection,
     client::{ClusterConfig, Config},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::Version,
-    resp::{Command, CommandBuilder, RespResponse, RespView},
+    resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, RespView},
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
@@ -113,7 +114,17 @@ struct Node {
 }
 
 impl Node {
-    pub async fn feed(&mut self, command: &Command) -> Result<()> {
+    /// `reply_skip` is a held-back `CLIENT REPLY SKIP`, emitted on this node right
+    /// before the command it silences.
+    ///
+    /// It has to travel with the command rather than being routed on its own: it
+    /// suppresses the reply of whatever the node receives next, so sending it to a
+    /// node the command never reaches would leave that node swallowing the reply of
+    /// some unrelated later command.
+    pub async fn feed(&mut self, command: &Command, reply_skip: Option<&Command>) -> Result<()> {
+        if let Some(reply_skip) = reply_skip {
+            self.connection.feed(reply_skip, &[]).await?;
+        }
         self.connection.feed(command, &[]).await?;
         self.is_dirty = true;
         Ok(())
@@ -222,6 +233,14 @@ impl ClusterNodeResult {
 pub struct ClusterConnection {
     cluster_config: ClusterConfig,
     config: Config,
+    /// Read-only copy of the handler's connection-state registry, refreshed through
+    /// `sync_connection_state`.
+    ///
+    /// A topology change creates node connections from inside `feed` / `read`, which
+    /// the handler drives without lending its registry — `read` is polled in a
+    /// `select!` over its other fields. Those nodes must still reach the state their
+    /// siblings are in before anything is sent on them, and this is what lets them.
+    state_snapshot: ConnectionState,
     nodes: Vec<Node>,
     slot_ranges: Vec<SlotRange>,
     pending_requests: VecDeque<RequestInfo>,
@@ -229,6 +248,20 @@ pub struct ClusterConnection {
     /// to be sent.
     pending_redirections: Vec<PendingRedirection>,
     tag: Arc<str>,
+    /// Whether the nodes are answering, mirroring `CLIENT REPLY ON` / `OFF` — which
+    /// is sent to all of them, so one flag describes the whole connection.
+    ///
+    /// While they are silent, no in-flight bookkeeping may be filed: a sub-request
+    /// waiting for a reply that will never come sits at the head of
+    /// `pending_requests` forever and stalls every caller behind it.
+    is_reply_on: bool,
+    /// A `CLIENT REPLY SKIP` held back until the command it silences is routed.
+    ///
+    /// It carries no routing policy of its own because it is only correct on the
+    /// nodes that command reaches — one for a key-routed command, several for a
+    /// multi-shard one. Same shape as the "Lazy MULTI" state below, and for the same
+    /// reason: the target is known only once the next command arrives.
+    pending_reply_skip: Option<Command>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
     /// Whether the topology has already been refreshed during the send batch
@@ -239,11 +272,13 @@ pub struct ClusterConnection {
 }
 
 impl ClusterConnection {
-    pub async fn connect(
+    pub(crate) async fn connect(
         cluster_config: &ClusterConfig,
         config: &Config,
+        connection_state: &mut ConnectionState,
     ) -> Result<ClusterConnection> {
-        let (mut nodes, slot_ranges) = Self::connect_to_cluster(cluster_config, config).await?;
+        let (mut nodes, slot_ranges) =
+            Self::connect_to_cluster(cluster_config, config, connection_state).await?;
         let first_node = nodes
             .get_mut(0)
             .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
@@ -253,11 +288,14 @@ impl ClusterConnection {
         Ok(ClusterConnection {
             cluster_config: cluster_config.clone(),
             config: config.clone(),
+            state_snapshot: connection_state.clone(),
             nodes,
             slot_ranges,
             pending_requests: VecDeque::new(),
             pending_redirections: Vec::new(),
             tag,
+            is_reply_on: true,
+            pending_reply_skip: None,
             transaction_state: TransactionState::default(),
             refreshed_in_current_batch: false,
             #[cfg(test)]
@@ -267,6 +305,35 @@ impl ClusterConnection {
 
     #[inline]
     pub async fn feed(&mut self, command: &Command, retry_reasons: &[RetryReason]) -> Result<()> {
+        // The mode has to move before the command is routed, so that `file_request`
+        // sees it: `CLIENT REPLY ON` is itself answered and must be filed, while
+        // `OFF` is not answered and must not be.
+        match command.kind() {
+            CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,
+            CommandKind::ClientReply(ClientReplyMode::Off) => self.is_reply_on = false,
+            // Held back rather than sent: it belongs on the nodes the next command
+            // reaches, which is only known once that command is routed.
+            CommandKind::ClientReply(ClientReplyMode::Skip) => {
+                self.pending_reply_skip = Some(command.clone());
+                return Ok(());
+            }
+            _ => (),
+        }
+
+        // The skip travels with the command it silences, on every node that command
+        // reached. It applies to nothing further — including when the routing below
+        // fails, where it never reached a node at all and the handler has already
+        // spent its own one-shot on the command that errored.
+        let result = self.feed_routed(command, retry_reasons).await;
+        self.pending_reply_skip = None;
+        result
+    }
+
+    async fn feed_routed(
+        &mut self,
+        command: &Command,
+        retry_reasons: &[RetryReason],
+    ) -> Result<()> {
         if retry_reasons.iter().any(|r| {
             matches!(
                 r,
@@ -311,12 +378,16 @@ impl ClusterConnection {
             self.refresh_nodes_and_slot_ranges().await?;
         }
 
+        // A held skip belongs to the caller's command, not to the `MULTI` released
+        // here on its behalf, so it is set aside across that injection.
+        let held_skip = self.pending_reply_skip.take();
         if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
             let (node_idx, _) = self.get_no_request_policy_node(command, &ask_reasons)?;
             self.feed_no_request_policy(&multi_cmd, node_idx, false)
                 .await?;
             self.transaction_state.node_index = Some(node_idx);
         }
+        self.pending_reply_skip = held_skip;
 
         match command.name() {
             b"MULTI" => {
@@ -337,6 +408,17 @@ impl ClusterConnection {
         }
 
         Ok(())
+    }
+
+    /// Records the in-flight bookkeeping for a request — unless the nodes are silent,
+    /// in which case there is no reply to match it against and filing it would park
+    /// an unresolvable entry at the head of the queue.
+    ///
+    /// The single funnel for all four routing policies, so the decision is made once.
+    fn file_request(&mut self, request_info: RequestInfo) {
+        if self.is_reply_on && self.pending_reply_skip.is_none() {
+            self.pending_requests.push_back(request_info);
+        }
     }
 
     async fn internal_feed(
@@ -398,9 +480,10 @@ impl ClusterConnection {
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(&mut self, command: &Command) -> Result<()> {
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
+        let reply_skip = self.pending_reply_skip.clone();
 
         for node in self.nodes.iter_mut().filter(|n| n.is_master) {
-            node.feed(command).await?;
+            node.feed(command, reply_skip.as_ref()).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -418,7 +501,7 @@ impl ClusterConnection {
             command_seq: command.command_seq,
         };
 
-        self.pending_requests.push_back(request_info);
+        self.file_request(request_info);
 
         Ok(())
     }
@@ -432,9 +515,10 @@ impl ClusterConnection {
             self.connect_replicas().await?;
         }
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
+        let reply_skip = self.pending_reply_skip.clone();
 
         for node in self.nodes.iter_mut() {
-            node.feed(command).await?;
+            node.feed(command, reply_skip.as_ref()).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: smallvec![],
@@ -452,7 +536,7 @@ impl ClusterConnection {
             command_seq: command.command_seq,
         };
 
-        self.pending_requests.push_back(request_info);
+        self.file_request(request_info);
 
         Ok(())
     }
@@ -490,6 +574,9 @@ impl ClusterConnection {
         let mut last_slot = u16::MAX;
         let mut last_node_index: usize = usize::MAX;
         let mut last_should_ask = false;
+        // Each shard receives the skip before its own slice of the command, so each
+        // suppresses exactly one reply — its own.
+        let reply_skip = self.pending_reply_skip.clone();
 
         // Placeholder, overwritten on the first iteration: `last_node_index`
         // starts at a value no real index can equal. A node-less connection
@@ -507,7 +594,7 @@ impl ClusterConnection {
                     }
 
                     let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-                    node.feed(&shard_command).await?;
+                    node.feed(&shard_command, reply_skip.as_ref()).await?;
                     sub_requests.push(SubRequest {
                         node_id: node.id.clone(),
                         keys: std::mem::take(&mut current_slot_keys),
@@ -535,7 +622,7 @@ impl ClusterConnection {
         }
 
         let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-        node.feed(&shard_command).await?;
+        node.feed(&shard_command, reply_skip.as_ref()).await?;
         sub_requests.push(SubRequest {
             node_id: node.id.clone(),
             keys: std::mem::take(&mut current_slot_keys),
@@ -555,7 +642,7 @@ impl ClusterConnection {
 
         trace!("{request_info:?}");
 
-        self.pending_requests.push_back(request_info);
+        self.file_request(request_info);
 
         Ok(())
     }
@@ -598,6 +685,7 @@ impl ClusterConnection {
         node_idx: usize,
         should_ask: bool,
     ) -> Result<()> {
+        let reply_skip = self.pending_reply_skip.clone();
         let node = self
             .nodes
             .get_mut(node_idx)
@@ -605,7 +693,7 @@ impl ClusterConnection {
         if should_ask {
             node.connection.asking().await?;
         }
-        node.feed(command).await?;
+        node.feed(command, reply_skip.as_ref()).await?;
         let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
         let request_info = RequestInfo {
             response_policy: command.response_policy(),
@@ -620,7 +708,7 @@ impl ClusterConnection {
             #[cfg(test)]
             command_seq: command.command_seq,
         };
-        self.pending_requests.push_back(request_info);
+        self.file_request(request_info);
         Ok(())
     }
 
@@ -1034,7 +1122,9 @@ impl ClusterConnection {
             if redirection.should_ask {
                 node.connection.asking().await?;
             }
-            node.feed(&redirection.command).await?;
+            // No skip here: this re-sends a sub-request of a request already filed,
+            // whose reply is still expected.
+            node.feed(&redirection.command, None).await?;
         }
 
         self.flush().await
@@ -1322,10 +1412,21 @@ impl ClusterConnection {
         }
     }
 
-    pub async fn reconnect(&mut self) -> Result<()> {
+    /// Refreshes the read-only copy the topology-change paths replay from.
+    ///
+    /// Called by the handler whenever it records connection state, which is the one
+    /// place that state changes. Keeping the copy in step here is what lets
+    /// `refresh_nodes_and_slot_ranges` restore a joining node without reaching back
+    /// into the handler's registry.
+    pub(crate) fn sync_connection_state(&mut self, connection_state: &ConnectionState) {
+        self.state_snapshot = connection_state.clone();
+    }
+
+    pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         info!("Reconnecting to cluster...");
+        self.state_snapshot = connection_state.clone();
         let (nodes, slot_ranges) =
-            Self::connect_to_cluster(&self.cluster_config, &self.config).await?;
+            Self::connect_to_cluster(&self.cluster_config, &self.config, connection_state).await?;
         info!("Reconnected to cluster!");
 
         self.nodes = nodes;
@@ -1340,6 +1441,12 @@ impl ClusterConnection {
         // non-retryable messages and re-queued the retryable ones for replay,
         // which will repopulate `pending_requests` consistently.
         self.pending_requests.clear();
+
+        // A skip still held belonged to a command that never reached the wire on the
+        // socket that just died. The handler resets its own one-shot; keeping this one
+        // would silence the first command of the new connection while that reply is
+        // still expected, shifting every response after it.
+        self.pending_reply_skip = None;
 
         Ok(())
 
@@ -1363,13 +1470,16 @@ impl ClusterConnection {
         debug!("Discovering cluster shards and slots...");
 
         for (host, port) in addresses {
-            let mut connection = match StandaloneConnection::connect(host, *port, config).await {
-                Ok(connection) => connection,
-                Err(e) => {
-                    warn!("Cannot connect to node ({host}:{port}): {e}");
-                    continue;
-                }
-            };
+            // A dedicated, short-lived discovery connection is not the caller's:
+            // it must not replay their database, name or tracking mode.
+            let mut connection =
+                match StandaloneConnection::connect_control(host, *port, config).await {
+                    Ok(connection) => connection,
+                    Err(e) => {
+                        warn!("Cannot connect to node ({host}:{port}): {e}");
+                        continue;
+                    }
+                };
 
             let version: Result<Version> = connection.get_version().try_into();
             let Ok(version) = version else {
@@ -1411,6 +1521,7 @@ impl ClusterConnection {
     async fn connect_to_cluster(
         cluster_config: &ClusterConfig,
         config: &Config,
+        connection_state: &mut ConnectionState,
     ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
         #[cfg_attr(not(test), allow(unused_mut))]
         let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
@@ -1441,7 +1552,9 @@ impl ClusterConnection {
 
             let port = master_info.get_port()?;
 
-            let connection = StandaloneConnection::connect(&master_info.ip, port, config).await?;
+            let connection =
+                StandaloneConnection::connect(&master_info.ip, port, config, connection_state)
+                    .await?;
 
             slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
                 slot_range: *s,
@@ -1478,8 +1591,13 @@ impl ClusterConnection {
                 let port = node_info.get_port()?;
                 let node_id: NodeId = node_info.id.as_str().into();
 
-                let connection =
-                    StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
+                // Opened without state, then brought up to the state its siblings
+                // are in: `connect` would need the handler's registry, which this
+                // path does not have.
+                let mut connection =
+                    StandaloneConnection::connect_control(&node_info.ip, port, &self.config)
+                        .await?;
+                connection.restore_from_snapshot(&self.state_snapshot).await;
 
                 for slot_range_info in &shard_info.slots {
                     if let Some(slot_range) = self.get_slot_range_by_slot_mut(slot_range_info.0)
@@ -1511,6 +1629,10 @@ impl ClusterConnection {
 
     /// Keep existing connection, connect new nodes, remove obsolte ones
     /// Rebuild slot_ranges from scratch
+    ///
+    /// Nodes appearing here are restored from [`Self::state_snapshot`]: a refresh runs
+    /// inside `feed` / `read`, which the handler drives without lending its registry,
+    /// so the snapshot is what makes the caller's state reach a joining shard.
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
         debug!("Reloading slot ranges");
 
@@ -1593,8 +1715,13 @@ impl ClusterConnection {
                     // add missing node
                     let port = node_info.get_port()?;
 
-                    let connection =
-                        StandaloneConnection::connect(&node_info.ip, port, &self.config).await?;
+                    // A node joining the topology must reach the state its siblings
+                    // are in before anything is sent on it, or the caller's tracking,
+                    // name and exemptions would silently not apply to its shard.
+                    let mut connection =
+                        StandaloneConnection::connect_control(&node_info.ip, port, &self.config)
+                            .await?;
+                    connection.restore_from_snapshot(&self.state_snapshot).await;
 
                     self.nodes.push(Node {
                         id: node_id,

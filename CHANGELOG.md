@@ -14,6 +14,21 @@ contains breaking changes; read that section before upgrading.
 
 ### BREAKING CHANGES
 
+- **`ClientTrackingOptions::redirect` is removed.** Redirection sends client-side
+  caching invalidations to *another* connection. It exists for RESP2, which cannot
+  deliver an invalidation on a connection that is also answering commands, so the
+  target subscribes to `__redis__:invalidate` and reads them as pub/sub messages.
+
+  rustis always negotiates **RESP3**, where invalidations arrive as push frames on
+  the very connection that enabled tracking — which is what
+  `Client::create_client_tracking_invalidation_stream` and `Cache` consume. Setting
+  a redirection therefore sent them somewhere else and **silently starved both**:
+  they stayed alive, reported no error, and never fired again. It also could not
+  work on a cluster client at all, a client id being a per-node counter.
+
+  If you were relying on it, you were not receiving invalidations. The reasoning is
+  documented on `ClientTrackingOptions`.
+
 - **The `async-std-runtime` and `async-std-native-tls` features are removed.**
   async-std is no longer maintained; its authors point users to `smol`. Tokio is
   now the only supported runtime, and the `async-std` and `async-native-tls`
@@ -390,6 +405,84 @@ contains breaking changes; read that section before upgrading.
   connection's lifetime.
 
 ### Fixed
+
+- **Connection-state commands now reach every node of a cluster instead of one
+  random node.** A cluster client is one connection per node, and this state lives
+  on the connection. Only `CLIENT SETNAME` and `CLIENT SETINFO` declared a routing
+  policy; `AUTH`, `CLIENT TRACKING`, `CLIENT NO-EVICT`, `CLIENT NO-TOUCH` and
+  `RESET` carried none, so each landed on an arbitrary shard and left the others
+  in their previous state.
+
+  The worst consequence was **client-side caching on a cluster client: it served
+  stale values indefinitely.** Tracking armed on one node means the keys held by
+  every other shard are cached and never invalidated, with no error and no log.
+
+  A node that joins the topology later — through a `MOVED`-triggered refresh, or
+  as a replica connected on demand — is now brought up to the same state before
+  anything is sent on it, so a resharding no longer opts a shard out silently.
+
+- **`CLIENT REPLY` now works on a cluster client instead of hanging it.** A cluster
+  connection matches each reply against the sub-request it filed for the node it was
+  sent to, so a silenced node used to leave that sub-request unresolvable and every
+  caller queued behind it waited forever.
+
+  `ON` and `OFF` are sent to every node — the mode has to be the same everywhere —
+  and no in-flight bookkeeping is filed while the nodes are silent. This makes the
+  use cases the Redis documentation names available to cluster clients too:
+  fire-and-forget bursts, mass loading, constantly streamed cache writes.
+
+  `SKIP` silences only the next command, so it is emitted on exactly the nodes that
+  command is routed to — one for a key-routed command, every touched shard for a
+  multi-shard one, all of them for a broadcast one. Previously it reached a single
+  arbitrary node, which shifted the responses of everything that followed.
+
+  `SELECT` and `READONLY` are unchanged and now document why: a cluster has one
+  database, and rustis does not route slot reads to replicas.
+
+- **A reconnection now restores the state the caller had attached to the
+  connection, not only what the config describes.** Redis keeps a good deal of
+  state on the connection itself, and a new socket starts without any of it. The
+  handshake only ever restored `HELLO`, the config credentials, the config
+  connection name and the config database, so a `SELECT`, an `AUTH`, a
+  `CLIENT SETNAME`, a `CLIENT SETINFO`, a `CLIENT NO-EVICT` / `NO-TOUCH`, a
+  `CLIENT TRACKING` issued directly or a `SCRIPT DEBUG` issued at
+  runtime was silently lost the first time the connection blipped. Two of those
+  are silent and damaging: the connection came back reading **database 0** and
+  authenticated as **whoever the config names**, while answering normally.
+
+  Each of these is now replayed as the command the caller actually issued, so
+  option-carrying commands such as `CLIENT TRACKING` come back exactly as they
+  were sent. A replay the server rejects is logged and dropped rather than
+  failing the connection, so one bad `AUTH` cannot turn into a permanently dead
+  client. `READONLY` is deliberately not among them: a cluster reconnection
+  redials every node, so replaying it would grant the whole cluster a capability
+  the send path never grants.
+
+- **`CLIENT REPLY OFF` no longer desynchronizes every response after a
+  reconnection.** The client mirrors the reply mode to know how many responses
+  each command produces, and that mirror did not follow the socket: a
+  reconnection taken while the connection was silent left the client expecting
+  nothing while the server answered everything, shifting every subsequent
+  response by one — permanently.
+
+- **`CLIENT REPLY SKIP` silences one command again, instead of the connection.**
+  It was treated as a sticky `OFF` until an explicit `ON`, so `SKIP` followed by
+  more than one command made the client expect fewer replies than the server
+  sends. `SKIP` before exactly one command — the only case the suite covered —
+  behaved correctly and hid this.
+
+- **`RESET` now clears the client's picture of the connection too.** It was
+  recognised for a single one of its effects (leaving `MONITOR`). The reply mode
+  stayed wrong afterwards, and a later reconnection restored subscriptions the
+  caller had explicitly discarded.
+
+- **A pooled client whose network task has ended is dropped from the pool.**
+  `PooledClientManager::has_broken` returned `false` unconditionally, so a client
+  that could no longer answer anything stayed in circulation and was handed to
+  every subsequent borrower. Note that the pool still does **not** reset
+  connection state between borrows — it hands out a multiplexed client, not a
+  fresh connection; this is now documented on `PooledClientManager`, and callers
+  needing a clean slate should issue `RESET` themselves.
 
 - **Eighty-six option builders that nothing called got a test, and seventeen of
   them were broken.** Counting `*Options` / `*Schema` / `*Attribute` builder

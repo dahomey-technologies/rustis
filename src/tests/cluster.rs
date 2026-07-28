@@ -1,8 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, RedisErrorKind, Result,
-    client::{BatchPreparedCommand, Client, IntoConfig, ReconnectionConfig},
+    client::{BatchPreparedCommand, Client, ClientPreparedCommand, IntoConfig, ReconnectionConfig},
     commands::{
-        ClusterCommands, ClusterNodeResult,
+        ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClusterCommands,
+        ClusterNodeResult,
         ClusterSetSlotSubCommand::{self, Importing, Migrating, Node},
         ClusterShardResult, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
         LegacyClusterNodeResult, LegacyClusterShardResult, MigrateOptions, ScriptingCommands,
@@ -923,4 +924,410 @@ fn legacy_shards_sharing_a_master_are_merged_into_one_shard() {
     assert_eq!("replica", converted[0].nodes[1].role);
     assert_eq!(vec![(201, 300)], converted[1].slots);
     assert_eq!("node-c", converted[1].nodes[0].id);
+}
+
+/// The `flags` field the given node reports for every connection it sees under
+/// `connection_name`, read from a **separate** standalone connection to that node
+/// so the reading is not itself routed by the cluster client under test.
+async fn node_flags_for(port: u16, connection_name: &str) -> Result<Vec<String>> {
+    let host = get_default_host();
+    let observer = Client::connect(format!("{host}:{port}")).await?;
+    let list: String = observer.send(cmd("CLIENT").arg("LIST"), None).await?;
+
+    Ok(list
+        .lines()
+        .filter(|line| line.contains(&format!("name={connection_name} ")))
+        .filter_map(|line| line.split(' ').find_map(|f| f.strip_prefix("flags=")))
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Names the cluster client on every node — `CLIENT SETNAME` declares
+/// `RequestPolicy::AllNodes`, so this is what makes its connections findable in
+/// each node's `CLIENT LIST`.
+async fn name_cluster_client(client: &Client, connection_name: &str) -> Result<()> {
+    client.client_setname(connection_name).await?;
+    Ok(())
+}
+
+const CLUSTER_MASTER_PORTS: [u16; 3] = [7000, 7001, 7002];
+
+async fn reconnecting_cluster_test_client() -> Result<Client> {
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    Client::connect(config).await
+}
+
+/// `CLIENT NO-TOUCH` protects the connection from bumping key idle times. In a
+/// cluster the connection is one socket per node, so the protection is only real
+/// if the command reaches all of them.
+#[tokio::test]
+#[serial]
+async fn cluster_no_touch_reaches_every_node() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    name_cluster_client(&client, "clu_no_touch").await?;
+
+    client.client_no_touch(true).await?;
+
+    for port in CLUSTER_MASTER_PORTS {
+        let flags = node_flags_for(port, "clu_no_touch").await?;
+        assert!(
+            !flags.is_empty(),
+            "node {port} should see the named connection"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('T')),
+            "NO-TOUCH must reach node {port}, flags: {flags:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Same argument for `CLIENT NO-EVICT`: a connection exempted from eviction on
+/// one shard only is not exempted.
+#[tokio::test]
+#[serial]
+async fn cluster_no_evict_reaches_every_node() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    name_cluster_client(&client, "clu_no_evict").await?;
+
+    client.client_no_evict(true).await?;
+
+    for port in CLUSTER_MASTER_PORTS {
+        let flags = node_flags_for(port, "clu_no_evict").await?;
+        assert!(
+            !flags.is_empty(),
+            "node {port} should see the named connection"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('e')),
+            "NO-EVICT must reach node {port}, flags: {flags:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Client-side caching is the sharpest case: keys are spread across shards, so
+/// tracking armed on one node means invalidations never arrive for the keys held
+/// by the others — a silently stale cache, with no signal.
+#[tokio::test]
+#[serial]
+async fn cluster_client_tracking_reaches_every_node() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    name_cluster_client(&client, "clu_tracking").await?;
+
+    client
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
+        .await?;
+
+    for port in CLUSTER_MASTER_PORTS {
+        let flags = node_flags_for(port, "clu_tracking").await?;
+        assert!(
+            !flags.is_empty(),
+            "node {port} should see the named connection"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('t')),
+            "CLIENT TRACKING must reach node {port}, flags: {flags:?}"
+        );
+    }
+
+    client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
+    Ok(())
+}
+
+/// Silencing a cluster connection stalls it: replies are matched against the
+/// sub-request filed for the node they came from, so a command answering nothing
+/// leaves that sub-request unresolvable and every caller behind it waits forever.
+/// `OFF` and `SKIP` must therefore fail immediately instead of hanging, and the
+/// connection must keep working afterwards.
+#[tokio::test]
+#[serial]
+async fn cluster_reply_off_silences_every_node_and_stays_usable() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    let keys = ["clu_reply{a}", "clu_reply{b}", "clu_reply{c}"];
+    client.del(keys).await?;
+
+    // What the mode is for: a burst of writes whose replies nobody reads. The keys
+    // carry different hash tags, so the burst spans shards — a node still answering
+    // would leave a reply nobody accounted for, and shift every response after it.
+    client.client_reply(ClientReplyMode::Off).forget()?;
+    for key in keys {
+        client.set(key, "value").forget()?;
+    }
+    timeout(
+        Duration::from_secs(5),
+        client.client_reply(ClientReplyMode::On).into_future(),
+    )
+    .await??;
+
+    // Every write landed, and each response reaches the caller that asked for it.
+    for key in keys {
+        let value: String =
+            timeout(Duration::from_secs(5), client.get(key).into_future()).await??;
+        assert_eq!(
+            "value", value,
+            "`{key}` must have been written while the connection was silent, and its \
+             response must not be shifted"
+        );
+    }
+
+    client.del(keys).await?;
+    Ok(())
+}
+
+/// A node that joins the topology after the caller set connection state must be
+/// brought up to that state before anything is sent on it. Otherwise its shard
+/// silently opts out: no tracking, so its keys are cached and never invalidated.
+///
+/// The client starts with a topology that ignores the node owning the probe key —
+/// the state a client is in when a node joined, or was learned about, after its own
+/// discovery — then a `MOVED` on that key makes it join.
+#[tokio::test]
+#[serial]
+async fn a_node_joining_the_topology_is_restored_to_the_connection_state() -> Result<()> {
+    let probe = get_cluster_test_client().await?;
+    let shard_info_list: Vec<ClusterShardResult> = probe.cluster_shards().await?;
+    let slot = probe.cluster_keyslot("clu_join_key").await?;
+
+    let masters: Vec<&ClusterNodeResult> = shard_info_list
+        .iter()
+        .filter_map(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .collect();
+
+    // The key's owner and one other node stay visible, so the slot the migration
+    // below moves is routable throughout. The third is hidden: it must not be the
+    // owner, or the client could not reach the key at all.
+    let src_node = shard_info_list
+        .iter()
+        .find(|s| s.slots.iter().any(|s| s.0 <= slot && slot <= s.1))
+        .and_then(|s| s.nodes.iter().find(|n| n.role == "master"))
+        .expect("no master found for the probe key's shard");
+    let others: Vec<&&ClusterNodeResult> = masters.iter().filter(|n| n.id != src_node.id).collect();
+    let dst_node = others.first().expect("a second master is needed");
+    let hidden_node = others.get(1).expect("a third master is needed");
+    let hidden_port = hidden_node.port.expect("the hidden node must have a port");
+
+    let cluster_hook = ClusterTestHook::new();
+    cluster_hook.hide_node_on_initial_discovery(&hidden_node.id);
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    // Set on the nodes the client can currently see; the hidden one gets neither.
+    client.client_setname("clu_joining").await?;
+    client.client_no_touch(true).await?;
+
+    assert!(
+        node_flags_for(hidden_port, "clu_joining").await?.is_empty(),
+        "the hidden node must not be connected yet"
+    );
+
+    // Hand the key's slot to another visible node: the client's next command on it
+    // answers MOVED, which reloads the topology and brings the hidden node in.
+    let src_id = &src_node.id;
+    let dst_id = &dst_node.id;
+    let src_client = Client::connect((src_node.ip.clone(), src_node.port.unwrap())).await?;
+    let dst_client = Client::connect((dst_node.ip.clone(), dst_node.port.unwrap())).await?;
+    migrate_slot(slot, &src_client, src_id, &dst_client, dst_id).await?;
+
+    let set_result = client.set("clu_join_key", "value").await;
+
+    // Restore the topology before asserting: the cluster is shared with every other
+    // test, and an early return here would strand the slot.
+    dst_client.del("clu_join_key").await?;
+    migrate_slot(slot, &dst_client, dst_id, &src_client, src_id).await?;
+    set_result?;
+
+    let flags = node_flags_for(hidden_port, "clu_joining").await?;
+    assert!(
+        !flags.is_empty(),
+        "the node must have joined the topology, and carry the connection name"
+    );
+    assert!(
+        flags.iter().all(|f| f.contains('T')),
+        "a joining node must be restored to the connection state, flags: {flags:?}"
+    );
+
+    Ok(())
+}
+
+/// `CLIENT REPLY SKIP` silences the reply of the next command only, so it is only
+/// correct on the nodes that command reaches. It therefore has no routing policy of
+/// its own and is emitted on exactly those nodes — which has to hold for each shape
+/// the next command can take.
+#[tokio::test]
+#[serial]
+async fn cluster_reply_skip_follows_the_routing_of_the_command_it_silences() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+    let spread = ["clu_skip{a}", "clu_skip{b}", "clu_skip{c}"];
+    client.del(spread).await?;
+    client.del("clu_skip_single").await?;
+
+    // (1) A key-routed command: one node must skip, and only that one.
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    client.set("clu_skip_single", "one").forget()?;
+    let value: String = timeout(
+        Duration::from_secs(5),
+        client.get("clu_skip_single").into_future(),
+    )
+    .await??;
+    assert_eq!(
+        "one", value,
+        "a key-routed command must not shift responses"
+    );
+
+    // (2) A multi-shard command: every shard it touches must skip exactly one reply.
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    client
+        .mset([(spread[0], "a"), (spread[1], "b"), (spread[2], "c")])
+        .forget()?;
+    let values: Vec<String> =
+        timeout(Duration::from_secs(5), client.mget(spread).into_future()).await??;
+    assert_eq!(
+        vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
+        values,
+        "a multi-shard command must not shift responses"
+    );
+
+    // (3) An all-nodes command: every node must skip.
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    client.client_setname("clu_skip_named").forget()?;
+    let name: Option<String> = timeout(
+        Duration::from_secs(5),
+        client.client_getname().into_future(),
+    )
+    .await??;
+    assert_eq!(
+        Some("clu_skip_named".to_owned()),
+        name,
+        "an all-nodes command must not shift responses"
+    );
+
+    client.del(spread).await?;
+    client.del("clu_skip_single").await?;
+    Ok(())
+}
+
+/// A `CLIENT REPLY SKIP` is held until the command it silences is routed. If the
+/// connection dies while it is held, it belongs to a socket that no longer exists:
+/// the caller's command never reached the wire, so nothing was ever silenced.
+///
+/// Should it outlive the reconnection, the node silences the first command sent on
+/// the new socket while the handler — which does reset its own one-shot — still
+/// expects that reply, and every response afterwards is shifted by one.
+#[tokio::test]
+#[serial]
+async fn a_held_reply_skip_does_not_survive_a_reconnection() -> Result<()> {
+    let client = reconnecting_cluster_test_client().await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    // The killer goes first, so the skip is still held — nothing of it on the wire —
+    // when the socket is cut under it.
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+    client.client_reply(ClientReplyMode::Skip).forget()?;
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+
+    timeout(
+        Duration::from_secs(5),
+        client.set("clu_skip_reconnect", "value").into_future(),
+    )
+    .await??;
+    let value: String = timeout(
+        Duration::from_secs(5),
+        client.get("clu_skip_reconnect").into_future(),
+    )
+    .await??;
+    assert_eq!(
+        "value", value,
+        "a skip held when the connection died must not silence the first command \
+         of the new one"
+    );
+
+    client.del("clu_skip_reconnect").await?;
+    Ok(())
+}
+
+/// `READONLY` is deliberately not broadcast: a rustis cluster client routes every
+/// slot-based read to the shard's master, so the capability it advertises does not
+/// exist. A reconnection must not advertise it either — replaying it once per node
+/// would put the whole cluster in a mode the send path refuses to grant.
+#[tokio::test]
+#[serial]
+async fn readonly_is_not_broadcast_by_a_reconnection() -> Result<()> {
+    let client = reconnecting_cluster_test_client().await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    name_cluster_client(&client, "clu_readonly").await?;
+    client.readonly().await?;
+
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+
+    for port in CLUSTER_MASTER_PORTS {
+        let flags = node_flags_for(port, "clu_readonly").await?;
+        assert!(
+            flags.iter().all(|f| !f.contains('r')),
+            "node {port} must not have been put in readonly mode by the reconnection, \
+             flags: {flags:?}"
+        );
+    }
+
+    client.readwrite().await?;
+    Ok(())
+}
+
+/// A cluster reconnection redials every node, so the connection state has to be
+/// replayed once per node — not once. A node left behind opts its whole shard out
+/// of whatever the caller asked for, silently.
+#[tokio::test]
+#[serial]
+async fn cluster_connection_state_is_restored_on_every_node_after_reconnect() -> Result<()> {
+    let client = reconnecting_cluster_test_client().await?;
+    let mut on_reconnect = client.on_reconnect();
+
+    name_cluster_client(&client, "clu_restore").await?;
+    client.client_no_touch(true).await?;
+    client
+        .client_tracking(ClientTrackingStatus::On, ClientTrackingOptions::default())
+        .await?;
+
+    client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
+    on_reconnect
+        .recv()
+        .await
+        .expect("the client should have reconnected");
+
+    for port in CLUSTER_MASTER_PORTS {
+        let flags = node_flags_for(port, "clu_restore").await?;
+        assert!(
+            !flags.is_empty(),
+            "node {port} must see the connection under its name again after a reconnection"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('T')),
+            "NO-TOUCH must be restored on node {port}, flags: {flags:?}"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('t')),
+            "CLIENT TRACKING must be restored on node {port}, flags: {flags:?}"
+        );
+    }
+
+    Ok(())
 }

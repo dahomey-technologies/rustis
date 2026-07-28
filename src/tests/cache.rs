@@ -3,12 +3,12 @@ use crate::{
     cache::Cache,
     client::Client,
     commands::{
-        ClientTrackingOptions, ClientTrackingStatus, ConnectionCommands, FlushingMode,
-        HashCommands, ServerCommands, StringCommands,
+        ClientTrackingOptions, ClientTrackingStatus, ClusterCommands, ConnectionCommands,
+        FlushingMode, HashCommands, ServerCommands, StringCommands,
     },
     network::sleep,
     resp::cmd,
-    tests::log_try_init,
+    tests::{get_cluster_test_client, log_try_init},
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -225,6 +225,55 @@ async fn cache_survives_reconnection() -> Result<()> {
         cache.get::<String>("key").await?,
         "invalidations must still be delivered after a reconnection"
     );
+
+    Ok(())
+}
+
+/// Tracking is per-connection and each node only invalidates the keys it holds,
+/// so a cluster cache is only correct if tracking reached every node. Keys are
+/// picked to land on more than one shard: `key1` hashes into the middle range,
+/// `key2` and `key3` into the first.
+#[tokio::test]
+#[serial]
+async fn cluster_cache_is_invalidated_for_keys_on_every_shard() -> Result<()> {
+    log_try_init();
+    let cached_client = get_cluster_test_client().await?;
+    let writer = get_cluster_test_client().await?;
+
+    writer.flushall(FlushingMode::Sync).await?;
+    for key in ["key1", "key2", "key3"] {
+        writer.set(key, "before").await?;
+    }
+
+    // The keys must not all live on the same shard, otherwise the test would pass
+    // with tracking armed on a single node.
+    let mut slots = Vec::new();
+    for key in ["key1", "key2", "key3"] {
+        slots.push(writer.cluster_keyslot(key).await?);
+    }
+    assert!(
+        slots.iter().any(|s| *s > 5460),
+        "the probe keys must span more than one shard, slots: {slots:?}"
+    );
+
+    let cache = Cache::new(cached_client.clone(), 60, ClientTrackingOptions::default()).await?;
+
+    for key in ["key1", "key2", "key3"] {
+        assert_eq!("before", cache.get::<String>(key).await?);
+    }
+
+    for key in ["key1", "key2", "key3"] {
+        writer.set(key, "after").await?;
+    }
+    sleep(Duration::from_millis(200)).await;
+
+    for key in ["key1", "key2", "key3"] {
+        assert_eq!(
+            "after",
+            cache.get::<String>(key).await?,
+            "the cache must be invalidated for `{key}`, whichever shard holds it"
+        );
+    }
 
     Ok(())
 }

@@ -1,9 +1,10 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
-    ClientError, Connection, Error, JoinHandle, ReconnectionState, Result, RetryReason,
+    ClientError, Connection, ConnectionState, Error, JoinHandle, ReconnectionState, Result,
+    RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
-    resp::{ClientReplyMode, CommandKind, RespResponse, SubscriptionType, cmd},
+    resp::{ClientReplyMode, CommandKind, RespResponse, StateSlot, SubscriptionType, cmd},
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -217,6 +218,13 @@ pub(crate) struct NetworkHandler {
     pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
     is_reply_on: bool,
+    /// `CLIENT REPLY SKIP` silences the reply of the command that follows it, and
+    /// only that one — unlike `OFF`, which silences the connection until `ON`.
+    skip_next_reply: bool,
+    /// Connection-attached state to replay when the socket is remade. Owned here
+    /// and lent as `&mut` to whichever connection is being built: the network task
+    /// is its only user, so no `Arc` and no lock are involved.
+    connection_state: ConnectionState,
     /// Sink for client-side-caching invalidation pushes, active while the
     /// connection is in `Status::Connected`. Kept separate from `monitor_sender`
     /// so registering one push consumer cannot silently overwrite the other's
@@ -258,7 +266,12 @@ impl NetworkHandler {
         #[cfg(test)]
         let send_batch_test_hook = config.send_batch_test_hook.clone();
 
-        let connection = Connection::connect(config).await?;
+        // One registry per client: two clients built from the same `Config` must
+        // not share the state either of them sets at runtime, which is exactly
+        // why this is lent to the connection rather than carried by the config.
+        let mut connection_state = ConnectionState::default();
+
+        let connection = Connection::connect(config, &mut connection_state).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) =
             tokio::sync::mpsc::unbounded_channel();
         let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
@@ -275,6 +288,8 @@ impl NetworkHandler {
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
             is_reply_on: true,
+            skip_next_reply: false,
+            connection_state,
             invalidation_sender: None,
             monitor_sender: None,
             reconnect_sender: reconnect_sender.clone(),
@@ -516,15 +531,67 @@ impl NetworkHandler {
             // flush (see `CommandEncoder::encode`) already caps the buffer, so there
             // is nothing to amortize. Keep the per-command loop.
             for command in msg.commands_mut() {
-                match command.kind() {
-                    CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,
-                    CommandKind::ClientReply(ClientReplyMode::Off | ClientReplyMode::Skip) => {
-                        self.is_reply_on = false
+                let kind = *command.kind();
+
+                match kind {
+                    CommandKind::ClientReply(ClientReplyMode::On) => {
+                        self.is_reply_on = true;
+                        self.skip_next_reply = false;
+                        self.connection_state.record(StateSlot::ReplyMode, command);
+                    }
+                    CommandKind::ClientReply(ClientReplyMode::Off) => {
+                        self.is_reply_on = false;
+                        self.skip_next_reply = false;
+                        self.connection_state.record(StateSlot::ReplyMode, command);
+                    }
+                    // `SKIP` is not connection state: it is consumed by the next
+                    // command and leaves the connection as it found it.
+                    CommandKind::ClientReply(ClientReplyMode::Skip) => {
+                        self.skip_next_reply = true;
+                    }
+                    CommandKind::ConnectionState(slot) => {
+                        self.connection_state.record(slot, command);
+                    }
+                    // The server restores every connection default here, so the
+                    // client's picture of the connection must go with it —
+                    // including the reply mode, which `RESET` itself answers
+                    // through.
+                    CommandKind::Reset => {
+                        self.connection_state.clear();
+                        self.is_reply_on = true;
+                        self.skip_next_reply = false;
+                        self.subscriptions.clear();
                     }
                     _ => (),
                 }
 
-                if self.is_reply_on {
+                // The registry just changed, so the copy a cluster connection
+                // replays onto a joining node has to change with it. This is the
+                // only place connection state is recorded, which makes it the only
+                // sync point needed.
+                if matches!(
+                    kind,
+                    CommandKind::ConnectionState(_)
+                        | CommandKind::ClientReply(_)
+                        | CommandKind::Reset
+                ) {
+                    self.connection
+                        .sync_connection_state(&self.connection_state);
+                }
+
+                let expects_reply = if !self.is_reply_on {
+                    false
+                } else if matches!(kind, CommandKind::ClientReply(ClientReplyMode::Skip)) {
+                    // `CLIENT REPLY SKIP` is not answered either.
+                    false
+                } else if self.skip_next_reply {
+                    self.skip_next_reply = false;
+                    false
+                } else {
+                    true
+                };
+
+                if expects_reply {
                     num_commands_to_receive += 1;
                 }
 
@@ -969,6 +1036,9 @@ impl NetworkHandler {
         // keeping the count would discard legitimate responses afterwards.
         self.results_to_discard = 0;
 
+        // A `SKIP` waiting for the command it silences died with the connection too.
+        self.skip_next_reply = false;
+
         // Purge every non-retryable message, wherever it sits in the queue,
         // and keep the retryable ones in order. A prefix-only purge would leave
         // a non-retryable message behind a retryable one, and it would then be
@@ -1055,10 +1125,15 @@ impl NetworkHandler {
                 return false;
             }
 
-            if let Err(e) = self.connection.reconnect().await {
+            if let Err(e) = self.connection.reconnect(&mut self.connection_state).await {
                 error!("Failed to reconnect: {e:?}");
                 continue;
             }
+
+            // The new connection was restored from the same registry, so the
+            // mirror the send loop uses has to be derived from it rather than
+            // left at whatever the dead connection ended on.
+            self.is_reply_on = self.connection_state.is_reply_on();
 
             if self.auto_resubscribe
                 && let Err(e) = self.auto_resubscribe().await

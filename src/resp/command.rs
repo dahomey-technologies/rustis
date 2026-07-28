@@ -47,11 +47,60 @@ pub(crate) enum ClientReplyMode {
     Skip,
 }
 
+/// One piece of state that lives in the connection rather than in the server, and
+/// that a new socket therefore starts without.
+///
+/// The declaration order is the order in which the slots are replayed after a
+/// reconnection: `Auth` first, because every following command runs as the
+/// identity it establishes, then `Select`, which decides the keyspace.
+///
+/// `READONLY` / `READWRITE` is deliberately absent. It only means anything on a
+/// cluster, where the replay runs once per node — so a slot for it would broadcast
+/// a capability the send path refuses to broadcast, since slot-based reads always
+/// go to the shard's master. On a standalone server the command is refused outright.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StateSlot {
+    Auth,
+    Select,
+    Name,
+    LibName,
+    LibVer,
+    NoEvict,
+    NoTouch,
+    Tracking,
+    ScriptDebug,
+    /// `CLIENT REPLY ON` / `OFF`. `SKIP` is not a slot: it applies to one
+    /// command, not to the connection.
+    ReplyMode,
+}
+
+impl StateSlot {
+    pub(crate) const ALL: [StateSlot; 10] = [
+        StateSlot::Auth,
+        StateSlot::Select,
+        StateSlot::Name,
+        StateSlot::LibName,
+        StateSlot::LibVer,
+        StateSlot::NoEvict,
+        StateSlot::NoTouch,
+        StateSlot::Tracking,
+        StateSlot::ScriptDebug,
+        StateSlot::ReplyMode,
+    ];
+
+    pub(crate) fn index(self) -> usize {
+        self as usize
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandKind {
     Other,
     Unsbuscribe(SubscriptionType),
     ClientReply(ClientReplyMode),
+    /// A command whose effect is attached to the connection, and which must
+    /// therefore be replayed when the connection is remade.
+    ConnectionState(StateSlot),
     Reset,
 }
 
@@ -146,8 +195,23 @@ impl<'a> From<&'a Command> for CommandKind {
                 (Some(b"REPLY"), Some(b"ON")) => CommandKind::ClientReply(ClientReplyMode::On),
                 (Some(b"REPLY"), Some(b"OFF")) => CommandKind::ClientReply(ClientReplyMode::Off),
                 (Some(b"REPLY"), Some(b"SKIP")) => CommandKind::ClientReply(ClientReplyMode::Skip),
+                (Some(b"SETNAME"), _) => CommandKind::ConnectionState(StateSlot::Name),
+                (Some(b"SETINFO"), Some(b"LIB-NAME")) => {
+                    CommandKind::ConnectionState(StateSlot::LibName)
+                }
+                (Some(b"SETINFO"), Some(b"LIB-VER")) => {
+                    CommandKind::ConnectionState(StateSlot::LibVer)
+                }
+                (Some(b"NO-EVICT"), _) => CommandKind::ConnectionState(StateSlot::NoEvict),
+                (Some(b"NO-TOUCH"), _) => CommandKind::ConnectionState(StateSlot::NoTouch),
+                (Some(b"TRACKING"), _) => CommandKind::ConnectionState(StateSlot::Tracking),
                 _ => CommandKind::Other,
             },
+            b"AUTH" => CommandKind::ConnectionState(StateSlot::Auth),
+            b"SELECT" => CommandKind::ConnectionState(StateSlot::Select),
+            b"SCRIPT" if command.get_arg(0).as_deref() == Some(b"DEBUG") => {
+                CommandKind::ConnectionState(StateSlot::ScriptDebug)
+            }
             b"RESET" => CommandKind::Reset,
             _ => CommandKind::Other,
         }

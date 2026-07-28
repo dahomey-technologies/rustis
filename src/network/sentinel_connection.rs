@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result, RetryReason, StandaloneConnection,
+    ConnectionState, Error, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
     resp::{Command, RespResponse},
@@ -36,9 +36,10 @@ impl SentinelConnection {
     }
 
     #[inline]
-    pub async fn reconnect(&mut self) -> Result<()> {
+    pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         self.inner_connection =
-            Self::connect_to_sentinel(&self.sentinel_config, &self.config).await?;
+            Self::connect_to_sentinel(&self.sentinel_config, &self.config, connection_state)
+                .await?;
 
         Ok(())
     }
@@ -49,11 +50,13 @@ impl SentinelConnection {
     /// # Remark
     /// this function must be desugared because of async recursion:
     /// <https://doc.rust-lang.org/error-index.html#E0733>
-    pub async fn connect(
+    pub(crate) async fn connect(
         sentinel_config: &SentinelConfig,
         config: &Config,
+        connection_state: &mut ConnectionState,
     ) -> Result<SentinelConnection> {
-        let inner_connection = Self::connect_to_sentinel(sentinel_config, config).await?;
+        let inner_connection =
+            Self::connect_to_sentinel(sentinel_config, config, connection_state).await?;
 
         Ok(SentinelConnection {
             sentinel_config: sentinel_config.clone(),
@@ -65,6 +68,7 @@ impl SentinelConnection {
     async fn connect_to_sentinel(
         sentinel_config: &SentinelConfig,
         config: &Config,
+        connection_state: &mut ConnectionState,
     ) -> Result<StandaloneConnection> {
         let mut restart = false;
         let mut unreachable_sentinel = true;
@@ -97,8 +101,13 @@ impl SentinelConnection {
                 // Step 1: connecting to Sentinel
                 let (host, port) = sentinel_instance;
 
+                // A probe to a Sentinel is a control connection, not the caller's:
+                // it must not replay their database, name or tracking mode onto a
+                // node they never addressed.
                 let mut sentinel_connection =
-                    match StandaloneConnection::connect(host, *port, &sentinel_node_config).await {
+                    match StandaloneConnection::connect_control(host, *port, &sentinel_node_config)
+                        .await
+                    {
                         Ok(sentinel_connection) => sentinel_connection,
                         Err(e) => {
                             debug!("Cannot connect to Sentinel {}:{} : {}", *host, *port, e);
@@ -137,15 +146,21 @@ impl SentinelConnection {
                 // unreachable announced master is exactly the failover scenario
                 // Sentinel exists for, so fall through to the next Sentinel — which
                 // may know the newly promoted master — instead of aborting.
-                let mut master_connection =
-                    match StandaloneConnection::connect(&master_host, master_port, config).await {
-                        Ok(connection) => connection,
-                        Err(e) => {
-                            debug!("Cannot connect to master {master_host}:{master_port}: {e}");
-                            master_unreachable = true;
-                            continue;
-                        }
-                    };
+                let mut master_connection = match StandaloneConnection::connect(
+                    &master_host,
+                    master_port,
+                    config,
+                    connection_state,
+                )
+                .await
+                {
+                    Ok(connection) => connection,
+                    Err(e) => {
+                        debug!("Cannot connect to master {master_host}:{master_port}: {e}");
+                        master_unreachable = true;
+                        continue;
+                    }
+                };
 
                 let role: RoleResult = match master_connection.role().await {
                     Ok(role) => role,

@@ -1,30 +1,33 @@
 use crate::{
     Error, Result,
+    client::Client,
     commands::{ConnectionCommands, DebugCommands},
     sleep,
     tests::get_test_client,
 };
 use serial_test::serial;
-use std::time::Duration;
+use std::{future::Future, time::Duration};
+
+/// What a test body concluded; `Err` carries the message it fails with.
+type Verdict = std::result::Result<(), String>;
 
 /// A server that dies mid-command must surface an error to the caller instead
 /// of leaving it waiting for a reply that will never come.
 #[tokio::test]
 #[serial]
 async fn standalone_server_panic() -> Result<()> {
-    let client = get_test_client().await?;
+    with_server_restart("DEBUG PANIC", async |client| {
+        if client.debug_panic().await.is_ok() {
+            return Err("the server acknowledged instead of dying".to_owned());
+        }
 
-    let panic_result = client.debug_panic().await;
+        if client.ping::<()>(()).await.is_ok() {
+            return Err("the dead server answered a ping".to_owned());
+        }
 
-    assert!(panic_result.is_err());
-
-    let ping_result = client.ping::<()>(()).await;
-
-    assert!(ping_result.is_err());
-
-    wait_for_standalone_server_restart().await?;
-
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// `DEBUG OOM` and `DEBUG ASSERT` are the two other ways of killing the server
@@ -33,25 +36,19 @@ async fn standalone_server_panic() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn standalone_server_oom() -> Result<()> {
-    let client = get_test_client().await?;
-
-    assert_died(client.debug_oom().await);
-
-    wait_for_standalone_server_restart().await?;
-
-    Ok(())
+    with_server_restart("DEBUG OOM", async |client| {
+        check_died(client.debug_oom().await)
+    })
+    .await
 }
 
 #[tokio::test]
 #[serial]
 async fn standalone_server_assert() -> Result<()> {
-    let client = get_test_client().await?;
-
-    assert_died(client.debug_assert().await);
-
-    wait_for_standalone_server_restart().await?;
-
-    Ok(())
+    with_server_restart("DEBUG ASSERT", async |client| {
+        check_died(client.debug_assert().await)
+    })
+    .await
 }
 
 /// `DEBUG RESTART [<milliseconds>]` and `DEBUG CRASH-AND-RECOVER
@@ -60,44 +57,64 @@ async fn standalone_server_assert() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn standalone_server_restart() -> Result<()> {
-    let client = get_test_client().await?;
-    assert_died(client.debug_restart(None).await);
-    wait_for_standalone_server_restart().await?;
+    with_server_restart("DEBUG RESTART", async |client| {
+        check_died(client.debug_restart(None).await)
+    })
+    .await?;
 
-    let client = get_test_client().await?;
-    assert_died(client.debug_restart(Some(Duration::from_millis(100))).await);
-    wait_for_standalone_server_restart().await?;
-
-    Ok(())
+    with_server_restart("DEBUG RESTART 100", async |client| {
+        check_died(client.debug_restart(Some(Duration::from_millis(100))).await)
+    })
+    .await
 }
 
 #[tokio::test]
 #[serial]
 async fn standalone_server_crash_and_recover() -> Result<()> {
-    let client = get_test_client().await?;
-    assert_died(client.debug_crash_and_recover(None).await);
-    wait_for_standalone_server_restart().await?;
+    with_server_restart("DEBUG CRASH-AND-RECOVER", async |client| {
+        check_died(client.debug_crash_and_recover(None).await)
+    })
+    .await?;
 
-    let client = get_test_client().await?;
-    assert_died(
-        client
-            .debug_crash_and_recover(Some(Duration::from_millis(100)))
-            .await,
-    );
-    wait_for_standalone_server_restart().await?;
-
-    Ok(())
+    with_server_restart("DEBUG CRASH-AND-RECOVER 100", async |client| {
+        check_died(
+            client
+                .debug_crash_and_recover(Some(Duration::from_millis(100)))
+                .await,
+        )
+    })
+    .await
 }
 
 /// A command meant to take the server down succeeds by never answering. An
 /// `Error::Redis` would mean the opposite: the server stayed up long enough to
 /// reject what it was sent, which is how a wrong subcommand or a mis-encoded
 /// argument shows up here.
-fn assert_died(result: Result<()>) {
+fn check_died(result: Result<()>) -> Verdict {
     match result {
-        Err(Error::Redis(e)) => panic!("the server answered instead of dying: {e}"),
-        Err(_) => (),
-        Ok(()) => panic!("the server acknowledged instead of dying"),
+        Err(Error::Redis(e)) => Err(format!("the server answered instead of dying: {e}")),
+        Err(_) => Ok(()),
+        Ok(()) => Err("the server acknowledged instead of dying".to_owned()),
+    }
+}
+
+/// The body kills the test server, so its verdict is reported only once the
+/// server answers again: failing earlier would leave the rest of the suite
+/// running against a server that is gone.
+async fn with_server_restart<F, Fut>(what: &str, body: F) -> Result<()>
+where
+    F: FnOnce(Client) -> Fut,
+    Fut: Future<Output = Verdict>,
+{
+    let client = get_test_client().await?;
+
+    let outcome = body(client).await;
+
+    wait_for_standalone_server_restart(what).await;
+
+    match outcome {
+        Ok(()) => Ok(()),
+        Err(message) => panic!("{message}"),
     }
 }
 
@@ -105,7 +122,7 @@ fn assert_died(result: Result<()>) {
 /// subcommands re-execute the server in place. Either way, give it back to the
 /// rest of the suite only once it answers again, so the next test does not run
 /// against a server that is still coming up.
-async fn wait_for_standalone_server_restart() -> Result<()> {
+async fn wait_for_standalone_server_restart(what: &str) {
     for _ in 0..100 {
         sleep(Duration::from_millis(200)).await;
 
@@ -114,9 +131,9 @@ async fn wait_for_standalone_server_restart() -> Result<()> {
         };
 
         if client.ping::<()>(()).await.is_ok() {
-            return Ok(());
+            return;
         }
     }
 
-    panic!("the test server did not come back up");
+    panic!("the test server did not come back up after {what}");
 }

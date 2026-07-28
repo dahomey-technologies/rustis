@@ -811,3 +811,103 @@ async fn json_type() -> Result<()> {
 
     Ok(())
 }
+
+/// `JSON.GET key [INDENT indent] [NEWLINE newline] [SPACE space] [path ...]`.
+/// The three formatting options are the server's own pretty-printer: INDENT per
+/// nesting level, NEWLINE at each line end, SPACE between a key and its value.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn json_get_formatting() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .json_set("key", "$", r#"{"a":1,"b":2}"#, None)
+        .await?;
+
+    let json: String = client
+        .json_get(
+            "key",
+            JsonGetOptions::default()
+                .indent("--")
+                .newline("|")
+                .space("_")
+                .path("$.a"),
+        )
+        .await?;
+    assert_eq!("[|--1|]", json);
+
+    // Each option is independently visible: dropping NEWLINE drops the line
+    // breaks but keeps nothing else.
+    let json: String = client
+        .json_get(
+            "key",
+            JsonGetOptions::default().indent("--").space("_").path("$"),
+        )
+        .await?;
+    assert_eq!(r#"[--{----"a":_1,----"b":_2--}]"#, json);
+
+    Ok(())
+}
+
+/// `JSON.ARRINDEX key path value [start [stop]]`. start and stop are positional
+/// and slice the searched range; stop is exclusive except that 0 means "to the
+/// end".
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn json_arrindex_stop() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .json_set("key", "$", r#"{"b":[1,2,3,4,5]}"#, None)
+        .await?;
+
+    // 4 sits at index 3, inside [0, 4).
+    let result: Vec<Option<isize>> = client
+        .json_arrindex(
+            "key",
+            "$.b",
+            "4",
+            JsonArrIndexOptions::default().start(0).stop(4),
+        )
+        .await?;
+    assert_eq!(vec![Some(3)], result);
+
+    // Outside [0, 3) it is not found.
+    let result: Vec<Option<isize>> = client
+        .json_arrindex(
+            "key",
+            "$.b",
+            "4",
+            JsonArrIndexOptions::default().start(0).stop(3),
+        )
+        .await?;
+    assert_eq!(vec![Some(-1)], result);
+
+    // A negative stop counts from the end and stays exclusive, so -1 drops the
+    // last element; stop 0 is the one value that means "to the end".
+    let result: Vec<Option<isize>> = client
+        .json_arrindex(
+            "key",
+            "$.b",
+            "5",
+            JsonArrIndexOptions::default().start(0).stop(-1),
+        )
+        .await?;
+    assert_eq!(vec![Some(-1)], result);
+
+    let result: Vec<Option<isize>> = client
+        .json_arrindex(
+            "key",
+            "$.b",
+            "5",
+            JsonArrIndexOptions::default().start(0).stop(0),
+        )
+        .await?;
+    assert_eq!(vec![Some(4)], result);
+
+    Ok(())
+}

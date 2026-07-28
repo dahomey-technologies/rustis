@@ -306,8 +306,9 @@ pub struct BfInfoResult {
     pub num_filters: usize,
     #[serde(rename = "Number of items inserted")]
     pub num_items_inserted: usize,
+    /// `None` for a non-scaling filter, which has no expansion rate to report.
     #[serde(rename = "Expansion rate")]
-    pub expansion_rate: usize,
+    pub expansion_rate: Option<usize>,
 }
 
 /// Options for the [`bf_insert`](BloomCommands::bf_insert) command.

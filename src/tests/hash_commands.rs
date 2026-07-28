@@ -633,6 +633,29 @@ async fn hscan() -> Result<()> {
     Ok(())
 }
 
+/// `HSCAN key cursor [MATCH pattern] [COUNT count] [NOVALUES]`. With NOVALUES the
+/// server answers the field names alone, not field/value pairs.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hscan_no_values() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.del("key").await?;
+    client
+        .hset("key", [("field1", "value1"), ("field2", "value2")])
+        .await?;
+
+    let (cursor, fields): (u64, Vec<String>) = client
+        .hscan_no_values("key", 0, HScanOptions::default().count(20))
+        .await?;
+
+    assert_eq!(0, cursor);
+    assert_eq!(vec!["field1".to_owned(), "field2".to_owned()], fields);
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
 #[serial]

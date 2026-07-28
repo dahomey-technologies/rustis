@@ -670,8 +670,13 @@ impl<'de> Deserialize<'de> for ClientListResult {
         D: Deserializer<'de>,
     {
         let lines = <&str>::deserialize(deserializer)?;
-        let client_infos: Result<Vec<ClientInfo>> =
-            lines.split('\n').map(ClientInfo::from_line).collect();
+        // The reply is newline-terminated, so the split yields a trailing empty
+        // line that carries no client.
+        let client_infos: Result<Vec<ClientInfo>> = lines
+            .split('\n')
+            .filter(|line| !line.trim().is_empty())
+            .map(ClientInfo::from_line)
+            .collect();
 
         Ok(Self {
             client_infos: client_infos.map_err(de::Error::custom)?,
@@ -694,12 +699,12 @@ pub struct ClientKillOptions<'a> {
     id: Option<i64>,
     #[serde(rename = "TYPE", skip_serializing_if = "Option::is_none")]
     client_type: Option<ClientType>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "USER", skip_serializing_if = "Option::is_none")]
     username: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    addr: Option<(&'a str, u16)>,
+    addr: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    laddr: Option<(&'a str, u16)>,
+    laddr: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     skipme: Option<YesNo>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -731,14 +736,14 @@ impl<'a> ClientKillOptions<'a> {
     /// [`client_list`](ConnectionCommands::client_list) command (addr field).
     #[must_use]
     pub fn addr(mut self, ip: &'a str, port: u16) -> Self {
-        self.addr = Some((ip, port));
+        self.addr = Some(format!("{ip}:{port}"));
         self
     }
 
     /// Kill all clients connected to specified local (bind) address.
     #[must_use]
     pub fn laddr(mut self, ip: &'a str, port: u16) -> Self {
-        self.laddr = Some((ip, port));
+        self.laddr = Some(format!("{ip}:{port}"));
         self
     }
 

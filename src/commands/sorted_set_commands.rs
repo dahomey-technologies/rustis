@@ -809,6 +809,7 @@ pub struct ZAddOptions {
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     comparison: Option<ZAddComparison>,
     #[serde(
+        rename = "CH",
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
     )]

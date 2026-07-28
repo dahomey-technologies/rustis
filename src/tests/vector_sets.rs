@@ -602,3 +602,43 @@ async fn vrange() -> Result<()> {
 
     Ok(())
 }
+
+/// `VSIM key (ELE|FP32|VALUES) ... [WITHSCORES] [WITHATTRIBS] [COUNT num]
+/// [EPSILON delta] [EF factor] [FILTER expr] [FILTER-EF max] [TRUTH] [NOTHREAD]`.
+/// TRUTH forces an exact linear scan and NOTHREAD keeps it on the main thread, so
+/// both must return the same neighbours as the default approximate search.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn vsim_truth_and_no_thread() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    for element in ["apple", "apples", "pear"] {
+        client
+            .vadd(
+                "key",
+                None,
+                &[0.1, 1.2, 0.5],
+                element,
+                VAddOptions::default(),
+            )
+            .await?;
+    }
+
+    let result: Vec<String> = client
+        .vsim(
+            "key",
+            VectorOrElement::Element("apple"),
+            VSimOptions::default().truth().no_thread(),
+        )
+        .await?;
+
+    assert_eq!(3, result.len());
+    assert!(result.contains(&"apple".to_owned()));
+    assert!(result.contains(&"apples".to_owned()));
+    assert!(result.contains(&"pear".to_owned()));
+
+    Ok(())
+}

@@ -3,7 +3,7 @@ use crate::{
     client::{BatchPreparedCommand, Client, ClientPreparedCommand},
     commands::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
-        ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus,
+        ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClientType,
         ClientUnblockMode, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
         ServerCommands, StringCommands,
     },
@@ -114,6 +114,112 @@ async fn client_kill() -> Result<()> {
     client2
         .client_kill(ClientKillOptions::default().id(client_id))
         .await?;
+
+    Ok(())
+}
+
+/// Every filter of `CLIENT KILL <option> <value> [...]` as `CLIENT HELP` prints
+/// it: ADDR, LADDR, TYPE, USER, SKIPME, ID, MAXAGE. Each filter is paired with an
+/// address that matches no connection, so the server parses the whole clause but
+/// kills nothing.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_kill_options() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let unmatched = || ClientKillOptions::default().addr("1.2.3.4", 1);
+
+    assert_eq!(0, client.client_kill(unmatched()).await?);
+    assert_eq!(
+        0,
+        client.client_kill(unmatched().laddr("1.2.3.4", 1)).await?
+    );
+    assert_eq!(
+        0,
+        client
+            .client_kill(unmatched().client_type(ClientType::PubSub))
+            .await?
+    );
+    assert_eq!(0, client.client_kill(unmatched().user("default")).await?);
+    assert_eq!(0, client.client_kill(unmatched().skip_me(false)).await?);
+    assert_eq!(0, client.client_kill(unmatched().skip_me(true)).await?);
+    assert_eq!(0, client.client_kill(unmatched().max_age(100_000)).await?);
+    assert_eq!(0, client.client_kill(unmatched().id(999_999_999)).await?);
+
+    Ok(())
+}
+
+/// `CLIENT LIST [TYPE normal|master|replica|pubsub] [ID client-id [client-id ...]]`.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_list_options() -> Result<()> {
+    let client1 = get_test_client().await?;
+    let client2 = get_test_client().await?;
+
+    let id1 = client1.client_id().await?;
+    let id2 = client2.client_id().await?;
+
+    let result = client1
+        .client_list(ClientListOptions::default().client_type(ClientType::Normal))
+        .await?;
+    let ids: Vec<i64> = result.client_infos.iter().map(|info| info.id).collect();
+    assert!(ids.contains(&id1));
+    assert!(ids.contains(&id2));
+
+    let result = client1
+        .client_list(ClientListOptions::default().client_ids([id1, id2]))
+        .await?;
+    let mut ids: Vec<i64> = result.client_infos.iter().map(|info| info.id).collect();
+    ids.sort_unstable();
+    let mut expected = vec![id1, id2];
+    expected.sort_unstable();
+    assert_eq!(expected, ids);
+
+    Ok(())
+}
+
+/// `CLIENT TRACKING ON [OPTOUT] [NOLOOP]`, read back through `CLIENT TRACKINGINFO`
+/// whose `flags` field is the server's own name for each mode.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn client_tracking_optout_and_noloop() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client
+        .client_tracking(
+            ClientTrackingStatus::On,
+            ClientTrackingOptions::default().optout().noloop(),
+        )
+        .await?;
+
+    let tracking_info = client.client_trackinginfo().await?;
+    assert!(tracking_info.flags.contains(&"on".to_owned()));
+    assert!(tracking_info.flags.contains(&"optout".to_owned()));
+    assert!(tracking_info.flags.contains(&"noloop".to_owned()));
+
+    client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
+
+    Ok(())
+}
+
+/// `HELLO [protover [AUTH username password] [SETNAME clientname]]`.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn hello_set_name() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client
+        .hello(HelloOptions::new(3).set_name("hello_name"))
+        .await?;
+
+    let name: String = client.client_getname().await?;
+    assert_eq!("hello_name", name);
 
     Ok(())
 }

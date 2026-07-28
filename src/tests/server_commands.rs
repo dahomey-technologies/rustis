@@ -6,8 +6,8 @@ use crate::{
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
         CommandListOptions, ConnectionCommands, DebugCommands, FailOverOptions, FlushingMode,
         HotKeysInfo, HotKeysMetric, HotKeysStartOptions, InfoSection, LatencyHistoryEvent,
-        MemoryUsageOptions, ModuleInfo, ModuleLoadexOptions, ReplicaOfOptions, RoleResult,
-        ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
+        LolWutOptions, MemoryUsageOptions, ModuleInfo, ModuleLoadexOptions, ReplicaOfOptions,
+        RoleResult, ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
     },
     resp::Value,
     spawn,
@@ -1425,4 +1425,87 @@ fn shutdown_command() {
         .shutdown(ShutdownOptions::default().save(true))
         .command;
     assert_eq!("SHUTDOWN SAVE", cmd.to_string());
+}
+
+/// `COMMAND LIST FILTERBY MODULE module-name`. The test server loads the search,
+/// json, timeseries and bloom modules, so filtering by one of them returns that
+/// module's commands and nothing from the core.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn command_list_filter_by_module_name() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let module_commands: Vec<String> = client
+        .command_list(CommandListOptions::default().filter_by_module_name("timeseries"))
+        .await?;
+    assert!(!module_commands.is_empty());
+    assert!(
+        module_commands
+            .iter()
+            .all(|name| name.starts_with("ts.") || name.starts_with("timeseries."))
+    );
+    assert!(module_commands.contains(&"ts.add".to_owned()));
+
+    let module_commands: Vec<String> = client
+        .command_list(CommandListOptions::default().filter_by_module_name("nosuchmodule"))
+        .await?;
+    assert!(module_commands.is_empty());
+
+    Ok(())
+}
+
+/// `LOLWUT [VERSION version]` plus the version's own trailing arguments, which
+/// for version 5 are the canvas width and height.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn lolwut_version_and_optional_args() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let small = client
+        .lolwut(
+            LolWutOptions::default()
+                .version(5)
+                .optional_arg(5)
+                .optional_arg(5),
+        )
+        .await?;
+    let large = client
+        .lolwut(
+            LolWutOptions::default()
+                .version(5)
+                .optional_arg(30)
+                .optional_arg(30),
+        )
+        .await?;
+
+    assert!(!small.is_empty());
+    assert!(large.lines().count() > small.lines().count());
+
+    Ok(())
+}
+
+/// `FAILOVER [TO host port [FORCE]] [ABORT] [TIMEOUT milliseconds]`. TO promotes
+/// a designated replica, so it cannot be sent against the shared test server;
+/// the wire form is asserted instead.
+#[test]
+fn failover_to_args() {
+    let cmd = TestClient
+        .failover(FailOverOptions::default().to("127.0.0.1", 6379))
+        .command;
+    assert_eq!("FAILOVER TO 127.0.0.1 6379", cmd.to_string());
+
+    let cmd = TestClient
+        .failover(
+            FailOverOptions::default()
+                .to("127.0.0.1", 6379)
+                .force()
+                .timeout(1000),
+        )
+        .command;
+    assert_eq!(
+        "FAILOVER TO 127.0.0.1 6379 FORCE TIMEOUT 1000",
+        cmd.to_string()
+    );
 }

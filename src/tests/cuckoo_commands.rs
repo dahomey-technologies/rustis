@@ -256,3 +256,31 @@ async fn cf_mexists() -> Result<()> {
 
     Ok(())
 }
+
+/// `CF.RESERVE key capacity [BUCKETSIZE bucketsize] [MAXITERATIONS maxiterations]
+/// [EXPANSION expansion]`, read back through the fields CF.INFO prints for itself.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn cf_reserve_maxiterations() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .cf_reserve(
+            "cf",
+            10,
+            CfReserveOptions::default()
+                .bucketsize(4)
+                .maxiterations(5)
+                .expansion(2),
+        )
+        .await?;
+
+    let info = client.cf_info("cf").await?;
+    assert_eq!(4, info.bucket_size);
+    assert_eq!(5, info.max_iteration);
+    assert_eq!(2, info.expansion_rate);
+
+    Ok(())
+}

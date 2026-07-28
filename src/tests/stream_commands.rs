@@ -1575,3 +1575,266 @@ async fn xinfo_help() -> Result<()> {
 
     Ok(())
 }
+
+/// `XGROUP CREATE key group id [MKSTREAM] [ENTRIESREAD entries-read]`.
+/// ENTRIESREAD seeds the group's read counter, which XINFO GROUPS reports back
+/// and which the lag is computed from.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xgroup_create_entries_read() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    for _ in 0..3 {
+        let _: String = client
+            .xadd("mystream", "*", ("field", "value"), XAddOptions::default())
+            .await?;
+    }
+
+    client
+        .xgroup_create(
+            "mystream",
+            "mygroup",
+            "0",
+            XGroupCreateOptions::default().entries_read(1),
+        )
+        .await?;
+
+    // A group created without ENTRIESREAD has no read counter to report.
+    client
+        .xgroup_create(
+            "mystream",
+            "plaingroup",
+            "0",
+            XGroupCreateOptions::default(),
+        )
+        .await?;
+
+    let groups = client.xinfo_groups("mystream").await?;
+    let seeded = groups
+        .iter()
+        .find(|group| group.name == "mygroup")
+        .expect("mygroup");
+    let plain = groups
+        .iter()
+        .find(|group| group.name == "plaingroup")
+        .expect("plaingroup");
+
+    assert_eq!(Some(1), seeded.entries_read);
+    assert_eq!(None, plain.entries_read);
+
+    Ok(())
+}
+
+/// `XPENDING key group [[IDLE min-idle-time] start end count [consumer]]`. IDLE
+/// filters on how long an entry has been pending and the trailing consumer name
+/// restricts the reply to that consumer's entries.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xpending_idle_and_consumer() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .xgroup_create(
+            "mystream",
+            "mygroup",
+            "$",
+            XGroupCreateOptions::default().mk_stream(),
+        )
+        .await?;
+
+    let id1: String = client
+        .xadd("mystream", "*", ("message", "one"), XAddOptions::default())
+        .await?;
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "alice",
+            XReadGroupOptions::default(),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    let id2: String = client
+        .xadd("mystream", "*", ("message", "two"), XAddOptions::default())
+        .await?;
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "bob",
+            XReadGroupOptions::default(),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    // Both entries are pending, one per consumer.
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default().start("-").end("+").count(10),
+        )
+        .await?;
+    assert_eq!(2, results.len());
+
+    // The trailing consumer name selects one of them.
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default()
+                .start("-")
+                .end("+")
+                .count(10)
+                .consumer("alice"),
+        )
+        .await?;
+    assert_eq!(1, results.len());
+    assert_eq!(id1, results[0].message_id);
+    assert_eq!("alice", results[0].consumer);
+
+    // IDLE 0 keeps everything; an idle floor no entry can have met yet drops all
+    // of them.
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default()
+                .idle(0)
+                .start("-")
+                .end("+")
+                .count(10),
+        )
+        .await?;
+    assert_eq!(2, results.len());
+    assert_eq!(id1, results[0].message_id);
+    assert_eq!(id2, results[1].message_id);
+
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default()
+                .idle(3_600_000)
+                .start("-")
+                .end("+")
+                .count(10),
+        )
+        .await?;
+    assert!(results.is_empty());
+
+    Ok(())
+}
+
+/// `XREADGROUP GROUP group consumer [COUNT n] [BLOCK ms] [CLAIM min-idle-time]
+/// [NOACK] STREAMS key... id...`. NOACK skips the PEL entirely, and CLAIM takes
+/// over another consumer's pending entries before reading new ones.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xreadgroup_claim_and_no_ack() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client
+        .xgroup_create(
+            "mystream",
+            "mygroup",
+            "$",
+            XGroupCreateOptions::default().mk_stream(),
+        )
+        .await?;
+
+    let _: String = client
+        .xadd("mystream", "*", ("message", "one"), XAddOptions::default())
+        .await?;
+
+    // NOACK reads the entry without ever putting it in the PEL.
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "alice",
+            XReadGroupOptions::default().no_ack(),
+            "mystream",
+            ">",
+        )
+        .await?;
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default().start("-").end("+").count(10),
+        )
+        .await?;
+    assert!(results.is_empty());
+
+    // Without NOACK the entry is pending, and owned by alice.
+    let id: String = client
+        .xadd("mystream", "*", ("message", "two"), XAddOptions::default())
+        .await?;
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "alice",
+            XReadGroupOptions::default(),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    // CLAIM lets bob take it over, since it has been pending at least 0 ms.
+    let _: Value = client
+        .xreadgroup(
+            "mygroup",
+            "bob",
+            XReadGroupOptions::default().claim(0),
+            "mystream",
+            ">",
+        )
+        .await?;
+
+    let results: Vec<XPendingMessageResult> = client
+        .xpending_with_options(
+            "mystream",
+            "mygroup",
+            XPendingOptions::default().start("-").end("+").count(10),
+        )
+        .await?;
+    assert_eq!(1, results.len());
+    assert_eq!(id, results[0].message_id);
+    assert_eq!("bob", results[0].consumer);
+
+    Ok(())
+}
+
+/// `XTRIM key MINID [=|~] threshold-id [LIMIT count]`. MINID evicts every entry
+/// whose ID is below the threshold, where MAXLEN counts instead.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn xtrim_min_id() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    for id in ["1-1", "2-1", "3-1"] {
+        let _: String = client
+            .xadd("mystream", id, ("field", "value"), XAddOptions::default())
+            .await?;
+    }
+
+    let deleted = client
+        .xtrim("mystream", XTrimOptions::min_id(None, "3-1"))
+        .await?;
+    assert_eq!(2, deleted);
+
+    let results: Vec<StreamEntry<String>> = client.xrange("mystream", "-", "+", None).await?;
+    assert_eq!(1, results.len());
+    assert_eq!("3-1", results[0].stream_id);
+
+    Ok(())
+}

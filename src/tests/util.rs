@@ -2,8 +2,9 @@ use crate::{
     Result,
     client::{Client, Config, IntoConfig},
     commands::{
-        ArrayCommands, ClusterCommands, JsonCommands, SearchCommands, SentinelCommands,
-        ServerCommands, SortedSetCommands, StreamCommands, StringCommands, VectorSetCommands,
+        ArrayCommands, ClusterCommands, GenericCommands, JsonCommands, SearchCommands,
+        SentinelCommands, ServerCommands, SortedSetCommands, StreamCommands, StringCommands,
+        VectorSetCommands,
     },
 };
 #[cfg(feature = "native-tls")]
@@ -183,6 +184,7 @@ impl<'a> ArrayCommands<'a> for TestClient {}
 impl<'a> StreamCommands<'a> for TestClient {}
 impl<'a> VectorSetCommands<'a> for TestClient {}
 impl<'a> ClusterCommands<'a> for TestClient {}
+impl<'a> GenericCommands<'a> for TestClient {}
 impl<'a> JsonCommands<'a> for TestClient {}
 impl<'a> SearchCommands<'a> for TestClient {}
 impl<'a> SentinelCommands<'a> for TestClient {}

@@ -354,3 +354,47 @@ async fn tdigest_trimmed_mean() -> Result<()> {
 
     Ok(())
 }
+
+/// `TDIGEST.MERGE destination numkeys source... [COMPRESSION compression]
+/// [OVERRIDE]`. COMPRESSION is read back through the `Compression` field
+/// TDIGEST.INFO prints; OVERRIDE is what lets a merge into an existing sketch
+/// replace it rather than add to it.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn tdigest_merge_compression_and_override() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.tdigest_create("s1", None).await?;
+    client.tdigest_add("s1", [10., 20.]).await?;
+
+    client
+        .tdigest_merge(
+            "sM",
+            ["s1"],
+            TDigestMergeOptions::default().compression(200),
+        )
+        .await?;
+    let info = client.tdigest_info("sM").await?;
+    assert_eq!(200, info.compression);
+    assert_eq!(2, info.observations);
+
+    // Without OVERRIDE the destination accumulates: the same source merged twice
+    // is counted twice.
+    client
+        .tdigest_merge("sM", ["s1"], TDigestMergeOptions::default())
+        .await?;
+    let info = client.tdigest_info("sM").await?;
+    assert_eq!(4, info.observations);
+
+    // With OVERRIDE the destination is replaced, so the count falls back to the
+    // source alone.
+    client
+        .tdigest_merge("sM", ["s1"], TDigestMergeOptions::default()._override())
+        .await?;
+    let info = client.tdigest_info("sM").await?;
+    assert_eq!(2, info.observations);
+
+    Ok(())
+}

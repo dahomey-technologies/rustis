@@ -40,6 +40,42 @@ These is the list of existing command traits:
 * [`TimeSeriesCommands`] — [Time Series](https://redis.io/docs/stack/timeseries/)
 * [`TopKCommands`] — [Top-K](https://redis.io/docs/stack/bloom/)
 
+# Command coverage
+
+Every command documented on [redis.io](https://redis.io/commands/) up to and
+including **Redis 8.6** is implemented, together with its options — including
+the commands of the bundled modules (RediSearch, RedisJSON, RedisTimeSeries,
+RedisBloom, vector sets).
+
+Two families are left out on purpose.
+
+**Deprecated commands.** Their modern replacement is implemented instead, so
+there is one way to do each thing rather than two:
+
+| Deprecated | Use instead |
+|---|---|
+| `ZREVRANGE`, `ZRANGEBYSCORE`, `ZRANGEBYLEX`, `ZREVRANGEBYSCORE`, `ZREVRANGEBYLEX` | [`zrange`](SortedSetCommands::zrange) with [`ZRangeOptions`] |
+| `RPOPLPUSH`, `BRPOPLPUSH` | [`lmove`](ListCommands::lmove), [`blmove`](BlockingCommands::blmove) |
+| `GEORADIUS`, `GEORADIUSBYMEMBER`, and their `_RO` variants | [`geosearch`](GeoCommands::geosearch) |
+| `HMSET` | [`hset`](HashCommands::hset) |
+| `SLAVEOF` | [`replicaof`](ServerCommands::replicaof) |
+| `CLUSTER SLAVES` | [`cluster_replicas`](ClusterCommands::cluster_replicas) |
+| `FT.ADD`, `FT.DEL`, `FT.GET`, `FT.MGET`, `FT.DROP`, `FT.SAFEADD`, `FT.SYNADD` | the hash/JSON document model ([`ft_create`](SearchCommands::ft_create), [`ft_search`](SearchCommands::ft_search)) |
+
+**Server-internal commands**, such as `PSYNC`, `SYNC`, `REPLCONF`,
+`RESTORE-ASKING`, `PFDEBUG`, `BF.DEBUG` or `CF.DEBUG`. These belong to the
+server-to-server or debugging surface; issuing them from a client can corrupt
+replication or cluster state.
+
+Note also that a handful of commands appear in `COMMAND LIST` without being
+public API — a module's private surface, recognizable by the absence of any
+documentation page. Those are not implemented either.
+
+Transactions need no `DISCARD`: a [`Transaction`](crate::client::Transaction) is
+buffered client-side and sent as a single `MULTI` … `EXEC` batch when
+[`execute`](crate::client::Transaction::execute) is called, so abandoning one is
+simply dropping it — nothing has reached the server yet.
+
 # Example
 
 To use a command, simply add the related trait to your `use` declerations

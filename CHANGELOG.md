@@ -10,6 +10,36 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Added
 
+- **Complete command coverage up to Redis 8.6**, established by diffing the
+  server's own `COMMAND DOCS` against the crate rather than by reading release
+  notes, and verified against a Redis 8.6.5 server.
+
+  Redis 8.6 itself:
+  - `HOTKEYS`: `hotkeys_start`, `hotkeys_stop`, `hotkeys_get`, `hotkeys_reset`,
+    `hotkeys_help`, with `HotKeysMetric`, `HotKeysStartOptions` and
+    `HotKeysInfo`. `HOTKEYS GET` replies with one entry per node; the fields
+    tied to a metric are absent — not empty — when that metric was not tracked,
+    so they are `Option`.
+  - Stream idempotent production: `xcfgset` (+ `XCfgSetOptions`),
+    `XAddOptions::idmp` and `XAddOptions::idmp_auto`, and the six IDMP fields on
+    `XStreamInfo`.
+  - `TsAggregationType::CountNan` and `CountAll`.
+
+  Commands that pre-dated 8.6 and had been missed:
+  - `xsetid` (+ `XSetIdOptions` for `ENTRIESADDED` / `MAXDELETEDID`)
+  - `cluster_myshardid`
+  - `module_loadex` (+ `ModuleLoadexOptions`) and `module_unload`
+  - `json_merge`
+  - `bf_card`, `topk_count`
+  - `vismember`, `vrange`
+
+  Arguments that existed on implemented commands but were not reachable:
+  - `XClaimOptions::last_id` (`LASTID`)
+  - `JsonGetOptions::format` with `JsonGetFormat::{String, Expand1, Expand}`
+  - `FtFieldSchema::index_missing` / `index_empty`, and
+    `FtCreateOptions::index_all` (+ `FtIndexAll`), which takes an explicit
+    `ENABLE` / `DISABLE` value rather than being a flag
+
 - **Rustis now emits [`tracing`](https://docs.rs/tracing) events and spans**
   instead of plain `log` records.
 
@@ -54,6 +84,18 @@ Versions up to and including `0.19.3` are documented in the
     it is 8.4, as the README already said.
 
 ### Fixed
+
+- **Two option builders emitted a token the server rejects, so the options were
+  unusable.** Both came from a `rename_all` rule silently producing the wrong
+  spelling, and neither had a call site anywhere in the crate — which is why no
+  test caught them:
+  - `ZRangeOptions::reverse()` emitted `REVERSE` instead of `REV`, so any
+    `zrange` or `zrangestore` using it failed with `syntax error`.
+  - `VSimOptions::with_attributes()` emitted `WITHATTRIBUTES` instead of
+    `WITHATTRIBS`, so any `vsim` requesting attributes failed the same way.
+
+  Both now have a live integration test and a wire-form test pinning the exact
+  token.
 
 - **A cluster client deadlocked after any subscription.** A subscription is
   acknowledged by a push frame, which the cluster connection hands straight to

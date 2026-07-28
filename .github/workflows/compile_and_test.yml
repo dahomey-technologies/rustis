@@ -135,11 +135,19 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-semver-checks
+      # The feature set is the one docs.rs builds, not the default one. Only the
+      # features named here have their public surface compared, so `--default-
+      # features` — tokio-runtime alone — left `pool`, `json`, `client-cache` and
+      # the TLS surface unchecked: three real breaks in 0.20.0 (`Cache::
+      # zremrangebyscore`, `TlsConfig`, `resp::JsonRef`) were invisible to this
+      # job and were caught by hand.
       - name: cargo semver-checks
         run: |
           BASELINE=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*')
           echo "baseline: $BASELINE"
-          cargo semver-checks --baseline-rev "$BASELINE" --default-features
+          cargo semver-checks --baseline-rev "$BASELINE" \
+            --only-explicit-features \
+            --features tokio-runtime,tokio-rustls,pool,json,client-cache
 
   # Compile a curated set of feature combinations (compile-only, no server
   # needed). `--no-default-features` is used so each entry compiles exactly the

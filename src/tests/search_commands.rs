@@ -23,6 +23,24 @@ use std::{
     time::Duration,
 };
 
+/// `FtAggregateOptions` nests inline `SmallVec` buffers two levels deep, and its
+/// builder methods take `self` by value, so every chained call copies the whole
+/// struct on the stack. Keeping the type small is what stops a builder chain from
+/// costing hundreds of kilobytes of stack in a debug build.
+#[test]
+fn ft_aggregate_options_stay_small() {
+    assert!(
+        size_of::<FtAggregateOptions<'_>>() <= 4096,
+        "FtAggregateOptions grew to {} bytes",
+        size_of::<FtAggregateOptions<'_>>()
+    );
+    assert!(
+        size_of::<FtGroupBy<'_>>() <= 1024,
+        "FtGroupBy grew to {} bytes",
+        size_of::<FtGroupBy<'_>>()
+    );
+}
+
 async fn wait_for_index_scanned(client: &Client, index: &str) -> Result<()> {
     loop {
         let result = client.ft_info(index.to_owned()).await?;

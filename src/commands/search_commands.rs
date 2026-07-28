@@ -1742,7 +1742,7 @@ pub struct FtAggregateOptions<'a> {
     )]
     load: SmallVec<[FtAttribute<'a>; 10]>,
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
-    expressions: SmallVec<[FtAggregateExpression<'a>; 10]>,
+    expressions: SmallVec<[FtAggregateExpression<'a>; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<(u32, u32)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1969,7 +1969,7 @@ pub struct FtGroupBy<'a> {
     #[serde(rename = "", serialize_with = "serialize_slice_with_arg_count")]
     properties: SmallVec<[&'a str; 10]>,
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
-    reducers: SmallVec<[FtReduceOptions<'a>; 10]>,
+    reducers: SmallVec<[FtReduceOptions<'a>; 2]>,
 }
 
 impl<'a> FtGroupBy<'a> {

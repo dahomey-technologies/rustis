@@ -637,6 +637,7 @@ pub trait GenericCommands<'a>: Sized {
 /// Result for the [`type`](GenericCommands::type_) command
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum KeyType {
     String,
     List,

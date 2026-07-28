@@ -197,3 +197,62 @@ async fn bf_card() -> Result<()> {
 
     Ok(())
 }
+
+/// `BF.RESERVE key error_rate capacity [EXPANSION expansion] [NONSCALING]` and
+/// `BF.INSERT key [CAPACITY cap] [ERROR error] [EXPANSION exp] [NOCREATE]
+/// [NONSCALING] ITEMS item...`. NONSCALING is observable through BF.INFO, which
+/// reports no expansion rate for a filter that cannot grow, and ERROR is
+/// observable through the size the server allocates for a given capacity.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bf_nonscaling_and_error() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .bf_reserve(
+            "scaling",
+            0.01,
+            100,
+            BfReserveOptions::default().expansion(3),
+        )
+        .await?;
+    let info = client.bf_info_all("scaling").await?;
+    assert_eq!(100, info.capacity);
+    assert_eq!(Some(3), info.expansion_rate);
+
+    client
+        .bf_reserve(
+            "nonscaling",
+            0.01,
+            100,
+            BfReserveOptions::default().nonscaling(),
+        )
+        .await?;
+    let info = client.bf_info_all("nonscaling").await?;
+    assert_eq!(100, info.capacity);
+    assert_eq!(None, info.expansion_rate);
+    let tight_size = info.size;
+
+    // A tighter error ratio costs more memory at the same capacity.
+    let results: Vec<bool> = client
+        .bf_insert(
+            "inserted",
+            ["a", "b"],
+            BfInsertOptions::default()
+                .capacity(100)
+                .error(0.001)
+                .nonscaling(),
+        )
+        .await?;
+    assert_eq!(vec![true, true], results);
+
+    let info = client.bf_info_all("inserted").await?;
+    assert_eq!(100, info.capacity);
+    assert_eq!(2, info.num_items_inserted);
+    assert_eq!(None, info.expansion_rate);
+    assert!(info.size > tight_size);
+
+    Ok(())
+}

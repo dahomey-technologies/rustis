@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -533,6 +533,30 @@ pub trait HashCommands<'a>: Sized {
         prepare_command(self, cmd("HSCAN").key(key).arg(cursor).arg(options))
     }
 
+    /// Iterates fields of Hash types, without their associated values.
+    ///
+    /// # Return
+    /// A tuple of the next cursor and the field names of the returned elements.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/hscan/>](https://redis.io/commands/hscan/)
+    #[must_use]
+    fn hscan_no_values<R: Response + DeserializeOwned>(
+        self,
+        key: impl Serialize,
+        cursor: u64,
+        options: HScanOptions,
+    ) -> PreparedCommand<'a, Self, (u64, R)> {
+        prepare_command(
+            self,
+            cmd("HSCAN")
+                .key(key)
+                .arg(cursor)
+                .arg(options)
+                .arg("NOVALUES"),
+        )
+    }
+
     /// Sets field in the hash stored at key to value.
     ///
     /// # Return
@@ -657,11 +681,6 @@ pub struct HScanOptions<'a> {
     r#match: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     count: Option<u32>,
-    #[serde(
-        skip_serializing_if = "std::ops::Not::not",
-        serialize_with = "serialize_flag"
-    )]
-    novalues: bool,
 }
 
 impl<'a> HScanOptions<'a> {
@@ -674,12 +693,6 @@ impl<'a> HScanOptions<'a> {
     #[must_use]
     pub fn count(mut self, count: u32) -> Self {
         self.count = Some(count);
-        self
-    }
-
-    #[must_use]
-    pub fn no_values(mut self) -> Self {
-        self.novalues = true;
         self
     }
 }

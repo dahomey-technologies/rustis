@@ -963,8 +963,9 @@ impl TsGetOptions {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct TsInfoResult {
-    /// key name
-    pub key_self_name: String,
+    /// key name, reported only when the `debug` flag is specified in
+    /// [`ts_info`](TimeSeriesCommands::ts_info)
+    pub key_self_name: Option<String>,
     /// Total number of samples in this time series
     pub total_samples: usize,
     /// Total number of bytes allocated for this time series, which is the sum of
@@ -1186,8 +1187,8 @@ pub struct TsMRangeOptions<'a> {
         serialize_with = "serialize_flag"
     )]
     latest: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    filter_by_ts: Option<&'a str>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    filter_by_ts: SmallVec<[u64; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     filter_by_value: Option<(f64, f64)>,
     #[serde(
@@ -1204,7 +1205,7 @@ pub struct TsMRangeOptions<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     aggregation: Option<(TsAggregationType, u64)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    buckettimestamp: Option<u64>,
+    buckettimestamp: Option<TsBucketTimestamp>,
     #[serde(
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
@@ -1236,8 +1237,8 @@ impl<'a> TsMRangeOptions<'a> {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(mut self, ts: &'a str) -> Self {
-        self.filter_by_ts = Some(ts);
+    pub fn filter_by_ts(mut self, ts: impl IntoIterator<Item = u64>) -> Self {
+        self.filter_by_ts.extend(ts);
         self
     }
 
@@ -1307,12 +1308,11 @@ impl<'a> TsMRangeOptions<'a> {
     }
 
     /// controls how bucket timestamps are reported.
-    /// `bucket_timestamp` values include:
-    /// * `-` or `low` - Timestamp reported for each bucket is the bucket's start time (default)
-    /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
-    /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
+    ///
+    /// See [`TsBucketTimestamp`](TsBucketTimestamp) for the three markers the
+    /// server accepts.
     #[must_use]
-    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
+    pub fn bucket_timestamp(mut self, bucket_timestamp: TsBucketTimestamp) -> Self {
         self.buckettimestamp = Some(bucket_timestamp);
         self
     }
@@ -1465,11 +1465,16 @@ impl<'de> de::Deserialize<'de> for TsRangeSample {
 }
 
 /// Options for the [`ts_mrange`](TimeSeriesCommands::ts_mrange) command.
-#[derive(Serialize)]
+///
+/// `GROUPBY` is optional, so the default value emits nothing and leaves the
+/// reply one entry per matched series.
+#[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct TsGroupByOptions<'a> {
-    groupby: &'a str,
-    reduce: TsAggregationType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    groupby: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reduce: Option<TsAggregationType>,
 }
 
 impl<'a> TsGroupByOptions<'a> {
@@ -1489,10 +1494,26 @@ impl<'a> TsGroupByOptions<'a> {
     #[must_use]
     pub fn new(label: &'a str, reducer: TsAggregationType) -> Self {
         Self {
-            groupby: label,
-            reduce: reducer,
+            groupby: Some(label),
+            reduce: Some(reducer),
         }
     }
+}
+
+/// Which point of an aggregation bucket its reported timestamp is, for the
+/// `BUCKETTIMESTAMP` option of the range commands.
+#[derive(Serialize)]
+#[non_exhaustive]
+pub enum TsBucketTimestamp {
+    /// The bucket's start time (the default when the option is absent).
+    #[serde(rename = "-")]
+    Low,
+    /// The bucket's end time.
+    #[serde(rename = "+")]
+    High,
+    /// The bucket's mid time, rounded down when it is not an integer.
+    #[serde(rename = "~")]
+    Mid,
 }
 
 /// Options for the [`ts_range`](TimeSeriesCommands::ts_range) and
@@ -1505,8 +1526,8 @@ pub struct TsRangeOptions<'a> {
         serialize_with = "serialize_flag"
     )]
     latest: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    filter_by_ts: Option<&'a str>,
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    filter_by_ts: SmallVec<[u64; 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     filter_by_value: Option<(f64, f64)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1516,7 +1537,7 @@ pub struct TsRangeOptions<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     aggregation: Option<(TsAggregationType, u64)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    buckettimestamp: Option<u64>,
+    buckettimestamp: Option<TsBucketTimestamp>,
     #[serde(
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
@@ -1548,8 +1569,8 @@ impl<'a> TsRangeOptions<'a> {
     ///
     /// A sample passes the filter if its exact timestamp is specified and falls within [`from_timestamp`, `to_timestamp`].
     #[must_use]
-    pub fn filter_by_ts(mut self, ts: &'a str) -> Self {
-        self.filter_by_ts = Some(ts);
+    pub fn filter_by_ts(mut self, ts: impl IntoIterator<Item = u64>) -> Self {
+        self.filter_by_ts.extend(ts);
         self
     }
 
@@ -1600,12 +1621,11 @@ impl<'a> TsRangeOptions<'a> {
     }
 
     /// controls how bucket timestamps are reported.
-    /// `bucket_timestamp` values include:
-    /// * `-` or `low` - Timestamp reported for each bucket is the bucket's start time (default)
-    /// * `+` or `high` - Timestamp reported for each bucket is the bucket's end time
-    /// * `~` or `mid` - Timestamp reported for each bucket is the bucket's mid time (rounded down if not an integer)
+    ///
+    /// See [`TsBucketTimestamp`](TsBucketTimestamp) for the three markers the
+    /// server accepts.
     #[must_use]
-    pub fn bucket_timestamp(mut self, bucket_timestamp: u64) -> Self {
+    pub fn bucket_timestamp(mut self, bucket_timestamp: TsBucketTimestamp) -> Self {
         self.buckettimestamp = Some(bucket_timestamp);
         self
     }

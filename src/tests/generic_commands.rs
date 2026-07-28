@@ -2,10 +2,11 @@ use crate::{
     Result,
     commands::{
         ConnectionCommands, ExpireOption, FlushingMode, GenericCommands, ListCommands,
-        RestoreOptions, ScanOptions, ServerCommands, SetCommands, SortOptions, StringCommands,
+        MigrateOptions, MigrateResult, RestoreOptions, ScanOptions, ServerCommands, SetCommands,
+        SortOptions, StringCommands,
     },
     resp::Value,
-    tests::get_test_client,
+    tests::{TestClient, get_sentinel_master_test_client, get_test_client},
 };
 use serial_test::serial;
 use std::{collections::HashSet, time::SystemTime};
@@ -721,4 +722,166 @@ async fn unlink() -> Result<()> {
     assert_eq!(2, unlinked);
 
     Ok(())
+}
+
+/// `RESTORE key ttl serialized-value [REPLACE] [ABSTTL] [IDLETIME seconds]
+/// [FREQ frequency]`. REPLACE lets the restore overwrite a live key, and ABSTTL
+/// reads the ttl argument as a Unix time in milliseconds instead of a delay.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn restore_replace_and_abs_ttl() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    client.set("key", "value").await?;
+    let dump = client.dump("key").await?;
+
+    // Without REPLACE the server refuses to overwrite the live key.
+    let result = client
+        .restore("key", 0, &dump, RestoreOptions::default())
+        .await;
+    assert!(result.is_err());
+
+    client.set("key", "other").await?;
+    client
+        .restore("key", 0, &dump, RestoreOptions::default().replace())
+        .await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+
+    // ABSTTL reads the ttl as a Unix time in milliseconds.
+    let now_ms = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    client
+        .restore(
+            "key",
+            now_ms + 100_000,
+            &dump,
+            RestoreOptions::default().replace().abs_ttl().idle_time(0),
+        )
+        .await?;
+    let ttl = client.ttl("key").await?;
+    assert!(ttl > 90 && ttl <= 100);
+
+    Ok(())
+}
+
+/// `MIGRATE host port key destination-db timeout [COPY] [REPLACE]
+/// [AUTH password | AUTH2 username password] [KEYS key ...]`. The destination is
+/// the sentinel master of `redis/docker-compose.yml`, reachable from the source
+/// container by name; a server cannot migrate to itself, since it would block
+/// waiting for its own reply.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn migrate_replace() -> Result<()> {
+    let client = get_test_client().await?;
+    let destination = get_sentinel_master_test_client().await?;
+
+    client.flushdb(FlushingMode::Sync).await?;
+    destination.del("migrated").await?;
+
+    client.set("migrated", "first").await?;
+    let result = client
+        .migrate(
+            "redis-sentinel-master",
+            6381,
+            "migrated",
+            0,
+            1000,
+            MigrateOptions::default(),
+        )
+        .await?;
+    assert!(matches!(result, MigrateResult::Ok));
+
+    // The key now exists at the destination, so a second migration is refused.
+    client.set("migrated", "second").await?;
+    let result = client
+        .migrate(
+            "redis-sentinel-master",
+            6381,
+            "migrated",
+            0,
+            1000,
+            MigrateOptions::default(),
+        )
+        .await;
+    assert!(result.is_err());
+
+    // REPLACE overwrites it, and COPY keeps the source key in place.
+    let result = client
+        .migrate(
+            "redis-sentinel-master",
+            6381,
+            "migrated",
+            0,
+            1000,
+            MigrateOptions::default().replace().copy(),
+        )
+        .await?;
+    assert!(matches!(result, MigrateResult::Ok));
+
+    let value: String = destination.get("migrated").await?;
+    assert_eq!("second", value);
+    let value: String = client.get("migrated").await?;
+    assert_eq!("second", value);
+
+    destination.del("migrated").await?;
+
+    Ok(())
+}
+
+/// `AUTH password` and `AUTH2 username password` are the two authentication
+/// forms of MIGRATE. The test servers need no password, so the wire form is
+/// asserted instead.
+#[test]
+fn migrate_auth_args() {
+    let cmd = TestClient
+        .migrate(
+            "host",
+            6379,
+            "key",
+            0,
+            1000,
+            MigrateOptions::default().auth("password"),
+        )
+        .command;
+    assert_eq!(
+        "MIGRATE host 6379 key 0 1000 AUTH password",
+        cmd.to_string()
+    );
+
+    let cmd = TestClient
+        .migrate(
+            "host",
+            6379,
+            "key",
+            0,
+            1000,
+            MigrateOptions::default().auth2("username", "password"),
+        )
+        .command;
+    assert_eq!(
+        "MIGRATE host 6379 key 0 1000 AUTH2 username password",
+        cmd.to_string()
+    );
+
+    // With KEYS the single-key slot is an empty string and the keys follow.
+    let cmd = TestClient
+        .migrate(
+            "host",
+            6379,
+            "",
+            0,
+            1000,
+            MigrateOptions::default().replace().key("key1").key("key2"),
+        )
+        .command;
+    assert_eq!(
+        "MIGRATE host 6379  0 1000 REPLACE KEYS key1 key2",
+        cmd.to_string()
+    );
 }

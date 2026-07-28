@@ -3,6 +3,7 @@ use crate::{
     commands::{
         GenericCommands, GeoAddCondition, GeoCommands, GeoSearchBy, GeoSearchFrom,
         GeoSearchOptions, GeoSearchOrder, GeoSearchResult, GeoSearchStoreOptions, GeoUnit,
+        SortedSetCommands,
     },
     tests::get_test_client,
 };
@@ -360,6 +361,55 @@ async fn geosearchstore() -> Result<()> {
     assert_eq!(
         Some((17.241510450839996, 38.78813451624225)),
         results[2].coordinates
+    );
+
+    Ok(())
+}
+
+/// `GEOSEARCHSTORE dst src ... [STOREDIST]`. With STOREDIST the destination is a
+/// plain sorted set whose scores are the distances, in the unit of the search.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn geosearchstore_store_dist() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.del(["Sicily", "out"]).await?;
+
+    client
+        .geoadd(
+            "Sicily",
+            None,
+            false,
+            [
+                (13.361389, 38.115556, "Palermo"),
+                (15.087269, 37.502669, "Catania"),
+            ],
+        )
+        .await?;
+
+    let len = client
+        .geosearchstore(
+            "out",
+            "Sicily",
+            GeoSearchFrom::from_longitude_latitude(15.0, 37.0),
+            GeoSearchBy::by_radius(200.0, GeoUnit::Kilometers),
+            GeoSearchStoreOptions::default()
+                .order(GeoSearchOrder::Asc)
+                .store_dist(true),
+        )
+        .await?;
+    assert_eq!(2, len);
+
+    let catania: Option<f64> = client.zscore("out", "Catania").await?;
+    let palermo: Option<f64> = client.zscore("out", "Palermo").await?;
+    assert_eq!(
+        Some(56.4413),
+        catania.map(|d| (d * 10000.0).round() / 10000.0)
+    );
+    assert_eq!(
+        Some(190.4424),
+        palermo.map(|d| (d * 10000.0).round() / 10000.0)
     );
 
     Ok(())

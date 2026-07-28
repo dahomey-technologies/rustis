@@ -789,8 +789,6 @@ pub struct SortOptions<'a> {
         serialize_with = "serialize_flag"
     )]
     alpha: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    store: Option<&'a str>,
 }
 
 impl<'a> SortOptions<'a> {
@@ -821,12 +819,6 @@ impl<'a> SortOptions<'a> {
     #[must_use]
     pub fn alpha(mut self) -> Self {
         self.alpha = true;
-        self
-    }
-
-    #[must_use]
-    pub fn store(mut self, destination: &'a str) -> Self {
-        self.store = Some(destination);
         self
     }
 }

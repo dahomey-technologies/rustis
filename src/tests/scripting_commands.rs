@@ -485,3 +485,32 @@ async fn script_debug() -> Result<()> {
 
     Ok(())
 }
+
+/// `FUNCTION LIST [LIBRARYNAME library-name] [WITHCODE]`. LIBRARYNAME is an exact
+/// library name, so a name that exists selects one library and any other selects
+/// none.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn function_list_library_name_pattern() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.function_flush(FlushingMode::Sync).await?;
+
+    let code = "#!lua name=mylib \n redis.register_function{function_name='myfunc', callback=function(keys, args) return args[1] end, flags={ 'no-writes' }}";
+    let library: String = client.function_load(true, code).await?;
+    assert_eq!("mylib", library);
+
+    let libs: Vec<LibraryInfo> = client
+        .function_list(FunctionListOptions::default().library_name_pattern("mylib"))
+        .await?;
+    assert_eq!(1, libs.len());
+    assert_eq!("mylib", libs[0].library_name);
+
+    let libs: Vec<LibraryInfo> = client
+        .function_list(FunctionListOptions::default().library_name_pattern("otherlib"))
+        .await?;
+    assert!(libs.is_empty());
+
+    Ok(())
+}

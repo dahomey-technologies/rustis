@@ -2,9 +2,9 @@ use crate::{
     Result,
     commands::{
         FlushingMode, ServerCommands, TimeSeriesCommands, TsAddOptions, TsAggregationType,
-        TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsGetOptions, TsGroupByOptions,
-        TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions, TsRangeOptions, TsRangeSample,
-        TsSample, TsTimestamp,
+        TsBucketTimestamp, TsCreateOptions, TsCreateRuleOptions, TsDuplicatePolicy, TsEncoding,
+        TsGetOptions, TsGroupByOptions, TsIncrByDecrByOptions, TsMGetOptions, TsMRangeOptions,
+        TsRangeOptions, TsRangeSample, TsSample, TsTimestamp,
     },
     tests::get_test_client,
 };
@@ -871,6 +871,336 @@ async fn ts_range_count_nan_aggregations() -> Result<()> {
         )
         .await?;
     assert_eq!(vec![(1000, 3.), (2000, 2.)], results);
+
+    Ok(())
+}
+
+/// `TS.CREATE key [ENCODING COMPRESSED|UNCOMPRESSED]` and
+/// `TS.ADD key timestamp value [ENCODING ...] [ON_DUPLICATE policy]`, plus
+/// `TS.INCRBY key value [UNCOMPRESSED]`. The chunk encoding and the duplicate
+/// policy are both reported back by TS.INFO.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ts_encoding_and_on_duplicate() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create(
+            "created",
+            TsCreateOptions::default().encoding(TsEncoding::Uncompressed),
+        )
+        .await?;
+    let info = client.ts_info("created", false).await?;
+    assert_eq!("uncompressed", info.chunk_type);
+
+    // TS.ADD creates the series, so its ENCODING and ON_DUPLICATE apply.
+    let _: u64 = client
+        .ts_add(
+            "added",
+            TsTimestamp::Value(1000),
+            10.,
+            TsAddOptions::default()
+                .encoding(TsEncoding::Uncompressed)
+                .on_duplicate(TsDuplicatePolicy::Max),
+        )
+        .await?;
+    let info = client.ts_info("added", false).await?;
+    assert_eq!("uncompressed", info.chunk_type);
+
+    // ON_DUPLICATE applies to the call, not to the series, so it is only visible
+    // in what the sample becomes: MAX
+    // keeps the larger value, MIN the smaller.
+    let _: u64 = client
+        .ts_add(
+            "added",
+            TsTimestamp::Value(1000),
+            5.,
+            TsAddOptions::default().on_duplicate(TsDuplicatePolicy::Max),
+        )
+        .await?;
+    let results: Vec<(u64, f64)> = client
+        .ts_range("added", "-", "+", TsRangeOptions::default())
+        .await?;
+    assert_eq!(vec![(1000, 10.)], results);
+
+    let _: u64 = client
+        .ts_add(
+            "added",
+            TsTimestamp::Value(1000),
+            5.,
+            TsAddOptions::default().on_duplicate(TsDuplicatePolicy::Min),
+        )
+        .await?;
+    let results: Vec<(u64, f64)> = client
+        .ts_range("added", "-", "+", TsRangeOptions::default())
+        .await?;
+    assert_eq!(vec![(1000, 5.)], results);
+
+    // TS.INCRBY spells the same choice as a bare UNCOMPRESSED flag.
+    let _: u64 = client
+        .ts_incrby(
+            "incremented",
+            1.,
+            TsIncrByDecrByOptions::default().uncompressed(),
+        )
+        .await?;
+    let info = client.ts_info("incremented", false).await?;
+    assert_eq!("uncompressed", info.chunk_type);
+
+    Ok(())
+}
+
+/// `LATEST` on TS.GET / TS.MGET / TS.RANGE / TS.MRANGE. A compaction's latest
+/// bucket is only closed by the arrival of a later sample, so without LATEST the
+/// still-open bucket is not reported and with it, it is.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ts_latest() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create(
+            "source",
+            TsCreateOptions::default().labels([("kind", "src")]),
+        )
+        .await?;
+    client
+        .ts_create(
+            "compacted",
+            TsCreateOptions::default().labels([("kind", "cmp")]),
+        )
+        .await?;
+    client
+        .ts_createrule(
+            "source",
+            "compacted",
+            TsAggregationType::Sum,
+            10,
+            TsCreateRuleOptions::default(),
+        )
+        .await?;
+
+    // Two samples in the same 10 ms bucket, which therefore stays open.
+    let _: u64 = client
+        .ts_add("source", TsTimestamp::Value(1), 1., TsAddOptions::default())
+        .await?;
+    let _: u64 = client
+        .ts_add("source", TsTimestamp::Value(2), 2., TsAddOptions::default())
+        .await?;
+
+    let sample: Option<(u64, f64)> = client.ts_get("compacted", TsGetOptions::default()).await?;
+    assert_eq!(None, sample);
+
+    let sample: Option<(u64, f64)> = client
+        .ts_get("compacted", TsGetOptions::default().latest())
+        .await?;
+    assert_eq!(Some((0, 3.)), sample);
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range("compacted", "-", "+", TsRangeOptions::default())
+        .await?;
+    assert!(results.is_empty());
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range("compacted", "-", "+", TsRangeOptions::default().latest())
+        .await?;
+    assert_eq!(vec![(0, 3.)], results);
+
+    let samples: HashMap<String, TsSample> = client
+        .ts_mget(TsMGetOptions::default().latest(), "kind=cmp")
+        .await?;
+    assert_eq!(1, samples.len());
+    assert_eq!((0, 3.), samples["compacted"].timestamp_value);
+
+    let samples: HashMap<String, TsRangeSample> = client
+        .ts_mrange(
+            "-",
+            "+",
+            TsMRangeOptions::default().latest(),
+            "kind=cmp",
+            TsGroupByOptions::default(),
+        )
+        .await?;
+    assert_eq!(1, samples.len());
+    assert_eq!(vec![(0, 3.)], samples["compacted"].values);
+
+    Ok(())
+}
+
+/// `SELECTED_LABELS label [label ...]` on TS.MGET and TS.MRANGE returns only the
+/// named labels, where WITHLABELS returns them all.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ts_selected_label() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create(
+            "temp:TLV",
+            TsCreateOptions::default().labels([
+                ("type", "temp"),
+                ("location", "TLV"),
+                ("unit", "celsius"),
+            ]),
+        )
+        .await?;
+    let _: u64 = client
+        .ts_add(
+            "temp:TLV",
+            TsTimestamp::Value(1000),
+            30.,
+            TsAddOptions::default(),
+        )
+        .await?;
+
+    let samples: HashMap<String, TsSample> = client
+        .ts_mget(
+            TsMGetOptions::default()
+                .selected_label("type")
+                .selected_label("unit"),
+            "type=temp",
+        )
+        .await?;
+    assert_eq!(1, samples.len());
+    let labels = &samples["temp:TLV"].labels;
+    assert_eq!(2, labels.len());
+    assert_eq!("temp", labels["type"]);
+    assert_eq!("celsius", labels["unit"]);
+
+    let samples: HashMap<String, TsRangeSample> = client
+        .ts_mrange(
+            "-",
+            "+",
+            TsMRangeOptions::default().selected_label("location"),
+            "type=temp",
+            TsGroupByOptions::default(),
+        )
+        .await?;
+    assert_eq!(1, samples.len());
+    let labels = &samples["temp:TLV"].labels;
+    assert_eq!(
+        vec![("location".to_owned(), "TLV".to_owned())],
+        labels.clone()
+    );
+
+    Ok(())
+}
+
+/// `ALIGN`, `BUCKETTIMESTAMP` and `FILTER_BY_TS` on TS.RANGE and TS.MRANGE.
+/// BUCKETTIMESTAMP takes one of the `-`, `+`, `~` markers the server accepts, not
+/// a timestamp; FILTER_BY_TS takes a list of exact timestamps.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ts_align_bucket_timestamp_and_filter_by_ts() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create("temp", TsCreateOptions::default().labels([("kind", "t")]))
+        .await?;
+    let _timestamps: Vec<u64> = client
+        .ts_madd([
+            ("temp", 10, 10.),
+            ("temp", 20, 20.),
+            ("temp", 30, 30.),
+            ("temp", 40, 40.),
+        ])
+        .await?;
+
+    // BUCKETTIMESTAMP reports the bucket's start, end or mid time.
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp",
+            "-",
+            "+",
+            TsRangeOptions::default()
+                .aggregation(TsAggregationType::Avg, 20)
+                .bucket_timestamp(TsBucketTimestamp::Low),
+        )
+        .await?;
+    assert_eq!(vec![(0, 10.), (20, 25.), (40, 40.)], results);
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp",
+            "-",
+            "+",
+            TsRangeOptions::default()
+                .aggregation(TsAggregationType::Avg, 20)
+                .bucket_timestamp(TsBucketTimestamp::High),
+        )
+        .await?;
+    assert_eq!(vec![(20, 10.), (40, 25.), (60, 40.)], results);
+
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp",
+            "-",
+            "+",
+            TsRangeOptions::default()
+                .aggregation(TsAggregationType::Avg, 20)
+                .bucket_timestamp(TsBucketTimestamp::Mid),
+        )
+        .await?;
+    assert_eq!(vec![(10, 10.), (30, 25.), (50, 40.)], results);
+
+    // ALIGN moves the bucket reference, so the same aggregation splits
+    // differently. It needs an explicit start timestamp.
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp",
+            "10",
+            "+",
+            TsRangeOptions::default()
+                .align("start")
+                .aggregation(TsAggregationType::Avg, 20),
+        )
+        .await?;
+    assert_eq!(vec![(10, 15.), (30, 35.)], results);
+
+    // FILTER_BY_TS keeps only the listed timestamps.
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp",
+            "-",
+            "+",
+            TsRangeOptions::default().filter_by_ts([10, 30]),
+        )
+        .await?;
+    assert_eq!(vec![(10, 10.), (30, 30.)], results);
+
+    // The same three options on TS.MRANGE.
+    let samples: HashMap<String, TsRangeSample> = client
+        .ts_mrange(
+            "10",
+            "+",
+            TsMRangeOptions::default()
+                .align("start")
+                .aggregation(TsAggregationType::Avg, 20)
+                .bucket_timestamp(TsBucketTimestamp::High),
+            "kind=t",
+            TsGroupByOptions::default(),
+        )
+        .await?;
+    assert_eq!(vec![(30, 15.), (50, 35.)], samples["temp"].values);
+
+    let samples: HashMap<String, TsRangeSample> = client
+        .ts_mrange(
+            "-",
+            "+",
+            TsMRangeOptions::default().filter_by_ts([20]),
+            "kind=t",
+            TsGroupByOptions::default(),
+        )
+        .await?;
+    assert_eq!(vec![(20, 20.)], samples["temp"].values);
 
     Ok(())
 }

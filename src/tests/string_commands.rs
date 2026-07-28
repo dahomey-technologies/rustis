@@ -966,3 +966,53 @@ async fn substr() -> Result<()> {
 
     Ok(())
 }
+
+/// The expiration forms of INCREX the server lists for itself — `EX seconds`,
+/// `PX milliseconds`, `EXAT unix-time-seconds`, `PXAT unix-time-milliseconds` —
+/// plus UBOUND in BYFLOAT mode, where the bound is a floating-point number.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn increx_expirations_and_float_bound() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    let (_, _): (i64, i64) = client
+        .increx("key", IncrExOptions::by_int(1).px(100_000))
+        .await?;
+    let ttl = client.pttl("key").await?;
+    assert!(ttl > 90_000 && ttl <= 100_000);
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let (_, _): (i64, i64) = client
+        .increx("key", IncrExOptions::by_int(1).exat(now + 100))
+        .await?;
+    let ttl = client.ttl("key").await?;
+    assert!(ttl > 90 && ttl <= 100);
+
+    let (_, _): (i64, i64) = client
+        .increx("key", IncrExOptions::by_int(1).pxat((now + 200) * 1000))
+        .await?;
+    let ttl = client.ttl("key").await?;
+    assert!(ttl > 190 && ttl <= 200);
+
+    // UBOUND in BYFLOAT mode: 1.5 + 0.75 would pass 2.0, so the operation is
+    // rejected and reports a zero increment.
+    client.set("float", "1.5").await?;
+    let (value, applied): (f64, f64) = client
+        .increx("float", IncrExOptions::by_float(0.75).ubound_float(2.0))
+        .await?;
+    assert_eq!((1.5, 0.0), (value, applied));
+
+    // Under the bound it lands.
+    let (value, applied): (f64, f64) = client
+        .increx("float", IncrExOptions::by_float(0.25).ubound_float(2.0))
+        .await?;
+    assert_eq!((1.75, 0.25), (value, applied));
+
+    Ok(())
+}

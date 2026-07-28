@@ -1736,11 +1736,21 @@ pub struct FtAggregateOptions<'a> {
         serialize_with = "serialize_flag"
     )]
     verbatim: bool,
+    /// The server accepts ADDSCORES before LOAD only, so this field must stay
+    /// ahead of `load`.
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        serialize_with = "serialize_flag"
+    )]
+    addscores: bool,
     #[serde(
         skip_serializing_if = "SmallVec::is_empty",
         serialize_with = "serialize_slice_with_arg_count"
     )]
     load: SmallVec<[FtAttribute<'a>; 10]>,
+    /// `LOAD *` carries no count, so it cannot go through the counted list above.
+    #[serde(rename = "LOAD", skip_serializing_if = "Option::is_none")]
+    load_all: Option<&'static str>,
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
     expressions: SmallVec<[FtAggregateExpression<'a>; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1758,11 +1768,6 @@ pub struct FtAggregateOptions<'a> {
     params: SmallVec<[(&'a str, &'a str); 10]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scorer: Option<FtScorerOptions<'a>>,
-    #[serde(
-        skip_serializing_if = "std::ops::Not::not",
-        serialize_with = "serialize_flag"
-    )]
-    addscores: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     dialect: Option<u64>,
 }
@@ -1791,9 +1796,12 @@ impl<'a> FtAggregateOptions<'a> {
     }
 
     /// all attributes in a document are loaded.
+    ///
+    /// Mutually exclusive with [`load`](FtAggregateOptions::load): setting both
+    /// emits both clauses and the server keeps the last one.
     #[must_use]
     pub fn load_all(mut self) -> Self {
-        self.load.push(FtAttribute::new("*"));
+        self.load_all = Some("*");
         self
     }
 
@@ -2432,7 +2440,7 @@ pub struct FtSearchResultRow {
     pub id: String,
     /// relative internal score of each document. only if [`withscores`](FtSearchOptions::withscores) is set
     #[serde(default)]
-    pub score: f64,
+    pub score: FtScore,
     /// document payload. only if [`withpayloads`](FtSearchOptions::withpayloads) is set
     #[serde(default)]
     pub payload: String,
@@ -2444,6 +2452,78 @@ pub struct FtSearchResultRow {
     /// collection of attribute/value pairs.
     #[serde(default)]
     pub extra_attributes: Vec<(String, String)>,
+}
+
+/// A row's relevance score, as [`withscores`](FtSearchOptions::withscores) reports it.
+///
+/// With [`explainscore`](FtSearchOptions::explainscore) the server nests the score
+/// breakdown alongside the number, so the number alone is not the whole field.
+#[derive(Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct FtScore {
+    /// The score itself.
+    pub value: f64,
+    /// The lines of the score breakdown, in the order the server prints them.
+    /// Empty unless [`explainscore`](FtSearchOptions::explainscore) was set.
+    pub explanation: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for FtScore {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct FtScoreVisitor;
+
+        /// The breakdown is an arbitrarily nested array of strings.
+        fn collect_explanation(value: &Value, lines: &mut Vec<String>) {
+            match value {
+                Value::SimpleString(line) => lines.push(line.clone()),
+                Value::BulkString(line) => {
+                    lines.push(String::from_utf8_lossy(line).into_owned());
+                }
+                Value::Array(values) => {
+                    for value in values {
+                        collect_explanation(value, lines);
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        impl<'de> Visitor<'de> for FtScoreVisitor {
+            type Value = FtScore;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a score, or a score followed by its breakdown")
+            }
+
+            fn visit_f64<E>(self, value: f64) -> std::result::Result<FtScore, E> {
+                Ok(FtScore {
+                    value,
+                    explanation: Vec::new(),
+                })
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<FtScore, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let value = seq
+                    .next_element::<f64>()?
+                    .ok_or_else(|| de::Error::custom("missing score"))?;
+
+                let mut explanation = Vec::new();
+                while let Some(element) = seq.next_element::<Value>()? {
+                    collect_explanation(&element, &mut explanation);
+                }
+
+                Ok(FtScore { value, explanation })
+            }
+        }
+
+        deserializer.deserialize_any(FtScoreVisitor)
+    }
 }
 
 /// Result for the [`ft_info`](SearchCommands::ft_info) command
@@ -2732,13 +2812,11 @@ pub struct FtSearchOptions<'a> {
     #[serde(rename = "", skip_serializing_if = "SmallVec::is_empty")]
     geofilter: SmallVec<[FtGeoFilterOptions<'a>; 10]>,
     #[serde(
-        rename = "",
         skip_serializing_if = "SmallVec::is_empty",
         serialize_with = "serialize_slice_with_arg_count"
     )]
     inkeys: SmallVec<[&'a str; 10]>,
     #[serde(
-        rename = "",
         skip_serializing_if = "SmallVec::is_empty",
         serialize_with = "serialize_slice_with_arg_count"
     )]
@@ -2880,7 +2958,7 @@ impl<'a> FtSearchOptions<'a> {
     ///
     /// Call multiple times to add multiple keys
     #[must_use]
-    pub fn inkey<A>(mut self, key: &'a str) -> Self {
+    pub fn inkey(mut self, key: &'a str) -> Self {
         self.inkeys.push(key);
         self
     }
@@ -2889,7 +2967,7 @@ impl<'a> FtSearchOptions<'a> {
     ///
     /// Call multiple times to add multiple fields
     #[must_use]
-    pub fn infields<A>(mut self, field: &'a str) -> Self {
+    pub fn infields(mut self, field: &'a str) -> Self {
         self.infields.push(field);
         self
     }
@@ -3066,7 +3144,7 @@ struct FtGeoFilterOptions<'a> {
 }
 
 /// sub-options for the [`search`](SearchCommands::ft_search) option [`summarize`](FtSearchOptions::summarize)
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct FtSearchSummarizeOptions<'a> {
     #[serde(

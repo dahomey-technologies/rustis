@@ -6,166 +6,7 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
-## [Unreleased]
-
-### Added
-
-- **Redis 8.8 support**, established the same way as the 8.6 pass below: the
-  8.8 server's `COMMAND DOCS` diffed against a throwaway 8.6 server, so the
-  delta is what the servers themselves disagree on rather than what a release
-  note mentions.
-
-  A new data type, with its own `ArrayCommands` trait: an **array** is
-  sparse and index-addressed, so unlike a list it has no push or pop — you
-  write at an index you choose (`arset`, `armset`) or at a cursor the array
-  carries (`arinsert`, `arring`, moved with `arseek`). Gaps cost nothing, which
-  is why `arlen` (highest index plus one) and `arcount` (slots that hold a
-  value) never coincide. All eighteen commands are covered: `arcount`, `ardel`,
-  `ardelrange`, `arget`, `argetrange`, `argrep`, `arinfo`, `arinsert`,
-  `arlastitems`, `arlen`, `armget`, `armset`, `arnext`, `arop`, `arring`,
-  `arscan`, `arseek`, `arset`, with `ArGrep`, `ArGrepPredicate`, `ArOperation`,
-  `ArInfoOptions`, `ArLastItemsOptions` and `ArrayInfo`.
-
-  Two more commands:
-  - `increx` (+ `IncrExOptions`), a bounded increment that sets the expiration
-    in the same atomic step. It returns both the new value and the increment
-    that was actually applied, which is `0` when a bound stopped it. With
-    `ubound_int` as the cap and `enx` to start the window only once, a window
-    counter rate limiter no longer needs a Lua script.
-  - `xnack` (+ `XNackMode`, `XNackOptions`), which releases pending messages
-    back to the group's PEL without acknowledging them. The entries lose their
-    owner and their idle time, so another consumer can claim them at once
-    instead of waiting out `min-idle-time`.
-
-  Arguments added to existing commands:
-  - `ZAggregate::Count` on `zinter`, `zinterstore`, `zunion` and `zunionstore`
-  - `FtFieldType::Geoshape` (+ `FtGeoShapeCoordSystem`) on `ft_create`
-  - `JsonSetOptions::fpha` (+ `JsonFpType`) on `json_set`, which declares the
-    storage type of a floating-point homogeneous array
-
-- **Complete command coverage up to Redis 8.6**, established by diffing the
-  server's own `COMMAND DOCS` against the crate rather than by reading release
-  notes, and verified against a Redis 8.6.5 server.
-
-  Redis 8.6 itself:
-  - `HOTKEYS`: `hotkeys_start`, `hotkeys_stop`, `hotkeys_get`, `hotkeys_reset`,
-    `hotkeys_help`, with `HotKeysMetric`, `HotKeysStartOptions` and
-    `HotKeysInfo`. `HOTKEYS GET` replies with one entry per node; the fields
-    tied to a metric are absent — not empty — when that metric was not tracked,
-    so they are `Option`.
-  - Stream idempotent production: `xcfgset` (+ `XCfgSetOptions`),
-    `XAddOptions::idmp` and `XAddOptions::idmp_auto`, and the six IDMP fields on
-    `XStreamInfo`.
-  - `TsAggregationType::CountNan` and `CountAll`.
-
-  Commands that pre-dated 8.6 and had been missed:
-  - `xsetid` (+ `XSetIdOptions` for `ENTRIESADDED` / `MAXDELETEDID`)
-  - `cluster_myshardid`
-  - `module_loadex` (+ `ModuleLoadexOptions`) and `module_unload`
-  - `json_merge`
-  - `bf_card`, `topk_count`
-  - `vismember`, `vrange`
-
-  Arguments that existed on implemented commands but were not reachable:
-  - `XClaimOptions::last_id` (`LASTID`)
-  - `JsonGetOptions::format` with `JsonGetFormat::{String, Expand1, Expand}`
-  - `FtFieldSchema::index_missing` / `index_empty`, and
-    `FtCreateOptions::index_all` (+ `FtIndexAll`), which takes an explicit
-    `ENABLE` / `DISABLE` value rather than being a flag
-
-- **Rustis now emits [`tracing`](https://docs.rs/tracing) events and spans**
-  instead of plain `log` records.
-
-  **If you use `log`, nothing changes and you need to do nothing.** The `log`
-  feature of `tracing` is enabled, so every event also emits a `log` record and
-  existing `env_logger`-style setups keep receiving the same output.
-
-  What you gain by installing a `tracing` subscriber instead: every event from
-  the network task is wrapped in a `connection` span carrying a `tag` field, so
-  output from several clients stays attributable; reconnections open a nested
-  `reconnect` span grouping the in-flight purge, the retries and the
-  subscription replay; and in cluster mode, events about a specific node carry a
-  `node` field. Connection identity is no longer duplicated into each message —
-  it is a structured field a collector can index.
-
-- **A declared minimum supported Rust version: 1.88.** `Cargo.toml` now carries
-  `rust-version`, and a CI job compiles both runtimes with exactly that
-  toolchain, so the number is verified rather than asserted. Let chains hold the
-  floor there; edition 2024 on its own would allow 1.85. Raising the MSRV will be
-  treated as a breaking change and announced here.
-
-### Changed
-
-- Three `if let` guards in the `Value` deserializer were rewritten as plain
-  matches. They were the only construct in the crate requiring Rust 1.95, so
-  removing them lowered the compiler floor by seven releases. Behavior is
-  unchanged.
-- Documentation only, no API change:
-  - `BlockingCommands` and each of its methods now state prominently that a
-    blocking command monopolizes its connection, that `command_timeout` bounds
-    only the caller's wait and does not free the connection server-side, and
-    that these commands belong on a dedicated client. The constraint was
-    documented before, but only in the client module's *Limitations* paragraph.
-  - The README gained a *Safety* section explaining `#![forbid(unsafe_code)]` as
-    a deliberate position — what it costs on a length-delimited protocol, and
-    what actually guards the hostile-input surface instead (the panic lint
-    policy, the configurable RESP limits, the fuzz targets).
-  - The `check_resp2_array` heuristic in the `Value` deserializer is now
-    documented, including where it is looser than the equivalent rule in the
-    RESP deserializer.
-  - The crate-level documentation claimed command coverage "until Redis 8.0";
-    it is 8.4, as the README already said.
-
-### Fixed
-
-- **`ZAggregate` was never introduced by its `AGGREGATE` token.** `zinter`,
-  `zinterstore`, `zunion` and `zunionstore` appended the bare value, so
-  `zinter(keys, None, ZAggregate::Sum)` sent `ZINTER 2 k1 k2 SUM` and failed
-  with `syntax error`. The whole enum was therefore unusable, and no test
-  passed one — the same blind spot as the two token bugs below. Found while
-  adding `ZAggregate::Count`.
-
-- **`XPendingMessageResult::elapsed_millis` could not hold the value the server
-  sends.** It was a `u64`, but `XPENDING` answers `-1` for an entry with no
-  delivery to measure from — the state `xnack` puts entries in — which failed
-  to deserialize. It is now an `i64`. See the breaking-changes section.
-
-- **Two option builders emitted a token the server rejects, so the options were
-  unusable.** Both came from a `rename_all` rule silently producing the wrong
-  spelling, and neither had a call site anywhere in the crate — which is why no
-  test caught them:
-  - `ZRangeOptions::reverse()` emitted `REVERSE` instead of `REV`, so any
-    `zrange` or `zrangestore` using it failed with `syntax error`.
-  - `VSimOptions::with_attributes()` emitted `WITHATTRIBUTES` instead of
-    `WITHATTRIBS`, so any `vsim` requesting attributes failed the same way.
-
-  Both now have a live integration test and a wire-form test pinning the exact
-  token.
-
-- **A cluster client deadlocked after any subscription.** A subscription is
-  acknowledged by a push frame, which the cluster connection hands straight to
-  the network task instead of filing it as the answer to the request it sent.
-  That request stayed at the head of the pending queue forever, and since
-  replies are reported in order, the first reply coming from any other node
-  waited behind it — the connection stopped answering entirely. The
-  acknowledgement now retires the request; an error reply such as `MOVED` is
-  still filed as a result, so redirections keep working.
-- **`spublish` was sent to an arbitrary node.** Its shard channel was passed as
-  a plain argument rather than as a key, so the cluster client could not route
-  it and relied on the server's `MOVED` to find the shard — one useless round
-  trip per call, on the path that then hit the deadlock above. `ssubscribe` and
-  `sunsubscribe` already routed by slot.
-- Eleven broken links in the published documentation, which rendered as dead
-  text on docs.rs: `resp::Args` (a trait that does not exist — arguments are any
-  `serde::Serialize`), `Command::arg` (it is `CommandBuilder::arg`),
-  `Client::send_batch` (removed from the public API, still linked from three
-  places — use `Pipeline`), `FtAggregateOptions::reduce` (it is on `FtGroupBy`),
-  `FtSugGetOptions::withpayload` (plural), `TsMGetOptions::selected_labels` (the
-  method is `selected_label`), `Command::compute_slots` (private), a bare
-  `Serialize`, and a doubled parenthesis swallowing a URL. `cargo doc` now runs
-  in CI with warnings denied, so these cannot come back unnoticed.
-
-## [0.20.0] - 2026-07-27
+## [0.20.0] - 2026-07-28
 
 This release closes a large correctness and performance pass over the RESP
 layer, the network task, the cluster client and the client-side cache. It
@@ -289,6 +130,25 @@ contains breaking changes; read that section before upgrading.
     and `SentinelCommands::sentinel_failover`. Only a call site passing the
     parameter explicitly (`cluster_forget::<T>(…)`) needs changing.
 
+- **Eight option builders changed shape because they could not express their
+  command.** All eight are described in the fixes section; the API deltas are:
+  - `HScanOptions::no_values` was removed, replaced by
+    `HashCommands::hscan_no_values`, which returns `(u64, R)` and emits `NOVALUES`
+    itself.
+  - `SortOptions::store` was removed; use `sort_and_store`, which appends `STORE`
+    itself.
+  - `BfInfoResult::expansion_rate` is an `Option<usize>`, not a `usize`.
+  - `TsInfoResult::key_self_name` is an `Option<String>`, not a `String`.
+  - `FtSearchResultRow::score` is an `FtScore { value, explanation }`, not an
+    `f64`.
+  - `TsRangeOptions::bucket_timestamp` and `TsMRangeOptions::bucket_timestamp`
+    take the new `TsBucketTimestamp` (`Low` / `High` / `Mid`), not a `u64`.
+  - `TsRangeOptions::filter_by_ts` and `TsMRangeOptions::filter_by_ts` take
+    `impl IntoIterator<Item = u64>`, not a single `&str`.
+  - `FtSearchOptions::inkey` and `FtSearchOptions::infields` lost an
+    unconstrained generic parameter, which had made them uncallable without a
+    turbofish naming an unused type — so no working caller can break.
+
 ### Security
 
 - Passwords are no longer written in clear text by `Display for Config`. Both the
@@ -310,6 +170,90 @@ contains breaking changes; read that section before upgrading.
   command along with the reconnection loop.
 
 ### Added
+
+- **Redis 8.8 support**, established the same way as the 8.6 pass below: the
+  8.8 server's `COMMAND DOCS` diffed against a throwaway 8.6 server, so the
+  delta is what the servers themselves disagree on rather than what a release
+  note mentions.
+
+  A new data type, with its own `ArrayCommands` trait: an **array** is
+  sparse and index-addressed, so unlike a list it has no push or pop — you
+  write at an index you choose (`arset`, `armset`) or at a cursor the array
+  carries (`arinsert`, `arring`, moved with `arseek`). Gaps cost nothing, which
+  is why `arlen` (highest index plus one) and `arcount` (slots that hold a
+  value) never coincide. All eighteen commands are covered: `arcount`, `ardel`,
+  `ardelrange`, `arget`, `argetrange`, `argrep`, `arinfo`, `arinsert`,
+  `arlastitems`, `arlen`, `armget`, `armset`, `arnext`, `arop`, `arring`,
+  `arscan`, `arseek`, `arset`, with `ArGrep`, `ArGrepPredicate`, `ArOperation`,
+  `ArInfoOptions`, `ArLastItemsOptions` and `ArrayInfo`.
+
+  Two more commands:
+  - `increx` (+ `IncrExOptions`), a bounded increment that sets the expiration
+    in the same atomic step. It returns both the new value and the increment
+    that was actually applied, which is `0` when a bound stopped it. With
+    `ubound_int` as the cap and `enx` to start the window only once, a window
+    counter rate limiter no longer needs a Lua script.
+  - `xnack` (+ `XNackMode`, `XNackOptions`), which releases pending messages
+    back to the group's PEL without acknowledging them. The entries lose their
+    owner and their idle time, so another consumer can claim them at once
+    instead of waiting out `min-idle-time`.
+
+  Arguments added to existing commands:
+  - `ZAggregate::Count` on `zinter`, `zinterstore`, `zunion` and `zunionstore`
+  - `FtFieldType::Geoshape` (+ `FtGeoShapeCoordSystem`) on `ft_create`
+  - `JsonSetOptions::fpha` (+ `JsonFpType`) on `json_set`, which declares the
+    storage type of a floating-point homogeneous array
+
+- **Complete command coverage up to Redis 8.6**, established by diffing the
+  server's own `COMMAND DOCS` against the crate rather than by reading release
+  notes, and verified against a Redis 8.6.5 server.
+
+  Redis 8.6 itself:
+  - `HOTKEYS`: `hotkeys_start`, `hotkeys_stop`, `hotkeys_get`, `hotkeys_reset`,
+    `hotkeys_help`, with `HotKeysMetric`, `HotKeysStartOptions` and
+    `HotKeysInfo`. `HOTKEYS GET` replies with one entry per node; the fields
+    tied to a metric are absent — not empty — when that metric was not tracked,
+    so they are `Option`.
+  - Stream idempotent production: `xcfgset` (+ `XCfgSetOptions`),
+    `XAddOptions::idmp` and `XAddOptions::idmp_auto`, and the six IDMP fields on
+    `XStreamInfo`.
+  - `TsAggregationType::CountNan` and `CountAll`.
+
+  Commands that pre-dated 8.6 and had been missed:
+  - `xsetid` (+ `XSetIdOptions` for `ENTRIESADDED` / `MAXDELETEDID`)
+  - `cluster_myshardid`
+  - `module_loadex` (+ `ModuleLoadexOptions`) and `module_unload`
+  - `json_merge`
+  - `bf_card`, `topk_count`
+  - `vismember`, `vrange`
+
+  Arguments that existed on implemented commands but were not reachable:
+  - `XClaimOptions::last_id` (`LASTID`)
+  - `JsonGetOptions::format` with `JsonGetFormat::{String, Expand1, Expand}`
+  - `FtFieldSchema::index_missing` / `index_empty`, and
+    `FtCreateOptions::index_all` (+ `FtIndexAll`), which takes an explicit
+    `ENABLE` / `DISABLE` value rather than being a flag
+
+- **Rustis now emits [`tracing`](https://docs.rs/tracing) events and spans**
+  instead of plain `log` records.
+
+  **If you use `log`, nothing changes and you need to do nothing.** The `log`
+  feature of `tracing` is enabled, so every event also emits a `log` record and
+  existing `env_logger`-style setups keep receiving the same output.
+
+  What you gain by installing a `tracing` subscriber instead: every event from
+  the network task is wrapped in a `connection` span carrying a `tag` field, so
+  output from several clients stays attributable; reconnections open a nested
+  `reconnect` span grouping the in-flight purge, the retries and the
+  subscription replay; and in cluster mode, events about a specific node carry a
+  `node` field. Connection identity is no longer duplicated into each message —
+  it is a structured field a collector can index.
+
+- **A declared minimum supported Rust version: 1.88.** `Cargo.toml` now carries
+  `rust-version`, and a CI job compiles both runtimes with exactly that
+  toolchain, so the number is verified rather than asserted. Let chains hold the
+  floor there; edition 2024 on its own would allow 1.85. Raising the MSRV will be
+  treated as a breaking change and announced here.
 
 - Redis 8.4 command support: `FT.HYBRID` (including the advanced
   post-processing options), `CLUSTER SLOT-STATS`, `CLUSTER MIGRATION`, `DIGEST`
@@ -357,6 +301,26 @@ contains breaking changes; read that section before upgrading.
 
 ### Changed
 
+- Three `if let` guards in the `Value` deserializer were rewritten as plain
+  matches. They were the only construct in the crate requiring Rust 1.95, so
+  removing them lowered the compiler floor by seven releases. Behavior is
+  unchanged.
+- Documentation only, no API change:
+  - `BlockingCommands` and each of its methods now state prominently that a
+    blocking command monopolizes its connection, that `command_timeout` bounds
+    only the caller's wait and does not free the connection server-side, and
+    that these commands belong on a dedicated client. The constraint was
+    documented before, but only in the client module's *Limitations* paragraph.
+  - The README gained a *Safety* section explaining `#![forbid(unsafe_code)]` as
+    a deliberate position — what it costs on a length-delimited protocol, and
+    what actually guards the hostile-input surface instead (the panic lint
+    policy, the configurable RESP limits, the fuzz targets).
+  - The `check_resp2_array` heuristic in the `Value` deserializer is now
+    documented, including where it is looser than the equivalent rule in the
+    RESP deserializer.
+  - The crate-level documentation claimed command coverage "until Redis 8.0";
+    it is 8.4, as the README already said.
+
 - **RESP collection decoding now uses a flat parse tape.** A collection reply is
   parsed once into a sequence of fixed-width nodes (one per element, all nesting
   levels) held in a recycled buffer, and reading an element is an O(1) node
@@ -402,6 +366,95 @@ contains breaking changes; read that section before upgrading.
   connection's lifetime.
 
 ### Fixed
+
+- **Eighty-six option builders that nothing called got a test, and seventeen of
+  them were broken.** Counting `*Options` / `*Schema` / `*Attribute` builder
+  methods rather than commands shows that a tested command says nothing about its
+  options: `ft_search` had a test all along and eleven of its options had never
+  been sent once. Each of the 86 now has one, written from the syntax the server
+  prints for itself and red before green. Thirteen of the seventeen defects were
+  options that could not work in any call at all.
+
+  Wrong token or wrong argument shape:
+  - `ClientKillOptions::user` emitted `USERNAME` instead of `USER`, so any use
+    answered `ERR syntax error`.
+  - `ClientKillOptions::addr` and `laddr` sent `ADDR ip port` as two arguments
+    where the server wants a single `ip:port`. Same error.
+  - `ZAddOptions::change` emitted `CHANGE` instead of `CH`.
+  - `FtSearchOptions::inkey` and `infields` suppressed their own field name
+    through `#[serde(rename = "")]`, so the count and values went out with no
+    `INKEYS` / `INFIELDS` token.
+  - `FtAggregateOptions::load_all` emitted `LOAD 1 *`; `LOAD *` carries no count,
+    and the counted form loads a field named `*`, which is to say nothing.
+  - `FtAggregateOptions::add_scores` was serialized after `LOAD`, and the server
+    accepts `ADDSCORES` only before it.
+
+  Options no signature could express:
+  - `TsGroupByOptions` had no `Default`, so `ts_mrange` and `ts_mrevrange` forced
+    a `GROUPBY` the server makes optional — and grouping renames every returned
+    series. It now defaults to emitting nothing.
+  - `FtSearchSummarizeOptions` had neither `Default` nor a constructor, so
+    `FtSearchOptions::summarize` had no argument that could be built.
+
+  Replies the declared type could not hold:
+  - `client_list` returned one phantom `ClientInfo` with `id: 0` on every call:
+    the reply is newline-terminated and the trailing empty line was parsed as a
+    client.
+  - `ts_info(key, false)` always failed with `missing field keySelfName`; the
+    existing test only ever passed `true`.
+  - `bf_info_all` always failed on a `NONSCALING` filter — the filters the two
+    `nonscaling()` options exist to create.
+  - `FT.SEARCH ... EXPLAINSCORE` always failed with `CannotParseDouble`, so the
+    option's own output was unreachable.
+
+  See `RUSTIS_AUDIT.md` §3.2 for the full table and what the pass says about
+  reviewing builders by reading them.
+- **`ZAggregate` was never introduced by its `AGGREGATE` token.** `zinter`,
+  `zinterstore`, `zunion` and `zunionstore` appended the bare value, so
+  `zinter(keys, None, ZAggregate::Sum)` sent `ZINTER 2 k1 k2 SUM` and failed
+  with `syntax error`. The whole enum was therefore unusable, and no test
+  passed one — the same blind spot as the two token bugs below. Found while
+  adding `ZAggregate::Count`.
+
+- **`XPendingMessageResult::elapsed_millis` could not hold the value the server
+  sends.** It was a `u64`, but `XPENDING` answers `-1` for an entry with no
+  delivery to measure from — the state `xnack` puts entries in — which failed
+  to deserialize. It is now an `i64`. See the breaking-changes section.
+
+- **Two option builders emitted a token the server rejects, so the options were
+  unusable.** Both came from a `rename_all` rule silently producing the wrong
+  spelling, and neither had a call site anywhere in the crate — which is why no
+  test caught them:
+  - `ZRangeOptions::reverse()` emitted `REVERSE` instead of `REV`, so any
+    `zrange` or `zrangestore` using it failed with `syntax error`.
+  - `VSimOptions::with_attributes()` emitted `WITHATTRIBUTES` instead of
+    `WITHATTRIBS`, so any `vsim` requesting attributes failed the same way.
+
+  Both now have a live integration test and a wire-form test pinning the exact
+  token.
+
+- **A cluster client deadlocked after any subscription.** A subscription is
+  acknowledged by a push frame, which the cluster connection hands straight to
+  the network task instead of filing it as the answer to the request it sent.
+  That request stayed at the head of the pending queue forever, and since
+  replies are reported in order, the first reply coming from any other node
+  waited behind it — the connection stopped answering entirely. The
+  acknowledgement now retires the request; an error reply such as `MOVED` is
+  still filed as a result, so redirections keep working.
+- **`spublish` was sent to an arbitrary node.** Its shard channel was passed as
+  a plain argument rather than as a key, so the cluster client could not route
+  it and relied on the server's `MOVED` to find the shard — one useless round
+  trip per call, on the path that then hit the deadlock above. `ssubscribe` and
+  `sunsubscribe` already routed by slot.
+- Eleven broken links in the published documentation, which rendered as dead
+  text on docs.rs: `resp::Args` (a trait that does not exist — arguments are any
+  `serde::Serialize`), `Command::arg` (it is `CommandBuilder::arg`),
+  `Client::send_batch` (removed from the public API, still linked from three
+  places — use `Pipeline`), `FtAggregateOptions::reduce` (it is on `FtGroupBy`),
+  `FtSugGetOptions::withpayload` (plural), `TsMGetOptions::selected_labels` (the
+  method is `selected_label`), `Command::compute_slots` (private), a bare
+  `Serialize`, and a doubled parenthesis swallowing a URL. `cargo doc` now runs
+  in CI with warnings denied, so these cannot come back unnoticed.
 
 - **`zadd_incr` never incremented anything.** It omitted the `INCR` keyword, so
   it sent a plain `ZADD` and answered the number of elements added — `Some(0.0)`
@@ -492,5 +545,4 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
-[Unreleased]: https://github.com/dahomey-technologies/rustis/compare/0.20.0...HEAD
 [0.20.0]: https://github.com/dahomey-technologies/rustis/compare/0.19.3...0.20.0

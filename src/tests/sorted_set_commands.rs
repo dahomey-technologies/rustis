@@ -1364,3 +1364,72 @@ async fn zunionstore() -> Result<()> {
 
     Ok(())
 }
+
+/// `ZADD key [NX|XX] [GT|LT] [CH] [INCR] score member ...`. GT/LT only move a
+/// score in the named direction; CH makes the reply count changed elements, not
+/// added ones.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn zadd_change_and_comparison() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.del("key").await?;
+    client
+        .zadd("key", (5.0, "member"), ZAddOptions::default())
+        .await?;
+
+    // GT refuses a lower score, and CH reports that nothing changed.
+    let changed = client
+        .zadd(
+            "key",
+            (3.0, "member"),
+            ZAddOptions::default()
+                .comparison(ZAddComparison::GT)
+                .change(),
+        )
+        .await?;
+    assert_eq!(0, changed);
+    let score: Option<f64> = client.zscore("key", "member").await?;
+    assert_eq!(Some(5.0), score);
+
+    // GT accepts a higher score, and CH counts the update a plain ZADD would not.
+    let changed = client
+        .zadd(
+            "key",
+            (7.0, "member"),
+            ZAddOptions::default()
+                .comparison(ZAddComparison::GT)
+                .change(),
+        )
+        .await?;
+    assert_eq!(1, changed);
+    let score: Option<f64> = client.zscore("key", "member").await?;
+    assert_eq!(Some(7.0), score);
+
+    // LT is the mirror image.
+    let changed = client
+        .zadd(
+            "key",
+            (9.0, "member"),
+            ZAddOptions::default()
+                .comparison(ZAddComparison::LT)
+                .change(),
+        )
+        .await?;
+    assert_eq!(0, changed);
+    let changed = client
+        .zadd(
+            "key",
+            (2.0, "member"),
+            ZAddOptions::default()
+                .comparison(ZAddComparison::LT)
+                .change(),
+        )
+        .await?;
+    assert_eq!(1, changed);
+    let score: Option<f64> = client.zscore("key", "member").await?;
+    assert_eq!(Some(2.0), score);
+
+    Ok(())
+}

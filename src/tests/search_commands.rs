@@ -6,10 +6,11 @@ use crate::{
         FtCreateOptions, FtFieldSchema, FtFieldType, FtFlatVectorFieldAttributes,
         FtGeoShapeCoordSystem, FtGroupBy, FtHybridCombine, FtHybridFormat, FtHybridOptions,
         FtHybridSearch, FtHybridVectorQuery, FtHybridVsim, FtIndexAll, FtIndexDataType, FtLanguage,
-        FtPhoneticMatcher, FtReducer, FtSearchOptions, FtSearchResult, FtSortBy, FtSortByProperty,
-        FtSpellCheckOptions, FtSugAddOptions, FtSugGetOptions, FtTermType, FtVectorDistanceMetric,
-        FtVectorFieldAlgorithm, FtVectorType, FtWithCursorOptions, HashCommands, JsonCommands,
-        SearchCommands, ServerCommands, SortOrder,
+        FtPhoneticMatcher, FtReducer, FtSearchHighlightOptions, FtSearchOptions, FtSearchResult,
+        FtSearchSummarizeOptions, FtSortBy, FtSortByProperty, FtSpellCheckOptions, FtSugAddOptions,
+        FtSugGetOptions, FtTermType, FtVectorDistanceMetric, FtVectorFieldAlgorithm, FtVectorType,
+        FtWithCursorOptions, GeoUnit, HashCommands, JsonCommands, SearchCommands, ServerCommands,
+        SortOrder,
     },
     network::sleep,
     resp::{RefBulkString, Value},
@@ -2062,4 +2063,641 @@ fn ft_create_index_all_args() {
         "FT.CREATE idx ON HASH INDEXALL ENABLE SCHEMA t TEXT",
         cmd.to_string()
     );
+}
+
+/// Builds the index the FT.SEARCH option tests below share.
+async fn create_search_options_index(client: &Client) -> Result<()> {
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .hset(
+            "doc:1",
+            [
+                ("title", "dogs"),
+                ("data", "foo wizard bar"),
+                ("published_at", "2019"),
+                ("loc", "15.0,37.0"),
+            ],
+        )
+        .await?;
+    client
+        .hset(
+            "doc:2",
+            [
+                ("title", "cats"),
+                ("data", "hello world wizard"),
+                ("published_at", "2020"),
+                ("loc", "13.0,38.0"),
+            ],
+        )
+        .await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc")
+                .schema(
+                    FtFieldSchema::identifier("title")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("data")
+                        .field_type(FtFieldType::Text)
+                        .sortable(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("published_at")
+                        .field_type(FtFieldType::Numeric)
+                        .sortable(),
+                )
+                .schema(FtFieldSchema::identifier("loc").field_type(FtFieldType::Geo)),
+        )
+        .await?;
+    wait_for_index_scanned(client, "index").await
+}
+
+/// `VERBATIM` searches the query terms as written, without stemming, so a query
+/// that only matches through a stem finds nothing.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_verbatim() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    // "dog" reaches "dogs" through the stemmer.
+    let result = client
+        .ft_search("index", "dog", FtSearchOptions::default().nocontent())
+        .await?;
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "dog",
+            FtSearchOptions::default().verbatim().nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    Ok(())
+}
+
+/// `EXPANDER expander` names the query expander. `SBSTEM` is the built-in
+/// stemmer, which reaches "dogs" from "dog"; an unknown expander name expands
+/// nothing, so the same query matches no document.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_expander() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "dog",
+            FtSearchOptions::default().expander("SBSTEM").nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "dog",
+            FtSearchOptions::default()
+                .expander("NOSUCHEXPANDER")
+                .nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    Ok(())
+}
+
+/// `EXPLAINSCORE` adds the score breakdown next to each score, so it only means
+/// anything alongside WITHSCORES.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_explainscore() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "@title:dogs",
+            FtSearchOptions::default().withscores().explainscore(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert!(result.results[0].score.value > 0.);
+    // The breakdown the option exists for.
+    let explanation = &result.results[0].score.explanation;
+    assert!(!explanation.is_empty());
+    assert!(explanation[0].contains("BM25"));
+
+    // Without EXPLAINSCORE the score carries no breakdown.
+    let result = client
+        .ft_search(
+            "index",
+            "@title:dogs",
+            FtSearchOptions::default().withscores(),
+        )
+        .await?;
+    assert!(result.results[0].score.value > 0.);
+    assert!(result.results[0].score.explanation.is_empty());
+
+    Ok(())
+}
+
+/// `GEOFILTER geo_field lon lat radius m|km|mi|ft` restricts the results to a
+/// radius around a point.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_geo_filter() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default()
+                .geo_filter("loc", 15.0, 37.0, 100.0, GeoUnit::Kilometers)
+                .nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("doc:1", result.results[0].id);
+
+    // Wide enough to take both documents in.
+    let result = client
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default()
+                .geo_filter("loc", 15.0, 37.0, 500.0, GeoUnit::Kilometers)
+                .nocontent(),
+        )
+        .await?;
+    assert_eq!(2, result.total_results);
+
+    Ok(())
+}
+
+/// `INKEYS count key ...` and `INFIELDS count field ...` limit the search to a
+/// set of document keys and to a set of indexed fields.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_inkey_and_infields() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    // "wizard" is in both documents; INKEYS keeps one.
+    let result = client
+        .ft_search(
+            "index",
+            "wizard",
+            FtSearchOptions::default().inkey("doc:1").nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("doc:1", result.results[0].id);
+
+    let result = client
+        .ft_search(
+            "index",
+            "wizard",
+            FtSearchOptions::default()
+                .inkey("doc:1")
+                .inkey("doc:2")
+                .nocontent(),
+        )
+        .await?;
+    assert_eq!(2, result.total_results);
+
+    // "dogs" is in `title`, so restricting to `data` finds nothing.
+    let result = client
+        .ft_search(
+            "index",
+            "dogs",
+            FtSearchOptions::default().infields("title").nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "dogs",
+            FtSearchOptions::default().infields("data").nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    Ok(())
+}
+
+/// `SLOP slop` allows intervening terms between the query terms and `INORDER`
+/// requires them to appear in the query's order.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_slop_and_inorder() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    // doc:2 holds "hello world wizard": one term sits between the two searched.
+    let result = client
+        .ft_search(
+            "index",
+            "hello wizard",
+            FtSearchOptions::default().slop(1).inorder().nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+    assert_eq!("doc:2", result.results[0].id);
+
+    // No intervening term allowed, so the phrase no longer matches.
+    let result = client
+        .ft_search(
+            "index",
+            "hello wizard",
+            FtSearchOptions::default().slop(0).inorder().nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    // INORDER with the terms reversed rejects it too.
+    let result = client
+        .ft_search(
+            "index",
+            "wizard hello",
+            FtSearchOptions::default().slop(1).inorder().nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    Ok(())
+}
+
+/// `SUMMARIZE [FIELDS count field ...] [FRAGS num] [LEN fragsize]
+/// [SEPARATOR separator]` and `HIGHLIGHT [FIELDS ...] [TAGS open close]` rewrite
+/// the returned field values around the matched terms.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_summarize_and_highlight() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "@data:wizard",
+            FtSearchOptions::default()
+                .summarize(
+                    FtSearchSummarizeOptions::default()
+                        .field("data")
+                        .frags(1)
+                        .len(1)
+                        .separator("|"),
+                )
+                .highlight(
+                    FtSearchHighlightOptions::default()
+                        .fields("data")
+                        .tags("<b>", "</b>"),
+                ),
+        )
+        .await?;
+
+    assert_eq!(2, result.total_results);
+    for row in &result.results {
+        let data = row
+            .extra_attributes
+            .iter()
+            .chain(row.values.iter())
+            .find(|(name, _)| name == "data")
+            .map(|(_, value)| value.clone())
+            .expect("the data attribute");
+        // The term is wrapped in the requested tags, and the snippet is cut down
+        // to one short fragment closed by the requested separator.
+        assert!(data.contains("<b>wizard</b>"));
+        assert!(data.ends_with('|'));
+        assert!(!data.contains("hello"));
+        assert!(!data.contains("foo"));
+    }
+
+    Ok(())
+}
+
+/// `TIMEOUT milliseconds` overrides the index-level timeout for one query.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_timeout() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "*",
+            FtSearchOptions::default().timeout(500).nocontent(),
+        )
+        .await?;
+    assert_eq!(2, result.total_results);
+
+    Ok(())
+}
+
+/// `RETURN count identifier [AS property]` renames the returned attribute, and
+/// the AS clause is what makes the count 3 rather than 1.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_search_return_as() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    let result = client
+        .ft_search(
+            "index",
+            "@title:dogs",
+            FtSearchOptions::default()._return(FtAttribute::new("title").r#as("name")),
+        )
+        .await?;
+
+    assert_eq!(1, result.total_results);
+    let attributes: Vec<(String, String)> = result.results[0]
+        .extra_attributes
+        .iter()
+        .chain(result.results[0].values.iter())
+        .cloned()
+        .collect();
+    assert_eq!(vec![("name".to_owned(), "dogs".to_owned())], attributes);
+
+    Ok(())
+}
+
+/// `FT.AGGREGATE ... [VERBATIM] [LOAD count field ... | LOAD *] [ADDSCORES]`.
+/// `LOAD *` carries no count, and ADDSCORES adds a `__score` property to every
+/// record.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_aggregate_verbatim_load_all_and_add_scores() -> Result<()> {
+    let client = get_test_client().await?;
+    create_search_options_index(&client).await?;
+
+    // LOAD * loads every attribute of the document.
+    let result = client
+        .ft_aggregate("index", "dog", FtAggregateOptions::default().load_all())
+        .await?;
+    assert_eq!(1, result.results.len());
+    let loaded: HashMap<String, String> = result.results[0]
+        .extra_attributes
+        .iter()
+        .chain(result.results[0].values.iter())
+        .cloned()
+        .collect();
+    assert_eq!("dogs", loaded["title"]);
+    assert_eq!("foo wizard bar", loaded["data"]);
+
+    // ADDSCORES exposes the relevance score as a loadable property.
+    let result = client
+        .ft_aggregate(
+            "index",
+            "dog",
+            FtAggregateOptions::default()
+                .add_scores()
+                .load(FtAttribute::new("title")),
+        )
+        .await?;
+    assert_eq!(1, result.results.len());
+    let loaded: HashMap<String, String> = result.results[0]
+        .extra_attributes
+        .iter()
+        .chain(result.results[0].values.iter())
+        .cloned()
+        .collect();
+    assert!(loaded.contains_key("__score"));
+    assert!(loaded["__score"].parse::<f64>().unwrap() > 0.);
+
+    // VERBATIM drops the stemming that let "dog" reach "dogs".
+    let result = client
+        .ft_aggregate(
+            "index",
+            "dog",
+            FtAggregateOptions::default()
+                .verbatim()
+                .load(FtAttribute::new("title")),
+        )
+        .await?;
+    assert!(result.results.is_empty());
+
+    Ok(())
+}
+
+/// `FT.CREATE ... [NOOFFSETS] [NOFIELDS]`, both reported back in FT.INFO's
+/// `index_options`. NOOFFSETS implies NOHL, which is why the server lists three
+/// options for two requested.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_create_no_offsets_and_nofields() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc")
+                .no_offsets()
+                .nofields()
+                .schema(FtFieldSchema::identifier("title").field_type(FtFieldType::Text)),
+        )
+        .await?;
+
+    let info = client.ft_info("index").await?;
+    let options: HashSet<String> = info.index_options.into_iter().collect();
+    assert!(options.contains("NOOFFSETS"));
+    assert!(options.contains("NOFIELDS"));
+    assert!(options.contains("NOHL"));
+
+    Ok(())
+}
+
+/// `CASESENSITIVE` on a TAG attribute and `WITHSUFFIXTRIE` on a TEXT attribute.
+/// The first changes what a tag query matches, the second is reported back by
+/// FT.INFO.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_field_schema_case_sensitive_and_suffix_trie() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .hset("doc:1", [("tag", "Foo"), ("body", "wizard")])
+        .await?;
+
+    client
+        .ft_create(
+            "index",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc")
+                .schema(
+                    FtFieldSchema::identifier("tag")
+                        .field_type(FtFieldType::Tag)
+                        .case_sensitive(),
+                )
+                .schema(
+                    FtFieldSchema::identifier("body")
+                        .field_type(FtFieldType::Text)
+                        .with_suffix_trie(),
+                ),
+        )
+        .await?;
+    wait_for_index_scanned(&client, "index").await?;
+
+    // The tag keeps its original case, so only the exact case matches.
+    let result = client
+        .ft_search(
+            "index",
+            "@tag:{Foo}",
+            FtSearchOptions::default().nocontent(),
+        )
+        .await?;
+    assert_eq!(1, result.total_results);
+
+    let result = client
+        .ft_search(
+            "index",
+            "@tag:{foo}",
+            FtSearchOptions::default().nocontent(),
+        )
+        .await?;
+    assert_eq!(0, result.total_results);
+
+    let info = client.ft_info("index").await?;
+    let tag = info
+        .attributes
+        .iter()
+        .find(|attribute| attribute.identifier == "tag")
+        .expect("the tag attribute");
+    assert!(tag.case_sensitive);
+    assert!(!tag.with_suffixe_trie);
+
+    let body = info
+        .attributes
+        .iter()
+        .find(|attribute| attribute.identifier == "body")
+        .expect("the body attribute");
+    assert!(body.with_suffixe_trie);
+    assert!(!body.case_sensitive);
+
+    Ok(())
+}
+
+/// `LOAD *` and `NOSORT` in the post-processing pipeline of FT.HYBRID.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_hybrid_load_all_and_nosort() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_create(
+            "hybrid_idx",
+            FtCreateOptions::default()
+                .on(FtIndexDataType::Hash)
+                .prefix("doc:")
+                .schema(FtFieldSchema::identifier("content").field_type(FtFieldType::Text))
+                .schema(
+                    FtFieldSchema::identifier("embedding").field_type(FtFieldType::Vector(Some(
+                        FtVectorFieldAlgorithm::Flat(FtFlatVectorFieldAttributes::new(
+                            FtVectorType::Float32,
+                            4,
+                            FtVectorDistanceMetric::L2,
+                        )),
+                    ))),
+                ),
+        )
+        .await?;
+
+    let embedding = |v: [f32; 4]| v.iter().flat_map(|f| f.to_le_bytes()).collect::<Vec<u8>>();
+    let doc1 = embedding([1.0, 0.0, 0.0, 0.0]);
+    client
+        .hset(
+            "doc:1",
+            [
+                ("content", RefBulkString::new(b"red bicycle")),
+                ("embedding", RefBulkString::new(&doc1)),
+            ],
+        )
+        .await?;
+    wait_for_index_scanned(&client, "hybrid_idx").await?;
+
+    let query_vector = embedding([1.0, 0.0, 0.0, 0.0]);
+    let result: Value = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: None,
+            }),
+            FtHybridOptions::default()
+                .combine(FtHybridCombine::Rrf {
+                    constant: None,
+                    window: Some(40),
+                })
+                .load_all()
+                .nosort()
+                .limit(0, 10)
+                .param("vec", &query_vector),
+        )
+        .await?;
+    assert!(!matches!(result, Value::Null));
+
+    Ok(())
+}
+
+/// `FT.SUGGET key prefix [FUZZY]`. FUZZY accepts a prefix at Levenshtein
+/// distance 1, which the exact form rejects.
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ft_sugget_fuzzy() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ft_sugadd("sug", "hello", 1., FtSugAddOptions::default())
+        .await?;
+
+    let suggestions: Vec<String> = client
+        .ft_sugget("sug", "hallo", FtSugGetOptions::default())
+        .await?;
+    assert!(suggestions.is_empty());
+
+    let suggestions: Vec<String> = client
+        .ft_sugget("sug", "hallo", FtSugGetOptions::default().fuzzy())
+        .await?;
+    assert_eq!(vec!["hello".to_owned()], suggestions);
+
+    Ok(())
 }

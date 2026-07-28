@@ -1,7 +1,13 @@
+# Redis version for the whole test suite, pinned on the minor so patch fixes
+# still come in. A floating `alpine` tag drifts between CI runs and developer
+# machines, and the same commit then passes on one and fails on the other.
+# Override for a one-off run with `REDIS_VERSION=8.10-rc2-alpine ./docker_up.sh`;
+# it does not belong in `.env`, which `set_host_ip.sh` rewrites on every start.
+
 services:
 # Standalone
   redis-standalone:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-standalone
     restart: on-failure:20
     ports:
@@ -19,7 +25,7 @@ services:
 
 # TLS
   redis-tls:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-tls
     restart: on-failure:20
     ports:
@@ -36,7 +42,7 @@ services:
 
 # Sentinel
   redis-sentinel-master:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-sentinel-master
     ports: 
       - "6381:6381"
@@ -47,7 +53,7 @@ services:
       redis-server --port 6381
 
   redis-sentinel-replica:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-sentinel-replica
     restart: on-failure:20
     ports:
@@ -61,7 +67,7 @@ services:
       redis-sentinel-master: { condition: service_healthy }
 
   redis-sentinel1:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-sentinel1
     restart: on-failure:20
     ports:
@@ -79,7 +85,7 @@ services:
       redis-sentinel /tmp/sentinel.conf"
 
   redis-sentinel2:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-sentinel2
     restart: on-failure:20
     ports:
@@ -99,7 +105,7 @@ services:
       redis-server /tmp/sentinel.conf --sentinel"
 
   redis-sentinel3:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-sentinel3
     restart: on-failure:20
     ports:
@@ -120,7 +126,7 @@ services:
 
 # Cluster
   cluster-init:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: cluster-init
     command: redis-cli --cluster create "${HOST_IP}":7000 "${HOST_IP}":7001 "${HOST_IP}":7002 "${HOST_IP}":7003 "${HOST_IP}":7004 "${HOST_IP}":7005 --cluster-replicas 1 --cluster-yes
     depends_on:
@@ -132,7 +138,7 @@ services:
       redis-node6: { condition: service_healthy }
 
   redis-node1:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node1
     ports: ["7000:7000", "17000:17000"]
     healthcheck:
@@ -147,7 +153,7 @@ services:
       --cluster-announce-bus-port 17000 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node2:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node2
     ports: ["7001:7001", "17001:17001"]
     healthcheck:
@@ -162,7 +168,7 @@ services:
       --cluster-announce-bus-port 17001 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node3:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node3
     ports: ["7002:7002", "17002:17002"]
     healthcheck:
@@ -177,7 +183,7 @@ services:
       --cluster-announce-bus-port 17002 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node4:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node4
     ports: ["7003:7003", "17003:17003"]
     healthcheck:
@@ -192,7 +198,7 @@ services:
       --cluster-announce-bus-port 17003 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node5:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node5
     ports: ["7004:7004", "17004:17004"]
     healthcheck:
@@ -207,7 +213,7 @@ services:
       --cluster-announce-bus-port 17004 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
 
   redis-node6:
-    image: redis:alpine
+    image: redis:${REDIS_VERSION:-8.8-alpine}
     container_name: redis-node6
     ports: ["7005:7005", "17005:17005"]
     healthcheck:

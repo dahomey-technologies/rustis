@@ -196,3 +196,44 @@ jobs:
           echo "Redis is ready."
       - name: Run cargo test
         run: cargo test --release --features pool,tokio-rustls,json,client-cache -- --test-threads=1
+
+  # `rustls` and `native-tls` are mutually exclusive — `src/lib.rs` rejects the
+  # pair with a `compile_error!`, and `src/tests/tls.rs` defines one `tls()` per
+  # backend — so the native-tls backend needs a job of its own rather than an
+  # extra feature on the one above. Without it the backend is only ever
+  # `cargo check`ed, and a compiled path nothing runs is an untested path.
+  #
+  # The whole suite runs, not just `tls::`: the `native-tls` cfg sites reach
+  # into the config, network and error modules that every test goes through.
+  test-native-tls:
+    name: Test (native-tls)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: Create Redis containers
+        run: |
+          cd /home/runner/work/rustis/rustis/redis/
+          sh ./docker_up.sh
+      - name: Wait for Redis to be ready
+        timeout-minutes: 3
+        run: |
+          echo "Waiting for standalone node..."
+          until docker exec redis-standalone redis-cli ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for cluster to reach cluster_state:ok..."
+          until docker exec redis-node1 redis-cli -p 7000 cluster info 2>/dev/null | grep -q "cluster_state:ok"; do
+            sleep 1
+          done
+          echo "Redis is ready."
+      # `--no-default-features` is required here: the default set pulls in
+      # `tokio-rustls`, which cannot coexist with `tokio-native-tls`.
+      - name: Run cargo test
+        run: |
+          cargo test --release --no-default-features \
+            --features tokio-runtime,tokio-native-tls,pool,json,client-cache \
+            -- --test-threads=1

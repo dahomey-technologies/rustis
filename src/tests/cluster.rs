@@ -20,8 +20,7 @@ use futures_util::try_join;
 use serial_test::serial;
 use std::{collections::HashSet, future::IntoFuture, time::Duration};
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn no_request_policy_no_response_policy() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -33,8 +32,7 @@ async fn no_request_policy_no_response_policy() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn multi_shard_all_succeeded() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -64,8 +62,7 @@ async fn multi_shard_all_succeeded() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn all_shards_agg_sum() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -80,8 +77,7 @@ async fn all_shards_agg_sum() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn all_shards_one_succeeded() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -119,8 +115,7 @@ async fn all_shards_one_succeeded() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn all_shard_agg_logical_and() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -133,8 +128,7 @@ async fn all_shard_agg_logical_and() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn multi_shard_agg_min() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -147,8 +141,7 @@ async fn multi_shard_agg_min() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn all_shards_no_response_policy() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -167,8 +160,7 @@ async fn all_shards_no_response_policy() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn all_nodes_all_succeeded() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -200,8 +192,7 @@ async fn migrate_slot(
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn moved() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -252,8 +243,7 @@ async fn moved() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ask() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -339,8 +329,7 @@ async fn ask() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn commands_to_different_nodes() -> Result<()> {
     // Assume test cluster has following slots split: [0 - 5460], [5461 - 10922], [10923 - 16383]
@@ -368,8 +357,7 @@ async fn commands_to_different_nodes() -> Result<()> {
 /// stale request stuck at the front of the queue blocks every subsequent reply
 /// from surfacing (`read()` pops the front only once all its sub-requests are
 /// resolved) and every caller hangs. A follow-up command must still complete.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn reconnect_purges_pending_requests_so_callers_do_not_hang() -> Result<()> {
     let host = get_default_host();
@@ -413,8 +401,7 @@ async fn reconnect_purges_pending_requests_so_callers_do_not_hang() -> Result<()
 /// reply (`read()` pops the front only once all its sub-requests resolve) and
 /// hangs all callers. Orphaned requests must instead surface as a retryable
 /// error so the handler replays them against the refreshed topology.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn refresh_removing_a_node_does_not_hang_in_flight_callers() -> Result<()> {
     crate::tests::log_try_init();
@@ -452,8 +439,7 @@ async fn refresh_removing_a_node_does_not_hang_in_flight_callers() -> Result<()>
 /// requests queued behind it must be discarded too. Otherwise their replies
 /// still arrive, get matched FIFO against the retried message, and shift every
 /// subsequent response by one.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -533,8 +519,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 /// command double-counts nothing but *under*-counts everything already applied: a
 /// replayed `DEL` answers 0 for the keys its first attempt deleted. The caller then
 /// receives a total that is silently wrong, reported as a success.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn partial_redirection_keeps_the_sub_results_already_obtained() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -594,8 +579,7 @@ async fn partial_redirection_keeps_the_sub_results_already_obtained() -> Result<
 /// else brings that node into the local topology. Resolving the target among the
 /// known nodes only therefore fails the command outright, where the cluster spec
 /// requires the redirection to be followed.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ask_to_an_unknown_node_is_followed_instead_of_failing() -> Result<()> {
     let probe = get_cluster_test_client().await?;
@@ -679,8 +663,7 @@ async fn ask_to_an_unknown_node_is_followed_instead_of_failing() -> Result<()> {
 /// applied. Applying it empties the node list, and the next node lookup then
 /// indexes an empty collection — panicking the network task, which owns all
 /// routing state, and leaving the client permanently dead.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() -> Result<()> {
     let cluster_hook = ClusterTestHook::new();
@@ -757,8 +740,7 @@ fn cluster_selslot_command() {
     );
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_transaction() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -789,8 +771,7 @@ async fn cluster_transaction() -> Result<()> {
 /// error to the caller. Reporting it as a disconnection instead makes the handler
 /// reconnect the whole cluster and replay in-flight work, turning a routine
 /// per-shard error into topology churn.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn per_shard_error_surfaces_to_the_caller_without_reconnecting() -> Result<()> {
     let admin = get_cluster_test_client().await?;
@@ -835,8 +816,7 @@ async fn per_shard_error_surfaces_to_the_caller_without_reconnecting() -> Result
 /// Commands are routed per key, so a cross-slot transaction would be split across
 /// nodes: the ones outside the pinned node execute immediately, outside any MULTI.
 /// That must be refused up front rather than reported as a successful transaction.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cross_slot_transaction_is_rejected_instead_of_losing_atomicity() -> Result<()> {
     let client = get_cluster_test_client().await?;
@@ -862,8 +842,7 @@ async fn cross_slot_transaction_is_rejected_instead_of_losing_atomicity() -> Res
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_pipeline() -> Result<()> {
     let client = get_cluster_test_client().await?;

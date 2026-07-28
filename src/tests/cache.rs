@@ -13,8 +13,7 @@ use crate::{
 use serial_test::serial;
 use std::time::Duration;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cache_get() -> Result<()> {
     log_try_init();
@@ -49,8 +48,7 @@ async fn cache_get() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cache_key_serializing_to_zero_args_errors_instead_of_panicking() -> Result<()> {
     log_try_init();
@@ -68,8 +66,7 @@ async fn cache_key_serializing_to_zero_args_errors_instead_of_panicking() -> Res
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cache_hash() -> Result<()> {
     log_try_init();
@@ -152,8 +149,7 @@ async fn cache_hash() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cache_mget() -> Result<()> {
     log_try_init();
@@ -189,8 +185,7 @@ async fn cache_mget() -> Result<()> {
 /// reconnection, the cache must both drop everything it holds — invalidations missed
 /// during the outage are unrecoverable — and re-arm tracking so later writes keep
 /// invalidating it.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cache_survives_reconnection() -> Result<()> {
     log_try_init();

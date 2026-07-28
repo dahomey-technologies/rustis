@@ -9,8 +9,7 @@ use crate::{
 use serial_test::serial;
 use std::collections::VecDeque;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_add() -> Result<()> {
     let client = get_test_client().await?;
@@ -25,8 +24,7 @@ async fn bf_add() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_exists() -> Result<()> {
     let client = get_test_client().await?;
@@ -44,8 +42,7 @@ async fn bf_exists() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -68,8 +65,7 @@ async fn bf_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_insert() -> Result<()> {
     let client = get_test_client().await?;
@@ -97,8 +93,7 @@ async fn bf_insert() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_madd() -> Result<()> {
     let client = get_test_client().await?;
@@ -113,8 +108,7 @@ async fn bf_madd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_mexists() -> Result<()> {
     let client = get_test_client().await?;
@@ -131,8 +125,7 @@ async fn bf_mexists() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     let client = get_test_client().await?;
@@ -173,8 +166,7 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_card() -> Result<()> {
     let client = get_test_client().await?;
@@ -203,8 +195,7 @@ async fn bf_card() -> Result<()> {
 /// [NONSCALING] ITEMS item...`. NONSCALING is observable through BF.INFO, which
 /// reports no expansion rate for a filter that cannot grow, and ERROR is
 /// observable through the size the server allocates for a given capacity.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bf_nonscaling_and_error() -> Result<()> {
     let client = get_test_client().await?;

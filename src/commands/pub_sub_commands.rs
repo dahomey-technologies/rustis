@@ -21,8 +21,7 @@ pub trait PubSubCommands<'a>: Sized {
     /// };
     /// use futures_util::StreamExt;
     ///
-    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let regular_client = Client::connect("127.0.0.1:6379").await?;
@@ -97,8 +96,7 @@ pub trait PubSubCommands<'a>: Sized {
     /// #    Result,
     /// # };
     /// #
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// # #[tokio::main]
     /// # async fn main() -> Result<()> {
     /// #     let client = Client::connect("127.0.0.1:6379").await?;
     /// let result: Vec<String> = client.pub_sub_help().await?;
@@ -203,8 +201,7 @@ pub trait PubSubCommands<'a>: Sized {
     /// };
     /// use futures_util::StreamExt;
     ///
-    /// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-    /// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+    /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let pub_sub_client = Client::connect("127.0.0.1:6379").await?;
     ///     let regular_client = Client::connect("127.0.0.1:6379").await?;

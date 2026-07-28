@@ -7,8 +7,7 @@ use crate::{
 use serial_test::serial;
 use std::collections::HashMap;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn unreachable() -> Result<()> {
     log_try_init();
@@ -18,8 +17,7 @@ async fn unreachable() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn unknown_service() -> Result<()> {
     log_try_init();
@@ -29,8 +27,7 @@ async fn unknown_service() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn connection() -> Result<()> {
     let client = get_sentinel_master_test_client().await?;
@@ -39,8 +36,7 @@ async fn connection() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn connection_with_failures() -> Result<()> {
     log_try_init();
@@ -51,8 +47,7 @@ async fn connection_with_failures() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn config_get_set() -> Result<()> {
     // connect to the sentinel instance directly for these commands
@@ -75,8 +70,7 @@ async fn config_get_set() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_ckquorum() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -87,8 +81,7 @@ async fn sentinel_ckquorum() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_flushconfig() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -99,8 +92,7 @@ async fn sentinel_flushconfig() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_info_cache() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -115,8 +107,7 @@ async fn sentinel_info_cache() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_master() {
     // connect to the sentinel instance directly for this command
@@ -128,8 +119,7 @@ async fn sentinel_master() {
     assert_eq!(2, result.quorum);
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_masters() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -144,8 +134,7 @@ async fn sentinel_masters() -> Result<()> {
     Ok(())
 }
 
-// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[tokio::test]
 // #[serial]
 // async fn sentinel_remove_and_monitor() -> Result<()> {
 //     // connect to the sentinel instance directly for these commands
@@ -168,8 +157,7 @@ async fn sentinel_masters() -> Result<()> {
 //     Ok(())
 // }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_set() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -188,8 +176,7 @@ async fn sentinel_set() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_myid() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -201,8 +188,7 @@ async fn sentinel_myid() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_pending_scripts() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -214,8 +200,7 @@ async fn sentinel_pending_scripts() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_replicas() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -230,8 +215,7 @@ async fn sentinel_replicas() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_sentinels() -> Result<()> {
     // connect to the sentinel instance directly for this command
@@ -245,8 +229,7 @@ async fn sentinel_sentinels() -> Result<()> {
     Ok(())
 }
 
-// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[tokio::test]
 // #[serial]
 // async fn sentinel_reset() -> Result<()> {
 //     // connect to the sentinel instance directly for this command
@@ -258,8 +241,7 @@ async fn sentinel_sentinels() -> Result<()> {
 //     Ok(())
 // }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn sentinel_get_master_addr_by_name() -> Result<()> {
     // connect to the sentinel instance directly for this command

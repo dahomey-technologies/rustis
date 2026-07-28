@@ -15,8 +15,7 @@ use crate::{
 use futures_util::StreamExt;
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn auth() -> Result<()> {
     let client = get_test_client().await?;
@@ -42,8 +41,7 @@ async fn auth() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_getredir() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -68,8 +66,7 @@ async fn client_getredir() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_help() -> Result<()> {
     let client = get_test_client().await?;
@@ -78,8 +75,7 @@ async fn client_help() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_id() -> Result<()> {
     let client = get_test_client().await?;
@@ -90,8 +86,7 @@ async fn client_id() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -103,8 +98,7 @@ async fn client_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_kill() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -122,8 +116,7 @@ async fn client_kill() -> Result<()> {
 /// it: ADDR, LADDR, TYPE, USER, SKIPME, ID, MAXAGE. Each filter is paired with an
 /// address that matches no connection, so the server parses the whole clause but
 /// kills nothing.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_kill_options() -> Result<()> {
     let client = get_test_client().await?;
@@ -151,8 +144,7 @@ async fn client_kill_options() -> Result<()> {
 }
 
 /// `CLIENT LIST [TYPE normal|master|replica|pubsub] [ID client-id [client-id ...]]`.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_list_options() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -182,8 +174,7 @@ async fn client_list_options() -> Result<()> {
 
 /// `CLIENT TRACKING ON [OPTOUT] [NOLOOP]`, read back through `CLIENT TRACKINGINFO`
 /// whose `flags` field is the server's own name for each mode.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_tracking_optout_and_noloop() -> Result<()> {
     let client = get_test_client().await?;
@@ -208,8 +199,7 @@ async fn client_tracking_optout_and_noloop() -> Result<()> {
 }
 
 /// `HELLO [protover [AUTH username password] [SETNAME clientname]]`.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hello_set_name() -> Result<()> {
     let client = get_test_client().await?;
@@ -224,8 +214,7 @@ async fn hello_set_name() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_list() -> Result<()> {
     let client = get_test_client().await?;
@@ -239,8 +228,7 @@ async fn client_list() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_no_evict() -> Result<()> {
     let client = get_test_client().await?;
@@ -251,8 +239,7 @@ async fn client_no_evict() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_no_touch() -> Result<()> {
     let client = get_test_client().await?;
@@ -263,8 +250,7 @@ async fn client_no_touch() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_pause() -> Result<()> {
     let client = get_test_client().await?;
@@ -275,8 +261,7 @@ async fn client_pause() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_reply() -> Result<()> {
     let client = get_test_client().await?;
@@ -307,8 +292,7 @@ async fn client_reply() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_reply_skip() -> Result<()> {
     let client = get_test_client().await?;
@@ -323,8 +307,7 @@ async fn client_reply_skip() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_setname_getname() -> Result<()> {
     let client = get_test_client().await?;
@@ -336,8 +319,7 @@ async fn client_setname_getname() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_setinfo() -> Result<()> {
     let client = get_test_client().await?;
@@ -354,8 +336,7 @@ async fn client_setinfo() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_tracking() -> Result<()> {
     log_try_init();
@@ -435,8 +416,7 @@ async fn client_tracking() -> Result<()> {
 /// valid UTF-8. Such an event must still reach the consumer, and above all must
 /// not end the stream: once ended, no invalidation ever arrives again and every
 /// cache built on top of it silently serves stale data for good.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_tracking_invalidation_survives_a_binary_key() -> Result<()> {
     log_try_init();
@@ -484,8 +464,7 @@ async fn client_tracking_invalidation_survives_a_binary_key() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_tracking_info() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -515,8 +494,7 @@ async fn client_tracking_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn client_unblock() -> Result<()> {
     let client1 = get_test_client().await?;
@@ -543,8 +521,7 @@ async fn client_unblock() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn echo() -> Result<()> {
     let client = get_test_client().await?;
@@ -555,8 +532,7 @@ async fn echo() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn hello_v3() -> Result<()> {
     let client = get_test_client().await?;
@@ -573,8 +549,7 @@ async fn hello_v3() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ping() -> Result<()> {
     let client = get_test_client().await?;
@@ -587,8 +562,7 @@ async fn ping() -> Result<()> {
     Ok(())
 }
 
-// #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-// #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+// #[tokio::test]
 // #[serial]
 // async fn quit() -> Result<()> {
 //     let client = Connection::connect(get_default_addr()).await?;
@@ -601,8 +575,7 @@ async fn ping() -> Result<()> {
 //     Ok(())
 // }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn reset() -> Result<()> {
     let client = get_test_client().await?;
@@ -612,8 +585,7 @@ async fn reset() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn select() -> Result<()> {
     let client = get_test_client().await?;

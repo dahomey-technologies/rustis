@@ -14,6 +14,17 @@ contains breaking changes; read that section before upgrading.
 
 ### BREAKING CHANGES
 
+- **The `async-std-runtime` and `async-std-native-tls` features are removed.**
+  async-std is no longer maintained; its authors point users to `smol`. Tokio is
+  now the only supported runtime, and the `async-std` and `async-native-tls`
+  dependencies are gone from the tree. Enabling either feature is now a Cargo
+  error, so the break is loud rather than silent. Nothing changes for the default
+  `tokio-runtime` build.
+
+  Support for another runtime is not ruled out: the runtime-facing surface is a
+  handful of primitives in one module (connect, spawn, sleep, timeout, join
+  handle). If you need a non-tokio runtime, open an issue.
+
 - **`json_set` takes a `JsonSetOptions` instead of a bare `SetCondition`.**
   `JSON.SET` gained the `FPHA` argument in 8.8, so the last parameter had to
   become extensible. Calls passing `None` are unaffected; a call passing a
@@ -274,10 +285,8 @@ contains breaking changes; read that section before upgrading.
   value …` require. The `key_` form additionally marks every `step`-th element as
   a routing key for the cluster client. Both derive their count the same way
   `arg_counted` does.
-- The examples now declare `tokio-runtime` in their `required-features`. They are
-  written with `#[tokio::main]`, so `cargo test --no-default-features --features
-  async-std-runtime,…` used to fail to build on them rather than run the suite;
-  the whole suite now runs under async-std.
+- The examples now declare `tokio-runtime` in their `required-features`, so a
+  feature set that does not build them no longer fails the whole target set.
 - `Config` now exposes the constants that were hardcoded, each defaulting to its
   previous value: `Config::buffers` (`BufferConfig` — read/write buffer initial
   and shrink-back capacities), `Config::limits` (`RespLimits` — maximum nesting

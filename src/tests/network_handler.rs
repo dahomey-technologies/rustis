@@ -15,8 +15,7 @@ use std::{collections::HashMap, time::Duration};
 /// Retry reasons accumulated for one message must not be applied to the other
 /// messages sharing the same send batch: each message must be fed only with
 /// its own reasons.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn retry_reasons_do_not_leak_across_messages_in_a_batch() -> Result<()> {
     log_try_init();
@@ -68,8 +67,7 @@ async fn retry_reasons_do_not_leak_across_messages_in_a_batch() -> Result<()> {
 /// On reconnect, a non-retryable message sitting behind a retryable one must
 /// be failed, not replayed: replaying it double-executes a command whose
 /// caller explicitly opted out of retries.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn non_retryable_message_behind_retryable_is_not_replayed_on_reconnect() -> Result<()> {
     log_try_init();
@@ -111,8 +109,7 @@ async fn non_retryable_message_behind_retryable_is_not_replayed_on_reconnect() -
 /// confirmation push arrives with nothing to match, the stale message keeps
 /// its slot in the receive queue, and it consumes the reply of the next
 /// command — shifting every subsequent response by one, permanently.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn inflight_unsubscribe_does_not_desync_responses_after_reconnect() -> Result<()> {
     log_try_init();
@@ -156,8 +153,7 @@ async fn inflight_unsubscribe_does_not_desync_responses_after_reconnect() -> Res
 /// `auto_resubscribe`. The correct action for a pending unsubscription on a
 /// fresh connection is to emit nothing and drop it: resubscribing would leave
 /// the server subscribed to a channel the client no longer tracks.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn inflight_unsubscribe_is_not_turned_into_subscribe_on_reconnect() -> Result<()> {
     log_try_init();
@@ -199,8 +195,7 @@ async fn inflight_unsubscribe_is_not_turned_into_subscribe_on_reconnect() -> Res
 /// replays and failed with a distinct error rather than replayed further. With a
 /// cap of 1, the single reconnection replay this test forces already reaches the
 /// budget, so the command is failed instead of retried.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
     log_try_init();

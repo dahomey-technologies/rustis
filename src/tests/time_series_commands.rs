@@ -11,8 +11,7 @@ use crate::{
 use serial_test::serial;
 use std::collections::HashMap;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_add() -> Result<()> {
     let client = get_test_client().await?;
@@ -40,8 +39,7 @@ async fn ts_add() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_create() -> Result<()> {
     let client = get_test_client().await?;
@@ -60,8 +58,7 @@ async fn ts_create() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_alter() -> Result<()> {
     let client = get_test_client().await?;
@@ -91,8 +88,7 @@ async fn ts_alter() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_create_delete_rule() -> Result<()> {
     let client = get_test_client().await?;
@@ -146,8 +142,7 @@ async fn ts_create_delete_rule() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_del() -> Result<()> {
     let client = get_test_client().await?;
@@ -175,8 +170,7 @@ async fn ts_del() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_get() -> Result<()> {
     let client = get_test_client().await?;
@@ -231,8 +225,7 @@ async fn ts_get() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_incrby() -> Result<()> {
     let client = get_test_client().await?;
@@ -273,8 +266,7 @@ async fn ts_incrby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_decrby() -> Result<()> {
     let client = get_test_client().await?;
@@ -309,8 +301,7 @@ async fn ts_decrby() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -370,8 +361,7 @@ async fn ts_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_madd() -> Result<()> {
     let client = get_test_client().await?;
@@ -390,8 +380,7 @@ async fn ts_madd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_mget() -> Result<()> {
     let client = get_test_client().await?;
@@ -456,8 +445,7 @@ async fn ts_mget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_mrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -560,8 +548,7 @@ async fn ts_mrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_mrevrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -664,8 +651,7 @@ async fn ts_mrevrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_queryindex() -> Result<()> {
     let client = get_test_client().await?;
@@ -711,8 +697,7 @@ async fn ts_queryindex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_range() -> Result<()> {
     let client = get_test_client().await?;
@@ -761,8 +746,7 @@ async fn ts_range() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_revrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -811,8 +795,7 @@ async fn ts_revrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_range_count_nan_aggregations() -> Result<()> {
     let client = get_test_client().await?;
@@ -879,8 +862,7 @@ async fn ts_range_count_nan_aggregations() -> Result<()> {
 /// `TS.ADD key timestamp value [ENCODING ...] [ON_DUPLICATE policy]`, plus
 /// `TS.INCRBY key value [UNCOMPRESSED]`. The chunk encoding and the duplicate
 /// policy are both reported back by TS.INFO.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_encoding_and_on_duplicate() -> Result<()> {
     let client = get_test_client().await?;
@@ -955,8 +937,7 @@ async fn ts_encoding_and_on_duplicate() -> Result<()> {
 /// `LATEST` on TS.GET / TS.MGET / TS.RANGE / TS.MRANGE. A compaction's latest
 /// bucket is only closed by the arrival of a later sample, so without LATEST the
 /// still-open bucket is not reported and with it, it is.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_latest() -> Result<()> {
     let client = get_test_client().await?;
@@ -1033,8 +1014,7 @@ async fn ts_latest() -> Result<()> {
 
 /// `SELECTED_LABELS label [label ...]` on TS.MGET and TS.MRANGE returns only the
 /// named labels, where WITHLABELS returns them all.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_selected_label() -> Result<()> {
     let client = get_test_client().await?;
@@ -1095,8 +1075,7 @@ async fn ts_selected_label() -> Result<()> {
 /// `ALIGN`, `BUCKETTIMESTAMP` and `FILTER_BY_TS` on TS.RANGE and TS.MRANGE.
 /// BUCKETTIMESTAMP takes one of the `-`, `+`, `~` markers the server accepts, not
 /// a timestamp; FILTER_BY_TS takes a list of exact timestamps.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ts_align_bucket_timestamp_and_filter_by_ts() -> Result<()> {
     let client = get_test_client().await?;

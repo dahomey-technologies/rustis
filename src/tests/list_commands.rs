@@ -11,8 +11,7 @@ use crate::{
 use serial_test::serial;
 use std::time::Duration;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn blmove() -> Result<()> {
     let client = get_test_client().await?;
@@ -68,8 +67,7 @@ async fn blmove() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn blmpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -120,8 +118,7 @@ async fn blmpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn blpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -154,8 +151,7 @@ async fn blpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn brpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -188,8 +184,7 @@ async fn brpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lindex() -> Result<()> {
     let client = get_test_client().await?;
@@ -213,8 +208,7 @@ async fn lindex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn linsert() -> Result<()> {
     let client = get_test_client().await?;
@@ -238,8 +232,7 @@ async fn linsert() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn llen() -> Result<()> {
     let client = get_test_client().await?;
@@ -257,8 +250,7 @@ async fn llen() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lmove() -> Result<()> {
     let client = get_test_client().await?;
@@ -288,8 +280,7 @@ async fn lmove() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lmpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -312,8 +303,7 @@ async fn lmpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -343,8 +333,7 @@ async fn lpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lpos() -> Result<()> {
     let client = get_test_client().await?;
@@ -376,8 +365,7 @@ async fn lpos() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lpush() -> Result<()> {
     let client = get_test_client().await?;
@@ -394,8 +382,7 @@ async fn lpush() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lpushx() -> Result<()> {
     let client = get_test_client().await?;
@@ -413,8 +400,7 @@ async fn lpushx() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -439,8 +425,7 @@ async fn lrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lrem() -> Result<()> {
     let client = get_test_client().await?;
@@ -464,8 +449,7 @@ async fn lrem() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn lset() -> Result<()> {
     let client = get_test_client().await?;
@@ -489,8 +473,7 @@ async fn lset() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ltrim() -> Result<()> {
     let client = get_test_client().await?;
@@ -512,8 +495,7 @@ async fn ltrim() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn rpop() -> Result<()> {
     let client = get_test_client().await?;
@@ -540,8 +522,7 @@ async fn rpop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn rpush() -> Result<()> {
     let client = get_test_client().await?;
@@ -558,8 +539,7 @@ async fn rpush() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn rpushx() -> Result<()> {
     let client = get_test_client().await?;

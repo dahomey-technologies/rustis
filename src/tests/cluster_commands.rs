@@ -13,8 +13,7 @@ use crate::{
 use serial_test::serial;
 use tracing::debug;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn asking() -> Result<()> {
     log_try_init();
@@ -25,8 +24,7 @@ async fn asking() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_shards() -> Result<()> {
     log_try_init();
@@ -39,8 +37,7 @@ async fn cluster_shards() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_slots() -> Result<()> {
     log_try_init();
@@ -53,8 +50,7 @@ async fn cluster_slots() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_slot_stats() -> Result<()> {
     log_try_init();
@@ -81,8 +77,7 @@ async fn cluster_slot_stats() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_info() -> Result<()> {
     log_try_init();
@@ -99,8 +94,7 @@ async fn cluster_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_getkeysinslot() -> Result<()> {
     log_try_init();
@@ -126,8 +120,7 @@ async fn cluster_getkeysinslot() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_myid_and_nodes() -> Result<()> {
     log_try_init();
@@ -160,8 +153,7 @@ async fn cluster_myid_and_nodes() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_links() -> Result<()> {
     log_try_init();
@@ -185,8 +177,7 @@ async fn cluster_links() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_replicas_and_failure_reports() -> Result<()> {
     log_try_init();
@@ -206,8 +197,7 @@ async fn cluster_replicas_and_failure_reports() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn readonly_and_readwrite() -> Result<()> {
     log_try_init();
@@ -246,8 +236,7 @@ async fn readonly_and_readwrite() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_migration_status() -> Result<()> {
     log_try_init();
@@ -263,8 +252,7 @@ async fn cluster_migration_status() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_saveconfig() -> Result<()> {
     log_try_init();
@@ -275,8 +263,7 @@ async fn cluster_saveconfig() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_bumpepoch() -> Result<()> {
     log_try_init();
@@ -292,8 +279,7 @@ async fn cluster_bumpepoch() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cluster_migration_cancel() -> Result<()> {
     log_try_init();

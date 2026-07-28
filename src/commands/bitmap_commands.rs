@@ -22,8 +22,7 @@ pub trait BitmapCommands<'a>: Sized {
     /// #    commands::{BitRange, BitUnit},
     /// #    Result,
     /// # };
-    /// # #[cfg_attr(feature = "tokio-runtime", tokio::test)]
-    /// # #[cfg_attr(feature = "async-std-runtime", async_std::test)]
+    /// # #[tokio::test]
     /// # async fn bitcount() -> Result<()> {
     /// #    let client = get_test_client().await?;
     /// client.set("mykey", "foobar").await?;

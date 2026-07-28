@@ -9,8 +9,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geoadd() -> Result<()> {
     let client = get_test_client().await?;
@@ -79,8 +78,7 @@ async fn geoadd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geodist() -> Result<()> {
     let client = get_test_client().await?;
@@ -124,8 +122,7 @@ async fn geodist() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geohash() -> Result<()> {
     let client = get_test_client().await?;
@@ -154,8 +151,7 @@ async fn geohash() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geopos() -> Result<()> {
     let client = get_test_client().await?;
@@ -187,8 +183,7 @@ async fn geopos() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geosearch() -> Result<()> {
     let client = get_test_client().await?;
@@ -279,8 +274,7 @@ async fn geosearch() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geosearchstore() -> Result<()> {
     let client = get_test_client().await?;
@@ -368,8 +362,7 @@ async fn geosearchstore() -> Result<()> {
 
 /// `GEOSEARCHSTORE dst src ... [STOREDIST]`. With STOREDIST the destination is a
 /// plain sorted set whose scores are the distances, in the unit of the search.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn geosearchstore_store_dist() -> Result<()> {
     let client = get_test_client().await?;

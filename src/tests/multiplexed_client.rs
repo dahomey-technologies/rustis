@@ -9,8 +9,7 @@ use futures_util::future;
 use rand::Rng;
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn multiplexed_client() -> Result<()> {
     log_try_init();

@@ -7,8 +7,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pipeline() -> Result<()> {
     let client = get_test_client().await?;
@@ -27,8 +26,7 @@ async fn pipeline() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn single_command_forget() -> Result<()> {
     let client = get_test_client().await?;
@@ -46,8 +44,7 @@ async fn single_command_forget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn empty_pipeline() -> Result<()> {
     let client = get_test_client().await?;
@@ -60,8 +57,7 @@ async fn empty_pipeline() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn error() -> Result<()> {
     let client = get_test_client().await?;
@@ -80,8 +76,7 @@ async fn error() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pipeline_on_cluster() -> Result<()> {
     let client = get_cluster_test_client().await?;

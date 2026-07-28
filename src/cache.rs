@@ -52,8 +52,7 @@ type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, Mo
 /// ```rust
 /// use rustis::{client::Client, Result, cache::Cache, commands::{ClientTrackingOptions}};
 ///
-/// #[cfg_attr(feature = "tokio-runtime", tokio::main)]
-/// #[cfg_attr(feature = "async-std-runtime", async_std::main)]
+/// #[tokio::main]
 /// async fn main() -> Result<()> {
 ///     let client = Client::connect("127.0.0.1:6379").await?;
 ///     let tracking_opts = ClientTrackingOptions::default().broadcasting().noloop();

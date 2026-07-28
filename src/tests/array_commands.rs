@@ -8,8 +8,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arinsert_and_cursor() -> Result<()> {
     let client = get_test_client().await?;
@@ -35,8 +34,7 @@ async fn arinsert_and_cursor() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arset_armset_and_get() -> Result<()> {
     let client = get_test_client().await?;
@@ -89,8 +87,7 @@ async fn arset_armset_and_get() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ardel_and_ardelrange() -> Result<()> {
     let client = get_test_client().await?;
@@ -110,8 +107,7 @@ async fn ardel_and_ardelrange() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arlastitems() -> Result<()> {
     let client = get_test_client().await?;
@@ -132,8 +128,7 @@ async fn arlastitems() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arring() -> Result<()> {
     let client = get_test_client().await?;
@@ -158,8 +153,7 @@ async fn arring() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arop() -> Result<()> {
     let client = get_test_client().await?;
@@ -199,8 +193,7 @@ async fn arop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn argrep() -> Result<()> {
     let client = get_test_client().await?;
@@ -317,8 +310,7 @@ async fn argrep() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn arinfo() -> Result<()> {
     let client = get_test_client().await?;

@@ -56,8 +56,7 @@ async fn wait_for_index_scanned(client: &Client, index: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_aggregate() -> Result<()> {
     let client = get_test_client().await?;
@@ -310,8 +309,7 @@ async fn ft_aggregate() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_alias() -> Result<()> {
     let client = get_test_client().await?;
@@ -342,8 +340,7 @@ async fn ft_alias() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_alter() -> Result<()> {
     let client = get_test_client().await?;
@@ -368,8 +365,7 @@ async fn ft_alter() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_config_get_set() -> Result<()> {
     let client = get_test_client().await?;
@@ -386,8 +382,7 @@ async fn ft_config_get_set() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_create() -> Result<()> {
     let client = get_test_client().await?;
@@ -556,8 +551,7 @@ async fn ft_create() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_hybrid() -> Result<()> {
     let client = get_test_client().await?;
@@ -689,8 +683,7 @@ async fn ft_hybrid() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_cursor() -> Result<()> {
     let client = get_test_client().await?;
@@ -792,8 +785,7 @@ async fn ft_cursor() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_dict() -> Result<()> {
     let client = get_test_client().await?;
@@ -820,8 +812,7 @@ async fn ft_dict() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_dropindex() -> Result<()> {
     let client = get_test_client().await?;
@@ -916,8 +907,7 @@ async fn ft_dropindex() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_explain() -> Result<()> {
     let client = get_test_client().await?;
@@ -952,8 +942,7 @@ async fn ft_explain() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_explaincli() -> Result<()> {
     let client = get_test_client().await?;
@@ -988,8 +977,7 @@ async fn ft_explaincli() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_info() -> Result<()> {
     log_try_init();
@@ -1038,8 +1026,7 @@ async fn ft_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_list() -> Result<()> {
     let client = get_test_client().await?;
@@ -1078,8 +1065,7 @@ async fn ft_list() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_profile() -> Result<()> {
     let client = get_test_client().await?;
@@ -1191,8 +1177,7 @@ async fn ft_profile() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search() -> Result<()> {
     let client = get_test_client().await?;
@@ -1307,8 +1292,7 @@ async fn ft_search() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_empty_index() -> Result<()> {
     let client = get_test_client().await?;
@@ -1350,8 +1334,7 @@ async fn ft_search_empty_index() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_spellcheck() -> Result<()> {
     let client = get_test_client().await?;
@@ -1408,8 +1391,7 @@ async fn ft_spellcheck() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_syn() -> Result<()> {
     let client = get_test_client().await?;
@@ -1491,8 +1473,7 @@ async fn ft_syn() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_tagvals() -> Result<()> {
     let client = get_test_client().await?;
@@ -1520,8 +1501,7 @@ async fn ft_tagvals() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_sugadd() -> Result<()> {
     let client = get_test_client().await?;
@@ -1539,8 +1519,7 @@ async fn ft_sugadd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_sugdel() -> Result<()> {
     let client = get_test_client().await?;
@@ -1559,8 +1538,7 @@ async fn ft_sugdel() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_sugget() -> Result<()> {
     let client = get_test_client().await?;
@@ -1603,8 +1581,7 @@ async fn ft_sugget() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_suglen() -> Result<()> {
     let client = get_test_client().await?;
@@ -1719,8 +1696,7 @@ fn ft_spellcheck_args() -> Result<()> {
 /// are the two shapes whose argument count used to be under-reported. Both are
 /// rejected outright by the server when the count is wrong, so this exercises
 /// them end to end.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_renamed_attributes_and_params() -> Result<()> {
     let client = get_test_client().await?;
@@ -1902,8 +1878,7 @@ fn ft_create_vector_field_args() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_create_geoshape() -> Result<()> {
     let client = get_test_client().await?;
@@ -1979,8 +1954,7 @@ fn ft_create_geoshape_args() {
     assert_eq!("FT.CREATE idx SCHEMA geom GEOSHAPE", cmd.to_string());
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_create_index_missing_and_empty() -> Result<()> {
     let client = get_test_client().await?;
@@ -2121,8 +2095,7 @@ async fn create_search_options_index(client: &Client) -> Result<()> {
 
 /// `VERBATIM` searches the query terms as written, without stemming, so a query
 /// that only matches through a stem finds nothing.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_verbatim() -> Result<()> {
     let client = get_test_client().await?;
@@ -2149,8 +2122,7 @@ async fn ft_search_verbatim() -> Result<()> {
 /// `EXPANDER expander` names the query expander. `SBSTEM` is the built-in
 /// stemmer, which reaches "dogs" from "dog"; an unknown expander name expands
 /// nothing, so the same query matches no document.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_expander() -> Result<()> {
     let client = get_test_client().await?;
@@ -2181,8 +2153,7 @@ async fn ft_search_expander() -> Result<()> {
 
 /// `EXPLAINSCORE` adds the score breakdown next to each score, so it only means
 /// anything alongside WITHSCORES.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_explainscore() -> Result<()> {
     let client = get_test_client().await?;
@@ -2218,8 +2189,7 @@ async fn ft_search_explainscore() -> Result<()> {
 
 /// `GEOFILTER geo_field lon lat radius m|km|mi|ft` restricts the results to a
 /// radius around a point.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_geo_filter() -> Result<()> {
     let client = get_test_client().await?;
@@ -2254,8 +2224,7 @@ async fn ft_search_geo_filter() -> Result<()> {
 
 /// `INKEYS count key ...` and `INFIELDS count field ...` limit the search to a
 /// set of document keys and to a set of indexed fields.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_inkey_and_infields() -> Result<()> {
     let client = get_test_client().await?;
@@ -2308,8 +2277,7 @@ async fn ft_search_inkey_and_infields() -> Result<()> {
 
 /// `SLOP slop` allows intervening terms between the query terms and `INORDER`
 /// requires them to appear in the query's order.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_slop_and_inorder() -> Result<()> {
     let client = get_test_client().await?;
@@ -2352,8 +2320,7 @@ async fn ft_search_slop_and_inorder() -> Result<()> {
 /// `SUMMARIZE [FIELDS count field ...] [FRAGS num] [LEN fragsize]
 /// [SEPARATOR separator]` and `HIGHLIGHT [FIELDS ...] [TAGS open close]` rewrite
 /// the returned field values around the matched terms.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_summarize_and_highlight() -> Result<()> {
     let client = get_test_client().await?;
@@ -2400,8 +2367,7 @@ async fn ft_search_summarize_and_highlight() -> Result<()> {
 }
 
 /// `TIMEOUT milliseconds` overrides the index-level timeout for one query.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_timeout() -> Result<()> {
     let client = get_test_client().await?;
@@ -2421,8 +2387,7 @@ async fn ft_search_timeout() -> Result<()> {
 
 /// `RETURN count identifier [AS property]` renames the returned attribute, and
 /// the AS clause is what makes the count 3 rather than 1.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_search_return_as() -> Result<()> {
     let client = get_test_client().await?;
@@ -2451,8 +2416,7 @@ async fn ft_search_return_as() -> Result<()> {
 /// `FT.AGGREGATE ... [VERBATIM] [LOAD count field ... | LOAD *] [ADDSCORES]`.
 /// `LOAD *` carries no count, and ADDSCORES adds a `__score` property to every
 /// record.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_aggregate_verbatim_load_all_and_add_scores() -> Result<()> {
     let client = get_test_client().await?;
@@ -2510,8 +2474,7 @@ async fn ft_aggregate_verbatim_load_all_and_add_scores() -> Result<()> {
 /// `FT.CREATE ... [NOOFFSETS] [NOFIELDS]`, both reported back in FT.INFO's
 /// `index_options`. NOOFFSETS implies NOHL, which is why the server lists three
 /// options for two requested.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_create_no_offsets_and_nofields() -> Result<()> {
     let client = get_test_client().await?;
@@ -2541,8 +2504,7 @@ async fn ft_create_no_offsets_and_nofields() -> Result<()> {
 /// `CASESENSITIVE` on a TAG attribute and `WITHSUFFIXTRIE` on a TEXT attribute.
 /// The first changes what a tag query matches, the second is reported back by
 /// FT.INFO.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_field_schema_case_sensitive_and_suffix_trie() -> Result<()> {
     let client = get_test_client().await?;
@@ -2612,8 +2574,7 @@ async fn ft_field_schema_case_sensitive_and_suffix_trie() -> Result<()> {
 }
 
 /// `LOAD *` and `NOSORT` in the post-processing pipeline of FT.HYBRID.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_hybrid_load_all_and_nosort() -> Result<()> {
     let client = get_test_client().await?;
@@ -2678,8 +2639,7 @@ async fn ft_hybrid_load_all_and_nosort() -> Result<()> {
 
 /// `FT.SUGGET key prefix [FUZZY]`. FUZZY accepts a prefix at Levenshtein
 /// distance 1, which the exact form rejects.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn ft_sugget_fuzzy() -> Result<()> {
     let client = get_test_client().await?;

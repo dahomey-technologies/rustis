@@ -5,8 +5,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pfadd() -> Result<()> {
     let client = get_test_client().await?;
@@ -27,8 +26,7 @@ async fn pfadd() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pfcount() -> Result<()> {
     let client = get_test_client().await?;
@@ -49,8 +47,7 @@ async fn pfcount() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn pfmerge() -> Result<()> {
     let client = get_test_client().await?;

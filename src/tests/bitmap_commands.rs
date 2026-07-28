@@ -9,8 +9,7 @@ use crate::{
 };
 use serial_test::serial;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitcount() -> Result<()> {
     let client = get_test_client().await?;
@@ -41,8 +40,7 @@ async fn bitcount() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitfield() -> Result<()> {
     let client = get_test_client().await?;
@@ -100,8 +98,7 @@ async fn bitfield() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitfield_readonly() -> Result<()> {
     let client = get_test_client().await?;
@@ -117,8 +114,7 @@ async fn bitfield_readonly() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitop() -> Result<()> {
     let client = get_test_client().await?;
@@ -139,8 +135,7 @@ async fn bitop() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitop_new_operators() -> Result<()> {
     let client = get_test_client().await?;
@@ -166,8 +161,7 @@ async fn bitop_new_operators() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn bitpos() -> Result<()> {
     let client = get_test_client().await?;
@@ -206,8 +200,7 @@ async fn bitpos() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn getbit() -> Result<()> {
     let client = get_test_client().await?;
@@ -222,8 +215,7 @@ async fn getbit() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn setbit() -> Result<()> {
     let client = get_test_client().await?;

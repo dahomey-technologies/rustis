@@ -9,8 +9,7 @@ use crate::{
 use serial_test::serial;
 use std::collections::VecDeque;
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_add() -> Result<()> {
     let client = get_test_client().await?;
@@ -36,8 +35,7 @@ async fn cf_add() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_addnx() -> Result<()> {
     let client = get_test_client().await?;
@@ -52,8 +50,7 @@ async fn cf_addnx() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_count() -> Result<()> {
     let client = get_test_client().await?;
@@ -69,8 +66,7 @@ async fn cf_count() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_del() -> Result<()> {
     let client = get_test_client().await?;
@@ -92,8 +88,7 @@ async fn cf_del() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_exists() -> Result<()> {
     let client = get_test_client().await?;
@@ -110,8 +105,7 @@ async fn cf_exists() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_info() -> Result<()> {
     let client = get_test_client().await?;
@@ -131,8 +125,7 @@ async fn cf_info() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_insert() -> Result<()> {
     let client = get_test_client().await?;
@@ -171,8 +164,7 @@ async fn cf_insert() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_insertnx() -> Result<()> {
     let client = get_test_client().await?;
@@ -199,8 +191,7 @@ async fn cf_insertnx() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_reserve_loadchunk_scandump() -> Result<()> {
     let client = get_test_client().await?;
@@ -238,8 +229,7 @@ async fn cf_reserve_loadchunk_scandump() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_mexists() -> Result<()> {
     let client = get_test_client().await?;
@@ -259,8 +249,7 @@ async fn cf_mexists() -> Result<()> {
 
 /// `CF.RESERVE key capacity [BUCKETSIZE bucketsize] [MAXITERATIONS maxiterations]
 /// [EXPANSION expansion]`, read back through the fields CF.INFO prints for itself.
-#[cfg_attr(feature = "tokio-runtime", tokio::test)]
-#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[tokio::test]
 #[serial]
 async fn cf_reserve_maxiterations() -> Result<()> {
     let client = get_test_client().await?;

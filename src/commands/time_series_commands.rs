@@ -788,8 +788,12 @@ pub enum TsAggregationType {
     Max,
     /// Difference between the highest and the lowest value
     Range,
-    /// Number of values
+    /// Number of values, excluding NaN values
     Count,
+    /// Number of NaN values (since RedisTimeSeries v8.6)
+    CountNan,
+    /// Number of values, including NaN values (since RedisTimeSeries v8.6)
+    CountAll,
     /// Value with lowest timestamp in the bucket
     First,
     /// Value with highest timestamp in the bucket

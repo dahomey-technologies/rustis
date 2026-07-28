@@ -172,3 +172,28 @@ async fn bf_reserve_loadchunk_scandump() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn bf_card() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // A missing filter has no cardinality rather than an error.
+    let card = client.bf_card("key").await?;
+    assert_eq!(0, card);
+
+    client.bf_add("key", "item1").await?;
+    client.bf_add("key", "item2").await?;
+    let card = client.bf_card("key").await?;
+    assert_eq!(2, card);
+
+    // Re-adding an item is a no-op, so the cardinality counts distinct items.
+    let added = client.bf_add("key", "item1").await?;
+    assert!(!added);
+    let card = client.bf_card("key").await?;
+    assert_eq!(2, card);
+
+    Ok(())
+}

@@ -810,3 +810,67 @@ async fn ts_revrange() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
+#[serial]
+async fn ts_range_count_nan_aggregations() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    client
+        .ts_create("temp:TLV", TsCreateOptions::default())
+        .await?;
+
+    let _timestamps: Vec<u64> = client
+        .ts_madd([
+            ("temp:TLV", 1000, 30.),
+            ("temp:TLV", 1010, f64::NAN),
+            ("temp:TLV", 1020, 40.),
+            ("temp:TLV", 2000, f64::NAN),
+            ("temp:TLV", 2010, f64::NAN),
+        ])
+        .await?;
+
+    // NaN samples round-trip untouched.
+    let results: Vec<(u64, f64)> = client
+        .ts_range("temp:TLV", "-", "+", TsRangeOptions::default())
+        .await?;
+    assert_eq!(5, results.len());
+    assert!(results[1].1.is_nan());
+
+    // COUNT ignores NaN samples...
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp:TLV",
+            "-",
+            "+",
+            TsRangeOptions::default().aggregation(TsAggregationType::Count, 1000),
+        )
+        .await?;
+    assert_eq!(vec![(1000, 2.)], results);
+
+    // ...COUNTNAN counts only those...
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp:TLV",
+            "-",
+            "+",
+            TsRangeOptions::default().aggregation(TsAggregationType::CountNan, 1000),
+        )
+        .await?;
+    assert_eq!(vec![(1000, 1.), (2000, 2.)], results);
+
+    // ...and COUNTALL counts both kinds.
+    let results: Vec<(u64, f64)> = client
+        .ts_range(
+            "temp:TLV",
+            "-",
+            "+",
+            TsRangeOptions::default().aggregation(TsAggregationType::CountAll, 1000),
+        )
+        .await?;
+    assert_eq!(vec![(1000, 3.), (2000, 2.)], results);
+
+    Ok(())
+}

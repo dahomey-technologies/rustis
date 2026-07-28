@@ -54,6 +54,41 @@ pub trait StreamCommands<'a>: Sized {
         )
     }
 
+    /// Sets the last delivered id of a stream, and optionally the two counters
+    /// that go with it.
+    ///
+    /// The id can only move forward: an id lower than the stream's current top
+    /// entry is refused, as is a stream that does not exist. Intended for
+    /// tooling that rebuilds a stream's metadata — replication, migration,
+    /// tests — not for regular production.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xsetid/>](https://redis.io/commands/xsetid/)
+    fn xsetid(
+        self,
+        key: impl Serialize,
+        last_id: impl Serialize,
+        options: XSetIdOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(self, cmd("XSETID").key(key).arg(last_id).arg(options))
+    }
+
+    /// Sets the idempotent message processing (IDMP) parameters of a stream.
+    ///
+    /// The stream must already exist, and at least one of the two parameters
+    /// must be given. Changing either value clears the stream's IDMP map, so
+    /// every idempotent id recorded so far is forgotten.
+    ///
+    /// # See Also
+    /// [<https://redis.io/commands/xcfgset/>](https://redis.io/commands/xcfgset/)
+    fn xcfgset(
+        self,
+        key: impl Serialize,
+        options: XCfgSetOptions,
+    ) -> PreparedCommand<'a, Self, ()> {
+        prepare_command(self, cmd("XCFGSET").key(key).arg(options))
+    }
+
     /// This command transfers ownership of pending stream entries that match the specified criteria.
     ///
     /// # Return
@@ -595,6 +630,10 @@ pub struct XAddOptions<'a> {
     nomkstream: bool,
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     consumer_group_options: Option<ConsumerGroupOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idmpauto: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idmp: Option<(&'a str, &'a str)>,
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     trim_options: Option<XTrimOptions<'a>>,
 }
@@ -612,9 +651,95 @@ impl<'a> XAddOptions<'a> {
         self
     }
 
+    /// Idempotent production in manual mode: the producer supplies both its own
+    /// id `pid` and a unique id `iid` for this entry.
+    ///
+    /// Resending the same `(pid, iid)` pair adds nothing to the stream and
+    /// returns the id of the entry recorded the first time. The pair is
+    /// remembered for the stream's IDMP duration and capacity, both settable
+    /// with [`xcfgset`](StreamCommands::xcfgset).
+    ///
+    /// Mutually exclusive with [`idmp_auto`](Self::idmp_auto), which this
+    /// method cancels.
+    #[must_use]
+    pub fn idmp(mut self, pid: &'a str, iid: &'a str) -> Self {
+        self.idmp = Some((pid, iid));
+        self.idmpauto = None;
+        self
+    }
+
+    /// Idempotent production in automatic mode: the producer supplies only its
+    /// own id `pid`, and the server derives the entry's idempotent id from the
+    /// entry's field-value pairs.
+    ///
+    /// Two entries with identical content sent by the same producer are
+    /// therefore deduplicated. Slightly slower than
+    /// [`idmp`](Self::idmp), which this method cancels.
+    #[must_use]
+    pub fn idmp_auto(mut self, pid: &'a str) -> Self {
+        self.idmpauto = Some(pid);
+        self.idmp = None;
+        self
+    }
+
     #[must_use]
     pub fn trim_options(mut self, trim_options: XTrimOptions<'a>) -> Self {
         self.trim_options = Some(trim_options);
+        self
+    }
+}
+
+/// Options for the [`xsetid`](StreamCommands::xsetid) command.
+#[derive(Default, Serialize)]
+pub struct XSetIdOptions {
+    #[serde(rename = "ENTRIESADDED", skip_serializing_if = "Option::is_none")]
+    entries_added: Option<u64>,
+    #[serde(rename = "MAXDELETEDID", skip_serializing_if = "Option::is_none")]
+    max_deleted_id: Option<String>,
+}
+
+impl XSetIdOptions {
+    /// Sets the stream's lifetime count of added entries, which drives the
+    /// consumer-group lag computation.
+    #[must_use]
+    pub fn entries_added(mut self, entries_added: u64) -> Self {
+        self.entries_added = Some(entries_added);
+        self
+    }
+
+    /// Sets the greatest id ever deleted from the stream.
+    #[must_use]
+    pub fn max_deleted_id(mut self, id: impl Into<String>) -> Self {
+        self.max_deleted_id = Some(id.into());
+        self
+    }
+}
+
+/// Options for the [`xcfgset`](StreamCommands::xcfgset) command.
+#[derive(Default, Serialize)]
+pub struct XCfgSetOptions {
+    #[serde(rename = "IDMP-DURATION", skip_serializing_if = "Option::is_none")]
+    idmp_duration: Option<u64>,
+    #[serde(rename = "IDMP-MAXSIZE", skip_serializing_if = "Option::is_none")]
+    idmp_maxsize: Option<u64>,
+}
+
+impl XCfgSetOptions {
+    /// How long, in seconds, an idempotent id is retained. Valid range: 1 to
+    /// 86400. Defaults to the `stream-idmp-duration` server configuration.
+    #[must_use]
+    pub fn idmp_duration(mut self, seconds: u64) -> Self {
+        self.idmp_duration = Some(seconds);
+        self
+    }
+
+    /// How many of the most recent idempotent ids are kept per producer. Valid
+    /// range: 1 to 10000. Defaults to the `stream-idmp-maxsize` server
+    /// configuration. Once the capacity is reached the oldest ids are evicted,
+    /// whatever their remaining duration.
+    #[must_use]
+    pub fn idmp_maxsize(mut self, entries: u64) -> Self {
+        self.idmp_maxsize = Some(entries);
         self
     }
 }
@@ -778,6 +903,8 @@ pub struct XClaimOptions {
         serialize_with = "serialize_flag"
     )]
     justid: bool,
+    #[serde(rename = "LASTID", skip_serializing_if = "Option::is_none")]
+    lastid: Option<String>,
 }
 
 impl XClaimOptions {
@@ -817,6 +944,16 @@ impl XClaimOptions {
     #[must_use]
     pub fn just_id(mut self) -> Self {
         self.justid = true;
+        self
+    }
+
+    /// Set the consumer group's last delivered id to `id`.
+    ///
+    /// Meant for a tool rebuilding a consumer group's state; a normal claim has
+    /// no reason to move the group's cursor.
+    #[must_use]
+    pub fn last_id(mut self, id: impl Into<String>) -> Self {
+        self.lastid = Some(id.into());
         self
     }
 }
@@ -963,6 +1100,32 @@ pub struct XStreamInfo {
     pub last_entry: StreamEntry<String>,
 
     pub recorded_first_entry_id: String,
+
+    /// how long, in seconds, an idempotent id is retained
+    /// (see [`xcfgset`](StreamCommands::xcfgset))
+    #[serde(default)]
+    pub idmp_duration: Option<u64>,
+
+    /// how many of the most recent idempotent ids are kept per producer
+    /// (see [`xcfgset`](StreamCommands::xcfgset))
+    #[serde(default)]
+    pub idmp_maxsize: Option<u64>,
+
+    /// the number of producers currently tracked in the stream's IDMP map
+    #[serde(default)]
+    pub pids_tracked: Option<usize>,
+
+    /// the total number of idempotent ids currently tracked
+    #[serde(default)]
+    pub iids_tracked: Option<usize>,
+
+    /// the count of entries added with an idempotent id during the stream's lifetime
+    #[serde(default)]
+    pub iids_added: Option<usize>,
+
+    /// the count of duplicates prevented during the stream's lifetime
+    #[serde(default)]
+    pub iids_duplicates: Option<usize>,
 }
 
 /// Options for the [`xread`](StreamCommands::xread) command

@@ -844,6 +844,7 @@ pub struct ZRangeOptions {
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     sort_by: Option<ZRangeSortBy>,
     #[serde(
+        rename = "REV",
         skip_serializing_if = "std::ops::Not::not",
         serialize_with = "serialize_flag"
     )]
@@ -859,6 +860,10 @@ impl ZRangeOptions {
         self
     }
 
+    /// Walks the range from the highest element down.
+    ///
+    /// The bounds keep their `start stop` order but swap meaning: with
+    /// `BYSCORE` or `BYLEX` the higher bound must be given first.
     #[must_use]
     pub fn reverse(mut self) -> Self {
         self.reverse = true;

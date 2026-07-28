@@ -6,7 +6,7 @@ use crate::{
         ZScanOptions, ZScanResult, ZWhere,
     },
     sleep, spawn,
-    tests::get_test_client,
+    tests::{TestClient, get_test_client},
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -777,6 +777,44 @@ async fn zrange() -> Result<()> {
         .await?;
     assert_eq!(1, values.len());
     assert_eq!("three".to_owned(), values[0]);
+
+    // `REV` walks the range from the highest score down. With `BYSCORE` the
+    // bounds are given highest-first, as the server requires.
+    let values: Vec<String> = client
+        .zrange("key", 0, -1, ZRangeOptions::default().reverse())
+        .await?;
+    assert_eq!(
+        vec!["three".to_owned(), "two".to_owned(), "one".to_owned()],
+        values
+    );
+
+    let values: Vec<String> = client
+        .zrange(
+            "key",
+            "+inf",
+            "(1",
+            ZRangeOptions::default()
+                .sort_by(ZRangeSortBy::ByScore)
+                .reverse(),
+        )
+        .await?;
+    assert_eq!(vec!["three".to_owned(), "two".to_owned()], values);
+
+    Ok(())
+}
+
+#[test]
+fn zrange_reverse_emits_rev() -> Result<()> {
+    // The server's token is `REV`; `REVERSE` is a syntax error.
+    let cmd = TestClient
+        .zrange::<()>("key", 0, -1, ZRangeOptions::default().reverse())
+        .command;
+    assert_eq!("ZRANGE key 0 -1 REV", &cmd.to_string());
+
+    let cmd = TestClient
+        .zrangestore("dst", "key", 0, -1, ZRangeOptions::default().reverse())
+        .command;
+    assert_eq!("ZRANGESTORE dst key 0 -1 REV", &cmd.to_string());
 
     Ok(())
 }

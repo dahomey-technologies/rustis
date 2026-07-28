@@ -137,6 +137,13 @@ async fn cluster_myid_and_nodes() -> Result<()> {
     assert_eq!(40, my_id.len());
     assert!(my_id.chars().all(|c| c.is_ascii_hexdigit()));
 
+    // The shard id groups a master with its replicas, so it differs from the
+    // node id while sharing its shape.
+    let my_shard_id: String = client.cluster_myshardid().await?;
+    assert_eq!(40, my_shard_id.len());
+    assert!(my_shard_id.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(my_id, my_shard_id);
+
     // CLUSTER NODES is the same text format as the nodes.conf file: one line per
     // node, the contacted one flagged `myself`.
     let nodes: String = client.cluster_nodes().await?;

@@ -21,7 +21,11 @@ services:
     # re-execute argv[0] resolved against the working directory, which is /data
     # here. Started as a bare name, the server can only answer "no permissions
     # to execute /data/redis-server" and the two commands are untestable.
-    command: /usr/local/bin/redis-server --enable-debug-command yes
+    # `--enable-module-command` makes MODULE reach the server at all; without it
+    # every subcommand is refused before parsing, so the MODULE UNLOAD / LOADEX
+    # tests could not tell a correctly-encoded command from a broken one. The
+    # tests only exercise the error path and never unload a bundled module.
+    command: /usr/local/bin/redis-server --enable-debug-command yes --enable-module-command yes
 
 # TLS
   redis-tls:

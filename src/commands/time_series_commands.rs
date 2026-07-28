@@ -668,6 +668,7 @@ pub enum TsEncoding {
 ///  It is used with one of the following values:
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum TsDuplicatePolicy {
     /// ignore any newly reported value and reply with an error
     Block,
@@ -777,6 +778,7 @@ impl<'a> TsCreateOptions<'a> {
 /// and [`ts_mrange`](TimeSeriesCommands::ts_mrange) commands.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum TsAggregationType {
     /// Arithmetic mean of all values
     Avg,

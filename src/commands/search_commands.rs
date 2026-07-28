@@ -942,6 +942,7 @@ impl Serialize for FtVectorFieldAlgorithm {
 /// for the [`ft_create`](SearchCommands::ft_create) command
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtFieldType {
     /// Allows full-text search queries against the value in this attribute.
     #[default]
@@ -992,6 +993,7 @@ pub enum FtGeoShapeCoordSystem {
 ///
 /// For more information, see [`Phonetic Matching`](https://redis.io/docs/stack/search/reference/phonetic_matching).
 #[derive(Debug, Deserialize, Serialize)]
+#[non_exhaustive]
 pub enum FtPhoneticMatcher {
     /// Double metaphone for English
     #[serde(rename = "dm:en")]
@@ -1204,6 +1206,7 @@ impl<'a> FtFieldSchema<'a> {
 /// Redis Data type of an index defined in [`FtCreateOptions`](FtCreateOptions) struct
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
 pub enum FtIndexDataType {
     /// [`hash`](https://redis.io/docs/data-types/hashes/) (default)
     Hash,

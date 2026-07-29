@@ -1,4 +1,7 @@
-use crate::{ClientError, Error, Result, resp::Value};
+use crate::{
+    ClientError, Error, Result,
+    resp::{Value, util::is_field_value_array},
+};
 use serde::{
     Deserialize, Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
@@ -470,34 +473,20 @@ impl<'de> Deserializer<'de> for &'de Value {
     where
         V: Visitor<'de>,
     {
-        // Heuristic for decoding a struct out of a flat RESP2 array; RESP3 maps
-        // take the `Value::Map` path below and need no guessing. An array is
-        // read as field/value pairs when it holds more elements than the struct
-        // has fields, or when its first element is a simple string naming one of
-        // them; otherwise it is read as a positional tuple.
-        //
-        // This is looser than the rule in `resp_deserializer.rs`, which requires
-        // `len >= 2 * fields` *and* a matching first field name and errors
-        // otherwise. Here a 4-element array for a 3-field struct is read as
-        // pairs rather than rejected, and the name check only fires on
-        // `SimpleString` — field names arrive as bulk strings.
-        //
-        // The boundary is narrow either way: the crate forces `HELLO 3`, so this
-        // is only reachable for the commands that still answer a flat array
-        // under RESP3.
-        fn check_resp2_array(values: &[Value], fields: &'static [&'static str]) -> bool {
-            if values.len() > fields.len() {
-                true
-            } else if let Some(Value::SimpleString(s)) = values.first() {
-                fields.iter().any(|f| s == f)
-            } else {
-                false
+        /// The first element of a flat array when it is a string, which is what
+        /// [`is_field_value_array`] classifies the array on. Any other kind of
+        /// element gives `None` — a positional array.
+        fn first_key(values: &[Value]) -> Option<&[u8]> {
+            match values.first() {
+                Some(Value::SimpleString(s)) => Some(s.as_bytes()),
+                Some(Value::BulkString(bs)) => Some(bs),
+                _ => None,
             }
         }
 
         match self {
             Value::Array(values) => {
-                if check_resp2_array(values, fields) {
+                if is_field_value_array(values.len(), first_key(values), fields) {
                     visitor.visit_map(SeqAccess::new(values))
                 } else {
                     visitor.visit_seq(SeqAccess::new(values))

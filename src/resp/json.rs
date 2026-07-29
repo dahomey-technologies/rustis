@@ -16,6 +16,26 @@ use serde::{
 /// `Json(&value)` borrows and `Json(value)` moves — both serialize identically,
 /// since `&T` is itself `Serialize`.
 ///
+/// `T` needs no schema: `Json<serde_json::Value>` stores and reads back an
+/// untyped document. The wrapper is what makes the document one bulk string —
+/// a bare [`serde_json::Value`] passed as an argument is serialized like any
+/// other Rust value, so a map becomes one argument per key and per value, and
+/// an array one argument per element.
+///
+/// ```rust
+/// # use rustis::{client::Client, commands::StringCommands, resp::Json, Result};
+/// # #[tokio::main]
+/// # async fn main() -> Result<()> {
+/// # let client = Client::connect("127.0.0.1:6379").await?;
+/// let document = serde_json::json!({ "id": 12, "name": "foo" });
+/// client.set("user:123", Json(&document)).await?;
+/// let Json(read_back): Json<serde_json::Value> = client.get("user:123").await?;
+///
+/// assert_eq!(document, read_back);
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Example
 /// ```rust
 /// use rustis::{
@@ -372,6 +392,25 @@ mod tests {
             error.to_string().contains("Cannot deserialize from json"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn a_json_value_becomes_one_json_argument() {
+        let value = serde_json::json!({ "id": 12, "name": "Foo" });
+        let mut command: Command = FastPathCommandBuilder::set("key", Json(&value));
+        assert!(command.take_serialization_error().is_none());
+        assert_eq!(2, command.num_args());
+        assert_eq!(
+            Some(&br#"{"id":12,"name":"Foo"}"#[..]),
+            command.get_arg(1).as_deref()
+        );
+    }
+
+    #[test]
+    fn a_bulk_string_reply_deserializes_into_a_json_value() {
+        let resp = RespBuf::from_slice(b"$22\r\n{\"id\":12,\"name\":\"Foo\"}\r\n");
+        let Json(value): Json<serde_json::Value> = resp.to().unwrap();
+        assert_eq!(serde_json::json!({ "id": 12, "name": "Foo" }), value);
     }
 
     #[test]

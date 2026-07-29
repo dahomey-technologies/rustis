@@ -72,6 +72,50 @@ async fn a_value_that_cannot_be_serialized_fails_the_command() -> Result<()> {
     Ok(())
 }
 
+/// An untyped document round-trips through `GET` / `SET` the same way a struct
+/// does: `serde_json::Value` needs no schema on either side.
+#[tokio::test]
+#[serial]
+async fn get_set_json_value() -> Result<()> {
+    let value = serde_json::json!({
+        "id": 12,
+        "name": "Foo",
+        "tags": ["a", "b"],
+        "address": { "city": "Paris" },
+        "active": true,
+        "score": null,
+    });
+
+    let client = get_test_client().await?;
+
+    client.flushall(FlushingMode::Sync).await?;
+
+    client.set("key", Json(&value)).await?;
+    let Json(value2): Json<serde_json::Value> = client.get("key").await?;
+
+    assert_eq!(value, value2);
+
+    // A scalar document is a document too.
+    client.set("key2", Json(serde_json::json!(12))).await?;
+    let Json(scalar): Json<serde_json::Value> = client.get("key2").await?;
+
+    assert_eq!(serde_json::json!(12), scalar);
+
+    // A missing key is a nil reply, not the JSON document `null`.
+    assert!(
+        client
+            .get::<Json<serde_json::Value>>("missing")
+            .await
+            .is_err()
+    );
+    let missing: Option<Json<serde_json::Value>> = client.get("missing").await?;
+    assert!(missing.is_none());
+
+    client.close().await?;
+
+    Ok(())
+}
+
 /// The wrapper reads back what the JSON feature itself stored, not only what
 /// `SET` stored.
 #[tokio::test]

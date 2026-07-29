@@ -7,6 +7,7 @@ on:
       - "redis/**"
       - ".github/workflows/**"
       - "Cargo.toml"
+      - "Cargo.lock"
     branches:
       - "**"
     tags-ignore:
@@ -16,6 +17,7 @@ on:
       - "src/**"
       - ".github/workflows/**"
       - "Cargo.toml"
+      - "Cargo.lock"
     branches:
       - "**"
 
@@ -53,10 +55,10 @@ jobs:
   # downstream crate compiles, not the dev-dependencies of our own test suite,
   # which are free to require a newer compiler.
   #
-  # Cargo's v3 resolver reads `rust-version` when picking dependency versions,
-  # so a dependency that raises its own MSRV is resolved away instead of
-  # breaking this job. `Cargo.lock` is not committed, which is what makes that
-  # resolution happen on every run.
+  # Cargo's v3 resolver — the default in edition 2024 — reads `rust-version`
+  # when picking dependency versions, so the committed `Cargo.lock` is
+  # MSRV-compatible by construction: a dependency that raises its own MSRV above
+  # 1.88 is resolved away when the lock is written, not discovered here.
   msrv:
     name: MSRV
     runs-on: ubuntu-22.04

@@ -1064,15 +1064,20 @@ async fn monitor() -> Result<()> {
         let _result = calls(&client2).await;
     });
 
-    for _ in 0..3 {
+    // MONITOR reports every command served by the instance: commands issued by
+    // connections other than client2 are skipped.
+    let mut seen = 0;
+    while seen < 3 {
         let result = monitor_stream
             .next()
             .await
             .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
+        if result.database != 2 || result.command != "SET" {
+            continue;
+        }
         assert!(result.unix_timestamp_millis > 0.0);
-        assert_eq!(2, result.database);
-        assert_eq!("SET", result.command);
         assert_eq!(2, result.command_args.len());
+        seen += 1;
     }
 
     // RESET is the only command allowed during a MONITOR session
@@ -1123,16 +1128,20 @@ async fn auto_remonitor() -> Result<()> {
         let _result = calls(&client2).await;
     });
 
-    for _ in 0..3 {
+    // MONITOR reports every command served by the instance: commands issued by
+    // connections other than client2 are skipped.
+    let mut seen = 0;
+    while seen < 3 {
         let result = monitor_stream
             .next()
             .await
             .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
-
+        if result.database != 2 || result.command != "SET" {
+            continue;
+        }
         assert!(result.unix_timestamp_millis > 0.0);
-        assert_eq!(2, result.database);
-        assert_eq!("SET", result.command);
         assert_eq!(2, result.command_args.len());
+        seen += 1;
     }
 
     monitor_stream.close().await?;

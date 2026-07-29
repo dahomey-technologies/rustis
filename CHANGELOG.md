@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### BREAKING CHANGES
+
+- **`FtHybridVectorQuery::Knn` has a third field, `shard_k_ratio`.** The variant's
+  fields are public and `#[non_exhaustive]` on the enum does not cover them, so an
+  existing `Knn { k, ef_runtime }` literal needs `shard_k_ratio: None` added. That
+  is the whole break; behaviour is unchanged when it is `None`.
+
+### Fixed
+
+- **`FT.HYBRID`'s `KNN SHARD_K_RATIO` is now reachable**, through
+  `FtHybridVectorQuery::Knn::shard_k_ratio`. It is a cluster-only knob — it scales
+  the candidate count each shard returns — and Redis 8.8 accepts it, where 8.6
+  rejected it as an unknown argument. It counts towards the `KNN` clause count:
+  `KNN 6 K 2 EF_RUNTIME 30 SHARD_K_RATIO 0.5`. See the breaking-changes section.
+
 ## [0.20.0] - 2026-07-28
 
 This release closes a large correctness and performance pass over the RESP

@@ -630,6 +630,7 @@ async fn ft_hybrid() -> Result<()> {
             FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
                 k: 2,
                 ef_runtime: None,
+                shard_k_ratio: None,
             }),
             FtHybridOptions::default()
                 .combine(FtHybridCombine::Rrf {
@@ -655,6 +656,7 @@ async fn ft_hybrid() -> Result<()> {
             FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
                 k: 2,
                 ef_runtime: None,
+                shard_k_ratio: None,
             }),
             FtHybridOptions::default()
                 .combine(FtHybridCombine::Rrf {
@@ -690,6 +692,7 @@ async fn ft_hybrid() -> Result<()> {
                 .query(FtHybridVectorQuery::Knn {
                     k: 2,
                     ef_runtime: None,
+                    shard_k_ratio: None,
                 })
                 .yield_score_as("vector_score"),
             FtHybridOptions::default()
@@ -708,6 +711,24 @@ async fn ft_hybrid() -> Result<()> {
         top.keys().collect::<Vec<_>>()
     );
 
+    // `SHARD_K_RATIO` scales the per-shard `K`; a standalone server accepts and
+    // ignores it, which is what makes it reachable at all.
+    let sharded: Value = client
+        .ft_hybrid(
+            "hybrid_idx",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: None,
+                shard_k_ratio: Some(0.5),
+            }),
+            FtHybridOptions::default()
+                .limit(0, 10)
+                .param("vec", &query_vector),
+        )
+        .await?;
+    assert!(!matches!(sharded, Value::Null));
+
     // Post-combine FILTER on an APPLY-computed field.
     let filtered: Value = client
         .ft_hybrid(
@@ -716,6 +737,7 @@ async fn ft_hybrid() -> Result<()> {
             FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
                 k: 2,
                 ef_runtime: None,
+                shard_k_ratio: None,
             }),
             FtHybridOptions::default()
                 .combine(FtHybridCombine::Rrf {
@@ -2034,6 +2056,7 @@ fn ft_hybrid_args() -> Result<()> {
             FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
                 k: 2,
                 ef_runtime: Some(30),
+                shard_k_ratio: None,
             }),
             FtHybridOptions::default()
                 .combine(FtHybridCombine::Rrf {
@@ -2085,6 +2108,7 @@ fn ft_hybrid_args() -> Result<()> {
                 .query(FtHybridVectorQuery::Knn {
                     k: 2,
                     ef_runtime: None,
+                    shard_k_ratio: None,
                 })
                 .yield_score_as("vector_score"),
             FtHybridOptions::default(),
@@ -2093,6 +2117,25 @@ fn ft_hybrid_args() -> Result<()> {
     assert_eq!(
         "FT.HYBRID index SEARCH bicycle YIELD_SCORE_AS text_score \
          VSIM @embedding $vec KNN 2 K 2 YIELD_SCORE_AS vector_score",
+        &cmd.to_string()
+    );
+
+    // `SHARD_K_RATIO` is a `KNN` argument and counts towards the clause count.
+    let cmd = TestClient
+        .ft_hybrid::<Value>(
+            "index",
+            FtHybridSearch::new("bicycle"),
+            FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
+                k: 2,
+                ef_runtime: Some(30),
+                shard_k_ratio: Some(0.5),
+            }),
+            FtHybridOptions::default(),
+        )
+        .command;
+    assert_eq!(
+        "FT.HYBRID index SEARCH bicycle VSIM @embedding $vec \
+         KNN 6 K 2 EF_RUNTIME 30 SHARD_K_RATIO 0.5",
         &cmd.to_string()
     );
 
@@ -2919,6 +2962,7 @@ async fn ft_hybrid_load_all_and_nosort() -> Result<()> {
             FtHybridVsim::new("@embedding", "$vec").query(FtHybridVectorQuery::Knn {
                 k: 2,
                 ef_runtime: None,
+                shard_k_ratio: None,
             }),
             FtHybridOptions::default()
                 .combine(FtHybridCombine::Rrf {

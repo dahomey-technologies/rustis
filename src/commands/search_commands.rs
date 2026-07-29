@@ -389,9 +389,9 @@ pub trait SearchCommands<'a>: Sized {
     /// `SORTBY`/`NOSORT`, `LOAD`, `GROUPBY`/`REDUCE`, `APPLY`, a post-combine
     /// `FILTER`, `FORMAT`, `PARAMS` and `TIMEOUT`. The vector query blob is passed
     /// by reference (e.g. `$vec`) and its bytes supplied through `PARAMS`. The
-    /// `SHARD_K_RATIO`, per-clause `YIELD_SCORE_AS` and vector `POLICY` arguments
-    /// appear in the command reference but are rejected by the search module, so
-    /// they are intentionally not exposed.
+    /// vector `POLICY` and `BATCH_SIZE` arguments appear in the command reference
+    /// but are rejected by the search module, so they are intentionally not
+    /// exposed.
     ///
     /// # See Also
     /// [<https://redis.io/commands/ft.hybrid/>](https://redis.io/commands/ft.hybrid/)
@@ -417,9 +417,19 @@ pub trait SearchCommands<'a>: Sized {
         // VSIM field vector [KNN count ... | RANGE count ...] [FILTER expr] [YIELD_SCORE_AS name]
         command = command.arg("VSIM").arg(vsim.field).arg(vsim.vector);
         match vsim.query {
-            Some(FtHybridVectorQuery::Knn { k, ef_runtime }) => {
-                command =
-                    command.arg_counted("KNN", (("K", k), ef_runtime.map(|e| ("EF_RUNTIME", e))));
+            Some(FtHybridVectorQuery::Knn {
+                k,
+                ef_runtime,
+                shard_k_ratio,
+            }) => {
+                command = command.arg_counted(
+                    "KNN",
+                    (
+                        ("K", k),
+                        ef_runtime.map(|e| ("EF_RUNTIME", e)),
+                        shard_k_ratio.map(|r| ("SHARD_K_RATIO", r)),
+                    ),
+                );
             }
             Some(FtHybridVectorQuery::Range { radius, epsilon }) => {
                 command = command.arg_counted(
@@ -1513,7 +1523,15 @@ impl<'a> FtHybridSearch<'a> {
 #[non_exhaustive]
 pub enum FtHybridVectorQuery {
     /// K-nearest-neighbors search.
-    Knn { k: u32, ef_runtime: Option<u32> },
+    ///
+    /// `shard_k_ratio` scales the number of candidates each shard returns, as a
+    /// fraction of `k`. It only affects a cluster; a standalone server accepts it
+    /// and ignores it.
+    Knn {
+        k: u32,
+        ef_runtime: Option<u32>,
+        shard_k_ratio: Option<f64>,
+    },
     /// Range search within a radius.
     Range { radius: f64, epsilon: Option<f64> },
 }

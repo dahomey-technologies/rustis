@@ -194,6 +194,24 @@ pub(crate) async fn get_cluster_test_client_with_command_timeout() -> Result<Cli
     .await
 }
 
+/// Resident set size of the current process, in bytes, or `None` where it
+/// cannot be read.
+///
+/// Reads field 2 of `/proc/self/statm` (resident pages) and scales it by the
+/// page size. This measures *retention*, which is what a memory-growth claim is
+/// about, unlike an allocation counter. Its noise floor is a few MiB, so it is
+/// only ever compared against thresholds orders of magnitude above that.
+/// Returning `None` off Linux lets a caller skip the check instead of failing on
+/// a platform where the figure is unavailable.
+pub(crate) fn resident_bytes() -> Option<usize> {
+    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+    let resident_pages: usize = statm.split_whitespace().nth(1)?.parse().ok()?;
+    // 4 KiB is the page size on every platform this file exists on that the
+    // suite runs against; reading it would need libc, which the crate does not
+    // depend on.
+    Some(resident_pages * 4096)
+}
+
 pub(crate) fn log_try_init() {
     let _ = env_logger::builder()
         .format_target(false)

@@ -1,11 +1,15 @@
 //! Fault-injecting TCP proxy for failure-path tests.
 //!
 //! A [`FaultProxy`] binds an ephemeral local port in front of an upstream
-//! address (a real Redis, or a fake server in a hermetic test), accepts a
-//! single client connection, and rewrites the **upstream → client** byte stream
-//! through a scripted [`Vec<Action>`]. The **client → upstream** direction is
-//! always forwarded verbatim, and once the script is exhausted the proxy
-//! forwards both directions transparently.
+//! address (a real Redis, or a fake server in a hermetic test), accepts client
+//! connections, and rewrites the **upstream → client** byte stream through a
+//! scripted [`Vec<Action>`]. The **client → upstream** direction is always
+//! forwarded verbatim, and once the script is exhausted the proxy forwards both
+//! directions transparently.
+//!
+//! [`FaultProxy::start`] scripts one connection; [`FaultProxy::start_multi`]
+//! scripts a sequence of them, which is what makes a sustained outage — a server
+//! that keeps failing every reconnection — expressible.
 //!
 //! This is the one primitive that unlocks the faults the client cannot inflict
 //! on itself — truncated frames mid-response, unknown RESP3 tags, unsolicited
@@ -14,6 +18,10 @@
 //! itself.
 
 use std::net::SocketAddr;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -43,6 +51,10 @@ pub(crate) enum Action {
 pub(crate) struct FaultProxy {
     /// Local address the client should connect to instead of the upstream.
     pub addr: SocketAddr,
+    connections_accepted: Arc<AtomicUsize>,
+    /// Handles of the per-connection tasks, so `Drop` tears down the live
+    /// connections and not only the accept loop.
+    connections: Arc<Mutex<Vec<JoinHandle<()>>>>,
     handle: JoinHandle<()>,
 }
 
@@ -54,27 +66,89 @@ impl FaultProxy {
         upstream: impl Into<String>,
         script: Vec<Action>,
     ) -> std::io::Result<Self> {
+        Self::start_multi(upstream, vec![script]).await
+    }
+
+    /// Same as [`Self::start`], but keeps accepting: connection *n* is driven
+    /// through `scripts[n]`, and every connection past the end of the list
+    /// replays the last script.
+    ///
+    /// This is what makes a *sustained* outage scriptable rather than a single
+    /// failure. With one accept only, the port goes dead after the first
+    /// connection is dropped, so a client that keeps reconnecting hits a closed
+    /// port instead of a server that keeps failing it — a different fault.
+    pub(crate) async fn start_multi(
+        upstream: impl Into<String>,
+        scripts: Vec<Vec<Action>>,
+    ) -> std::io::Result<Self> {
+        assert!(
+            !scripts.is_empty(),
+            "a fault proxy needs at least one script"
+        );
+
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
         let upstream = upstream.into();
+        let connections_accepted = Arc::new(AtomicUsize::new(0));
 
+        let connections: Arc<Mutex<Vec<JoinHandle<()>>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let accepted = Arc::clone(&connections_accepted);
+        let spawned = Arc::clone(&connections);
         let handle = tokio::spawn(async move {
-            let Ok((client, _)) = listener.accept().await else {
-                return;
-            };
-            let Ok(server) = TcpStream::connect(&upstream).await else {
-                return;
-            };
-            let _ = run_connection(client, server, script).await;
+            loop {
+                let Ok((client, _)) = listener.accept().await else {
+                    return;
+                };
+                let index = accepted.fetch_add(1, Ordering::Relaxed);
+                let script = scripts
+                    .get(index)
+                    .unwrap_or_else(|| {
+                        scripts
+                            .last()
+                            .expect("a fault proxy needs at least one script")
+                    })
+                    .clone();
+
+                // Each connection is driven on its own task, so a script that
+                // parks (a `Delay`, a transparent tail) does not stop the next
+                // reconnection from being accepted.
+                let upstream = upstream.clone();
+                let connection = tokio::spawn(async move {
+                    let Ok(server) = TcpStream::connect(&upstream).await else {
+                        return;
+                    };
+                    let _ = run_connection(client, server, script).await;
+                });
+                if let Ok(mut guard) = spawned.lock() {
+                    guard.push(connection);
+                }
+            }
         });
 
-        Ok(Self { addr, handle })
+        Ok(Self {
+            addr,
+            connections_accepted,
+            connections,
+            handle,
+        })
+    }
+
+    /// Number of client connections accepted so far. Lets a test prove a
+    /// reconnection storm actually happened instead of assuming it.
+    pub(crate) fn connections_accepted(&self) -> usize {
+        self.connections_accepted.load(Ordering::Relaxed)
     }
 }
 
 impl Drop for FaultProxy {
     fn drop(&mut self) {
         self.handle.abort();
+        if let Ok(guard) = self.connections.lock() {
+            for connection in guard.iter() {
+                connection.abort();
+            }
+        }
     }
 }
 
@@ -244,6 +318,59 @@ mod tests {
         .unwrap();
         let out = read_all_from(proxy.addr, b"PING\r\n").await;
         assert_eq!(&out, b"+PONG\r\n");
+    }
+
+    /// Spawns an upstream that keeps accepting, so a multi-connection script has
+    /// something to dial on every reconnection.
+    async fn spawn_repeating_fake_upstream(response: Vec<u8>) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                let response = response.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 64];
+                    let _ = sock.read(&mut buf).await;
+                    let _ = sock.write_all(&response).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+        addr
+    }
+
+    /// Successive connections must each get their own script, and connections
+    /// past the end of the list must replay the last one — that is what lets a
+    /// test script an outage that keeps failing every reconnection.
+    #[tokio::test]
+    async fn proxy_scripts_each_connection_in_turn_then_repeats_the_last() {
+        let upstream = spawn_repeating_fake_upstream(b"+PONG\r\n".to_vec()).await;
+        let proxy = FaultProxy::start_multi(
+            upstream.to_string(),
+            vec![
+                vec![Action::Inject(b"+ONE\r\n".to_vec()), Action::Drop],
+                vec![Action::Inject(b"+TWO\r\n".to_vec()), Action::Drop],
+                vec![Action::Inject(b"+LAST\r\n".to_vec()), Action::Drop],
+            ],
+        )
+        .await
+        .unwrap();
+
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            seen.push(read_all_from(proxy.addr, b"PING\r\n").await);
+        }
+
+        assert_eq!(
+            vec![
+                b"+ONE\r\n".to_vec(),
+                b"+TWO\r\n".to_vec(),
+                b"+LAST\r\n".to_vec(),
+                b"+LAST\r\n".to_vec(),
+            ],
+            seen
+        );
+        assert_eq!(4, proxy.connections_accepted());
     }
 
     /// End-to-end proof the harness is usable by a real client: a transparent

@@ -85,6 +85,14 @@ pub struct Cache {
     /// keys with an in-flight or recent invalidation appear here; entries are
     /// pruned when the key is next inserted cleanly.
     key_generations: Arc<DashMap<BulkString, u64>>,
+    /// `generation_counter` value at the last whole-cache flush.
+    ///
+    /// A flush happens when invalidations were lost — dropped under
+    /// backpressure, or missed while the connection was down. It names no key,
+    /// because the lost messages named keys nobody will ever learn, so any fetch
+    /// that sampled before it must discard its result whatever its own key's
+    /// record says.
+    flush_generation: Arc<AtomicU64>,
     #[allow(dead_code)]
     invalidation_task: JoinHandle<()>,
     #[allow(dead_code)]
@@ -110,13 +118,42 @@ impl Cache {
 
         let generation_counter = Arc::new(AtomicU64::new(0));
         let key_generations: Arc<DashMap<BulkString, u64>> = Arc::new(DashMap::new());
+        let flush_generation = Arc::new(AtomicU64::new(0));
 
         let connection_tag = client.connection_tag().to_owned();
         let counter_clone = generation_counter.clone();
         let key_generations_clone = key_generations.clone();
+        let flush_generation_clone = flush_generation.clone();
         let invalidation_task = spawn(async move {
             let mut stream = stream;
+            let mut dropped_seen = 0usize;
             while let Some(keys) = stream.next().await {
+                // The invalidation channel is bounded, and it sheds the oldest
+                // messages when a burst outruns this task. Those messages name
+                // keys that are now stale and will never be named again, so
+                // acting only on what survived would leave them cached and
+                // served for good. Losing invalidations means no longer knowing
+                // what is stale — the same situation as after a reconnection
+                // (see below), and it takes the same answer: drop everything.
+                let dropped = stream.dropped_messages();
+                if dropped != dropped_seen {
+                    tracing::warn!(
+                        tag = %connection_tag,
+                        "Dropped {} invalidation message(s) under backpressure; \
+                         invalidating the whole client cache",
+                        dropped - dropped_seen
+                    );
+                    dropped_seen = dropped;
+                    // Record the flush at a fresh generation, so a fetch already
+                    // in flight — which sampled the counter before this point —
+                    // discards its value instead of re-inserting it after the
+                    // flush. A per-key record cannot express this: the dropped
+                    // messages named keys we never saw.
+                    let generation = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
+                    flush_generation_clone.store(generation, Ordering::SeqCst);
+                    cache_clone.invalidate_all();
+                }
+
                 for key in keys {
                     tracing::debug!(
                         tag = %connection_tag,
@@ -142,13 +179,19 @@ impl Cache {
         let client_clone = client.clone();
         let connection_tag = client.connection_tag().to_owned();
         let mut on_reconnect = client.on_reconnect();
+        let counter_clone = generation_counter.clone();
+        let flush_generation_clone = flush_generation.clone();
         let reconnection_task = spawn(async move {
             while on_reconnect.recv().await.is_ok() {
                 tracing::debug!(tag = %connection_tag, "Re-enabling client tracking after reconnection");
 
                 // Invalidations emitted while the connection was down are lost for
                 // good, so every entry must be considered stale. A partial refresh
-                // cannot be correct here.
+                // cannot be correct here. Marking the flush is what also protects
+                // a fetch that was in flight across the reconnection: without it,
+                // that fetch would re-insert its value after the flush.
+                let generation = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
+                flush_generation_clone.store(generation, Ordering::SeqCst);
                 cache_clone.invalidate_all();
 
                 if let Err(e) = client_clone
@@ -168,6 +211,7 @@ impl Cache {
             client,
             generation_counter,
             key_generations,
+            flush_generation,
             invalidation_task,
             reconnection_task,
         }))
@@ -568,7 +612,8 @@ impl Cache {
         // miss), never serves stale data. If no invalidation raced, prune this
         // key's now-obsolete generation record so the map does not grow unbounded.
         let recorded = self.key_generations.get(&key_for_check).map(|g| *g);
-        match post_insert_action(recorded, generation_before) {
+        let flushed_at = self.flush_generation.load(Ordering::SeqCst);
+        match post_insert_action(recorded, generation_before, flushed_at) {
             PostInsertAction::DropStale => {
                 self.cache.invalidate(&key_for_check).await;
             }
@@ -612,7 +657,20 @@ enum PostInsertAction {
 
 /// Pure decision behind the insert-after-response race guard, split out so the
 /// ordering logic is unit-testable without a live cache or a real race.
-fn post_insert_action(recorded_generation: Option<u64>, sampled_before: u64) -> PostInsertAction {
+///
+/// `flushed_at` is the generation of the last whole-cache flush, which happens
+/// when invalidation messages were dropped under backpressure. Such a flush
+/// carries no key: the dropped messages named keys nobody will ever learn, so a
+/// fetch that sampled before it cannot be trusted whatever its own key's record
+/// says. It is checked first for that reason.
+fn post_insert_action(
+    recorded_generation: Option<u64>,
+    sampled_before: u64,
+    flushed_at: u64,
+) -> PostInsertAction {
+    if sampled_before < flushed_at {
+        return PostInsertAction::DropStale;
+    }
     match recorded_generation {
         Some(generation) if generation > sampled_before => PostInsertAction::DropStale,
         Some(_) => PostInsertAction::PruneGeneration,
@@ -634,13 +692,39 @@ mod tests {
 
     #[test]
     fn no_invalidation_recorded_keeps_entry() {
-        assert_eq!(PostInsertAction::Keep, post_insert_action(None, 5));
+        assert_eq!(PostInsertAction::Keep, post_insert_action(None, 5, 0));
     }
 
     #[test]
     fn invalidation_after_sample_drops_stale_entry() {
         // Sampled 5 before sending; key invalidated at generation 6 in flight.
-        assert_eq!(PostInsertAction::DropStale, post_insert_action(Some(6), 5));
+        assert_eq!(
+            PostInsertAction::DropStale,
+            post_insert_action(Some(6), 5, 0)
+        );
+    }
+
+    /// A whole-cache flush names no key, so it must invalidate a fetch that
+    /// sampled before it even though that key has no invalidation record. This
+    /// is what keeps the cache correct when invalidation messages are dropped
+    /// under backpressure, or missed across a reconnection.
+    #[test]
+    fn a_flush_drops_an_entry_fetched_before_it_whatever_its_key_record() {
+        // Sampled 5, cache flushed at generation 6 while the response was in
+        // flight: nothing says this key is clean, because the flush knows no keys.
+        assert_eq!(PostInsertAction::DropStale, post_insert_action(None, 5, 6));
+        assert_eq!(
+            PostInsertAction::DropStale,
+            post_insert_action(Some(3), 5, 6)
+        );
+    }
+
+    /// A fetch started after the flush is fetching post-flush data, so the flush
+    /// must not condemn it — otherwise the cache could never repopulate.
+    #[test]
+    fn a_flush_leaves_a_later_fetch_alone() {
+        assert_eq!(PostInsertAction::Keep, post_insert_action(None, 6, 6));
+        assert_eq!(PostInsertAction::Keep, post_insert_action(None, 7, 6));
     }
 
     #[test]
@@ -648,11 +732,11 @@ mod tests {
         // A record no newer than our sample cannot have raced this fetch.
         assert_eq!(
             PostInsertAction::PruneGeneration,
-            post_insert_action(Some(5), 5)
+            post_insert_action(Some(5), 5, 0)
         );
         assert_eq!(
             PostInsertAction::PruneGeneration,
-            post_insert_action(Some(4), 5)
+            post_insert_action(Some(4), 5, 0)
         );
     }
 }

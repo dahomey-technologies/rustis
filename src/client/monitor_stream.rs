@@ -35,6 +35,18 @@ impl MonitorStream {
         self.closed = true;
         Ok(())
     }
+
+    /// Number of monitored commands dropped so far because this stream fell
+    /// behind its memory budget.
+    ///
+    /// `MONITOR` is a firehose and there is no way to make the server slow down,
+    /// so once
+    /// [`BackpressureConfig::max_push_bytes`](crate::client::BackpressureConfig::max_push_bytes)
+    /// of undelivered lines have piled up, the **oldest** are discarded rather
+    /// than growing without limit. A consumer that keeps up sees `0`.
+    pub fn dropped_messages(&self) -> usize {
+        self.receiver.dropped_messages()
+    }
 }
 
 impl Stream for MonitorStream {

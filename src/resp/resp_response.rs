@@ -168,6 +168,19 @@ impl RespResponse {
         }
     }
 
+    /// The number of wire bytes this response keeps alive.
+    ///
+    /// A response parsed off the wire holds its frame's buffer, so this is what
+    /// a queue of undelivered responses actually costs, and it is what a pub/sub
+    /// channel charges against its budget. A synthesized response carries its
+    /// value inline and holds no buffer.
+    pub(crate) fn retained_bytes(&self) -> usize {
+        match self {
+            RespResponse::Frame { buf, .. } => buf.as_ref().len(),
+            _ => 0,
+        }
+    }
+
     /// Returns `true` if the RESP Response is a push message
     #[inline(always)]
     pub(crate) fn is_push(&self) -> bool {

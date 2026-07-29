@@ -4,7 +4,7 @@ use crate::{
     commands::{
         ClientReplyMode, ConnectionCommands, GenericCommands, PubSubCommands, StringCommands,
     },
-    network::{SendBatchTestHook, sleep, timeout},
+    network::{QueueMetricsTestHook, SendBatchTestHook, sleep, timeout},
     resp::cmd,
     tests::{
         get_default_config, get_default_port, get_test_client, get_test_client_with_config,
@@ -62,6 +62,46 @@ async fn retry_reasons_do_not_leak_across_messages_in_a_batch() -> Result<()> {
     assert_eq!(
         0, *second_reasons,
         "a following message must not inherit the previous message's retry reasons"
+    );
+
+    Ok(())
+}
+
+/// The queue-depth marks are high-water marks: they must report the peak a
+/// queue reached even after it has been fully drained. Without that, no test can
+/// measure a transient queue, because a measurement always arrives after the
+/// drain.
+#[tokio::test]
+#[serial]
+async fn the_queue_depth_marks_survive_the_drain() -> Result<()> {
+    log_try_init();
+
+    let metrics = QueueMetricsTestHook::new();
+    let mut config = get_default_config()?;
+    config.queue_metrics_test_hook = Some(metrics.clone());
+    let client = Client::connect(config).await?;
+
+    // Enqueue many independent messages without awaiting, so they pile up in the
+    // channel before the network task gets a turn. `send_and_forget` is
+    // synchronous, so this loop never yields and the whole batch is queued.
+    for i in 0..100 {
+        client.send_and_forget(cmd("GET").arg(format!("depth_mark_{i}")), None)?;
+    }
+
+    // Await a follow-up command: by the time it answers, every queued message
+    // has been sent and both queues are empty again.
+    let _: String = client.send(cmd("PING"), None).await?;
+
+    let send_peak = metrics.messages_to_send_high_water();
+    let receive_peak = metrics.messages_to_receive_high_water();
+
+    assert!(
+        send_peak > 1,
+        "the send-queue mark should hold the peak reached before the drain, got {send_peak}"
+    );
+    assert!(
+        receive_peak > 1,
+        "the receive-queue mark should hold the peak reached before the drain, got {receive_peak}"
     );
 
     Ok(())
@@ -224,6 +264,50 @@ async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
             Err(Error::Client(ClientError::MaxCommandAttemptsReached))
         ),
         "expected MaxCommandAttemptsReached, got {result:?}"
+    );
+
+    Ok(())
+}
+
+/// The default attempt budget must absorb an ordinary cluster slot migration.
+///
+/// Redirections and reconnections share one budget, and a migration legitimately
+/// costs an `ASK` followed by a `MOVED` when it completes between the two. A
+/// command must survive that sequence on the stock configuration; a budget of
+/// `3` would leave almost no room, which is why the default is higher.
+#[tokio::test]
+#[serial]
+async fn a_command_survives_an_ask_then_moved_on_the_default_attempt_budget() -> Result<()> {
+    log_try_init();
+
+    let hook = SendBatchTestHook::new();
+    let mut config = get_default_config()?;
+    config.send_batch_test_hook = Some(hook.clone());
+    let client = get_test_client_with_config(config.clone()).await?;
+
+    assert_eq!(
+        5, config.max_command_attempts,
+        "this test is about the stock budget; update it deliberately if it changes"
+    );
+
+    // Two successive redirections, as a slot migration that finishes midway
+    // would produce, then the command is left alone and must succeed.
+    let address = ("127.0.0.1".to_owned(), get_default_port());
+    hook.push_injection(Some(vec![RetryReason::Ask {
+        hash_slot: 0,
+        address: address.clone(),
+    }]));
+    hook.push_injection(Some(vec![RetryReason::Moved {
+        hash_slot: 0,
+        address,
+    }]));
+
+    let result: Result<String> =
+        timeout(Duration::from_secs(5), client.send(cmd("PING"), Some(true))).await?;
+
+    assert_eq!(
+        "PONG", result?,
+        "a command redirected twice must still be answered"
     );
 
     Ok(())

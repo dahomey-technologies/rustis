@@ -114,6 +114,19 @@ pub enum ClientError {
     /// without succeeding, so it is failed instead of retried indefinitely.
     #[error("command failed after reaching the maximum number of attempts")]
     MaxCommandAttemptsReached,
+    /// Raised when the send queue has reached `Config::backpressure.max_queued_bytes`,
+    /// so an incoming command is shed instead of growing the queue further.
+    ///
+    /// This means the connection is down and the queue of commands waiting for it
+    /// is full. It is distinct from
+    /// [`DisconnectedByPeer`](crate::Error::DisconnectedByPeer), which means the
+    /// command was dropped because it opted out of retries, and from
+    /// [`MaxCommandAttemptsReached`](Self::MaxCommandAttemptsReached), which means
+    /// the command was retried and kept failing. Only a *new* command is refused:
+    /// one already queued, or replayed after a reconnection or a redirection,
+    /// never is.
+    #[error("send queue is full")]
+    SendQueueFull,
     #[error("a client-side cache key must serialize to exactly one argument")]
     InvalidCacheKey,
     /// Raised when an unexpected error occurs

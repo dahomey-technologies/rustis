@@ -14,6 +14,20 @@ impl ClientTrackingInvalidationStream {
     pub(crate) fn new(receiver: PushReceiver) -> Self {
         Self { receiver }
     }
+
+    /// Number of invalidation messages dropped so far because this stream fell
+    /// behind its memory budget.
+    ///
+    /// **A non-zero value means the reader no longer knows which keys are
+    /// stale.** Unlike a pub/sub message, a lost invalidation is not merely
+    /// missing data: acting on the remaining ones would leave the dropped keys
+    /// cached and served forever. A consumer that observes this counter move
+    /// must discard everything it cached, which is what the `Cache` (feature `client-cache`)
+    /// does — the same response it already has for invalidations lost across a
+    /// reconnection.
+    pub fn dropped_messages(&self) -> usize {
+        self.receiver.dropped_messages()
+    }
 }
 
 impl Stream for ClientTrackingInvalidationStream {

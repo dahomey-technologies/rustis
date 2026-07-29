@@ -243,6 +243,37 @@ where
     }
 }
 
+/// Tells whether a flat array holds a struct's fields as field/value pairs
+/// rather than as a positional tuple. Both deserializers share this single rule
+/// so that the same reply decodes identically through either one.
+///
+/// RESP3 maps carry the answer in the protocol and never come here; a flat
+/// array does not, and the shape has to be guessed from `len` and the first
+/// element. It is read as pairs when the length is even *and* the first element
+/// is a string naming one of the struct's fields — `first_key` is `None` for any
+/// other kind of first element.
+///
+/// The rule is deliberately blind to `fields.len()`, because the server's field
+/// list moves between Redis versions while the struct's does not:
+///
+/// * a field added to a pair array keeps the length even and the first element
+///   unchanged, so it stays pairs and serde ignores the unknown key;
+/// * an element appended to a positional array stays positional, and the
+///   deserializers' `SeqAccess` stops after the last field, ignoring the extra;
+/// * a field the server no longer sends yields a `missing field` error naming
+///   it, instead of a shape mismatch.
+///
+/// It accepts one false positive in exchange: a positional array of even length
+/// whose first element happens to equal a field name is read as pairs.
+pub(crate) fn is_field_value_array(
+    len: usize,
+    first_key: Option<&[u8]>,
+    fields: &'static [&'static str],
+) -> bool {
+    len.is_multiple_of(2)
+        && first_key.is_some_and(|key| fields.iter().any(|field| field.as_bytes() == key))
+}
+
 /// Serialize field name only and skip the boolean value
 pub(crate) fn serialize_flag<S: serde::Serializer>(
     _: &bool,

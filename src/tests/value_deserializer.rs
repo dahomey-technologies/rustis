@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{Error, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init};
+use crate::{
+    ClientError, Error, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init,
+};
 use serde::Deserialize;
 use smallvec::SmallVec;
 
@@ -511,6 +513,90 @@ fn _struct() -> Result<()> {
     let result = Person::deserialize(&value)?;
     assert_eq!(12, result.id);
     assert_eq!("foo", result.name);
+
+    Ok(())
+}
+
+/// The mirror of `resp_deserializer::struct_flat_array_shapes`: the same flat
+/// arrays must decode the same way through the materialized `Value` tree.
+#[test]
+fn struct_flat_array_shapes() -> Result<()> {
+    log_try_init();
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Person {
+        id: u64,
+        name: String,
+    }
+
+    /// Two required fields and two optional ones, to exercise a server that
+    /// answers fewer field/value pairs than the struct declares.
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct PartialPerson {
+        id: u64,
+        name: String,
+        ttl: Option<u64>,
+        tag: Option<String>,
+    }
+
+    let mike = Person {
+        id: 12,
+        name: "Mike".to_owned(),
+    };
+
+    // A field the server added to a field/value array is ignored.
+    let value = Value::Array(vec![
+        Value::BulkString(b"id".to_vec()),
+        Value::Integer(12),
+        Value::BulkString(b"name".to_vec()),
+        Value::BulkString(b"Mike".to_vec()),
+        Value::BulkString(b"ttl".to_vec()),
+        Value::Integer(99),
+    ]);
+    assert_eq!(mike, Person::deserialize(&value)?);
+
+    // Field names rendered as simple strings are field names too.
+    let value = Value::Array(vec![
+        Value::SimpleString("id".to_owned()),
+        Value::Integer(12),
+        Value::SimpleString("name".to_owned()),
+        Value::BulkString(b"Mike".to_vec()),
+    ]);
+    assert_eq!(mike, Person::deserialize(&value)?);
+
+    // An element the server appended to a positional array is ignored.
+    let value = Value::Array(vec![
+        Value::Integer(12),
+        Value::BulkString(b"Mike".to_vec()),
+        Value::Integer(99),
+    ]);
+    assert_eq!(mike, Person::deserialize(&value)?);
+
+    // Two pairs for a four-field struct are pairs, not a positional tuple.
+    let value = Value::Array(vec![
+        Value::BulkString(b"id".to_vec()),
+        Value::Integer(12),
+        Value::BulkString(b"name".to_vec()),
+        Value::BulkString(b"Mike".to_vec()),
+    ]);
+    assert_eq!(
+        PartialPerson {
+            id: 12,
+            name: "Mike".to_owned(),
+            ttl: None,
+            tag: None
+        },
+        PartialPerson::deserialize(&value)?
+    );
+
+    // A missing required field is a serde error naming it, not a blanket
+    // `CannotParseStruct`.
+    let value = Value::Array(vec![Value::BulkString(b"id".to_vec()), Value::Integer(12)]);
+    let result = Person::deserialize(&value);
+    assert!(
+        matches!(&result, Err(Error::Client(ClientError::SerdeDeserialize(msg))) if msg.contains("name")),
+        "{result:?}"
+    );
 
     Ok(())
 }

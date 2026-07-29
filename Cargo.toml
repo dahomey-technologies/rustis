@@ -145,6 +145,11 @@ name = "cluster_read_alloc"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "struct_decode"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["tokio-runtime", "web-examples"]

@@ -618,6 +618,108 @@ fn r#struct() {
     );
 }
 
+/// The shapes a flat array can take must decode the same way whatever the
+/// server adds, removes, or renders as a simple string. Mirrored, case for
+/// case, by `value_deserializer::struct_flat_array_shapes`.
+#[test]
+fn struct_flat_array_shapes() {
+    log_try_init();
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Person {
+        id: u64,
+        name: String,
+    }
+
+    /// Two required fields and two optional ones, to exercise a server that
+    /// answers fewer field/value pairs than the struct declares.
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct PartialPerson {
+        id: u64,
+        name: String,
+        ttl: Option<u64>,
+        tag: Option<String>,
+    }
+
+    let mike = Person {
+        id: 12,
+        name: "Mike".to_owned(),
+    };
+
+    // A field the server added to a field/value array is ignored.
+    let result: Person =
+        deserialize("*6\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n$3\r\nttl\r\n:99\r\n")
+            .unwrap();
+    assert_eq!(mike, result);
+
+    // Field names rendered as simple strings are field names too.
+    let result: Person = deserialize("*4\r\n+id\r\n:12\r\n+name\r\n$4\r\nMike\r\n").unwrap();
+    assert_eq!(mike, result);
+
+    // An element the server appended to a positional array is ignored.
+    let result: Person = deserialize("*3\r\n:12\r\n$4\r\nMike\r\n:99\r\n").unwrap();
+    assert_eq!(mike, result);
+
+    // Two pairs for a four-field struct are pairs, not a positional tuple:
+    // the absent fields are left to their `Option` default.
+    let result: PartialPerson =
+        deserialize("*4\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n").unwrap();
+    assert_eq!(
+        PartialPerson {
+            id: 12,
+            name: "Mike".to_owned(),
+            ttl: None,
+            tag: None
+        },
+        result
+    );
+
+    // A missing required field is a serde error naming it, not a blanket
+    // `CannotParseStruct`.
+    let result: Result<Person> = deserialize("*2\r\n$2\r\nid\r\n:12\r\n");
+    assert!(
+        matches!(&result, Err(Error::Client(ClientError::SerdeDeserialize(msg))) if msg.contains("name")),
+        "{result:?}"
+    );
+}
+
+/// Structs also decode from the two synthesized array shapes — the cluster
+/// aggregates fan-out replies into an owned array, the client-side cache
+/// rebuilds `MGET` the same way.
+#[test]
+fn struct_from_synthesized_arrays() {
+    log_try_init();
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Pair {
+        first: i64,
+        second: i64,
+    }
+
+    let result: Pair = deserialize_from_resp_response(RespResponse::integer_array(vec![12, 13]))
+        .expect("integer array");
+    assert_eq!(
+        Pair {
+            first: 12,
+            second: 13
+        },
+        result
+    );
+
+    let result: Pair = deserialize_from_resp_response(RespResponse::owned_array(vec![
+        RespResponse::integer(12),
+        RespResponse::integer(13),
+    ]))
+    .expect("owned array");
+    assert_eq!(
+        Pair {
+            first: 12,
+            second: 13
+        },
+        result
+    );
+}
+
 #[test]
 fn r#enum() {
     log_try_init();

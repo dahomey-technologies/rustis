@@ -1,6 +1,9 @@
 use crate::{
     ClientError, Error, RedisError, Result,
-    resp::{PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView},
+    resp::{
+        PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView,
+        util::is_field_value_array,
+    },
 };
 use serde::{
     Deserializer,
@@ -611,43 +614,44 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        // Heuristic for decoding a struct out of a flat RESP2 array (RESP3 maps go
-        // through the robust `RespView::Map` path below). Two shapes are accepted:
-        //   * `len >= 2 * fields` with the first element matching a field name —
-        //     treated as a field/value map. This can false-positive on a plain
-        //     array whose first element happens to equal a field name.
-        //   * `len == fields` exactly — treated as a positional tuple. A server that
-        //     adds a field breaks this exact-length match.
-        // The tension is inherent to driving serde's typed shapes over an untyped
-        // protocol and is bounded to variable-shape commands still returning flat
-        // arrays under RESP3. Tightening it risks breaking currently-working
-        // decodes; document the boundary before changing it.
-        #[inline]
-        fn check_resp2_array(
-            view: RespCollectionView<'_>,
-            fields: &'static [&'static str],
-        ) -> Result<bool> {
-            if view.len() >= 2 * fields.len() {
-                if let Some(Ok(RespView::BulkString(bs))) = view.into_iter().next()
-                    && fields.iter().any(|f| f.as_bytes() == bs)
-                {
-                    Ok(true)
-                } else {
-                    Err(Error::Client(ClientError::CannotParseStruct))
-                }
-            } else if view.len() == fields.len() {
-                Ok(false)
-            } else {
-                Err(Error::Client(ClientError::CannotParseStruct))
+        /// The bytes [`is_field_value_array`] classifies an array on: its first
+        /// element when that element is a string. Any other kind of element, and
+        /// any unreadable one, gives `None` — a positional array.
+        #[inline(always)]
+        fn key_bytes<'a>(view: &Option<Result<RespView<'a>>>) -> Option<&'a [u8]> {
+            match view {
+                Some(Ok(RespView::SimpleString(s) | RespView::BulkString(s))) => Some(s),
+                _ => None,
             }
         }
 
         match self.view {
             RespView::Array(view) => {
-                if check_resp2_array(view.clone(), fields)? {
-                    visitor.visit_map(SeqAccess::new(view.into_iter()))
+                // Resolving an element decodes its bytes, so the first one is
+                // pulled off the iterator that will go on to feed serde and
+                // handed back to it, rather than read through a second iterator
+                // and decoded twice.
+                let len = view.len();
+                let mut iter = view.into_iter();
+                let first = iter.next();
+                if is_field_value_array(len, key_bytes(&first), fields) {
+                    visitor.visit_map(SeqAccess::with_peeked(iter, first))
                 } else {
-                    visitor.visit_seq(SeqAccess::new(view.into_iter()))
+                    visitor.visit_seq(SeqAccess::with_peeked(iter, first))
+                }
+            }
+            // Integers are never field names, so a synthesized integer array is
+            // always positional.
+            RespView::IntegerArray(a) => visitor.visit_seq(IntegerArraySeqAccess::new(a.iter())),
+            RespView::OwnedArray(a) => {
+                let first_key = match a.first().map(RespResponse::view) {
+                    Some(Ok(RespView::SimpleString(s) | RespView::BulkString(s))) => Some(s),
+                    _ => None,
+                };
+                if is_field_value_array(a.len(), first_key, fields) {
+                    visitor.visit_map(OwnedArraySeqAccess::new(a.iter()))
+                } else {
+                    visitor.visit_seq(OwnedArraySeqAccess::new(a.iter()))
                 }
             }
             RespView::Set(view) => visitor.visit_seq(SeqAccess::new(view.into_iter())),
@@ -950,12 +954,39 @@ impl<'de> de::MapAccess<'de> for OwnedArraySeqAccess<'de> {
 
 struct SeqAccess<'de> {
     iter: RespCollectionIter<'de>,
+    /// An element already pulled off `iter` and not yet handed to serde.
+    ///
+    /// Resolving an element decodes its bytes, so a caller that had to look at
+    /// the first one — `deserialize_struct`, to tell field/value pairs from a
+    /// positional tuple — parks it here instead of rewinding and paying for that
+    /// decode twice.
+    peeked: Option<Result<RespView<'de>>>,
 }
 
 impl<'de> SeqAccess<'de> {
     #[inline(always)]
     fn new(iter: RespCollectionIter<'de>) -> Self {
-        Self { iter }
+        Self { iter, peeked: None }
+    }
+
+    #[inline(always)]
+    fn with_peeked(iter: RespCollectionIter<'de>, peeked: Option<Result<RespView<'de>>>) -> Self {
+        Self { iter, peeked }
+    }
+
+    /// The next element, taking the parked one first.
+    #[inline(always)]
+    fn next_view(&mut self) -> Option<Result<RespView<'de>>> {
+        match self.peeked.take() {
+            Some(view) => Some(view),
+            None => self.iter.next(),
+        }
+    }
+
+    /// How many elements are still to come, the parked one included.
+    #[inline(always)]
+    fn remaining(&self) -> usize {
+        self.iter.len() + usize::from(self.peeked.is_some())
     }
 }
 
@@ -966,7 +997,7 @@ impl<'de> de::SeqAccess<'de> for SeqAccess<'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        match self.iter.next() {
+        match self.next_view() {
             Some(view) => seed.deserialize(RespDeserializer::new(view?)).map(Some),
             None => Ok(None),
         }
@@ -974,7 +1005,7 @@ impl<'de> de::SeqAccess<'de> for SeqAccess<'de> {
 
     #[inline(always)]
     fn size_hint(&self) -> Option<usize> {
-        Some(self.iter.len())
+        Some(self.remaining())
     }
 }
 
@@ -985,7 +1016,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        match self.iter.next() {
+        match self.next_view() {
             Some(view) => {
                 let view = view?;
                 if let RespView::Array(array_view) = &view
@@ -1008,7 +1039,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        match self.iter.next() {
+        match self.next_view() {
             Some(view) => seed.deserialize(RespDeserializer::new(view?)),
             None => Err(Error::Client(ClientError::CannotParseMap)),
         }
@@ -1019,7 +1050,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
         K: de::DeserializeSeed<'de>,
         V: de::DeserializeSeed<'de>,
     {
-        match self.iter.next() {
+        match self.next_view() {
             Some(view) => {
                 let view = view?;
                 if let RespView::Array(ref array_view) = view
@@ -1042,8 +1073,7 @@ impl<'de> de::MapAccess<'de> for SeqAccess<'de> {
 
                 let key = kseed.deserialize(RespDeserializer::new(view))?;
                 let vview = self
-                    .iter
-                    .next()
+                    .next_view()
                     .ok_or_else(|| Error::Client(ClientError::CannotParseMap))??;
                 let value = vseed.deserialize(RespDeserializer::new(vview))?;
 

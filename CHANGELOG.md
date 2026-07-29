@@ -23,6 +23,21 @@ Versions up to and including `0.19.3` are documented in the
   rejected it as an unknown argument. It counts towards the `KNN` clause count:
   `KNN 6 K 2 EF_RUNTIME 30 SHARD_K_RATIO 0.5`. See the breaking-changes section.
 
+- **A struct no longer fails to decode when the server changes its field list.**
+  Commands that still answer a flat array under RESP3 (`XINFO`, `BF.INFO`,
+  `FT.INFO`, `XAUTOCLAIM`…) are decoded by guessing whether the array holds
+  field/value pairs or positional values, and that guess used to key on the struct's
+  field count — so one field added by a newer `redis-server` broke it. An array is
+  now read as pairs when its length is even and its first element names a field,
+  positionally otherwise, with both deserializers sharing the one rule. Added fields
+  and appended elements are ignored; a field the server stops sending gives a serde
+  error naming it. One consequence: an even-length positional array whose first
+  element happens to equal a field name is now read as pairs.
+
+- **Structs decode from cluster-aggregated and cache-rebuilt replies**, which are
+  synthesized rather than parsed off the wire and previously failed with
+  `CannotParseStruct`.
+
 ## [0.20.0] - 2026-07-28
 
 This release closes a large correctness and performance pass over the RESP

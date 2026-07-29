@@ -3,6 +3,11 @@ name: Publish on crates.io
 on:
   release:
     types: [published]
+  # A release only emits `published` once, so a job that failed on an
+  # infrastructure problem could not be retried without deleting and recreating
+  # the release. Manual dispatch makes the publication replayable; pick the
+  # release tag as the ref so the guard below still runs.
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,7 +19,12 @@ jobs:
       uses: actions/checkout@v5
     # `Cargo.toml` is the version's source of truth: the bump is a reviewable
     # commit, and the tag only confirms it.
+    #
+    # Skipped when dispatched from a branch instead of a tag: there is no tag to
+    # confirm anything, and comparing the manifest against a branch name would
+    # fail on every such run.
     - name: Verify the tag matches Cargo.toml
+      if: github.ref_type == 'tag'
       run: |
         # A command substitution that fails does not stop the script under
         # `set -e`, so an unreadable manifest would leave MANIFEST empty and

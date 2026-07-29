@@ -1,11 +1,15 @@
 use crate::{
     Result,
     client::{Client, IntoConfig, ReconnectionConfig},
-    commands::{ConnectionCommands, SentinelCommands, SentinelSimulateFailureMode},
+    commands::{
+        ConnectionCommands, ReplicaOfOptions, SentinelCommands, SentinelSimulateFailureMode,
+        ServerCommands,
+    },
     resp::cmd,
     tests::{
-        TestClient, get_sentinel_master_test_client, get_sentinel_master_test_uri,
-        get_sentinel_test_client, log_try_init,
+        SPARE_SENTINEL_SERVICE, TestClient, get_default_host, get_sentinel_master_test_client,
+        get_sentinel_master_test_uri, get_sentinel_test_client, get_spare_sentinel_test_client,
+        log_try_init,
     },
 };
 use serial_test::serial;
@@ -109,7 +113,13 @@ async fn sentinel_ckquorum() -> Result<()> {
     // connect to the sentinel instance directly for this command
     let client = get_sentinel_test_client().await?;
 
-    client.sentinel_ckquorum("myservice").await?;
+    // The whole point of CKQUORUM is the status line it answers; an error only
+    // tells the caller the quorum is unreachable, never how close it was.
+    let status: String = client.sentinel_ckquorum("myservice").await?;
+    assert!(
+        status.starts_with("OK") && status.contains("usable Sentinels"),
+        "unexpected CKQUORUM status: {status}"
+    );
 
     Ok(())
 }
@@ -296,8 +306,11 @@ async fn sentinel_get_master_addr_by_name() -> Result<()> {
 }
 
 // The two commands below take the monitored master down on purpose, so neither
-// can be sent against the shared sentinel set-up. What is still checkable is
-// the wire form, against the syntax the server prints under `SENTINEL HELP`.
+// can be sent against the shared sentinel set-up. The wire-form tests check
+// their argument shape against the syntax the server prints under
+// `SENTINEL HELP`; the live test after them sends both to the spare Sentinel on
+// 26382, which monitors nothing else, and is the only thing that can check the
+// declared response type against a real reply.
 
 #[test]
 fn sentinel_failover_command() {
@@ -322,4 +335,186 @@ fn sentinel_simulate_failure_command() {
         "SENTINEL SIMULATE-FAILURE CRASH-AFTER-PROMOTION",
         cmd.to_string()
     );
+}
+
+/// SENTINEL FAILOVER sent for real, against a deployment nothing else
+/// monitors. The wire-form test above cannot check the declared response type:
+/// `R` is only ever wrong against a reply, and this command had never had one.
+#[tokio::test]
+#[serial]
+async fn sentinel_failover() -> Result<()> {
+    let client = wait_for_spare_sentinel_up().await?;
+    reset_spare_sentinel_topology(&client).await?;
+
+    // Which of the pair leads depends on what an earlier run left behind, so
+    // the assertion is that the address moved, not where it moved to.
+    let before = client
+        .sentinel_get_master_addr_by_name(SPARE_SENTINEL_SERVICE)
+        .await?
+        .expect("the spare Sentinel monitors spareservice");
+
+    client.sentinel_failover(SPARE_SENTINEL_SERVICE).await?;
+    wait_until("failover moves the master address", || async {
+        let addr = client
+            .sentinel_get_master_addr_by_name(SPARE_SENTINEL_SERVICE)
+            .await
+            .unwrap_or(None);
+        Ok(addr.is_some_and(|addr| addr != before))
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// SIMULATE-FAILURE arms a crash rather than causing one, so its reply proves
+/// only that the flag was accepted; the failover after it is what makes the
+/// effect observable — and consuming the flag here is also what leaves the
+/// Sentinel unarmed for whatever runs next.
+///
+/// Deliberately not chained onto the test above: a Sentinel that has just
+/// failed over needs an unpredictable while before it can elect again, and a
+/// second act reusing the first one's aftermath is a test measuring that delay
+/// rather than the command. Both tests instead rebuild the topology they need.
+#[tokio::test]
+#[serial]
+async fn sentinel_simulate_failure() -> Result<()> {
+    let client = wait_for_spare_sentinel_up().await?;
+    reset_spare_sentinel_topology(&client).await?;
+
+    let run_id_before = sentinel_run_id(&client).await?;
+    client
+        .sentinel_simulate_failure(SentinelSimulateFailureMode::CrashAfterElection)
+        .await?;
+    // The failover is asked for inside the loop rather than once before it: a
+    // Sentinel that failed over recently answers `NOGOODSLAVE` or simply
+    // declines to elect for a while, and there is no state to poll that says
+    // when it will accept. Retrying until the crash is observed removes the
+    // guess, and asking twice costs nothing — the flag only fires once.
+    //
+    // A restarted Sentinel announces a new run id, which is the difference
+    // between "it crashed and came back" and "it never crashed".
+    wait_until("the simulated crash restarts the Sentinel", || async {
+        let Ok(client) = get_spare_sentinel_test_client().await else {
+            return Ok(false);
+        };
+
+        // The reply never comes when the flag does fire: the Sentinel dies
+        // mid-election, by design.
+        let _: Result<()> = client.sentinel_failover(SPARE_SENTINEL_SERVICE).await;
+
+        Ok(sentinel_run_id(&client)
+            .await
+            .is_ok_and(|run_id| run_id != run_id_before))
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// Connects once the spare Sentinel answers again. Connecting to a process that
+/// is still starting succeeds and then breaks on the first command, so the ping
+/// is the part that matters.
+async fn wait_for_spare_sentinel_up() -> Result<Client> {
+    for _ in 0..150 {
+        if let Ok(client) = get_spare_sentinel_test_client().await
+            && client.ping::<String>("").await.is_ok()
+        {
+            return Ok(client);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    panic!("the spare Sentinel never came back");
+}
+
+async fn reset_spare_sentinel_topology(sentinel: &Client) -> Result<()> {
+    let host = get_default_host();
+    // The address the servers must dial to reach each other, which is not the
+    // one this test connects through: inside a container `localhost` is that
+    // container, so a REPLICAOF built from it points a server at itself. The
+    // Sentinel knows the announced address, because it is the one it monitors.
+    let announced_ip = sentinel.sentinel_master(SPARE_SENTINEL_SERVICE).await?.ip;
+
+    // Whichever of the pair currently leads is taken as the master rather than
+    // forced back to 6383: a failover swaps the roles for good, and a test that
+    // insists on the original one is fighting the state it just created.
+    let mut pair = Vec::new();
+    for port in [6383u16, 6384] {
+        let client = Client::connect(format!("{host}:{port}")).await?;
+        let info: String = client.send(cmd("INFO").arg("replication"), None).await?;
+        let is_master = info.lines().any(|line| line.trim() == "role:master");
+        pair.push((port, client, is_master));
+    }
+    let master_port = pair
+        .iter()
+        .find(|(.., is_master)| *is_master)
+        .map_or(6383, |(port, ..)| *port);
+
+    for (port, client, _) in &pair {
+        if *port == master_port {
+            client.replicaof(ReplicaOfOptions::no_one()).await?;
+        } else {
+            client
+                .replicaof(ReplicaOfOptions::master(&announced_ip, master_port))
+                .await?;
+        }
+    }
+
+    // REMOVE then MONITOR rather than RESET: a restarted Sentinel rebuilds its
+    // config file from the compose command line, so it may be monitoring an
+    // address that is no longer the master. RESET only re-reads that address,
+    // where MONITOR replaces it.
+    let _: Result<()> = sentinel.sentinel_remove(SPARE_SENTINEL_SERVICE).await;
+    sentinel
+        .sentinel_monitor(SPARE_SENTINEL_SERVICE, &announced_ip, master_port, 1)
+        .await?;
+
+    wait_for_synced_replica(sentinel).await
+}
+
+/// A failover needs a replica that has caught up. Right after one, the freshly
+/// demoted master is still syncing, and a Sentinel asked to fail over again
+/// answers `NOGOODSLAVE` instead of starting an election — so anything that
+/// depends on an election happening has to wait for this first.
+async fn wait_for_synced_replica(sentinel: &Client) -> Result<()> {
+    wait_until("the replica catches up", || async {
+        has_synced_replica(sentinel).await
+    })
+    .await
+}
+
+async fn has_synced_replica(sentinel: &Client) -> Result<bool> {
+    let Ok(replicas) = sentinel.sentinel_replicas(SPARE_SENTINEL_SERVICE).await else {
+        return Ok(false);
+    };
+
+    Ok(replicas.len() == 1 && replicas[0].master_link_status == "ok")
+}
+
+async fn sentinel_run_id(client: &Client) -> Result<String> {
+    let info: String = client.send(cmd("INFO").arg("server"), None).await?;
+
+    Ok(info
+        .lines()
+        .find_map(|line| line.strip_prefix("run_id:"))
+        .expect("INFO server always reports a run_id")
+        .trim()
+        .to_owned())
+}
+
+/// A Sentinel converges on its own schedule — an election, a promotion and a
+/// restart all take as long as they take.
+async fn wait_until<F, Fut>(label: &str, mut condition: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<bool>>,
+{
+    for _ in 0..150 {
+        if condition().await? {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    panic!("{}: condition still false after 30s", label);
 }

@@ -8,7 +8,7 @@ use crate::{
         StringCommands,
     },
     resp::Value,
-    tests::{TestClient, log_try_init},
+    tests::{TestClient, get_spare_cluster_node_client, log_try_init, reset_spare_cluster_node},
 };
 use serial_test::serial;
 use tracing::debug;
@@ -300,10 +300,13 @@ async fn cluster_migration_cancel() -> Result<()> {
     Ok(())
 }
 
-// The commands below reconfigure the topology, and the test cluster is shared
-// by every other cluster test, so none of them can be sent. What is still
-// checkable is the wire form: each expectation below is the syntax the server
-// prints for itself under `CLUSTER HELP`.
+// The commands below reconfigure the topology, so none of them can be sent
+// against the cluster the other tests share. The wire-form tests here check
+// their argument shape against the syntax the server prints under
+// `CLUSTER HELP`; the live tests further down send them for real to the spare
+// nodes on 7006/7007, which is the only thing that can check the declared
+// response type — the wire form never disagrees with a `R` nobody read a reply
+// into.
 
 #[test]
 fn cluster_addslots_command() {
@@ -413,4 +416,243 @@ fn cluster_migration_import_command() {
         .cluster_migration_import::<()>([(0u16, 100u16), (200, 300)])
         .command;
     assert_eq!("CLUSTER MIGRATION IMPORT 0 100 200 300", cmd.to_string());
+}
+
+// The same twelve commands, sent for real to the spare nodes on 7006/7007.
+// What the wire-form tests above cannot check is the declared response type:
+// `R` is only ever wrong against a reply, and these commands had never received
+// one. Each test resets the node it uses, so none inherits the topology the one
+// before it built.
+
+/// Slots are owned after ADDSLOTS and gone after DELSLOTS, which is what makes
+/// this an assertion rather than a restatement of the command.
+#[tokio::test]
+#[serial]
+async fn cluster_addslots_delslots() -> Result<()> {
+    let client = get_spare_cluster_node_client(1).await?;
+    reset_spare_cluster_node(&client).await?;
+
+    client.cluster_addslots([0u16, 1, 2]).await?;
+    let info = client.cluster_info().await?;
+    assert_eq!(3, info.cluster_slots_assigned);
+
+    client.cluster_delslots([0u16, 1]).await?;
+    let info = client.cluster_info().await?;
+    assert_eq!(1, info.cluster_slots_assigned);
+
+    reset_spare_cluster_node(&client).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn cluster_addslotsrange_delslotsrange() -> Result<()> {
+    let client = get_spare_cluster_node_client(1).await?;
+    reset_spare_cluster_node(&client).await?;
+
+    client
+        .cluster_addslotsrange([(0u16, 100u16), (200, 300)])
+        .await?;
+    let info = client.cluster_info().await?;
+    assert_eq!(202, info.cluster_slots_assigned);
+
+    client.cluster_delslotsrange([(200u16, 300u16)]).await?;
+    let info = client.cluster_info().await?;
+    assert_eq!(101, info.cluster_slots_assigned);
+
+    reset_spare_cluster_node(&client).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn cluster_flushslots() -> Result<()> {
+    let client = get_spare_cluster_node_client(1).await?;
+    reset_spare_cluster_node(&client).await?;
+
+    client.cluster_addslotsrange([(0u16, 100u16)]).await?;
+    assert_eq!(101, client.cluster_info().await?.cluster_slots_assigned);
+
+    client.cluster_flushslots().await?;
+    assert_eq!(0, client.cluster_info().await?.cluster_slots_assigned);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn cluster_set_config_epoch() -> Result<()> {
+    let client = get_spare_cluster_node_client(1).await?;
+    // The server only accepts a new epoch on a node whose epoch is still zero,
+    // which a hard reset is what produces.
+    reset_spare_cluster_node(&client).await?;
+
+    client.cluster_set_config_epoch(12).await?;
+    assert_eq!(12, client.cluster_info().await?.cluster_my_epoch);
+
+    reset_spare_cluster_node(&client).await?;
+
+    Ok(())
+}
+
+/// A hard reset drops the slots *and* the node id; a soft one keeps the id.
+#[tokio::test]
+#[serial]
+async fn cluster_reset() -> Result<()> {
+    let client = get_spare_cluster_node_client(1).await?;
+    reset_spare_cluster_node(&client).await?;
+
+    client.cluster_addslotsrange([(0u16, 100u16)]).await?;
+    let id_before: String = client.cluster_myid().await?;
+
+    client.cluster_reset(ClusterResetType::Soft).await?;
+    assert_eq!(0, client.cluster_info().await?.cluster_slots_assigned);
+    let id_after_soft: String = client.cluster_myid().await?;
+    assert_eq!(id_before, id_after_soft);
+
+    client.cluster_reset(ClusterResetType::Hard).await?;
+    let id_after_hard: String = client.cluster_myid().await?;
+    assert_ne!(id_before, id_after_hard);
+
+    Ok(())
+}
+
+/// MEET, REPLICATE, FAILOVER and FORGET in one test because each needs the
+/// state the one before it leaves: a node cannot replicate a master it has not
+/// met, nor fail over a master it does not replicate.
+#[tokio::test]
+#[serial]
+async fn cluster_meet_replicate_failover_forget() -> Result<()> {
+    let node1 = get_spare_cluster_node_client(1).await?;
+    let node2 = get_spare_cluster_node_client(2).await?;
+    reset_spare_cluster_node(&node1).await?;
+    reset_spare_cluster_node(&node2).await?;
+
+    // A replica has to be a replica *of* something, and only a node owning every
+    // slot makes the cluster reach `ok` — the state FAILOVER requires.
+    node1.cluster_addslotsrange([(0u16, 16383u16)]).await?;
+    let node1_id: String = node1.cluster_myid().await?;
+    let node2_id: String = node2.cluster_myid().await?;
+
+    node2
+        .cluster_meet(announced_ip(&node1).await?, 7006, Some(17006))
+        .await?;
+    wait_for_cluster_ok(&node2).await?;
+
+    node2.cluster_replicate(&node1_id).await?;
+    wait_until("node2 becomes a working replica", || async {
+        Ok(
+            matches!(node2.cluster_info().await?.cluster_state, ClusterState::Ok)
+                && node2.cluster_slots::<Value>().await.is_ok(),
+        )
+    })
+    .await?;
+
+    // The promotion is the observable effect: node2 stops being a replica and
+    // takes the slots over.
+    //
+    // TAKEOVER rather than a plain failover: the coordinated form needs the
+    // master's agreement over the cluster bus, so how long it takes — and
+    // whether it happens at all — depends on gossip timing a test cannot pin
+    // down. TAKEOVER promotes unilaterally, which is the same command and the
+    // same reply, decided locally.
+    node2
+        .cluster_failover(Some(ClusterFailoverOption::Takeover))
+        .await?;
+    wait_until("the failover promotes node2", || async {
+        let shards: Vec<ClusterShardResult> = node2.cluster_shards().await?;
+        Ok(shards.iter().any(|shard| {
+            shard
+                .nodes
+                .iter()
+                .any(|node| node.id == node2_id && node.role == "master")
+        }))
+    })
+    .await?;
+
+    node2.cluster_forget(&node1_id).await?;
+    wait_until("node2 forgets node1", || async {
+        let nodes: String = node2.cluster_nodes().await?;
+        Ok(!nodes.contains(&node1_id))
+    })
+    .await?;
+
+    reset_spare_cluster_node(&node1).await?;
+    reset_spare_cluster_node(&node2).await?;
+
+    Ok(())
+}
+
+/// `CLUSTER MIGRATION IMPORT` answers the id of the migration task it started,
+/// not an acknowledgement — and that id is what `CLUSTER MIGRATION CANCEL`
+/// takes, so a caller reading the reply as `()` cannot cancel what it began.
+#[tokio::test]
+#[serial]
+async fn cluster_migration_import() -> Result<()> {
+    let node1 = get_spare_cluster_node_client(1).await?;
+    let node2 = get_spare_cluster_node_client(2).await?;
+    reset_spare_cluster_node(&node1).await?;
+    reset_spare_cluster_node(&node2).await?;
+
+    node1.cluster_addslotsrange([(0u16, 16383u16)]).await?;
+    node2
+        .cluster_meet(announced_ip(&node1).await?, 7006, Some(17006))
+        .await?;
+    wait_for_cluster_ok(&node2).await?;
+
+    let task_id: String = node2.cluster_migration_import([(0u16, 100u16)]).await?;
+    assert_eq!(40, task_id.len(), "expected a task id, got {task_id:?}");
+
+    wait_until("the imported slots land on node2", || async {
+        Ok(node2.cluster_info().await?.cluster_slots_assigned == 16384)
+    })
+    .await?;
+
+    reset_spare_cluster_node(&node1).await?;
+    reset_spare_cluster_node(&node2).await?;
+
+    Ok(())
+}
+
+/// The cluster bus converges on its own schedule, so every assertion about the
+/// state it produces has to be given time rather than a single shot.
+async fn wait_until<F, Fut>(label: &str, mut condition: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<bool>>,
+{
+    for _ in 0..150 {
+        if condition().await? {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    panic!("{label}: condition still false after 30s");
+}
+
+/// The address a node announces on the cluster bus, which is the only one MEET
+/// accepts: the host the test connects through may be a name, and the server
+/// answers `Invalid node address specified` to anything it cannot parse as an
+/// IP. The node has to own a slot for `CLUSTER SHARDS` to report it.
+async fn announced_ip(client: &Client) -> Result<String> {
+    let shards: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let node = shards
+        .first()
+        .and_then(|shard| shard.nodes.first())
+        .expect("the node owns no slot, so it announces no address");
+
+    Ok(node.ip.clone())
+}
+
+async fn wait_for_cluster_ok(client: &Client) -> Result<()> {
+    wait_until("the cluster reaches state ok", || async {
+        Ok(matches!(
+            client.cluster_info().await?.cluster_state,
+            ClusterState::Ok
+        ))
+    })
+    .await
 }

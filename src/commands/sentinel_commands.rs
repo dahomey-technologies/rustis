@@ -41,8 +41,17 @@ pub trait SentinelCommands<'a>: Sized {
     /// and the majority needed to authorize the failover.
     ///
     /// This command should be used in monitoring systems to check if a Sentinel deployment is ok.
+    ///
+    /// # Return
+    /// The status line, of the form
+    /// `OK 3 usable Sentinels. Quorum and failover authorization can be reached`.
+    /// An unreachable quorum is a Redis error, so the count is what the reply
+    /// adds: how much margin the deployment has left.
     #[must_use]
-    fn sentinel_ckquorum(self, master_name: impl Serialize) -> PreparedCommand<'a, Self, ()> {
+    fn sentinel_ckquorum<R: Response>(
+        self,
+        master_name: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SENTINEL").arg("CKQUORUM").arg(master_name))
     }
 

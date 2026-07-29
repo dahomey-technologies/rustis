@@ -201,9 +201,35 @@ jobs:
           until docker exec redis-node1 redis-cli -p 7000 cluster info 2>/dev/null | grep -q "cluster_state:ok"; do
             sleep 1
           done
+          # The spare servers carry the topology mutators and the Sentinel
+          # failover commands, which cannot be sent to the shared deployments
+          # above. They belong to no cluster, so there is no `cluster_state:ok`
+          # to wait for — answering a ping is the whole readiness condition.
+          echo "Waiting for spare cluster nodes..."
+          until docker exec redis-spare-node1 redis-cli -p 7006 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          until docker exec redis-spare-node2 redis-cli -p 7007 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for the spare Sentinel to see its replica..."
+          until docker exec redis-spare-sentinel redis-cli -p 26382 \
+            sentinel replicas spareservice 2>/dev/null | grep -q "master-link-status"; do
+            sleep 1
+          done
           echo "Redis is ready."
       - name: Run cargo test
         run: cargo test --release --features pool,tokio-rustls,json,client-cache -- --test-threads=1
+      # A second invocation, after the suite has filled the probe dump: the
+      # harness gives no ordering guarantee that would let one run both collect
+      # the observations and judge them. This is what keeps a Redis upgrade that
+      # changes a reply shape from passing unnoticed.
+      - name: Report response shapes
+        env:
+          RUSTIS_RESPONSE_SHAPE_REPORT: "1"
+        run: |
+          cargo test --release --features pool,tokio-rustls,json,client-cache \
+            response_shape -- --test-threads=1
 
   # `rustls` and `native-tls` are mutually exclusive — `src/lib.rs` rejects the
   # pair with a `compile_error!`, and `src/tests/tls.rs` defines one `tls()` per
@@ -237,6 +263,22 @@ jobs:
           until docker exec redis-node1 redis-cli -p 7000 cluster info 2>/dev/null | grep -q "cluster_state:ok"; do
             sleep 1
           done
+          # The spare servers carry the topology mutators and the Sentinel
+          # failover commands, which cannot be sent to the shared deployments
+          # above. They belong to no cluster, so there is no `cluster_state:ok`
+          # to wait for — answering a ping is the whole readiness condition.
+          echo "Waiting for spare cluster nodes..."
+          until docker exec redis-spare-node1 redis-cli -p 7006 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          until docker exec redis-spare-node2 redis-cli -p 7007 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for the spare Sentinel to see its replica..."
+          until docker exec redis-spare-sentinel redis-cli -p 26382 \
+            sentinel replicas spareservice 2>/dev/null | grep -q "master-link-status"; do
+            sleep 1
+          done
           echo "Redis is ready."
       # `--no-default-features` is required here: the default set pulls in
       # `tokio-rustls`, which cannot coexist with `tokio-native-tls`.
@@ -245,3 +287,14 @@ jobs:
           cargo test --release --no-default-features \
             --features tokio-runtime,tokio-native-tls,pool,json,client-cache \
             -- --test-threads=1
+      # A second invocation, after the suite has filled the probe dump: the
+      # harness gives no ordering guarantee that would let one run both collect
+      # the observations and judge them. This is what keeps a Redis upgrade that
+      # changes a reply shape from passing unnoticed.
+      - name: Report response shapes
+        env:
+          RUSTIS_RESPONSE_SHAPE_REPORT: "1"
+        run: |
+          cargo test --release --no-default-features \
+            --features tokio-runtime,tokio-native-tls,pool,json,client-cache \
+            response_shape -- --test-threads=1

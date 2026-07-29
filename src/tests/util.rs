@@ -2,9 +2,9 @@ use crate::{
     Result,
     client::{Client, Config, IntoConfig},
     commands::{
-        ArrayCommands, ClusterCommands, GenericCommands, JsonCommands, SearchCommands,
-        SentinelCommands, ServerCommands, SortedSetCommands, StreamCommands, StringCommands,
-        VectorSetCommands,
+        ArrayCommands, ClusterCommands, ClusterResetType, GenericCommands, JsonCommands,
+        SearchCommands, SentinelCommands, ServerCommands, SortedSetCommands, StreamCommands,
+        StringCommands, VectorSetCommands,
     },
 };
 #[cfg(feature = "native-tls")]
@@ -156,6 +156,34 @@ pub(crate) async fn get_cluster_test_client() -> Result<Client> {
     ))
     .await
 }
+
+/// The spare cluster nodes on 7006/7007, which belong to no cluster and are
+/// read by nothing else in the suite. They exist so the topology mutators can
+/// be *sent*: against the shared cluster above, moving a slot breaks every
+/// other cluster test, which is what made these commands look untestable.
+///
+/// `node` is 1 or 2; two nodes because MEET, FORGET, REPLICATE and FAILOVER
+/// each need a second one to name.
+pub(crate) async fn get_spare_cluster_node_client(node: u8) -> Result<Client> {
+    log_try_init();
+    Client::connect(format!("{}:{}", get_default_host(), 7005 + u16::from(node))).await
+}
+
+/// Puts a spare node back to a node belonging to no cluster and owning no slot,
+/// so a test never inherits what the one before it built.
+pub(crate) async fn reset_spare_cluster_node(client: &Client) -> Result<()> {
+    client.cluster_reset(ClusterResetType::Hard).await
+}
+
+/// The spare Sentinel on 26382, monitoring `spareservice` (master 6383,
+/// replica 6384) with a quorum of one — a deployment the failover commands may
+/// destroy without taking the shared sentinel tests down with it.
+pub(crate) async fn get_spare_sentinel_test_client() -> Result<Client> {
+    log_try_init();
+    Client::connect(format!("redis://{}:26382", get_default_host())).await
+}
+
+pub(crate) const SPARE_SENTINEL_SERVICE: &str = "spareservice";
 
 pub(crate) async fn get_cluster_test_client_with_command_timeout() -> Result<Client> {
     log_try_init();

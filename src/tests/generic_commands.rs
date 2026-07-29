@@ -275,8 +275,11 @@ async fn object_encoding() -> Result<()> {
     let encoding: String = client.object_encoding("key2").await?;
     assert_eq!("int", encoding);
 
-    let encoding: String = client.object_encoding("unknown").await?;
-    assert_eq!("", encoding);
+    // A key with no value has no encoding, and the server says so with a nil.
+    // Read as `String` that nil becomes `""`, which no live key ever answers —
+    // the caller cannot tell "absent" from "encoded as nothing".
+    let encoding: Option<String> = client.object_encoding("unknown").await?;
+    assert_eq!(None, encoding);
 
     Ok(())
 }

@@ -230,4 +230,106 @@ services:
       --cluster-config-file nodes.conf --cluster-node-timeout 5000 
       --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7005 
       --cluster-announce-bus-port 17005 --enable-debug-command yes --busy-reply-threshold 500 --appendonly yes
+
+# Sacrificial cluster pair
+#
+# The topology mutators — ADDSLOTS, DELSLOTS, FORGET, MEET, REPLICATE, RESET,
+# FAILOVER, FLUSHSLOTS, SET-CONFIG-EPOCH, MIGRATION IMPORT — were held to be
+# untestable, which was true only of the *shared* cluster above: every other
+# cluster test runs against it, so moving one of its slots breaks them all.
+# It was never a property of the commands. These two nodes are cluster-enabled
+# and deliberately left out of `cluster-init`, so they belong to no cluster and
+# nothing else in the suite reads them. A test may reconfigure them freely, and
+# the declared response type finally meets a real reply.
+#
+# Two rather than one: MEET, FORGET, REPLICATE and FAILOVER each need a second
+# node to name.
+  redis-spare-node1:
+    image: redis:${REDIS_VERSION:-8.8-alpine}
+    container_name: redis-spare-node1
+    restart: on-failure:20
+    ports: ["7006:7006", "17006:17006"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7006", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7006 --cluster-enabled yes
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7006
+      --cluster-announce-bus-port 17006 --enable-debug-command yes
+
+  redis-spare-node2:
+    image: redis:${REDIS_VERSION:-8.8-alpine}
+    container_name: redis-spare-node2
+    restart: on-failure:20
+    ports: ["7007:7007", "17007:17007"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7007", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 7007 --cluster-enabled yes
+      --cluster-config-file nodes.conf --cluster-node-timeout 5000
+      --cluster-announce-ip "${HOST_IP}" --cluster-announce-port 7007
+      --cluster-announce-bus-port 17007 --enable-debug-command yes
+
+# Sacrificial Sentinel
+#
+# Same reasoning for SENTINEL FAILOVER and SENTINEL SIMULATE-FAILURE: they take
+# the monitored master down on purpose, which the Sentinel deployment above
+# cannot survive without breaking every other sentinel test. This master and the
+# single Sentinel watching it are monitored by nothing else.
+  redis-spare-master:
+    image: redis:${REDIS_VERSION:-8.8-alpine}
+    container_name: redis-spare-master
+    restart: on-failure:20
+    ports: ["6383:6383"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6383", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 6383
+
+  redis-spare-replica:
+    image: redis:${REDIS_VERSION:-8.8-alpine}
+    container_name: redis-spare-replica
+    restart: on-failure:20
+    ports: ["6384:6384"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6384", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    command: >
+      redis-server --port 6384 --replicaof "${HOST_IP}" 6383 --slave-announce-ip "${HOST_IP}"
+    depends_on:
+      redis-spare-master: { condition: service_healthy }
+
+  redis-spare-sentinel:
+    image: redis:${REDIS_VERSION:-8.8-alpine}
+    container_name: redis-spare-sentinel
+    # `always`, not a bounded `on-failure:N`: SENTINEL SIMULATE-FAILURE crashes
+    # this process every time its test runs, so a finite budget is a number of
+    # suite runs after which the container stays down and the test fails for a
+    # reason that has nothing to do with the code.
+    restart: always
+    ports: ["26382:26382"]
+    depends_on:
+      redis-spare-master: { condition: service_healthy }
+    # `quorum 1`: a lone Sentinel must be able to authorize the failover the
+    # test asks it for.
+    command: >
+      sh -c "
+      echo 'port 26382' > /tmp/sentinel.conf;
+      echo 'sentinel monitor spareservice ${HOST_IP} 6383 1' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-ip ${HOST_IP}' >> /tmp/sentinel.conf;
+      echo 'sentinel announce-port 26382' >> /tmp/sentinel.conf;
+      echo 'sentinel down-after-milliseconds spareservice 1000' >> /tmp/sentinel.conf;
+      echo 'sentinel failover-timeout spareservice 1000' >> /tmp/sentinel.conf;
+      redis-sentinel /tmp/sentinel.conf"
       

@@ -1,0 +1,55 @@
+# `Cargo.lock` is committed, so every other workflow builds against a frozen
+# dependency set: reproducible, but blind to an upstream release that breaks us.
+# This job restores that coverage out of band — it updates the lock in the
+# runner, throws it away, and reports on a schedule instead of on a pull
+# request, so upstream breakage never blocks a merge that did not cause it.
+name: Latest dependencies
+
+on:
+  schedule:
+    # Mondays, 04:00 UTC.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  latest-deps:
+    name: Test against the latest dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: Update the lockfile
+        run: cargo update
+      - name: Create Redis containers
+        run: |
+          cd /home/runner/work/rustis/rustis/redis/
+          sh ./docker_up.sh
+      - name: Wait for Redis to be ready
+        timeout-minutes: 3
+        run: |
+          echo "Waiting for standalone node..."
+          until docker exec redis-standalone redis-cli ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for cluster to reach cluster_state:ok..."
+          until docker exec redis-node1 redis-cli -p 7000 cluster info 2>/dev/null | grep -q "cluster_state:ok"; do
+            sleep 1
+          done
+          echo "Waiting for spare cluster nodes..."
+          until docker exec redis-spare-node1 redis-cli -p 7006 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          until docker exec redis-spare-node2 redis-cli -p 7007 ping 2>/dev/null | grep -q PONG; do
+            sleep 1
+          done
+          echo "Waiting for the spare Sentinel to see its replica..."
+          until docker exec redis-spare-sentinel redis-cli -p 26382 \
+            sentinel replicas spareservice 2>/dev/null | grep -q "master-link-status"; do
+            sleep 1
+          done
+          echo "Redis is ready."
+      - name: Run cargo test
+        run: cargo test --release --features pool,tokio-rustls,json,client-cache -- --test-threads=1

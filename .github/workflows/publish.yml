@@ -16,8 +16,14 @@ jobs:
     # commit, and the tag only confirms it.
     - name: Verify the tag matches Cargo.toml
       run: |
+        # A command substitution that fails does not stop the script under
+        # `set -e`, so an unreadable manifest would leave MANIFEST empty and
+        # report a mismatch against nothing. `pipefail` and the emptiness test
+        # make the guard say which of the two actually went wrong.
+        set -o pipefail
         TAG=${{github.ref_name}}
-        MANIFEST=$(cargo pkgid | sed 's/.*[#@]//')
+        MANIFEST=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
+        test -n "$MANIFEST" || { echo "::error::could not read the version from Cargo.toml"; exit 1; }
         if [ "$TAG" != "$MANIFEST" ]; then
           echo "::error::tag $TAG does not match Cargo.toml version $MANIFEST — bump the manifest and re-tag"
           exit 1

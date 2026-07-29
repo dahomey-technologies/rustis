@@ -1,0 +1,46 @@
+# Rows the response-shape rules flag and that are nonetheless correct.
+# Format: command <TAB> declared R <TAB> observed RESP kind, each preceded by
+# the reason it is accepted. A row without a reason is a defect nobody triaged.
+#
+# A row leaving this file means either the declared type was fixed or the server
+# changed its answer, and both have to be looked at.
+
+# A blocking pop that timed out. `BZpopMinMaxResult` wraps `Option<Vec<..>>`
+# behind a visitor that reads the nil as `None`, so the absence is carried to
+# the caller instead of being flattened into an empty result.
+BZPOPMAX	BZpopMinMaxResult<String, String>	Null
+BZPOPMIN	BZpopMinMaxResult<String, String>	Null
+
+# A cuckoo filter admits duplicates, so CF.ADD adds unconditionally and its
+# reply is the constant `1` — verified against a live server, which answers
+# `(true)` for both the first and the second insertion of the same item. The
+# sibling that can answer `0` is `cf_addnx`, and it does declare `bool`.
+CF.ADD	()	Boolean
+
+# LPOP/RPOP with a count on a missing key answer a nil array. An empty
+# collection is the faithful reading: the caller asked for the elements and
+# there are none, which is the same statement as an existing empty list.
+LPOP	Vec<String>	Null
+RPOP	Vec<String>	Null
+
+# PING answers `+PONG` and RESET answers `+RESET`: an acknowledgement naming
+# the command, carrying nothing the caller did not already know. `ping` is
+# generic, so a caller wanting the token can name `String`.
+PING	()	SimpleString
+RESET	()	SimpleString
+
+# `SET key value NX` whose condition was not met answers a nil, and `bool`
+# reads it as `false` — which is the documented contract of `set_with_options`,
+# not a coercion accident.
+SET	bool	Null
+
+# REPLICAOF answers `+OK` normally and `+OK Already connected to specified
+# master` when the server was already replicating that address — verified
+# against a live server. Both are acknowledgements of the same success, so the
+# suffix is a nuance of the message and not a result being dropped.
+REPLICAOF	()	SimpleString
+
+# TOPK.ADD answers the items its insertion evicted, and `topk_add` is generic:
+# this row is the one call in the suite that deliberately discards them, next
+# to the tests that read them as `Vec<Option<String>>`.
+TOPK.ADD	()	Array

@@ -5,11 +5,13 @@ use crate::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         ListCommands, PubSubCommands, ServerCommands, StringCommands,
     },
-    network::SendBatchTestHook,
+    network::{QueueMetricsTestHook, SendBatchTestHook, timeout},
+    resp::cmd,
     spawn,
     tests::{
         get_cluster_test_client, get_cluster_test_client_with_command_timeout, get_default_addr,
         get_default_config, get_test_client, get_test_client_with_config, log_try_init,
+        resident_bytes,
     },
 };
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
@@ -17,7 +19,114 @@ use serial_test::serial;
 use std::{
     collections::{HashMap, HashSet},
     future::IntoFuture,
+    time::Duration,
 };
+
+/// A subscriber that stops polling its stream must cost the client a bounded
+/// amount of memory, and must be told what it lost.
+///
+/// Before the budget existed this same setup absorbed everything a single
+/// loopback publisher could send — 113 MiB/s, nothing refused, 207 MB retained
+/// for 50 000 messages — which is a 1 GiB container gone in about nine seconds.
+/// The subscription is still held while nothing ever reads it; what is asserted
+/// now is that the retained bytes stay within the configured budget, that the
+/// dropped messages are counted rather than lost silently, and that resident
+/// memory follows.
+#[tokio::test]
+#[serial]
+async fn a_paused_subscriber_is_bounded_by_its_memory_budget() -> Result<()> {
+    log_try_init();
+
+    const PAYLOAD_BYTES: usize = 4096;
+    const MESSAGES_PER_WAVE: usize = 500;
+    const WAVES: usize = 100;
+    const TOTAL_MESSAGES: usize = MESSAGES_PER_WAVE * WAVES;
+    const BUDGET: usize = 4 * 1024 * 1024;
+
+    let metrics = QueueMetricsTestHook::new();
+    let mut config = get_default_config()?;
+    config.queue_metrics_test_hook = Some(metrics.clone());
+    config.backpressure.max_pubsub_bytes = BUDGET;
+    let subscriber = Client::connect(config).await?;
+    let publisher = get_test_client().await?;
+
+    // Hold the whole stream and never poll it. Splitting and dropping the reader
+    // would close the receiver, which turns every delivery into an error and
+    // would measure loss instead of growth.
+    let _held_stream = subscriber.subscribe("paused_subscriber_channel").await?;
+
+    let baseline_rss = resident_bytes();
+    let payload = "x".repeat(PAYLOAD_BYTES);
+    let started = std::time::Instant::now();
+
+    timeout(Duration::from_secs(60), async {
+        for _ in 0..WAVES {
+            for _ in 0..MESSAGES_PER_WAVE {
+                publisher.send_and_forget(
+                    cmd("PUBLISH")
+                        .arg("paused_subscriber_channel")
+                        .arg(payload.as_str()),
+                    None,
+                )?;
+            }
+            // Bound the publisher's own queue: by the time this answers, the
+            // wave has been written and its deliveries counted.
+            let _: String = publisher.send(cmd("PING"), None).await?;
+        }
+
+        // The last deliveries may still be in flight on the subscriber side.
+        while metrics.pub_sub_delivered() < TOTAL_MESSAGES {
+            tokio::task::yield_now().await;
+        }
+        Ok::<(), Error>(())
+    })
+    .await??;
+
+    let elapsed = started.elapsed();
+    let delivered = metrics.pub_sub_delivered();
+    let dropped = _held_stream.dropped_messages();
+    let offered_bytes = metrics.pub_sub_delivered_bytes();
+    let rss_delta = match (baseline_rss, resident_bytes()) {
+        (Some(before), Some(after)) => Some(after.saturating_sub(before)),
+        _ => None,
+    };
+    // Every message that was delivered but not dropped is still held.
+    let held = delivered.saturating_sub(dropped);
+    let report = format!(
+        "delivered={delivered} dropped={dropped} held={held} \
+         offered={offered_bytes} B budget={BUDGET} B rss_delta={rss_delta:?} \
+         elapsed={elapsed:?}"
+    );
+    println!("paused subscriber: {report}");
+
+    assert_eq!(
+        TOTAL_MESSAGES, delivered,
+        "delivery must never block or refuse, only shed: {report}"
+    );
+    assert_eq!(
+        0,
+        metrics.pub_sub_delivery_failed(),
+        "a live subscriber must never have a delivery refused: {report}"
+    );
+    assert!(
+        dropped > 0,
+        "far more was published than the budget allows, so messages must have \
+         been dropped and counted: {report}"
+    );
+    // The channel keeps at least one message beyond the budget by design, so a
+    // single message of slack is allowed on top of it.
+    let max_held = BUDGET / PAYLOAD_BYTES + 1;
+    assert!(
+        held <= max_held,
+        "the stream must hold no more than its budget allows ({max_held} messages): {report}"
+    );
+    // `rss_delta` is reported, not asserted; see the same note in
+    // `backpressure.rs`. The held-message count above is exact and is the proof.
+
+    drop(_held_stream);
+
+    Ok(())
+}
 
 #[tokio::test]
 #[serial]

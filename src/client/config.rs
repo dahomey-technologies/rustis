@@ -21,7 +21,7 @@ const DEFAULT_AUTO_REMONITOR: bool = true;
 const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
 const DEFAULT_NO_DELAY: bool = true;
 const DEFAULT_RETRY_ON_ERROR: bool = false;
-const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 0;
+const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 5;
 const DEFAULT_MAX_MESSAGES_PER_WAVE: usize = 48;
 const DEFAULT_MAX_DISCOVERY_ROUNDS: usize = 10;
 
@@ -102,6 +102,110 @@ impl BufferConfig {
 }
 
 impl Default for BufferConfig {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// Memory budgets bounding what the client holds on behalf of a consumer that
+/// has stopped keeping up.
+///
+/// Two kinds of thing grow without help from the server: commands queued while
+/// the connection is down, and server-driven messages delivered to a consumer
+/// that is not reading — a pub/sub subscriber, an invalidation reader, a
+/// `MONITOR` stream. Both were measured before these budgets existed: a single
+/// loopback publisher filled a paused subscriber at 113 MiB/s, and a sustained
+/// outage retained every queued command. The defaults are sized to protect a
+/// memory-constrained deployment rather than to reproduce the earlier unlimited
+/// behaviour.
+///
+/// Budgets are expressed in **bytes, not message counts**, because a count gives
+/// no memory guarantee: ten thousand commands are 23 MiB at 1 KiB per value and
+/// 10 GiB at 1 MiB per value. Setting a budget to `0` disables it and restores
+/// unlimited growth, which is an escape hatch, not a recommendation.
+///
+/// No budget ever blocks a sender, because the network task owns the whole
+/// connection's routing state and anything that made it wait on one consumer
+/// would stall every other caller. Over budget, the send queue rejects the
+/// *incoming* command and a delivery channel discards its *oldest* message
+/// instead. Bounding memory this way is what lets [`ReconnectionConfig`] keep
+/// retrying forever, which is the safe posture for a long-lived service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BackpressureConfig {
+    /// Memory budget for commands waiting to be written, which is what grows
+    /// while the connection is down and reconnection keeps failing.
+    ///
+    /// A message is charged the size of its command buffers plus a flat
+    /// per-message allowance, so a flood of tiny commands is bounded by the same
+    /// budget as a few large ones. Once the budget is reached, an **incoming**
+    /// command is failed with
+    /// [`SendQueueFull`](crate::ClientError::SendQueueFull); a command already
+    /// queued is never dropped, and neither is one being replayed after a
+    /// reconnection or a cluster redirection.
+    ///
+    /// Only commands sent with `retry_on_error` accumulate across a
+    /// disconnection: the others are failed immediately, so they never reach
+    /// this budget.
+    ///
+    /// The default is 16 MiB — 6% of a 256 MiB container, and about one second
+    /// of an outage for a service writing 10 000 commands of 1 KiB per second.
+    /// `0` disables the budget.
+    pub max_queued_bytes: usize,
+    /// Memory budget for messages held for one pub/sub stream that is not being
+    /// polled.
+    ///
+    /// Over budget, the **oldest** messages are dropped so the subscriber sees
+    /// recent data when it resumes, and the number lost is exposed by
+    /// [`PubSubStream::dropped_messages`](crate::client::PubSubStream::dropped_messages)
+    /// so the loss is observable rather than silent. The network task never
+    /// blocks on a slow subscriber.
+    ///
+    /// The budget is per stream, shared by every channel and pattern that stream
+    /// subscribes to.
+    ///
+    /// The default is 8 MiB. `0` disables the budget.
+    pub max_pubsub_bytes: usize,
+    /// Memory budget for messages held for one push sink — the client-side
+    /// caching invalidation stream, or a `MONITOR` stream.
+    ///
+    /// Over budget the **oldest** messages are dropped, as for pub/sub, but what
+    /// that costs differs by sink and is worth knowing:
+    ///
+    /// * `MONITOR` loses lines. It is a debugging firehose with no way to push
+    ///   backpressure to the server, so shedding is the only alternative to
+    ///   unbounded growth. [`MonitorStream::dropped_messages`](crate::client::MonitorStream::dropped_messages)
+    ///   reports how many.
+    /// * The invalidation stream **cannot** simply lose messages: a dropped
+    ///   invalidation would leave a stale entry served indefinitely. So
+    ///   the `Cache` (feature `client-cache`) watches the drop counter and, the moment it
+    ///   moves, invalidates its whole cache — losing invalidations means no
+    ///   longer knowing what is stale, exactly as after a reconnection. The
+    ///   result is a cold cache, never a wrong answer.
+    ///
+    /// The default is 8 MiB. `0` disables the budget.
+    pub max_push_bytes: usize,
+}
+
+impl BackpressureConfig {
+    /// The default budgets, usable in a `const` context.
+    pub const DEFAULT: Self = Self {
+        max_queued_bytes: 16 * 1024 * 1024,
+        max_pubsub_bytes: 8 * 1024 * 1024,
+        max_push_bytes: 8 * 1024 * 1024,
+    };
+
+    fn validate(&self) -> Result<()> {
+        // Unlike the buffer knobs, `0` is meaningful here: it removes the budget
+        // rather than making it unusable, and is the documented escape hatch. So
+        // there is nothing to reject — the method exists to keep the shape of
+        // the sibling config structs, and to have somewhere to put a future
+        // coherence check.
+        Ok(())
+    }
+}
+
+impl Default for BackpressureConfig {
     fn default() -> Self {
         Self::DEFAULT
     }
@@ -288,10 +392,29 @@ pub struct Config {
     /// caught in a pathological redirect or reconnect loop would otherwise be
     /// replayed forever.
     ///
-    /// The default is `0`, meaning unlimited (the historical behavior).
+    /// A retry costs one attempt whatever its cause, and the two causes share
+    /// this one budget. That is what sets the floor on a sane value: a cluster
+    /// slot migration legitimately costs one attempt (an `ASK`, or a `MOVED`),
+    /// two if the migration completes between them, and three if the topology
+    /// refresh itself reads a state that is still moving. A cap of `3` would
+    /// therefore fail commands during an ordinary resharding.
+    ///
+    /// One reconnection also costs exactly one attempt, however many socket
+    /// attempts fail inside it — the queue is filtered once per reconnection,
+    /// not once per failed dial. So the default of `5` lets a command survive a
+    /// complete slot migration *and* two reconnections before being given up on.
+    ///
+    /// Reaching the cap fails that command and nothing else: the counter lives
+    /// in the command, so later commands start fresh and the connection is
+    /// unaffected. This is unlike
+    /// [`ReconnectionConfig`]'s own cap, which ends the client for good.
+    ///
+    /// The default is `5`. Set `0` for unlimited.
     pub max_command_attempts: usize,
     /// Sizing and recycling policy for the connection's internal buffers.
     pub buffers: BufferConfig,
+    /// Memory budgets bounding the send queue and the pub/sub streams.
+    pub backpressure: BackpressureConfig,
     /// Limits the RESP parser enforces against hostile or corrupt server input.
     pub limits: RespLimits,
     /// Maximum number of queued commands the network task writes in one wave
@@ -318,6 +441,12 @@ pub struct Config {
     /// Only present in test builds; it carries no cost in release builds.
     #[cfg(test)]
     pub(crate) cluster_test_hook: Option<crate::network::ClusterTestHook>,
+    /// Test-only hook to observe the depth the network task's internal queues
+    /// reach and how much traffic its pub/sub and push sinks absorb.
+    ///
+    /// Only present in test builds; it carries no cost in release builds.
+    #[cfg(test)]
+    pub(crate) queue_metrics_test_hook: Option<crate::network::QueueMetricsTestHook>,
 }
 
 impl fmt::Debug for Config {
@@ -341,6 +470,7 @@ impl fmt::Debug for Config {
             .field("reconnection", &self.reconnection)
             .field("max_command_attempts", &self.max_command_attempts)
             .field("buffers", &self.buffers)
+            .field("backpressure", &self.backpressure)
             .field("limits", &self.limits)
             .field("max_messages_per_wave", &self.max_messages_per_wave)
             .finish()
@@ -367,12 +497,15 @@ impl Default for Config {
             reconnection: Default::default(),
             max_command_attempts: DEFAULT_MAX_COMMAND_ATTEMPTS,
             buffers: Default::default(),
+            backpressure: Default::default(),
             limits: Default::default(),
             max_messages_per_wave: DEFAULT_MAX_MESSAGES_PER_WAVE,
             #[cfg(test)]
             send_batch_test_hook: None,
             #[cfg(test)]
             cluster_test_hook: None,
+            #[cfg(test)]
+            queue_metrics_test_hook: None,
         }
     }
 }
@@ -413,6 +546,7 @@ impl Config {
     /// [`Default`] filled it in.
     pub fn validate(&self) -> Result<()> {
         self.buffers.validate()?;
+        self.backpressure.validate()?;
         self.limits.validate()?;
         // A wave of zero flushes before any message is queued, so the network
         // task would spin without ever writing.
@@ -1225,13 +1359,34 @@ impl IntoConfig for Url {
 }
 
 /// The type of reconnection policy to use. This will apply to every connection used by the client.
-/// This code has been mostly inpisred by [fred ReconnectPolicy](https://docs.rs/fred/latest/fred/types/enum.ReconnectPolicy.html)
+/// This code has been mostly inspired by [fred ReconnectPolicy](https://docs.rs/fred/latest/fred/types/enum.ReconnectPolicy.html)
+///
+/// # Setting `max_attempts` is a one-way door
+///
+/// Every variant carries a `max_attempts`, and every one of them defaults to `0`
+/// — retry forever. **Reaching a non-zero cap does not merely abandon the
+/// current attempt: it ends the client's network task permanently.** Queued
+/// commands are failed with [`Error::DisconnectedByPeer`](crate::Error::DisconnectedByPeer),
+/// the task returns, and every command issued afterwards fails — including long
+/// after the server has come back. The only recovery is to build a new
+/// [`Client`](crate::client::Client).
+///
+/// A cap suits a script or a batch job that should fail loudly rather than hang.
+/// It is **not recommended for long-lived backend services** (Axum, Actix-Web, a
+/// worker): an outage longer than the budget leaves a process that is still
+/// alive, still serving traffic, and permanently unable to reach Redis — a state
+/// no liveness probe detects. Keep the default `0` there, and bound memory with
+/// [`BackpressureConfig`] instead, which sheds load without ending the
+/// connection.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ReconnectionConfig {
     /// Wait a constant amount of time between reconnection attempts, in ms.
     Constant {
-        /// Maximum number of attemps, set `0` to retry forever.
+        /// Maximum number of attempts, set `0` to retry forever.
+        ///
+        /// Reaching a non-zero cap ends the network task for good; see the note
+        /// on [`ReconnectionConfig`] before setting it in a backend service.
         max_attempts: u32,
         /// Delay in ms to wait between reconnection attempts
         delay: u32,
@@ -1240,11 +1395,14 @@ pub enum ReconnectionConfig {
     },
     /// Backoff reconnection attempts linearly, adding `delay` each time.
     Linear {
-        /// Maximum number of attemps, set `0` to retry forever.
+        /// Maximum number of attempts, set `0` to retry forever.
+        ///
+        /// Reaching a non-zero cap ends the network task for good; see the note
+        /// on [`ReconnectionConfig`] before setting it in a backend service.
         max_attempts: u32,
         /// Maximum delay in ms
         max_delay: u32,
-        /// Delay in ms to add to the total waiting time at each attemp
+        /// Delay in ms to add to the total waiting time at each attempt
         delay: u32,
         /// Add jitter in ms to each delay
         jitter: u32,
@@ -1253,7 +1411,10 @@ pub enum ReconnectionConfig {
     ///
     /// see <https://en.wikipedia.org/wiki/Exponential_backoff>
     Exponential {
-        /// Maximum number of attemps, set `0` to retry forever.
+        /// Maximum number of attempts, set `0` to retry forever.
+        ///
+        /// Reaching a non-zero cap ends the network task for good; see the note
+        /// on [`ReconnectionConfig`] before setting it in a backend service.
         max_attempts: u32,
         /// Minimum delay in ms
         min_delay: u32,
@@ -1282,6 +1443,10 @@ impl Default for ReconnectionConfig {
 
 impl ReconnectionConfig {
     /// Create a new reconnect policy with a constant backoff.
+    ///
+    /// Pass `0` for `max_attempts` to retry forever, which is what a long-lived
+    /// backend service wants: a non-zero cap ends the network task for good once
+    /// reached. See the note on [`ReconnectionConfig`].
     pub fn new_constant(max_attempts: u32, delay: u32) -> Self {
         Self::Constant {
             max_attempts,
@@ -1291,6 +1456,10 @@ impl ReconnectionConfig {
     }
 
     /// Create a new reconnect policy with a linear backoff.
+    ///
+    /// Pass `0` for `max_attempts` to retry forever, which is what a long-lived
+    /// backend service wants: a non-zero cap ends the network task for good once
+    /// reached. See the note on [`ReconnectionConfig`].
     pub fn new_linear(max_attempts: u32, max_delay: u32, delay: u32) -> Self {
         Self::Linear {
             max_attempts,
@@ -1301,6 +1470,10 @@ impl ReconnectionConfig {
     }
 
     /// Create a new reconnect policy with an exponential backoff.
+    ///
+    /// Pass `0` for `max_attempts` to retry forever, which is what a long-lived
+    /// backend service wants: a non-zero cap ends the network task for good once
+    /// reached. See the note on [`ReconnectionConfig`].
     pub fn new_exponential(
         max_attempts: u32,
         min_delay: u32,

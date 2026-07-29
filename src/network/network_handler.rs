@@ -8,7 +8,6 @@ use crate::{
     spawn, timeout,
 };
 use bytes::Bytes;
-use futures_channel::mpsc;
 use futures_util::{FutureExt, select};
 use smallvec::SmallVec;
 use std::{
@@ -21,16 +20,26 @@ use std::{
 use tokio::{sync::broadcast, time::Instant};
 use tracing::{Instrument, debug, error, info, info_span, trace, warn};
 
-// Backpressure note: every channel in the crate — request, pub/sub and push —
-// is deliberately unbounded. This is a design choice of the lock-free
-// multiplexer: senders never block or await capacity, keeping the hot send path
-// allocation-and-await-free and the network task's accounting simple. The
-// trade-off is that memory is bounded by consumer behaviour rather than by the
-// channel: a pub/sub subscriber that stops polling its stream, or a reconnect
-// storm accumulating retryable traffic in `messages_to_send`, grows client-side
-// memory unbounded. Callers with slow or paused consumers should drop the
-// stream (or drain it) promptly; a bounded variant would trade this for
-// send-path blocking and is intentionally not used here.
+// Backpressure note. Nothing here ever blocks a sender: the network task owns
+// the connection's whole routing state, so making it wait on a consumer would
+// stall every other caller. Memory is bounded by shedding instead, and each
+// place that can grow sheds in the way that suits what it carries.
+//
+// - `messages_to_send` grows while the connection is down and every reconnection
+//   fails. It is capped by `BackpressureConfig::max_queued_bytes`, enforced on
+//   *incoming* messages only: anything replayed or retried was already accepted
+//   and must not be dropped. Left uncapped it was measured retaining 100 000
+//   commands and 229 MiB.
+// - Pub/sub streams and the push sinks are bounded channels that discard their
+//   oldest messages, so a consumer that resumes sees current data. A paused
+//   subscriber was measured absorbing 113 MiB/s and 221 MiB before this existed.
+//
+// The request channel (`MsgSender`) stays unbounded on purpose. The task drains
+// it into `messages_to_send` continuously, even while disconnected, so it holds
+// almost nothing: of the 100 000 commands accumulated in that measurement,
+// essentially all sat in the queue downstream. Capping it would never fire.
+// Its senders are synchronous anyway (`send_and_forget`, `forget`, the stream
+// `Drop` impls), so a bound there would have to reject rather than wait.
 pub(crate) type MsgSender = tokio::sync::mpsc::UnboundedSender<Message>;
 pub(crate) type MsgReceiver = tokio::sync::mpsc::UnboundedReceiver<Message>;
 /// Retry-only handle the network task keeps on the message channel. It is
@@ -44,10 +53,16 @@ pub(crate) type ResultSender = tokio::sync::oneshot::Sender<Result<RespResponse>
 pub(crate) type ResultReceiver = tokio::sync::oneshot::Receiver<Result<RespResponse>>;
 pub(crate) type ResultsSender = tokio::sync::oneshot::Sender<Result<Vec<RespResponse>>>;
 pub(crate) type ResultsReceiver = tokio::sync::oneshot::Receiver<Result<Vec<RespResponse>>>;
-pub(crate) type PubSubSender = mpsc::UnboundedSender<Result<RespResponse>>;
-pub(crate) type PubSubReceiver = mpsc::UnboundedReceiver<Result<RespResponse>>;
-pub(crate) type PushSender = mpsc::UnboundedSender<Result<RespResponse>>;
-pub(crate) type PushReceiver = mpsc::UnboundedReceiver<Result<RespResponse>>;
+/// Bounded, drop-oldest channels; see [`crate::client::bounded_channel`].
+///
+/// Pub/sub streams and the push sinks (client-side-caching invalidation,
+/// `MONITOR`) share one implementation: all three deliver server-driven messages
+/// to a consumer the network task must never wait on. What differs is what a
+/// drop *means*, which is documented on the budgets in `BackpressureConfig`.
+pub(crate) type PubSubSender = crate::client::BoundedSender;
+pub(crate) type PubSubReceiver = crate::client::BoundedReceiver;
+pub(crate) type PushSender = crate::client::BoundedSender;
+pub(crate) type PushReceiver = crate::client::BoundedReceiver;
 pub(crate) type ReconnectSender = broadcast::Sender<()>;
 pub(crate) type ReconnectReceiver = broadcast::Receiver<()>;
 
@@ -143,6 +158,90 @@ impl SendBatchTestHook {
             return guard.take().map(|(_, num_reads)| num_reads);
         }
         None
+    }
+}
+
+/// Test-only observability of how deep the network task's internal queues get
+/// and of how much traffic the pub/sub and push sinks actually absorb.
+///
+/// Every counter is an `Arc<AtomicUsize>`, so reading one from a test never
+/// contends with the network task and the send path never takes a lock. The
+/// queue depths are recorded with `fetch_max`, which makes them **high-water
+/// marks**: monotone, so a drain cannot lower them and a test can observe the
+/// peak after the queue is empty again. A purge therefore shows up as the mark
+/// *stopping*, never as the mark falling.
+///
+/// `futures_channel::mpsc::UnboundedReceiver` exposes no `len()`, so the
+/// delivered/failed counters are the only way to observe how much a pub/sub
+/// channel holds: when the consumer never polls its stream, `delivered` *is* the
+/// channel depth.
+///
+/// Like [`SendBatchTestHook`], it is gated behind `cfg(test)` and carries no
+/// cost in shipped builds.
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub(crate) struct QueueMetricsTestHook {
+    messages_to_send_high_water: Arc<std::sync::atomic::AtomicUsize>,
+    messages_to_receive_high_water: Arc<std::sync::atomic::AtomicUsize>,
+    pub_sub_delivered: Arc<std::sync::atomic::AtomicUsize>,
+    pub_sub_delivery_failed: Arc<std::sync::atomic::AtomicUsize>,
+    pub_sub_delivered_bytes: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[cfg(test)]
+impl QueueMetricsTestHook {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Deepest `messages_to_send` ever observed, in messages.
+    pub(crate) fn messages_to_send_high_water(&self) -> usize {
+        self.messages_to_send_high_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Deepest `messages_to_receive` ever observed, in messages.
+    pub(crate) fn messages_to_receive_high_water(&self) -> usize {
+        self.messages_to_receive_high_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Pub/sub messages handed to a subscriber's channel without error.
+    pub(crate) fn pub_sub_delivered(&self) -> usize {
+        self.pub_sub_delivered
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Pub/sub messages the subscriber's channel refused, its receiver being gone.
+    pub(crate) fn pub_sub_delivery_failed(&self) -> usize {
+        self.pub_sub_delivery_failed
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Wire bytes of the pub/sub messages counted by [`Self::pub_sub_delivered`].
+    /// This is the payload a paused subscriber's channel retains.
+    pub(crate) fn pub_sub_delivered_bytes(&self) -> usize {
+        self.pub_sub_delivered_bytes
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn record_queue_depths(&self, to_send: usize, to_receive: usize) {
+        self.messages_to_send_high_water
+            .fetch_max(to_send, std::sync::atomic::Ordering::Relaxed);
+        self.messages_to_receive_high_water
+            .fetch_max(to_receive, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_pub_sub_delivered(&self, bytes: usize) {
+        self.pub_sub_delivered
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.pub_sub_delivered_bytes
+            .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_pub_sub_delivery_failed(&self) {
+        self.pub_sub_delivery_failed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -242,11 +341,22 @@ pub(crate) struct NetworkHandler {
     max_command_attempts: usize,
     /// Send-wave cap from `Config::max_messages_per_wave`.
     max_messages_per_wave: usize,
+    /// Memory budget for `messages_to_send`, from
+    /// `Config::backpressure.max_queued_bytes` (`0` = unlimited).
+    max_queued_bytes: usize,
+    /// Running total of `Message::queued_bytes` over `messages_to_send`.
+    ///
+    /// Maintained incrementally at every push and pop rather than recomputed:
+    /// the queue is walked often enough that summing it per message would be
+    /// quadratic in the queue depth.
+    queued_bytes: usize,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
     #[cfg(test)]
     send_batch_test_hook: Option<SendBatchTestHook>,
+    #[cfg(test)]
+    queue_metrics_test_hook: Option<QueueMetricsTestHook>,
 }
 
 impl NetworkHandler {
@@ -262,9 +372,12 @@ impl NetworkHandler {
         let auto_remonitor = config.auto_remonitor;
         let max_command_attempts = config.max_command_attempts;
         let max_messages_per_wave = config.max_messages_per_wave;
+        let max_queued_bytes = config.backpressure.max_queued_bytes;
         let reconnection_config = config.reconnection.clone();
         #[cfg(test)]
         let send_batch_test_hook = config.send_batch_test_hook.clone();
+        #[cfg(test)]
+        let queue_metrics_test_hook = config.queue_metrics_test_hook.clone();
 
         // One registry per client: two clients built from the same `Config` must
         // not share the state either of them sets at runtime, which is exactly
@@ -298,9 +411,13 @@ impl NetworkHandler {
             reconnection_state: ReconnectionState::new(reconnection_config),
             max_command_attempts,
             max_messages_per_wave,
+            max_queued_bytes,
+            queued_bytes: 0,
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
+            #[cfg(test)]
+            queue_metrics_test_hook,
         };
 
         // Every event emitted by the network task, and by the connection code it
@@ -375,8 +492,63 @@ impl NetworkHandler {
         !is_channel_closed
     }
 
+    /// Test-only: samples the current queue depths into the metrics hook.
+    ///
+    /// Called wherever a depth can be at its peak — right after the pushes, and
+    /// right before a drain or a purge rebuilds the queue.
+    #[cfg(test)]
+    fn record_queue_depths(&self) {
+        if let Some(hook) = &self.queue_metrics_test_hook {
+            hook.record_queue_depths(self.messages_to_send.len(), self.messages_to_receive.len());
+        }
+    }
+
+    /// Whether queuing `cost` more bytes would breach the send-queue budget.
+    ///
+    /// An empty queue always admits, whatever the size: refusing a command
+    /// larger than the whole budget would make it permanently unsendable rather
+    /// than merely delayed. The queue is therefore bounded by the budget plus at
+    /// most one message.
+    fn would_exceed_queue_budget(&self, cost: usize) -> bool {
+        self.max_queued_bytes != 0
+            && self.queued_bytes != 0
+            && self.queued_bytes + cost > self.max_queued_bytes
+    }
+
+    /// Queues a message for sending, keeping the byte accounting in step.
+    fn queue_message(&mut self, msg: Message) {
+        self.queued_bytes += msg.queued_bytes();
+        self.messages_to_send.push_back(MessageToSend::new(msg));
+    }
+
     fn handle_message(&mut self, mut msg: Message) {
         trace!("[{:?}] Will handle message: {msg:?}", self.status);
+
+        // Shed an incoming command rather than let the send queue grow past its
+        // memory budget, which is what a reconnection outage would otherwise do.
+        //
+        // Only a *new* message is refused. A replayed or retried one has already
+        // been charged an attempt, so `attempts > 0` marks a command the caller
+        // was told had been accepted; dropping it here would lose it silently.
+        // An invalidation registers a sink instead of queuing a command, so it
+        // costs the queue nothing and is never refused. Neither is a message
+        // that is about to be failed with `DisconnectedByPeer` for opting out of
+        // retries: it never reaches the queue, so blaming the queue for it would
+        // report the wrong cause.
+        let will_be_queued = self.status != Status::Disconnected || msg.retry_on_error;
+        if will_be_queued
+            && msg.attempts == 0
+            && !matches!(msg.kind, MessageKind::Invalidation { .. })
+            && self.would_exceed_queue_budget(msg.queued_bytes())
+        {
+            debug!(
+                "send queue is full ({} bytes), shedding command: {:?}",
+                self.queued_bytes,
+                msg.commands()
+            );
+            msg.send_error(Error::Client(ClientError::SendQueueFull));
+            return;
+        }
 
         let mut collision_error = None;
 
@@ -446,7 +618,7 @@ impl NetworkHandler {
                 if let Some(err) = collision_error {
                     msg.send_error(err);
                 } else {
-                    self.messages_to_send.push_back(MessageToSend::new(msg));
+                    self.queue_message(msg);
                 }
             }
             Status::Disconnected => {
@@ -455,7 +627,7 @@ impl NetworkHandler {
                         "network disconnected, queuing command: {:?}",
                         msg.commands()
                     );
-                    self.messages_to_send.push_back(MessageToSend::new(msg));
+                    self.queue_message(msg);
                 } else {
                     debug!(
                         "network disconnected, sending command in error: {:?}",
@@ -464,22 +636,29 @@ impl NetworkHandler {
                     msg.send_error(Error::DisconnectedByPeer);
                 }
             }
-            Status::EnteringMonitor => self.messages_to_send.push_back(MessageToSend::new(msg)),
+            Status::EnteringMonitor => self.queue_message(msg),
             Status::Monitor => {
                 for command in msg.commands() {
                     if matches!(command.kind(), CommandKind::Reset) {
                         self.status = Status::LeavingMonitor;
                     }
                 }
-                self.messages_to_send.push_back(MessageToSend::new(msg));
+                self.queue_message(msg);
             }
             Status::LeavingMonitor => {
-                self.messages_to_send.push_back(MessageToSend::new(msg));
+                self.queue_message(msg);
             }
         }
+
+        #[cfg(test)]
+        self.record_queue_depths();
     }
 
     async fn send_messages(&mut self) {
+        // Sampled before the drain, where the send queue is at its deepest.
+        #[cfg(test)]
+        self.record_queue_depths();
+
         // The line is only worth emitting for an actual batch, and deciding that
         // needs the count, so the count is taken here rather than inside the
         // macro argument. Guarding it with `enabled!` instead would silence the
@@ -513,6 +692,7 @@ impl NetworkHandler {
 
         while let Some(message_to_send) = self.messages_to_send.pop_front() {
             let mut msg = message_to_send.message;
+            self.queued_bytes = self.queued_bytes.saturating_sub(msg.queued_bytes());
 
             // Scope the retry reasons to the current message: they must not
             // leak onto the other messages sharing this send batch.
@@ -691,7 +871,7 @@ impl NetworkHandler {
                         } else {
                             match &mut self.invalidation_sender {
                                 Some(push_sender) => {
-                                    if let Err(e) = push_sender.unbounded_send(response) {
+                                    if let Err(e) = push_sender.send(response) {
                                         warn!("Cannot send push message result to caller: {e}");
                                     }
                                 }
@@ -715,7 +895,7 @@ impl NetworkHandler {
             Status::Monitor => match &result {
                 Ok(response) if response.is_monitor() => {
                     if let Some(push_sender) = &mut self.monitor_sender
-                        && let Err(e) = push_sender.unbounded_send(result)
+                        && let Err(e) = push_sender.send(result)
                     {
                         warn!("Cannot send monitor result to caller: {e}");
                     }
@@ -725,7 +905,7 @@ impl NetworkHandler {
             Status::LeavingMonitor => match &result {
                 Ok(response) if response.is_monitor() => {
                     if let Some(push_sender) = &mut self.monitor_sender
-                        && let Err(e) = push_sender.unbounded_send(result)
+                        && let Err(e) = push_sender.send(result)
                     {
                         warn!("Cannot send monitor result to caller: {e}");
                     }
@@ -892,9 +1072,20 @@ impl NetworkHandler {
                 match pub_sub_message {
                     PubSubMessage::Message(channel_or_pattern, _)
                     | PubSubMessage::SMessage(channel_or_pattern, _) => {
+                        #[cfg(test)]
+                        let delivered_bytes = ref_value.retained_bytes();
                         match self.subscriptions.get_mut(channel_or_pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
-                                if let Err(e) = pub_sub_sender.unbounded_send(value) {
+                                let sent = pub_sub_sender.send(value);
+                                #[cfg(test)]
+                                if let Some(hook) = &self.queue_metrics_test_hook {
+                                    if sent.is_ok() {
+                                        hook.record_pub_sub_delivered(delivered_bytes);
+                                    } else {
+                                        hook.record_pub_sub_delivery_failed();
+                                    }
+                                }
+                                if let Err(e) = sent {
                                     let error_desc = e.to_string();
                                     if let Ok(ref_value) = &e.into_inner()
                                         && let Some(
@@ -997,9 +1188,20 @@ impl NetworkHandler {
                         }
                     }
                     PubSubMessage::PMessage(pattern, channel, _) => {
+                        #[cfg(test)]
+                        let delivered_bytes = ref_value.retained_bytes();
                         match self.subscriptions.get_mut(pattern) {
                             Some((_subscription_type, pub_sub_sender)) => {
-                                if let Err(e) = pub_sub_sender.unbounded_send(value) {
+                                let sent = pub_sub_sender.send(value);
+                                #[cfg(test)]
+                                if let Some(hook) = &self.queue_metrics_test_hook {
+                                    if sent.is_ok() {
+                                        hook.record_pub_sub_delivered(delivered_bytes);
+                                    } else {
+                                        hook.record_pub_sub_delivery_failed();
+                                    }
+                                }
+                                if let Err(e) = sent {
                                     warn!("Cannot send pub/sub message to caller: {e}");
                                 }
                             }
@@ -1048,6 +1250,11 @@ impl NetworkHandler {
         // that has exhausted its budget instead of replaying it once more.
         let max_command_attempts = self.max_command_attempts;
 
+        // Sampled before the purge, so a purge reads as the high-water mark
+        // stopping rather than as a depth that fell.
+        #[cfg(test)]
+        self.record_queue_depths();
+
         let mut retained_to_receive = VecDeque::with_capacity(self.messages_to_receive.len());
         while let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
             if !message_to_receive.message.retry_on_error {
@@ -1068,6 +1275,9 @@ impl NetworkHandler {
         self.messages_to_receive = retained_to_receive;
 
         let mut retained_to_send = VecDeque::with_capacity(self.messages_to_send.len());
+        // The queue is rebuilt below, so the byte total is rebuilt with it
+        // rather than adjusted message by message.
+        self.queued_bytes = 0;
         while let Some(mut message_to_send) = self.messages_to_send.pop_front() {
             if !message_to_send.message.retry_on_error {
                 message_to_send
@@ -1080,6 +1290,7 @@ impl NetworkHandler {
                         .message
                         .send_error(Error::Client(ClientError::MaxCommandAttemptsReached));
                 } else {
+                    self.queued_bytes += message_to_send.message.queued_bytes();
                     retained_to_send.push_back(message_to_send);
                 }
             }
@@ -1122,6 +1333,7 @@ impl NetworkHandler {
                         .message
                         .send_error(Error::DisconnectedByPeer);
                 }
+                self.queued_bytes = 0;
                 return false;
             }
 
@@ -1186,6 +1398,10 @@ impl NetworkHandler {
                         .map(|message_to_send| message_to_send.message),
                 )
                 .collect();
+            // `messages_to_send` was emptied above and `handle_message` charges
+            // every message it queues, so the total has to start from zero or
+            // the replayed messages would be counted twice.
+            self.queued_bytes = 0;
             for message in to_replay {
                 self.handle_message(message);
             }

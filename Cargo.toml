@@ -41,6 +41,10 @@ itoa = "1.0"
 fast-float2 = "0.2"
 dtoa = "1.0"
 smallvec = { version = "1.15", features = ["union", "serde"] }
+# Lock-free MPMC queue backing the pub/sub channel. Its producer can pop the
+# head, which is what lets a full channel drop its oldest message without the
+# network task ever waiting on the subscriber.
+crossbeam-queue = "0.3"
 bb8 = { version = "0.9", optional = true }
 url = "2.5"
 tokio-rustls = { version = "0.26", optional = true }

@@ -4,7 +4,7 @@ use crate::{
     ClientError, Error, Future, Result,
     client::{
         ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
-        PreparedCommand, PubSubStream, ServerConfig, Transaction,
+        PreparedCommand, PubSubStream, ServerConfig, Transaction, bounded_channel,
     },
     commands::{
         ArrayCommands, BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands,
@@ -21,7 +21,6 @@ use crate::{
     },
     resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
-use futures_channel::mpsc;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 use tracing::{info, trace};
@@ -54,6 +53,12 @@ pub struct Client {
     /// Whether this client talks to a Redis Cluster, which constrains what a
     /// transaction may contain.
     is_cluster: bool,
+    /// Memory budget handed to each pub/sub stream this client opens, from
+    /// `Config::backpressure.max_pubsub_bytes`.
+    max_pubsub_bytes: usize,
+    /// Memory budget handed to each push sink this client opens, from
+    /// `Config::backpressure.max_push_bytes`.
+    max_push_bytes: usize,
 }
 
 impl Client {
@@ -67,6 +72,8 @@ impl Client {
         let command_timeout = config.command_timeout;
         let retry_on_error = config.retry_on_error;
         let is_cluster = matches!(config.server, ServerConfig::Cluster(_));
+        let max_pubsub_bytes = config.backpressure.max_pubsub_bytes;
+        let max_push_bytes = config.backpressure.max_push_bytes;
         let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag) =
             NetworkHandler::connect(config.into_config()?).await?;
 
@@ -80,6 +87,8 @@ impl Client {
             retry_on_error,
             connection_tag,
             is_cluster,
+            max_pubsub_bytes,
+            max_push_bytes,
         })
     }
 
@@ -368,7 +377,8 @@ impl Client {
     /// Create a new pub sub stream with no upfront subscription
     #[inline]
     pub fn create_pub_sub(&self) -> PubSubStream {
-        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+            bounded_channel(self.max_pubsub_bytes);
         PubSubStream::new(pub_sub_sender, pub_sub_receiver, self.clone())
     }
 
@@ -390,7 +400,8 @@ impl Client {
     pub fn create_client_tracking_invalidation_stream(
         &self,
     ) -> Result<ClientTrackingInvalidationStream> {
-        let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
+        let (push_sender, push_receiver): (PushSender, PushReceiver) =
+            bounded_channel(self.max_push_bytes);
         let message = Message::client_tracking_invalidation(push_sender);
         self.send_message(message)?;
         Ok(ClientTrackingInvalidationStream::new(push_receiver))
@@ -537,7 +548,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     async fn subscribe(self, channels: impl Serialize) -> Result<PubSubStream> {
         let channels = CommandArgsMut::default().arg(channels).freeze();
 
-        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+            bounded_channel(self.max_pubsub_bytes);
 
         self.subscribe_from_pub_sub_sender(&channels, &pub_sub_sender)
             .await?;
@@ -554,7 +566,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     async fn psubscribe(self, patterns: impl Serialize) -> Result<PubSubStream> {
         let patterns = CommandArgsMut::default().arg(patterns).freeze();
 
-        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+            bounded_channel(self.max_pubsub_bytes);
 
         self.psubscribe_from_pub_sub_sender(&patterns, &pub_sub_sender)
             .await?;
@@ -571,7 +584,8 @@ impl<'a> PubSubCommands<'a> for &'a Client {
     async fn ssubscribe(self, shardchannels: impl Serialize) -> Result<PubSubStream> {
         let shardchannels = CommandArgsMut::default().arg(shardchannels).freeze();
 
-        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) = mpsc::unbounded();
+        let (pub_sub_sender, pub_sub_receiver): (PubSubSender, PubSubReceiver) =
+            bounded_channel(self.max_pubsub_bytes);
 
         self.ssubscribe_from_pub_sub_sender(&shardchannels, &pub_sub_sender)
             .await?;
@@ -589,7 +603,8 @@ impl<'a> BlockingCommands<'a> for &'a Client {
     async fn monitor(self) -> Result<MonitorStream> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
             tokio::sync::oneshot::channel();
-        let (push_sender, push_receiver): (PushSender, PushReceiver) = mpsc::unbounded();
+        let (push_sender, push_receiver): (PushSender, PushReceiver) =
+            bounded_channel(self.max_push_bytes);
 
         let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);
 

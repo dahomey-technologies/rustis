@@ -292,6 +292,16 @@ pub struct PubSubSplitStream {
     receiver: PubSubReceiver,
 }
 
+impl PubSubSplitStream {
+    /// Number of messages dropped so far because this stream fell behind its
+    /// memory budget.
+    ///
+    /// See [`PubSubStream::dropped_messages`].
+    pub fn dropped_messages(&self) -> usize {
+        self.receiver.dropped_messages()
+    }
+}
+
 impl Stream for PubSubSplitStream {
     type Item = Result<PubSubMessage>;
 
@@ -344,6 +354,22 @@ pub struct PubSubStream {
 }
 
 impl PubSubStream {
+    /// Number of messages dropped so far because this stream fell behind its
+    /// memory budget.
+    ///
+    /// The client holds at most
+    /// [`BackpressureConfig::max_pubsub_bytes`](crate::client::BackpressureConfig::max_pubsub_bytes)
+    /// of undelivered messages per stream. Past that it discards the **oldest**
+    /// ones, so a stream that resumes reading sees current data rather than a
+    /// stale prefix. The count is cumulative and never resets; sample it to tell
+    /// whether a consumer is keeping up.
+    ///
+    /// It stays at `0` for a consumer that keeps up, and for any stream if the
+    /// budget is disabled.
+    pub fn dropped_messages(&self) -> usize {
+        self.split_stream.dropped_messages()
+    }
+
     pub(crate) fn new(sender: PubSubSender, receiver: PubSubReceiver, client: Client) -> Self {
         Self {
             split_sink: PubSubSplitSink {

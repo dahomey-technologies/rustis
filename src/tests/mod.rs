@@ -9,6 +9,8 @@
 
 mod arg_serializer;
 mod array_commands;
+#[cfg(feature = "tokio-runtime")]
+mod backpressure;
 mod bitmap_commands;
 mod bloom_commands;
 mod buffer_decoder;

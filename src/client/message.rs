@@ -11,6 +11,17 @@ use tracing::warn;
 #[cfg(test)]
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+/// Per-message allowance charged against the send-queue budget on top of the
+/// command bytes, covering everything a queued message holds besides its
+/// buffers.
+///
+/// Calibrated by measurement: 100 000 queued commands carrying a 1 KiB value
+/// grew resident memory by 229 MiB, i.e. ~2.3 KiB per command, of which ~1.3 KiB
+/// does not scale with the value. Rounded down to 1 KiB, so the budget is
+/// conservative about the part it can measure exactly (the buffers) rather than
+/// about the estimate.
+pub(crate) const QUEUED_MESSAGE_OVERHEAD: usize = 1024;
+
 #[derive(Debug)]
 pub(crate) enum CommandsIteratorRef<'a> {
     Single(Option<&'a Command>),
@@ -243,6 +254,25 @@ impl Message {
             MessageKind::Monitor { .. } => 1,
             MessageKind::Invalidation { .. } => 0,
         }
+    }
+
+    /// What this message costs against `BackpressureConfig::max_queued_bytes`
+    /// while it waits in the send queue.
+    ///
+    /// The command bytes are exact and free to read: a `Command` owns one
+    /// contiguous buffer holding its name and every argument, so this is a
+    /// `len()` per command rather than a walk over the arguments.
+    ///
+    /// [`QUEUED_MESSAGE_OVERHEAD`] is added on top because the buffers are not
+    /// the whole cost: a message also carries its result channel, its retry
+    /// bookkeeping and the queue node itself. Without it, a flood of tiny
+    /// commands would pass under any byte budget while consuming far more than
+    /// the budget allows.
+    pub(crate) fn queued_bytes(&self) -> usize {
+        self.commands()
+            .map(|command| command.bytes().len())
+            .sum::<usize>()
+            + QUEUED_MESSAGE_OVERHEAD
     }
 
     pub(crate) fn commands(&self) -> CommandsIteratorRef<'_> {

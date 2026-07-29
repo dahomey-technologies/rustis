@@ -203,8 +203,33 @@ impl Client {
         command: impl Into<Command>,
         retry_on_error: Option<bool>,
     ) -> Result<T> {
+        // The one place holding both the command and the type the caller
+        // declared for its reply, so it is where the two can be confronted with
+        // what the server actually answers.
+        #[cfg(test)]
+        let command = command.into();
+        #[cfg(test)]
+        let probe_label = crate::tests::response_probe::label(&command);
+
         let response = self.internal_send(command, retry_on_error).await?;
-        response.to()
+
+        #[cfg(not(test))]
+        return response.to();
+
+        // The outcome is recorded alongside the shape: a mismatch the decoder
+        // refuses is a mismatch the caller was told about, where a mismatch it
+        // coerces is the silent one this probe exists for.
+        #[cfg(test)]
+        {
+            let result = response.to();
+            crate::tests::response_probe::record(
+                probe_label,
+                std::any::type_name::<T>(),
+                &response,
+                result.is_ok(),
+            );
+            result
+        }
     }
 
     #[inline]

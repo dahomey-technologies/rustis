@@ -47,6 +47,8 @@ mod resp_deserializer;
 mod resp_frame_parser;
 mod resp_response;
 mod resp_tape;
+pub(crate) mod response_probe;
+mod response_shape;
 mod scripting_commands;
 mod search_commands;
 mod sentinel;

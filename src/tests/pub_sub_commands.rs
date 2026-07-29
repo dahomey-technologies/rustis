@@ -39,7 +39,12 @@ async fn a_paused_subscriber_is_bounded_by_its_memory_budget() -> Result<()> {
 
     const PAYLOAD_BYTES: usize = 4096;
     const MESSAGES_PER_WAVE: usize = 500;
-    const WAVES: usize = 100;
+    // 10 000 messages of 4 KiB is 40 MiB offered against a 4 MiB budget. The
+    // measurement that first exposed the growth used five times this, but the
+    // assertion below is arithmetic on the budget, not on the volume: an order of
+    // magnitude over budget proves the bound just as well, and keeps this test
+    // clear of its timeout when the whole suite is competing for the CPU.
+    const WAVES: usize = 20;
     const TOTAL_MESSAGES: usize = MESSAGES_PER_WAVE * WAVES;
     const BUDGET: usize = 4 * 1024 * 1024;
 
@@ -59,7 +64,9 @@ async fn a_paused_subscriber_is_bounded_by_its_memory_budget() -> Result<()> {
     let payload = "x".repeat(PAYLOAD_BYTES);
     let started = std::time::Instant::now();
 
-    timeout(Duration::from_secs(60), async {
+    // Generous on purpose: the volume above is comfortably inside this, and the
+    // timeout is here to fail a hang rather than to bound a slow machine.
+    timeout(Duration::from_secs(120), async {
         for _ in 0..WAVES {
             for _ in 0..MESSAGES_PER_WAVE {
                 publisher.send_and_forget(

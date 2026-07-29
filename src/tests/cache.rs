@@ -6,9 +6,9 @@ use crate::{
         ClientTrackingOptions, ClientTrackingStatus, ClusterCommands, ConnectionCommands,
         FlushingMode, HashCommands, ServerCommands, StringCommands,
     },
-    network::sleep,
+    network::{sleep, timeout},
     resp::cmd,
-    tests::{get_cluster_test_client, log_try_init},
+    tests::{get_cluster_test_client, get_default_config, get_test_client, log_try_init},
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -275,5 +275,81 @@ async fn cluster_cache_is_invalidated_for_keys_on_every_shard() -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+/// Losing an invalidation must cost a cache flush, not a stale read.
+///
+/// This is the one path in the backpressure work whose failure is a correctness
+/// bug rather than a memory one: an invalidation discarded to stay within budget
+/// names a key that will never be named again, so acting only on the survivors
+/// would leave that key cached and served for good.
+///
+/// The scenario forces exactly that. The budget is one byte, so any burst that
+/// leaves two messages queued at once evicts; the tracked key is written
+/// *first*, so its invalidation is the oldest and therefore the prime candidate
+/// for eviction; and thousands of writes follow to guarantee the burst. The
+/// flush is waited for rather than slept on — the cache exposes its flush
+/// generation for that.
+#[tokio::test]
+#[serial]
+async fn a_lost_invalidation_flushes_the_cache_instead_of_serving_stale_data() -> Result<()> {
+    log_try_init();
+
+    const PREFIX: &str = "lost_invalidation_key_";
+    const OTHER_KEYS: usize = 5_000;
+
+    let mut config = get_default_config()?;
+    // The smallest non-zero budget: `0` would mean unbounded.
+    config.backpressure.max_push_bytes = 1;
+    let cached_client = Client::connect(config).await?;
+    let writer = get_test_client().await?;
+
+    let target = format!("{PREFIX}target");
+    writer.set(&target, "v1").await?;
+
+    let cache = Cache::new(
+        cached_client.clone(),
+        60,
+        ClientTrackingOptions::default()
+            .prefix(PREFIX)
+            .broadcasting(),
+    )
+    .await?;
+
+    let value: String = cache.get(&target).await?;
+    assert_eq!("v1", value, "the value under test must start out cached");
+
+    // The tracked key changes first, so its invalidation is the oldest queued
+    // and the one drop-oldest sheds. The rest of the burst is what overruns the
+    // budget in the first place.
+    //
+    // Not awaited, and this is the whole point: awaiting it would let its
+    // invalidation arrive alone and be handled key by key, so the test would pass
+    // without the flush ever mattering. Pipelined into the burst, it is the oldest
+    // queued message when the budget is breached.
+    writer.send_and_forget(cmd("SET").arg(&target).arg("v2"), None)?;
+    for i in 0..OTHER_KEYS {
+        writer.send_and_forget(cmd("SET").arg(format!("{PREFIX}{i}")).arg("v"), None)?;
+    }
+    let _: String = writer.send(cmd("PING"), None).await?;
+
+    timeout(Duration::from_secs(30), async {
+        while cache.flush_generation() == 0 {
+            tokio::task::yield_now().await;
+        }
+        Ok::<(), Error>(())
+    })
+    .await??;
+
+    let value: String = cache.get(&target).await?;
+    assert_eq!(
+        "v2", value,
+        "a dropped invalidation must have flushed the cache, not left a stale value"
+    );
+
+    cached_client
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
     Ok(())
 }

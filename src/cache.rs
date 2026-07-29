@@ -228,6 +228,16 @@ impl Cache {
         Self::from_builder(client, builder, tracking_opts).await
     }
 
+    /// Generation of the last whole-cache flush, `0` if none happened.
+    ///
+    /// A test needs this to wait for the flush instead of sleeping: the `Cache`
+    /// owns its invalidation stream, so a caller has no other way to know that a
+    /// lost invalidation has been reacted to.
+    #[cfg(test)]
+    pub(crate) fn flush_generation(&self) -> u64 {
+        self.flush_generation.load(Ordering::SeqCst)
+    }
+
     /// Executes the `GET` command with client-side caching.
     pub async fn get<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.get(key))

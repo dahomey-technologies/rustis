@@ -15,7 +15,35 @@ Versions up to and including `0.19.3` are documented in the
   existing `Knn { k, ef_runtime }` literal needs `shard_k_ratio: None` added. That
   is the whole break; behaviour is unchanged when it is `None`.
 
+### Added
+
+- **`BackpressureConfig` on `Config` bounds the client's memory.** `max_queued_bytes`
+  (16 MiB) caps the send queue, `max_pubsub_bytes` (8 MiB) each subscription,
+  `max_push_bytes` (8 MiB) each push sink. Over budget, a stream drops its **oldest**
+  messages; `0` restores the previous unbounded behaviour.
+
+- **`dropped_messages()` on `PubSubStream`, `MonitorStream` and
+  `ClientTrackingInvalidationStream`**, reporting what a budget shed.
+
+- **`ClientError::SendQueueFull`**, returned when a command is offered to a send queue
+  that is over budget. Commands already accepted are never shed.
+
+### Changed
+
+- **`max_command_attempts` defaults to `5` instead of unlimited**, so a command that
+  keeps failing ends with `ClientError::MaxCommandAttemptsReached`. `0` still means
+  unlimited.
+
+- **`ReconnectionConfig::max_attempts` documents that a non-zero value is a one-way
+  door**: reaching the limit ends the network task for good, so it is not recommended
+  for long-running services. Behaviour and the `0` default are unchanged.
+
 ### Fixed
+
+- **A cache entry whose invalidation was lost is no longer served stale.** The cache
+  (feature `client-cache`) now flushes when invalidations are dropped, and a fetch in
+  flight across a flush no longer re-inserts its stale value — which also fixes the
+  pre-existing flush on reconnection.
 
 - **`FT.HYBRID`'s `KNN SHARD_K_RATIO` is now reachable**, through
   `FtHybridVectorQuery::Knn::shard_k_ratio`. It is a cluster-only knob — it scales

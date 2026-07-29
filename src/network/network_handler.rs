@@ -186,6 +186,9 @@ pub(crate) struct QueueMetricsTestHook {
     pub_sub_delivered: Arc<std::sync::atomic::AtomicUsize>,
     pub_sub_delivery_failed: Arc<std::sync::atomic::AtomicUsize>,
     pub_sub_delivered_bytes: Arc<std::sync::atomic::AtomicUsize>,
+    push_delivered: Arc<std::sync::atomic::AtomicUsize>,
+    push_delivery_failed: Arc<std::sync::atomic::AtomicUsize>,
+    push_delivered_bytes: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(test)]
@@ -225,6 +228,30 @@ impl QueueMetricsTestHook {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Push messages — monitor lines and tracking invalidations — handed to their
+    /// sink's channel without error.
+    ///
+    /// This is the denominator a shedding assertion needs: `dropped_messages()`
+    /// on the stream says how many were evicted, and only this says how many were
+    /// offered in the first place.
+    pub(crate) fn push_delivered(&self) -> usize {
+        self.push_delivered
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Push messages the sink's channel refused, its receiver being gone.
+    pub(crate) fn push_delivery_failed(&self) -> usize {
+        self.push_delivery_failed
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Wire bytes of the push messages counted by [`Self::push_delivered`]. This
+    /// is the payload a paused sink's channel retains.
+    pub(crate) fn push_delivered_bytes(&self) -> usize {
+        self.push_delivered_bytes
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     fn record_queue_depths(&self, to_send: usize, to_receive: usize) {
         self.messages_to_send_high_water
             .fetch_max(to_send, std::sync::atomic::Ordering::Relaxed);
@@ -241,6 +268,18 @@ impl QueueMetricsTestHook {
 
     fn record_pub_sub_delivery_failed(&self) {
         self.pub_sub_delivery_failed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_push_delivered(&self, bytes: usize) {
+        self.push_delivered
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.push_delivered_bytes
+            .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_push_delivery_failed(&self) {
+        self.push_delivery_failed
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
@@ -871,7 +910,21 @@ impl NetworkHandler {
                         } else {
                             match &mut self.invalidation_sender {
                                 Some(push_sender) => {
-                                    if let Err(e) = push_sender.send(response) {
+                                    #[cfg(test)]
+                                    let delivered_bytes = response
+                                        .as_ref()
+                                        .map(|response| response.retained_bytes())
+                                        .unwrap_or(0);
+                                    let sent = push_sender.send(response);
+                                    #[cfg(test)]
+                                    if let Some(hook) = &self.queue_metrics_test_hook {
+                                        if sent.is_ok() {
+                                            hook.record_push_delivered(delivered_bytes);
+                                        } else {
+                                            hook.record_push_delivery_failed();
+                                        }
+                                    }
+                                    if let Err(e) = sent {
                                         warn!("Cannot send push message result to caller: {e}");
                                     }
                                 }
@@ -894,27 +947,45 @@ impl NetworkHandler {
             }
             Status::Monitor => match &result {
                 Ok(response) if response.is_monitor() => {
-                    if let Some(push_sender) = &mut self.monitor_sender
-                        && let Err(e) = push_sender.send(result)
-                    {
-                        warn!("Cannot send monitor result to caller: {e}");
-                    }
+                    self.deliver_monitor_result(result);
                 }
                 _ => self.receive_result(result),
             },
             Status::LeavingMonitor => match &result {
                 Ok(response) if response.is_monitor() => {
-                    if let Some(push_sender) = &mut self.monitor_sender
-                        && let Err(e) = push_sender.send(result)
-                    {
-                        warn!("Cannot send monitor result to caller: {e}");
-                    }
+                    self.deliver_monitor_result(result);
                 }
                 _ => {
                     self.receive_result(result);
                     self.status = Status::Connected;
                 }
             },
+        }
+    }
+
+    /// Hands a monitor line to the `MONITOR` sink, if one is registered.
+    fn deliver_monitor_result(&self, result: Result<RespResponse>) {
+        #[cfg(test)]
+        let delivered_bytes = result
+            .as_ref()
+            .map(|response| response.retained_bytes())
+            .unwrap_or(0);
+
+        let Some(push_sender) = &self.monitor_sender else {
+            return;
+        };
+
+        let sent = push_sender.send(result);
+        #[cfg(test)]
+        if let Some(hook) = &self.queue_metrics_test_hook {
+            if sent.is_ok() {
+                hook.record_push_delivered(delivered_bytes);
+            } else {
+                hook.record_push_delivery_failed();
+            }
+        }
+        if let Err(e) = sent {
+            warn!("Cannot send monitor result to caller: {e}");
         }
     }
 

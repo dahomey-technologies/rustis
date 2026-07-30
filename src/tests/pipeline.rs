@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::BatchPreparedCommand,
-    commands::{FlushingMode, ServerCommands, StringCommands},
+    commands::{FlushingMode, ServerCommands, StringCommands, VAddOptions, VectorSetCommands},
     resp::{Value, cmd},
     tests::{get_cluster_test_client, get_test_client},
 };
@@ -91,6 +91,31 @@ async fn pipeline_on_cluster() -> Result<()> {
     let (value1, value2): (String, String) = pipeline.execute().await?;
     assert_eq!("value1", value1);
     assert_eq!("value2", value2);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn vector_set_commands() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // Vector-set commands must be queueable like every other command family.
+    let mut pipeline = client.create_pipeline();
+    pipeline
+        .vadd(
+            "key",
+            None,
+            &[0.1, 1.2, 0.5],
+            "element",
+            VAddOptions::default(),
+        )
+        .forget();
+    pipeline.vcard("key").queue();
+
+    let card: u32 = pipeline.execute().await?;
+    assert_eq!(1, card);
 
     Ok(())
 }

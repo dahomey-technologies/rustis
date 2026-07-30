@@ -2,6 +2,17 @@
 // the reconnection loop itself — there is nothing left to retry on. Indexing is
 // therefore denied, not warned; see the panic policy in `lib.rs`.
 #![deny(clippy::indexing_slicing)]
+// `as` is denied here for the same reason it is in `resp/`: a narrowing,
+// sign-changing or float-to-integer cast is silent where it is wrong, and this
+// task handles values the server chose. Every conversion is a `From`/`TryFrom`,
+// or an `as` whose exactness an `#[expect(…, reason = "…")]` states.
+#![deny(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_lossless
+)]
 
 mod async_executor_strategy;
 mod cluster_connection;

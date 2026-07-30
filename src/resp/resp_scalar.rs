@@ -66,16 +66,17 @@ struct ScalarLayout {
 /// Rejects a bulk-family length that exceeds `max_bulk_length`. `len` must
 /// already be known non-negative.
 ///
-/// The comparison widens instead of narrowing: `len as usize` truncates on a
-/// 32-bit target, so an announced length above `u32::MAX` would slip under the cap
-/// as a small number and the payload bounds would then be computed from it. Both
-/// casts below are lossless at every pointer width.
+/// The comparison widens instead of narrowing: narrowing `len` to a `usize`
+/// truncates on a 32-bit target, so an announced length above `u32::MAX` would
+/// slip under the cap as a small number and the payload bounds would then be
+/// computed from it. Widening a non-negative `i64` to `u64` is lossless, and so
+/// is `usize` to `u64` at every pointer width.
 ///
-/// Passing this is what makes `len as usize` exact for the callers: the length is
-/// bounded by a `usize` afterwards.
+/// Passing this is what makes the callers' narrowing to `usize` infallible: the
+/// length is bounded by a `usize` afterwards.
 #[inline]
 fn check_bulk_len(len: i64, max_bulk_length: usize) -> Result<()> {
-    if len as u64 > max_bulk_length as u64 {
+    if len.cast_unsigned() > max_bulk_length as u64 {
         return Err(Error::Client(ClientError::BulkLengthTooLarge));
     }
     Ok(())
@@ -111,8 +112,9 @@ fn bulk_payload(
     malformed: ClientError,
 ) -> Result<(Range<usize>, usize)> {
     check_bulk_len(len, max_bulk_length)?;
+    let len = usize::try_from(len).map_err(|_| Error::Client(malformed.clone()))?;
     let payload_end = after
-        .checked_add(len as usize)
+        .checked_add(len)
         .ok_or_else(|| Error::Client(malformed.clone()))?;
     let end = payload_end
         .checked_add(2)
@@ -157,7 +159,9 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) ->
     // payload + trailing CRLF. `max_bulk_length` is a connection setting, so the
     // cap above bounds `len` but says nothing about the sum; answering `None` here
     // just sends the caller back to the doubling fallback.
-    after.checked_add(len as usize)?.checked_add(2)
+    after
+        .checked_add(usize::try_from(len).ok()?)?
+        .checked_add(2)
 }
 
 /// Slices `data[range]`, answering [`Error::EOF`] instead of panicking when the
@@ -255,7 +259,7 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
             b'0'..=b'9' => {
                 n = n
                     .checked_mul(10)
-                    .and_then(|n| n.checked_sub((digit - b'0') as i64))
+                    .and_then(|n| n.checked_sub(i64::from(digit - b'0')))
                     .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?;
                 i += 1;
             }

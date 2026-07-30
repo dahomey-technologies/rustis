@@ -75,7 +75,7 @@ impl TapeNode {
             payload <= MAX_TAPE_PAYLOAD,
             "tape payload overflows 56 bits"
         );
-        Self(((tag as u64) << 56) | (payload & PAYLOAD_MASK))
+        Self((u64::from(tag) << 56) | (payload & PAYLOAD_MASK))
     }
 
     /// The node's tag byte.
@@ -89,6 +89,19 @@ impl TapeNode {
     #[inline(always)]
     pub(crate) fn payload(self) -> u64 {
         self.0 & PAYLOAD_MASK
+    }
+
+    /// The payload as an index, for the three uses that are one: a byte offset,
+    /// a tape index, an element count.
+    ///
+    /// The payload is 56 bits wide while `usize` is 32 on some targets, so the
+    /// conversion is saturating rather than truncating: an offset too large for
+    /// the address space becomes `usize::MAX`, which every bounds check on the
+    /// read path rejects, where a wrapped offset would have pointed at a valid
+    /// but wrong byte.
+    #[inline(always)]
+    pub(crate) fn payload_index(self) -> usize {
+        usize::try_from(self.payload()).unwrap_or(usize::MAX)
     }
 
     /// `true` if this node is a collection head.
@@ -171,7 +184,7 @@ impl RespTape {
         if self.node_count() <= companion {
             return None;
         }
-        Some(self.node(companion).payload() as usize)
+        Some(self.node(companion).payload_index())
     }
 }
 

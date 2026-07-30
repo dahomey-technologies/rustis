@@ -1,4 +1,4 @@
-use crate::resp::ArgCounter;
+use crate::{ClientError, Error, resp::ArgCounter};
 use serde::{
     Deserializer, Serialize, Serializer,
     de::{self, DeserializeOwned, DeserializeSeed, Visitor},
@@ -272,6 +272,40 @@ pub(crate) fn is_field_value_array(
 ) -> bool {
     len.is_multiple_of(2)
         && first_key.is_some_and(|key| fields.iter().any(|field| field.as_bytes() == key))
+}
+
+/// Converts a RESP double into an integer, only when the conversion is exact:
+/// the double must be finite, have no fractional part, and land in the target's
+/// range. Anything else is `CannotParseInteger`, the same error an out-of-range
+/// wire integer produces.
+///
+/// The alternative — an `as` cast — is silent where it is wrong: it truncates
+/// towards zero (a `ZSCORE` of `3.9` read as `i64` is `3`), saturates out of
+/// range (`1e300` is `i64::MAX`) and maps NaN to `0`, handing the caller a
+/// plausible number for a value the server never sent.
+#[inline]
+pub(crate) fn double_to_int<T>(d: f64) -> Result<T, Error>
+where
+    T: TryFrom<i128>,
+{
+    // `i128` is the widest integer target, so its bounds are the widest window an
+    // exact conversion can land in; `T::try_from` then narrows. Both bounds are
+    // powers of two, hence exactly representable as `f64`, so the comparison is
+    // exact rather than a rounded approximation of `i128::MAX`.
+    const I128_MIN: f64 = -170_141_183_460_469_231_731_687_303_715_884_105_728.0;
+    const I128_MAX_EXCLUSIVE: f64 = 170_141_183_460_469_231_731_687_303_715_884_105_728.0;
+
+    if !d.is_finite() || d.fract() != 0. || !(I128_MIN..I128_MAX_EXCLUSIVE).contains(&d) {
+        return Err(Error::Client(ClientError::CannotParseInteger));
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the guard above leaves only finite integral doubles inside i128's range, where the cast is exact"
+    )]
+    let integral = d as i128;
+
+    T::try_from(integral).map_err(|_| Error::Client(ClientError::CannotParseInteger))
 }
 
 /// Serialize field name only and skip the boolean value

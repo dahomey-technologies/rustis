@@ -167,7 +167,12 @@ jobs:
       matrix:
         features:
           - tokio-runtime
+          - tokio-runtime,pool
+          - tokio-runtime,json
+          - tokio-runtime,client-cache
           - tokio-runtime,pool,json,client-cache
+          - tokio-runtime,tokio-rustls
+          - tokio-runtime,tokio-native-tls
           - tokio-runtime,tokio-rustls,pool,json,client-cache
           - tokio-runtime,tokio-native-tls,pool,json,client-cache
     steps:
@@ -175,6 +180,54 @@ jobs:
         uses: actions/checkout@v5
       - name: cargo check --no-default-features --features ${{ matrix.features }}
         run: cargo check --no-default-features --features ${{ matrix.features }}
+
+  # The combinations that must *not* build. Each is rejected by a `compile_error!`
+  # in `lib.rs`, and what is checked is the message: a build failing for some
+  # unrelated reason, or failing with the dozen "not found in this scope" errors
+  # the guard exists to replace, fails this job too.
+  #
+  # `--no-default-features` alone is the entry the matrix above cannot hold: it
+  # names no feature, and its absence is what let the crate stay unbuildable
+  # without a runtime for as long as it did.
+  check-rejected-features:
+    name: Check rejected features (${{ matrix.name }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: no runtime
+            features: ""
+            expected: "rustis needs an async runtime feature"
+          - name: both TLS runtimes
+            features: tokio-runtime,tokio-rustls,tokio-native-tls
+            expected: "cannot be enabled at the same time"
+          - name: rustls alone
+            features: tokio-runtime,rustls
+            expected: "Feature `rustls` cannot be enabled on its own"
+          - name: native-tls alone
+            features: tokio-runtime,native-tls
+            expected: "Feature `native-tls` cannot be enabled on its own"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: cargo check --no-default-features --features ${{ matrix.features }} must fail
+        run: |
+          set +e
+          output=$(cargo check --no-default-features --features "${{ matrix.features }}" 2>&1)
+          status=$?
+          echo "$output"
+          if [ $status -eq 0 ]; then
+            echo "::error::expected the build to fail, but it succeeded"
+            exit 1
+          fi
+          if ! echo "$output" | grep -qF '${{ matrix.expected }}'; then
+            echo "::error::build failed without the expected guard: ${{ matrix.expected }}"
+            exit 1
+          fi
 
   test:
     name: Test

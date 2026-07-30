@@ -180,6 +180,11 @@ impl Client {
     /// (`0`, `0.0`, `false`, `""`) instead of being rejected. Declare `Option<R>` when the
     /// command can reply `nil`. See [Command results](crate::resp#command-results).
     ///
+    /// Dropping the returned future does not cancel the command: the message is already queued,
+    /// so it is sent and executed by the server and only the reply is discarded. A `timeout`, a
+    /// `select!` or an aborted task therefore leaves a non-idempotent command applied. See
+    /// [Cancellation and timeouts](crate::client#cancellation-and-timeouts).
+    ///
     /// # Example
     /// ```
     /// use rustis::{client::Client, commands::{FlushingMode, ServerCommands}, resp::cmd, Result};

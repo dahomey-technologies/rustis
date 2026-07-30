@@ -50,6 +50,15 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **Dropping a command future does not cancel the command, and this is now
+  documented.** The message is already queued when the future is awaited, so it
+  is sent and executed by the server; only the reply is discarded. Every
+  `tokio::time::timeout`, `select!`, aborted task and `command_timeout` therefore
+  leaves a non-idempotent command applied, which nothing said. A new
+  `Cancellation and timeouts` section in the `client` module states the contract
+  and what to do about it; `Client::send` and `Config::command_timeout` point at
+  it.
+
 - **The silent `nil` coercion is now documented as a trap instead of a convenience.**
   A `nil` reply decodes as the neutral value of the response type — `0` for every
   integer width, `0.0` for floats, `false` for `bool`, `""` for `String` — so a

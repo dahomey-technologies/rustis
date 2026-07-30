@@ -190,6 +190,57 @@ async fn main() -> Result<()> {
 }
 ```
 
+# Cancellation and timeouts
+
+Dropping the future of a command does **not** cancel the command. By the time the future is
+awaited, the message is already in the send queue: it is written to the connection and executed
+by the server. Dropping the future only discards the reply.
+
+This is what happens on every `tokio::time::timeout`, every `select!` branch that loses, every
+`JoinHandle::abort`, every HTTP request cancelled by the client — and on
+[`Config::command_timeout`](crate::client::Config::command_timeout), which is itself a timeout
+around the wait for the reply.
+
+So a timeout error tells you nothing about whether the command ran. For an idempotent command
+(`GET`, `SET` of a constant, `DEL`) that is harmless; for `INCR`, `LPUSH`, `XADD` or a Lua script
+with side effects, the effect may have happened, and retrying applies it twice.
+
+The reason is the protocol: commands are pipelined on a shared connection, and replies come back
+in the order the commands were sent. A message already handed to the connection cannot be pulled
+back, and nothing in RESP cancels a command in flight.
+[`Config::retry_on_error`](crate::client::Config::retry_on_error) and
+[`Config::max_command_attempts`](crate::client::Config::max_command_attempts) add the same
+duplication on a network error: a command that reached the server before the connection broke is
+sent again.
+
+Design the commands you put a deadline on to be idempotent, or check the state after a timeout
+instead of assuming the command did not run.
+
+```no_run
+use rustis::{client::Client, commands::StringCommands, Result};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = Client::connect("127.0.0.1:6379").await?;
+
+    match tokio::time::timeout(Duration::from_millis(10), client.incr("counter")).await {
+        Ok(result) => {
+            let value: i64 = result?;
+            println!("counter: {value}");
+        }
+        // The reply never came back in time. The counter may still have been
+        // incremented: incrementing again here would count twice.
+        Err(_elapsed) => {
+            let value: i64 = client.get("counter").await?;
+            println!("counter after timeout: {value}");
+        }
+    }
+
+    Ok(())
+}
+```
+
 # Pipelining
 
 One of the most performant Redis feature is [pipelining](https://redis.io/docs/manual/pipelining/).

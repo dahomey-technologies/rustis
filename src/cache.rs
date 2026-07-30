@@ -102,6 +102,13 @@ pub struct Cache {
 impl Cache {
     /// Create cache from a moka CacheBuilder and activates Redis client tracking invalidations
     #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`dropped` is a monotonic counter and `dropped_seen` its last \
+                  observed value, so the difference cannot go below zero. The \
+                  generation counter counts cache flushes over the life of a \
+                  client."
+    )]
     pub(crate) async fn from_builder(
         client: Client,
         builder: MokaCacheBuilder,

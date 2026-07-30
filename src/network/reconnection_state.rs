@@ -21,6 +21,11 @@ impl ReconnectionState {
     }
 
     /// Calculate the next delay, incrementing `attempts` in the process.
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`incr_with_max` answered `Some` on the line above, so the attempt \
+                  count is at least 1."
+    )]
     pub(crate) fn next_delay(&mut self) -> Option<u64> {
         match &self.config {
             ReconnectionConfig::Constant {

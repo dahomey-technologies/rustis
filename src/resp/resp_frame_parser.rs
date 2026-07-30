@@ -61,6 +61,13 @@ enum CollectionHeader {
 /// rejected here, where the count is known, so no caller can forget to bound an
 /// attacker-controlled loop. [`Error::EOF`] when the header has not fully
 /// arrived, so the streaming decoder can retry once more bytes are read.
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`at` indexes `data` — the read above proves it — so stepping past \
+              the tag byte stays inside `usize`. The cardinality is doubled in \
+              `u64`, where a non-negative `i64` times 2 cannot overflow, and capped \
+              before it is narrowed."
+)]
 fn parse_collection_header(
     data: &[u8],
     at: usize,
@@ -79,11 +86,22 @@ fn parse_collection_header(
             ClientError::CannotParseSequence
         }));
     }
-    let multiplier = if is_map_shaped { 2 } else { 1 };
-    let count = n as usize * multiplier;
-    if count > max_collection_length {
+    // Cap the announced cardinality before it is narrowed, and before it is
+    // doubled. `n as usize` would truncate on a 32-bit target, turning an
+    // announced four-billion-element collection into a small count that passes the
+    // cap and stops the element walk early — the remaining elements would then be
+    // read as the next reply, misattributing every response after it.
+    //
+    // Doubling in `u64` is where the check happens: `n` is non-negative and at most
+    // `i64::MAX`, so `n * 2` is exact in `u64` (it lands one short of `u64::MAX`),
+    // and `usize as u64` is lossless at every pointer width. Once the cap has
+    // accepted the wide count it is bounded by a `usize`, so narrowing it is exact.
+    let multiplier: u64 = if is_map_shaped { 2 } else { 1 };
+    let wide_count = n as u64 * multiplier;
+    if wide_count > max_collection_length as u64 {
         return Err(Error::Client(ClientError::CollectionLengthTooLarge));
     }
+    let count = wide_count as usize;
     Ok(CollectionHeader::Open { count, end })
 }
 
@@ -93,6 +111,11 @@ fn parse_collection_header(
 /// precede any value, so they are skipped wherever a value is expected and never
 /// surfaced — neither as a frame nor as a tape node. [`Error::EOF`] if an
 /// attribute is only partially present; the caller then rewinds and retries.
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "the guard above returned unless `depth < max_nesting_depth`, so the \
+              incremented depth is at most that setting."
+)]
 fn skip_leading_attributes(
     data: &[u8],
     mut pos: usize,
@@ -100,7 +123,7 @@ fn skip_leading_attributes(
     limits: &RespLimits,
 ) -> Result<usize> {
     while data.get(pos) == Some(&ATTRIBUTE_TAG) {
-        if depth + 1 > limits.max_nesting_depth {
+        if depth >= limits.max_nesting_depth {
             return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
         }
         let CollectionHeader::Open { count, end } =
@@ -142,6 +165,11 @@ fn skip_children(
 /// leaves `pos` at its tag and is replayed whole once more bytes arrive, so no
 /// state has to survive between chunks. Its depth is held to
 /// [`RespLimits::max_nesting_depth`] like any other nesting.
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "same nesting guard as `skip_leading_attributes`: the increment is \
+              only reached with `depth < max_nesting_depth`."
+)]
 fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) -> Result<usize> {
     let pos = skip_leading_attributes(data, pos, depth, limits)?;
     let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
@@ -149,7 +177,7 @@ fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) ->
         match parse_collection_header(data, pos, limits.max_collection_length)? {
             CollectionHeader::Null { end } => Ok(end),
             CollectionHeader::Open { count, end } => {
-                if depth + 1 > limits.max_nesting_depth {
+                if depth >= limits.max_nesting_depth {
                     return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                 }
                 skip_children(data, end, count, depth + 1, limits)
@@ -358,6 +386,13 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
 
     /// Drives the explicit-stack element loop until the root collection is
     /// complete (`Ok(Some)`) or a child needs more bytes (`Ok(None)`, resumable).
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "a level is only pushed while its parent still had a child to \
+                  fill, and the parent is credited only when that child closes, so \
+                  the parent's `remaining` is non-zero here — the same invariant \
+                  `credit_open_collection` documents."
+    )]
     fn run_collection_loop(
         &mut self,
         stack: &mut Vec<OpenCollection>,
@@ -427,7 +462,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     credit_open_collection(stack);
                 }
                 CollectionHeader::Open { count, end } => {
-                    if stack.len() + 1 > self.limits.max_nesting_depth {
+                    if stack.len() >= self.limits.max_nesting_depth {
                         return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
                     }
                     let head = self.tape.push(tag, 0);
@@ -456,6 +491,14 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
 /// A no-op on an empty stack, which the collection loop never produces: it is
 /// the only caller of `emit_one_child` and always holds at least one open level.
 #[inline]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "the innermost level's `remaining` is non-zero here: the collection \
+              loop is the only caller and it parses a child only when the level \
+              still has one to fill. Routing the underflow through a `Result` \
+              instead costs 2-5% on all three collection benches, measured paired \
+              — this runs once per element."
+)]
 fn credit_open_collection(stack: &mut [OpenCollection]) {
     if let Some(open) = stack.last_mut() {
         open.remaining -= 1;

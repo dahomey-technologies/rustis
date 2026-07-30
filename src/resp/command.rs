@@ -1,4 +1,5 @@
 use crate::{
+    ClientError, Error,
     commands::{RequestPolicy, ResponsePolicy},
     resp::{ArgCounter, ArgSerializer},
 };
@@ -145,6 +146,13 @@ pub(crate) const ARGS_LAYOUT_INLINE: usize = 4;
 /// Argument-layout list of a command, sized by [`ARGS_LAYOUT_INLINE`].
 pub(crate) type ArgsLayout = SmallVec<[ArgLayout; ARGS_LAYOUT_INLINE]>;
 
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "invariant: a layout is built from a range the builder just wrote into \
+              the command buffer, so its end is at or past its start, and the whole \
+              buffer fits `u32` — Redis caps a bulk string at 512 MiB, as the field \
+              documentation above states."
+)]
 impl ArgLayout {
     /// Flag indicating that this argument is a Redis key.
     const IS_KEY: u16 = 1 << 0;
@@ -303,9 +311,11 @@ impl Command {
     /// inspecting the name (e.g. classification) touches no atomic refcount.
     #[expect(
         clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
         reason = "invariant: `name_layout` was recorded by the builder while it \
                   wrote those very bytes into `buffer`; the two are produced \
-                  together and never read off the wire."
+                  together and never read off the wire, so the end offset lands \
+                  inside the buffer."
     )]
     pub fn name(&self) -> &[u8] {
         let (start, len) = self.name_layout;
@@ -380,6 +390,11 @@ impl Command {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the fault-injection countdown is only decremented inside `> 0`. It \
+                  is `cfg(test)` state: no shipped build reaches this."
+    )]
     pub(crate) fn try_decrement_kill_connection_on_write(&self) -> bool {
         self.kill_connection_on_write
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
@@ -444,6 +459,17 @@ pub struct CommandBuilder {
     /// First serialization error encountered while building, deferred to send
     /// time so the fluent API stays panic-free (see [`Command`]).
     pub(crate) pending_error: Option<crate::Error>,
+}
+
+/// How many `step`-sized groups `count` arguments make, or `None` for a step of
+/// zero — which names no group and would otherwise reach an integer division that
+/// panics in release builds too.
+///
+/// The step comes from the caller of a public builder method, so it is validated
+/// here rather than assumed.
+#[inline(always)]
+fn group_count(count: usize, step: usize) -> Option<usize> {
+    count.checked_div(step)
 }
 
 impl CommandBuilder {
@@ -550,6 +576,11 @@ impl CommandBuilder {
     /// Zero Allocation strategy.
     #[must_use]
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`group_count` answered `Some`, so `step` is non-zero and the \
+                  modulo in the assertion below cannot divide by zero."
+    )]
     pub fn arg_with_count_and_step(mut self, arg: impl Serialize, step: usize) -> Self {
         // 1. Dry Run (CPU only, No Alloc) to get the total argument count.
         let mut counter = ArgCounter::default();
@@ -557,14 +588,19 @@ impl CommandBuilder {
             self.record_serialization_error(e);
             return self;
         }
-        debug_assert!(
-            counter.count % step == 0,
+        let Some(groups) = group_count(counter.count, step) else {
+            self.record_serialization_error(Error::Client(ClientError::InvalidArgumentGroupStep));
+            return self;
+        };
+        debug_assert_eq!(
+            0,
+            counter.count % step,
             "arg_with_count_and_step: argument count {} is not a multiple of step {step}",
             counter.count
         );
 
         // 2. Write the group count, then the elements.
-        self = self.arg(counter.count / step);
+        self = self.arg(groups);
         self.arg_checking_count(arg, counter.count)
     }
 
@@ -626,6 +662,11 @@ impl CommandBuilder {
     /// agreement, at no cost in release builds.
     #[must_use]
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`before` is the layout count taken before appending, and appending \
+                  only ever grows it."
+    )]
     fn arg_checking_count(mut self, arg: impl Serialize, expected: usize) -> Self {
         let before = self.args_layout.len();
         self = self.arg(arg);
@@ -665,6 +706,11 @@ impl CommandBuilder {
     /// Zero Allocation strategy.
     #[must_use]
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`old_len` is a layout count, so skipping past it and the count \
+                  argument written after it stays inside `usize`."
+    )]
     pub fn key_with_count(mut self, keys: impl Serialize) -> Self {
         let old_len = self.args_layout.len();
         self = self.arg_with_count(keys);
@@ -701,6 +747,11 @@ impl CommandBuilder {
     /// argument count.
     #[must_use]
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`group_count` answered `Some`, so `step` is non-zero and the \
+                  modulo in the assertion below cannot divide by zero."
+    )]
     pub fn key_with_count_and_step(mut self, args: impl Serialize, step: usize) -> Self {
         // 1. Dry Run (CPU only, No Alloc) to get the total argument count.
         let mut counter = ArgCounter::default();
@@ -708,14 +759,19 @@ impl CommandBuilder {
             self.record_serialization_error(e);
             return self;
         }
-        debug_assert!(
-            counter.count % step == 0,
+        let Some(groups) = group_count(counter.count, step) else {
+            self.record_serialization_error(Error::Client(ClientError::InvalidArgumentGroupStep));
+            return self;
+        };
+        debug_assert_eq!(
+            0,
+            counter.count % step,
             "key_with_count_and_step: argument count {} is not a multiple of step {step}",
             counter.count
         );
 
         // 2. Write the group count (number of key/value groups).
-        self = self.arg(counter.count / step);
+        self = self.arg(groups);
 
         // 3. Write the elements, marking every step-th one (after the count) as a key.
         let old_len = self.args_layout.len();
@@ -767,9 +823,13 @@ impl From<CommandBuilder> for Command {
     /// Fills the HEADROOM with the header and freezes the buffer.
     #[expect(
         clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
         reason = "invariant: every write below is bounded by `HEADROOM_SIZE`, \
                   which is sized to hold the longest `*<n>` header line and is \
-                  reserved up front by `CommandBuilder::new`. Nothing here is \
+                  reserved up front by `CommandBuilder::new`. The header therefore \
+                  never fills the headroom, which is what makes `HEADROOM_SIZE - \
+                  cursor.len()` and the shift of every layout by `start_pos` \
+                  subtractions that cannot go below zero. Nothing here is \
                   driven by input, and a fallback would have to emit a command \
                   with a truncated header — silent corruption in place of a \
                   crash. This exemption covers the finalizer only."
@@ -838,6 +898,11 @@ impl From<CommandBuilder> for Command {
 
 /// Implement hash_slot algorithm
 /// see. https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`s` is a `memchr` hit inside `key`, so stepping past the brace stays \
+              an offset into a slice."
+)]
 pub(crate) fn hash_slot(mut key: &[u8]) -> u16 {
     // `{` found, then `}` after it, with a non-empty tag in between
     if let Some(s) = memchr(b'{', key)
@@ -955,5 +1020,32 @@ mod tests {
             .arg_with_count_and_step(FailingSerialize, 2)
             .into();
         assert!(command.take_serialization_error().is_some());
+    }
+
+    #[test]
+    fn a_zero_group_step_defers_instead_of_dividing_by_zero() {
+        // The group count is `total / step`, so a zero step reaches an integer
+        // division that panics in release builds as well as debug ones. These are
+        // public builder methods: the step comes from the caller, and a caller
+        // getting it wrong must fail the command, not the process.
+        let mut command: Command = cmd("HSETEX")
+            .key("key")
+            .arg("FIELDS")
+            .arg_with_count_and_step(["f1", "v1"], 0)
+            .into();
+        assert!(matches!(
+            command.take_serialization_error(),
+            Some(crate::Error::Client(
+                crate::ClientError::InvalidArgumentGroupStep
+            ))
+        ));
+
+        let mut command: Command = cmd("MSETEX").key_with_count_and_step(["k", "v"], 0).into();
+        assert!(matches!(
+            command.take_serialization_error(),
+            Some(crate::Error::Client(
+                crate::ClientError::InvalidArgumentGroupStep
+            ))
+        ));
     }
 }

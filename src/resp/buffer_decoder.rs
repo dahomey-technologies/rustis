@@ -83,8 +83,20 @@ impl BufferDecoder {
     /// frozen tape and is freed when that is dropped. Either way `tape_buf` stops
     /// pinning oversized memory.
     #[inline]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the streak is reset the moment it reaches `shrink_hysteresis`, so \
+                  it never grows past that setting."
+    )]
     fn recycle_tape(&mut self, last_tape_len: usize) {
-        if last_tape_len > self.buffers.tape_capacity * self.buffers.shrink_factor {
+        // A saturated product is above any real tape length, so the block is left
+        // alone — the safe direction for a shrink heuristic.
+        if last_tape_len
+            > self
+                .buffers
+                .tape_capacity
+                .saturating_mul(self.buffers.shrink_factor)
+        {
             // The block just grew large; it is legitimately in use this frame.
             self.tape_oversized = true;
             self.quiet_streak = 0;
@@ -126,6 +138,11 @@ impl Decoder for BufferDecoder {
     type Item = RespResponse;
     type Error = Error;
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the reservation is inside `end > src.len()`, so the additional amount \
+                  cannot go below zero."
+    )]
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         if src.is_empty() {
             // Nothing to parse; any in-flight resume state is preserved for the

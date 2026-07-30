@@ -1222,7 +1222,12 @@ impl ClusterConnection {
                     .response_policy_agg(sub_results, |a, b| if a == 0 && b == 0 { 0 } else { 1 }),
                 ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
                 ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
-                ResponsePolicy::AggSum => self.response_policy_agg(sub_results, |a, b| a + b),
+                ResponsePolicy::AggSum => {
+                    // The operands are integers the shards sent, so the sum is
+                    // driven by server data. Saturating keeps an implausible total
+                    // implausible instead of wrapping it into a small one.
+                    self.response_policy_agg(sub_results, i64::saturating_add)
+                }
                 ResponsePolicy::Special => self.response_policy_special(sub_results),
             }
         } else {
@@ -1892,16 +1897,20 @@ pub(crate) fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes])
             // If the current argument is a key, check if it exists in our shard group
             if shard_key_set.contains(arg.as_ref()) {
                 shard_command = shard_command.arg(arg);
-                // Keep the next (step - 1) arguments associated with this key
-                keep_next = step - 1;
+                // Keep the next (step - 1) arguments associated with this key.
+                // Every `MultiShard` command declares a step of at least 1 through
+                // `cluster_info`, but the step is read from a public getter whose
+                // default is 0, and this runs on the network task: a step of 0
+                // keeps no trailing argument rather than underflowing.
+                keep_next = step.saturating_sub(1);
             } else {
                 // Key belongs to another shard
                 keep_next = 0;
             }
-        } else if keep_next > 0 {
+        } else if let Some(remaining) = keep_next.checked_sub(1) {
             // This is a value/path associated with an accepted key
             shard_command = shard_command.arg(arg);
-            keep_next -= 1;
+            keep_next = remaining;
         }
     }
 

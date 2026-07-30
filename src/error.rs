@@ -110,6 +110,12 @@ pub enum ClientError {
     /// Raised when serde serialization error occurs
     #[error("Serde serialization error: {0}")]
     SerdeSerialize(String),
+    /// Raised when a command groups its arguments by a step of zero, which names
+    /// no group at all. The step is a caller-supplied width on the builder's
+    /// `*_with_count_and_step` methods, so the command carries the error instead of
+    /// dividing its argument count by zero.
+    #[error("command args: a group step of zero is not a valid grouping")]
+    InvalidArgumentGroupStep,
     /// Raised when a command has been retried up to `Config::max_command_attempts`
     /// without succeeding, so it is failed instead of retried indefinitely.
     #[error("command failed after reaching the maximum number of attempts")]
@@ -369,6 +375,11 @@ pub enum RedisErrorKind {
 }
 
 impl RedisErrorKind {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`index` is a separator position found inside `address`, so stepping \
+                  past it stays an offset into the slice."
+    )]
     fn parse_hash_slot_and_address(
         hash_slot: &[u8],
         address: &[u8],
@@ -483,6 +494,11 @@ pub struct RedisError {
 impl<'a> TryFrom<&'a [u8]> for RedisError {
     type Error = Error;
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`i` is a separator position found inside `error`, so stepping past \
+                  it stays an offset into the slice."
+    )]
     fn try_from(error: &'a [u8]) -> std::result::Result<Self, Self::Error> {
         match error
             .iter()

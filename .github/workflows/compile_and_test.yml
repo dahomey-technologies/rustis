@@ -83,7 +83,8 @@ jobs:
         run: cargo check --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache
 
   # Enforce the panic policy declared in `src/lib.rs`: the explicit-panic family
-  # crate-wide, plus `clippy::indexing_slicing` in `network/` and `resp/`. Those
+  # and `clippy::arithmetic_side_effects` crate-wide, plus
+  # `clippy::indexing_slicing` in `network/` and `resp/`. Those
   # are `deny`, so they already fail without `-D warnings`; the flag is what
   # makes an *unfulfilled* `#[expect(...)]` fail too, so a justification that no
   # longer applies gets removed instead of quietly outliving its reason.

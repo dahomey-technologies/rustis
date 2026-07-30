@@ -35,9 +35,16 @@ fn command_turns_replies_on(command: &Command) -> bool {
 /// is the only lever.
 ///
 /// `small_streak` is the caller-owned hysteresis counter for this buffer.
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "the streak is reset the moment it reaches `shrink_hysteresis`, so it \
+              never grows past that setting."
+)]
 fn maybe_shrink_buffer(buf: &mut BytesMut, small_streak: &mut usize, buffers: &BufferConfig) {
     // Part 1: ignore buffers that have not grown well past the target.
-    if buf.capacity() <= buffers.read_capacity * buffers.shrink_factor {
+    // A saturated product is above any real capacity, so the buffer is left alone
+    // — the safe direction for a shrink heuristic.
+    if buf.capacity() <= buffers.read_capacity.saturating_mul(buffers.shrink_factor) {
         *small_streak = 0;
         return;
     }
@@ -271,6 +278,14 @@ impl StandaloneConnection {
         result
     }
 
+    #[cfg_attr(
+        test,
+        expect(
+            clippy::arithmetic_side_effects,
+            reason = "the fault-injection countdown is only decremented inside `> 0`. It \
+                      is `cfg(test)` state: no shipped build reaches this."
+        )
+    )]
     pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
         // Test-only: simulate the connection being closed before any response
         // is delivered, once the armed countdown expires.
@@ -305,6 +320,14 @@ impl StandaloneConnection {
         }
     }
 
+    #[cfg_attr(
+        test,
+        expect(
+            clippy::arithmetic_side_effects,
+            reason = "the fault-injection countdown is only decremented inside `> 0`. It \
+                      is `cfg(test)` state: no shipped build reaches this."
+        )
+    )]
     pub(crate) fn try_read(&mut self) -> Poll<Option<Result<RespResponse>>> {
         // Test-only: mirror `read`'s simulated close on the drain path.
         #[cfg(test)]

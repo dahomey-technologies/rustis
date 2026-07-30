@@ -8,6 +8,19 @@
 //!
 //! Nothing here decodes: a value's bytes are located, never interpreted. The
 //! numeric parsing lives in the reader, in whichever task asked for the value.
+//!
+//! # Offsets versus announced lengths
+//!
+//! Two kinds of arithmetic live here, and only one of them can overflow.
+//!
+//! Advancing an offset into `data` by a small constant — past a tag byte, past a
+//! `\r\n`, past a digit — cannot: a slice's length is bounded by `isize::MAX`, so
+//! an in-bounds offset plus a constant stays well inside `usize`. Those sites
+//! exempt `clippy::arithmetic_side_effects` and name that bound.
+//!
+//! Adding a length the *server* announced can, and none of it happens in the open:
+//! it goes through [`check_bulk_len`] and [`bulk_payload`], which compare before
+//! narrowing and add with `checked_add`.
 
 use crate::{
     ClientError, Error, Result,
@@ -52,12 +65,64 @@ struct ScalarLayout {
 
 /// Rejects a bulk-family length that exceeds `max_bulk_length`. `len` must
 /// already be known non-negative.
+///
+/// The comparison widens instead of narrowing: `len as usize` truncates on a
+/// 32-bit target, so an announced length above `u32::MAX` would slip under the cap
+/// as a small number and the payload bounds would then be computed from it. Both
+/// casts below are lossless at every pointer width.
+///
+/// Passing this is what makes `len as usize` exact for the callers: the length is
+/// bounded by a `usize` afterwards.
 #[inline]
 fn check_bulk_len(len: i64, max_bulk_length: usize) -> Result<()> {
-    if len as usize > max_bulk_length {
+    if len as u64 > max_bulk_length as u64 {
         return Err(Error::Client(ClientError::BulkLengthTooLarge));
     }
     Ok(())
+}
+
+/// Where the payload of a length-prefixed scalar sits, and where the whole
+/// element ends.
+///
+/// The `$`, `=` and `!` tags share one byte layout — `len` payload bytes at
+/// `after`, then `\r\n` — so they share the arithmetic that turns an announced
+/// length into offsets, and the terminator check that proves the element
+/// well-formed. `skip` drops a fixed prefix from the reported payload, which only
+/// the verbatim tag uses for its `txt:` / `mkd:` marker; the caller has already
+/// established `skip <= len`. `malformed` is the tag's own error for a payload
+/// that is not `\r\n`-terminated.
+///
+/// `len` must be non-negative. The payload end is computed with `checked_add`:
+/// `max_bulk_length` is a connection setting, and the read-back path deliberately
+/// passes [`NO_BULK_LIMIT`], so no cap here bounds the sum on its own.
+#[inline(always)]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "the two sums a server-announced length drives are `checked_add`; the \
+              remaining one steps over a fixed prefix the caller has already \
+              bounded by that length."
+)]
+fn bulk_payload(
+    data: &[u8],
+    after: usize,
+    len: i64,
+    skip: usize,
+    max_bulk_length: usize,
+    malformed: ClientError,
+) -> Result<(Range<usize>, usize)> {
+    check_bulk_len(len, max_bulk_length)?;
+    let payload_end = after
+        .checked_add(len as usize)
+        .ok_or_else(|| Error::Client(malformed.clone()))?;
+    let end = payload_end
+        .checked_add(2)
+        .ok_or_else(|| Error::Client(malformed.clone()))?;
+    if slice(data, payload_end..end)? != b"\r\n" {
+        return Err(Error::Client(malformed));
+    }
+    // The caller established `skip <= len`, so this lands at or before
+    // `payload_end`, whose own addition just succeeded.
+    Ok((after + skip..payload_end, end))
 }
 
 /// Total buffer offset an incomplete bulk-family value at `pos` ends at, when its
@@ -73,6 +138,12 @@ fn check_bulk_len(len: i64, max_bulk_length: usize) -> Result<()> {
 /// scalars whose payload is large enough for the reallocation cost to bite. All
 /// other frames stay on the existing incremental-growth path.
 #[inline]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`pos` indexes `data` — the read on the line below proves it — so \
+              stepping past the tag byte stays inside `usize`. The announced \
+              length is added under `checked_add` further down."
+)]
 pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) -> Option<usize> {
     let tag = *data.get(pos)?;
     if tag != b'$' && tag != b'=' {
@@ -83,8 +154,10 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) ->
         return None;
     }
     check_bulk_len(len, max_bulk_length).ok()?;
-    // payload + trailing CRLF
-    Some(after + len as usize + 2)
+    // payload + trailing CRLF. `max_bulk_length` is a connection setting, so the
+    // cap above bounds `len` but says nothing about the sum; answering `None` here
+    // just sends the caller back to the doubling fallback.
+    after.checked_add(len as usize)?.checked_add(2)
 }
 
 /// Slices `data[range]`, answering [`Error::EOF`] instead of panicking when the
@@ -102,6 +175,12 @@ fn slice(data: &[u8], range: Range<usize>) -> Result<&[u8]> {
 /// Finds the `\r` of the next `\r\n` at or after `from`, returning its index.
 /// Errors with [`Error::EOF`] when no complete terminator is present yet.
 #[inline]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`i` is a `memchr` hit inside `rem`, itself a suffix of `data`, so \
+              both `i + 1` and `from + i` are offsets into a slice — bounded by \
+              `isize::MAX`."
+)]
 fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
     let rem = data.get(from..).ok_or_else(|| Error::EOF)?;
     let i = memchr(b'\r', rem).ok_or_else(|| Error::EOF)?;
@@ -148,6 +227,14 @@ fn crlf_at<const FRAME: bool>(data: &[u8], from: usize) -> Result<usize> {
 /// cardinality, an attribute's pair count — so the one accumulation serves the
 /// scalar layout and the frame parser alike.
 #[inline]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`i` only advances over bytes `digits.get(i)` returned, so it stays \
+              an offset into a slice and `from + i + 2` cannot leave `usize`. \
+              `digit - b'0'` is inside the `b'0'..=b'9'` arm. The accumulation \
+              itself — the one operation here that a hostile length drives — is \
+              already `checked_mul` / `checked_sub`."
+)]
 pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
     let digits = data.get(from..).ok_or_else(|| Error::EOF)?;
     let mut i = 0;
@@ -212,6 +299,13 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
 /// selects, and lets the fields that site does not read be dropped rather than
 /// built and spilled.
 #[inline(always)]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "every sum here steps over a fixed number of bytes from an offset \
+              already known to index `data`: `at` is read on the first line, and \
+              `cr` is where a terminator was found. The three length-prefixed tags \
+              add their announced length inside `bulk_payload` instead."
+)]
 fn scalar_layout<const FRAME: bool>(
     data: &[u8],
     at: usize,
@@ -294,14 +388,17 @@ fn scalar_layout<const FRAME: bool>(
             if len < 0 {
                 return Err(Error::Client(ClientError::CannotParseBulkString));
             }
-            check_bulk_len(len, max_bulk_length)?;
-            let end = after + len as usize + 2;
-            if slice(data, end - 2..end)? != b"\r\n" {
-                return Err(Error::Client(ClientError::CannotParseBulkString));
-            }
+            let (value, end) = bulk_payload(
+                data,
+                after,
+                len,
+                0,
+                max_bulk_length,
+                ClientError::CannotParseBulkString,
+            )?;
             Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
-                value: after..after + len as usize,
+                value,
                 end,
             })
         }
@@ -319,14 +416,17 @@ fn scalar_layout<const FRAME: bool>(
             if len < 4 {
                 return Err(Error::Client(ClientError::VerbatimStringTooShort));
             }
-            check_bulk_len(len, max_bulk_length)?;
-            let end = after + len as usize + 2;
-            if slice(data, end - 2..end)? != b"\r\n" {
-                return Err(Error::Client(ClientError::CannotParseVerbatimString));
-            }
+            let (value, end) = bulk_payload(
+                data,
+                after,
+                len,
+                4,
+                max_bulk_length,
+                ClientError::CannotParseVerbatimString,
+            )?;
             Ok(ScalarLayout {
                 kind: ScalarKind::BulkString,
-                value: after + 4..after + len as usize,
+                value,
                 end,
             })
         }
@@ -335,14 +435,17 @@ fn scalar_layout<const FRAME: bool>(
             if len < 0 {
                 return Err(Error::Client(ClientError::CannotParseBulkError));
             }
-            check_bulk_len(len, max_bulk_length)?;
-            let end = after + len as usize + 2;
-            if slice(data, end - 2..end)? != b"\r\n" {
-                return Err(Error::Client(ClientError::CannotParseBulkError));
-            }
+            let (value, end) = bulk_payload(
+                data,
+                after,
+                len,
+                0,
+                max_bulk_length,
+                ClientError::CannotParseBulkError,
+            )?;
             Ok(ScalarLayout {
                 kind: ScalarKind::Error,
-                value: after..after + len as usize,
+                value,
                 end,
             })
         }

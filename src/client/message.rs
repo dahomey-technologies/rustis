@@ -268,6 +268,11 @@ impl Message {
     /// bookkeeping and the queue node itself. Without it, a flood of tiny
     /// commands would pass under any byte budget while consuming far more than
     /// the budget allows.
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the total sums the lengths of buffers that are allocated and held by \
+                  this message, plus a small constant."
+    )]
     pub(crate) fn queued_bytes(&self) -> usize {
         self.commands()
             .map(|command| command.bytes().len())

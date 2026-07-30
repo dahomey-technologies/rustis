@@ -3,21 +3,31 @@
 //
 // No `forbid(panics)` can exist: a panic has no single syntactic form. It
 // escapes from `unwrap`/`expect`/`panic!`/`unreachable!` *and* from indexing,
-// integer division, debug arithmetic and dozens of std methods. What is
-// enforceable is the explicit-panic family, denied crate-wide here, plus
-// `indexing_slicing` — the only lint covering `a[i]` / `a[i..j]`, the crate's
-// largest real panic surface — denied in the two zones where a panic is fatal
-// rather than merely wrong: `network/` (a panic in the network task kills the
-// client with no reconnect) and `resp/` (fed directly by server bytes). See
-// their `mod.rs`.
+// integer arithmetic and dozens of std methods. What is enforceable is three
+// families of lint, and all three are denied:
+//
+// * the explicit-panic family, crate-wide here;
+// * `arithmetic_side_effects`, crate-wide here — every `+ - * / %` on integers
+//   that the compiler cannot prove safe. It covers the failure mode that has
+//   produced the most defects in this crate: an announced length or a counter
+//   that overflows, which panics in debug builds and *wraps silently* in release
+//   ones, turning a hostile length into a plausible offset;
+// * `indexing_slicing` — the only lint covering `a[i]` / `a[i..j]`, the crate's
+//   largest panic surface by count — in the two zones where a panic is fatal
+//   rather than merely wrong: `network/` (a panic in the network task kills the
+//   client with no reconnect) and `resp/` (fed directly by server bytes). See
+//   their `mod.rs`.
 //
 // This is deny-plus-justified-allow, not a blanket ban: not every panic is a
-// bug. An `unreachable!` on an exhaustive internal match and an index guarded
-// by the compare on the line above are correct code, and rewriting them into
-// `.get().unwrap()` would trade clarity for nothing. Every surviving site
-// therefore carries `#[allow(…, reason = "…")]` naming the invariant that makes
-// it unreachable — the same contract a `// SAFETY:` comment carries over an
-// `unsafe` block, and reviewable the same way.
+// bug. An `unreachable!` on an exhaustive internal match, an index guarded by
+// the compare on the line above, and stepping a slice offset past a byte that
+// was just read are correct code, and rewriting them into `.get().unwrap()` or
+// `checked_add` would trade clarity — and, in the parser, throughput — for
+// nothing. Every surviving site therefore carries `#[expect(…, reason = "…")]`
+// naming the invariant that makes it unreachable — the same contract a
+// `// SAFETY:` comment carries over an `unsafe` block, and reviewable the same
+// way. `expect` rather than `allow`, so a justification whose lint stops firing
+// becomes a warning and is deleted instead of rotting.
 //
 // `warn` would have been indistinguishable from `deny` here: CI runs clippy
 // with `-D warnings`, so the real tiers are enforced and exempt. Test code is
@@ -29,7 +39,8 @@
     clippy::panic,
     clippy::unreachable,
     clippy::todo,
-    clippy::unimplemented
+    clippy::unimplemented,
+    clippy::arithmetic_side_effects
 )]
 // `pub` on an item the outside world cannot reach is a lie the compiler does not
 // otherwise report: it suppresses `dead_code`, and a reader — or a CHANGELOG

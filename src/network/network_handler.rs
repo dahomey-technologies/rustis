@@ -492,6 +492,11 @@ impl NetworkHandler {
         Ok(())
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "one increment per message taken from the channel in this wave, \
+                  and the wave is cut at `max_messages_per_wave` below."
+    )]
     async fn try_handle_message(&mut self, mut msg: Option<Message>) -> bool {
         let mut is_channel_closed = false;
         // Messages queued since the last flush, for the wave cap below.
@@ -551,10 +556,19 @@ impl NetworkHandler {
     fn would_exceed_queue_budget(&self, cost: usize) -> bool {
         self.max_queued_bytes != 0
             && self.queued_bytes != 0
-            && self.queued_bytes + cost > self.max_queued_bytes
+            // A saturated sum is still above any budget, so saturating here gives
+            // the same answer without an overflow to reason about.
+            && self.queued_bytes.saturating_add(cost) > self.max_queued_bytes
     }
 
     /// Queues a message for sending, keeping the byte accounting in step.
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the running total counts bytes of buffers that are actually \
+                  allocated and still queued, so it is bounded by the memory \
+                  holding them. Saturating instead would silently desynchronise \
+                  the backpressure accounting from what is really queued."
+    )]
     fn queue_message(&mut self, msg: Message) {
         self.queued_bytes += msg.queued_bytes();
         self.messages_to_send.push_back(MessageToSend::new(msg));
@@ -614,13 +628,15 @@ impl NetworkHandler {
 
                         if collision_error.is_none() {
                             let subscriptions = std::mem::take(subscriptions);
-                            let num_pending_subscriptions = subscriptions.len();
+                            // The closure below never runs on an empty set, so
+                            // the saturated value is unreachable rather than wrong.
+                            let last_subscription_index = subscriptions.len().saturating_sub(1);
                             let pending_subscriptions = subscriptions.into_iter().enumerate().map(
                                 |(index, (channel_or_pattern, sender))| PendingSubscription {
                                     channel_or_pattern,
                                     subscription_type: *subscription_type,
                                     sender,
-                                    more_to_come: index < num_pending_subscriptions - 1,
+                                    more_to_come: index < last_subscription_index,
                                 },
                             );
 
@@ -693,6 +709,12 @@ impl NetworkHandler {
         self.record_queue_depths();
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "both counters add one per command in the send queue: the queue is \
+                  bounded by `max_messages_per_wave` and each command owns an \
+                  allocated buffer, so neither total can approach `usize::MAX`."
+    )]
     async fn send_messages(&mut self) {
         // Sampled before the drain, where the send queue is at its deepest.
         #[cfg(test)]
@@ -989,6 +1011,16 @@ impl NetworkHandler {
         }
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "each subtraction has its guard on the branch above it: \
+                  `results_to_discard` is only decremented inside `> 0`, and \
+                  `num_commands` is only decremented in the arm where it is neither \
+                  1 nor being resolved — and it never starts at 0, because \
+                  `send_messages` only enqueues a message to receive when it wrote \
+                  at least one command expecting a reply. The retry counter is \
+                  compared against `max_command_attempts` on the next line."
+    )]
     fn receive_result(&mut self, result: Result<RespResponse>) {
         // Responses owed to a message that was already resolved as a whole: the
         // commands were executed, so their replies still arrive, but there is no
@@ -1300,6 +1332,13 @@ impl NetworkHandler {
     /// exhausted its retry budget — is grouped under one identifiable unit
     /// instead of being interleaved with ordinary traffic.
     #[tracing::instrument(name = "reconnect", skip_all)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the retry counter is compared against `max_command_attempts` \
+                  immediately after each increment, and `queued_bytes` accounts \
+                  bytes of buffers that are allocated and requeued — see \
+                  `queue_message`."
+    )]
     async fn reconnect(&mut self) -> bool {
         debug!("reconnecting...");
         let old_status = self.status;
@@ -1378,7 +1417,8 @@ impl NetworkHandler {
                 // monotonic clock; cap it rather than panicking the network task.
                 let end = start
                     .checked_add(Duration::from_millis(delay))
-                    .unwrap_or_else(|| start + Duration::from_secs(3600));
+                    .or_else(|| start.checked_add(Duration::from_secs(3600)))
+                    .unwrap_or(start);
                 loop {
                     let delay = end.duration_since(Instant::now());
                     let result =

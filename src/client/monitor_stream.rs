@@ -171,6 +171,12 @@ fn parse_quoted_args(mut s: &str) -> Option<Vec<String>> {
 /// Decodes one C-quoted token starting just after its opening quote, returning the
 /// decoded string and the remaining input after the closing quote. Non-UTF-8 byte
 /// escapes are rendered lossily (this is a debugging feed, not a data path).
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`i` only advances over bytes the `get` calls found, so it stays an \
+              offset into the slice, and `hi * 16 + lo` is at most 255 for two hex \
+              digits."
+)]
 fn decode_quoted(s: &str) -> Option<(String, &str)> {
     let bytes = s.as_bytes();
     let mut out: Vec<u8> = Vec::new();

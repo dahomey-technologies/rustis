@@ -135,6 +135,11 @@ impl BoundedSender {
             // message when that message is larger than the whole budget: an
             // oversized message is delivered rather than made undeliverable,
             // exactly as the send queue always admits into an empty queue.
+            #[expect(
+                clippy::arithmetic_side_effects,
+                reason = "one increment per queue entry actually popped, so the \
+                          count is bounded by the queue length."
+            )]
             while self.shared.bytes.load(Ordering::Acquire) > self.shared.max_bytes
                 && self.shared.queue.len() > 1
             {
@@ -224,6 +229,7 @@ impl Drop for BoundedReceiver {
 #[allow(
     clippy::unwrap_used,
     clippy::panic,
+    clippy::arithmetic_side_effects,
     reason = "test code: a panic is how a test reports failure"
 )]
 mod tests {

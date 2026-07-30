@@ -2028,6 +2028,12 @@ impl HotKeysStartOptions {
 struct HotKeysSlots(SmallVec<[u16; 16]>);
 
 impl Serialize for HotKeysSlots {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the declared element count is derived from the length of a \
+                  collection already held in memory, so the product cannot \
+                  leave `usize`."
+    )]
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,

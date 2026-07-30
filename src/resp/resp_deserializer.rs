@@ -83,7 +83,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => i as i128,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
@@ -108,7 +110,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => i as u128,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
@@ -133,7 +137,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => i,
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
@@ -160,7 +166,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     u64::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -189,7 +197,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     i32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -218,7 +228,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     u32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -247,7 +259,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     i16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -276,7 +290,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     u16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -305,7 +321,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     i8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }
@@ -334,7 +352,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Array(a) => match a.into_iter().next() {
+            // Only a one-element array unwraps to its element: a longer one
+            // would have to discard the rest silently.
+            RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
                 Some(Ok(RespView::Integer(i, _))) => {
                     u8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
                 }

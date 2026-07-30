@@ -10,6 +10,12 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **An array of more than one element no longer decodes as a single integer.**
+  Every integer width (`i8`…`i128`, `u8`…`u128`) unwrapped an array reply to its
+  first element and discarded the rest, so a mistyped response shape produced a
+  plausible number instead of an error. Only a one-element array still unwraps;
+  a longer one fails with `ClientError::CannotParseInteger`.
+
 - **A connection URI now rejects a query parameter it does not understand.** An
   unknown key (`?commandtimeout=5000`, `?reconnection=constant`) and a value that
   does not parse (`?command_timeout=5s`) were both dropped silently, leaving the

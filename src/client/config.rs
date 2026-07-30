@@ -341,6 +341,11 @@ pub struct Config {
     /// If a command does not return a reply within a set number of milliseconds,
     /// a timeout error will be thrown.
     ///
+    /// The timeout gives up on the reply, it does not cancel the command: the command has already
+    /// been sent and is executed by the server. A timeout error therefore says nothing about
+    /// whether the command ran. See
+    /// [Cancellation and timeouts](crate::client#cancellation-and-timeouts).
+    ///
     /// If set to 0, no timeout is apply
     ///
     /// The default is 0

@@ -2400,7 +2400,7 @@ dependencies = [
 
 [[package]]
 name = "rustis"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "actix-web",
  "atoi",

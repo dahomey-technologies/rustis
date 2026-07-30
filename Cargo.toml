@@ -1,6 +1,6 @@
 [package]
 name = "rustis"
-version = "0.20.0"
+version = "0.21.0"
 keywords = ["redis", "database", "async", "cluster", "sentinel"]
 categories = ["database", "asynchronous"]
 description = "Redis async driver for Rust"

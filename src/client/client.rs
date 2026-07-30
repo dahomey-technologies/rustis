@@ -169,6 +169,13 @@ impl Client {
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
     ///
+    /// # Warning
+    /// In Cluster mode, the arguments that are Redis keys must be added with
+    /// [`CommandBuilder::key`](crate::resp::CommandBuilder::key): a command built with
+    /// [`arg`](crate::resp::CommandBuilder::arg) alone carries no slot and is sent to a
+    /// **random node**. A multi-key command such as `MSET` also requires all its keys to hash
+    /// to the same slot, which the `{my}` hash tag guarantees in the example below.
+    ///
     /// # Example
     /// ```
     /// use rustis::{client::Client, commands::{FlushingMode, ServerCommands}, resp::cmd, Result};
@@ -182,13 +189,13 @@ impl Client {
     ///     client
     ///         .send::<()>(
     ///             cmd("MSET")
-    ///                 .arg("key1")
+    ///                 .key("{my}key1")
     ///                 .arg("value1")
-    ///                 .arg("key2")
+    ///                 .key("{my}key2")
     ///                 .arg("value2")
-    ///                  .arg("key3")
+    ///                 .key("{my}key3")
     ///                 .arg("value3")
-    ///                 .arg("key4")
+    ///                 .key("{my}key4")
     ///                 .arg("value4"),
     ///             None,
     ///         )
@@ -196,7 +203,11 @@ impl Client {
     ///
     ///     let values: Vec<String> = client
     ///         .send(
-    ///             cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
+    ///             cmd("MGET")
+    ///                 .key("{my}key1")
+    ///                 .key("{my}key2")
+    ///                 .key("{my}key3")
+    ///                 .key("{my}key4"),
     ///             None,
     ///         )
     ///         .await?;

@@ -57,6 +57,19 @@ Versions up to and including `0.19.3` are documented in the
   errors pointing at internal items. A `compile_error!` now names the missing
   feature and how to enable it.
 
+- **Enabling `rustls` or `native-tls` on its own is now a clear compile error.** The
+  backend-only features gate the TLS configuration types, while the connection code
+  reading them lives behind `tokio-rustls` / `tokio-native-tls`. Enabled alone they
+  produced six `cannot find … in this scope` errors on internal stream types. A
+  `compile_error!` now names the runtime feature to enable instead.
+
+- **CI builds the feature combinations that were unbuildable.** No job compiled the
+  crate without a runtime feature, which is why that break went unnoticed. The
+  feature matrix gains `pool`, `json`, `client-cache` and the two TLS runtimes each
+  on their own, and a new job asserts that the four rejected configurations — no
+  runtime, both TLS runtimes, and each backend-only feature alone — fail with their
+  own `compile_error!` rather than with a cascade of internal errors.
+
 - **The `actix_long_polling_pubsub` and `axum_long_polling_pubsub` examples compile
   again.** They passed `lpop`'s count as a `usize` where the signature takes a `u32`.
 

@@ -88,8 +88,9 @@ rustis is a Redis client for Rust.
 
 `tokio-rustls` and `tokio-native-tls` are **mutually exclusive**: enabling both is a
 compile error. Each implies the corresponding backend-only feature (`rustls`,
-`native-tls`), which exists so the TLS configuration types can be compiled without a
-runtime and is not meant to be enabled on its own.
+`native-tls`), which gates the TLS configuration types. Enabling a backend-only
+feature on its own is also a compile error: it brings the configuration types
+without the connection code that honours them.
 
 The remaining features are for developing rustis itself and carry **no stability
 guarantee**: `bench` (exposes internal RESP entry points to the benchmarks and pulls in
@@ -272,6 +273,22 @@ compile_error!(
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
 compile_error!(
     "Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time."
+);
+
+// The backend-only features gate the TLS configuration types; the connection
+// code that reads them lives behind the runtime feature. Enabled alone they
+// build a `TlsConfig` nothing would ever use, so name that rather than let the
+// missing stream types surface as "not found in this scope".
+#[cfg(all(feature = "rustls", not(feature = "tokio-rustls")))]
+compile_error!(
+    "Feature `rustls` cannot be enabled on its own: it only gates the TLS configuration types. \
+     Enable `tokio-rustls`, which implies it and brings the TLS connection code."
+);
+
+#[cfg(all(feature = "native-tls", not(feature = "tokio-native-tls")))]
+compile_error!(
+    "Feature `native-tls` cannot be enabled on its own: it only gates the TLS configuration types. \
+     Enable `tokio-native-tls`, which implies it and brings the TLS connection code."
 );
 
 #[cfg(test)]

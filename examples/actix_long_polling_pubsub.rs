@@ -74,7 +74,7 @@ async fn get_messages_from_queue(
     redis: &Client,
     channel: &str,
 ) -> Result<Vec<String>, ServiceError> {
-    Ok(redis.lpop(channel, i32::MAX as usize).await?)
+    Ok(redis.lpop(channel, u32::MAX).await?)
 }
 
 #[post("/{channel}")]

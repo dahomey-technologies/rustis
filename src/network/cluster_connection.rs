@@ -12,7 +12,7 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
-use rand::Rng;
+use rand::RngExt;
 use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,

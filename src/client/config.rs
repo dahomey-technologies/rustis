@@ -18,7 +18,7 @@ const DEFAULT_CONNECT_TIMEOUT: u64 = 10_000;
 const DEFAULT_COMMAND_TIMEOUT: u64 = 0;
 const DEFAULT_AUTO_RESUBSCRTBE: bool = true;
 const DEFAULT_AUTO_REMONITOR: bool = true;
-const DEFAULT_KEEP_ALIVE: Option<Duration> = None;
+const DEFAULT_KEEP_ALIVE: Option<Duration> = Some(Duration::from_secs(30));
 const DEFAULT_NO_DELAY: bool = true;
 const DEFAULT_RETRY_ON_ERROR: bool = false;
 const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 5;
@@ -360,7 +360,17 @@ pub struct Config {
     ///
     /// See [`client_setname`](crate::commands::ConnectionCommands::client_setname)
     pub connection_name: String,
-    /// Enable/disable keep-alive functionality (default `None`)
+    /// Idle time before the TCP keep-alive probes start, or `None` to disable
+    /// keep-alive entirely.
+    ///
+    /// The default is 30 seconds. Because [`command_timeout`](Self::command_timeout)
+    /// defaults to no timeout, the keep-alive is what detects a half-open
+    /// connection — one silently dropped by a NAT, a firewall or a load
+    /// balancer — and turns it into the socket error that triggers a
+    /// reconnection. Disabling it means such a connection is detected by
+    /// nothing and awaiting callers park indefinitely.
+    ///
+    /// In a URL, `keep_alive=0` means `None`.
     ///
     /// See [`TcpKeepAlive::with_time`](https://docs.rs/socket2/latest/socket2/struct.TcpKeepalive.html#method.with_time)
     pub keep_alive: Option<Duration>,
@@ -745,7 +755,8 @@ impl Config {
             if let Some(keep_alive) = query.remove("keep_alive")
                 && let Ok(keep_alive) = keep_alive.parse::<u64>()
             {
-                config.keep_alive = Some(Duration::from_millis(keep_alive));
+                // 0 is the way to spell "no keep-alive" in a URL.
+                config.keep_alive = (keep_alive > 0).then(|| Duration::from_millis(keep_alive));
             }
 
             if let Some(no_delay) = query.remove("no_delay")
@@ -1005,14 +1016,15 @@ impl Display for Config {
             f.write_fmt(format_args!("connection_name={}", self.connection_name))?;
         }
 
-        if let Some(keep_alive) = self.keep_alive {
+        if self.keep_alive != DEFAULT_KEEP_ALIVE {
             if !query_separator {
                 query_separator = true;
                 f.write_char('?')?;
             } else {
                 f.write_char('&')?;
             }
-            f.write_fmt(format_args!("keep_alive={}", keep_alive.as_millis()))?;
+            let keep_alive = self.keep_alive.unwrap_or_default().as_millis();
+            f.write_fmt(format_args!("keep_alive={keep_alive}"))?;
         }
 
         if self.no_delay != DEFAULT_NO_DELAY {

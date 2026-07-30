@@ -135,6 +135,11 @@ harness = false
 required-features = ["bench"]
 
 [[bench]]
+name = "tape_memory"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
 name = "command_encode"
 harness = false
 required-features = ["bench"]

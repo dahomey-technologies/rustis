@@ -119,7 +119,7 @@ impl BufferDecoder {
         self.tape_buf = RespTapeMut::with_capacity(self.buffers.tape_capacity);
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "bench"))]
     pub(crate) fn tape_capacity(&self) -> usize {
         self.tape_buf.byte_capacity()
     }

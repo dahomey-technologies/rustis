@@ -259,6 +259,16 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Library general future type.
 pub type Future<'a, T> = futures_util::future::BoxFuture<'a, Result<T>>;
 
+// Every function of `network::async_executor_strategy` is provided by a runtime
+// feature and has no fallback body. Without this guard the user gets a dozen
+// "not found in this scope" errors instead of the actual cause.
+#[cfg(not(feature = "tokio-runtime"))]
+compile_error!(
+    "rustis needs an async runtime feature. Enable `tokio-runtime`, which is the default feature: \
+     with `default-features = false` you must list it explicitly, as in \
+     `rustis = { version = \"...\", default-features = false, features = [\"tokio-runtime\"] }`."
+);
+
 #[cfg(all(feature = "tokio-native-tls", feature = "tokio-rustls"))]
 compile_error!(
     "Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time."

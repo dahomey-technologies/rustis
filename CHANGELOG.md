@@ -51,6 +51,12 @@ Versions up to and including `0.19.3` are documented in the
   `&mut`, so `.queue()` and `.forget()` did not resolve on any of them and the whole
   family was unreachable in batch mode.
 
+- **Building without any runtime feature now fails with a message that says so.**
+  `default-features = false` without `tokio-runtime` left every function of the
+  runtime layer without a body, and the user got nine `cannot find … in this scope`
+  errors pointing at internal items. A `compile_error!` now names the missing
+  feature and how to enable it.
+
 - **The `actix_long_polling_pubsub` and `axum_long_polling_pubsub` examples compile
   again.** They passed `lpop`'s count as a `usize` where the signature takes a `u32`.
 

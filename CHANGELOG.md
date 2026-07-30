@@ -17,6 +17,12 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **`keep_alive` and `no_delay` are now applied to TLS connections.** Both were set
+  only on the plain TCP path: a TLS connection ran with Nagle's algorithm enabled
+  (up to 40 ms added to a small command) and without TCP keepalive, so a half-open
+  socket was detected by nothing. Both paths now share a single socket-setup step
+  applied to the `TcpStream` before the TLS handshake.
+
 - **Vector-set commands are usable in pipelines and transactions again.**
   `VectorSetCommands` was implemented for `&Pipeline` and `&Transaction` instead of
   `&mut`, so `.queue()` and `.forget()` did not resolve on any of them and the whole

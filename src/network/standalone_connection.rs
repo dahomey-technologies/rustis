@@ -81,8 +81,7 @@ impl Streams {
     pub(crate) async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
         #[cfg(any(feature = "native-tls", feature = "rustls"))]
         if let Some(tls_config) = &config.tls_config {
-            let (reader, writer) =
-                tcp_tls_connect(host, port, tls_config, config.connect_timeout).await?;
+            let (reader, writer) = tcp_tls_connect(host, port, tls_config, config).await?;
             let framed_read = FramedRead::with_capacity(
                 reader,
                 BufferDecoder::with_config(config.buffers, config.limits),

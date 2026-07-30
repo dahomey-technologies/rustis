@@ -57,6 +57,7 @@ mod search_commands;
 mod sentinel;
 mod server_commands;
 mod set_commands;
+mod socket_options;
 mod sorted_set_commands;
 mod stream_commands;
 mod string_commands;

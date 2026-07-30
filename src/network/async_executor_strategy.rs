@@ -34,6 +34,24 @@ pub(crate) type TcpTlsStreamReader =
 pub(crate) type TcpTlsStreamWriter =
     tokio::io::WriteHalf<tokio_native_tls::TlsStream<tokio::net::TcpStream>>;
 
+/// Apply the socket-level options of `config` to a freshly connected stream.
+///
+/// Shared by the plain and the TLS connect paths: TLS wraps the very same
+/// `TcpStream`, so both must set the options here, before the handshake.
+#[cfg(feature = "tokio-runtime")]
+pub(crate) fn apply_socket_options(stream: &tokio::net::TcpStream, config: &Config) -> Result<()> {
+    if let Some(keep_alive) = config.keep_alive {
+        socket2::SockRef::from(stream)
+            .set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
+    }
+
+    if config.no_delay {
+        stream.set_nodelay(true)?;
+    }
+
+    Ok(())
+}
+
 pub(crate) async fn tcp_connect(
     host: &str,
     port: u16,
@@ -55,14 +73,7 @@ pub(crate) async fn tcp_connect(
         )
         .await??;
 
-        if let Some(keep_alive) = config.keep_alive {
-            socket2::SockRef::from(&stream)
-                .set_tcp_keepalive(&TcpKeepalive::new().with_time(keep_alive))?;
-        }
-
-        if config.no_delay {
-            stream.set_nodelay(true)?;
-        }
+        apply_socket_options(&stream, config)?;
 
         (reader, writer) = stream.into_split();
     }
@@ -77,9 +88,12 @@ pub(crate) async fn tcp_tls_connect(
     host: &str,
     port: u16,
     tls_config: &TlsConfig,
-    connect_timeout: Duration,
+    config: &Config,
 ) -> Result<(TcpTlsStreamReader, TcpTlsStreamWriter)> {
-    debug!("Connecting to {host}:{port} with timeout {connect_timeout:?}...");
+    debug!(
+        "Connecting to {host}:{port} with timeout {:?}...",
+        config.connect_timeout
+    );
 
     let reader: TcpTlsStreamReader;
     let writer: TcpTlsStreamWriter;
@@ -88,10 +102,11 @@ pub(crate) async fn tcp_tls_connect(
     #[cfg(feature = "tokio-rustls")]
     {
         let stream = timeout(
-            connect_timeout,
+            config.connect_timeout,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
+        apply_socket_options(&stream, config)?;
         let tls_connector = tokio_rustls::TlsConnector::from(tls_config.rustls_config.clone());
         let server_name = host.to_owned().try_into()?;
         let tls_stream = tls_connector.connect(server_name, stream).await?;
@@ -102,10 +117,11 @@ pub(crate) async fn tcp_tls_connect(
     {
         let builder = tls_config.into_tls_connector_builder();
         let stream = timeout(
-            connect_timeout,
+            config.connect_timeout,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
+        apply_socket_options(&stream, config)?;
         let tls_connector: native_tls::TlsConnector = builder.build()?;
         let tls_connector = tokio_native_tls::TlsConnector::from(tls_connector);
         let tls_stream = tls_connector.connect(host, stream).await?;

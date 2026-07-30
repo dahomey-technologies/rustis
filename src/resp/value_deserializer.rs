@@ -577,6 +577,11 @@ impl<'de> SeqAccess<'de> {
 impl<'de> serde::de::SeqAccess<'de> for SeqAccess<'de> {
     type Error = Error;
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the remaining count is only decremented when the iterator yielded \
+                  an element, so it never passes zero."
+    )]
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,

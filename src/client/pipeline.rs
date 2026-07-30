@@ -90,6 +90,11 @@ impl Pipeline<'_> {
     ///     Ok(())
     /// }
     /// ```    
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the index advances once per retained result, so it is bounded by the \
+                  flag list it indexes."
+    )]
     pub async fn execute<T: DeserializeOwned>(self) -> Result<T> {
         // An empty pipeline never reaches the network layer (no `MessageToReceive`
         // is created), so awaiting a result would surface an opaque channel-canceled

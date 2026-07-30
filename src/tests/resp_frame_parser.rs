@@ -132,6 +132,34 @@ fn parse_oversized_map_length_is_rejected() {
 }
 
 #[test]
+fn parse_collection_length_wider_than_pointer_is_rejected() {
+    // A cardinality that does not fit a `usize` must be rejected, not narrowed
+    // into one that passes the cap. The declared count decides how many elements
+    // the parser walks, so a silently truncated one stops early and leaves the
+    // remaining elements to be read as the next reply — a desynchronised stream
+    // that misattributes every response after it.
+    //
+    // The assertion is pointer-width sensitive by nature: on a 32-bit target the
+    // value below narrows to 1, which is exactly the defect being pinned.
+    let resp = format!("*{}\r\n$3\r\nfoo\r\n", u64::from(u32::MAX) + 2);
+    assert!(matches!(
+        parse(resp.as_bytes()),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+
+    // Same for the map arm, whose count is doubled before the cap comparison.
+    let resp = format!("%{}\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", u64::from(u32::MAX) + 2);
+    assert!(matches!(
+        parse(resp.as_bytes()),
+        Err(crate::Error::Client(
+            crate::ClientError::CollectionLengthTooLarge
+        ))
+    ));
+}
+
+#[test]
 fn parse_leading_attribute_is_skipped_and_reply_decodes() {
     // An attribute frame may precede any reply. The parser must skip
     // it and decode the underlying reply normally, without a self-inflicted

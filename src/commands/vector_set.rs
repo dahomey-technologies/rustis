@@ -272,6 +272,12 @@ pub trait VectorSetCommands<'a>: Sized {
 struct Fp32Vector<'a>(&'a [f32]);
 
 impl<'a> Serialize for Fp32Vector<'a> {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the declared element count is derived from the length of a \
+                  collection already held in memory, so the product cannot \
+                  leave `usize`."
+    )]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

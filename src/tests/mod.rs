@@ -4,6 +4,7 @@
     clippy::panic,
     clippy::unreachable,
     clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
     reason = "test code: a panic is how a test reports failure"
 )]
 

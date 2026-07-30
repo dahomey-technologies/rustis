@@ -69,6 +69,11 @@ impl SentinelConnection {
         })
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the loop returns unless the round counter is still below \
+                  `max_discovery_rounds`, so the increment is bounded by it."
+    )]
     async fn connect_to_sentinel(
         sentinel_config: &SentinelConfig,
         config: &Config,

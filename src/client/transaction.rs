@@ -89,6 +89,10 @@ impl Transaction {
     ///     Ok(())
     /// }
     /// ```
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`EXEC` was pushed just above, so the command count is at least 1."
+    )]
     pub async fn execute<T: DeserializeOwned>(mut self) -> Result<T> {
         if self.client.is_cluster() {
             // Slots are no longer computed at command-build time; populate them
@@ -193,6 +197,10 @@ impl<'de, T: DeserializeOwned> Visitor<'de> for TransactionResultSeed<T> {
         formatter.write_str("Option<T>")
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "one increment per flag in a list held in memory."
+    )]
     fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
     where
         A: serde::de::SeqAccess<'de>,

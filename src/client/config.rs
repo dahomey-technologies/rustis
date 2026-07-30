@@ -771,6 +771,11 @@ impl Config {
     }
 
     /// break down an uri in a tuple (scheme, username, password, hosts, path_segments)
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`find` answered `Some`, so the scheme and its three-byte separator \
+                  are both inside the string."
+    )]
     fn break_down_uri<'a>(uri: &'a str) -> Option<Uri<'a>> {
         let end_of_scheme = match uri.find("://") {
             Some(index) => index,
@@ -1510,6 +1515,11 @@ impl ReconnectionConfig {
 /// Percent-decodes a URI component (`%XX` → byte), rendering the result lossily as
 /// UTF-8. Malformed escapes are left as-is rather than dropped, so a stray `%`
 /// never silently corrupts the surrounding text.
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "`hi` and `lo` are hex digits, so `hi * 16 + lo` is at most 255, and \
+              `i` only advances over bytes the `get` calls above found."
+)]
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());

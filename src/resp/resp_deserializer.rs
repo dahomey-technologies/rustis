@@ -985,6 +985,11 @@ impl<'de> SeqAccess<'de> {
 
     /// How many elements are still to come, the parked one included.
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the parked element is one the iterator already yielded, so the sum \
+                  is at most the element count of a collection held in memory."
+    )]
     fn remaining(&self) -> usize {
         self.iter.len() + usize::from(self.peeked.is_some())
     }

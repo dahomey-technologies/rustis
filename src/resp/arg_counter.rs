@@ -5,6 +5,23 @@ pub(crate) struct ArgCounter {
     pub count: usize,
 }
 
+impl ArgCounter {
+    /// Counts one argument.
+    ///
+    /// Every `serialize_*` leaf goes through here, so the counter has a single
+    /// increment site rather than fourteen.
+    #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "one increment per argument serialized into an in-memory \
+                  command; reaching usize::MAX would require 2^64 arguments, \
+                  each of which had to be allocated first"
+    )]
+    fn bump(&mut self) {
+        self.count += 1;
+    }
+}
+
 impl Serializer for &mut ArgCounter {
     type Ok = ();
     type Error = crate::Error;
@@ -18,72 +35,72 @@ impl Serializer for &mut ArgCounter {
     type SerializeStructVariant = Self;
 
     fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_u16(self, _v: u16) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_u32(self, _v: u32) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_str(self, _v: &str) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 
     fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        self.count += 1;
+        self.bump();
         Ok(())
     }
 

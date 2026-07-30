@@ -94,6 +94,11 @@ impl<'a, 'b> TruncatingWriter<'a, 'b> {
 }
 
 impl fmt::Write for TruncatingWriter<'_, '_> {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the subtraction is inside the `s.len() <= self.remaining` branch, \
+                  and `end` is decremented only while `end > 0`."
+    )]
     fn write_str(&mut self, s: &str) -> fmt::Result {
         if s.len() <= self.remaining {
             self.remaining -= s.len();
@@ -298,6 +303,12 @@ impl RespResponse {
     /// flattened, a push yields its kind as the first element. An error reply is
     /// surfaced as the Redis error itself, so a caller cannot mistake a failure
     /// for an empty reply.
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the guard proves `root` is a collection head, and the parser \
+                  writes a head's element-count node immediately after it, so \
+                  `root + 1` addresses a node that exists."
+    )]
     pub(crate) fn into_collection_iter(self) -> Result<RespResponseIter> {
         // `is_error` is a tag check, so a non-error reply does not pay for a view.
         if self.is_error()
@@ -523,6 +534,11 @@ pub(crate) struct RespCollectionView<'a> {
 
 impl<'a> RespCollectionView<'a> {
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "`root` is a collection head, whose element-count node the parser \
+                  writes immediately after it."
+    )]
     pub(crate) fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
         let len = tape.node(root + 1).payload() as usize;
         Self {
@@ -575,6 +591,11 @@ pub(crate) struct RespCollectionIter<'a> {
 
 impl<'a> RespCollectionIter<'a> {
     #[inline(always)]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the first child of a collection sits two nodes past its head — \
+                  the head, then its element count — both written by the parser."
+    )]
     pub(crate) fn new(buf: &'a [u8], tape: &'a RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
@@ -598,6 +619,11 @@ impl<'a> RespCollectionIter<'a> {
 impl<'a> Iterator for RespCollectionIter<'a> {
     type Item = Result<RespView<'a>>;
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the zero check above is what makes the decrement safe, and \
+                  `cursor` steps to the next node of a tape it was built over."
+    )]
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;
@@ -649,6 +675,11 @@ pub(crate) struct RespResponseIter {
 }
 
 impl RespResponseIter {
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "same tape layout as `RespCollectionIter::new`: head, element \
+                  count, then the first child."
+    )]
     pub(crate) fn new(buf: RespBuf, tape: RespTape, root: usize, len: usize) -> Self {
         Self {
             buf,
@@ -662,6 +693,11 @@ impl RespResponseIter {
 impl Iterator for RespResponseIter {
     type Item = Result<RespResponse>;
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "same as `RespCollectionIter::next`: the zero check above guards \
+                  the decrement, and `cursor` walks a tape this iterator owns."
+    )]
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;

@@ -228,6 +228,12 @@ impl<'a> FastPathRespSerializer<'a> {
     /// # Format
     /// `$Length\r\nData\r\n`
     #[inline]
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the header adds a fixed handful of bytes to the length of a slice \
+                  that is already allocated, and the payload range ends where the \
+                  bytes just written end."
+    )]
     pub(crate) fn write_arg(&mut self, data: &[u8]) -> Range<usize> {
         // 1. Write the RESP BulkString header ($Len\r\n)
         let data_len = data.len();

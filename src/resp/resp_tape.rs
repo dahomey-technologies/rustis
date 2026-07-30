@@ -125,9 +125,12 @@ impl RespTape {
     #[expect(
         clippy::indexing_slicing,
         clippy::expect_used,
+        clippy::arithmetic_side_effects,
         reason = "invariant: `index` addresses a node this crate wrote. Tape indices \
                   are never read off the wire — they are literal roots (0) or `next` \
-                  payloads the parser back-patched from `node_count`. A fallback \
+                  payloads the parser back-patched from `node_count`. The byte offset \
+                  therefore lands inside a buffer that already holds that node, so \
+                  neither the multiply nor the add can leave `usize`. A fallback \
                   would have to invent a node word and corrupt the read silently, \
                   so the invariant is checked by the debug assertion instead."
     )]
@@ -219,8 +222,10 @@ impl RespTapeMut {
     #[inline(always)]
     #[expect(
         clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
         reason = "invariant: `index` was returned by `push` for this same tape, \
-                  so the node it addresses has already been appended."
+                  so the node it addresses has already been appended and its byte \
+                  offset is inside the buffer."
     )]
     pub(crate) fn patch(&mut self, index: usize, tag: u8, payload: u64) {
         let start = index * TAPE_NODE_SIZE;

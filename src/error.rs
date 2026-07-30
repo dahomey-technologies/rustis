@@ -156,6 +156,10 @@ pub enum ClientError {
     /// Raised if an error occurs in the [`Config`](crate::client::Config) parsing
     #[error("Cannot parse config")]
     ConfigParseError,
+    /// Raised when a connection URI carries a query parameter that is unknown or
+    /// whose value cannot be parsed. The message names the offending parameter.
+    #[error("Invalid URI: {0}")]
+    InvalidUri(String),
     /// Raised at connection time when a [`Config`](crate::client::Config) knob
     /// holds a value that would disable behavior rather than tune it — a zero
     /// buffer capacity, a zero loop bound. The message names the offending knob.

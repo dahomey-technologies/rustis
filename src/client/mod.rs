@@ -153,8 +153,9 @@ The URL scheme is used to detect the server type:
 * `rediss+cluster://` or `rediss-cluster://` - Secure (TSL) TCP connection to a Redis cluster
 
 ### QueryParameters
-Query parameters match perfectly optional configuration fields
-of the struct [`Config`] or its dependencies:
+Query parameters set optional configuration fields of the struct [`Config`] or its
+dependencies. The list below is exhaustive: an unknown parameter, or a value that
+does not parse, is rejected with an error rather than ignored.
 * [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default `10,000` ms).
 * [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
   a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).
@@ -168,7 +169,8 @@ of the struct [`Config`] or its dependencies:
   or `None` (`keep_alive=0` in a URL) to disable keep-alive (default `30` s).
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
 * [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`).
-* [`reconnection`](Config::reconnection) - Reconnection policy configuration: Constant, Linear or Exponential (default `Constant`)
+* [`max_command_attempts`](Config::max_command_attempts) - Maximum number of times a command is sent
+  before giving up (default `5`).
 * [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after
   failing before connecting to the next Sentinel instance (default `250` ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username

@@ -10,6 +10,15 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **A connection URI now rejects a query parameter it does not understand.** An
+  unknown key (`?commandtimeout=5000`, `?reconnection=constant`) and a value that
+  does not parse (`?command_timeout=5s`) were both dropped silently, leaving the
+  default in place — a mistyped `command_timeout` meant no timeout at all. Both
+  now fail with `ClientError::InvalidUri`, whose message names the parameter.
+  Code relying on a URI with an unknown parameter being accepted must drop it.
+  The documented `reconnection` parameter never existed and has been removed from
+  the list; `max_command_attempts`, which is parsed, has been added to it.
+
 - **`keep_alive` now defaults to 30 seconds** instead of `None`. Paired with the
   default `command_timeout` of 0 (no timeout), the previous default left a
   half-open connection — one silently dropped by a NAT, a firewall or a load

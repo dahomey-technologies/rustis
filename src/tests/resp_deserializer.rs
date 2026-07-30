@@ -108,6 +108,29 @@ fn integer() {
     assert_eq!(12, result);
 }
 
+/// A single-element array unwraps to its element, but a longer one must not
+/// silently drop the extra elements.
+#[test]
+fn integer_from_multi_element_array() {
+    log_try_init();
+
+    macro_rules! assert_rejected {
+        ($($ty:ty),+) => {$(
+            let result: Result<$ty> = deserialize("*2\r\n:12\r\n:13\r\n");
+            assert!(
+                matches!(
+                    result,
+                    Err(Error::Client(ClientError::CannotParseInteger))
+                ),
+                "{} accepted a 2-element array",
+                stringify!($ty)
+            );
+        )+};
+    }
+
+    assert_rejected!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+}
+
 #[test]
 fn float() -> Result<()> {
     log_try_init();

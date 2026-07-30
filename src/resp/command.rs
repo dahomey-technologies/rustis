@@ -28,6 +28,13 @@ static COMMAND_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 const HEADROOM_SIZE: usize = 16;
 
 /// Shortcut function for creating a command.
+///
+/// # Cluster routing
+/// Arguments that are Redis keys must be added with
+/// [`CommandBuilder::key`], not [`CommandBuilder::arg`]: only `key`
+/// arguments take part in slot computation. A command carrying no key is
+/// sent to a random node of the cluster, which silently reads or writes the
+/// wrong shard. See the [`key`](CommandBuilder::key) documentation.
 #[must_use]
 #[inline(always)]
 pub fn cmd(name: &'static str) -> CommandBuilder {
@@ -520,6 +527,9 @@ impl CommandBuilder {
     }
 
     /// Builder function to add an argument to an existing command (uses Serde).
+    ///
+    /// An argument added this way is never considered a key for Cluster
+    /// routing. Use [`key`](Self::key) for Redis keys.
     #[must_use]
     #[inline(always)]
     pub fn arg(mut self, arg: impl Serialize) -> Self {
@@ -684,6 +694,28 @@ impl CommandBuilder {
     /// Adds a Key argument, marking it for Cluster routing. The CRC16 slot is
     /// computed later by `Command::compute_slots`, on the caller thread and
     /// only in Cluster mode.
+    ///
+    /// # Warning
+    /// In Cluster mode, a command whose keys were added with
+    /// [`arg`](Self::arg) carries no slot and is therefore sent to a **random
+    /// node**. The server does not signal the mistake for single-key commands:
+    /// it answers `MOVED`, the client refreshes its topology and retries — and
+    /// picks a random node again. Multi-key commands such as `MSET` fail with
+    /// `CROSSSLOT` instead. Both cases are silent misuses of the API, so every
+    /// key must go through `key`:
+    ///
+    /// ```
+    /// use rustis::resp::cmd;
+    ///
+    /// // routed on the slot of "key1"
+    /// let routed = cmd("GET").key("key1");
+    ///
+    /// // sent to a random node
+    /// let misrouted = cmd("GET").arg("key1");
+    /// ```
+    ///
+    /// A multi-key command additionally requires all its keys to hash to the
+    /// same slot; use hash tags (`{tag}key1`, `{tag}key2`) to guarantee it.
     #[must_use]
     #[inline(always)]
     pub fn key(mut self, key: impl Serialize) -> Self {

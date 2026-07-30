@@ -174,7 +174,8 @@ See the module [`commands`] to discover how Redis built-in commands are organize
 
 ## Generic command API
 To use the generic command API, you can use the [`cmd`](crate::resp::cmd) function to specify the name of the command,
-followed by one or multiple calls to [`CommandBuilder::arg`](crate::resp::CommandBuilder::arg) to add arguments to the command.
+followed by one or multiple calls to [`CommandBuilder::arg`](crate::resp::CommandBuilder::arg) to add arguments to the command,
+and to [`CommandBuilder::key`](crate::resp::CommandBuilder::key) to add arguments that are Redis keys.
 
 This command can then be passed as a parameter to one of the following associated functions,
 depending on the client, transaction or pipeline struct used:
@@ -192,13 +193,13 @@ async fn main() -> Result<()> {
     client
         .send::<()>(
             cmd("MSET")
-                .arg("key1")
+                .key("{my}key1")
                 .arg("value1")
-                .arg("key2")
+                .key("{my}key2")
                 .arg("value2")
-                .arg("key3")
+                .key("{my}key3")
                 .arg("value3")
-                .arg("key4")
+                .key("{my}key4")
                 .arg("value4"),
             None,
         )
@@ -206,7 +207,11 @@ async fn main() -> Result<()> {
 
     let values: Vec<String> = client
         .send(
-            cmd("MGET").arg("key1").arg("key2").arg("key3").arg("key4"),
+            cmd("MGET")
+                .key("{my}key1")
+                .key("{my}key2")
+                .key("{my}key3")
+                .key("{my}key4"),
             None,
         )
         .await?;
@@ -216,6 +221,19 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## Warning: keys must be added with `key`, not `arg`
+Only arguments added with [`key`](crate::resp::CommandBuilder::key) take part in Cluster slot
+computation. A command built with `arg` alone carries no slot and is sent to a **random node**
+of the cluster, with no error to tell you: a single-key command gets a `MOVED` reply, and the
+retry that follows the topology refresh picks a random node again. A multi-key command such as
+`MSET` fails with `CROSSSLOT`.
+
+A multi-key command additionally requires all its keys to hash to the same slot, which is what
+the `{my}` hash tag guarantees in the example above.
+
+This does not apply to the strongly typed command API ([`commands`]): those functions already
+mark their keys.
 
 # Client-side caching
 See the module [`cache`] to discover how you can implement client-side caching.

@@ -34,6 +34,12 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **The generic-command API documentation no longer teaches a Cluster misroute.**
+  The `MSET`/`MGET` examples in the crate documentation and in `Client::send` added
+  their keys with `arg`, which does not mark an argument as a key: the command
+  carried no slot and was sent to a random node. They now use `key` and same-slot
+  hash tags, and the rule is stated in the `cmd`, `arg` and `key` documentation.
+
 - **`keep_alive` and `no_delay` are now applied to TLS connections.** Both were set
   only on the plain TCP path: a TLS connection ran with Nagle's algorithm enabled
   (up to 40 ms added to a small command) and without TCP keepalive, so a half-open

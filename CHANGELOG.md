@@ -17,6 +17,11 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **Vector-set commands are usable in pipelines and transactions again.**
+  `VectorSetCommands` was implemented for `&Pipeline` and `&Transaction` instead of
+  `&mut`, so `.queue()` and `.forget()` did not resolve on any of them and the whole
+  family was unreachable in batch mode.
+
 - **The `actix_long_polling_pubsub` and `axum_long_polling_pubsub` examples compile
   again.** They passed `lpop`'s count as a `usize` where the signature takes a `u32`.
 

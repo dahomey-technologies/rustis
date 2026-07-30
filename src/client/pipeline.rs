@@ -185,4 +185,4 @@ impl<'a> StringCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
 impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> VectorSetCommands<'a> for &'a Pipeline<'_> {}
+impl<'a> VectorSetCommands<'a> for &'a mut Pipeline<'_> {}

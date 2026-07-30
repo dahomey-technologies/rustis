@@ -1,7 +1,10 @@
 use crate::{
     Error, RedisError, RedisErrorKind, Result,
     client::BatchPreparedCommand,
-    commands::{FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands},
+    commands::{
+        FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands,
+        VAddOptions, VectorSetCommands,
+    },
     resp::cmd,
     tests::{get_cluster_test_client, get_test_client},
 };
@@ -191,6 +194,31 @@ async fn transaction_on_cluster_connection_with_keys_with_different_slots() -> R
     transaction.get::<String>("key2").queue();
     let result: Result<((), String, String)> = transaction.execute().await;
     assert!(result.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn vector_set_commands() -> Result<()> {
+    let client = get_test_client().await?;
+    client.flushdb(FlushingMode::Sync).await?;
+
+    // Vector-set commands must be queueable like every other command family.
+    let mut transaction = client.create_transaction();
+    transaction
+        .vadd(
+            "key",
+            None,
+            &[0.1, 1.2, 0.5],
+            "element",
+            VAddOptions::default(),
+        )
+        .forget();
+    transaction.vcard("key").queue();
+
+    let card: u32 = transaction.execute().await?;
+    assert_eq!(1, card);
 
     Ok(())
 }

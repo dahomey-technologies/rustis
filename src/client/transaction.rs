@@ -330,4 +330,4 @@ impl<'a> StringCommands<'a> for &'a mut Transaction {}
 impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
 impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
 impl<'a> TopKCommands<'a> for &'a mut Transaction {}
-impl<'a> VectorSetCommands<'a> for &'a Transaction {}
+impl<'a> VectorSetCommands<'a> for &'a mut Transaction {}

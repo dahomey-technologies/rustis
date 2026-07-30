@@ -200,9 +200,9 @@ impl RespTapeMut {
         self.0.is_empty()
     }
 
-    /// Capacity of the underlying block, in bytes. Lets the tests observe the
-    /// recycling policy's effect on the block.
-    #[cfg(test)]
+    /// Capacity of the underlying block, in bytes. Lets the tests and the memory
+    /// benchmark observe the recycling policy's effect on the block.
+    #[cfg(any(test, feature = "bench"))]
     #[inline(always)]
     pub(crate) fn byte_capacity(&self) -> usize {
         self.0.capacity()

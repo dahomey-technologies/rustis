@@ -9,6 +9,7 @@
 #![allow(
     clippy::indexing_slicing,
     clippy::expect_used,
+    clippy::arithmetic_side_effects,
     reason = "bench harness over hand-built buffers: a panic on a malformed \
               fixture is the report, and adding error handling would put \
               branches in the code being measured"
@@ -16,8 +17,10 @@
 
 use crate::{
     Error, Result,
+    client::BufferConfig,
     resp::{
-        BufferDecoder, Command, CommandEncoder, RespBuf, RespFrameParser, RespResponse, RespTapeMut,
+        BufferDecoder, Command, CommandEncoder, ParsedFrame, RespBuf, RespFrameParser,
+        RespResponse, RespTapeMut,
     },
 };
 use bytes::{Bytes, BytesMut};
@@ -84,8 +87,6 @@ pub fn bench_decode_stream_prereserve(data: &[u8], chunk: usize) -> Result<usize
 /// incomplete, reserve then copy the next `chunk`-sized slice from `data`.
 #[inline(always)]
 fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
-    use crate::client::BufferConfig;
-
     let mut decoder = BufferDecoder::new();
     let mut src = BytesMut::with_capacity(BufferConfig::DEFAULT.read_capacity);
     let mut pos = 0usize;
@@ -143,6 +144,80 @@ pub fn bench_parse_only(bytes: &[u8], tape: &mut BenchTape) {
         .parse()
         .expect("bench_parse_only fed a valid frame");
     std::hint::black_box((&frame, frame_len));
+}
+
+/// Parses one complete RESP frame from `bytes` and reports what it costs to index:
+/// `(frame_len, tape_bytes)`, the reply's own byte length and the byte length of the
+/// tape built over it.
+///
+/// This is the footprint instrument: the tape is a fixed width per element, so its
+/// share of the total is set by the average element size, and only measurement over
+/// real reply shapes says whether that share is acceptable. A scalar frame carries
+/// no tape and reports `0`.
+#[inline(never)]
+pub fn bench_tape_footprint(bytes: &[u8]) -> (usize, usize) {
+    let mut tape = RespTapeMut::default();
+    let (frame, frame_len) = RespFrameParser::new(bytes, &mut tape)
+        .parse()
+        .expect("bench_tape_footprint fed a valid frame");
+    let tape_bytes = match &frame {
+        ParsedFrame::Collection(tape) => tape.byte_len(),
+        _ => 0,
+    };
+    (frame_len, tape_bytes)
+}
+
+/// A [`BufferDecoder`] a benchmark can drive across frames, on the shipped default
+/// buffer policy, while observing how much tape memory the recycled block holds.
+///
+/// Opaque on purpose, like [`BenchTape`]: the decoder and the tape types stay
+/// `pub(crate)`. This exposes exactly the two numbers the retained-memory question
+/// needs — the tape a frame just built, and the block still pinned afterwards.
+pub struct BenchDecoder {
+    decoder: BufferDecoder,
+    src: BytesMut,
+}
+
+impl Default for BenchDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BenchDecoder {
+    pub fn new() -> Self {
+        Self {
+            decoder: BufferDecoder::new(),
+            src: BytesMut::with_capacity(BufferConfig::DEFAULT.read_capacity),
+        }
+    }
+
+    /// Feeds one whole reply and decodes it, returning the byte length of the tape
+    /// built for it. The response is dropped before returning, as prompt
+    /// consumption would, so the frozen tape stops pinning the recycled block and
+    /// [`retained_tape_capacity`](Self::retained_tape_capacity) reads what the
+    /// decoder alone holds.
+    pub fn feed(&mut self, reply: &[u8]) -> Result<usize> {
+        self.src.extend_from_slice(reply);
+        let Some(resp) = self.decoder.decode(&mut self.src)? else {
+            return Err(Error::EOF);
+        };
+        let tape_bytes = match &resp {
+            RespResponse::Frame { tape, .. } => tape.byte_len(),
+            _ => 0,
+        };
+        drop(resp);
+        Ok(tape_bytes)
+    }
+
+    /// Capacity, in bytes, of the tape block the decoder is currently holding.
+    ///
+    /// This is the memory a quiet connection keeps immobilized after a large reply,
+    /// until the shrink hysteresis releases it — the number the per-frame tape size
+    /// does not tell you.
+    pub fn retained_tape_capacity(&self) -> usize {
+        self.decoder.tape_capacity()
+    }
 }
 
 /// Encodes `command` into `buf` through [`CommandEncoder`] — the exact write-path

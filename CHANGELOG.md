@@ -34,6 +34,14 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **The silent `nil` coercion is now documented as a trap instead of a convenience.**
+  A `nil` reply decodes as the neutral value of the response type — `0` for every
+  integer width, `0.0` for floats, `false` for `bool`, `""` for `String` — so a
+  missing counter reads as zero with no error. The behaviour is unchanged, but the
+  `resp` module, `StringCommands::get` and `Client::send` now state it and point at
+  `Option<R>`, which is honoured before any conversion and yields `None` on `nil`.
+  The `get` example presented the `String` case as a convenience.
+
 - **The generic-command API documentation no longer teaches a Cluster misroute.**
   The `MSET`/`MGET` examples in the crate documentation and in `Client::send` added
   their keys with `arg`, which does not mark an argument as a key: the command

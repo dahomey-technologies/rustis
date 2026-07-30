@@ -176,6 +176,10 @@ impl Client {
     /// **random node**. A multi-key command such as `MSET` also requires all its keys to hash
     /// to the same slot, which the `{my}` hash tag guarantees in the example below.
     ///
+    /// Unless `R` is an [`Option`], a `nil` reply decodes as the neutral value of `R`
+    /// (`0`, `0.0`, `false`, `""`) instead of being rejected. Declare `Option<R>` when the
+    /// command can reply `nil`. See [Command results](crate::resp#command-results).
+    ///
     /// # Example
     /// ```
     /// use rustis::{client::Client, commands::{FlushingMode, ServerCommands}, resp::cmd, Result};

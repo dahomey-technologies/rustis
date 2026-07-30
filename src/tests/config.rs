@@ -269,9 +269,54 @@ fn into_config() -> Result<()> {
             .is_err()
     );
     assert!("redis://127.0.0.1?param".into_config().is_err());
-    assert!("redis://127.0.0.1?param=value".into_config().is_ok());
 
     Ok(())
+}
+
+#[test]
+fn an_unknown_query_parameter_is_rejected() {
+    // A misspelled knob used to be dropped without a word, leaving the default
+    // in place while the caller believed they had set it.
+    for uri in [
+        "redis://127.0.0.1?param=value",
+        "redis://127.0.0.1?commandtimeout=5000",
+        "redis://127.0.0.1?reconnection=constant",
+        "redis://127.0.0.1?command_timeout=5000&read_timeout=5000",
+        "redis+sentinel://127.0.0.1:6379/myservice?sentinel_user=foo",
+        "redis+cluster://127.0.0.1:6379?sentinel_username=foo",
+    ] {
+        let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
+            panic!("`{uri}` should be rejected as an unknown query parameter");
+        };
+        assert!(
+            message.contains("unknown"),
+            "`{uri}`: unhelpful message `{message}`"
+        );
+    }
+}
+
+#[test]
+fn an_unparsable_query_parameter_value_is_rejected() {
+    for uri in [
+        "redis://127.0.0.1?command_timeout=5s",
+        "redis://127.0.0.1?connect_timeout=5000ms",
+        "redis://127.0.0.1?keep_alive=abc",
+        "redis://127.0.0.1?no_delay=yes",
+        "redis://127.0.0.1?auto_resubscribe=1",
+        "redis://127.0.0.1?auto_remonitor=",
+        "redis://127.0.0.1?retry_on_error=maybe",
+        "redis://127.0.0.1?max_command_attempts=-1",
+        "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250ms",
+    ] {
+        let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
+            panic!("`{uri}` should be rejected as an unparsable parameter value");
+        };
+        let name = uri.rsplit_once('?').unwrap().1.split('=').next().unwrap();
+        assert!(
+            message.contains(name),
+            "`{uri}`: message `{message}` does not name the offending parameter"
+        );
+    }
 }
 
 #[tokio::test]

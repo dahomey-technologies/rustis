@@ -525,8 +525,11 @@ impl FromStr for Config {
 
     /// Build a config from an URI or a standard address format `host`:`port`
     fn from_str(str: &str) -> Result<Config> {
-        if let Some(config) = Self::parse_uri(str) {
-            Ok(config)
+        // A string carrying a scheme separator is a URI and only a URI: reporting
+        // why it is malformed beats falling back to the `host:port` reading,
+        // which cannot match it anyway.
+        if str.contains("://") {
+            Self::parse_uri(str)
         } else if let Some(addr) = Self::parse_addr(str) {
             addr.into_config()
         } else {
@@ -606,9 +609,33 @@ impl Config {
         }
     }
 
-    fn parse_uri(uri: &str) -> Option<Config> {
+    /// Builds an [`Error::Client`] naming what the URI got wrong.
+    fn invalid_uri(message: String) -> Error {
+        Error::Client(ClientError::InvalidUri(message))
+    }
+
+    /// Removes `name` from the query and parses its value, reporting an error
+    /// naming the parameter when the value does not parse. A parameter left in
+    /// the query after every known key has been taken is an unknown one.
+    fn take_query_param<T: FromStr>(
+        query: &mut HashMap<String, String>,
+        name: &str,
+    ) -> Result<Option<T>> {
+        match query.remove(name) {
+            Some(value) => value.parse::<T>().map(Some).map_err(|_| {
+                Self::invalid_uri(format!(
+                    "cannot parse query parameter `{name}` from `{value}`"
+                ))
+            }),
+            None => Ok(None),
+        }
+    }
+
+    fn parse_uri(uri: &str) -> Result<Config> {
+        let config_parse_error = || Error::Client(ClientError::ConfigParseError);
+
         let (scheme, username, password, hosts, path_segments, mut query) =
-            Self::break_down_uri(uri)?;
+            Self::break_down_uri(uri).ok_or_else(config_parse_error)?;
         let mut hosts = hosts;
         let mut path_segments = path_segments.into_iter();
 
@@ -631,7 +658,7 @@ impl Config {
                 (Some(TlsConfig::default()), ServerType::Cluster)
             }
             _ => {
-                return None;
+                return Err(config_parse_error());
             }
         };
 
@@ -641,16 +668,16 @@ impl Config {
             "redis+sentinel" | "redis-sentinel" => ServerType::Sentinel,
             "redis+cluster" | "redis-cluster" => ServerType::Cluster,
             _ => {
-                return None;
+                return Err(config_parse_error());
             }
         };
 
         let server = match server_type {
             ServerType::Standalone => {
                 if hosts.len() > 1 {
-                    return None;
+                    return Err(config_parse_error());
                 } else {
-                    let (host, port) = hosts.pop()?;
+                    let (host, port) = hosts.pop().ok_or_else(config_parse_error)?;
                     ServerConfig::Standalone {
                         host: host.to_owned(),
                         port,
@@ -666,7 +693,7 @@ impl Config {
                 let service_name = match path_segments.next() {
                     Some(service_name) => service_name.to_owned(),
                     None => {
-                        return None;
+                        return Err(config_parse_error());
                     }
                 };
 
@@ -677,8 +704,8 @@ impl Config {
                 };
 
                 if let Some(ref mut query) = query {
-                    if let Some(millis) = query.remove("wait_between_failures")
-                        && let Ok(millis) = millis.parse::<u64>()
+                    if let Some(millis) =
+                        Self::take_query_param::<u64>(query, "wait_between_failures")?
                     {
                         sentinel_config.wait_between_failures = Duration::from_millis(millis);
                     }
@@ -703,7 +730,7 @@ impl Config {
             Some(database) => match database.parse::<usize>() {
                 Ok(database) => database,
                 Err(_) => {
-                    return None;
+                    return Err(config_parse_error());
                 }
             },
             None => DEFAULT_DATABASE,
@@ -724,27 +751,19 @@ impl Config {
         };
 
         if let Some(ref mut query) = query {
-            if let Some(millis) = query.remove("connect_timeout")
-                && let Ok(millis) = millis.parse::<u64>()
-            {
+            if let Some(millis) = Self::take_query_param::<u64>(query, "connect_timeout")? {
                 config.connect_timeout = Duration::from_millis(millis);
             }
 
-            if let Some(millis) = query.remove("command_timeout")
-                && let Ok(millis) = millis.parse::<u64>()
-            {
+            if let Some(millis) = Self::take_query_param::<u64>(query, "command_timeout")? {
                 config.command_timeout = Duration::from_millis(millis);
             }
 
-            if let Some(auto_resubscribe) = query.remove("auto_resubscribe")
-                && let Ok(auto_resubscribe) = auto_resubscribe.parse::<bool>()
-            {
+            if let Some(auto_resubscribe) = Self::take_query_param(query, "auto_resubscribe")? {
                 config.auto_resubscribe = auto_resubscribe;
             }
 
-            if let Some(auto_remonitor) = query.remove("auto_remonitor")
-                && let Ok(auto_remonitor) = auto_remonitor.parse::<bool>()
-            {
+            if let Some(auto_remonitor) = Self::take_query_param(query, "auto_remonitor")? {
                 config.auto_remonitor = auto_remonitor;
             }
 
@@ -752,33 +771,36 @@ impl Config {
                 config.connection_name = connection_name;
             }
 
-            if let Some(keep_alive) = query.remove("keep_alive")
-                && let Ok(keep_alive) = keep_alive.parse::<u64>()
-            {
+            if let Some(keep_alive) = Self::take_query_param::<u64>(query, "keep_alive")? {
                 // 0 is the way to spell "no keep-alive" in a URL.
                 config.keep_alive = (keep_alive > 0).then(|| Duration::from_millis(keep_alive));
             }
 
-            if let Some(no_delay) = query.remove("no_delay")
-                && let Ok(no_delay) = no_delay.parse::<bool>()
-            {
+            if let Some(no_delay) = Self::take_query_param(query, "no_delay")? {
                 config.no_delay = no_delay;
             }
 
-            if let Some(retry_on_error) = query.remove("retry_on_error")
-                && let Ok(retry_on_error) = retry_on_error.parse::<bool>()
-            {
+            if let Some(retry_on_error) = Self::take_query_param(query, "retry_on_error")? {
                 config.retry_on_error = retry_on_error;
             }
 
-            if let Some(max_command_attempts) = query.remove("max_command_attempts")
-                && let Ok(max_command_attempts) = max_command_attempts.parse::<usize>()
+            if let Some(max_command_attempts) =
+                Self::take_query_param(query, "max_command_attempts")?
             {
                 config.max_command_attempts = max_command_attempts;
             }
+
+            // Whatever is left is a key this client does not know: a typo, or a
+            // knob borrowed from another server type. Dropping it silently leaves
+            // the default in place behind the caller's back.
+            if let Some(name) = query.keys().min() {
+                return Err(Self::invalid_uri(format!(
+                    "unknown query parameter `{name}`"
+                )));
+            }
         }
 
-        Some(config)
+        Ok(config)
     }
 
     /// break down an uri in a tuple (scheme, username, password, hosts, path_segments)

@@ -107,6 +107,46 @@ The different command traits implementations ([`Client`](crate::client::Client),
  Each custom struct or enum defined as a response of a built-command implements
  serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
+
+## Warning: a `nil` reply decodes as a neutral value
+When the response type is not an [`Option`], a `nil` reply is converted to the neutral value of
+that type instead of being rejected: `0` for every integer width, `0.0` for `f32`/`f64`, `false`
+for `bool`, `'\0'` for `char` and `""` for `String`.
+
+A missing key is therefore indistinguishable from a key holding that neutral value — a counter,
+a quota or a balance that expired reads as zero, with no error to tell you.
+
+Declare `Option<R>` to recover the distinction: it is honoured before any conversion and yields
+`None` on `nil`.
+
+#### Example
+```
+use rustis::{
+    client::Client,
+    commands::{FlushingMode, ServerCommands, StringCommands},
+    Result,
+};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = Client::connect("127.0.0.1:6379").await?;
+    client.flushall(FlushingMode::Sync).await?;
+
+    // the key does not exist: `nil` becomes `0`, as if it held `0`
+    let counter: i64 = client.get("counter").await?;
+    assert_eq!(0, counter);
+
+    // `Option` keeps the two apart
+    let counter: Option<i64> = client.get("counter").await?;
+    assert_eq!(None, counter);
+
+    client.set("counter", 0).await?;
+    let counter: Option<i64> = client.get("counter").await?;
+    assert_eq!(Some(0), counter);
+
+    Ok(())
+}
+```
 */
 // This module is fed directly by server bytes: every length, cardinality and
 // offset here is attacker-controlled, so an out-of-bounds index is reachable

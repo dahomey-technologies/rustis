@@ -76,6 +76,12 @@ pub trait StringCommands<'a>: Sized {
     /// # Return
     /// the value of key, or `nil` when key does not exist.
     ///
+    /// # Warning
+    /// Unless `R` is an [`Option`], a `nil` reply decodes as the neutral value of `R`:
+    /// `""` for a `String`, `0` for an integer, `0.0` for a float, `false` for a `bool`.
+    /// A missing key is then indistinguishable from a key holding that value. See
+    /// [Command results](crate::resp#command-results).
+    ///
     /// # Example
     /// ```
     /// use rustis::{
@@ -90,14 +96,18 @@ pub trait StringCommands<'a>: Sized {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushall(FlushingMode::Sync).await?;
     ///
-    ///     // return value can be an Option<String>...
+    ///     // an Option keeps `nil` apart from a value...
     ///     let value: Option<String> = client.get("key").await?;
     ///     assert_eq!(None, value);
     ///
-    ///     // ... or it can be directly a String.
-    ///     // In this cas a `nil` value will result in an empty String
+    ///     // ... while a bare type hides it: `nil` becomes an empty String,
+    ///     // as if the key held one
     ///     let value: String = client.get("key").await?;
     ///     assert_eq!("", value);
+    ///
+    ///     // same trap on numbers: a missing counter reads as 0
+    ///     let counter: i64 = client.get("counter").await?;
+    ///     assert_eq!(0, counter);
     ///
     ///     client.set("key", "value").await?;
     ///     let value: String = client.get("key").await?;

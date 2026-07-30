@@ -6,7 +6,7 @@ use crate::{
     tests::log_try_init,
 };
 use futures_util::future;
-use rand::Rng;
+use rand::RngExt;
 use serial_test::serial;
 
 #[tokio::test]

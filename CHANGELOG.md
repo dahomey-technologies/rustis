@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Changed
+
+- **Dependencies updated to their latest releases**, including two major bumps:
+  `rand` 0.9 → 0.10 and `atoi` 2.0 → 3.1. Both are internal; the public API is
+  unchanged. `serial_test` stays on 3.x — its 4.0 requires Rust 1.93, above the
+  crate's 1.88 MSRV, which is itself unchanged.
+
+### Fixed
+
+- **The `actix_long_polling_pubsub` and `axum_long_polling_pubsub` examples compile
+  again.** They passed `lpop`'s count as a `usize` where the signature takes a `u32`.
+
 ## [0.21.0] - 2026-07-30
 
 ### BREAKING CHANGES
@@ -797,5 +811,6 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
+[Unreleased]: https://github.com/dahomey-technologies/rustis/compare/0.21.0...HEAD
 [0.21.0]: https://github.com/dahomey-technologies/rustis/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/dahomey-technologies/rustis/compare/0.19.3...0.20.0

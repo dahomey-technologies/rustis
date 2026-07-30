@@ -17,7 +17,7 @@ use crate::{
     resp::{RefBulkString, Value},
     tests::{TestClient, get_test_client, log_try_init},
 };
-use rand::{Rng, seq::IndexedRandom};
+use rand::{RngExt, seq::IndexedRandom};
 use serial_test::serial;
 use smallvec::SmallVec;
 use std::{

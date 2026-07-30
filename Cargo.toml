@@ -33,10 +33,10 @@ web-examples = ["dep:axum", "dep:actix-web"]
 [dependencies]
 futures-util = { version = "0.3", features = ["sink"] }
 futures-channel = { version = "0.3", features = ["sink"] }
-bytes = { version = "1.11", features = ["serde"] }
-tokio = { version = "1.49", features = ["time", "io-util", "sync"] }
+bytes = { version = "1.12", features = ["serde"] }
+tokio = { version = "1.53", features = ["time", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
-atoi = "2.0"
+atoi = "3.1"
 itoa = "1.0"
 fast-float2 = "0.2"
 dtoa = "1.0"
@@ -57,26 +57,27 @@ tokio-native-tls = { version = "0.3", optional = true }
 # only sees a difference if it installs a `tracing` subscriber.
 tracing = { version = "0.1", features = ["log"] }
 crc16 = "0.4"
-rand = "0.9"
+rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 socket2 = "0.6"
 memchr = "2.7"
 moka = { version = "0.12", features = ["future"], optional = true }
-dashmap = { version = "6.1", optional = true }
+dashmap = { version = "6.2", optional = true }
 # optional dev dependencies
 criterion = { version = "0.8", features = ["async_tokio"], optional = true }
 fred = { version = "10.1", optional = true }
-redis = { version = "1.0", features = ["aio", "tokio-comp"], optional = true }
+redis = { version = "1.5", features = ["aio", "tokio-comp"], optional = true }
 axum = { version = "0.8", optional = true }
-actix-web = { version = "4.12", optional = true }
+actix-web = { version = "4.14", optional = true }
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
 thiserror = "2.0"
 
 [dev-dependencies]
+# Held at 3.x: serial_test 4.x requires Rust 1.93, above the crate's MSRV.
 serial_test = "3.3"
-tokio = { version = "1.49", features = ["rt-multi-thread"] }
-rand = "0.9"
+tokio = { version = "1.53", features = ["rt-multi-thread"] }
+rand = "0.10"
 # The suite reads the crate's output through `env_logger`, which is the point:
 # it exercises the `tracing/log` bridge that downstream `log` users rely on.
 env_logger = "0.11"

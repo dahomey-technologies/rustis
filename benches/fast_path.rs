@@ -109,5 +109,51 @@ fn bench_get_e2e(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_get_commands, bench_get_e2e);
+/// Queue `count` GETs into one pipeline, then send. Construction here is serial
+/// and not overlapped with any I/O wait: every command is built before the first
+/// byte leaves, so the per-command construction delta adds up instead of hiding
+/// behind another task's round trip.
+async fn pipelined(client: &Client, count: usize, build: fn(&str) -> Command) {
+    let mut pipeline = client.create_pipeline();
+    for _ in 0..count {
+        pipeline.queue(build(KEY));
+    }
+    let _: Vec<String> = pipeline.execute().await.unwrap();
+}
+
+/// The regime the saturated bench cannot see: fast vs generic construction when
+/// the caller builds a whole batch up front. Full round-trip against live Redis.
+fn bench_get_pipeline(c: &mut Criterion) {
+    const COUNT: usize = 10_000;
+
+    let rt = build_runtime();
+    let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let client = rt.block_on(async {
+        let client = Client::connect(host.as_str()).await.unwrap();
+        let _: String = client
+            .send(cmd("SET").arg(KEY).arg("v"), None)
+            .await
+            .unwrap();
+        client
+    });
+
+    let mut group = c.benchmark_group("Redis GET pipeline (10k queued)");
+
+    group.bench_function("Generic path", |b| {
+        b.iter(|| rt.block_on(pipelined(&client, COUNT, slow_path_get)));
+    });
+
+    group.bench_function("Fast path", |b| {
+        b.iter(|| rt.block_on(pipelined(&client, COUNT, fast_path_get)));
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_get_commands,
+    bench_get_e2e,
+    bench_get_pipeline
+);
 criterion_main!(benches);

@@ -164,7 +164,8 @@ of the struct [`Config`] or its dependencies:
   [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
 * [`connection_name`](Config::connection_name) - Set the name of the connection to make
   it easier to identity the connection in client list.
-* [`keep_alive`](Config::keep_alive) - Enable/disable keep-alive functionality (default `None`)
+* [`keep_alive`](Config::keep_alive) - Idle time before the TCP keep-alive probes start,
+  or `None` (`keep_alive=0` in a URL) to disable keep-alive (default `30` s).
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
 * [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`).
 * [`reconnection`](Config::reconnection) - Reconnection policy configuration: Constant, Linear or Exponential (default `Constant`)

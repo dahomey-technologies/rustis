@@ -10,6 +10,14 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **`keep_alive` now defaults to 30 seconds** instead of `None`. Paired with the
+  default `command_timeout` of 0 (no timeout), the previous default left a
+  half-open connection — one silently dropped by a NAT, a firewall or a load
+  balancer — detected by nothing: no timeout, no keepalive, no socket error, so
+  every awaiting caller parked forever and `on_reconnect` never fired. Set
+  `keep_alive` to `None`, or `keep_alive=0` in a URL, to restore the old
+  behaviour.
+
 - **Dependencies updated to their latest releases**, including two major bumps:
   `rand` 0.9 → 0.10 and `atoi` 2.0 → 3.1. Both are internal; the public API is
   unchanged. `serial_test` stays on 3.x — its 4.0 requires Rust 1.93, above the

@@ -168,10 +168,22 @@ fn into_config() -> Result<()> {
             .to_string()
     );
     assert_eq!(
-        "redis://127.0.0.1?keep_alive=30000",
+        "redis://127.0.0.1?keep_alive=60000",
+        "redis://127.0.0.1?keep_alive=60000"
+            .into_config()?
+            .to_string()
+    );
+    // the default keep-alive is implicit in the URL
+    assert_eq!(
+        "redis://127.0.0.1",
         "redis://127.0.0.1?keep_alive=30000"
             .into_config()?
             .to_string()
+    );
+    // 0 means "no keep-alive" and must survive a round-trip
+    assert_eq!(
+        "redis://127.0.0.1?keep_alive=0",
+        "redis://127.0.0.1?keep_alive=0".into_config()?.to_string()
     );
     assert_eq!(
         "redis://127.0.0.1?no_delay=false",
@@ -270,6 +282,16 @@ async fn connect_timeout() -> Result<()> {
     client.flushdb(FlushingMode::Sync).await?;
 
     Ok(())
+}
+
+#[test]
+fn the_default_config_detects_a_half_open_connection() {
+    // With neither a command timeout nor a TCP keep-alive, a socket silently
+    // dropped by a NAT or a load balancer is reported by nothing and every
+    // awaiting caller parks forever. The keep-alive is what breaks that tie.
+    let config = Config::default();
+
+    assert_eq!(Some(std::time::Duration::from_secs(30)), config.keep_alive);
 }
 
 #[test]

@@ -948,3 +948,71 @@ fn null_still_deserializes_to_integer_default() {
     let value: i32 = deserialize("_\r\n").unwrap();
     assert_eq!(0, value);
 }
+
+#[test]
+fn lossy_double_to_integer_errors_instead_of_truncating() {
+    log_try_init();
+
+    // A fractional score has no exact integer value.
+    let result: Result<i64> = deserialize(",3.9\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "i64 from 3.9 should error, got {result:?}"
+    );
+
+    // Beyond the target's range, where an `as` cast would saturate.
+    let result: Result<i64> = deserialize(",1e300\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "i64 from 1e300 should error, got {result:?}"
+    );
+
+    // Out of range for the narrow target, in range for f64.
+    let result: Result<i8> = deserialize(",300\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "i8 from 300 should error, got {result:?}"
+    );
+
+    // A negative double has no value in an unsigned target.
+    let result: Result<u32> = deserialize(",-1\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "u32 from -1.0 should error, got {result:?}"
+    );
+
+    // NaN and the infinities are not integers.
+    let result: Result<i64> = deserialize(",nan\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "i64 from NaN should error, got {result:?}"
+    );
+    let result: Result<i64> = deserialize(",inf\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "i64 from inf should error, got {result:?}"
+    );
+
+    // An exactly representable double still deserializes to the integer.
+    let value: i64 = deserialize(",3\r\n").unwrap();
+    assert_eq!(3, value);
+    let value: u8 = deserialize(",255.0\r\n").unwrap();
+    assert_eq!(255, value);
+    let value: i128 = deserialize(",-42\r\n").unwrap();
+    assert_eq!(-42, value);
+}
+
+#[test]
+fn negative_integer_to_u128_errors_instead_of_wrapping() {
+    log_try_init();
+
+    // A negative wire integer has no `u128` value.
+    let result: Result<u128> = deserialize(":-1\r\n");
+    assert!(
+        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
+        "u128 from -1 should error, got {result:?}"
+    );
+
+    let value: u128 = deserialize(":42\r\n").unwrap();
+    assert_eq!(42, value);
+}

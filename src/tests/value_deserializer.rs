@@ -748,3 +748,50 @@ fn out_of_range_integer_errors_instead_of_truncating() {
     assert_eq!(42u8, u8::deserialize(&Value::Integer(42)).unwrap());
     assert_eq!(0i32, i32::deserialize(&Value::Null).unwrap());
 }
+
+#[test]
+fn lossy_double_to_integer_errors_instead_of_truncating() {
+    log_try_init();
+
+    // Mirror of the RESP deserializer: `Value::Double` only converts to an
+    // integer when the conversion is exact.
+    let result = i64::deserialize(&Value::Double(3.9));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "i64 from 3.9 should error, got {result:?}"
+    );
+
+    let result = i64::deserialize(&Value::Double(1e300));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "i64 from 1e300 should error, got {result:?}"
+    );
+
+    let result = u32::deserialize(&Value::Double(-1.));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "u32 from -1.0 should error, got {result:?}"
+    );
+
+    let result = i8::deserialize(&Value::Double(f64::NAN));
+    assert!(
+        matches!(
+            result,
+            Err(Error::Client(crate::ClientError::CannotParseInteger))
+        ),
+        "i8 from NaN should error, got {result:?}"
+    );
+
+    // An exactly representable double still deserializes to the integer.
+    assert_eq!(3i64, i64::deserialize(&Value::Double(3.)).unwrap());
+    assert_eq!(255u8, u8::deserialize(&Value::Double(255.)).unwrap());
+}

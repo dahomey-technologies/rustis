@@ -321,7 +321,7 @@ impl RespResponse {
                 if !tape.is_empty() && tape.node(root as usize).is_collection() =>
             {
                 let root = root as usize;
-                let len = tape.node(root + 1).payload() as usize;
+                let len = tape.node(root + 1).payload_index();
                 Ok(RespResponseIter::new(buf, tape, root, len))
             }
             _ => Err(Error::Client(ClientError::Unexpected)),
@@ -364,7 +364,7 @@ fn read_node_view<'a>(node: TapeNode, data: &'a [u8]) -> Result<RespView<'a>> {
     if node.tag() == NULL_TAG {
         return Ok(RespView::Null);
     }
-    read_scalar_view(data, node.payload() as usize)
+    read_scalar_view(data, node.payload_index())
 }
 
 /// Decodes the scalar element whose tag byte is at `off`, whose end is unknown
@@ -540,7 +540,7 @@ impl<'a> RespCollectionView<'a> {
                   writes immediately after it."
     )]
     pub(crate) fn new(buf: &'a [u8], tape: &'a RespTape, root: usize) -> Self {
-        let len = tape.node(root + 1).payload() as usize;
+        let len = tape.node(root + 1).payload_index();
         Self {
             buf,
             tape,
@@ -634,7 +634,7 @@ impl<'a> Iterator for RespCollectionIter<'a> {
 
         if node.is_collection() {
             let root = self.cursor;
-            self.cursor = node.payload() as usize;
+            self.cursor = node.payload_index();
             self.remaining -= 1;
             Some(Ok(collection_view(tag, self.buf, self.tape, root)))
         } else {
@@ -710,7 +710,7 @@ impl Iterator for RespResponseIter {
         // it reads back exactly as it would through the parent.
         if node.is_collection() {
             let root = self.cursor;
-            self.cursor = node.payload() as usize;
+            self.cursor = node.payload_index();
             self.remaining -= 1;
             // A tape node index is far below `u32::MAX` for any reply a server
             // can send, but the tape's own payload is wider, so the conversion is
@@ -737,7 +737,7 @@ impl Iterator for RespResponseIter {
         // A scalar element is handed out over its own bytes: the buffer is sliced
         // down to the element — a refcount bump, not a copy — so the response
         // holds to the invariant that a tapeless frame ends where its scalar does.
-        let at = node.payload() as usize;
+        let at = node.payload_index();
         let data = self.buf.as_ref();
         match scalar_span(data, at) {
             Ok(span) => Some(Ok(RespResponse::Frame {

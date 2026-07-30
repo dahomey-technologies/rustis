@@ -2,7 +2,7 @@ use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
         PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView,
-        util::is_field_value_array,
+        util::{double_to_int, is_field_value_array},
     },
 };
 use serde::{
@@ -78,15 +78,15 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::SimpleString(ss) => {
                 atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Integer(i, _) => i as i128,
-            RespView::Double(d, _) => d as i128,
+            RespView::Integer(i, _) => i128::from(i),
+            RespView::Double(d, _) => double_to_int::<i128>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
-                Some(Ok(RespView::Integer(i, _))) => i as i128,
+                Some(Ok(RespView::Integer(i, _))) => i128::from(i),
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
@@ -105,15 +105,19 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::SimpleString(ss) => {
                 atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Integer(i, _) => i as u128,
-            RespView::Double(d, _) => d as u128,
+            RespView::Integer(i, _) => {
+                u128::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
+            RespView::Double(d, _) => double_to_int::<u128>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
-                Some(Ok(RespView::Integer(i, _))) => i as u128,
+                Some(Ok(RespView::Integer(i, _))) => {
+                    u128::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                }
                 _ => return Err(Error::Client(ClientError::CannotParseInteger)),
             },
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
@@ -133,7 +137,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 atoi::atoi(ss).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
             RespView::Integer(i, _) => i,
-            RespView::Double(d, _) => d as i64,
+            RespView::Double(d, _) => double_to_int::<i64>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -162,7 +166,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 u64::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as u64,
+            RespView::Double(d, _) => double_to_int::<u64>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -193,7 +197,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 i32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as i32,
+            RespView::Double(d, _) => double_to_int::<i32>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -224,7 +228,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 u32::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as u32,
+            RespView::Double(d, _) => double_to_int::<u32>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -255,7 +259,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 i16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as i16,
+            RespView::Double(d, _) => double_to_int::<i16>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -286,7 +290,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 u16::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as u16,
+            RespView::Double(d, _) => double_to_int::<u16>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -317,7 +321,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 i8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as i8,
+            RespView::Double(d, _) => double_to_int::<i8>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -348,7 +352,7 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(i, _) => {
                 u8::try_from(i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            RespView::Double(d, _) => d as u8,
+            RespView::Double(d, _) => double_to_int::<u8>(d)?,
             RespView::BulkString(bs) => {
                 atoi::atoi(bs).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
             }
@@ -376,6 +380,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             match self.view {
                 RespView::SimpleString(ss) => fast_float2::parse(ss)
                     .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "asking for a float is asking for an approximation: unlike an \
+                          integer target, where a rounded value would be read as exact, \
+                          the requested type is itself the caller's precision bound"
+                )]
                 RespView::Integer(i, _) => i as f64,
                 RespView::Double(d, _) => d,
                 RespView::BulkString(bs) => fast_float2::parse(bs)
@@ -396,7 +406,19 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             match self.view {
                 RespView::SimpleString(ss) => fast_float2::parse(ss)
                     .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "asking for a float is asking for an approximation: unlike an \
+                          integer target, where a rounded value would be read as exact, \
+                          the requested type is itself the caller's precision bound"
+                )]
                 RespView::Integer(i, _) => i as f32,
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "asking for a float is asking for an approximation: unlike an \
+                          integer target, where a rounded value would be read as exact, \
+                          the requested type is itself the caller's precision bound"
+                )]
                 RespView::Double(d, _) => d as f32,
                 RespView::BulkString(bs) => fast_float2::parse(bs)
                     .map_err(|_| Error::Client(ClientError::CannotParseDouble))?,

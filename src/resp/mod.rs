@@ -153,6 +153,19 @@ async fn main() -> Result<()> {
 // from the wire rather than from a local mistake. Indexing is denied, not
 // warned; see the panic policy in `lib.rs`.
 #![deny(clippy::indexing_slicing)]
+// Same reasoning applied to `as`, which `arithmetic_side_effects` does not cover:
+// on a wire-supplied value a narrowing cast truncates, a signed-to-unsigned one
+// wraps and a float-to-integer one saturates or maps NaN to zero — silently, in
+// debug as in release. Every conversion of a decoded value must therefore be
+// `TryFrom` or a documented-exact `as`, each surviving cast carrying an
+// `#[expect(…, reason = "…")]` naming the invariant that makes it exact.
+#![deny(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_lossless
+)]
 
 pub(crate) use arg_counter::*;
 pub(crate) use arg_serializer::*;

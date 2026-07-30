@@ -87,21 +87,24 @@ fn parse_collection_header(
         }));
     }
     // Cap the announced cardinality before it is narrowed, and before it is
-    // doubled. `n as usize` would truncate on a 32-bit target, turning an
-    // announced four-billion-element collection into a small count that passes the
-    // cap and stops the element walk early — the remaining elements would then be
-    // read as the next reply, misattributing every response after it.
+    // doubled. Narrowing `n` to a `usize` first would truncate on a 32-bit target,
+    // turning an announced four-billion-element collection into a small count that
+    // passes the cap and stops the element walk early — the remaining elements
+    // would then be read as the next reply, misattributing every response after it.
     //
     // Doubling in `u64` is where the check happens: `n` is non-negative and at most
     // `i64::MAX`, so `n * 2` is exact in `u64` (it lands one short of `u64::MAX`),
-    // and `usize as u64` is lossless at every pointer width. Once the cap has
-    // accepted the wide count it is bounded by a `usize`, so narrowing it is exact.
+    // and `usize as u64` is lossless at every pointer width. The cap then bounds
+    // the wide count by a `usize`, so the narrowing below cannot fail; it is
+    // written as a fallible conversion rather than asserted.
     let multiplier: u64 = if is_map_shaped { 2 } else { 1 };
-    let wide_count = n as u64 * multiplier;
+    let wide_count = n.cast_unsigned() * multiplier;
     if wide_count > max_collection_length as u64 {
         return Err(Error::Client(ClientError::CollectionLengthTooLarge));
     }
-    let count = wide_count as usize;
+    let Ok(count) = usize::try_from(wide_count) else {
+        return Err(Error::Client(ClientError::CollectionLengthTooLarge));
+    };
     Ok(CollectionHeader::Open { count, end })
 }
 

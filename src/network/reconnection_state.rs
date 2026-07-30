@@ -34,7 +34,7 @@ impl ReconnectionState {
                 jitter,
             } => {
                 self.attempts = incr_with_max(self.attempts, *max_attempts)?;
-                Some(add_jitter(*delay as u64, *jitter))
+                Some(add_jitter(u64::from(*delay), *jitter))
             }
             ReconnectionConfig::Linear {
                 max_delay,
@@ -43,9 +43,9 @@ impl ReconnectionState {
                 jitter,
             } => {
                 self.attempts = incr_with_max(self.attempts, *max_attempts)?;
-                let delay = (*delay as u64).saturating_mul(self.attempts as u64);
+                let delay = u64::from(*delay).saturating_mul(u64::from(self.attempts));
 
-                Some(cmp::min(*max_delay as u64, add_jitter(delay, *jitter)))
+                Some(cmp::min(u64::from(*max_delay), add_jitter(delay, *jitter)))
             }
             ReconnectionConfig::Exponential {
                 min_delay,
@@ -55,11 +55,11 @@ impl ReconnectionState {
                 jitter,
             } => {
                 self.attempts = incr_with_max(self.attempts, *max_attempts)?;
-                let delay = (*multiplicative_factor as u64)
+                let delay = u64::from(*multiplicative_factor)
                     .saturating_pow(self.attempts - 1)
-                    .saturating_mul(*min_delay as u64);
+                    .saturating_mul(u64::from(*min_delay));
 
-                Some(cmp::min(*max_delay as u64, add_jitter(delay, *jitter)))
+                Some(cmp::min(u64::from(*max_delay), add_jitter(delay, *jitter)))
             }
         }
     }
@@ -77,6 +77,6 @@ fn add_jitter(delay: u64, jitter: u32) -> u64 {
     if jitter == 0 {
         delay
     } else {
-        delay.saturating_add(rng().random_range(0..jitter as u64))
+        delay.saturating_add(rng().random_range(0..u64::from(jitter)))
     }
 }

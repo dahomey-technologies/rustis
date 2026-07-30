@@ -1,6 +1,9 @@
 use crate::{
     ClientError, Error, Result,
-    resp::{Value, util::is_field_value_array},
+    resp::{
+        Value,
+        util::{double_to_int, is_field_value_array},
+    },
 };
 use serde::{
     Deserialize, Deserializer,
@@ -75,7 +78,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 i8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as i8,
+            Value::Double(d) => double_to_int::<i8>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
@@ -96,7 +99,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 i16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as i16,
+            Value::Double(d) => double_to_int::<i16>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
@@ -117,7 +120,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 i32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as i32,
+            Value::Double(d) => double_to_int::<i32>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
@@ -137,7 +140,7 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => *i,
-            Value::Double(d) => *d as i64,
+            Value::Double(d) => double_to_int::<i64>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
@@ -162,7 +165,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 u8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as u8,
+            Value::Double(d) => double_to_int::<u8>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
@@ -183,7 +186,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 u16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as u16,
+            Value::Double(d) => double_to_int::<u16>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
@@ -204,7 +207,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 u32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as u32,
+            Value::Double(d) => double_to_int::<u32>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
@@ -225,7 +228,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => {
                 u64::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
             }
-            Value::Double(d) => *d as u64,
+            Value::Double(d) => double_to_int::<u64>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
@@ -247,7 +250,19 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "asking for a float is asking for an approximation: unlike an \
+                      integer target, where a rounded value would be read as exact, \
+                      the requested type is itself the caller's precision bound"
+            )]
             Value::Integer(i) => *i as f32,
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "asking for a float is asking for an approximation: unlike an \
+                      integer target, where a rounded value would be read as exact, \
+                      the requested type is itself the caller's precision bound"
+            )]
             Value::Double(d) => *d as f32,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f32>()?,
             Value::Null => 0.,
@@ -266,6 +281,12 @@ impl<'de> Deserializer<'de> for &'de Value {
         V: Visitor<'de>,
     {
         let result = match self {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "asking for a float is asking for an approximation: unlike an \
+                      integer target, where a rounded value would be read as exact, \
+                      the requested type is itself the caller's precision bound"
+            )]
             Value::Integer(i) => *i as f64,
             Value::Double(d) => *d,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f64>()?,

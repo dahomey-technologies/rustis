@@ -10,6 +10,16 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **A double no longer decodes as an integer unless the conversion is exact.**
+  Every integer width converted a `Double` reply with a saturating cast, so a
+  `ZSCORE` of `3.9` read as `i64` gave `3`, `1e300` gave `i64::MAX` and `NaN`
+  gave `0` — a plausible number for a value the server never sent. A double now
+  deserializes to an integer only when it is finite, has no fractional part and
+  fits the target; anything else fails with `ClientError::CannotParseInteger`,
+  as an out-of-range integer reply already did. Read such a reply as `f64` to
+  keep the fractional value. A negative reply read as `u128` no longer wraps
+  either. Both deserializers — RESP and `resp::Value` — are covered.
+
 - **An array of more than one element no longer decodes as a single integer.**
   Every integer width (`i8`…`i128`, `u8`…`u128`) unwrapped an array reply to its
   first element and discarded the rest, so a mistyped response shape produced a

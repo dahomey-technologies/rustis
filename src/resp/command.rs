@@ -155,6 +155,7 @@ pub(crate) type ArgsLayout = SmallVec<[ArgLayout; ARGS_LAYOUT_INLINE]>;
 
 #[expect(
     clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation,
     reason = "invariant: a layout is built from a range the builder just wrote into \
               the command buffer, so its end is at or past its start, and the whole \
               buffer fits `u32` — Redis caps a bulk string at 512 MiB, as the field \
@@ -856,12 +857,14 @@ impl From<CommandBuilder> for Command {
     #[expect(
         clippy::indexing_slicing,
         clippy::arithmetic_side_effects,
+        clippy::cast_possible_truncation,
         reason = "invariant: every write below is bounded by `HEADROOM_SIZE`, \
                   which is sized to hold the longest `*<n>` header line and is \
                   reserved up front by `CommandBuilder::new`. The header therefore \
                   never fills the headroom, which is what makes `HEADROOM_SIZE - \
                   cursor.len()` and the shift of every layout by `start_pos` \
-                  subtractions that cannot go below zero. Nothing here is \
+                  subtractions that cannot go below zero — and `start_pos`, \
+                  bounded by that same headroom, exact as a `u32`. Nothing here is \
                   driven by input, and a fallback would have to emit a command \
                   with a truncated header — silent corruption in place of a \
                   crash. This exemption covers the finalizer only."

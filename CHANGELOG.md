@@ -62,6 +62,18 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **A Sentinel client rediscovers its master when the one it holds is demoted.**
+  A failover turns the master into a replica without closing the connections it
+  already serves, so nothing in the transport says the topology moved: the client
+  kept writing to a replica, reading stale data and collecting `READONLY` on every
+  write, for as long as the socket held — which is forever with the default absence
+  of `command_timeout` and TCP keepalive. A `READONLY` received on a Sentinel
+  connection now triggers a reconnection, and a Sentinel reconnection polls the
+  sentinels for the master again and accepts a node only once `ROLE` confirms it.
+  The caller who issued the refused write still receives the `READONLY` itself; the
+  commands in flight follow the usual reconnection rules. Standalone and cluster
+  connections are unchanged — neither has a master to look up.
+
 - **`TRYAGAIN` and `CLUSTERDOWN` are now retried instead of reaching the
   caller.** Both were parsed and never consulted, so a routine resharding — a
   multi-key command whose keys straddle a slot in migration — or a failover

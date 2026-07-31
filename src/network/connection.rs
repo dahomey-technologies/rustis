@@ -102,6 +102,21 @@ impl Connection {
         }
     }
 
+    /// Whether reconnecting this connection looks the master up again, rather than
+    /// redialing the node it already knows.
+    ///
+    /// Only the sentinel variant does: its `reconnect` polls the sentinels and
+    /// accepts a node only once `ROLE` confirms it is the master. So it is the only
+    /// one a reconnection can repair when the node turned out to be a replica — a
+    /// standalone connection would come back to the same demoted node, and a cluster
+    /// one learns where the masters are from the cluster itself.
+    pub(crate) fn rediscovers_master_on_reconnect(&self) -> bool {
+        match self {
+            Connection::Sentinel(_) => true,
+            Connection::Standalone(_) | Connection::Cluster(_) => false,
+        }
+    }
+
     pub(crate) fn tag(&self) -> Arc<str> {
         match self {
             Connection::Standalone(connection) => connection.tag(),

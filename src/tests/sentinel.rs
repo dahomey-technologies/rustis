@@ -2,8 +2,8 @@ use crate::{
     Result,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
-        ConnectionCommands, ReplicaOfOptions, SentinelCommands, SentinelSimulateFailureMode,
-        ServerCommands,
+        ConnectionCommands, GenericCommands, ReplicaOfOptions, SentinelCommands,
+        SentinelSimulateFailureMode, ServerCommands, StringCommands,
     },
     resp::cmd,
     tests::{
@@ -461,6 +461,73 @@ async fn sentinel_simulate_failure() -> Result<()> {
     })
     .await?;
 
+    Ok(())
+}
+
+/// A master demoted to replica keeps serving the connections it already had:
+/// `REPLICAOF` closes none of them. So nothing in the transport tells a client its
+/// node changed role — the only thing that does is the `READONLY` the demoted node
+/// answers to the next write, and that has to send the client back through the
+/// sentinels. Otherwise it writes to a replica for as long as the socket holds,
+/// which is forever when no timeout is configured.
+///
+/// The roles are swapped by hand rather than through `SENTINEL FAILOVER`: a
+/// Sentinel-driven failover also drops the demoted node's client connections, so a
+/// client would recover from the socket loss and the test would pass whatever the
+/// `READONLY` handling does.
+#[tokio::test]
+#[serial]
+async fn a_write_recovers_after_the_master_is_demoted() -> Result<()> {
+    log_try_init();
+    let sentinel = wait_for_spare_sentinel_up().await?;
+    reset_spare_sentinel_topology(&sentinel).await?;
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+sentinel://{host}:26382/{SPARE_SENTINEL_SERVICE}").into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    let client = Client::connect(config).await?;
+
+    // A write before the demotion: it proves the client reached a real master, so a
+    // failure afterwards is the demotion and not a deployment that was never ready.
+    client.set("sentinel_demoted_master", "before").await?;
+
+    // The address the servers dial to reach each other, which is not the one this
+    // test connects through — see `reset_spare_sentinel_topology`.
+    let master = sentinel.sentinel_master(SPARE_SENTINEL_SERVICE).await?;
+    let announced_ip = master.ip;
+    let demoted_port = master.port;
+    let promoted_port = if demoted_port == 6383 { 6384 } else { 6383 };
+
+    // Promote first, so the node being demoted has a real master to follow.
+    let promoted = Client::connect(format!("{host}:{promoted_port}")).await?;
+    promoted.replicaof(ReplicaOfOptions::no_one()).await?;
+    let demoted = Client::connect(format!("{host}:{demoted_port}")).await?;
+    demoted
+        .replicaof(ReplicaOfOptions::master(&announced_ip, promoted_port))
+        .await?;
+
+    // Point the Sentinel at the new master rather than waiting for it to notice: an
+    // election is its own subject, and the client under test only ever asks the
+    // Sentinel where the master is.
+    let _: Result<()> = sentinel.sentinel_remove(SPARE_SENTINEL_SERVICE).await;
+    sentinel
+        .sentinel_monitor(SPARE_SENTINEL_SERVICE, &announced_ip, promoted_port, 1)
+        .await?;
+
+    // The first write after the demotion is expected to fail — with the `READONLY`
+    // the demoted node answers, which its caller is entitled to see. What must not
+    // happen is that it keeps failing: a write only ever succeeds on a master, so a
+    // success here is the proof the client went back through the sentinels.
+    wait_until("the client writes to the promoted master again", || async {
+        Ok(client.set("sentinel_demoted_master", "after").await.is_ok())
+    })
+    .await?;
+
+    let value: String = client.get("sentinel_demoted_master").await?;
+    assert_eq!("after", value);
+
+    client.del("sentinel_demoted_master").await?;
     Ok(())
 }
 

@@ -1,10 +1,12 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
-    ClientError, Connection, ConnectionState, Error, JoinHandle, ReconnectionState, Result,
-    RetryReason,
+    ClientError, Connection, ConnectionState, Error, JoinHandle, ReconnectionState, RedisError,
+    RedisErrorKind, Result, RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
-    resp::{ClientReplyMode, CommandKind, RespResponse, StateSlot, SubscriptionType, cmd},
+    resp::{
+        ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
+    },
     spawn, timeout,
 };
 use bytes::Bytes;
@@ -890,6 +892,13 @@ impl NetworkHandler {
             debug!("Connection-level read error, reconnecting: {e}");
             return self.reconnect().await;
         }
+        // The demotion signal is read before the result is handed over, because
+        // `handle_result` consumes it. The caller still receives the `READONLY`
+        // itself — replacing it with the reconnection's `DisconnectedByPeer` would
+        // hide why the write was refused — and the rediscovery happens after the
+        // whole batch has been dispatched, so a burst of refused writes costs one
+        // reconnection rather than one each.
+        let mut master_demoted = self.master_demoted(&result);
         self.handle_result(result);
 
         // OPTIMIZATION : Drain the next available results in the buffer
@@ -903,10 +912,25 @@ impl NetworkHandler {
                 debug!("Connection-level read error, reconnecting: {e}");
                 return self.reconnect().await;
             }
+            master_demoted |= self.master_demoted(&result);
             self.handle_result(result);
         }
 
+        if master_demoted {
+            debug!("The master was demoted to replica, rediscovering it");
+            return self.reconnect().await;
+        }
+
         true
+    }
+
+    /// Whether this result says the master is now a replica *and* a reconnection
+    /// would find the new one — the two halves that together make rediscovery worth
+    /// it. Where reconnecting cannot look the master up again, a `READONLY` is left
+    /// as the per-message error it is, rather than churning the connection to come
+    /// back to the same demoted node.
+    fn master_demoted(&self, result: &Result<RespResponse>) -> bool {
+        indicates_demoted_master(result) && self.connection.rediscovers_master_on_reconnect()
     }
 
     /// Hands a matched reply to its caller, waking it.
@@ -1630,6 +1654,31 @@ fn is_connection_level_error(error: &Error) -> bool {
     }
 }
 
+/// Whether this reply says the node being talked to is no longer the master:
+/// `-READONLY` is what a master demoted to replica answers to a write, on a
+/// connection the server does not close.
+///
+/// It stays a per-message error — the caller who issued the write receives it — but
+/// on a Sentinel connection it is also the only signal that the topology moved, and
+/// so the trigger for rediscovering the master through the sentinels.
+///
+/// A command error arrives here as a successfully read error *frame*, not as an
+/// `Err`: the `Error::Redis` only exists once a caller deserializes it. The tag
+/// check comes first, so an ordinary reply never pays for a view.
+#[inline]
+fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
+    match result {
+        Ok(response) => {
+            response.is_error()
+                && matches!(response.view(), Ok(RespView::Error(message))
+                    if matches!(RedisError::try_from(message),
+                        Ok(error) if error.kind == RedisErrorKind::Readonly))
+        }
+        Err(Error::Redis(error)) => error.kind == RedisErrorKind::Readonly,
+        Err(_) => false,
+    }
+}
+
 /// Whether a message that has been attempted `attempts` times has reached the
 /// configured per-message cap. `cap == 0` means unlimited (the default), matching
 /// the historical behavior of never bounding retries at the message level.
@@ -1648,7 +1697,7 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use super::{is_connection_level_error, max_attempts_reached};
+    use super::{indicates_demoted_master, is_connection_level_error, max_attempts_reached};
 
     #[test]
     fn zero_cap_is_unlimited() {
@@ -1693,5 +1742,57 @@ mod tests {
             ClientError::MaxNestingDepthExceeded
         )));
         assert!(is_connection_level_error(&Error::EOF));
+    }
+
+    /// `READONLY` is the one command error that says something about the *node*
+    /// rather than the command: it is what a master demoted to replica answers to
+    /// a write, on a socket the server never closed. It reaches the handler as a
+    /// read error *frame*, which is the form that has to be recognized.
+    #[test]
+    fn readonly_is_the_only_demotion_signal() {
+        assert!(indicates_demoted_master(&Ok(decode_one(
+            "-READONLY You can't write against a read only replica.\r\n"
+        ))));
+
+        // Another command error says nothing about the node's role, and neither
+        // does an ordinary reply.
+        assert!(!indicates_demoted_master(&Ok(decode_one(
+            "-NOPERM no permission\r\n"
+        ))));
+        assert!(!indicates_demoted_master(&Ok(decode_one("+OK\r\n"))));
+        assert!(!indicates_demoted_master(&Ok(decode_one(":12\r\n"))));
+
+        // And the same signal already turned into an `Error`, as the cluster path
+        // hands per-shard errors up.
+        assert!(indicates_demoted_master(&Err(Error::Redis(RedisError {
+            kind: RedisErrorKind::Readonly,
+            description: "You can't write against a read only replica.".to_owned(),
+        }))));
+        assert!(!indicates_demoted_master(&Err(Error::Retry(
+            Default::default()
+        ))));
+        assert!(!indicates_demoted_master(&Err(Error::EOF)));
+    }
+
+    /// Decodes `str`, which must hold exactly one complete frame.
+    fn decode_one(str: &str) -> crate::resp::RespResponse {
+        use tokio_util::codec::Decoder;
+
+        let mut buf: bytes::BytesMut = str.into();
+        crate::resp::BufferDecoder::new()
+            .decode(&mut buf)
+            .unwrap()
+            .expect("one complete frame")
+    }
+
+    /// The demotion signal must stay a per-message error: the caller who issued the
+    /// write is entitled to the `READONLY` itself, not to whatever the ensuing
+    /// reconnection substitutes for it.
+    #[test]
+    fn readonly_stays_a_per_message_error() {
+        assert!(!is_connection_level_error(&Error::Redis(RedisError {
+            kind: RedisErrorKind::Readonly,
+            description: "You can't write against a read only replica.".to_owned(),
+        })));
     }
 }

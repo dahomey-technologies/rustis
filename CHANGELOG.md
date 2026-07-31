@@ -34,6 +34,12 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **The manifest declares `license = "MIT"` instead of `license-file`.** With
+  `license-file`, `cargo metadata` reports `license: null`, so every tool that
+  keys on the SPDX identifier — license scanners, dependency audits, policy
+  checks — sees the crate as carrying no license. `LICENSE` is the verbatim MIT
+  text and is still packaged, so the terms are unchanged.
+
 - **A double no longer decodes as an integer unless the conversion is exact.**
   Every integer width converted a `Double` reply with a saturating cast, so a
   `ZSCORE` of `3.9` read as `i64` gave `3`, `1e300` gave `i64::MAX` and `NaN`

@@ -8,6 +8,18 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Added
+
+- **`Config::credentials_provider` authenticates with credentials resolved at every
+  handshake.** `Config::password` is fixed once and for all, so a client of a managed
+  Redis whose password is a short-lived token (ElastiCache IAM, Memorystore IAM, Entra
+  ID, Vault) reconnects for one token lifetime and then fails authentication for good.
+  A `CredentialsProvider` — implemented for any closure returning
+  `Result<Credentials>` — is asked again on each reconnection. It takes precedence over
+  `username`/`password` and has no URI representation. `SentinelConfig::credentials_provider`
+  does the same for the Sentinel instances themselves; the two are independent, a
+  Sentinel being a different server with its own ACLs.
+
 ### Changed
 
 - **A double no longer decodes as an integer unless the conversion is exact.**

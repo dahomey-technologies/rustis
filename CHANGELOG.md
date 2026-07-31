@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
-## [Unreleased]
+## [0.22.0] - 2026-08-01
 
 ### Added
 
@@ -947,6 +947,6 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
-[Unreleased]: https://github.com/dahomey-technologies/rustis/compare/0.21.0...HEAD
+[0.22.0]: https://github.com/dahomey-technologies/rustis/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/dahomey-technologies/rustis/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/dahomey-technologies/rustis/compare/0.19.3...0.20.0

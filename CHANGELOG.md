@@ -50,6 +50,14 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **`TRYAGAIN` and `CLUSTERDOWN` are now retried instead of reaching the
+  caller.** Both were parsed and never consulted, so a routine resharding — a
+  multi-key command whose keys straddle a slot in migration — or a failover
+  produced an application-visible error the driver is meant to absorb. A cluster
+  command answered `TRYAGAIN` is now replayed after 25 ms, and one answered
+  `CLUSTERDOWN` after 250 ms and a topology reload, through the same retry path
+  as `ASK`/`MOVED` and under the same `max_command_attempts` cap.
+
 - **Dropping a command future does not cancel the command, and this is now
   documented.** The message is already queued when the future is awaited, so it
   is sent and executed by the server; only the reply is discarded. Every

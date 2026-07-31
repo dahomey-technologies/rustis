@@ -1331,3 +1331,81 @@ async fn cluster_connection_state_is_restored_on_every_node_after_reconnect() ->
 
     Ok(())
 }
+
+/// `TRYAGAIN` is what a multi-key command gets while its slot is being migrated
+/// and its keys straddle the two nodes. The command was not executed, and the
+/// cluster spec asks the client to replay it after a short pause rather than to
+/// surface it: a routine resharding must stay invisible to the caller.
+#[tokio::test]
+#[serial]
+async fn try_again_is_retried_instead_of_reaching_the_caller() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    client.set("clu_tryagain", "value").await?;
+
+    // The next reply the client receives is a TRYAGAIN, whatever the server
+    // really answered — the state a slot in migration puts a multi-key command
+    // in, with no timing assumption.
+    cluster_hook.arm_transient_error_on_next_result(
+        "TRYAGAIN Multiple keys request during rehashing of slot",
+    );
+
+    let value: String = timeout(
+        Duration::from_secs(5),
+        client.get::<String>("clu_tryagain").into_future(),
+    )
+    .await??;
+
+    assert_eq!(
+        "value", value,
+        "a TRYAGAIN must be replayed, not reported to the caller"
+    );
+
+    client.del("clu_tryagain").await?;
+
+    Ok(())
+}
+
+/// `CLUSTERDOWN` is answered by a shard that momentarily has no master, during a
+/// failover. Like `TRYAGAIN` the command did not run, so it is replayed — after
+/// a longer pause, and after reloading a topology the failover just invalidated.
+#[tokio::test]
+#[serial]
+async fn cluster_down_is_retried_instead_of_reaching_the_caller() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    client.set("clu_clusterdown", "value").await?;
+
+    cluster_hook.arm_transient_error_on_next_result("CLUSTERDOWN The cluster is down");
+
+    let value: String = timeout(
+        Duration::from_secs(5),
+        client.get::<String>("clu_clusterdown").into_future(),
+    )
+    .await??;
+
+    assert_eq!(
+        "value", value,
+        "a CLUSTERDOWN must be replayed, not reported to the caller"
+    );
+
+    client.del("clu_clusterdown").await?;
+
+    Ok(())
+}

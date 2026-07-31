@@ -28,6 +28,17 @@ pub enum RetryReason {
         hash_slot: u16,
         address: (String, u16),
     },
+    /// Received a transient cluster error (`TRYAGAIN`, `CLUSTERDOWN`) from the
+    /// Redis Server: the command was not executed and the cluster spec asks the
+    /// client to replay it after a short delay.
+    TryAgain {
+        /// How long to wait before the command is sent again.
+        delay: std::time::Duration,
+        /// Whether the local topology is suspect and has to be reloaded before
+        /// the replay: true for `CLUSTERDOWN`, which follows a topology change,
+        /// false for `TRYAGAIN`, which only reports a slot in migration.
+        refresh_topology: bool,
+    },
 }
 
 /// Errors issued by the client

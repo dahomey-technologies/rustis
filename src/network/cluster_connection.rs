@@ -7,7 +7,7 @@ use crate::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
-    network::Version,
+    network::{Version, sleep},
     resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, RespView},
 };
 use bytes::Bytes;
@@ -21,6 +21,7 @@ use std::{
     iter::zip,
     sync::Arc,
     task::Poll,
+    time::Duration,
 };
 use tracing::{debug, error, info, trace, warn};
 
@@ -43,6 +44,10 @@ pub(crate) struct ClusterTestHook {
     /// When set, the initial discovery ignores the shard holding this node,
     /// reproducing a local topology that does not know a node the cluster does.
     hidden_node_id: Arc<std::sync::Mutex<Option<String>>>,
+    /// When set, the next sub-request result is replaced by this RESP error,
+    /// reproducing a transient cluster reply (`TRYAGAIN`, `CLUSTERDOWN`) without
+    /// having to catch a real resharding at the right microsecond.
+    transient_error: Arc<std::sync::Mutex<Option<Bytes>>>,
 }
 
 #[cfg(test)]
@@ -86,6 +91,16 @@ impl ClusterTestHook {
 
     fn take_hidden_node_id(&self) -> Option<String> {
         self.hidden_node_id.lock().unwrap().take()
+    }
+
+    /// Arms a one-shot replacement of the next sub-request reply by the server
+    /// error `error` (`"TRYAGAIN ..."`, `"CLUSTERDOWN ..."`).
+    pub(crate) fn arm_transient_error_on_next_result(&self, error: &str) {
+        *self.transient_error.lock().unwrap() = Some(Bytes::from(format!("-{error}\r\n")));
+    }
+
+    fn take_transient_error(&self) -> Option<Bytes> {
+        self.transient_error.lock().unwrap().take()
     }
 }
 
@@ -203,6 +218,38 @@ struct PendingRedirection {
     should_ask: bool,
 }
 
+/// Delay observed before replaying a command the cluster answered `TRYAGAIN`
+/// to. The slot is being migrated: the hand-over of a single key is short, so a
+/// brief pause is enough for the retry to land on the settled side.
+const TRY_AGAIN_DELAY: Duration = Duration::from_millis(25);
+
+/// Delay observed before replaying a command the cluster answered `CLUSTERDOWN`
+/// to. This one waits on a failover, which is decided in seconds rather than
+/// milliseconds, so retrying sooner would only spend the message's attempts.
+const CLUSTER_DOWN_DELAY: Duration = Duration::from_millis(250);
+
+/// The retry a transient cluster error calls for, or `None` for a server error
+/// that belongs to the caller.
+///
+/// Both kinds report a command that was *not* executed — a slot in migration
+/// whose keys are split across two nodes, or a shard momentarily without a
+/// master — and the cluster spec asks the client to absorb them instead of
+/// surfacing them, since they are what a routine resharding or failover
+/// produces.
+fn transient_retry_reason(kind: &RedisErrorKind) -> Option<RetryReason> {
+    match kind {
+        RedisErrorKind::TryAgain => Some(RetryReason::TryAgain {
+            delay: TRY_AGAIN_DELAY,
+            refresh_topology: false,
+        }),
+        RedisErrorKind::ClusterDown => Some(RetryReason::TryAgain {
+            delay: CLUSTER_DOWN_DELAY,
+            refresh_topology: true,
+        }),
+        _ => None,
+    }
+}
+
 /// What `internal_read` concluded about a fulfilled request.
 enum ReadOutcome {
     /// The request is over: this is its answer, or `None` for a disconnection.
@@ -271,6 +318,11 @@ pub(crate) struct ClusterConnection {
     /// Whether the topology has already been refreshed during the send batch
     /// currently being fed. Reset by `flush`, which ends that batch.
     refreshed_in_current_batch: bool,
+    /// Whether the transient-error delay has already been awaited during the
+    /// send batch currently being fed. Reset by `flush`, like the flag above:
+    /// every command of a retried batch carries the same reasons, and the delay
+    /// is owed once, not once per command.
+    delayed_in_current_batch: bool,
     #[cfg(test)]
     test_hook: Option<ClusterTestHook>,
 }
@@ -302,6 +354,7 @@ impl ClusterConnection {
             pending_reply_skip: None,
             transaction_state: TransactionState::default(),
             refreshed_in_current_batch: false,
+            delayed_in_current_batch: false,
             #[cfg(test)]
             test_hook: config.cluster_test_hook.clone(),
         })
@@ -357,6 +410,46 @@ impl ClusterConnection {
             if !self.refreshed_in_current_batch {
                 self.refreshed_in_current_batch = true;
                 self.refresh_nodes_and_slot_ranges().await?;
+            }
+        }
+
+        // A transient cluster error means the command never ran: the slot is
+        // mid-migration (`TRYAGAIN`) or the shard is briefly unavailable
+        // (`CLUSTERDOWN`). The cluster spec asks the client to replay it after a
+        // short pause, which is what this awaits. It holds the whole send batch,
+        // and that is the point: the cluster just said it cannot serve this
+        // slot, so racing back at it would only burn the message's attempts.
+        if let Some(delay) = retry_reasons
+            .iter()
+            .filter_map(|r| match r {
+                RetryReason::TryAgain { delay, .. } => Some(*delay),
+                _ => None,
+            })
+            .max()
+            && !self.delayed_in_current_batch
+        {
+            self.delayed_in_current_batch = true;
+            debug!("waiting {delay:?} before replaying a transient cluster error");
+            sleep(delay).await;
+
+            if !self.refreshed_in_current_batch
+                && retry_reasons.iter().any(|r| {
+                    matches!(
+                        r,
+                        RetryReason::TryAgain {
+                            refresh_topology: true,
+                            ..
+                        }
+                    )
+                })
+            {
+                self.refreshed_in_current_batch = true;
+                // A cluster that is still down answers nothing usable; the
+                // replay then goes to the topology already known and earns
+                // another `CLUSTERDOWN`, which is a retry rather than a failure.
+                if let Err(e) = self.refresh_nodes_and_slot_ranges().await {
+                    warn!("Cannot refresh the topology after a CLUSTERDOWN: {e}");
+                }
             }
         }
 
@@ -462,8 +555,10 @@ impl ClusterConnection {
 
     #[inline]
     pub(crate) async fn flush(&mut self) -> Result<()> {
-        // End of the send batch: allow the next one to refresh again if needed.
+        // End of the send batch: allow the next one to refresh and delay again
+        // if needed.
         self.refreshed_in_current_batch = false;
+        self.delayed_in_current_batch = false;
 
         let mut flush_futures = SmallVec::<[_; 16]>::new();
 
@@ -994,8 +1089,22 @@ impl ClusterConnection {
         &mut self,
         req_idx: usize,
         sub_req_idx: usize,
-        result: Option<Result<RespResponse>>,
+        #[cfg_attr(not(test), allow(unused_mut))] mut result: Option<Result<RespResponse>>,
     ) -> bool {
+        // Test-only: hand a transient cluster error to the next sub-request that
+        // completes, in place of the reply the server actually sent.
+        #[cfg(test)]
+        if let Some(hook) = &self.test_hook
+            && matches!(result, Some(Ok(_)))
+            && let Some(error) = hook.take_transient_error()
+        {
+            let mut tape = crate::resp::RespTapeMut::default();
+            let mut parser = crate::resp::RespFrameParser::new(&error, &mut tape);
+            if let Ok((frame, _)) = parser.parse() {
+                result = Some(Ok(RespResponse::new(error.into(), frame)));
+            }
+        }
+
         let Some(request) = self.pending_requests.get_mut(req_idx) else {
             return false;
         };
@@ -1064,6 +1173,10 @@ impl ClusterConnection {
             let (address, should_ask) = match reason {
                 RetryReason::Ask { address, .. } => (address, true),
                 RetryReason::Moved { address, .. } => (address, false),
+                // Not a redirection: nothing to re-arm against, and the caller
+                // falls back to replaying the whole command, which is where the
+                // transient-error delay is awaited.
+                RetryReason::TryAgain { .. } => return false,
             };
 
             let Some(node) = self.nodes.iter().find(|n| n.address == *address) else {
@@ -1192,6 +1305,12 @@ impl ClusterConnection {
                             hash_slot,
                             address: address.clone(),
                         }),
+                        // `TRYAGAIN` / `CLUSTERDOWN`: the command did not run,
+                        // so it is replayed rather than reported to the caller.
+                        Ok(RedisError { kind, .. }) => match transient_retry_reason(&kind) {
+                            Some(reason) => retry_reasons.push(reason),
+                            None => sub_results.push(Ok(result)),
+                        },
                         _ => sub_results.push(Ok(result)),
                     },
                     _ => sub_results.push(Ok(result)),
@@ -1921,4 +2040,55 @@ enum Integer {
     Single(i64),
     Array(Vec<i64>),
     Null,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CLUSTER_DOWN_DELAY, TRY_AGAIN_DELAY, transient_retry_reason};
+    use crate::{RedisErrorKind, RetryReason};
+
+    /// A `CLUSTERDOWN` follows a failover, which changes who owns the slot, so
+    /// the replay is worthless against the topology that earned the error.
+    #[test]
+    fn cluster_down_is_replayed_against_a_reloaded_topology() {
+        assert!(matches!(
+            transient_retry_reason(&RedisErrorKind::ClusterDown),
+            Some(RetryReason::TryAgain {
+                delay: CLUSTER_DOWN_DELAY,
+                refresh_topology: true
+            })
+        ));
+    }
+
+    /// A `TRYAGAIN` only reports a slot mid-migration: the topology it was read
+    /// against is still the right one, so the replay must not pay a discovery.
+    #[test]
+    fn try_again_is_replayed_without_a_discovery() {
+        assert!(matches!(
+            transient_retry_reason(&RedisErrorKind::TryAgain),
+            Some(RetryReason::TryAgain {
+                delay: TRY_AGAIN_DELAY,
+                refresh_topology: false
+            })
+        ));
+    }
+
+    /// Every other server error belongs to the caller: replaying it would hide a
+    /// real failure behind the attempt cap and, for a command that did run,
+    /// execute it twice.
+    #[test]
+    fn other_server_errors_are_not_retried() {
+        for kind in [
+            RedisErrorKind::WrongType,
+            RedisErrorKind::NoPerm,
+            RedisErrorKind::OutOfMemory,
+            RedisErrorKind::CrossSlot,
+            RedisErrorKind::Err,
+        ] {
+            assert!(
+                transient_retry_reason(&kind).is_none(),
+                "{kind:?} must reach the caller"
+            );
+        }
+    }
 }

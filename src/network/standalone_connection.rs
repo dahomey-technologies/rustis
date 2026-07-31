@@ -384,18 +384,18 @@ impl StandaloneConnection {
         // RESP3
         let mut hello_options = HelloOptions::new(3);
 
-        let config_username = self.config.username.clone();
-        let config_password = self.config.password.clone();
         let config_connection_name = self.config.connection_name.clone();
 
-        // authentication
-        if let Some(password) = &config_password {
+        // authentication: resolved for this handshake, so a rotated token is
+        // picked up by the reconnection instead of the expired one.
+        let credentials = self.config.resolve_credentials().await?;
+        if let Some(credentials) = &credentials {
             hello_options = hello_options.auth(
-                match &config_username {
+                match &credentials.username {
                     Some(username) => username,
                     None => "default",
                 },
-                password,
+                &credentials.password,
             );
         }
 

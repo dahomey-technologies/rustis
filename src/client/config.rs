@@ -1,12 +1,14 @@
-use crate::{ClientError, Error, Result};
+use crate::{
+    ClientError, Error, Result,
+    client::{Credentials, CredentialsProvider},
+};
 #[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
-#[cfg(feature = "rustls")]
-use std::sync::Arc;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 use url::Url;
@@ -327,6 +329,19 @@ pub struct Config {
     /// * [`ACL`](https://redis.io/docs/management/security/acl/)
     /// * [`Authentication`](https://redis.io/docs/management/security/#authentication)
     pub password: Option<String>,
+    /// An optional source of credentials consulted at every handshake, for
+    /// deployments whose password is a short-lived token.
+    ///
+    /// When set, it takes precedence over [`username`](Self::username) and
+    /// [`password`](Self::password). It has no URI representation, so it
+    /// survives neither [`Display`] nor a round-trip through
+    /// [`IntoConfig`]; it must be set on the `Config` itself.
+    ///
+    /// It is not used to authenticate against Sentinel instances, which keep
+    /// the static [`SentinelConfig::username`] / [`SentinelConfig::password`].
+    ///
+    /// See [`CredentialsProvider`].
+    pub credentials_provider: Option<Arc<dyn CredentialsProvider>>,
     /// The default database for this connection.
     ///
     /// If `database` is not set to `0`, a [`SELECT`](https://redis.io/commands/select/)
@@ -471,6 +486,10 @@ impl fmt::Debug for Config {
             .field("username", &self.username)
             // never leak the password in clear text
             .field("password", &self.password.as_ref().map(|_| "***"))
+            .field(
+                "credentials_provider",
+                &self.credentials_provider.as_ref().map(|_| "***"),
+            )
             .field("database", &self.database);
         #[cfg(any(feature = "native-tls", feature = "rustls"))]
         s.field("tls_config", &self.tls_config);
@@ -498,6 +517,7 @@ impl Default for Config {
             server: Default::default(),
             username: Default::default(),
             password: Default::default(),
+            credentials_provider: None,
             database: Default::default(),
             #[cfg(any(feature = "native-tls", feature = "rustls"))]
             tls_config: Default::default(),
@@ -544,6 +564,22 @@ impl FromStr for Config {
 }
 
 impl Config {
+    /// Yields the credentials the next handshake must authenticate with, or
+    /// `None` when the connection is not authenticated at all.
+    ///
+    /// The provider is consulted here rather than at construction time: that is
+    /// what lets a rotated token reach a reconnection.
+    pub(crate) async fn resolve_credentials(&self) -> Result<Option<Credentials>> {
+        if let Some(provider) = &self.credentials_provider {
+            return Ok(Some(provider.credentials().await?));
+        }
+
+        Ok(self.password.as_ref().map(|password| Credentials {
+            username: self.username.clone(),
+            password: password.clone(),
+        }))
+    }
+
     /// Build a config from an URI in the format `redis[s]://[[username]:password@]host[:port]/[database]`
     pub fn from_uri(uri: Url) -> Result<Config> {
         Self::from_str(uri.as_str())
@@ -960,6 +996,8 @@ impl Display for Config {
                 max_discovery_rounds: _,
                 password: _,
                 username: _,
+                // a provider has no URI representation
+                credentials_provider: _,
             }) => {
                 f.write_str(
                     &instances
@@ -1081,6 +1119,8 @@ impl Display for Config {
             max_discovery_rounds: _,
             password,
             username,
+            // a provider has no URI representation
+            credentials_provider: _,
         }) = &self.server
         {
             let wait_between_failures = wait_beetween_failures.as_millis() as u64;
@@ -1175,6 +1215,18 @@ pub struct SentinelConfig {
 
     /// Sentinel password
     pub password: Option<String>,
+
+    /// An optional source of Sentinel credentials consulted at every handshake
+    /// with a Sentinel instance.
+    ///
+    /// When set, it takes precedence over [`username`](Self::username) and
+    /// [`password`](Self::password). It is independent from
+    /// [`Config::credentials_provider`]: a Sentinel is a different server with
+    /// its own ACLs, so the master's credentials are never sent to it and vice
+    /// versa. Like its master counterpart, it has no URI representation.
+    ///
+    /// See [`CredentialsProvider`].
+    pub credentials_provider: Option<Arc<dyn CredentialsProvider>>,
 }
 
 impl fmt::Debug for SentinelConfig {
@@ -1187,6 +1239,10 @@ impl fmt::Debug for SentinelConfig {
             .field("username", &self.username)
             // never leak the password in clear text
             .field("password", &self.password.as_ref().map(|_| "***"))
+            .field(
+                "credentials_provider",
+                &self.credentials_provider.as_ref().map(|_| "***"),
+            )
             .finish()
     }
 }
@@ -1200,6 +1256,7 @@ impl Default for SentinelConfig {
             max_discovery_rounds: DEFAULT_MAX_DISCOVERY_ROUNDS,
             password: None,
             username: None,
+            credentials_provider: None,
         }
     }
 }

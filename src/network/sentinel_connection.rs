@@ -69,6 +69,21 @@ impl SentinelConnection {
         })
     }
 
+    /// The config a probe to a Sentinel instance connects with.
+    ///
+    /// A Sentinel is a different server with its own ACLs, so it gets the
+    /// Sentinel credentials — static or from its own provider — and never the
+    /// master's.
+    pub(crate) fn probe_config(sentinel_config: &SentinelConfig, config: &Config) -> Config {
+        let mut probe_config = config.clone();
+        probe_config.username.clone_from(&sentinel_config.username);
+        probe_config.password.clone_from(&sentinel_config.password);
+        probe_config
+            .credentials_provider
+            .clone_from(&sentinel_config.credentials_provider);
+        probe_config
+    }
+
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "the loop returns unless the round counter is still below \
@@ -86,13 +101,7 @@ impl SentinelConnection {
         // could not use it, typically mid-failover.
         let mut master_unreachable = false;
 
-        let mut sentinel_node_config = config.clone();
-        sentinel_node_config
-            .username
-            .clone_from(&sentinel_config.username);
-        sentinel_node_config
-            .password
-            .clone_from(&sentinel_config.password);
+        let sentinel_node_config = Self::probe_config(sentinel_config, config);
 
         let mut rounds = 0;
         loop {

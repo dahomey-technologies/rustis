@@ -176,6 +176,15 @@ does not parse, is rejected with an error rather than ignored.
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
 
+### Rotating credentials
+
+A password embedded in an URL is fixed for the life of the client. When the password is a
+short-lived token (AWS ElastiCache IAM, GCP Memorystore IAM, Azure Entra ID, Vault), set
+[`Config::credentials_provider`] instead: it is consulted at every handshake, so each
+reconnection authenticates with the current token. [`SentinelConfig::credentials_provider`] does
+the same for the Sentinel instances themselves. Neither has a URL representation; both are set on
+the config itself. See [`CredentialsProvider`].
+
 ### Example
 
 ```
@@ -465,6 +474,7 @@ mod bounded_channel;
 mod client;
 mod client_tracking_invalidation_stream;
 mod config;
+mod credentials_provider;
 mod message;
 mod monitor_stream;
 mod pipeline;
@@ -480,6 +490,7 @@ pub(crate) use bounded_channel::*;
 pub use client::*;
 pub use client_tracking_invalidation_stream::*;
 pub use config::*;
+pub use credentials_provider::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;
 pub use pipeline::*;

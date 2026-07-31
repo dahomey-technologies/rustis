@@ -10,6 +10,18 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Added
 
+- **`ClusterConfig::read_preference` routes read-only commands to the replicas.**
+  A cluster client sent every keyed command to the shard's master, replicas being
+  connected only to serve the broadcast policies, so a read-heavy deployment could
+  not spread its reads at all. `ReadPreference::PreferReplica` — spelled
+  `?read_preference=prefer_replica` in a URI — sends the commands the server reports
+  as `readonly` to the replicas of their shard, in round-robin, and puts those
+  connections in `READONLY` mode. Writes, blocking commands, transactions and
+  redirections stay on the master, as does everything when a shard has no reachable
+  replica. The default, `ReadPreference::Master`, keeps the previous behaviour: a
+  replica lags behind its master, so reading from one trades consistency for
+  throughput and has to be asked for.
+
 - **`Config::credentials_provider` authenticates with credentials resolved at every
   handshake.** `Config::password` is fixed once and for all, so a client of a managed
   Redis whose password is a short-lived token (ElastiCache IAM, Memorystore IAM, Entra

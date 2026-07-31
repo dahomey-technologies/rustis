@@ -251,7 +251,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         key: impl Serialize,
         options: TsGetOptions,
     ) -> PreparedCommand<'a, Self, Option<(u64, f64)>> {
-        prepare_command(self, cmd("TS.GET").key(key).arg(options))
+        prepare_command(self, cmd("TS.GET").key(key).arg(options).readonly())
     }
 
     /// Increase the value of the sample with the maximum existing timestamp,
@@ -296,7 +296,10 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// * [<https://redis.io/commands/ts.info/>](https://redis.io/commands/ts.info/)
     #[must_use]
     fn ts_info(self, key: impl Serialize, debug: bool) -> PreparedCommand<'a, Self, TsInfoResult> {
-        prepare_command(self, cmd("TS.INFO").key(key).arg_if(debug, "DEBUG"))
+        prepare_command(
+            self,
+            cmd("TS.INFO").key(key).arg_if(debug, "DEBUG").readonly(),
+        )
     }
 
     /// Append new samples to one or more time series
@@ -361,7 +364,14 @@ pub trait TimeSeriesCommands<'a>: Sized {
         options: TsMGetOptions,
         filters: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TS.MGET").arg(options).arg("FILTER").arg(filters))
+        prepare_command(
+            self,
+            cmd("TS.MGET")
+                .arg(options)
+                .arg("FILTER")
+                .arg(filters)
+                .readonly(),
+        )
     }
 
     /// Query a range across multiple time series by filters in forward direction
@@ -406,7 +416,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
                 .arg(options)
                 .arg("FILTER")
                 .arg(filters)
-                .arg(groupby_options),
+                .arg(groupby_options)
+                .readonly(),
         )
     }
 
@@ -452,7 +463,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
                 .arg(options)
                 .arg("FILTER")
                 .arg(filters)
-                .arg(groupby_options),
+                .arg(groupby_options)
+                .readonly(),
         )
     }
 
@@ -480,7 +492,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
     fn ts_queryindex<R: Response>(self, filters: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TS.QUERYINDEX").arg(filters))
+        prepare_command(self, cmd("TS.QUERYINDEX").arg(filters).readonly())
     }
 
     /// Query a range in forward direction
@@ -518,7 +530,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
                 .key(key)
                 .arg(from_timestamp)
                 .arg(to_timestamp)
-                .arg(options),
+                .arg(options)
+                .readonly(),
         )
     }
 
@@ -557,7 +570,8 @@ pub trait TimeSeriesCommands<'a>: Sized {
                 .key(key)
                 .arg(from_timestamp)
                 .arg(to_timestamp)
-                .arg(options),
+                .arg(options)
+                .readonly(),
         )
     }
 }

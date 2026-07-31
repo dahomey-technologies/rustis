@@ -418,7 +418,14 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         groupname: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<XConsumerInfo>> {
-        prepare_command(self, cmd("XINFO").arg("CONSUMERS").key(key).arg(groupname))
+        prepare_command(
+            self,
+            cmd("XINFO")
+                .arg("CONSUMERS")
+                .key(key)
+                .arg(groupname)
+                .readonly(),
+        )
     }
 
     /// This command returns the list of consumers that belong
@@ -430,7 +437,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xinfo-groups/>](https://redis.io/commands/xinfo-groups/)
     fn xinfo_groups(self, key: impl Serialize) -> PreparedCommand<'a, Self, Vec<XGroupInfo>> {
-        prepare_command(self, cmd("XINFO").arg("GROUPS").key(key))
+        prepare_command(self, cmd("XINFO").arg("GROUPS").key(key).readonly())
     }
 
     /// The command returns a helpful text describing the different XINFO subcommands.
@@ -477,7 +484,10 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         options: XInfoStreamOptions,
     ) -> PreparedCommand<'a, Self, XStreamInfo> {
-        prepare_command(self, cmd("XINFO").arg("STREAM").key(key).arg(options))
+        prepare_command(
+            self,
+            cmd("XINFO").arg("STREAM").key(key).arg(options).readonly(),
+        )
     }
 
     /// Returns the number of entries inside a stream.
@@ -488,7 +498,7 @@ pub trait StreamCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
     fn xlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("XLEN").key(key))
+        prepare_command(self, cmd("XLEN").key(key).readonly())
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
@@ -500,7 +510,7 @@ pub trait StreamCommands<'a>: Sized {
         key: impl Serialize,
         group: impl Serialize,
     ) -> PreparedCommand<'a, Self, XPendingResult> {
-        prepare_command(self, cmd("XPENDING").key(key).arg(group))
+        prepare_command(self, cmd("XPENDING").key(key).arg(group).readonly())
     }
 
     /// The XPENDING command is the interface to inspect the list of pending messages.
@@ -517,7 +527,10 @@ pub trait StreamCommands<'a>: Sized {
         group: impl Serialize,
         options: XPendingOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("XPENDING").key(key).arg(group).arg(options))
+        prepare_command(
+            self,
+            cmd("XPENDING").key(key).arg(group).arg(options).readonly(),
+        )
     }
 
     /// The command returns the stream entries matching a given range of IDs.
@@ -544,7 +557,8 @@ pub trait StreamCommands<'a>: Sized {
                 .key(key)
                 .arg(start)
                 .arg(end)
-                .arg(count.map(|c| ("COUNT", c))),
+                .arg(count.map(|c| ("COUNT", c)))
+                .readonly(),
         )
     }
 
@@ -564,7 +578,12 @@ pub trait StreamCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("XREAD").arg(options).arg("STREAMS").key(keys).arg(ids),
+            cmd("XREAD")
+                .arg(options)
+                .arg("STREAMS")
+                .key(keys)
+                .arg(ids)
+                .readonly(),
         )
     }
 
@@ -619,7 +638,8 @@ pub trait StreamCommands<'a>: Sized {
                 .key(key)
                 .arg(end)
                 .arg(start)
-                .arg(count.map(|c| ("COUNT", c))),
+                .arg(count.map(|c| ("COUNT", c)))
+                .readonly(),
         )
     }
 

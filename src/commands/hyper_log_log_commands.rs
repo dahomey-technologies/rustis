@@ -34,7 +34,7 @@ pub trait HyperLogLogCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/pfcount/>](https://redis.io/commands/pfcount/)
     fn pfcount(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("PFCOUNT").key(keys))
+        prepare_command(self, cmd("PFCOUNT").key(keys).readonly())
     }
 
     /// Merge N different HyperLogLogs into a single one.

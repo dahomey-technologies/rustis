@@ -402,6 +402,35 @@ fn into_config() -> Result<()> {
             .to_string()
     );
 
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000,127.0.0.1:7001",
+        "redis+cluster://127.0.0.1:7000,127.0.0.1:7001"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000?read_preference=prefer_replica",
+        "redis+cluster://127.0.0.1:7000?read_preference=prefer_replica"
+            .into_config()?
+            .to_string()
+    );
+
+    // the default read preference is implicit in the URL
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000",
+        "redis+cluster://127.0.0.1:7000?read_preference=master"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000?connect_timeout=100&read_preference=prefer_replica",
+        "redis+cluster://127.0.0.1:7000?connect_timeout=100&read_preference=prefer_replica"
+            .into_config()?
+            .to_string()
+    );
+
     assert!("127.0.0.1:xyz".into_config().is_err());
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());
@@ -427,6 +456,8 @@ fn an_unknown_query_parameter_is_rejected() {
         "redis://127.0.0.1?command_timeout=5000&read_timeout=5000",
         "redis+sentinel://127.0.0.1:6379/myservice?sentinel_user=foo",
         "redis+cluster://127.0.0.1:6379?sentinel_username=foo",
+        // a read preference only means something to a cluster client
+        "redis://127.0.0.1?read_preference=prefer_replica",
     ] {
         let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
             panic!("`{uri}` should be rejected as an unknown query parameter");
@@ -450,6 +481,7 @@ fn an_unparsable_query_parameter_value_is_rejected() {
         "redis://127.0.0.1?retry_on_error=maybe",
         "redis://127.0.0.1?max_command_attempts=-1",
         "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250ms",
+        "redis+cluster://127.0.0.1:7000?read_preference=replica",
     ] {
         let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
             panic!("`{uri}` should be rejected as an unparsable parameter value");

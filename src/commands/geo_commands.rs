@@ -60,7 +60,12 @@ pub trait GeoCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, Option<f64>> {
         prepare_command(
             self,
-            cmd("GEODIST").key(key).arg(member1).arg(member2).arg(unit),
+            cmd("GEODIST")
+                .key(key)
+                .arg(member1)
+                .arg(member2)
+                .arg(unit)
+                .readonly(),
         )
     }
 
@@ -78,7 +83,7 @@ pub trait GeoCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GEOHASH").key(key).arg(members))
+        prepare_command(self, cmd("GEOHASH").key(key).arg(members).readonly())
     }
 
     /// Return the positions (longitude,latitude) of all the specified members
@@ -97,7 +102,7 @@ pub trait GeoCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, Vec<Option<(f64, f64)>>> {
-        prepare_command(self, cmd("GEOPOS").key(key).arg(members))
+        prepare_command(self, cmd("GEOPOS").key(key).arg(members).readonly())
     }
 
     /// Return the members of a sorted set populated with geospatial information using [geoadd](GeoCommands::geoadd),
@@ -119,7 +124,12 @@ pub trait GeoCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("GEOSEARCH").key(key).arg(from).arg(by).arg(options),
+            cmd("GEOSEARCH")
+                .key(key)
+                .arg(from)
+                .arg(by)
+                .arg(options)
+                .readonly(),
         )
     }
 

@@ -53,7 +53,7 @@ pub trait BitmapCommands<'a>: Sized {
     /// [<https://redis.io/commands/bitcount/>](https://redis.io/commands/bitcount/)
     #[must_use]
     fn bitcount(self, key: impl Serialize, range: BitRange) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("BITCOUNT").key(key).arg(range))
+        prepare_command(self, cmd("BITCOUNT").key(key).arg(range).readonly())
     }
 
     /// The command treats a Redis string as an array of bits,
@@ -97,7 +97,10 @@ pub trait BitmapCommands<'a>: Sized {
         key: impl Serialize,
         sub_commands: impl IntoIterator<Item = BitFieldSubCommand<'b>> + Serialize,
     ) -> PreparedCommand<'a, Self, Vec<u64>> {
-        prepare_command(self, cmd("BITFIELD_RO").key(key).arg(sub_commands))
+        prepare_command(
+            self,
+            cmd("BITFIELD_RO").key(key).arg(sub_commands).readonly(),
+        )
     }
 
     /// Perform a bitwise operation between multiple keys (containing string values)
@@ -134,7 +137,7 @@ pub trait BitmapCommands<'a>: Sized {
         bit: u64,
         range: BitRange,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("BITPOS").key(key).arg(bit).arg(range))
+        prepare_command(self, cmd("BITPOS").key(key).arg(bit).arg(range).readonly())
     }
 
     /// Returns the bit value at offset in the string value stored at key.
@@ -146,7 +149,7 @@ pub trait BitmapCommands<'a>: Sized {
     /// [<https://redis.io/commands/getbit/>](https://redis.io/commands/getbit/)
     #[must_use]
     fn getbit(self, key: impl Serialize, offset: u64) -> PreparedCommand<'a, Self, u64> {
-        prepare_command(self, cmd("GETBIT").key(key).arg(offset))
+        prepare_command(self, cmd("GETBIT").key(key).arg(offset).readonly())
     }
 
     /// Sets or clears the bit at offset in the string value stored at key.

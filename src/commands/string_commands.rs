@@ -152,7 +152,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/digest/>](https://redis.io/commands/digest/)
     #[must_use]
     fn digest<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("DIGEST").key(key))
+        prepare_command(self, cmd("DIGEST").key(key).readonly())
     }
 
     /// Conditionally removes `key` based on a value or digest comparison.
@@ -265,7 +265,10 @@ pub trait StringCommands<'a>: Sized {
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETRANGE").key(key).arg(start).arg(end))
+        prepare_command(
+            self,
+            cmd("GETRANGE").key(key).arg(start).arg(end).readonly(),
+        )
     }
 
     /// Atomically sets key to value and returns the old value stored at key.
@@ -400,7 +403,7 @@ pub trait StringCommands<'a>: Sized {
         key1: impl Serialize,
         key2: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LCS").key(key1).arg(key2))
+        prepare_command(self, cmd("LCS").key(key1).arg(key2).readonly())
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -416,7 +419,7 @@ pub trait StringCommands<'a>: Sized {
         key1: impl Serialize,
         key2: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LCS").key(key1).key(key2).arg("LEN"))
+        prepare_command(self, cmd("LCS").key(key1).key(key2).arg("LEN").readonly())
     }
 
     /// The LCS command implements the longest common subsequence algorithm
@@ -443,7 +446,8 @@ pub trait StringCommands<'a>: Sized {
                 .key(key2)
                 .arg("IDX")
                 .arg(min_match_len.map(|len| ("MINMATCHLEN", len)))
-                .arg_if(with_match_len, "WITHMATCHLEN"),
+                .arg_if(with_match_len, "WITHMATCHLEN")
+                .readonly(),
         )
     }
 
@@ -463,7 +467,8 @@ pub trait StringCommands<'a>: Sized {
             self,
             cmd("MGET")
                 .key(keys)
-                .cluster_info(RequestPolicy::MultiShard, None, 1),
+                .cluster_info(RequestPolicy::MultiShard, None, 1)
+                .readonly(),
         )
     }
 
@@ -690,7 +695,7 @@ pub trait StringCommands<'a>: Sized {
     /// [<https://redis.io/commands/strlen/>](https://redis.io/commands/strlen/)
     #[must_use]
     fn strlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("STRLEN").key(key))
+        prepare_command(self, cmd("STRLEN").key(key).readonly())
     }
 
     /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
@@ -735,7 +740,7 @@ pub trait StringCommands<'a>: Sized {
         start: isize,
         end: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SUBSTR").key(key).arg(start).arg(end))
+        prepare_command(self, cmd("SUBSTR").key(key).arg(start).arg(end).readonly())
     }
 }
 

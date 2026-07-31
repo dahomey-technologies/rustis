@@ -12,6 +12,7 @@ pub struct FastPathCommandBuilder {
     buffer: BytesMut,
     name_layout: (usize, usize),
     args_layout: ArgsLayout,
+    is_readonly: bool,
 }
 
 impl FastPathCommandBuilder {
@@ -24,7 +25,15 @@ impl FastPathCommandBuilder {
             buffer,
             name_layout,
             args_layout: SmallVec::new(),
+            is_readonly: false,
         }
+    }
+
+    /// Declares the command as read-only, like [`CommandBuilder::readonly`](crate::resp::CommandBuilder::readonly).
+    #[inline(always)]
+    fn readonly(mut self) -> Self {
+        self.is_readonly = true;
+        self
     }
 
     /// Serializes `arg` onto the fast path, returning the builder on success or
@@ -66,14 +75,15 @@ impl FastPathCommandBuilder {
             None,
             None,
             0,
+            self.is_readonly,
         )
     }
 
     #[inline(always)]
     pub fn get(key: impl Serialize) -> Command {
         match FastPathCommandBuilder::new(b"*2\r\n$3\r\nGET\r\n", (8, 3)).try_key(&key) {
-            Ok(builder) => builder.build(),
-            Err(_) => cmd("GET").key(key).into(),
+            Ok(builder) => builder.readonly().build(),
+            Err(_) => cmd("GET").key(key).readonly().into(),
         }
     }
 
@@ -105,8 +115,8 @@ impl FastPathCommandBuilder {
             .try_key(&key)
             .and_then(|b| b.try_arg(&field))
         {
-            Ok(builder) => builder.build(),
-            Err(_) => cmd("HGET").key(key).arg(field).into(),
+            Ok(builder) => builder.readonly().build(),
+            Err(_) => cmd("HGET").key(key).arg(field).readonly().into(),
         }
     }
 
@@ -128,8 +138,8 @@ impl FastPathCommandBuilder {
             .try_key(&key)
             .and_then(|b| b.try_arg(&member))
         {
-            Ok(builder) => builder.build(),
-            Err(_) => cmd("SISMEMBER").key(key).arg(member).into(),
+            Ok(builder) => builder.readonly().build(),
+            Err(_) => cmd("SISMEMBER").key(key).arg(member).readonly().into(),
         }
     }
 

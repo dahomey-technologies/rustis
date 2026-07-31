@@ -253,6 +253,9 @@ pub struct Command {
     request_policy: Option<RequestPolicy>,
     response_policy: Option<ResponsePolicy>,
     key_step: u8,
+    /// Whether the command only reads: a Cluster client may route it to a replica
+    /// of the shard, which the server accepts only in `READONLY` mode.
+    is_readonly: bool,
     /// A serialization error deferred from the builder, surfaced at send time.
     ///
     /// The fluent builder cannot return a `Result`, so a failing user
@@ -275,6 +278,7 @@ impl Command {
         request_policy: Option<RequestPolicy>,
         response_policy: Option<ResponsePolicy>,
         key_step: u8,
+        is_readonly: bool,
     ) -> Self {
         let mut this = Self {
             buffer,
@@ -290,6 +294,7 @@ impl Command {
             request_policy,
             response_policy,
             key_step,
+            is_readonly,
             serialization_error: None,
         };
 
@@ -397,6 +402,12 @@ impl Command {
         self.key_step as usize
     }
 
+    /// Whether the command only reads, as declared by
+    /// [`CommandBuilder::readonly`].
+    pub fn is_readonly(&self) -> bool {
+        self.is_readonly
+    }
+
     #[cfg(test)]
     #[expect(
         clippy::arithmetic_side_effects,
@@ -464,6 +475,7 @@ pub struct CommandBuilder {
     pub(crate) request_policy: Option<RequestPolicy>,
     pub(crate) response_policy: Option<ResponsePolicy>,
     pub(crate) key_step: u8,
+    pub(crate) is_readonly: bool,
     /// First serialization error encountered while building, deferred to send
     /// time so the fluent API stays panic-free (see [`Command`]).
     pub(crate) pending_error: Option<crate::Error>,
@@ -523,6 +535,7 @@ impl CommandBuilder {
             request_policy: None,
             response_policy: None,
             key_step: 0,
+            is_readonly: false,
             pending_error: None,
         }
     }
@@ -849,6 +862,19 @@ impl CommandBuilder {
         self.key_step = key_step;
         self
     }
+
+    /// Declares the command as read-only, which is what allows a Cluster client
+    /// configured with [`ReadPreference::PreferReplica`](crate::client::ReadPreference::PreferReplica)
+    /// to route it to a replica of the shard.
+    ///
+    /// Mirrors the `readonly` flag the server reports in `COMMAND INFO`: a
+    /// command that writes, blocks, or has a `STORE`-like variant must not
+    /// declare it.
+    #[inline(always)]
+    pub fn readonly(mut self) -> Self {
+        self.is_readonly = true;
+        self
+    }
 }
 
 impl From<CommandBuilder> for Command {
@@ -924,6 +950,7 @@ impl From<CommandBuilder> for Command {
             command_builder.request_policy,
             command_builder.response_policy,
             command_builder.key_step,
+            command_builder.is_readonly,
         );
 
         command.serialization_error = command_builder.pending_error.take().map(Box::new);

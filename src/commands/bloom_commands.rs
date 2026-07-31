@@ -44,7 +44,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         item: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("BF.EXISTS").key(key).arg(item))
+        prepare_command(self, cmd("BF.EXISTS").key(key).arg(item).readonly())
     }
 
     /// Returns the cardinality of a Bloom filter: the number of items
@@ -64,7 +64,7 @@ pub trait BloomCommands<'a>: Sized {
     /// * [<https://redis.io/commands/bf.card/>](https://redis.io/commands/bf.card/)
     #[must_use]
     fn bf_card(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("BF.CARD").key(key))
+        prepare_command(self, cmd("BF.CARD").key(key).readonly())
     }
 
     /// Return information about key filter.
@@ -79,7 +79,7 @@ pub trait BloomCommands<'a>: Sized {
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
     fn bf_info_all(self, key: impl Serialize) -> PreparedCommand<'a, Self, BfInfoResult> {
-        prepare_command(self, cmd("BF.INFO").key(key))
+        prepare_command(self, cmd("BF.INFO").key(key).readonly())
     }
 
     /// Return information about key filter for a specific information parameter
@@ -99,7 +99,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         param: BfInfoParameter,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("BF.INFO").key(key).arg(param))
+        prepare_command(self, cmd("BF.INFO").key(key).arg(param).readonly())
     }
 
     /// `bf_insert` is a sugarcoated combination of [`bf_reserve`](BloomCommands::bf_reserve) and [`bf_add`](BloomCommands::bf_add).
@@ -201,7 +201,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("BF.MEXISTS").key(key).arg(items))
+        prepare_command(self, cmd("BF.MEXISTS").key(key).arg(items).readonly())
     }
 
     /// Creates an empty Bloom Filter with a single sub-filter
@@ -272,7 +272,7 @@ pub trait BloomCommands<'a>: Sized {
         key: impl Serialize,
         iterator: i64,
     ) -> PreparedCommand<'a, Self, BfScanDumpResult> {
-        prepare_command(self, cmd("BF.SCANDUMP").key(key).arg(iterator))
+        prepare_command(self, cmd("BF.SCANDUMP").key(key).arg(iterator).readonly())
     }
 }
 

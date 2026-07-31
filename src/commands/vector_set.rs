@@ -55,7 +55,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vcard/>](https://redis.io/commands/vcard/)
     #[must_use]
     fn vcard(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
-        prepare_command(self, cmd("VCARD").key(key))
+        prepare_command(self, cmd("VCARD").key(key).readonly())
     }
 
     /// Return the number of dimensions of the vectors in the specified vector set.
@@ -64,7 +64,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vdim/>](https://redis.io/commands/vdim/)
     #[must_use]
     fn vdim(self, key: impl Serialize) -> PreparedCommand<'a, Self, u32> {
-        prepare_command(self, cmd("VDIM").key(key))
+        prepare_command(self, cmd("VDIM").key(key).readonly())
     }
 
     /// Return the approximate vector associated with a given element in the vector set.
@@ -77,7 +77,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VEMB").key(key).arg(element))
+        prepare_command(self, cmd("VEMB").key(key).arg(element).readonly())
     }
 
     /// Return the JSON attributes associated with an element in a vector set.
@@ -90,7 +90,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VGETATTR").key(key).arg(element))
+        prepare_command(self, cmd("VGETATTR").key(key).arg(element).readonly())
     }
 
     /// Return metadata and internal details about a vector set,
@@ -100,7 +100,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/vinfo/>](https://redis.io/commands/vinfo/)
     #[must_use]
     fn vinfo(self, key: impl Serialize) -> PreparedCommand<'a, Self, VInfoResult> {
-        prepare_command(self, cmd("VINFO").key(key))
+        prepare_command(self, cmd("VINFO").key(key).readonly())
     }
 
     /// Return the neighbors of a specified element in a vector set.
@@ -117,7 +117,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VLINKS").key(key).arg(element))
+        prepare_command(self, cmd("VLINKS").key(key).arg(element).readonly())
     }
 
     /// Return the neighbors of a specified element in a vector set.
@@ -135,7 +135,14 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VLINKS").key(key).arg(element).arg("WITHSCORES"))
+        prepare_command(
+            self,
+            cmd("VLINKS")
+                .key(key)
+                .arg(element)
+                .arg("WITHSCORES")
+                .readonly(),
+        )
     }
 
     /// Check if an element exists in a vector set.
@@ -152,7 +159,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         element: impl Serialize,
     ) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("VISMEMBER").key(key).arg(element))
+        prepare_command(self, cmd("VISMEMBER").key(key).arg(element).readonly())
     }
 
     /// Return vector set elements whose names fall in a lexicographic range.
@@ -184,7 +191,12 @@ pub trait VectorSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("VRANGE").key(key).arg(start).arg(end).arg(count.into()),
+            cmd("VRANGE")
+                .key(key)
+                .arg(start)
+                .arg(end)
+                .arg(count.into())
+                .readonly(),
         )
     }
 
@@ -211,7 +223,7 @@ pub trait VectorSetCommands<'a>: Sized {
         key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("VRANDMEMBER").key(key).arg(count))
+        prepare_command(self, cmd("VRANDMEMBER").key(key).arg(count).readonly())
     }
 
     /// Remove an element from a vector set.
@@ -264,7 +276,11 @@ pub trait VectorSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("VSIM").key(key).arg(vector_or_element).arg(options),
+            cmd("VSIM")
+                .key(key)
+                .arg(vector_or_element)
+                .arg(options)
+                .readonly(),
         )
     }
 }

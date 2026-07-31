@@ -2,7 +2,7 @@ use super::pub_sub_message::PubSubMessage;
 use crate::{
     ClientError, ConnectionState, Error, RedisError, RedisErrorKind, Result, RetryReason,
     StandaloneConnection,
-    client::{ClusterConfig, Config},
+    client::{ClusterConfig, Config, ReadPreference},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
@@ -166,6 +166,10 @@ struct SlotRange {
     /// node ids of the shard that owns the slot range,
     /// the first node id being the master node id
     pub node_ids: SmallVec<[NodeId; 6]>,
+    /// Round-robin cursor over the replicas of the shard, used when the read
+    /// preference sends read-only commands to them. It only has to advance, so
+    /// it wraps freely: the candidate is picked modulo the replica count.
+    pub next_replica: usize,
 }
 
 #[derive(Debug)]
@@ -341,7 +345,7 @@ impl ClusterConnection {
 
         let tag = first_node.connection.tag();
 
-        Ok(ClusterConnection {
+        let mut cluster_connection = ClusterConnection {
             cluster_config: cluster_config.clone(),
             config: config.clone(),
             state_snapshot: connection_state.clone(),
@@ -357,7 +361,27 @@ impl ClusterConnection {
             delayed_in_current_batch: false,
             #[cfg(test)]
             test_hook: config.cluster_test_hook.clone(),
-        })
+        };
+
+        cluster_connection.connect_replicas_for_reads().await;
+
+        Ok(cluster_connection)
+    }
+
+    /// Brings the replicas in when the read preference sends reads to them, so
+    /// the first read is routed instead of waiting for an `AllNodes` command to
+    /// discover them.
+    ///
+    /// A cluster whose replicas cannot be reached is still a working cluster:
+    /// the failure is logged and every read falls back to its master.
+    async fn connect_replicas_for_reads(&mut self) {
+        if self.cluster_config.read_preference == ReadPreference::Master {
+            return;
+        }
+
+        if let Err(e) = self.connect_replicas().await {
+            warn!("Cannot connect the cluster replicas to read from: {e}");
+        }
     }
 
     #[inline]
@@ -653,12 +677,13 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
+        let for_read = self.may_read_from_replica(command);
         let mut node_slot_keys_ask = command
             .args_for_cluster()
             .filter_map(|(arg, is_key, slot)| {
                 is_key.then(|| {
                     let (node_index, should_ask) = self
-                        .get_master_node_index_by_slot(slot, ask_reasons)
+                        .get_node_index_by_slot(slot, ask_reasons, for_read)
                         .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
                     Ok((node_index, slot, arg, should_ask))
                 })
@@ -766,6 +791,7 @@ impl ClusterConnection {
         command: &Command,
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<(usize, bool)> {
+        let for_read = self.may_read_from_replica(command);
         let mut slots = command.slots();
 
         if let Some(first_slot) = slots.next() {
@@ -773,7 +799,7 @@ impl ClusterConnection {
                 return Err(Error::Client(ClientError::MismatchedKeySlots));
             }
 
-            self.get_master_node_index_by_slot(first_slot, ask_reasons)
+            self.get_node_index_by_slot(first_slot, ask_reasons, for_read)
                 .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
         } else {
             self.get_random_node_index()
@@ -1564,6 +1590,8 @@ impl ClusterConnection {
         self.nodes = nodes;
         self.slot_ranges = slot_ranges;
 
+        self.connect_replicas_for_reads().await;
+
         // Every in-flight request was fed to the previous per-node connections,
         // which are now gone; their responses can never arrive. Left in place,
         // the request stuck at the front of the queue would block every
@@ -1691,6 +1719,7 @@ impl ClusterConnection {
             slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
                 slot_range: *s,
                 node_ids: smallvec![master_id.clone()],
+                next_replica: 0,
             }));
 
             nodes.push(Node {
@@ -1708,6 +1737,46 @@ impl ClusterConnection {
         debug!("Cluster connected: nodes={nodes:?}, slot_ranges={slot_ranges:?}");
 
         Ok((nodes, slot_ranges))
+    }
+
+    /// Puts a replica connection in `READONLY` mode, which is what makes the node
+    /// serve a read instead of answering it with a `MOVED` to its master.
+    ///
+    /// Nothing is sent when reads stay on the masters: the mode would advertise a
+    /// capability the routing never uses. A refusal is logged rather than
+    /// propagated — the node then answers reads with a `MOVED`, which the client
+    /// follows, so the cluster keeps working.
+    async fn set_replica_read_mode(
+        connection: &mut StandaloneConnection,
+        read_preference: ReadPreference,
+    ) {
+        if read_preference == ReadPreference::Master {
+            return;
+        }
+
+        if let Err(e) = connection.readonly().await {
+            warn!(node = %connection.tag(), "Cannot enter readonly mode: {e}");
+        }
+    }
+
+    /// Same, for a node whose role has just changed: a master must be back in
+    /// read-write mode.
+    async fn set_read_mode_for_role(
+        connection: &mut StandaloneConnection,
+        is_master: bool,
+        read_preference: ReadPreference,
+    ) {
+        if read_preference == ReadPreference::Master {
+            return;
+        }
+
+        if is_master {
+            if let Err(e) = connection.readwrite().await {
+                warn!(node = %connection.tag(), "Cannot leave readonly mode: {e}");
+            }
+        } else {
+            Self::set_replica_read_mode(connection, read_preference).await;
+        }
     }
 
     async fn connect_replicas(&mut self) -> Result<()> {
@@ -1738,6 +1807,9 @@ impl ClusterConnection {
                         slot_range.node_ids.push(node_id.clone())
                     }
                 }
+
+                Self::set_replica_read_mode(&mut connection, self.cluster_config.read_preference)
+                    .await;
 
                 self.nodes.push(Node {
                     id: node_id,
@@ -1835,6 +1907,7 @@ impl ClusterConnection {
                         .iter()
                         .map(|n| n.id.as_str().into())
                         .collect(),
+                    next_replica: 0,
                 });
             }
 
@@ -1842,7 +1915,20 @@ impl ClusterConnection {
                 let node_id: NodeId = node_info.id.as_str().into();
                 if let Some(node) = self.nodes.iter_mut().find(|n| n.id == node_id) {
                     // refresh is_master flag in case a failover happened
-                    node.is_master = node_info.role == "master";
+                    let is_master = node_info.role == "master";
+                    if is_master != node.is_master {
+                        // The connection carries the read mode of the role the node
+                        // has just left: a promoted replica would keep advertising a
+                        // capability it no longer has, a demoted master would refuse
+                        // the reads now routed to it.
+                        Self::set_read_mode_for_role(
+                            &mut node.connection,
+                            is_master,
+                            self.cluster_config.read_preference,
+                        )
+                        .await;
+                    }
+                    node.is_master = is_master;
                 } else {
                     // add missing node
                     let port = node_info.get_port()?;
@@ -1854,6 +1940,14 @@ impl ClusterConnection {
                         StandaloneConnection::connect_control(&node_info.ip, port, &self.config)
                             .await?;
                     connection.restore_from_snapshot(&self.state_snapshot).await;
+
+                    if node_info.role != "master" {
+                        Self::set_replica_read_mode(
+                            &mut connection,
+                            self.cluster_config.read_preference,
+                        )
+                        .await;
+                    }
 
                     self.nodes.push(Node {
                         id: node_id,
@@ -1917,25 +2011,77 @@ impl ClusterConnection {
             .and_then(|idx| self.slot_ranges.get_mut(idx))
     }
 
-    fn get_master_node_index_by_slot(
+    /// The node a command addressing `slot` must be fed to, and whether it has to
+    /// be prefixed with an `ASKING`.
+    ///
+    /// `for_read` asks for the configured read preference to be honoured. It is
+    /// the caller's job to answer it only for a command that may legitimately
+    /// leave the master — see [`Self::may_read_from_replica`].
+    fn get_node_index_by_slot(
         &mut self,
         slot: u16,
         ask_reasons: &[(u16, (String, u16))],
+        for_read: bool,
     ) -> Option<(usize, bool)> {
         let ask_reason = ask_reasons
             .iter()
             .find(|(hash_slot, (_ip, _port))| *hash_slot == slot);
 
+        // An ASK names the node itself: the redirection is the routing decision,
+        // and the read preference has nothing to say about it.
         if let Some((_hash_slot, address)) = ask_reason {
             let node_index = self.nodes.iter().position(|n| n.address == *address)?;
-            Some((node_index, true))
-        } else {
-            let slot_range = self.get_slot_range_by_slot(slot)?;
-            // A slot range names its master first; one with no node routes nowhere.
-            let master_node_id = slot_range.node_ids.first()?;
-            let node_index = self.get_node_index_by_id(master_node_id)?;
-            Some((node_index, false))
+            return Some((node_index, true));
         }
+
+        if for_read && let Some(node_index) = self.get_replica_node_index_by_slot(slot) {
+            return Some((node_index, false));
+        }
+
+        let slot_range = self.get_slot_range_by_slot(slot)?;
+        // A slot range names its master first; one with no node routes nowhere.
+        let master_node_id = slot_range.node_ids.first()?;
+        let node_index = self.get_node_index_by_id(master_node_id)?;
+        Some((node_index, false))
+    }
+
+    /// The next replica of the shard owning `slot`, or `None` when the shard has
+    /// no connected one — in which case the caller falls back to the master
+    /// rather than failing the command.
+    fn get_replica_node_index_by_slot(&mut self, slot: u16) -> Option<usize> {
+        let slot_range_index = self.get_slot_range_index(slot)?;
+        let slot_range = self.slot_ranges.get(slot_range_index)?;
+
+        // The master heads the list; everything after it is a replica.
+        let replica_ids: SmallVec<[NodeId; 6]> =
+            slot_range.node_ids.iter().skip(1).cloned().collect();
+        if replica_ids.is_empty() {
+            return None;
+        }
+
+        let mut cursor = slot_range.next_replica;
+        let node_index = select_replica(&replica_ids, &mut cursor, |id| {
+            self.get_node_index_by_id(id)
+        })?;
+
+        if let Some(slot_range) = self.slot_ranges.get_mut(slot_range_index) {
+            slot_range.next_replica = cursor;
+        }
+
+        Some(node_index)
+    }
+
+    /// Whether `command` may be served by a replica: the preference asks for it,
+    /// the command only reads, and it is not part of a block that belongs to a
+    /// single node.
+    fn may_read_from_replica(&self, command: &Command) -> bool {
+        self.cluster_config.read_preference == ReadPreference::PreferReplica
+            && command.is_readonly()
+            && !is_pub_sub_command(command)
+            // A MULTI locks one node for the whole transaction; a read of that
+            // block sent elsewhere would leave the queue behind.
+            && self.transaction_state.pending_multi.is_none()
+            && self.transaction_state.node_index.is_none()
     }
 
     pub(crate) fn convert_from_legacy_shard_description(
@@ -2036,6 +2182,34 @@ pub(crate) fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes])
     shard_command.into()
 }
 
+/// Picks the next replica of a shard, starting at `cursor` and advancing it past
+/// the one returned.
+///
+/// A replica the topology names may not be connected yet — `AllNodes` is what
+/// brings them in when the read preference does not. The whole list is walked
+/// from the cursor so a hole does not pin every read of the shard on one node,
+/// and `None` — no replica reachable at all — sends the read back to the master.
+fn select_replica(
+    replica_ids: &[NodeId],
+    cursor: &mut usize,
+    resolve: impl Fn(&NodeId) -> Option<usize>,
+) -> Option<usize> {
+    if replica_ids.is_empty() {
+        return None;
+    }
+
+    for offset in 0..replica_ids.len() {
+        let position = cursor.wrapping_add(offset);
+        let candidate = replica_ids.get(position.checked_rem(replica_ids.len())?)?;
+        if let Some(node_index) = resolve(candidate) {
+            *cursor = position.wrapping_add(1);
+            return Some(node_index);
+        }
+    }
+
+    None
+}
+
 enum Integer {
     Single(i64),
     Array(Vec<i64>),
@@ -2044,7 +2218,9 @@ enum Integer {
 
 #[cfg(test)]
 mod tests {
-    use super::{CLUSTER_DOWN_DELAY, TRY_AGAIN_DELAY, transient_retry_reason};
+    use super::{
+        CLUSTER_DOWN_DELAY, NodeId, TRY_AGAIN_DELAY, select_replica, transient_retry_reason,
+    };
     use crate::{RedisErrorKind, RetryReason};
 
     /// A `CLUSTERDOWN` follows a failover, which changes who owns the slot, so
@@ -2090,5 +2266,60 @@ mod tests {
                 "{kind:?} must reach the caller"
             );
         }
+    }
+
+    /// Reads of a shard must be spread over its replicas, not pinned on the
+    /// first one: a preference that always answered the same node would move
+    /// the load instead of sharing it.
+    #[test]
+    fn replicas_are_picked_in_round_robin() {
+        let replicas: Vec<NodeId> = vec!["r1".into(), "r2".into(), "r3".into()];
+        let mut cursor = 0;
+
+        let picks = (0..6)
+            .map(|_| {
+                select_replica(&replicas, &mut cursor, |id| match id.as_ref() {
+                    "r1" => Some(10),
+                    "r2" => Some(20),
+                    "r3" => Some(30),
+                    _ => None,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            vec![Some(10), Some(20), Some(30), Some(10), Some(20), Some(30)],
+            picks
+        );
+    }
+
+    /// A replica the topology names but nothing has connected yet must be
+    /// stepped over, otherwise every read of the shard falls back to the master
+    /// one time out of two.
+    #[test]
+    fn an_unconnected_replica_is_skipped() {
+        let replicas: Vec<NodeId> = vec!["r1".into(), "r2".into()];
+        let mut cursor = 0;
+
+        let picks = (0..3)
+            .map(|_| {
+                select_replica(&replicas, &mut cursor, |id| {
+                    (id.as_ref() == "r2").then_some(20)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(vec![Some(20), Some(20), Some(20)], picks);
+    }
+
+    /// A shard with no reachable replica is not a routing failure: the read goes
+    /// to the master, which is what the caller would have got anyway.
+    #[test]
+    fn a_shard_without_a_reachable_replica_selects_nothing() {
+        let mut cursor = 0;
+        assert_eq!(None, select_replica(&[], &mut cursor, |_| Some(0)));
+
+        let replicas: Vec<NodeId> = vec!["r1".into()];
+        assert_eq!(None, select_replica(&replicas, &mut cursor, |_| None));
     }
 }

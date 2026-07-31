@@ -763,7 +763,19 @@ impl Config {
                     .map(|(host, port)| ((*host).to_owned(), *port))
                     .collect::<Vec<_>>();
 
-                ServerConfig::Cluster(ClusterConfig { nodes })
+                let mut cluster_config = ClusterConfig {
+                    nodes,
+                    ..Default::default()
+                };
+
+                if let Some(ref mut query) = query
+                    && let Some(read_preference) =
+                        Self::take_query_param::<ReadPreference>(query, "read_preference")?
+                {
+                    cluster_config.read_preference = read_preference;
+                }
+
+                ServerConfig::Cluster(cluster_config)
             }
         };
 
@@ -1009,7 +1021,10 @@ impl Display for Config {
                 f.write_char('/')?;
                 f.write_str(service_name)?;
             }
-            ServerConfig::Cluster(ClusterConfig { nodes }) => {
+            ServerConfig::Cluster(ClusterConfig {
+                nodes,
+                read_preference: _,
+            }) => {
                 f.write_str(
                     &nodes
                         .iter()
@@ -1110,6 +1125,21 @@ impl Display for Config {
                 f.write_char('&')?;
             }
             f.write_fmt(format_args!("retry_on_error={}", self.retry_on_error))?;
+        }
+
+        if let ServerConfig::Cluster(ClusterConfig {
+            nodes: _,
+            read_preference,
+        }) = &self.server
+            && *read_preference != ReadPreference::default()
+        {
+            if !query_separator {
+                query_separator = true;
+                f.write_char('?')?;
+            } else {
+                f.write_char('&')?;
+            }
+            f.write_fmt(format_args!("read_preference={read_preference}"))?;
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {
@@ -1261,12 +1291,60 @@ impl Default for SentinelConfig {
     }
 }
 
+/// Which node of a shard a Cluster client reads from.
+///
+/// A replica lags behind its master: replication is asynchronous, so a read
+/// routed to a replica may not see a write the client has just acknowledged.
+/// Reading from replicas trades that consistency for read throughput, which is
+/// why the default keeps every read on the master.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ReadPreference {
+    /// Every command goes to the master of its shard.
+    #[default]
+    Master,
+
+    /// Read-only commands are spread over the replicas of their shard, in
+    /// round-robin. A shard with no reachable replica serves them from its
+    /// master, so the preference never turns into a failure.
+    ///
+    /// Only commands the server itself reports as `readonly` are concerned:
+    /// writes, blocking commands and transactions stay on the master.
+    PreferReplica,
+}
+
+impl Display for ReadPreference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReadPreference::Master => f.write_str("master"),
+            ReadPreference::PreferReplica => f.write_str("prefer_replica"),
+        }
+    }
+}
+
+impl FromStr for ReadPreference {
+    type Err = Error;
+
+    fn from_str(str: &str) -> Result<Self> {
+        match str {
+            "master" => Ok(ReadPreference::Master),
+            "prefer_replica" => Ok(ReadPreference::PreferReplica),
+            _ => Err(Error::Client(ClientError::InvalidUri(format!(
+                "unknown read preference `{str}`"
+            )))),
+        }
+    }
+}
+
 /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
     pub nodes: Vec<(String, u16)>,
+
+    /// Which node of a shard reads are routed to (default
+    /// [`Master`](ReadPreference::Master)).
+    pub read_preference: ReadPreference,
 }
 
 /// Config for TLS.

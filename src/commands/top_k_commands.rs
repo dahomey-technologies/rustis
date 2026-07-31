@@ -72,7 +72,7 @@ pub trait TopKCommands<'a>: Sized {
     /// * [<https://redis.io/commands/topk.info/>](https://redis.io/commands/topk.info/)
     #[must_use]
     fn topk_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, TopKInfoResult> {
-        prepare_command(self, cmd("TOPK.INFO").key(key))
+        prepare_command(self, cmd("TOPK.INFO").key(key).readonly())
     }
 
     /// Return full list of items in Top K list.
@@ -87,7 +87,7 @@ pub trait TopKCommands<'a>: Sized {
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
     fn topk_list<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.LIST").key(key))
+        prepare_command(self, cmd("TOPK.LIST").key(key).readonly())
     }
 
     /// Return full list of items in Top K list.
@@ -107,7 +107,7 @@ pub trait TopKCommands<'a>: Sized {
         self,
         key: impl Serialize,
     ) -> PreparedCommand<'a, Self, TopKListWithCountResult<R>> {
-        prepare_command(self, cmd("TOPK.LIST").key(key).arg("WITHCOUNT"))
+        prepare_command(self, cmd("TOPK.LIST").key(key).arg("WITHCOUNT").readonly())
     }
 
     /// Return full list of items in Top K list.
@@ -129,7 +129,7 @@ pub trait TopKCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.QUERY").key(key).arg(items))
+        prepare_command(self, cmd("TOPK.QUERY").key(key).arg(items).readonly())
     }
 
     /// Returns the count for one or more items in a sketch.
@@ -152,7 +152,7 @@ pub trait TopKCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TOPK.COUNT").key(key).arg(items))
+        prepare_command(self, cmd("TOPK.COUNT").key(key).arg(items).readonly())
     }
 
     /// Initializes a TopK with specified parameters.

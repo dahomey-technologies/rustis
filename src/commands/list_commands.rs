@@ -23,7 +23,7 @@ pub trait ListCommands<'a>: Sized {
         key: impl Serialize,
         index: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LINDEX").key(key).arg(index))
+        prepare_command(self, cmd("LINDEX").key(key).arg(index).readonly())
     }
 
     /// Inserts element in the list stored at key either before or after the reference value pivot.
@@ -56,7 +56,7 @@ pub trait ListCommands<'a>: Sized {
     /// [<https://redis.io/commands/llen/>](https://redis.io/commands/llen/)
     #[must_use]
     fn llen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("LLEN").key(key))
+        prepare_command(self, cmd("LLEN").key(key).readonly())
     }
 
     /// Atomically returns and removes the first/last element (head/tail depending on the wherefrom argument)
@@ -143,7 +143,8 @@ pub trait ListCommands<'a>: Sized {
                 .key(key)
                 .arg(element)
                 .arg(rank.map(|r| ("RANK", r)))
-                .arg(max_len.map(|l| ("MAXLEN", l))),
+                .arg(max_len.map(|l| ("MAXLEN", l)))
+                .readonly(),
         )
     }
 
@@ -172,7 +173,8 @@ pub trait ListCommands<'a>: Sized {
                 .arg(rank.map(|r| ("RANK", r)))
                 .arg("COUNT")
                 .arg(num_matches)
-                .arg(max_len.map(|l| ("MAXLEN", l))),
+                .arg(max_len.map(|l| ("MAXLEN", l)))
+                .readonly(),
         )
     }
 
@@ -223,7 +225,7 @@ pub trait ListCommands<'a>: Sized {
         start: isize,
         stop: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LRANGE").key(key).arg(start).arg(stop))
+        prepare_command(self, cmd("LRANGE").key(key).arg(start).arg(stop).readonly())
     }
 
     /// Removes the first count occurrences of elements equal to element from the list stored at key.

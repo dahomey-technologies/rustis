@@ -70,7 +70,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/zcard/>](https://redis.io/commands/zcard/)
     #[must_use]
     fn zcard(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ZCARD").key(key))
+        prepare_command(self, cmd("ZCARD").key(key).readonly())
     }
 
     /// Returns the number of elements in the sorted set at key with a score between min and max.
@@ -87,7 +87,7 @@ pub trait SortedSetCommands<'a>: Sized {
         min: impl Serialize,
         max: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ZCOUNT").key(key).arg(min).arg(max))
+        prepare_command(self, cmd("ZCOUNT").key(key).arg(min).arg(max).readonly())
     }
 
     /// This command is similar to [zdiffstore](SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
@@ -100,7 +100,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
     fn zdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZDIFF").key_with_count(keys))
+        prepare_command(self, cmd("ZDIFF").key_with_count(keys).readonly())
     }
 
     /// This command is similar to [zdiffstore](SortedSetCommands::zdiffstore), but instead of storing the resulting sorted set,
@@ -113,7 +113,13 @@ pub trait SortedSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
     fn zdiff_with_scores<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZDIFF").key_with_count(keys).arg("WITHSCORES"))
+        prepare_command(
+            self,
+            cmd("ZDIFF")
+                .key_with_count(keys)
+                .arg("WITHSCORES")
+                .readonly(),
+        )
     }
 
     /// Computes the difference between the first and all successive
@@ -176,7 +182,8 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZINTER")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg_labeled("AGGREGATE", aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into())
+                .readonly(),
         )
     }
 
@@ -201,7 +208,8 @@ pub trait SortedSetCommands<'a>: Sized {
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
                 .arg_labeled("AGGREGATE", aggregate.into())
-                .arg("WITHSCORES"),
+                .arg("WITHSCORES")
+                .readonly(),
         )
     }
 
@@ -220,7 +228,8 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZINTERCARD")
                 .key_with_count(keys)
                 .arg("LIMIT")
-                .arg(limit),
+                .arg(limit)
+                .readonly(),
         )
     }
 
@@ -266,7 +275,7 @@ pub trait SortedSetCommands<'a>: Sized {
         min: impl Serialize,
         max: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ZLEXCOUNT").key(key).arg(min).arg(max))
+        prepare_command(self, cmd("ZLEXCOUNT").key(key).arg(min).arg(max).readonly())
     }
 
     /// Pops one or more elements, that are member-score pairs,
@@ -312,7 +321,7 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         members: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZMSCORE").key(key).arg(members))
+        prepare_command(self, cmd("ZMSCORE").key(key).arg(members).readonly())
     }
 
     /// Removes and returns up to count members with the highest scores in the sorted set stored at key.
@@ -356,7 +365,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
     fn zrandmember<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZRANDMEMBER").key(key))
+        prepare_command(self, cmd("ZRANDMEMBER").key(key).readonly())
     }
 
     /// Return random elements from the sorted set value stored at key.
@@ -376,7 +385,7 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         count: isize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ZRANDMEMBER").key(key).arg(count))
+        prepare_command(self, cmd("ZRANDMEMBER").key(key).arg(count).readonly())
     }
 
     /// Return random elements with their scores from the sorted set value stored at key.
@@ -398,7 +407,11 @@ pub trait SortedSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("ZRANDMEMBER").key(key).arg(count).arg("WITHSCORES"),
+            cmd("ZRANDMEMBER")
+                .key(key)
+                .arg(count)
+                .arg("WITHSCORES")
+                .readonly(),
         )
     }
 
@@ -419,7 +432,12 @@ pub trait SortedSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("ZRANGE").key(key).arg(start).arg(stop).arg(options),
+            cmd("ZRANGE")
+                .key(key)
+                .arg(start)
+                .arg(stop)
+                .arg(options)
+                .readonly(),
         )
     }
 
@@ -445,7 +463,8 @@ pub trait SortedSetCommands<'a>: Sized {
                 .arg(start)
                 .arg(stop)
                 .arg(options)
-                .arg("WITHSCORES"),
+                .arg("WITHSCORES")
+                .readonly(),
         )
     }
 
@@ -492,7 +511,7 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
-        prepare_command(self, cmd("ZRANK").key(key).arg(member))
+        prepare_command(self, cmd("ZRANK").key(key).arg(member).readonly())
     }
 
     /// Returns the rank of member in the sorted set stored at key,
@@ -510,7 +529,14 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<(usize, f64)>> {
-        prepare_command(self, cmd("ZRANK").key(key).arg(member).arg("WITHSCORE"))
+        prepare_command(
+            self,
+            cmd("ZRANK")
+                .key(key)
+                .arg(member)
+                .arg("WITHSCORE")
+                .readonly(),
+        )
     }
 
     /// Removes the specified members from the sorted set stored at key.
@@ -597,7 +623,7 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
-        prepare_command(self, cmd("ZREVRANK").key(key).arg(member))
+        prepare_command(self, cmd("ZREVRANK").key(key).arg(member).readonly())
     }
 
     /// Returns the rank of member in the sorted set stored at key, with the scores ordered from high to low.
@@ -614,7 +640,14 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<(usize, f64)>> {
-        prepare_command(self, cmd("ZREVRANK").key(key).arg(member).arg("WITHSCORE"))
+        prepare_command(
+            self,
+            cmd("ZREVRANK")
+                .key(key)
+                .arg(member)
+                .arg("WITHSCORE")
+                .readonly(),
+        )
     }
 
     /// Iterates elements of Sorted Set types and their associated scores.
@@ -633,7 +666,10 @@ pub trait SortedSetCommands<'a>: Sized {
         cursor: usize,
         options: ZScanOptions,
     ) -> PreparedCommand<'a, Self, ZScanResult<R>> {
-        prepare_command(self, cmd("ZSCAN").key(key).arg(cursor).arg(options))
+        prepare_command(
+            self,
+            cmd("ZSCAN").key(key).arg(cursor).arg(options).readonly(),
+        )
     }
 
     /// Returns the score of member in the sorted set at key.
@@ -649,7 +685,7 @@ pub trait SortedSetCommands<'a>: Sized {
         key: impl Serialize,
         member: impl Serialize,
     ) -> PreparedCommand<'a, Self, Option<f64>> {
-        prepare_command(self, cmd("ZSCORE").key(key).arg(member))
+        prepare_command(self, cmd("ZSCORE").key(key).arg(member).readonly())
     }
 
     /// This command is similar to [zunionstore](SortedSetCommands::zunionstore),
@@ -672,7 +708,8 @@ pub trait SortedSetCommands<'a>: Sized {
             cmd("ZUNION")
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
-                .arg_labeled("AGGREGATE", aggregate.into()),
+                .arg_labeled("AGGREGATE", aggregate.into())
+                .readonly(),
         )
     }
 
@@ -697,7 +734,8 @@ pub trait SortedSetCommands<'a>: Sized {
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
                 .arg_labeled("AGGREGATE", aggregate.into())
-                .arg("WITHSCORES"),
+                .arg("WITHSCORES")
+                .readonly(),
         )
     }
 

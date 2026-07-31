@@ -46,7 +46,11 @@ pub trait ScriptingCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("EVAL_RO").arg(script).key_with_count(keys).arg(args),
+            cmd("EVAL_RO")
+                .arg(script)
+                .key_with_count(keys)
+                .arg(args)
+                .readonly(),
         )
     }
 
@@ -87,7 +91,11 @@ pub trait ScriptingCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("EVALSHA_RO").arg(sha1).key_with_count(keys).arg(args),
+            cmd("EVALSHA_RO")
+                .arg(sha1)
+                .key_with_count(keys)
+                .arg(args)
+                .readonly(),
         )
     }
 
@@ -127,7 +135,11 @@ pub trait ScriptingCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("FCALL_RO").arg(function).key_with_count(keys).arg(args),
+            cmd("FCALL_RO")
+                .arg(function)
+                .key_with_count(keys)
+                .arg(args)
+                .readonly(),
         )
     }
 

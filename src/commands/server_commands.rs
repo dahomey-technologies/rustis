@@ -591,7 +591,9 @@ pub trait ServerCommands<'a>: Sized {
     {
         prepare_command(
             self,
-            cmd("DBSIZE").cluster_info(RequestPolicy::AllShards, ResponsePolicy::AggSum, 1),
+            cmd("DBSIZE")
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::AggSum, 1)
+                .readonly(),
         )
     }
 
@@ -961,7 +963,7 @@ pub trait ServerCommands<'a>: Sized {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("LOLWUT").arg(options))
+        prepare_command(self, cmd("LOLWUT").arg(options).readonly())
     }
 
     /// This command reports about different memory-related issues that
@@ -1095,7 +1097,10 @@ pub trait ServerCommands<'a>: Sized {
         key: impl Serialize,
         options: MemoryUsageOptions,
     ) -> PreparedCommand<'a, Self, Option<usize>> {
-        prepare_command(self, cmd("MEMORY").arg("USAGE").key(key).arg(options))
+        prepare_command(
+            self,
+            cmd("MEMORY").arg("USAGE").key(key).arg(options).readonly(),
+        )
     }
 
     /// Returns information about the modules loaded to the server.

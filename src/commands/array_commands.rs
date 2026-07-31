@@ -27,7 +27,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// [<https://redis.io/commands/arcount/>](https://redis.io/commands/arcount/)
     #[must_use]
     fn arcount(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ARCOUNT").key(key))
+        prepare_command(self, cmd("ARCOUNT").key(key).readonly())
     }
 
     /// Delete the elements at the given indices.
@@ -71,7 +71,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// [<https://redis.io/commands/arget/>](https://redis.io/commands/arget/)
     #[must_use]
     fn arget<R: Response>(self, key: impl Serialize, index: usize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ARGET").key(key).arg(index))
+        prepare_command(self, cmd("ARGET").key(key).arg(index).readonly())
     }
 
     /// Get the values in the inclusive index range `[start, end]`.
@@ -89,7 +89,10 @@ pub trait ArrayCommands<'a>: Sized {
         start: usize,
         end: usize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ARGETRANGE").key(key).arg(start).arg(end))
+        prepare_command(
+            self,
+            cmd("ARGETRANGE").key(key).arg(start).arg(end).readonly(),
+        )
     }
 
     /// Search the elements of a range with textual predicates.
@@ -115,7 +118,12 @@ pub trait ArrayCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("ARGREP").key(key).arg(start).arg(end).arg(options),
+            cmd("ARGREP")
+                .key(key)
+                .arg(start)
+                .arg(end)
+                .arg(options)
+                .readonly(),
         )
     }
 
@@ -129,7 +137,7 @@ pub trait ArrayCommands<'a>: Sized {
         key: impl Serialize,
         options: ArInfoOptions,
     ) -> PreparedCommand<'a, Self, ArrayInfo> {
-        prepare_command(self, cmd("ARINFO").key(key).arg(options))
+        prepare_command(self, cmd("ARINFO").key(key).arg(options).readonly())
     }
 
     /// Insert one or more values at consecutive indices, starting at the
@@ -160,7 +168,14 @@ pub trait ArrayCommands<'a>: Sized {
         count: usize,
         options: ArLastItemsOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ARLASTITEMS").key(key).arg(count).arg(options))
+        prepare_command(
+            self,
+            cmd("ARLASTITEMS")
+                .key(key)
+                .arg(count)
+                .arg(options)
+                .readonly(),
+        )
     }
 
     /// Return the length of the array: the highest index in use, plus one.
@@ -172,7 +187,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// [<https://redis.io/commands/arlen/>](https://redis.io/commands/arlen/)
     #[must_use]
     fn arlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ARLEN").key(key))
+        prepare_command(self, cmd("ARLEN").key(key).readonly())
     }
 
     /// Get the values at several indices.
@@ -189,7 +204,7 @@ pub trait ArrayCommands<'a>: Sized {
         key: impl Serialize,
         indices: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("ARMGET").key(key).arg(indices))
+        prepare_command(self, cmd("ARMGET").key(key).arg(indices).readonly())
     }
 
     /// Set several `(index, value)` pairs at once. The pairs need not be
@@ -215,7 +230,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// [<https://redis.io/commands/arnext/>](https://redis.io/commands/arnext/)
     #[must_use]
     fn arnext(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("ARNEXT").key(key))
+        prepare_command(self, cmd("ARNEXT").key(key).readonly())
     }
 
     /// Aggregate the non-empty elements of the inclusive range `[start, end]`.
@@ -240,7 +255,12 @@ pub trait ArrayCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("AROP").key(key).arg(start).arg(end).arg(operation),
+            cmd("AROP")
+                .key(key)
+                .arg(start)
+                .arg(end)
+                .arg(operation)
+                .readonly(),
         )
     }
 
@@ -286,7 +306,8 @@ pub trait ArrayCommands<'a>: Sized {
                 .key(key)
                 .arg(start)
                 .arg(end)
-                .arg_labeled("LIMIT", limit.into()),
+                .arg_labeled("LIMIT", limit.into())
+                .readonly(),
         )
     }
 

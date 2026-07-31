@@ -58,7 +58,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.BYRANK").key(key).arg(ranks))
+        prepare_command(self, cmd("TDIGEST.BYRANK").key(key).arg(ranks).readonly())
     }
 
     /// Returns, for each input reverse rank, an estimation of the value (floating-point) with that reverse rank.
@@ -89,7 +89,10 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.BYREVRANK").key(key).arg(ranks))
+        prepare_command(
+            self,
+            cmd("TDIGEST.BYREVRANK").key(key).arg(ranks).readonly(),
+        )
     }
 
     /// Returns, for each input reverse rank, an estimation of the value (floating-point) with that reverse rank.
@@ -117,7 +120,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.CDF").key(key).arg(values))
+        prepare_command(self, cmd("TDIGEST.CDF").key(key).arg(values).readonly())
     }
 
     /// Allocates memory and initializes a new t-digest sketch.
@@ -164,7 +167,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.INFO").key(key))
+        prepare_command(self, cmd("TDIGEST.INFO").key(key).readonly())
     }
 
     /// Returns the maximum observation value from a t-digest sketch.
@@ -183,7 +186,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.MAX").key(key))
+        prepare_command(self, cmd("TDIGEST.MAX").key(key).readonly())
     }
 
     /// Merges multiple t-digest sketches into a single sketch.
@@ -232,7 +235,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.MIN").key(key))
+        prepare_command(self, cmd("TDIGEST.MIN").key(key).readonly())
     }
 
     /// Returns, for each input fraction, an estimation of the value
@@ -262,7 +265,10 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.QUANTILE").key(key).arg(quantiles))
+        prepare_command(
+            self,
+            cmd("TDIGEST.QUANTILE").key(key).arg(quantiles).readonly(),
+        )
     }
 
     /// Returns, for each input value (floating-point), the estimated rank of the value
@@ -297,7 +303,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.RANK").key(key).arg(values))
+        prepare_command(self, cmd("TDIGEST.RANK").key(key).arg(values).readonly())
     }
 
     /// Resets a t-digest sketch: empty the sketch and re-initializes it.
@@ -347,7 +353,7 @@ pub trait TDigestCommands<'a> {
     where
         Self: Sized,
     {
-        prepare_command(self, cmd("TDIGEST.REVRANK").key(key).arg(values))
+        prepare_command(self, cmd("TDIGEST.REVRANK").key(key).arg(values).readonly())
     }
 
     /// Returns an estimation of the mean value from the sketch, excluding observation values outside the low and high cutoff quantiles.
@@ -381,7 +387,8 @@ pub trait TDigestCommands<'a> {
             cmd("TDIGEST.TRIMMED_MEAN")
                 .key(key)
                 .arg(low_cut_quantile)
-                .arg(high_cut_quantile),
+                .arg(high_cut_quantile)
+                .readonly(),
         )
     }
 }

@@ -44,7 +44,14 @@ pub trait SearchCommands<'a>: Sized {
         query: impl Serialize,
         options: FtAggregateOptions,
     ) -> PreparedCommand<'a, Self, FtAggregateResult> {
-        prepare_command(self, cmd("FT.AGGREGATE").arg(index).arg(query).arg(options))
+        prepare_command(
+            self,
+            cmd("FT.AGGREGATE")
+                .arg(index)
+                .arg(query)
+                .arg(options)
+                .readonly(),
+        )
     }
 
     /// Add an alias to an index
@@ -138,7 +145,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.config-get/>](https://redis.io/commands/ft.config-get/)
     #[must_use]
     fn ft_config_get<R: Response>(self, option: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option))
+        prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option).readonly())
     }
 
     /// Set configuration options
@@ -155,7 +162,14 @@ pub trait SearchCommands<'a>: Sized {
         option: impl Serialize,
         value: impl Serialize,
     ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("FT.CONFIG").arg("SET").arg(option).arg(value))
+        prepare_command(
+            self,
+            cmd("FT.CONFIG")
+                .arg("SET")
+                .arg(option)
+                .arg(value)
+                .readonly(),
+        )
     }
 
     /// Create an index with the given specification
@@ -185,7 +199,14 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.cursor-del/>](https://redis.io/commands/ft.cursor-del/)
     #[must_use]
     fn ft_cursor_del(self, index: impl Serialize, cursor_id: u64) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("FT.CURSOR").arg("DEL").arg(index).arg(cursor_id))
+        prepare_command(
+            self,
+            cmd("FT.CURSOR")
+                .arg("DEL")
+                .arg(index)
+                .arg(cursor_id)
+                .readonly(),
+        )
     }
 
     /// Read next results from an existing cursor
@@ -207,7 +228,14 @@ pub trait SearchCommands<'a>: Sized {
         index: impl Serialize,
         cursor_id: u64,
     ) -> PreparedCommand<'a, Self, FtAggregateResult> {
-        prepare_command(self, cmd("FT.CURSOR").arg("READ").arg(index).arg(cursor_id))
+        prepare_command(
+            self,
+            cmd("FT.CURSOR")
+                .arg("READ")
+                .arg(index)
+                .arg(cursor_id)
+                .readonly(),
+        )
     }
 
     /// Add terms to a dictionary
@@ -262,7 +290,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.dictdump/>](https://redis.io/commands/ft.dictdump/)
     #[must_use]
     fn ft_dictdump<R: Response>(self, dict: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.DICTDUMP").arg(dict))
+        prepare_command(self, cmd("FT.DICTDUMP").arg(dict).readonly())
     }
 
     /// Delete an index
@@ -317,7 +345,11 @@ pub trait SearchCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("FT.EXPLAIN").arg(index).arg(query).arg(dialect_version),
+            cmd("FT.EXPLAIN")
+                .arg(index)
+                .arg(query)
+                .arg(dialect_version)
+                .readonly(),
         )
     }
 
@@ -350,7 +382,8 @@ pub trait SearchCommands<'a>: Sized {
             cmd("FT.EXPLAINCLI")
                 .arg(index)
                 .arg(query)
-                .arg(dialect_version),
+                .arg(dialect_version)
+                .readonly(),
         )
     }
 
@@ -366,7 +399,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.info/>](https://redis.io/commands/ft.info/)
     #[must_use]
     fn ft_info(self, index: impl Serialize) -> PreparedCommand<'a, Self, FtInfoResult> {
-        prepare_command(self, cmd("FT.INFO").arg(index))
+        prepare_command(self, cmd("FT.INFO").arg(index).readonly())
     }
 
     /// Returns a list of all existing indexes.
@@ -378,7 +411,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft._list/>](https://redis.io/commands/ft._list/)
     #[must_use]
     fn ft_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT._LIST"))
+        prepare_command(self, cmd("FT._LIST").readonly())
     }
 
     /// Performs a hybrid search combining a text search ([`FtHybridSearch`]) and a
@@ -543,7 +576,8 @@ pub trait SearchCommands<'a>: Sized {
                 .arg("SEARCH")
                 .arg_if(limited, "LIMITED")
                 .arg("QUERY")
-                .arg(query),
+                .arg(query)
+                .readonly(),
         )
     }
 
@@ -577,7 +611,8 @@ pub trait SearchCommands<'a>: Sized {
                 .arg("AGGREGATE")
                 .arg_if(limited, "LIMITED")
                 .arg("QUERY")
-                .arg(query),
+                .arg(query)
+                .readonly(),
         )
     }
 
@@ -600,7 +635,14 @@ pub trait SearchCommands<'a>: Sized {
         query: impl Serialize,
         options: FtSearchOptions,
     ) -> PreparedCommand<'a, Self, FtSearchResult> {
-        prepare_command(self, cmd("FT.SEARCH").arg(index).arg(query).arg(options))
+        prepare_command(
+            self,
+            cmd("FT.SEARCH")
+                .arg(index)
+                .arg(query)
+                .arg(options)
+                .readonly(),
+        )
     }
 
     /// Perform spelling correction on a query, returning suggestions for misspelled terms
@@ -624,7 +666,11 @@ pub trait SearchCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, FtSpellCheckResult> {
         prepare_command(
             self,
-            cmd("FT.SPELLCHECK").arg(index).arg(query).arg(options),
+            cmd("FT.SPELLCHECK")
+                .arg(index)
+                .arg(query)
+                .arg(options)
+                .readonly(),
         )
     }
 
@@ -641,7 +687,7 @@ pub trait SearchCommands<'a>: Sized {
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
     fn ft_syndump<R: Response>(self, index: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.SYNDUMP").arg(index))
+        prepare_command(self, cmd("FT.SYNDUMP").arg(index).readonly())
     }
 
     /// Update a synonym group
@@ -698,7 +744,10 @@ pub trait SearchCommands<'a>: Sized {
         index: impl Serialize,
         field_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.TAGVALS").arg(index).arg(field_name))
+        prepare_command(
+            self,
+            cmd("FT.TAGVALS").arg(index).arg(field_name).readonly(),
+        )
     }
 
     /// Add a suggestion string to an auto-complete suggestion dictionary
@@ -774,7 +823,14 @@ pub trait SearchCommands<'a>: Sized {
         prefix: impl Serialize,
         options: FtSugGetOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("FT.SUGGET").key(key).arg(prefix).arg(options))
+        prepare_command(
+            self,
+            cmd("FT.SUGGET")
+                .key(key)
+                .arg(prefix)
+                .arg(options)
+                .readonly(),
+        )
     }
 
     /// Get the size of an auto-complete suggestion dictionary
@@ -789,7 +845,7 @@ pub trait SearchCommands<'a>: Sized {
     /// [<https://redis.io/commands/ft.suglen/>](https://redis.io/commands/ft.suglen/)
     #[must_use]
     fn ft_suglen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("FT.SUGLEN").key(key))
+        prepare_command(self, cmd("FT.SUGLEN").key(key).readonly())
     }
 }
 

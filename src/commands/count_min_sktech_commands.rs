@@ -42,7 +42,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     /// * [<https://redis.io/commands/cms.info/>](https://redis.io/commands/cms.info/)
     #[must_use]
     fn cms_info(self, key: impl Serialize) -> PreparedCommand<'a, Self, CmsInfoResult> {
-        prepare_command(self, cmd("CMS.INFO").key(key))
+        prepare_command(self, cmd("CMS.INFO").key(key).readonly())
     }
 
     /// Initializes a Count-Min Sketch to dimensions specified by user.
@@ -144,7 +144,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
         key: impl Serialize,
         items: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("CMS.QUERY").key(key).arg(items))
+        prepare_command(self, cmd("CMS.QUERY").key(key).arg(items).readonly())
     }
 }
 

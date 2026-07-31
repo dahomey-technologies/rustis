@@ -1260,10 +1260,10 @@ async fn a_held_reply_skip_does_not_survive_a_reconnection() -> Result<()> {
     Ok(())
 }
 
-/// `READONLY` is deliberately not broadcast: a rustis cluster client routes every
-/// slot-based read to the shard's master, so the capability it advertises does not
-/// exist. A reconnection must not advertise it either — replaying it once per node
-/// would put the whole cluster in a mode the send path refuses to grant.
+/// `READONLY` is deliberately not broadcast: the client owns the read mode of its
+/// connections, and with the default read preference every slot-based read goes to
+/// the shard's master. A reconnection must not advertise it either — replaying it
+/// once per node would put the whole cluster in a mode the routing never uses.
 #[tokio::test]
 #[serial]
 async fn readonly_is_not_broadcast_by_a_reconnection() -> Result<()> {
@@ -1407,5 +1407,239 @@ async fn cluster_down_is_retried_instead_of_reaching_the_caller() -> Result<()> 
 
     client.del("clu_clusterdown").await?;
 
+    Ok(())
+}
+
+const CLUSTER_NODE_PORTS: [u16; 6] = [7000, 7001, 7002, 7003, 7004, 7005];
+
+/// The ports currently serving as replicas, asked to the nodes themselves: a
+/// failover earlier in the suite may have swapped the roles the compose file set
+/// up, and a hard-coded list would then test the opposite of what it claims.
+async fn cluster_replica_ports() -> Result<Vec<u16>> {
+    let host = get_default_host();
+    let mut replicas = Vec::new();
+
+    for port in CLUSTER_NODE_PORTS {
+        let observer = Client::connect(format!("{host}:{port}")).await?;
+        let info: String = observer.send(cmd("INFO").arg("replication"), None).await?;
+        if info.contains("role:slave") {
+            replicas.push(port);
+        }
+    }
+
+    Ok(replicas)
+}
+
+/// The last command each connection named `connection_name` ran on the given
+/// node, read from a separate standalone connection like [`node_flags_for`].
+async fn node_last_commands_for(port: u16, connection_name: &str) -> Result<Vec<String>> {
+    let host = get_default_host();
+    let observer = Client::connect(format!("{host}:{port}")).await?;
+    let list: String = observer.send(cmd("CLIENT").arg("LIST"), None).await?;
+
+    Ok(list
+        .lines()
+        .filter(|line| line.contains(&format!("name={connection_name} ")))
+        .filter_map(|line| line.split(' ').find_map(|f| f.strip_prefix("cmd=")))
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Whether any node in `ports` saw `command` as the last one of a connection
+/// named `connection_name`.
+async fn any_node_ran(ports: &[u16], connection_name: &str, command: &str) -> Result<bool> {
+    for &port in ports {
+        if node_last_commands_for(port, connection_name)
+            .await?
+            .iter()
+            .any(|cmd| cmd == command)
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+async fn prefer_replica_cluster_client(connection_name: &str) -> Result<Client> {
+    crate::tests::log_try_init();
+    let host = get_default_host();
+    Client::connect(format!(
+        "redis+cluster://{host}:7000,{host}:7001,{host}:7002\
+         ?read_preference=prefer_replica&connection_name={connection_name}"
+    ))
+    .await
+}
+
+/// The point of the whole feature: a read-only command must leave the master
+/// alone and land on a replica of its shard.
+#[tokio::test]
+#[serial]
+async fn a_read_goes_to_a_replica_when_the_read_preference_asks_for_it() -> Result<()> {
+    let name = "clu_read_replica";
+    let client = prefer_replica_cluster_client(name).await?;
+    let replica_ports = cluster_replica_ports().await?;
+    let master_ports = CLUSTER_NODE_PORTS
+        .into_iter()
+        .filter(|p| !replica_ports.contains(p))
+        .collect::<Vec<_>>();
+
+    client.set("clu_read_replica_key", "value").await?;
+
+    // The write is asynchronous, so the value may need a moment to reach the
+    // replica the read is now routed to.
+    let mut value = String::new();
+    for _ in 0..20 {
+        value = client.get("clu_read_replica_key").await?;
+        if value == "value" {
+            break;
+        }
+        sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!("value", value);
+
+    assert!(
+        any_node_ran(&replica_ports, name, "get").await?,
+        "the read should have been served by a replica"
+    );
+    assert!(
+        !any_node_ran(&master_ports, name, "get").await?,
+        "no master should have served the read"
+    );
+
+    client.del("clu_read_replica_key").await?;
+    Ok(())
+}
+
+/// A replica only serves reads once the connection asked for it, so the
+/// handshake must carry `READONLY` — without it the very first read comes back
+/// as a `MOVED` to the master.
+#[tokio::test]
+#[serial]
+async fn replica_connections_are_put_in_readonly_mode() -> Result<()> {
+    let name = "clu_replica_readonly";
+    let _client = prefer_replica_cluster_client(name).await?;
+
+    for port in cluster_replica_ports().await? {
+        let flags = node_flags_for(port, name).await?;
+        assert!(
+            !flags.is_empty(),
+            "replica {port} should see the named connection"
+        );
+        assert!(
+            flags.iter().all(|f| f.contains('r')),
+            "replica {port} should have been put in readonly mode, flags: {flags:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// The preference names reads only: a write on a replica is refused by the
+/// server, so routing one there would break the client outright.
+#[tokio::test]
+#[serial]
+async fn a_write_still_goes_to_the_master_with_a_replica_read_preference() -> Result<()> {
+    let name = "clu_write_master";
+    let client = prefer_replica_cluster_client(name).await?;
+    let replica_ports = cluster_replica_ports().await?;
+
+    client.set("clu_write_master_key", "value").await?;
+
+    assert!(
+        !any_node_ran(&replica_ports, name, "set").await?,
+        "a write must never be routed to a replica"
+    );
+
+    client.del("clu_write_master_key").await?;
+    Ok(())
+}
+
+/// A multi-shard read is split per shard and each slice is routed on its own,
+/// so the preference has to apply to that path too.
+#[tokio::test]
+#[serial]
+async fn a_multi_shard_read_goes_to_the_replicas() -> Result<()> {
+    let name = "clu_mget_replica";
+    let client = prefer_replica_cluster_client(name).await?;
+    let replica_ports = cluster_replica_ports().await?;
+
+    client
+        .mset([
+            ("clu_mget_replica{1}", "value1"),
+            ("clu_mget_replica{2}", "value2"),
+            ("clu_mget_replica{3}", "value3"),
+        ])
+        .await?;
+
+    let _values: Vec<Option<String>> = client
+        .mget([
+            "clu_mget_replica{1}",
+            "clu_mget_replica{2}",
+            "clu_mget_replica{3}",
+        ])
+        .await?;
+
+    assert!(
+        any_node_ran(&replica_ports, name, "mget").await?,
+        "a multi-shard read should have reached at least one replica"
+    );
+
+    client
+        .del([
+            "clu_mget_replica{1}",
+            "clu_mget_replica{2}",
+            "clu_mget_replica{3}",
+        ])
+        .await?;
+    Ok(())
+}
+
+/// A transaction is one node's atomic block: its reads belong on the node
+/// holding the MULTI, which is the master the writes went to.
+#[tokio::test]
+#[serial]
+async fn a_read_inside_a_transaction_stays_on_the_master() -> Result<()> {
+    let name = "clu_tx_master";
+    let client = prefer_replica_cluster_client(name).await?;
+    let replica_ports = cluster_replica_ports().await?;
+
+    let mut transaction = client.create_transaction();
+    transaction.set("clu_tx_master{1}", "value").forget();
+    transaction.get::<()>("clu_tx_master{1}").queue();
+    let value: String = transaction.execute().await?;
+    assert_eq!("value", value);
+
+    assert!(
+        !any_node_ran(&replica_ports, name, "exec").await?,
+        "a transaction must not be split between a master and a replica"
+    );
+
+    client.del("clu_tx_master{1}").await?;
+    Ok(())
+}
+
+/// The default is the historical behaviour: everything on the masters.
+#[tokio::test]
+#[serial]
+async fn reads_stay_on_the_master_by_default() -> Result<()> {
+    let name = "clu_default_master";
+    let host = get_default_host();
+    let client = Client::connect(format!(
+        "redis+cluster://{host}:7000,{host}:7001,{host}:7002?connection_name={name}"
+    ))
+    .await?;
+    let replica_ports = cluster_replica_ports().await?;
+
+    client.set("clu_default_master_key", "value").await?;
+    let value: String = client.get("clu_default_master_key").await?;
+    assert_eq!("value", value);
+
+    assert!(
+        !any_node_ran(&replica_ports, name, "get").await?,
+        "the default read preference must keep reads on the masters"
+    );
+
+    client.del("clu_default_master_key").await?;
     Ok(())
 }

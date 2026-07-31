@@ -61,7 +61,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/dump/>](https://redis.io/commands/dump/)
     #[must_use]
     fn dump(self, key: impl Serialize) -> PreparedCommand<'a, Self, BulkString> {
-        prepare_command(self, cmd("DUMP").key(key))
+        prepare_command(self, cmd("DUMP").key(key).readonly())
     }
 
     /// Returns if keys exist.
@@ -75,11 +75,10 @@ pub trait GenericCommands<'a>: Sized {
     fn exists(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("EXISTS").key(keys).cluster_info(
-                RequestPolicy::MultiShard,
-                ResponsePolicy::AggSum,
-                1,
-            ),
+            cmd("EXISTS")
+                .key(keys)
+                .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AggSum, 1)
+                .readonly(),
         )
     }
 
@@ -144,7 +143,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/expiretime/>](https://redis.io/commands/expiretime/)
     #[must_use]
     fn expiretime(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("EXPIRETIME").key(key))
+        prepare_command(self, cmd("EXPIRETIME").key(key).readonly())
     }
 
     /// Returns all keys matching pattern.
@@ -160,7 +159,8 @@ pub trait GenericCommands<'a>: Sized {
             self,
             cmd("KEYS")
                 .arg(pattern)
-                .cluster_info(RequestPolicy::AllShards, None, 1),
+                .cluster_info(RequestPolicy::AllShards, None, 1)
+                .readonly(),
         )
     }
 
@@ -216,7 +216,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/object-encoding/>](https://redis.io/commands/object-encoding/)
     #[must_use]
     fn object_encoding<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("OBJECT").arg("ENCODING").key(key))
+        prepare_command(self, cmd("OBJECT").arg("ENCODING").key(key).readonly())
     }
 
     /// This command returns the logarithmic access frequency counter of a Redis object stored at `key`.
@@ -228,7 +228,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/object-freq/>](https://redis.io/commands/object-freq/)
     #[must_use]
     fn object_freq(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("OBJECT").arg("FREQ").key(key))
+        prepare_command(self, cmd("OBJECT").arg("FREQ").key(key).readonly())
     }
 
     /// The command returns a helpful text describing the different OBJECT subcommands.
@@ -269,7 +269,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/object-idletime/>](https://redis.io/commands/object-idletime/)
     #[must_use]
     fn object_idle_time(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("OBJECT").arg("IDLETIME").key(key))
+        prepare_command(self, cmd("OBJECT").arg("IDLETIME").key(key).readonly())
     }
 
     /// This command returns the reference count of the stored at `key`.
@@ -281,7 +281,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/object-refcount/>](https://redis.io/commands/object-refcount/)
     #[must_use]
     fn object_refcount(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("OBJECT").arg("REFCOUNT").key(key))
+        prepare_command(self, cmd("OBJECT").arg("REFCOUNT").key(key).readonly())
     }
 
     /// Remove the existing timeout on key,
@@ -357,7 +357,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/pexpiretime/>](https://redis.io/commands/pexpiretime/)
     #[must_use]
     fn pexpiretime(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("PEXPIRETIME").key(key))
+        prepare_command(self, cmd("PEXPIRETIME").key(key).readonly())
     }
 
     /// Returns the remaining time to live of a key that has a timeout.
@@ -371,7 +371,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/pttl/>](https://redis.io/commands/pttl/)
     #[must_use]
     fn pttl(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("PTTL").key(key))
+        prepare_command(self, cmd("PTTL").key(key).readonly())
     }
 
     /// Return a random key from the currently selected database.
@@ -385,7 +385,9 @@ pub trait GenericCommands<'a>: Sized {
     fn randomkey<R: Response>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("RANDOMKEY").cluster_info(RequestPolicy::AllShards, ResponsePolicy::Special, 1),
+            cmd("RANDOMKEY")
+                .cluster_info(RequestPolicy::AllShards, ResponsePolicy::Special, 1)
+                .readonly(),
         )
     }
 
@@ -452,11 +454,11 @@ pub trait GenericCommands<'a>: Sized {
     fn scan<R: Response>(self, cursor: u64, options: ScanOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
-            cmd("SCAN").arg(cursor).arg(options).cluster_info(
-                RequestPolicy::Special,
-                ResponsePolicy::Special,
-                1,
-            ),
+            cmd("SCAN")
+                .arg(cursor)
+                .arg(options)
+                .cluster_info(RequestPolicy::Special, ResponsePolicy::Special, 1)
+                .readonly(),
         )
     }
 
@@ -516,7 +518,7 @@ pub trait GenericCommands<'a>: Sized {
         key: impl Serialize,
         options: SortOptions,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SORT_RO").key(key).arg(options))
+        prepare_command(self, cmd("SORT_RO").key(key).arg(options).readonly())
     }
 
     /// Alters the last access time of a key(s). A key is ignored if it does not exist.
@@ -530,11 +532,10 @@ pub trait GenericCommands<'a>: Sized {
     fn touch(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("TOUCH").key(keys).cluster_info(
-                RequestPolicy::MultiShard,
-                ResponsePolicy::AggSum,
-                1,
-            ),
+            cmd("TOUCH")
+                .key(keys)
+                .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AggSum, 1)
+                .readonly(),
         )
     }
 
@@ -549,7 +550,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/ttl/>](https://redis.io/commands/ttl/)
     #[must_use]
     fn ttl(self, key: impl Serialize) -> PreparedCommand<'a, Self, i64> {
-        prepare_command(self, cmd("TTL").key(key))
+        prepare_command(self, cmd("TTL").key(key).readonly())
     }
 
     /// Returns the string representation of the type of the value stored at key.
@@ -563,7 +564,7 @@ pub trait GenericCommands<'a>: Sized {
     /// [<https://redis.io/commands/type/>](https://redis.io/commands/type/)
     #[must_use]
     fn type_<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("TYPE").key(key))
+        prepare_command(self, cmd("TYPE").key(key).readonly())
     }
 
     /// This command is very similar to DEL: it removes the specified keys.

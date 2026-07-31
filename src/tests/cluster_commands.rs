@@ -100,12 +100,23 @@ async fn cluster_getkeysinslot() -> Result<()> {
     log_try_init();
     let client = Client::connect("127.0.0.1:7000").await?;
 
-    // `key` hashes to slot 12539, which belongs to the third master's range
-    // (10923-16383), so that node both accepts the write and reports the key.
+    // `key` hashes to slot 12539. The master owning that slot is the only node
+    // that both accepts the write and reports the key, and which node that is
+    // depends on the current topology, so it is looked up rather than assumed.
     let slot = client.cluster_keyslot("key").await?;
     assert_eq!(12539, slot);
 
-    let owner = Client::connect("127.0.0.1:7002").await?;
+    let shards: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let shard = shards
+        .iter()
+        .find(|s| {
+            s.slots
+                .iter()
+                .any(|(start, end)| *start <= slot && slot <= *end)
+        })
+        .unwrap();
+    let master = shard.nodes.iter().find(|n| n.role == "master").unwrap();
+    let owner = Client::connect((master.ip.clone(), master.port.unwrap()).into_config()?).await?;
     owner.del("key").await?;
     assert_eq!(0, owner.cluster_countkeysinslot(slot as usize).await?);
 

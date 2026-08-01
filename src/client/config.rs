@@ -1306,7 +1306,7 @@ pub enum ServerConfig {
     },
     /// A byte stream supplied by the caller instead of one the client opens.
     ///
-    /// See [`TransportFactory`].
+    /// See [`TransportFactory`](crate::client::TransportFactory).
     Custom(CustomTransport),
 }
 

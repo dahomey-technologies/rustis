@@ -795,3 +795,105 @@ fn lossy_double_to_integer_errors_instead_of_truncating() {
     assert_eq!(3i64, i64::deserialize(&Value::Double(3.)).unwrap());
     assert_eq!(255u8, u8::deserialize(&Value::Double(255.)).unwrap());
 }
+
+#[test]
+fn one_element_array_unwraps_for_every_integer_width() {
+    log_try_init();
+
+    // Mirror of the RESP deserializer: a one-element array holding an integer
+    // unwraps to that integer, for every width and not just `i64`/`u64`.
+    let value = Value::Array(vec![Value::Integer(12)]);
+    assert_eq!(12i8, i8::deserialize(&value).unwrap());
+    assert_eq!(12u8, u8::deserialize(&value).unwrap());
+    assert_eq!(12i16, i16::deserialize(&value).unwrap());
+    assert_eq!(12u16, u16::deserialize(&value).unwrap());
+    assert_eq!(12i32, i32::deserialize(&value).unwrap());
+    assert_eq!(12u32, u32::deserialize(&value).unwrap());
+    assert_eq!(12i64, i64::deserialize(&value).unwrap());
+    assert_eq!(12u64, u64::deserialize(&value).unwrap());
+    assert_eq!(12i128, i128::deserialize(&value).unwrap());
+    assert_eq!(12u128, u128::deserialize(&value).unwrap());
+
+    // The element still has to fit the target.
+    let value = Value::Array(vec![Value::Integer(300)]);
+    assert!(matches!(
+        u8::deserialize(&value),
+        Err(Error::Client(ClientError::CannotParseInteger))
+    ));
+
+    // A longer array would have to discard the rest silently.
+    let value = Value::Array(vec![Value::Integer(12), Value::Integer(13)]);
+    for result in [
+        i8::deserialize(&value).map(i64::from),
+        u32::deserialize(&value).map(i64::from),
+        i64::deserialize(&value),
+        u64::deserialize(&value).map(|u| i64::try_from(u).unwrap()),
+    ] {
+        assert!(matches!(
+            result,
+            Err(Error::Client(ClientError::CannotParseInteger))
+        ));
+    }
+}
+
+#[test]
+fn integers_128_are_supported() {
+    log_try_init();
+
+    assert_eq!(12i128, i128::deserialize(&Value::Integer(12)).unwrap());
+    assert_eq!(12u128, u128::deserialize(&Value::Integer(12)).unwrap());
+    assert_eq!(
+        12i128,
+        i128::deserialize(&Value::SimpleString("12".to_owned())).unwrap()
+    );
+    assert_eq!(
+        12u128,
+        u128::deserialize(&Value::BulkString(b"12".to_vec())).unwrap()
+    );
+    assert_eq!(12i128, i128::deserialize(&Value::Double(12.)).unwrap());
+    assert_eq!(0i128, i128::deserialize(&Value::Null).unwrap());
+    assert!(matches!(
+        u128::deserialize(&Value::Integer(-1)),
+        Err(Error::Client(ClientError::CannotParseInteger))
+    ));
+}
+
+#[test]
+fn numbers_and_booleans_read_as_text() {
+    log_try_init();
+
+    // A visitor that takes the text however it comes, so `deserialize_str` can be
+    // compared with `deserialize_string` on the same reply.
+    struct AnyStr;
+
+    impl serde::de::Visitor<'_> for AnyStr {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string")
+        }
+
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<String, E> {
+            Ok(v.to_owned())
+        }
+    }
+
+    fn as_str(value: &Value) -> Result<String> {
+        serde::Deserializer::deserialize_str(value, AnyStr)
+    }
+
+    // Mirror of the RESP deserializer: a numeric or boolean reply is readable as
+    // text, and the entry point — `deserialize_str` for an identifier,
+    // `deserialize_string` for a `String` — never decides whether the command
+    // succeeds, nor the text it produces.
+    for (value, text) in [
+        (Value::Integer(12), "12"),
+        (Value::Double(12.), "12"),
+        (Value::Boolean(true), "true"),
+        (Value::Boolean(false), "false"),
+        (Value::SimpleString("foo".to_owned()), "foo"),
+    ] {
+        assert_eq!(text, String::deserialize(&value).unwrap());
+        assert_eq!(text, as_str(&value).unwrap());
+    }
+}

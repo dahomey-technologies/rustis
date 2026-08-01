@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use serde::{
-    Deserialize, Deserializer,
+    Deserializer,
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
     forward_to_deserialize_any,
 };
@@ -23,6 +23,19 @@ fn single_char(str: &str) -> Result<char> {
     match str.as_bytes() {
         &[b] => Ok(b as char),
         _ => Err(Error::Client(ClientError::CannotParseChar)),
+    }
+}
+
+/// Reads the single integer of a one-element array, the only array shape that
+/// unwraps to a number: a longer one would have to discard the rest silently.
+/// The slice pattern keeps the arity test and the read as one expression, and
+/// the rule is the wire path's, so the two deserializers cannot disagree on
+/// which arrays are readable as an integer.
+#[inline]
+fn single_integer(values: &[Value]) -> Result<i64> {
+    match values {
+        [Value::Integer(i)] => Ok(*i),
+        _ => Err(Error::Client(ClientError::CannotParseInteger)),
     }
 }
 
@@ -82,6 +95,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
+            Value::Array(a) => i8::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -103,6 +118,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
+            Value::Array(a) => i16::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -124,6 +141,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
+            Value::Array(a) => i32::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -131,6 +150,49 @@ impl<'de> Deserializer<'de> for &'de Value {
         };
 
         visitor.visit_i32(result)
+    }
+
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self {
+            Value::Integer(i) => i128::from(*i),
+            Value::Double(d) => double_to_int::<i128>(*d)?,
+            Value::Null => 0,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<i128>()?,
+            Value::SimpleString(s) => s.parse::<i128>()?,
+            Value::Array(a) => i128::from(single_integer(a)?),
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            _ => {
+                return Err(Error::Client(ClientError::CannotParseInteger));
+            }
+        };
+
+        visitor.visit_i128(result)
+    }
+
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let result = match self {
+            Value::Integer(i) => {
+                u128::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+            }
+            Value::Double(d) => double_to_int::<u128>(*d)?,
+            Value::Null => 0,
+            Value::BulkString(s) => str::from_utf8(s)?.parse::<u128>()?,
+            Value::SimpleString(s) => s.parse::<u128>()?,
+            Value::Array(a) => u128::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            _ => {
+                return Err(Error::Client(ClientError::CannotParseInteger));
+            }
+        };
+
+        visitor.visit_u128(result)
     }
 
     #[inline]
@@ -144,10 +206,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
-            Value::Array(a) => match a.as_slice() {
-                [single] => i64::deserialize(single)?,
-                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
-            },
+            Value::Array(a) => single_integer(a)?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -169,6 +228,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
+            Value::Array(a) => u8::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -190,6 +251,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
+            Value::Array(a) => u16::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -211,6 +274,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
+            Value::Array(a) => u32::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -232,10 +297,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
-            Value::Array(a) => match a.as_slice() {
-                [single] => u64::deserialize(single)?,
-                _ => return Err(Error::Client(ClientError::CannotParseInteger)),
-            },
+            Value::Array(a) => u64::try_from(single_integer(a)?)
+                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {
                 return Err(Error::Client(ClientError::CannotParseInteger));
@@ -325,6 +388,16 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Null => "",
             Value::SimpleString(s) => s.as_str(),
             Value::Error(e) => return Err(Error::Redis(e.clone())),
+            // Nothing to borrow: a number or a boolean holds no text of its own,
+            // so it is rendered, and the rendering lives in `deserialize_string`
+            // so the two entry points cannot disagree on which replies are
+            // readable as text, nor on the text they produce. Serde reaches this
+            // one through `deserialize_identifier` — struct field names, enum
+            // variant names — and the other for a `String`, so a caller's choice
+            // of target type must not decide whether their command succeeds.
+            Value::Integer(_) | Value::Double(_) | Value::Boolean(_) => {
+                return self.deserialize_string(visitor);
+            }
             _ => {
                 return Err(Error::Client(ClientError::CannotParseStr));
             }
@@ -338,18 +411,25 @@ impl<'de> Deserializer<'de> for &'de Value {
     where
         V: Visitor<'de>,
     {
-        let result = match self {
-            Value::Double(d) => d.to_string(),
-            Value::BulkString(s) => str::from_utf8(s)?.to_owned(),
-            Value::Null => String::from(""),
-            Value::SimpleString(s) => s.clone(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
-            _ => {
-                return Err(Error::Client(ClientError::CannotParseString));
+        // Each arm hands the visitor the cheapest form it can use: text that
+        // already lives in the `Value` stays borrowed, and a value that has to be
+        // rendered goes out as a `&str`, so a visitor that does not need to own it
+        // — a `Cow`, a field name — copies nothing.
+        match self {
+            Value::BulkString(s) => visitor.visit_borrowed_str(str::from_utf8(s)?),
+            Value::SimpleString(s) => visitor.visit_borrowed_str(s),
+            // `itoa` rather than `to_string`, which pulls in the `fmt` machinery
+            // and allocates a `String` only to hand it over.
+            Value::Integer(i) => {
+                let mut buffer = itoa::Buffer::new();
+                visitor.visit_str(buffer.format(*i))
             }
-        };
-
-        visitor.visit_string(result)
+            Value::Double(d) => visitor.visit_string(d.to_string()),
+            Value::Boolean(b) => visitor.visit_str(if *b { "true" } else { "false" }),
+            Value::Null => visitor.visit_borrowed_str(""),
+            Value::Error(e) => Err(Error::Redis(e.clone())),
+            _ => Err(Error::Client(ClientError::CannotParseString)),
+        }
     }
 
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>

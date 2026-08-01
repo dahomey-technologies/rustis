@@ -1,6 +1,8 @@
 use crate::{
     ConnectionState, ErrorKind, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
-    client::{BufferConfig, Config, PreparedCommand},
+    client::{
+        BufferConfig, Config, CustomTransport, PreparedCommand, TransportReader, TransportWriter,
+    },
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
     },
@@ -9,6 +11,8 @@ use crate::{
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
+#[cfg(unix)]
+use crate::{UnixStreamReader, UnixStreamWriter, unix_connect};
 use bytes::BytesMut;
 use futures_util::{SinkExt, Stream, StreamExt, task::noop_waker_ref};
 use serde::de::DeserializeOwned;
@@ -65,6 +69,52 @@ fn maybe_shrink_buffer(buf: &mut BytesMut, small_streak: &mut usize, buffers: &B
     *buf = replacement;
 }
 
+/// Where a [`StandaloneConnection`] dials, and how it dials again when the link
+/// breaks: a reconnection asks the endpoint for a fresh stream, so an endpoint
+/// describes a way to reach the server rather than one stream to it.
+#[derive(Clone)]
+pub(crate) enum Endpoint {
+    Tcp {
+        host: String,
+        port: u16,
+    },
+    #[cfg(unix)]
+    Unix(std::path::PathBuf),
+    Custom(CustomTransport),
+}
+
+impl Endpoint {
+    pub(crate) fn tcp(host: &str, port: u16) -> Self {
+        Endpoint::Tcp {
+            host: host.to_owned(),
+            port,
+        }
+    }
+
+    /// The host and port this endpoint dials, for the paths that can only work
+    /// on a TCP address.
+    #[cfg(test)]
+    pub(crate) fn tcp_address(&self) -> Option<(&str, u16)> {
+        match self {
+            Endpoint::Tcp { host, port } => Some((host, *port)),
+            #[cfg(unix)]
+            Endpoint::Unix(_) => None,
+            Endpoint::Custom(_) => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Endpoint::Tcp { host, port } => write!(f, "{host}:{port}"),
+            #[cfg(unix)]
+            Endpoint::Unix(path) => write!(f, "unix:{}", path.display()),
+            Endpoint::Custom(_) => f.write_str("custom"),
+        }
+    }
+}
+
 pub(crate) enum Streams {
     Tcp(
         FramedRead<TcpStreamReader, BufferDecoder>,
@@ -75,20 +125,89 @@ pub(crate) enum Streams {
         FramedRead<TcpTlsStreamReader, BufferDecoder>,
         FramedWrite<TcpTlsStreamWriter, CommandEncoder>,
     ),
+    #[cfg(unix)]
+    Unix(
+        FramedRead<UnixStreamReader, BufferDecoder>,
+        FramedWrite<UnixStreamWriter, CommandEncoder>,
+    ),
+    Custom(
+        FramedRead<TransportReader, BufferDecoder>,
+        FramedWrite<TransportWriter, CommandEncoder>,
+    ),
+}
+
+/// Runs `$body` against the framed writer of whichever transport is in use.
+///
+/// The variants differ only in the stream type they wrap, and every operation
+/// treats them identically; spelling the match out at each call site would
+/// repeat one arm per transport per operation.
+macro_rules! framed_write {
+    ($streams:expr, |$framed_write:ident| $body:expr) => {
+        match $streams {
+            Streams::Tcp(_, $framed_write) => $body,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls(_, $framed_write) => $body,
+            #[cfg(unix)]
+            Streams::Unix(_, $framed_write) => $body,
+            Streams::Custom(_, $framed_write) => $body,
+        }
+    };
+}
+
+/// The reading counterpart of [`framed_write!`].
+macro_rules! framed_read {
+    ($streams:expr, |$framed_read:ident| $body:expr) => {
+        match $streams {
+            Streams::Tcp($framed_read, _) => $body,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            Streams::TcpTls($framed_read, _) => $body,
+            #[cfg(unix)]
+            Streams::Unix($framed_read, _) => $body,
+            Streams::Custom($framed_read, _) => $body,
+        }
+    };
 }
 
 impl Streams {
-    pub(crate) async fn connect(host: &str, port: u16, config: &Config) -> Result<Self> {
+    /// Opens a fresh stream to `endpoint` and frames it.
+    pub(crate) async fn connect(endpoint: &Endpoint, config: &Config) -> Result<Self> {
+        match endpoint {
+            Endpoint::Tcp { host, port } => Self::connect_tcp(host, *port, config).await,
+            #[cfg(unix)]
+            Endpoint::Unix(path) => {
+                let (reader, writer) = unix_connect(path, config).await?;
+                Ok(Streams::Unix(
+                    Self::framed_read(reader, config),
+                    FramedWrite::new(writer, CommandEncoder),
+                ))
+            }
+            Endpoint::Custom(transport) => {
+                let (reader, writer) = transport.factory().connect().await?;
+                Ok(Streams::Custom(
+                    Self::framed_read(reader, config),
+                    FramedWrite::new(writer, CommandEncoder),
+                ))
+            }
+        }
+    }
+
+    fn framed_read<R>(reader: R, config: &Config) -> FramedRead<R, BufferDecoder> {
+        FramedRead::with_capacity(
+            reader,
+            BufferDecoder::with_config(config.buffers, config.limits),
+            config.buffers.read_capacity,
+        )
+    }
+
+    async fn connect_tcp(host: &str, port: u16, config: &Config) -> Result<Self> {
         #[cfg(any(feature = "native-tls", feature = "rustls"))]
         if let Some(tls_config) = &config.tls_config {
             let (reader, writer) = tcp_tls_connect(host, port, tls_config, config).await?;
-            let framed_read = FramedRead::with_capacity(
-                reader,
-                BufferDecoder::with_config(config.buffers, config.limits),
-                config.buffers.read_capacity,
-            );
             let framed_write = FramedWrite::new(writer, CommandEncoder);
-            Ok(Streams::TcpTls(framed_read, framed_write))
+            Ok(Streams::TcpTls(
+                Self::framed_read(reader, config),
+                framed_write,
+            ))
         } else {
             Self::connect_non_secure(host, port, config).await
         }
@@ -99,19 +218,16 @@ impl Streams {
 
     pub(crate) async fn connect_non_secure(host: &str, port: u16, config: &Config) -> Result<Self> {
         let (reader, writer) = tcp_connect(host, port, config).await?;
-        let framed_read = FramedRead::with_capacity(
-            reader,
-            BufferDecoder::with_config(config.buffers, config.limits),
-            config.buffers.read_capacity,
-        );
         let framed_write = FramedWrite::new(writer, CommandEncoder);
-        Ok(Streams::Tcp(framed_read, framed_write))
+        Ok(Streams::Tcp(
+            Self::framed_read(reader, config),
+            framed_write,
+        ))
     }
 }
 
 pub(crate) struct StandaloneConnection {
-    host: String,
-    port: u16,
+    endpoint: Endpoint,
     config: Config,
     streams: Streams,
     version: String,
@@ -135,7 +251,17 @@ impl StandaloneConnection {
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> Result<Self> {
-        Self::connect_inner(host, port, config, Some(connection_state)).await
+        Self::connect_inner(Endpoint::tcp(host, port), config, Some(connection_state)).await
+    }
+
+    /// Same as [`Self::connect`], for an endpoint that is not a TCP address:
+    /// a Unix socket, or a stream the caller supplies.
+    pub(crate) async fn connect_endpoint(
+        endpoint: Endpoint,
+        config: &Config,
+        connection_state: &mut ConnectionState,
+    ) -> Result<Self> {
+        Self::connect_inner(endpoint, config, Some(connection_state)).await
     }
 
     /// Opens a connection that is **not** the caller's — cluster shard discovery,
@@ -143,28 +269,26 @@ impl StandaloneConnection {
     /// no caller state: replaying their database, name or tracking mode onto a
     /// node they never addressed would be wrong.
     pub(crate) async fn connect_control(host: &str, port: u16, config: &Config) -> Result<Self> {
-        Self::connect_inner(host, port, config, None).await
+        Self::connect_inner(Endpoint::tcp(host, port), config, None).await
     }
 
     async fn connect_inner(
-        host: &str,
-        port: u16,
+        endpoint: Endpoint,
         config: &Config,
         connection_state: Option<&mut ConnectionState>,
     ) -> Result<Self> {
-        let streams = Streams::connect(host, port, config).await?;
+        let streams = Streams::connect(&endpoint, config).await?;
 
         let mut connection = Self {
-            host: host.to_owned(),
-            port,
             config: config.clone(),
             streams,
             version: String::new(),
             tag: if config.connection_name.is_empty() {
-                format!("{host}:{port}").into()
+                endpoint.to_string().into()
             } else {
-                format!("{}:{}:{}", config.connection_name, host, port).into()
+                format!("{}:{endpoint}", config.connection_name).into()
             },
+            endpoint,
             read_buffer_small_streak: 0,
             write_buffer_small_streak: 0,
             #[cfg(test)]
@@ -189,38 +313,28 @@ impl StandaloneConnection {
     fn shrink_read_buffer(&mut self) {
         let streak = &mut self.read_buffer_small_streak;
         let buffers = &self.config.buffers;
-        match &mut self.streams {
-            Streams::Tcp(framed_read, _) => {
-                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak, buffers)
-            }
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(framed_read, _) => {
-                maybe_shrink_buffer(framed_read.read_buffer_mut(), streak, buffers)
-            }
-        }
+        framed_read!(&mut self.streams, |framed_read| maybe_shrink_buffer(
+            framed_read.read_buffer_mut(),
+            streak,
+            buffers
+        ))
     }
 
     fn shrink_write_buffer(&mut self) {
         let streak = &mut self.write_buffer_small_streak;
         let buffers = &self.config.buffers;
-        match &mut self.streams {
-            Streams::Tcp(_, framed_write) => {
-                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak, buffers)
-            }
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => {
-                maybe_shrink_buffer(framed_write.write_buffer_mut(), streak, buffers)
-            }
-        }
+        framed_write!(&mut self.streams, |framed_write| maybe_shrink_buffer(
+            framed_write.write_buffer_mut(),
+            streak,
+            buffers
+        ))
     }
 
     async fn write(&mut self, command: &Command) -> Result<()> {
         debug!("Sending command: {command}");
-        let result = match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.send(command).await,
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => framed_write.send(command).await,
-        };
+        let result = framed_write!(&mut self.streams, |framed_write| framed_write
+            .send(command)
+            .await);
         // `send` flushes, so the write buffer is drained here — a good moment to
         // reclaim it if one oversized command inflated it.
         self.shrink_write_buffer();
@@ -234,13 +348,20 @@ impl StandaloneConnection {
     ) -> Result<()> {
         debug!("Sending command: {command}");
 
+        // The kill goes through a second connection to the same server, which
+        // only a TCP address can be dialed again by name.
         #[cfg(test)]
-        if command.try_decrement_kill_connection_on_write() {
+        if command.try_decrement_kill_connection_on_write()
+            && let Some((host, port)) = self
+                .endpoint
+                .tcp_address()
+                .map(|(host, port)| (host.to_owned(), port))
+        {
             let client_id = self.client_id().await?;
             let mut config = self.config.clone();
             "killer".clone_into(&mut config.connection_name);
             let mut connection =
-                StandaloneConnection::connect_control(&self.host, self.port, &config).await?;
+                StandaloneConnection::connect_control(&host, port, &config).await?;
             connection
                 .client_kill(crate::commands::ClientKillOptions::default().id(client_id))
                 .await?;
@@ -258,20 +379,14 @@ impl StandaloneConnection {
             }
         }
 
-        match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.feed(command).await,
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => framed_write.feed(command).await,
-        }
+        framed_write!(&mut self.streams, |framed_write| framed_write
+            .feed(command)
+            .await)
     }
 
     pub(crate) async fn flush(&mut self) -> Result<()> {
         trace!("Flushing...");
-        let result = match &mut self.streams {
-            Streams::Tcp(_, framed_write) => framed_write.flush().await,
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(_, framed_write) => framed_write.flush().await,
-        };
+        let result = framed_write!(&mut self.streams, |framed_write| framed_write.flush().await);
         // The write buffer is now drained; reclaim it if it grew oversized.
         self.shrink_write_buffer();
         result
@@ -297,11 +412,7 @@ impl StandaloneConnection {
             }
         }
 
-        let next = match &mut self.streams {
-            Streams::Tcp(framed_read, _) => framed_read.next().await,
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(framed_read, _) => framed_read.next().await,
-        };
+        let next = framed_read!(&mut self.streams, |framed_read| framed_read.next().await);
 
         // Reclaim the read buffer if a large reply left it oversized and it has
         // since drained back below the target for long enough.
@@ -341,11 +452,8 @@ impl StandaloneConnection {
         let waker = noop_waker_ref();
         let mut cx = Context::from_waker(waker);
 
-        let poll_result = match &mut self.streams {
-            Streams::Tcp(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
-            #[cfg(any(feature = "native-tls", feature = "rustls"))]
-            Streams::TcpTls(framed_read, _) => Pin::new(framed_read).poll_next(&mut cx),
-        };
+        let poll_result = framed_read!(&mut self.streams, |framed_read| Pin::new(framed_read)
+            .poll_next(&mut cx));
 
         // Same reclaim as the async `read` path; a no-op mid-large-frame because
         // the residue then exceeds the target.
@@ -371,7 +479,7 @@ impl StandaloneConnection {
         &mut self,
         connection_state: Option<&mut ConnectionState>,
     ) -> Result<()> {
-        self.streams = Streams::connect(&self.host, self.port, &self.config).await?;
+        self.streams = Streams::connect(&self.endpoint, &self.config).await?;
         // Fresh streams carry fresh buffers, so the shrink hysteresis restarts.
         self.read_buffer_small_streak = 0;
         self.write_buffer_small_streak = 0;

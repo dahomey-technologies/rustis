@@ -1,6 +1,6 @@
 use crate::{
-    ClusterConnection, ConnectionState, ErrorKind, Future, Result, RetryReason, SentinelConnection,
-    StandaloneConnection,
+    ClusterConnection, ConnectionState, Endpoint, ErrorKind, Future, Result, RetryReason,
+    SentinelConnection, StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
     resp::{Command, RespResponse},
@@ -30,6 +30,30 @@ impl Connection {
             )),
             ServerConfig::Cluster(cluster_config) => Ok(Connection::Cluster(
                 ClusterConnection::connect(cluster_config, &config, connection_state).await?,
+            )),
+            #[cfg(unix)]
+            ServerConfig::UnixSocket { path } => Ok(Connection::Standalone(
+                StandaloneConnection::connect_endpoint(
+                    Endpoint::Unix(path.clone()),
+                    &config,
+                    connection_state,
+                )
+                .await?,
+            )),
+            #[cfg(not(unix))]
+            ServerConfig::UnixSocket { path: _ } => {
+                Err(ErrorKind::Client(crate::ClientError::InvalidConfig(
+                    "unix domain sockets are not available on this platform",
+                ))
+                .into())
+            }
+            ServerConfig::Custom(transport) => Ok(Connection::Standalone(
+                StandaloneConnection::connect_endpoint(
+                    Endpoint::Custom(transport.clone()),
+                    &config,
+                    connection_state,
+                )
+                .await?,
             )),
         }
     }

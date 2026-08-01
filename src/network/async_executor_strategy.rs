@@ -21,6 +21,10 @@ use tracing::{debug, info};
 pub(crate) type TcpStreamReader = tokio::net::tcp::OwnedReadHalf;
 #[cfg(feature = "tokio-runtime")]
 pub(crate) type TcpStreamWriter = tokio::net::tcp::OwnedWriteHalf;
+#[cfg(all(unix, feature = "tokio-runtime"))]
+pub(crate) type UnixStreamReader = tokio::net::unix::OwnedReadHalf;
+#[cfg(all(unix, feature = "tokio-runtime"))]
+pub(crate) type UnixStreamWriter = tokio::net::unix::OwnedWriteHalf;
 #[cfg(feature = "tokio-rustls")]
 pub(crate) type TcpTlsStreamReader =
     tokio::io::ReadHalf<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>;
@@ -79,6 +83,40 @@ pub(crate) async fn tcp_connect(
     }
 
     info!("Connected to {host}:{port}");
+
+    Ok((reader, writer))
+}
+
+/// Dials the server listening on the Unix domain socket at `path`.
+///
+/// `keep_alive` and `no_delay` are TCP socket options and have no counterpart
+/// here, so [`apply_socket_options`] is not called: a Unix socket carries no
+/// Nagle algorithm and no keep-alive probes.
+#[cfg(unix)]
+pub(crate) async fn unix_connect(
+    path: &std::path::Path,
+    config: &Config,
+) -> Result<(UnixStreamReader, UnixStreamWriter)> {
+    debug!(
+        "Connecting to {} with timeout {:?}...",
+        path.display(),
+        config.connect_timeout
+    );
+
+    let reader: UnixStreamReader;
+    let writer: UnixStreamWriter;
+
+    #[cfg(feature = "tokio-runtime")]
+    {
+        let stream = timeout(
+            config.connect_timeout,
+            tokio::net::UnixStream::connect(path),
+        )
+        .await??;
+        (reader, writer) = stream.into_split();
+    }
+
+    info!("Connected to {}", path.display());
 
     Ok((reader, writer))
 }

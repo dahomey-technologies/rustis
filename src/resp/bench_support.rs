@@ -57,7 +57,7 @@ pub fn bench_decode_chunked<T: DeserializeOwned>(chunks: &[&[u8]]) -> Result<T> 
     }
     match decoder.decode(&mut buf)? {
         Some(resp) => resp.to(),
-        None => Err(ErrorKind::EOF),
+        None => Err(Error::from(ErrorKind::EOF)),
     }
 }
 
@@ -100,7 +100,7 @@ fn drive_stream(data: &[u8], chunk: usize, prereserve: bool) -> Result<usize> {
             return Ok(len);
         }
         if pos >= data.len() {
-            return Err(ErrorKind::EOF);
+            return Err(Error::from(ErrorKind::EOF));
         }
         // The fix reserves the whole announced reply once the header is buffered.
         if prereserve && !reserved && !src.is_empty() {
@@ -200,7 +200,7 @@ impl BenchDecoder {
     pub fn feed(&mut self, reply: &[u8]) -> Result<usize> {
         self.src.extend_from_slice(reply);
         let Some(resp) = self.decoder.decode(&mut self.src)? else {
-            return Err(ErrorKind::EOF);
+            return Err(Error::from(ErrorKind::EOF));
         };
         let tape_bytes = match &resp {
             RespResponse::Frame { tape, .. } => tape.byte_len(),

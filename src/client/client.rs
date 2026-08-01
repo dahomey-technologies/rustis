@@ -1,10 +1,11 @@
 #[cfg(test)]
 use crate::commands::DebugCommands;
 use crate::{
-    ClientError, Error, Future, Result,
+    ClientError, Error, Result,
     client::{
-        ClientTrackingInvalidationStream, IntoConfig, Message, MonitorStream, Pipeline,
-        PreparedCommand, PubSubStream, ServerConfig, Transaction, bounded_channel,
+        ClientTrackingInvalidationStream, CommandFuture, IntoConfig, Message, MonitorStream,
+        Pipeline, PreparedCommand, ProbeLabel, PubSubStream, ServerConfig, State, Transaction,
+        bounded_channel, record_probe,
     },
     commands::{
         ArrayCommands, BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands,
@@ -17,7 +18,7 @@ use crate::{
     network::{
         JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
-        ResultsReceiver, ResultsSender, timeout,
+        ResultsReceiver, ResultsSender, timeout, timeout_future,
     },
     resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
@@ -241,30 +242,82 @@ impl Client {
         #[cfg(test)]
         let probe_label = crate::tests::response_probe::label(&command);
 
+        #[cfg(not(test))]
+        let probe_label = ();
+
         let (response, command_name) = self.internal_send(command, retry_on_error).await?;
 
-        #[cfg(not(test))]
-        return Self::name_command(response.to(), command_name);
+        Self::finish_send(&response, command_name, probe_label)
+    }
+
+    /// Turns a reply into the type the caller declared for it, and names the
+    /// command in whatever error that produces.
+    ///
+    /// Shared by [`send`](Self::send) and [`CommandFuture`], so the ergonomic
+    /// and the generic path decode a reply the same way rather than each
+    /// keeping its own copy of these three lines.
+    #[inline]
+    pub(crate) fn finish_send<T: DeserializeOwned>(
+        response: &RespResponse,
+        command_name: Option<Bytes>,
+        probe_label: ProbeLabel,
+    ) -> Result<T> {
+        let result = response.to();
 
         // The outcome is recorded alongside the shape: a mismatch the decoder
         // refuses is a mismatch the caller was told about, where a mismatch it
         // coerces is the silent one this probe exists for.
+        record_probe::<T>(probe_label, response, result.is_ok());
+
+        Self::name_command(result, command_name)
+    }
+
+    /// Hands a command to the network task and returns what a [`CommandFuture`]
+    /// then waits on, alongside the command name and the probe label it needs
+    /// to finish. Called from the future's first poll, so that building one and
+    /// dropping it sends nothing.
+    #[inline]
+    pub(crate) fn start_send<'a>(
+        &self,
+        command: Command,
+        retry_on_error: Option<bool>,
+    ) -> (State<'a>, Option<Bytes>, ProbeLabel) {
         #[cfg(test)]
-        {
-            let result = response.to();
-            crate::tests::response_probe::record(
-                probe_label,
-                std::any::type_name::<T>(),
-                &response,
-                result.is_ok(),
-            );
-            Self::name_command(result, command_name)
-        }
+        let probe_label = crate::tests::response_probe::label(&command);
+        #[cfg(not(test))]
+        let probe_label = ();
+
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
+        let message = Message::single(
+            command,
+            result_sender,
+            retry_on_error.unwrap_or(self.retry_on_error),
+        );
+
+        let command_name = match self.send_message(message) {
+            Ok(command_name) => command_name,
+            Err(error) => {
+                return (State::Failed { error: Some(error) }, None, probe_label);
+            }
+        };
+
+        let state = if self.command_timeout != Duration::ZERO {
+            State::Timed {
+                receiver: timeout_future(self.command_timeout, result_receiver),
+            }
+        } else {
+            State::Waiting {
+                receiver: result_receiver,
+            }
+        };
+
+        (state, command_name, probe_label)
     }
 
     /// Names `command_name` in the error of `result`, when there is one.
     #[inline]
-    fn name_command<T>(result: Result<T>, command_name: Option<Bytes>) -> Result<T> {
+    pub(crate) fn name_command<T>(result: Result<T>, command_name: Option<Bytes>) -> Result<T> {
         match (result, command_name) {
             (Err(e), Some(command)) => Err(e.with_command(command)),
             (result, _) => result,
@@ -583,10 +636,11 @@ impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a C
 
 impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a, &'a Client, R> {
     type Output = Result<R>;
-    type IntoFuture = Future<'a, R>;
+    type IntoFuture = CommandFuture<'a, R>;
 
+    #[inline]
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move { self.executor.send(self.command, self.retry_on_error).await })
+        CommandFuture::new(self.executor, self.command, self.retry_on_error)
     }
 }
 

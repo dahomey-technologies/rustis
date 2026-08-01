@@ -2,7 +2,7 @@ use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
     RedisError, RedisErrorKind, Result, RetryReason,
-    client::{Config, Message, MessageKind},
+    client::{Config, Message, MessageKind, PreparedCommand},
     commands::InternalPubSubCommands,
     resp::{
         ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
@@ -357,6 +357,12 @@ pub(crate) struct NetworkHandler {
     pending_subscriptions: VecDeque<PendingSubscription>,
     pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
+    /// Subscriptions whose subscriber is gone, collected while a push is being
+    /// routed and unsubscribed from at the end of the read wave.
+    ///
+    /// Delivery is matched on the synchronous read path, but sending the
+    /// UNSUBSCRIBE needs the async send path, so the two are separated.
+    orphaned_subscriptions: Vec<(Bytes, SubscriptionType)>,
     is_reply_on: bool,
     /// `CLIENT REPLY SKIP` silences the reply of the command that follows it, and
     /// only that one — unlike `OFF`, which silences the connection until `ON`.
@@ -441,6 +447,7 @@ impl NetworkHandler {
             pending_subscriptions: VecDeque::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
+            orphaned_subscriptions: Vec::new(),
             is_reply_on: true,
             skip_next_reply: false,
             connection_state,
@@ -920,6 +927,11 @@ impl NetworkHandler {
             return self.reconnect().await;
         }
 
+        // Nothing else flushes the send queue on this path: an UNSUBSCRIBE left
+        // queued here would wait for the next command the application happens
+        // to send, which on a pure subscriber never comes.
+        self.unsubscribe_orphaned_subscriptions().await;
+
         true
     }
 
@@ -1204,6 +1216,64 @@ impl NetworkHandler {
         }
     }
 
+    /// Records a subscription whose subscriber is gone, so the read wave ends by
+    /// unsubscribing from it.
+    ///
+    /// A delivery fails only when the receiving half has been dropped, which is
+    /// permanent: retrying it on the next message would never succeed. Leaving
+    /// the entry in place instead keeps the server publishing to a channel
+    /// nobody can receive on, for as long as the connection lives. Removing it
+    /// here also makes this the *first* and only failed delivery for that
+    /// channel, so one warning and one UNSUBSCRIBE are emitted, not one per
+    /// message.
+    fn orphan_subscription(&mut self, orphaned: Option<(Bytes, SubscriptionType)>) {
+        let Some((channel_or_pattern, subscription_type)) = orphaned else {
+            return;
+        };
+        self.subscriptions.remove(&channel_or_pattern);
+        self.orphaned_subscriptions
+            .push((channel_or_pattern, subscription_type));
+    }
+
+    /// Unsubscribes from every subscription whose subscriber turned out to be
+    /// gone while this read wave was routed.
+    ///
+    /// Routed on the synchronous read path, sent here because sending is async.
+    /// The commands go through [`Self::handle_message`] rather than straight
+    /// into the send queue so that the pub/sub bookkeeping is built exactly as
+    /// for a caller-issued UNSUBSCRIBE: without its `pending_unsubscriptions`
+    /// entry the confirmation push would arrive with nothing to match and shift
+    /// every later response by one. They are fire-and-forget, like the ones
+    /// `PubSubSplitSink::drop` sends, since no caller is left to be answered.
+    async fn unsubscribe_orphaned_subscriptions(&mut self) {
+        if self.orphaned_subscriptions.is_empty() {
+            return;
+        }
+
+        for (channel_or_pattern, subscription_type) in
+            std::mem::take(&mut self.orphaned_subscriptions)
+        {
+            let PreparedCommand { mut command, .. } = match subscription_type {
+                SubscriptionType::Channel => self.connection.unsubscribe(channel_or_pattern),
+                SubscriptionType::Pattern => self.connection.punsubscribe(channel_or_pattern),
+                SubscriptionType::ShardChannel => self.connection.sunsubscribe(channel_or_pattern),
+            };
+            // A command built here has never been through the caller thread,
+            // where `Client` computes the slots. SUNSUBSCRIBE names a shard
+            // channel as a key, so without this it routes on slot 0 — to
+            // whichever node owns that slot rather than the one holding the
+            // subscription, which answers it happily and changes nothing.
+            if self.connection.is_cluster() {
+                command.compute_slots();
+            }
+            self.handle_message(Message::single_forget(command, true));
+        }
+
+        if self.status != Status::Disconnected {
+            self.send_messages().await;
+        }
+    }
+
     fn try_match_pubsub_message(
         &mut self,
         value: Result<RespResponse>,
@@ -1215,8 +1285,13 @@ impl NetworkHandler {
                     | PubSubPush::SMessage(channel_or_pattern, _) => {
                         #[cfg(test)]
                         let delivered_bytes = ref_value.retained_bytes();
-                        match self.subscriptions.get_mut(channel_or_pattern) {
-                            Some((_subscription_type, pub_sub_sender)) => {
+                        // The key is looked up alongside its value because
+                        // sending consumes `value`, and with it the borrowed
+                        // channel name: naming the channel in the log, and
+                        // cleaning the subscription up, both need a name that
+                        // outlives the send.
+                        let orphaned = match self.subscriptions.get_key_value(channel_or_pattern) {
+                            Some((key, (subscription_type, pub_sub_sender))) => {
                                 let sent = pub_sub_sender.send(value);
                                 #[cfg(test)]
                                 if let Some(hook) = &self.queue_metrics_test_hook {
@@ -1226,18 +1301,14 @@ impl NetworkHandler {
                                         hook.record_pub_sub_delivery_failed();
                                     }
                                 }
-                                if let Err(e) = sent {
-                                    let error_desc = e.to_string();
-                                    if let Ok(ref_value) = &e.into_inner()
-                                        && let Some(
-                                            PubSubPush::Message(channel_or_pattern, _)
-                                            | PubSubPush::SMessage(channel_or_pattern, _),
-                                        ) = PubSubPush::try_from(ref_value).ok()
-                                    {
+                                match sent {
+                                    Ok(()) => None,
+                                    Err(e) => {
                                         warn!(
-                                            "Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
-                                            String::from_utf8_lossy(channel_or_pattern)
+                                            "Cannot send pub/sub message to caller from channel `{}`: {e}",
+                                            String::from_utf8_lossy(key)
                                         );
+                                        Some((key.clone(), *subscription_type))
                                     }
                                 }
                             }
@@ -1246,8 +1317,10 @@ impl NetworkHandler {
                                     "Unexpected message on channel `{}`",
                                     String::from_utf8_lossy(channel_or_pattern)
                                 );
+                                None
                             }
-                        }
+                        };
+                        self.orphan_subscription(orphaned);
                         None
                     }
                     PubSubPush::Subscribe(channel_or_pattern)
@@ -1331,8 +1404,8 @@ impl NetworkHandler {
                     PubSubPush::PMessage(pattern, channel, _) => {
                         #[cfg(test)]
                         let delivered_bytes = ref_value.retained_bytes();
-                        match self.subscriptions.get_mut(pattern) {
-                            Some((_subscription_type, pub_sub_sender)) => {
+                        let orphaned = match self.subscriptions.get_key_value(pattern) {
+                            Some((key, (subscription_type, pub_sub_sender))) => {
                                 let sent = pub_sub_sender.send(value);
                                 #[cfg(test)]
                                 if let Some(hook) = &self.queue_metrics_test_hook {
@@ -1342,8 +1415,15 @@ impl NetworkHandler {
                                         hook.record_pub_sub_delivery_failed();
                                     }
                                 }
-                                if let Err(e) = sent {
-                                    warn!("Cannot send pub/sub message to caller: {e}");
+                                match sent {
+                                    Ok(()) => None,
+                                    Err(e) => {
+                                        warn!(
+                                            "Cannot send pub/sub message to caller for pattern `{}`: {e}",
+                                            String::from_utf8_lossy(key)
+                                        );
+                                        Some((key.clone(), *subscription_type))
+                                    }
                                 }
                             }
                             None => {
@@ -1352,8 +1432,10 @@ impl NetworkHandler {
                                     String::from_utf8_lossy(channel),
                                     String::from_utf8_lossy(pattern)
                                 );
+                                None
                             }
-                        }
+                        };
+                        self.orphan_subscription(orphaned);
                         None
                     }
                 }
@@ -1388,6 +1470,10 @@ impl NetworkHandler {
 
         // A `SKIP` waiting for the command it silences died with the connection too.
         self.skip_next_reply = false;
+
+        // A fresh connection is subscribed to nothing, so an orphaned
+        // subscription has already achieved what its UNSUBSCRIBE was for.
+        self.orphaned_subscriptions.clear();
 
         // Purge every non-retryable message, wherever it sits in the queue,
         // and keep the retryable ones in order. A prefix-only purge would leave

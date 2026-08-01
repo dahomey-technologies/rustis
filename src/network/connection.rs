@@ -143,6 +143,12 @@ impl Connection {
         }
     }
 
+    /// Whether this connection routes by hash slot, so a command built for it
+    /// needs its slots computed before it is fed.
+    pub(crate) fn is_cluster(&self) -> bool {
+        matches!(self, Connection::Cluster(_))
+    }
+
     pub(crate) fn tag(&self) -> Arc<str> {
         match self {
             Connection::Standalone(connection) => connection.tag(),

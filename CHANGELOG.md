@@ -97,6 +97,18 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **A subscription whose subscriber is gone is cleaned up.** When a pub/sub message
+  could not be handed to its subscriber because the receiving half had been dropped,
+  the client logged a warning and kept the subscription: the server went on
+  publishing to a channel nobody could receive on, one warning per message, for the
+  life of the connection. That state needs no bug to reach — a `command_timeout`
+  cutting `subscribe()` short after the server accepted it is enough, and so is
+  leaking the stream. The subscription is now removed and an `UNSUBSCRIBE`
+  (`PUNSUBSCRIBE`, `SUNSUBSCRIBE`) is sent, so the failed delivery is reported once
+  and the server stops publishing. On a cluster the `SUNSUBSCRIBE` is routed by the
+  shard channel's hash slot, so it reaches the node actually holding the
+  subscription.
+
 - **The `bench` feature compiles again.** `resp::bench_support` still built `Err`
   from an `ErrorKind` rather than an `Error`, so `--features bench` failed with five
   errors. No CI job compiles that feature, which is why the `Error` restructuring

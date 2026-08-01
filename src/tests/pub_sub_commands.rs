@@ -5,7 +5,7 @@ use crate::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
         ListCommands, PubSubCommands, ServerCommands, StringCommands,
     },
-    network::{QueueMetricsTestHook, SendBatchTestHook, timeout},
+    network::{QueueMetricsTestHook, SendBatchTestHook, sleep, timeout},
     resp::cmd,
     spawn,
     tests::{
@@ -1045,4 +1045,128 @@ async fn pub_sub_help() -> Result<()> {
     assert!(help.iter().any(|line| line.contains("CHANNELS")));
 
     Ok(())
+}
+
+/// A subscription whose receiver is gone must be cleaned up: removed from the
+/// handler's routing table and unsubscribed from on the server.
+///
+/// Leaking the sink and dropping the reader reproduces the state exactly — the
+/// `Drop` that normally fire-and-forgets the UNSUBSCRIBE never runs, so the only
+/// thing left to notice is the failed delivery. The same state is reached by a
+/// plain `command_timeout` cutting `subscribe()` short after the server accepted
+/// it. Without the cleanup the server keeps publishing to a channel nobody can
+/// receive on, one warning per message, until the connection is recycled.
+#[tokio::test]
+#[serial]
+async fn a_channel_subscription_whose_receiver_is_gone_is_unsubscribed() -> Result<()> {
+    log_try_init();
+
+    let control = get_test_client().await?;
+    let subscriber = get_test_client().await?;
+
+    let (sink, stream) = subscriber.subscribe("orphaned_channel").await?.split();
+    std::mem::forget(sink);
+    drop(stream);
+
+    control.publish("orphaned_channel", "trigger").await?;
+
+    wait_for(Duration::from_secs(5), || async {
+        let num_sub: HashMap<String, usize> = control.pub_sub_numsub("orphaned_channel").await?;
+        Ok(num_sub.get("orphaned_channel") == Some(&0))
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// Same cleanup for a pattern subscription, which is routed by a different
+/// delivery site in the handler.
+#[tokio::test]
+#[serial]
+async fn a_pattern_subscription_whose_receiver_is_gone_is_unsubscribed() -> Result<()> {
+    log_try_init();
+
+    let control = get_test_client().await?;
+    let subscriber = get_test_client().await?;
+
+    let (sink, stream) = subscriber.psubscribe("orphaned_pattern*").await?.split();
+    std::mem::forget(sink);
+    drop(stream);
+
+    control.publish("orphaned_pattern_1", "trigger").await?;
+
+    wait_for(Duration::from_secs(5), || async {
+        Ok(control.pub_sub_numpat().await? == 0)
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// Same cleanup on a cluster connection, where the shard channel is served by
+/// one node among several: the SUNSUBSCRIBE has to reach that node, not just
+/// whichever one the client last talked to.
+#[tokio::test]
+#[serial]
+async fn a_shard_subscription_whose_receiver_is_gone_is_unsubscribed_in_cluster() -> Result<()> {
+    log_try_init();
+
+    let subscriber = get_cluster_test_client().await?;
+
+    // The shard channel is served by the master owning the `{1}` hashtag, which
+    // is the only node that can be asked whether the subscription is gone.
+    let slot = subscriber.cluster_keyslot("{1}").await?;
+    let shard_results: Vec<ClusterShardResult> = subscriber.cluster_shards().await?;
+    let shard_index = shard_results
+        .iter()
+        .position(|s| s.slots[0].0 <= slot && slot <= s.slots[0].1)
+        .unwrap();
+    let master_node = shard_results[shard_index]
+        .nodes
+        .iter()
+        .find(|n| n.role == "master")
+        .unwrap();
+    let master_client =
+        Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?).await?;
+
+    let (sink, stream) = subscriber
+        .ssubscribe("orphaned_shardchannel{1}")
+        .await?
+        .split();
+    std::mem::forget(sink);
+    drop(stream);
+
+    subscriber
+        .spublish("orphaned_shardchannel{1}", "trigger")
+        .await?;
+
+    wait_for(Duration::from_secs(5), || async {
+        let channels: HashSet<String> = master_client.pub_sub_shardchannels(()).await?;
+        Ok(!channels.contains("orphaned_shardchannel{1}"))
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// Polls `condition` until it holds, failing the test if it still does not
+/// within `deadline`. The cleanup is asynchronous — the UNSUBSCRIBE is queued by
+/// the network task and confirmed by the server — so there is nothing to await
+/// on directly.
+async fn wait_for<F, Fut>(deadline: Duration, mut condition: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<bool>>,
+{
+    let started = std::time::Instant::now();
+    loop {
+        if condition().await? {
+            return Ok(());
+        }
+        assert!(
+            started.elapsed() < deadline,
+            "condition still not met after {deadline:?}"
+        );
+        sleep(Duration::from_millis(50)).await;
+    }
 }
